@@ -1,6 +1,19 @@
 {
   "entries": [
     {
+      "version": "1.0.24",
+      "date": "OCT 2026",
+      "title": "Emby libraries load, and the app tells you when something won't play",
+      "bullets": [
+        "Emby libraries load again. The app was asking Emby for its libraries using Jellyfin's spelling of the address, and Emby answers that with a 404, so the scan failed on the very first request no matter what your libraries were called or how big they were. Every Emby user hit this. Thanks to Jay for the report.",
+        "When a programme won't play, the app now says why instead of quietly jumping to the next one. You get a card on the channel for a few seconds: whether your server refused it, couldn't keep up, couldn't find the file, or whether it's the Apple TV that can't decode it. It's amber when your server is the thing to go and look at, red when it's the file.",
+        "Finding out which of those it is meant asking your server directly, because Apple TV doesn't tell an app the status code behind a failed stream. So on a failure the app makes one small request to the stream that just died and reads the real answer.",
+        "Jellyfin and Emby step the quality down before giving up. If a stream starts falling behind, the app now asks your server for a smaller one and keeps the programme going. Plex has done this for a while; the other two were skipping straight to the next title on a single stall.",
+        "Error messages name the server you actually connected to. Jellyfin and Emby users were being told to go and check Plex settings they don't have.",
+        "The guide's vertical wrap is steadier. Rolling off the bottom of the channel list now comes back to the top reliably at any list length. Up out of channel one still goes to Settings, as before."
+      ]
+    },
+    {
       "version": "1.0.23",
       "date": "OCT 2026",
       "title": "Halloween, Christmas, eleven new channels, and a guide that keeps up",
