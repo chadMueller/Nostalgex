@@ -415,7 +415,7 @@ extension AppState {
                 Analytics.track(.libraryRefreshBackgroundFailed(reason: reason))
             } else {
                 Analytics.track(.libraryLoadFailed(reason: reason, background: false))
-                errorMessage = Self.userFacingPlexAPIServiceError(api, justAuthenticated: justAuthenticated)
+                errorMessage = Self.userFacingPlexAPIServiceError(api, justAuthenticated: justAuthenticated, backend: backendKind)
                 lastFailureDiagnostic = diagnosticString(for: api)
                 if case .unauthorized = api, !justAuthenticated {
                     await resolveUnauthorizedLoadFailure()
@@ -436,7 +436,7 @@ extension AppState {
                 Analytics.track(.libraryRefreshBackgroundFailed(reason: reason))
             } else {
                 Analytics.track(.libraryLoadFailed(reason: reason, background: false))
-                errorMessage = Self.userFacingLoadLibraryError(error)
+                errorMessage = Self.userFacingLoadLibraryError(error, backend: backendKind)
                 let host = URL(string: serverURL)?.host ?? "?"
                 if let stalled = error as? LibraryLoadStalled {
                     lastFailureDiagnostic = "\(host) · stalled \(Int(stalled.secondsWithoutProgress))s"

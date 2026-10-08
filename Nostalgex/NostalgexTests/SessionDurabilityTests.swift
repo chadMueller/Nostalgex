@@ -103,4 +103,47 @@ final class SessionDurabilityTests: XCTestCase {
         XCTAssertTrue(invalid.contains("kept"))
         XCTAssertTrue(invalid.contains("Disconnect"))
     }
+
+    // MARK: - Error copy names the server the user actually connected to
+
+    /// A Jellyfin or Emby user whose scan fails used to be told to check Plex: the shared
+    /// `PlexAPIService.APIError` carried Plex-only wording for every backend. Issue #6 was
+    /// reported with "Plex (or your network path) returned HTTP 404" on an Emby server.
+    func testErrorCopyNamesTheConnectedBackendAndNeverTheWrongOne() {
+        let cases: [PlexAPIService.APIError] = [
+            .unauthorized,
+            .invalidResponse,
+            .noReachableServer,
+            .httpFailure(statusCode: 404),
+            .receivedMarkupInsteadOfJSON(statusCode: 200)
+        ]
+
+        for backend in [MediaBackendKind.jellyfin, .emby] {
+            for error in cases {
+                for fresh in [true, false] {
+                    let msg = AppState.userFacingPlexAPIServiceError(
+                        error, justAuthenticated: fresh, backend: backend
+                    )
+                    XCTAssertFalse(
+                        msg.contains("Plex"),
+                        "\(backend) / \(error) / justAuthenticated=\(fresh) names Plex: \(msg)"
+                    )
+                }
+            }
+        }
+
+        // The backend is named where there is a server to name. "Session expired" has no
+        // server in it by design, so it is the one message that stays generic.
+        let emby = AppState.userFacingPlexAPIServiceError(
+            .httpFailure(statusCode: 404), backend: .emby
+        )
+        XCTAssertTrue(emby.contains("Emby"), emby)
+        XCTAssertTrue(emby.contains("404"), emby)
+
+        // Plex keeps its own wording, including the paths only Plex serves.
+        let plex = AppState.userFacingPlexAPIServiceError(
+            .httpFailure(statusCode: 404), backend: .plex
+        )
+        XCTAssertTrue(plex.contains("/identity"), plex)
+    }
 }
