@@ -246,7 +246,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     tmdbID: show.tmdbID,
                     imdbID: show.imdbID,
                     librarySource: .tv,
-                    serverID: serverID.isEmpty ? nil : serverID
+                    serverID: serverID.isEmpty ? nil : serverID,
+                    videoBitDepth: source?.videoBitDepth
                 )
             }
         } catch {
@@ -310,7 +311,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             tmdbID: item.tmdbID,
             imdbID: item.imdbID,
             librarySource: isMusicVideo ? .musicVideo : .movie,
-            serverID: serverID.isEmpty ? nil : serverID
+            serverID: serverID.isEmpty ? nil : serverID,
+            videoBitDepth: source?.videoBitDepth
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -353,7 +355,6 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
 
     // MARK: - Stream URLs
 
-    private static let supportedVideoCodecs: Set<String> = CodecSupport.directPlayVideoCodecs(hevcCapable: CodecSupport.deviceSupportsHEVC)
     private static let supportedAudioCodecs: Set<String> = ["aac", "ac3", "eac3", "mp3", "alac", "flac"]
     private static let directPlayContainers: Set<String> = ["mp4", "mov", "m4v"]
 
@@ -363,7 +364,13 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         if let container = item.container?.lowercased(), !Self.directPlayContainers.contains(container) {
             return nil
         }
-        if let videoCodec = item.videoCodec?.lowercased(), !Self.supportedVideoCodecs.contains(videoCodec) {
+        // Same two black-picture cases as Jellyfin: 10-bit H.264, and HEVC in MP4 whose tag
+        // only the server knows. See JellyfinAPIService.buildDirectPlayURL.
+        if !CodecSupport.canDecodeVideo(codec: item.videoCodec?.lowercased(), bitDepth: item.videoBitDepth,
+                                        hevcCapable: CodecSupport.deviceSupportsHEVC) {
+            return nil
+        }
+        if PlexAPIService.needsServerRemux(container: item.container, videoCodec: item.videoCodec) {
             return nil
         }
         if let audioCodec = item.audioCodec?.lowercased(), !Self.supportedAudioCodecs.contains(audioCodec) {

@@ -103,6 +103,26 @@ final class JellyfinAPITests: XCTestCase {
         XCTAssertTrue(s.contains("api_key=TKN"))
     }
 
+    func testDirectPlayLeavesBlackPictureFilesToTheServer() throws {
+        func mapped(_ streams: String) throws -> PlexMediaItem {
+            let item = try decodeItem("""
+            { "Id": "m3", "Name": "C", "RunTimeTicks": 6000000000,
+              "MediaSources": [ { "Id": "s", "Container": "mp4", "MediaStreams": [ \(streams), { "Type": "Audio", "Codec": "aac" } ] } ] }
+            """)
+            return try XCTUnwrap(makeService().parseMovieItem(item, isMusicSection: false))
+        }
+        let tenBitH264 = try mapped(#"{ "Type": "Video", "Codec": "h264", "BitDepth": 10 }"#)
+        XCTAssertEqual(tenBitH264.videoBitDepth, 10, "bit depth is read from the video stream")
+        let hevcMp4 = try mapped(#"{ "Type": "Video", "Codec": "hevc", "BitDepth": 10 }"#)
+        let eightBitH264 = try mapped(#"{ "Type": "Video", "Codec": "h264", "BitDepth": 8 }"#)
+        let emby = EmbyAPIService(serverURL: "http://emby.local:8096", accessToken: "TKN", userId: "u")
+        for backend in [makeService() as any MediaBackend, emby] {
+            XCTAssertNil(backend.buildDirectPlayURL(for: tenBitH264), "10-bit H.264 plays as sound over black")
+            XCTAssertNil(backend.buildDirectPlayURL(for: hevcMp4), "only the server knows whether it is tagged hvc1")
+            XCTAssertNotNil(backend.buildDirectPlayURL(for: eightBitH264))
+        }
+    }
+
     func testDirectPlayRejectedForMkvContainer() throws {
         let item = try decodeItem("""
         { "Id": "m2", "Name": "B", "RunTimeTicks": 6000000000,

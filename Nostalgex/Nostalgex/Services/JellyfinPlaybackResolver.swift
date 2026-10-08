@@ -41,11 +41,32 @@ extension JellyfinPlaybackResolver {
 ///   • HEVC is only an acceptable codec when the device can hardware-decode it.
 ///   • Transcoding always targets fMP4 HLS (`Container: "mp4"`), never MPEG-TS — AVPlayer
 ///     cannot render HEVC from a TS segment (the original black-screen bug).
+/// CodecProfiles add the two decode limits a codec name does not express; see `deviceProfile`.
 struct JellyfinDeviceProfile: Encodable, Sendable {
     let MaxStreamingBitrate: Int
     let MaxStaticBitrate: Int
     let DirectPlayProfiles: [DirectPlayProfile]
     let TranscodingProfiles: [TranscodingProfile]
+    let CodecProfiles: [CodecProfile]
+
+    struct CodecProfile: Encodable, Sendable {
+        let mediaType: String
+        let Codec: String
+        let Conditions: [ProfileCondition]
+
+        enum CodingKeys: String, CodingKey {
+            case Codec, Conditions
+            case mediaType = "Type"
+        }
+    }
+
+    /// `IsRequired` decides what an unknown value means: true fails the condition, false passes it.
+    struct ProfileCondition: Encodable, Sendable {
+        let Condition: String
+        let Property: String
+        let Value: String
+        let IsRequired: Bool
+    }
 
     struct DirectPlayProfile: Encodable, Sendable {
         let Container: String
@@ -95,8 +116,33 @@ enum JellyfinPlaybackResolver {
                 // fMP4 HLS, h264 (+hevc when capable), audio forced into AVPlayer-friendly codecs.
                 .init(Container: "mp4", mediaType: "Video", VideoCodec: videoCodecs, AudioCodec: audioCodecs,
                       Context: "Streaming", MaxAudioChannels: "6", protocolName: "hls"),
-            ]
+            ],
+            CodecProfiles: codecProfiles(supportsHEVC: supportsHEVC)
         )
+    }
+
+    /// Files that pass the codec check and still play as sound over a black picture.
+    ///   • 10-bit H.264 has no decoder on any Apple device. The bit-depth cap also stops the
+    ///     server copying it into HLS, so it is re-encoded to 8-bit. Not required, so a file
+    ///     with no reported bit depth still direct-plays as before.
+    ///   • HEVC renders only when tagged hvc1 or dvh1 (jellyfin-web asks Safari for the same).
+    ///     Jellyfin counts a tag mismatch as a reason to remux, not re-encode, and its HLS
+    ///     muxer writes hvc1, so an hev1 file costs a remux. Required, so an unknown tag
+    ///     remuxes rather than risk the black picture. That case is common: Jellyfin 12.1
+    ///     records no codec tags at all (its probe reads `codec_tag_string?`), so on 12.1
+    ///     every HEVC MP4 remuxes, hvc1 included. Measured against a 12.1 server.
+    private static func codecProfiles(supportsHEVC: Bool) -> [JellyfinDeviceProfile.CodecProfile] {
+        var profiles: [JellyfinDeviceProfile.CodecProfile] = [
+            .init(mediaType: "Video", Codec: "h264", Conditions: [
+                .init(Condition: "LessThanEqual", Property: "VideoBitDepth", Value: "8", IsRequired: false),
+            ]),
+        ]
+        if supportsHEVC {
+            profiles.append(.init(mediaType: "Video", Codec: "hevc", Conditions: [
+                .init(Condition: "EqualsAny", Property: "VideoCodecTag", Value: "hvc1|dvh1", IsRequired: true),
+            ]))
+        }
+        return profiles
     }
 
     /// Decoded shape of a PlaybackInfo response (capital-letter Jellyfin keys).

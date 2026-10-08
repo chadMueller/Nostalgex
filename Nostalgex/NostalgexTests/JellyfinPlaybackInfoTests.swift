@@ -40,6 +40,15 @@ final class JellyfinPlaybackInfoTests: XCTestCase {
         XCTAssertTrue(json.contains("Streaming"))
     }
 
+    func testDeviceProfileNamesTheBlackPictureCases() throws {
+        let json = try profileJSON(supportsHEVC: true)
+        XCTAssertTrue(json.contains("CodecProfiles"))
+        XCTAssertTrue(json.contains("\"Property\":\"VideoCodecTag\""), "hev1 HEVC must be remuxed, not direct played")
+        XCTAssertTrue(json.contains("hvc1|dvh1"))
+        XCTAssertTrue(json.contains("\"Property\":\"VideoBitDepth\""), "10-bit H.264 has no decoder on Apple TV")
+        XCTAssertFalse(try profileJSON(supportsHEVC: false).contains("VideoCodecTag"), "no HEVC rule when HEVC is not offered")
+    }
+
     // MARK: - resolve()
 
     func testResolveSelectsTranscodingUrlAndSession() throws {

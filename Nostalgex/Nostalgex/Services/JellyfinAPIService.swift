@@ -267,7 +267,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     tmdbID: show.tmdbID,
                     imdbID: show.imdbID,
                     librarySource: .tv,
-                    serverID: serverID.isEmpty ? nil : serverID
+                    serverID: serverID.isEmpty ? nil : serverID,
+                    videoBitDepth: source?.videoBitDepth
                 )
             }
         } catch {
@@ -331,7 +332,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             tmdbID: item.tmdbID,
             imdbID: item.imdbID,
             librarySource: isMusicVideo ? .musicVideo : .movie,
-            serverID: serverID.isEmpty ? nil : serverID
+            serverID: serverID.isEmpty ? nil : serverID,
+            videoBitDepth: source?.videoBitDepth
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -405,7 +407,6 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     // MARK: - Stream URLs
 
     // Mirror the AVPlayer-native capability sets used by PlexAPIService.
-    private static let supportedVideoCodecs: Set<String> = CodecSupport.directPlayVideoCodecs(hevcCapable: CodecSupport.deviceSupportsHEVC)
     private static let supportedAudioCodecs: Set<String> = ["aac", "ac3", "eac3", "mp3", "alac", "flac"]
     private static let directPlayContainers: Set<String> = ["mp4", "mov", "m4v"]
 
@@ -417,7 +418,16 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         if let container = item.container?.lowercased(), !Self.directPlayContainers.contains(container) {
             return nil
         }
-        if let videoCodec = item.videoCodec?.lowercased(), !Self.supportedVideoCodecs.contains(videoCodec) {
+        // Codec and bit depth: 10-bit H.264 opens fine and plays as sound over a black picture.
+        if !CodecSupport.canDecodeVideo(codec: item.videoCodec?.lowercased(), bitDepth: item.videoBitDepth,
+                                        hevcCapable: CodecSupport.deviceSupportsHEVC) {
+            return nil
+        }
+        // HEVC in MP4 renders only when tagged hvc1, and most encodes are hev1 (ffmpeg's
+        // default): sound over a black picture. The library listing does not carry the tag,
+        // so let PlaybackInfo decide. Its profile requires hvc1: the server direct-plays what
+        // it knows is hvc1 and remuxes the rest (video copied) into HLS tagged hvc1.
+        if PlexAPIService.needsServerRemux(container: item.container, videoCodec: item.videoCodec) {
             return nil
         }
         if let audioCodec = item.audioCodec?.lowercased(), !Self.supportedAudioCodecs.contains(audioCodec) {
@@ -741,10 +751,11 @@ struct JellyfinItem: Decodable {
             let Profile: String?
             let Width: Int?
             let Height: Int?
+            let BitDepth: Int?
 
             enum CodingKeys: String, CodingKey {
                 case streamType = "Type"
-                case Codec, Profile, Width, Height
+                case Codec, Profile, Width, Height, BitDepth
             }
         }
 
@@ -752,6 +763,7 @@ struct JellyfinItem: Decodable {
         var audioCodec: String? { MediaStreams?.first(where: { $0.streamType == "Audio" })?.Codec }
         var videoProfile: String? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Profile }
         var videoHeight: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Height }
+        var videoBitDepth: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.BitDepth }
     }
 
     /// Highest-quality source: max bitrate, tie-broken on video height. Falls back to the first
