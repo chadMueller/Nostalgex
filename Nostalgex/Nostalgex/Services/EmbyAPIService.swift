@@ -86,8 +86,21 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
 
     // MARK: - Library sections (views)
 
+    /// Emby serves a user's libraries at `/Users/{id}/Views`. `/UserViews?userId=` is
+    /// Jellyfin's spelling and does not exist on Emby, which is what this used to call:
+    /// measured against Emby 4.10.1.0, `/UserViews` answers 404 while `/Users/{id}/Views`
+    /// answers 200. It was the first request after sign-in, so every Emby user got a 404
+    /// the moment the library scan started, whatever their libraries were called or how
+    /// big they were (issue #6).
+    /// Path for a user's libraries. Static so it can be asserted on without a server.
+    static func userViewsPath(userId: String) -> String? {
+        guard let escaped = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              !escaped.isEmpty else { return nil }
+        return "/Users/\(escaped)/Views"
+    }
+
     func loadSections() async throws -> [PlexSection] {
-        guard let req = request(path: "/UserViews", queryItems: [.init(name: "userId", value: userId)]) else {
+        guard let path = Self.userViewsPath(userId: userId), let req = request(path: path) else {
             throw PlexAPIService.APIError.invalidResponse
         }
         let (data, response) = try await Self.session.data(for: req)
@@ -448,6 +461,17 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         guard let r = await resolveTranscodePlayback(for: item) else { return nil }
         return JellyfinPlaybackResolver.offsetPlayback(r, offsetSeconds: offsetSeconds)
     }
+
+    func cappedTranscodeURL(for item: PlexMediaItem, offsetSeconds: Int, sessionID: String) -> URL? {
+        JellyfinPlaybackResolver.cappedTranscodeURL(
+            serverURL: serverURL, item: item, accessToken: accessToken,
+            deviceID: deviceID, sessionID: sessionID, supportsHEVC: Self.deviceSupportsHEVC
+        )
+    }
+
+    /// Emby rejects a start time on segment requests, so the capped stream starts at zero
+    /// and the caller seeks. Same as the first attempt.
+    var cappedStreamStartsAtOffset: Bool { false }
 
     private func fallbackResolution(for item: PlexMediaItem) -> PlaybackResolution? {
         guard let url = buildTranscodeURL(for: item) else { return nil }

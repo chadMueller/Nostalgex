@@ -8,7 +8,9 @@ enum PlaybackState: Equatable {
     case idle
     case loading
     case playing
-    case error(String)
+    /// Carries the reason rather than a sentence, so the screen can say both what happened
+    /// and whose problem it is. See `PlaybackFailure`.
+    case error(PlaybackFailure)
 }
 
 // MARK: - AVPlayerLayer container (proper layout sizing)
@@ -170,17 +172,8 @@ struct VideoAreaView: View {
         }
     }
 
-    private func errorOverlay(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Text("PLAYBACK ERROR")
-                .font(.custom("DMMono-Medium", size: 32))
-                .foregroundStyle(Color(hex: "#FF2244"))
-            Text(message.uppercased())
-                .font(.custom("DMMono-Regular", size: 22))
-                .foregroundStyle(Color(hex: "#FF2244").opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 60)
-        }
+    private func errorOverlay(_ failure: PlaybackFailure) -> some View {
+        PlaybackFailureCard(failure: failure, compact: true)
     }
 
     // MARK: - Channel bug (bottom-left info)

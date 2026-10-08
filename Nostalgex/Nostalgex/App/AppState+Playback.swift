@@ -313,17 +313,119 @@ extension AppState {
         }
     }
 
-    /// Shows an error frame briefly, then advances so a single bad item never strands a channel.
-    private func showErrorThenSkip(_ message: String, generation: Int, errorCode: AnalyticsPlaybackErrorCode? = nil) {
-        playbackState = .error(message)
-        if let errorCode {
-            emitPlaybackError(errorCode)
-        }
+    /// Shows the reason on screen, then advances so a single bad item never strands a channel.
+    ///
+    /// Every failure path funnels through here, including the ones that used to advance in
+    /// silence (the startup watchdog, the starvation verdict, and an AVPlayer item that
+    /// reached `.failed`). A silent skip reads as a broken app and hides whether the person
+    /// should go and look at their server or at the file.
+    ///
+    /// Five seconds, not the old two and a half: the card now carries a sentence worth
+    /// reading, and this is the only place the reason is ever shown.
+    private func showErrorThenSkip(_ failure: PlaybackFailure, generation: Int, title: String? = nil,
+                                   detail: String? = nil) {
+        playbackState = .error(failure)
+        emitPlaybackError(failure.analyticsCode)
+        PlaybackDiagnostics.record(
+            outcome: failure.diagnosticSummary,
+            title: title ?? currentItem?.title ?? "?",
+            detail: detail ?? failure.headline
+        )
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard let self, self.loadGeneration == generation else { return }
             self.advanceToNextItem()
         }
+    }
+
+    /// Ends a load early when the server has already said no.
+    ///
+    /// The startup watchdog gives a 4K source forty seconds to produce a picture, which is
+    /// right for a transcoder spinning up and wrong for a server that refused the job in a
+    /// tenth of a second. The viewer should not watch static for forty seconds to be told
+    /// something the server said immediately.
+    ///
+    /// Probing the URL handed to the player is not enough: that is the master playlist, and
+    /// it answers 200 while the segments beneath it fail. The failing request is named in
+    /// the player's own error log, so this takes the most recent logged URI and asks about
+    /// that. Returns true when it has taken over and shown the card.
+    ///
+    /// Only a 4xx or 5xx ends the load. A timeout, a refused connection or a slow answer
+    /// all leave the watchdog to run its full deadline, because those are the shapes a
+    /// healthy-but-slow transcode start also has.
+    private func failFastOnServerRefusal(playerItem: AVPlayerItem, item: PlexMediaItem?,
+                                         generation: Int) async -> Bool {
+        guard playbackState != .playing,
+              let events = playerItem.errorLog()?.events, !events.isEmpty,
+              let failing = events.reversed().compactMap({ $0.uri }).first,
+              let url = URL(string: failing) else { return false }
+        let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
+        guard let status = await StreamFailureProbe.status(of: url, headers: headers),
+              StreamFailureProbe.isRefusal(status),
+              loadGeneration == generation else { return false }
+        print("[Plex90] gen=\(generation) | FAIL FAST: \(url.host ?? "?") answered HTTP \(status) for \(url.lastPathComponent); not waiting out the deadline")
+        let failure = PlaybackFailure.classify(
+            backend: backendKind,
+            evidence: { var e = PlaybackFailure.Evidence(); e.httpStatuses = [status]; return e }()
+        )
+        showErrorThenSkip(failure, generation: generation, title: item?.title ?? "?",
+                          detail: "server refused \(url.lastPathComponent) with HTTP \(status) before any picture")
+        return true
+    }
+
+    /// Reads back what the player actually saw, so the message on screen is evidence and
+    /// not a guess.
+    ///
+    /// `AVPlayerItemErrorLogEvent.httpStatusCode` is the load-bearing field and nothing
+    /// used to read it: it is how the app can say "your server answered HTTP 500" instead
+    /// of "playback error". It is -1 on events that were not HTTP failures, which is why
+    /// the filter is here rather than at the point of use.
+    private func failureEvidence(for playerItem: AVPlayerItem?,
+                                 starvedAfterCappedRetry: Bool = false,
+                                 hadPicture: Bool = false,
+                                 item: PlexMediaItem? = nil) -> PlaybackFailure.Evidence {
+        var e = PlaybackFailure.Evidence()
+        e.starvedAfterCappedRetry = starvedAfterCappedRetry
+        e.everShowedPicture = hadPicture
+        e.sourceCodec = item?.videoCodec
+        if let events = playerItem?.errorLog()?.events {
+            e.coreMediaStatuses = events.map(\.errorStatusCode).filter { $0 != 0 }
+            // tvOS has no httpStatusCode on an error-log event, but AVFoundation often
+            // writes the status into the free-text comment ("... 500 ..."). Worth reading,
+            // never trusted on its own: `StreamFailureProbe` is what actually settles it.
+            e.httpStatuses = events.compactMap { Self.httpStatus(inComment: $0.errorComment) }
+        }
+        if let ns = playerItem?.error as NSError?, ns.domain == NSURLErrorDomain {
+            e.urlErrorCode = ns.code
+        }
+        return e
+    }
+
+    /// A three-digit HTTP status mentioned in an error-log comment, if there is one.
+    private static func httpStatus(inComment comment: String?) -> Int? {
+        guard let comment, let range = comment.range(of: #"\b[45]\d{2}\b"#, options: .regularExpression)
+        else { return nil }
+        return Int(comment[range])
+    }
+
+    /// Classify what just went wrong, asking the server when the player's own signals do
+    /// not already name a cause. The probe is one ranged GET on the URL that just failed.
+    private func classifyFailure(for playerItem: AVPlayerItem?, item: PlexMediaItem?,
+                                 starvedAfterCappedRetry: Bool = false,
+                                 hadPicture: Bool = false) async -> PlaybackFailure {
+        var evidence = failureEvidence(for: playerItem,
+                                       starvedAfterCappedRetry: starvedAfterCappedRetry,
+                                       hadPicture: hadPicture, item: item)
+        // Starvation is already decided; asking the server would only slow the card down.
+        if !starvedAfterCappedRetry, evidence.httpStatuses.isEmpty, let url = lastStreamURL {
+            let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
+            if let status = await StreamFailureProbe.status(of: url, headers: headers),
+               StreamFailureProbe.isRefusal(status) {
+                print("[Plex90] FAILURE PROBE: \(url.host ?? "?") answered HTTP \(status) for the failed stream")
+                evidence.httpStatuses.append(status)
+            }
+        }
+        return PlaybackFailure.classify(backend: backendKind, evidence: evidence)
     }
 
     /// Convenience for firing `playback.error` from any playback path. No-op when there
@@ -428,7 +530,7 @@ extension AppState {
 
         if !isDemoMode && directURL == nil && transcodeURL == nil {
             print("[Plex90] gen=\(generation) | No URL available")
-            showErrorThenSkip("No playable source", generation: generation, errorCode: .noPlayableSource)
+            showErrorThenSkip(.noPlayableSource(server: backendKind.displayName), generation: generation)
             return
         }
 
@@ -468,7 +570,7 @@ extension AppState {
                     // Transcode branch: ask the backend how to play it (Jellyfin = PlaybackInfo,
                     // others = hand-built URL). This is the only await in the load path.
                     guard let api = itemAPI else {
-                        self.showErrorThenSkip("No playable source", generation: generation, errorCode: .noPlayableSource)
+                        self.showErrorThenSkip(.noPlayableSource(server: backendKind.displayName), generation: generation)
                         return
                     }
                     let resolved = await api.resolveTranscodePlayback(for: item, offsetSeconds: self.seekOffset)
@@ -488,7 +590,7 @@ extension AppState {
                     }
                     guard let resolution else {
                         print("[Plex90] gen=\(generation) | No playable source after PlaybackInfo")
-                        self.showErrorThenSkip("Transcoding unavailable", generation: generation, errorCode: .transcodingUnavailable)
+                        self.showErrorThenSkip(.transcodingUnavailable(server: backendKind.displayName), generation: generation)
                         return
                     }
                     resolvedURL = resolution.url
@@ -508,6 +610,7 @@ extension AppState {
                 } else {
                     playerItem = AVPlayerItem(url: resolvedURL)
                 }
+                self.lastStreamURL = resolvedURL
                 playerItem.preferredForwardBufferDuration = 5
 
                 self.installFreshPlayer(with: playerItem, generation: generation)
@@ -623,6 +726,7 @@ extension AppState {
 
                 print("[Plex90] gen=\(generation) | RETRY: creating new AVPlayerItem for \"\(title)\"")
                 let playerItem = AVPlayerItem(url: url)
+                self.lastStreamURL = url
                 playerItem.preferredForwardBufferDuration = 5
                 self.installFreshPlayer(with: playerItem, generation: generation)
 
@@ -660,7 +764,7 @@ extension AppState {
                             let msg = playerItem.error?.localizedDescription ?? "Unknown error"
                             print("[Plex90] gen=\(generation) | RETRY FAILED: \"\(title)\" - \(msg)")
                             self.emitPlaybackError(.playerFailed)
-                            self.autoSkipOnError(generation: generation)
+                            self.autoSkipOnError(generation: generation, playerItem: playerItem)
                         default:
                             break
                         }
@@ -707,6 +811,7 @@ extension AppState {
                 }
                 print("[Plex90] gen=\(generation) | TRANSCODE: creating AVPlayerItem for \"\(title)\"")
                 let playerItem = AVPlayerItem(url: url)
+                self.lastStreamURL = url
                 playerItem.preferredForwardBufferDuration = 5
                 self.installFreshPlayer(with: playerItem, generation: generation)
 
@@ -742,7 +847,7 @@ extension AppState {
                             let msg = playerItem.error?.localizedDescription ?? "Unknown error"
                             print("[Plex90] gen=\(generation) | TRANSCODE FAILED: \"\(title)\" - \(msg)")
                             self.emitPlaybackError(.playerFailed)
-                            self.autoSkipOnError(generation: generation)
+                            self.autoSkipOnError(generation: generation, playerItem: playerItem)
                         default:
                             break
                         }
@@ -782,6 +887,13 @@ extension AppState {
             if self.player?.rate == 0, playerItem.status != .failed {
                 print("[Plex90] gen=\(generation) | WATCHDOG: 4s in, not playing yet (state=\(self.playbackState)) — nudging play()")
                 self.player?.play()
+            }
+            // A server that has already refused the stream should not cost the viewer the
+            // whole deadline, which is 40s for a 4K source. If the player has logged a
+            // failed request by now and nothing has decoded, ask that exact URL what it
+            // answers. A refusal is final: no amount of waiting turns a 500 into a picture.
+            if await self.failFastOnServerRefusal(playerItem: playerItem, item: item, generation: generation) {
+                return
             }
             let window = PlaybackWatchdog.progressWindowSeconds
             try? await Task.sleep(for: .seconds(max(1, deadline - 4 - window)))
@@ -831,16 +943,25 @@ extension AppState {
                 print("[Plex90] gen=\(generation) | WATCHDOG: \(deadline)s deadline, no picture (\(detail)) — retrying once with video capped at 1080p")
                 PlaybackDiagnostics.record(outcome: "retry capped at 1080p after \(deadline)s", title: item.title, detail: detail)
                 self.stopActiveTranscodeIfNeeded()
-                let session = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "session" }?.value
+                let query = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems
+                let session = query?.first { $0.name == "session" || $0.name == "PlaySessionId" }?.value
                 self.activeTranscode = (item.serverID, session)
-                self.hlsRequestedOffset = self.seekOffset
-                self.fallbackToTranscode(url: capped, seekTo: nil, generation: generation, allowCappedRetry: false)
+                // Same split as the starvation ladder: Plex builds the offset into the
+                // capped request, Jellyfin and Emby reject a start time on segment
+                // requests so their capped stream begins at zero and we seek.
+                let startsAtOffset = backend.cappedStreamStartsAtOffset
+                self.hlsRequestedOffset = startsAtOffset ? self.seekOffset : 0
+                self.fallbackToTranscode(url: capped, seekTo: startsAtOffset ? nil : self.seekOffset,
+                                         generation: generation, allowCappedRetry: false)
                 return
             }
             print("[Plex90] gen=\(generation) | WATCHDOG: \(deadline)s deadline, no picture (\(detail)) — advancing to next item")
-            PlaybackDiagnostics.record(outcome: "skipped to next after \(deadline)s", title: item?.title ?? "?", detail: detail)
-            self.emitPlaybackError(.watchdogSkip)
-            self.advanceToNextItem()
+            // The error log is read here for the first time to say *why*. A segment that
+            // came back 500 is the server's problem and the card now says so.
+            let failure = await self.classifyFailure(for: playerItem, item: item, hadPicture: false)
+            guard self.loadGeneration == generation else { return }
+            self.showErrorThenSkip(failure, generation: generation,
+                                   title: item?.title ?? "?", detail: detail)
         }
     }
 
@@ -905,20 +1026,27 @@ extension AppState {
         }
         if allowCappedRetry, let item,
            let capped = api(for: item.serverID).cappedTranscodeURL(for: item, offsetSeconds: position, sessionID: UUID().uuidString) {
-            print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — resuming at \(position)s with video capped at 1080p")
+            // Plex builds the offset into the capped request; Jellyfin and Emby reject a
+            // start time on segment requests, so their capped stream begins at zero and we
+            // seek, exactly as the first attempt does.
+            let startsAtOffset = api(for: item.serverID).cappedStreamStartsAtOffset
+            print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — resuming at \(position)s with video capped at 1080p (\(startsAtOffset ? "server offset" : "client seek"))")
             PlaybackDiagnostics.record(outcome: "starved → capped 1080p from \(position)s", title: title, detail: detail)
             stopActiveTranscodeIfNeeded()
-            let session = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "session" }?.value
+            let query = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems
+            let session = query?.first { $0.name == "session" || $0.name == "PlaySessionId" }?.value
             activeTranscode = (item.serverID, session)
             seekOffset = position
-            hlsRequestedOffset = position
-            fallbackToTranscode(url: capped, seekTo: nil, generation: generation, allowCappedRetry: false)
+            hlsRequestedOffset = startsAtOffset ? position : 0
+            fallbackToTranscode(url: capped, seekTo: startsAtOffset ? nil : position,
+                                generation: generation, allowCappedRetry: false)
             return
         }
         print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — nothing smaller to ask for, advancing to next item")
-        PlaybackDiagnostics.record(outcome: "starved on the capped stream, skipped", title: title, detail: detail)
-        emitPlaybackError(.watchdogSkip)
-        advanceToNextItem()
+        // The server answered correctly and still could not be watched, which is a
+        // different sentence from "your server refused it".
+        showErrorThenSkip(.serverTooSlow(server: backendKind.displayName),
+                          generation: generation, title: title, detail: detail)
     }
 
     /// One AVPlayer per load. Reusing a single player across dozens of item swaps, mixing
@@ -943,12 +1071,23 @@ extension AppState {
         print("[Plex90] gen=\(generation) | HLS timeline starts at \(String(format: "%.1f", t))s for a \(hlsRequestedOffset)s offset, base \(Int(hlsBaseOffset))s, item duration \(d.isNumeric ? String(format: "%.0f", d.seconds) : "indefinite")s")
     }
 
-    private func autoSkipOnError(generation: Int) {
+    /// `playerItem` is the one that failed. It carries the error log, which is the only
+    /// place the HTTP status of a refused segment survives, so this path can finally tell a
+    /// server that said no from a file the device could not decode.
+    private func autoSkipOnError(generation: Int, playerItem: AVPlayerItem? = nil) {
         guard loadGeneration == generation else { return }
         let title = currentItem?.title ?? "Unknown"
+        let reason = playerItem?.error?.localizedDescription ?? "no error on the item"
         print("[Plex90] gen=\(generation) | AUTO-SKIP: \"\(title)\" failed, skipping to next")
-        PlaybackDiagnostics.record(outcome: "player error, skipped", title: title, detail: "AVPlayer reported a failure before any watchdog deadline")
-        advanceToNextItem()
+        let hadPicture = playbackState == .playing
+        Task { @MainActor [weak self] in
+            guard let self, self.loadGeneration == generation else { return }
+            let failure = await self.classifyFailure(for: playerItem, item: self.currentItem,
+                                                     hadPicture: hadPicture)
+            guard self.loadGeneration == generation else { return }
+            self.showErrorThenSkip(failure, generation: generation, title: title,
+                                   detail: "AVPlayer failed before any watchdog deadline: \(reason)")
+        }
     }
 
     /// Backstop for an item that finishes without announcing it.

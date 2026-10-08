@@ -78,7 +78,46 @@ nostalgex.app shipped separately the same day.
   `/Users/{id}/Views` answers 200. It is the first request after sign-in, so it
   fails whatever the libraries are named and however large they are. Fixed with
   three tests on the branch, not yet merged. This is issue #6, and it is present
-  in the released 1.0.23.
+  in the released 1.0.23. **Now verified end to end against an Emby server**
+  (see below).
+- `feat/playback-failure-card` — **a programme that will not play now says why,
+  instead of being swapped for the next one in silence.** Only three of about eight
+  failure paths showed any UI at all; the startup watchdog, the starvation verdict and an
+  AVPlayer item reaching `.failed` all advanced with nothing on screen, which reads as a
+  broken app and hides whether the person should look at their server or at the file.
+  `PlaybackState.error` now carries a `PlaybackFailure` rather than a sentence, and every
+  failure path funnels through one place that records the verdict, emits the matching
+  analytics code and shows a card for five seconds before advancing. Amber when the server
+  is the thing to go and look at, red when the file or the device is.
+  Getting the reason right needed a new source of truth: tvOS has no `httpStatusCode` on
+  `AVPlayerItemErrorLogEvent`, so the status of a refused segment cannot be read out of the
+  player, and that status is the difference between "your server refused this" and "this
+  file will not decode". `StreamFailureProbe` asks the server instead, with one ranged GET
+  on the URL that just failed. 14 tests, classification being a pure function over what was
+  observed. Not merged.
+- The startup watchdog's capped retry had the same missing client-side seek the starvation
+  ladder got, so a watchdog retry on Jellyfin or Emby would have restarted the film from
+  frame one. Fixed on the same branch as the ladder.
+- `fix/starvation-ladder-all-backends` — **the starvation ladder had no rung on
+  Jellyfin or Emby, so one stall skipped the programme.** `handleStarvation` steps
+  a starving stream down to 1080p and only advances once there is nothing smaller
+  to ask for, but `cappedTranscodeURL` was implemented on Plex alone and the
+  `MediaBackend` default returns nil. Measured on Emby Server 4.10.1.0: each
+  6-second segment took 3.4s to produce before its first byte, at 128 Mbps once
+  flowing, so the server and not the network was the limit; a film jumped out
+  mid-scene to the next scheduled title at its first frame. Both backends now
+  build the rung at 1920 wide and 8 Mbps under their own `PlaySessionId`, with no
+  start time on the URL, because the segment handler refuses one. A new
+  `cappedStreamStartsAtOffset` says which backends seek client-side. 4 tests.
+  Not merged.
+- `fix/backend-error-copy` — error messages name the server the user actually
+  connected to. `PlexAPIService.APIError` is the shared error type for all three
+  backends, but every message hung off it was written for Plex, so an Emby user
+  whose scan 404s was told "Plex (or your network path) returned HTTP 404" and
+  sent to check Plex's Remote Access setting. Plex keeps its own copy, including
+  the `/library` and `/identity` paths only Plex serves. One test asserts no
+  Jellyfin or Emby message contains the word "Plex", across every error case.
+  Not merged.
 - `fix/guide-wrap-scrolling` — the guide's vertical wrap now runs off a focusable
   sentinel row just outside the last channel rather than a 150ms staleness timer,
   so "ran off the end" is proven by the focus engine instead of inferred from a
@@ -90,12 +129,20 @@ nostalgex.app shipped separately the same day.
   `getJellyfinTranscodeUrl` (`plex-tuner.html`). Same defect #5 fixed on tvOS.
   hls.js already seeks via `startPosition`, so the parameter only breaks segment
   requests. Spotted by @Gorbataras. In progress.
-- **Emby is reasoned, not measured.** The Emby halves of #5 and #7 rest on
-  Jellyfin's HLS controller being forked from Emby's, and on Emby's own web
-  client seeking client-side. Neither has been run against an Emby server.
+- **Emby, measured.** The Emby halves of #5 and #7 were reasoned from Jellyfin's
+  HLS controller being forked from Emby's, and from Emby's own web client seeking
+  client-side. Both now ran against Emby Server 4.10.1.0: sign-in, library scan,
+  guide build, and a mid-programme join that started Heat at 47 minutes into a
+  2:50:00 film and advanced 25s of playhead across 25s of wall clock with no
+  stall. The scan only ever touches `/Users/{id}/Views` and `/Items`, and series
+  and episodes go through that same `/Items` call with a different
+  `IncludeItemTypes`, so a movies-only test library still exercises every HTTP
+  path the scan makes. What remains untested on Emby is episode *parsing*, not
+  whether an endpoint answers.
 
 **Next.**
 
-- Verify the three Emby changes against a real Emby server, then cut a build.
-- Merge the two branches above once that verification lands.
+- Merge the three branches above.
 - Port the web tuner's `StartTimeTicks` removal.
+- Exercise an Emby library that contains TV series, to cover episode parsing and
+  the per-show grouping the movies-only run could not reach.

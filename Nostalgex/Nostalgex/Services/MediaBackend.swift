@@ -7,6 +7,17 @@ enum MediaBackendKind: String, Codable, Sendable {
     case plex
     case jellyfin
     case emby
+
+    /// How the server is named back to the user. Error copy says "Emby returned 404",
+    /// not "Plex returned 404", which is what a Jellyfin or Emby user used to be told
+    /// because every message was written for the one backend that shipped first.
+    var displayName: String {
+        switch self {
+        case .plex:     return "Plex"
+        case .jellyfin: return "Jellyfin"
+        case .emby:     return "Emby"
+        }
+    }
 }
 
 /// Abstraction over a media server the app can tune into (Plex, Jellyfin, …).
@@ -71,6 +82,12 @@ protocol MediaBackend: Sendable {
     /// stream the device turned out not to decode (4K H.264 on an older Apple TV, say): a
     /// re-encode the device can play beats a skipped program. Nil means no such option.
     func cappedTranscodeURL(for item: PlexMediaItem, offsetSeconds: Int, sessionID: String) -> URL?
+
+    /// Whether the URL from `cappedTranscodeURL` already begins at the requested offset.
+    /// Plex builds the offset into the transcode request. Jellyfin and Emby reject a start
+    /// time on segment requests, so their capped stream starts at zero and the client seeks,
+    /// the same split `resolveTranscodePlayback(for:offsetSeconds:)` already reports.
+    var cappedStreamStartsAtOffset: Bool { get }
 
     /// Registers a hand-built HLS start URL with the server before the player opens it.
     /// Plex needs its `decision` call first or it rejects `start.m3u8`; other backends
@@ -208,6 +225,8 @@ extension MediaBackend {
     }
 
     func cappedTranscodeURL(for item: PlexMediaItem, offsetSeconds: Int, sessionID: String) -> URL? { nil }
+
+    var cappedStreamStartsAtOffset: Bool { true }
 
     func prepareTranscodeSession(startURL: URL) async {}
 }

@@ -43,15 +43,8 @@ struct PlayerView: View {
             // Loading / error states. Loading crossfades in the "TUNING" overlay (visual
             // only) once we're past the ~0.75s threshold, so the screen isn't black during a
             // slow transcode spin-up; error shows a brief message before auto-skip advances.
-            if case .error(let message) = appState.playbackState {
-                VStack(spacing: 16) {
-                    Text("PLAYBACK ERROR")
-                        .font(.custom("DMMono-Medium", size: 32))
-                        .foregroundStyle(Color(hex: "#FF2244"))
-                    Text(message.uppercased())
-                        .font(.custom("DMMono-Regular", size: 22))
-                        .foregroundStyle(Color(hex: "#FF2244").opacity(0.7))
-                }
+            if case .error(let failure) = appState.playbackState {
+                PlaybackFailureCard(failure: failure, compact: false)
             }
 
             // Tuning overlay — layered here (not inside a switch) so it crossfades over the

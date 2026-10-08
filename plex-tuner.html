@@ -3418,10 +3418,16 @@
   async function getJellyfinTranscodeUrl(item) {
     const msid = item.partKey || item.ratingKey;
     const startTicks = item.offsetSeconds ? Math.floor(item.offsetSeconds) * 10000000 : 0;
+    // No StartTimeTicks on the fallback URL. Jellyfin copies the master's query string onto
+    // main.m3u8 and then onto every segment, and its segment handler refuses the parameter:
+    // measured against Jellyfin 12.2, master 200, main.m3u8 200, segment 0 HTTP 400. Without
+    // it the same segment is 584 KB and plays. hls.js already joins mid-programme through
+    // `startPosition` below, so the offset is the client's job here, exactly as on tvOS
+    // (see JellyfinPlaybackResolver.offsetPlayback). StartTimeTicks still goes in the
+    // PlaybackInfo body, where it only informs the decision and never reaches a segment URL.
     const fallback = `${plexServerUrl}/Videos/${item.ratingKey}/master.m3u8`
       + `?MediaSourceId=${encodeURIComponent(msid)}&api_key=${plexToken}`
-      + `&VideoCodec=h264&AudioCodec=aac&MaxWidth=3840&SegmentContainer=ts&DeviceId=${getClientId()}`
-      + (startTicks ? `&StartTimeTicks=${startTicks}` : '');
+      + `&VideoCodec=h264&AudioCodec=aac&MaxWidth=3840&SegmentContainer=ts&DeviceId=${getClientId()}`;
     const deviceProfile = {
       MaxStreamingBitrate: 120000000,
       DirectPlayProfiles: [

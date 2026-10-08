@@ -25,13 +25,56 @@ extension JellyfinPlaybackResolver {
     /// back in 9 ms with its first PTS at 114.58 s), so a client-side seek on the full
     /// playlist is the designed path, and the one Jellyfin's own web player takes.
     /// Emby goes through here too. Jellyfin's HLS controller is forked from Emby's, with the
-    /// same full-runtime playlist and query string copied onto every segment URL. Not yet
-    /// measured against an Emby server.
+    /// same full-runtime playlist and query string copied onto every segment URL. Measured
+    /// against Emby Server 4.10.1.0 on 2026-10-08: a mid-schedule join started at 47 minutes
+    /// into a 2:50:00 film and held real time.
     static func offsetPlayback(
         _ resolution: PlaybackResolution,
         offsetSeconds: Int
     ) -> (resolution: PlaybackResolution, startsAtOffset: Bool) {
         (resolution, false)
+    }
+
+    /// The 1080p rung of the starvation ladder, for both Jellyfin and Emby.
+    ///
+    /// Without this the ladder had no rung at all on these backends: `cappedTranscodeURL`
+    /// was implemented only on Plex, the protocol default returned nil, and a single stall
+    /// fell straight through to "nothing smaller to ask for" and skipped to the next
+    /// programme. A slow server therefore jumped out of a film mid-scene instead of
+    /// stepping the quality down, which is what a movie channel looked like on an Emby
+    /// server producing each 6-second segment in 3.4 seconds (measured 2026-10-08).
+    ///
+    /// 1920 wide at 8 Mbps is deliberately below the `.high` preset: the point is to ask
+    /// the server for materially less work than the stream that just starved, not to
+    /// re-request the same bitrate under a new session id.
+    ///
+    /// No start time goes on this URL. The segment handler rejects one, same as the first
+    /// attempt, so the caller seeks instead; `cappedStreamStartsAtOffset` is false on both
+    /// backends to say so.
+    static func cappedTranscodeURL(
+        serverURL: String,
+        item: PlexMediaItem,
+        accessToken: String,
+        deviceID: String,
+        sessionID: String,
+        supportsHEVC: Bool
+    ) -> URL? {
+        guard var components = URLComponents(string: "\(serverURL)/Videos/\(item.ratingKey)/master.m3u8") else {
+            return nil
+        }
+        components.queryItems = [
+            .init(name: "MediaSourceId", value: item.partKey ?? item.ratingKey),
+            .init(name: "api_key", value: accessToken),
+            .init(name: "DeviceId", value: deviceID),
+            .init(name: "PlaySessionId", value: sessionID),
+            .init(name: "VideoCodec", value: supportsHEVC ? "h264,hevc" : "h264"),
+            .init(name: "AudioCodec", value: "aac,ac3,eac3,mp3"),
+            .init(name: "VideoBitrate", value: "8000000"),
+            .init(name: "MaxWidth", value: "1920"),
+            .init(name: "TranscodingMaxAudioChannels", value: "6"),
+            .init(name: "SegmentContainer", value: "mp4"),
+        ]
+        return components.url
     }
 }
 
