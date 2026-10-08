@@ -107,6 +107,14 @@
     revealEls.forEach(function (el) { el.classList.add("is-visible"); });
   }
 
+  /* ---------- Hero video: respect prefers-reduced-motion ---------- */
+  var heroVideo = document.querySelector(".hero-video");
+  if (heroVideo && reduceMotion) {
+    heroVideo.removeAttribute("autoplay");
+    heroVideo.pause();
+    heroVideo.currentTime = 0;
+  }
+
   /* ---------- FAQ: close others when one opens ---------- */
   var faqs = document.querySelectorAll(".faq-list details");
   faqs.forEach(function (d) {

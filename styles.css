@@ -131,7 +131,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-img, svg { display: block; max-width: 100%; height: auto; }
+img, svg, video { display: block; max-width: 100%; height: auto; }
 
 h1, h2, h3 { margin: 0; line-height: 1.02; letter-spacing: -0.015em; font-weight: 800; }
 p { margin: 0; }
@@ -508,7 +508,7 @@ a { color: inherit; }
   background: var(--navy);
   padding: 8px;                 /* slim TV bezel */
 }
-.shot img { border-radius: 6px; }
+.shot img, .shot video { border-radius: 6px; }
 
 .shot-tilt-r {
   transform: rotate(2.2deg);
