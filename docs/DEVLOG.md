@@ -78,7 +78,16 @@ nostalgex.app shipped separately the same day.
   `/Users/{id}/Views` answers 200. It is the first request after sign-in, so it
   fails whatever the libraries are named and however large they are. Fixed with
   three tests on the branch, not yet merged. This is issue #6, and it is present
-  in the released 1.0.23.
+  in the released 1.0.23. **Now verified end to end against an Emby server**
+  (see below).
+- `fix/backend-error-copy` — error messages name the server the user actually
+  connected to. `PlexAPIService.APIError` is the shared error type for all three
+  backends, but every message hung off it was written for Plex, so an Emby user
+  whose scan 404s was told "Plex (or your network path) returned HTTP 404" and
+  sent to check Plex's Remote Access setting. Plex keeps its own copy, including
+  the `/library` and `/identity` paths only Plex serves. One test asserts no
+  Jellyfin or Emby message contains the word "Plex", across every error case.
+  Not merged.
 - `fix/guide-wrap-scrolling` — the guide's vertical wrap now runs off a focusable
   sentinel row just outside the last channel rather than a 150ms staleness timer,
   so "ran off the end" is proven by the focus engine instead of inferred from a
@@ -90,12 +99,20 @@ nostalgex.app shipped separately the same day.
   `getJellyfinTranscodeUrl` (`plex-tuner.html`). Same defect #5 fixed on tvOS.
   hls.js already seeks via `startPosition`, so the parameter only breaks segment
   requests. Spotted by @Gorbataras. In progress.
-- **Emby is reasoned, not measured.** The Emby halves of #5 and #7 rest on
-  Jellyfin's HLS controller being forked from Emby's, and on Emby's own web
-  client seeking client-side. Neither has been run against an Emby server.
+- **Emby, measured.** The Emby halves of #5 and #7 were reasoned from Jellyfin's
+  HLS controller being forked from Emby's, and from Emby's own web client seeking
+  client-side. Both now ran against Emby Server 4.10.1.0: sign-in, library scan,
+  guide build, and a mid-programme join that started Heat at 47 minutes into a
+  2:50:00 film and advanced 25s of playhead across 25s of wall clock with no
+  stall. The scan only ever touches `/Users/{id}/Views` and `/Items`, and series
+  and episodes go through that same `/Items` call with a different
+  `IncludeItemTypes`, so a movies-only test library still exercises every HTTP
+  path the scan makes. What remains untested on Emby is episode *parsing*, not
+  whether an endpoint answers.
 
 **Next.**
 
-- Verify the three Emby changes against a real Emby server, then cut a build.
-- Merge the two branches above once that verification lands.
+- Merge the three branches above.
 - Port the web tuner's `StartTimeTicks` removal.
+- Exercise an Emby library that contains TV series, to cover episode parsing and
+  the per-show grouping the movies-only run could not reach.
