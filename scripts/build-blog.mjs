@@ -106,8 +106,6 @@ function renderNav() {
         <a href="/#how">How it works</a>
         <a href="/#guide">The guide</a>
         <a href="/#lineup">Lineup</a>
-        <a href="/blog">Blog</a>
-        <a href="/#faq">FAQ</a>
         <a href="/#top" data-changelog-home>What's new</a>
       </nav>
       <div class="nav-actions">
