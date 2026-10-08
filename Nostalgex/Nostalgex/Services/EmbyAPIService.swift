@@ -462,6 +462,17 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         return JellyfinPlaybackResolver.offsetPlayback(r, offsetSeconds: offsetSeconds)
     }
 
+    func cappedTranscodeURL(for item: PlexMediaItem, offsetSeconds: Int, sessionID: String) -> URL? {
+        JellyfinPlaybackResolver.cappedTranscodeURL(
+            serverURL: serverURL, item: item, accessToken: accessToken,
+            deviceID: deviceID, sessionID: sessionID, supportsHEVC: Self.deviceSupportsHEVC
+        )
+    }
+
+    /// Emby rejects a start time on segment requests, so the capped stream starts at zero
+    /// and the caller seeks. Same as the first attempt.
+    var cappedStreamStartsAtOffset: Bool { false }
+
     private func fallbackResolution(for item: PlexMediaItem) -> PlaybackResolution? {
         guard let url = buildTranscodeURL(for: item) else { return nil }
         return PlaybackResolution(url: url, playSessionId: nil, isDirectPlay: false)

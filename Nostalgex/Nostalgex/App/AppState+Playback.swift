@@ -905,14 +905,20 @@ extension AppState {
         }
         if allowCappedRetry, let item,
            let capped = api(for: item.serverID).cappedTranscodeURL(for: item, offsetSeconds: position, sessionID: UUID().uuidString) {
-            print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — resuming at \(position)s with video capped at 1080p")
+            // Plex builds the offset into the capped request; Jellyfin and Emby reject a
+            // start time on segment requests, so their capped stream begins at zero and we
+            // seek, exactly as the first attempt does.
+            let startsAtOffset = api(for: item.serverID).cappedStreamStartsAtOffset
+            print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — resuming at \(position)s with video capped at 1080p (\(startsAtOffset ? "server offset" : "client seek"))")
             PlaybackDiagnostics.record(outcome: "starved → capped 1080p from \(position)s", title: title, detail: detail)
             stopActiveTranscodeIfNeeded()
-            let session = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "session" }?.value
+            let query = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems
+            let session = query?.first { $0.name == "session" || $0.name == "PlaySessionId" }?.value
             activeTranscode = (item.serverID, session)
             seekOffset = position
-            hlsRequestedOffset = position
-            fallbackToTranscode(url: capped, seekTo: nil, generation: generation, allowCappedRetry: false)
+            hlsRequestedOffset = startsAtOffset ? position : 0
+            fallbackToTranscode(url: capped, seekTo: startsAtOffset ? nil : position,
+                                generation: generation, allowCappedRetry: false)
             return
         }
         print("[Plex90] gen=\(generation) | STARVED: \"\(title)\" (\(detail)) — nothing smaller to ask for, advancing to next item")
