@@ -10,7 +10,50 @@ import SwiftUI
 /// (these items have no real media URLs), but every navigation surface renders.
 enum DemoData {
 
+    /// Test-only: `-uiTestManyChannels` pads demo mode out to a guide that actually
+    /// scrolls. The five bundled channels fit on screen at once, so they can never
+    /// reproduce an edge-wrap bug that only exists once the list is taller than the
+    /// viewport — which is every real library. Never set in a shipping run.
+    static var manyChannelsForUITest: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestManyChannels")
+    }
+
+    /// Enough rows that the bottom of the list is well below the fold on a 1080p/4K
+    /// guide (the grid shows roughly 7 rows at 80pt).
+    static let uiTestChannelCount = 20
+
     static func channels() -> [Channel] {
+        manyChannelsForUITest ? paddedChannels() : baseChannels()
+    }
+
+    /// The five bundled channels, then filler rows numbered 6...n so the list scrolls.
+    private static func paddedChannels() -> [Channel] {
+        let base = baseChannels()
+        guard base.count < uiTestChannelCount else { return base }
+        var out = base
+        for number in (base.count + 1)...uiTestChannelCount {
+            out.append(
+                channel(
+                    id: 9000 + number,
+                    number: number,
+                    name: "DEMO FILLER \(number)",
+                    colorHex: "#8899AA",
+                    items: (1...5).map {
+                        item(
+                            id: "d-f\(number)-\($0)",
+                            title: "Filler \(number) Feature \($0)",
+                            year: 1980 + $0,
+                            genres: ["Action"],
+                            duration: 90 + $0
+                        )
+                    }
+                )
+            )
+        }
+        return out
+    }
+
+    private static func baseChannels() -> [Channel] {
         [
             channel(
                 id: 9001, number: 1, name: "DEMO ACTION", colorHex: "#FF2244",
