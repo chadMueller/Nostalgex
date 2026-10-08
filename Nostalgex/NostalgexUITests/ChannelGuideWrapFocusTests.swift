@@ -133,24 +133,32 @@ final class ChannelGuideWrapFocusTests: XCTestCase {
 
     // MARK: - Up wrap
 
-    func testGuide_upOnFirstChannelWrapsToLast() {
+    /// Up out of channel one is meant to leave the grid for the nav bar, NOT wrap to the
+    /// bottom. Chad, 2026-10-08: "up is always supposed to go to settings". There is
+    /// deliberately no sentinel above the first channel, so this is the contract that
+    /// stops one being added back.
+    func testGuide_upOnFirstChannelGoesToSettingsNotTheBottom() {
         let app = launchIntoGuide()
         XCTAssertEqual(focusedChannel(app), 1)
 
         pressSettled(.up)
-        let landed = waitForFocusedChannel(app, demoChannelCount)
-        XCTAssertEqual(landed, demoChannelCount,
-            "Up on the first channel did not wrap to channel \(demoChannelCount); focus on: \(focusedLabel(app) ?? "<nothing>")")
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertNil(focusedChannel(app),
+            "Up on channel 1 should leave the channel grid, but focus stayed on a channel: \(focusedLabel(app) ?? "<nothing>")")
+        XCTAssertEqual(focusedLabel(app), "SETTINGS",
+            "Up on channel 1 should land on SETTINGS; focus on: \(focusedLabel(app) ?? "<nothing>")")
     }
 
-    func testGuide_upOnFirstChannelWrapsToLast_scrollingList() {
+    func testGuide_upOnFirstChannelGoesToSettings_scrollingList() {
         let app = launchIntoGuide(manyChannels: true)
         XCTAssertEqual(focusedChannel(app), 1)
 
         pressSettled(.up)
-        let landed = waitForFocusedChannel(app, manyChannelCount)
-        XCTAssertEqual(landed, manyChannelCount,
-            "Up on the first channel of a SCROLLING guide did not wrap to channel \(manyChannelCount); focus on: \(focusedLabel(app) ?? "<nothing>")")
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertNotEqual(focusedChannel(app), manyChannelCount,
+            "Up on channel 1 of a scrolling guide wrapped to the bottom; it should go to SETTINGS")
+        XCTAssertEqual(focusedLabel(app), "SETTINGS",
+            "Up on channel 1 should land on SETTINGS; focus on: \(focusedLabel(app) ?? "<nothing>")")
     }
 
     // MARK: - Arrival must not wrap
@@ -219,18 +227,18 @@ final class ChannelGuideWrapFocusTests: XCTestCase {
     }
 
     /// Same for Up out of channel 1 at remote cadence.
-    func testGuide_rapidPressesAtTopStillWrap() {
+    /// Rapid Up presses at the top must never wrap to the bottom, however fast they come.
+    func testGuide_rapidPressesAtTopNeverWrap() {
         let app = launchIntoGuide(manyChannels: true)
         XCTAssertEqual(focusedChannel(app), 1)
 
-        // Down to 2, back up to 1, and one more Up inside the same burst.
         for direction in [XCUIRemote.Button.down, .up, .up] {
             XCUIRemote.shared.press(direction)
             Thread.sleep(forTimeInterval: 0.08)
         }
-
-        XCTAssertEqual(waitForFocusedChannel(app, manyChannelCount), manyChannelCount,
-            "rapid Up presses at the top never wrapped; focus on: \(focusedLabel(app) ?? "<nothing>")")
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertNotEqual(focusedChannel(app), manyChannelCount,
+            "rapid Up presses at the top wrapped to the bottom; focus on: \(focusedLabel(app) ?? "<nothing>")")
     }
 
     /// Up from the top row must not wrap on the press that arrived there, or channel 1

@@ -21,7 +21,6 @@ struct ChannelGuideView: View {
     private static let seasonalRowID = -900
     /// Sentinel focus ids for the wrap rows that sit just outside the first and last
     /// channel. See `wrapSentinel`.
-    private static let wrapTopSentinelID = -901
     private static let wrapBottomSentinelID = -902
     @State private var seasonalPromptShown = false
 
@@ -65,7 +64,6 @@ struct ChannelGuideView: View {
                                         .frame(maxWidth: .infinity, minHeight: 200)
                                         .focusable()
                                 }
-                                wrapSentinel(Self.wrapTopSentinelID)
                                 if let offer = appState.seasonalBundleOnOffer {
                                     Button { seasonalPromptShown = true } label: {
                                         SeasonalInviteRow(
@@ -122,33 +120,26 @@ struct ChannelGuideView: View {
                             }
                         }
                         .onChange(of: focusedChannelID) { oldID, newID in
-                            // The wrap. Focus landing on a sentinel is the only proof that
-                            // a press ran off the end of the list, so that is what drives
-                            // it. Nothing here reads a clock or guesses at
-                            // .onMoveCommand's ordering against the focus engine, which is
-                            // what the previous implementation had to do and why it could
-                            // behave differently under load than on a quiet simulator.
+                            // The downward wrap. Focus landing on the sentinel below the
+                            // last channel is the only proof that a press ran off the end
+                            // of the list, so that is what drives it. Nothing here reads a
+                            // clock or guesses at .onMoveCommand's ordering against the
+                            // focus engine, which is what the previous implementation had
+                            // to do and why it could behave differently under load than on
+                            // a quiet simulator.
                             //
-                            // Arriving at the real first or last row is an ordinary focus
-                            // move and lands normally — the sentinel is one row further
-                            // out — so the edge channels stay selectable.
+                            // Arriving at the real last row is an ordinary focus move and
+                            // lands normally, because the sentinel is one row further out.
+                            // The bottom channel stays selectable by construction.
                             //
-                            // Where focus came FROM decides the direction. Pressing Up off
-                            // the top row is a wrap; the focus engine handing out initial
-                            // focus, or a programmatic jump, is not, and must fall through
-                            // onto the adjacent real row instead. That distinction is why
-                            // oldID is read here: without it the guide opened on the last
-                            // channel, because the engine's first focus candidate is the
-                            // top sentinel.
-                            if newID == Self.wrapTopSentinelID {
-                                let cameFromTopRow = oldID == appState.channels.first?.id
-                                    || oldID == Self.seasonalRowID
-                                let target = cameFromTopRow
-                                    ? appState.channels.last?.id
-                                    : appState.channels.first?.id
-                                if let target { focusedChannelID = target }
-                                return
-                            }
+                            // There is deliberately no sentinel above channel one: pressing
+                            // Up out of the top row is meant to reach SETTINGS in the nav
+                            // bar, not wrap to the bottom.
+                            //
+                            // Where focus came FROM decides what to do, because the engine
+                            // handing out initial focus or a programmatic jump can also
+                            // land here, and those must fall through to the adjacent real
+                            // row rather than wrap.
                             if newID == Self.wrapBottomSentinelID {
                                 let cameFromBottomRow = oldID == appState.channels.last?.id
                                 let target = cameFromBottomRow
