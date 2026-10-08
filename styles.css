@@ -1508,11 +1508,8 @@ a { color: inherit; }
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 1280px) {
-  /* nav gets tight with links + three actions; footer still carries the coffee link */
-}
-
 @media (max-width: 1024px) {
+  .nav-social { display: none; }
   .section { padding: 88px 0; }
 
   .hero-grid { grid-template-columns: 1fr; }
@@ -1554,7 +1551,6 @@ a { color: inherit; }
   .feature-grid { grid-template-columns: 1fr; }
   .btn-lg { width: 100%; justify-content: center; }
   .nav-actions .btn-outline { display: none; }
-  .nav-social { display: none; }
   /* nav fits a true 375px: tighter brand, gaps, and button padding */
   .nav-inner { gap: 12px; }
   .nav-actions { gap: 8px; }
