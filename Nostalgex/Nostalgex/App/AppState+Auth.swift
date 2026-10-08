@@ -366,7 +366,7 @@ extension AppState {
             saveCredentials()
         } catch let api as PlexAPIService.APIError {
             isConnected = false
-            errorMessage = Self.userFacingPlexAPIServiceError(api, justAuthenticated: justAuthenticated)
+            errorMessage = Self.userFacingPlexAPIServiceError(api, justAuthenticated: justAuthenticated, backend: backendKind)
             lastFailureDiagnostic = diagnosticString(for: api)
         } catch {
             isConnected = false
@@ -405,28 +405,53 @@ extension AppState {
         }
     }
 
-    /// Maps Plex client errors surfaced during library loads and connection checks.
+    /// Maps client errors surfaced during library loads and connection checks.
+    ///
+    /// `PlexAPIService.APIError` is the shared error type for all three backends, so the
+    /// copy has to be told which server the user actually connected to. Without `backend`
+    /// an Emby user whose scan 404s is told to check Plex's Remote Access setting, which
+    /// sends them looking at the wrong server (reported 2026-10-08 during the #6 triage).
     ///
     /// `justAuthenticated=true` means we're seeing this error on the first library load
-    /// after a fresh PIN sign-in. In that case `.unauthorized` is NOT a session expiry —
+    /// after a fresh sign-in. In that case `.unauthorized` is NOT a session expiry —
     /// it almost always means the account lacks library access on the discovered server.
     /// The reworded message keeps reviewers (and users) from being told their session
     /// expired on the very screen they just signed in from.
-    static func userFacingPlexAPIServiceError(_ error: PlexAPIService.APIError, justAuthenticated: Bool = false) -> String {
+    static func userFacingPlexAPIServiceError(
+        _ error: PlexAPIService.APIError,
+        justAuthenticated: Bool = false,
+        backend: MediaBackendKind = .plex
+    ) -> String {
+        let server = backend.displayName
         switch error {
         case .unauthorized:
             if justAuthenticated {
-                return "Signed in, but this account can't access libraries on the discovered Plex server. Open Plex (Settings → Users & Sharing) and confirm this user has library access, then try again."
+                switch backend {
+                case .plex:
+                    return "Signed in, but this account can't access libraries on the discovered Plex server. Open Plex (Settings → Users & Sharing) and confirm this user has library access, then try again."
+                case .jellyfin, .emby:
+                    return "Signed in, but this account can't access any libraries on your \(server) server. Open the \(server) dashboard, find this user, and confirm they have access to at least one library, then try again."
+                }
             }
             return "Session expired. Please reconnect in Settings."
         case .invalidResponse:
-            return "Invalid reply from Plex. Disconnect and reconnect in Settings."
+            return "Invalid reply from \(server). Disconnect and reconnect in Settings."
         case .noReachableServer:
-            return "Signed in, but no Plex server was reachable. Confirm Plex is running and Remote Access is enabled, then try again."
+            switch backend {
+            case .plex:
+                return "Signed in, but no Plex server was reachable. Confirm Plex is running and Remote Access is enabled, then try again."
+            case .jellyfin, .emby:
+                return "Signed in, but your \(server) server stopped answering. Confirm it is running and reachable at the address you entered, then try again."
+            }
         case .httpFailure(let code):
-            return "Plex (or your network path) returned HTTP \(code). If you use a reverse proxy or custom domain, confirm it proxies /library and /identity without injecting a login page. Then reconnect."
+            switch backend {
+            case .plex:
+                return "Plex (or your network path) returned HTTP \(code). If you use a reverse proxy or custom domain, confirm it proxies /library and /identity without injecting a login page. Then reconnect."
+            case .jellyfin, .emby:
+                return "\(server) (or your network path) returned HTTP \(code). If you use a reverse proxy or custom domain, confirm it passes the \(server) API through without injecting a login page. Check that the address includes the right port, then reconnect."
+            }
         case .receivedMarkupInsteadOfJSON:
-            return "This Plex URL returned a web page instead of the data the app expects. That usually means a proxy, a captive portal, or the wrong hostname or port. Disconnect in Settings, sign in again, or open Plex using the server's LAN address."
+            return "This \(server) URL returned a web page instead of the data the app expects. That usually means a proxy, a captive portal, or the wrong hostname or port. Disconnect in Settings, sign in again, or open \(server) using the server's LAN address."
         }
     }
 
@@ -443,9 +468,9 @@ extension AppState {
         }
     }
 
-    static func userFacingLoadLibraryError(_ error: Error) -> String {
+    static func userFacingLoadLibraryError(_ error: Error, backend: MediaBackendKind = .plex) -> String {
         if let apiErr = error as? PlexAPIService.APIError {
-            return userFacingPlexAPIServiceError(apiErr)
+            return userFacingPlexAPIServiceError(apiErr, backend: backend)
         }
         if let stalled = error as? LibraryLoadStalled {
             // Nothing usable came back, so there is no guide to fall back on. Say what

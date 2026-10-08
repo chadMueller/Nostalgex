@@ -7,6 +7,17 @@ enum MediaBackendKind: String, Codable, Sendable {
     case plex
     case jellyfin
     case emby
+
+    /// How the server is named back to the user. Error copy says "Emby returned 404",
+    /// not "Plex returned 404", which is what a Jellyfin or Emby user used to be told
+    /// because every message was written for the one backend that shipped first.
+    var displayName: String {
+        switch self {
+        case .plex:     return "Plex"
+        case .jellyfin: return "Jellyfin"
+        case .emby:     return "Emby"
+        }
+    }
 }
 
 /// Abstraction over a media server the app can tune into (Plex, Jellyfin, …).
