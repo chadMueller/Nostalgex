@@ -335,6 +335,24 @@ a { color: inherit; }
 [data-theme="light"] .theme-toggle .tt-moon { display: block; }
 [data-theme="light"] .theme-toggle:hover { color: var(--pink); }
 
+/* ---------- Nav social icons (GitHub, Discord, Instagram, coffee) ---------- */
+.nav-social { display: flex; gap: 8px; align-items: center; }
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  color: var(--ink);
+  border: 1.5px solid var(--rule);
+  border-radius: 999px;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease), transform 160ms var(--ease);
+}
+.social-icon svg { width: 16px; height: 16px; display: block; }
+.social-icon:hover { color: var(--pink); border-color: currentColor; transform: translateY(-2px); }
+.social-icon:active { transform: translateY(0); }
+
 /* ---------- CTA card ----------
    The house CTA treatment: ink frame, paper ground, hard colored slab behind it.
    Reused for coffee, privacy, and email signup. Set the slab with a modifier. */
@@ -394,6 +412,25 @@ a { color: inherit; }
 }
 
 .section-coffee { padding: 40px 0 72px; }
+
+/* ---------- Quick start steps (inside a .cta-card) ---------- */
+.quickstart-steps { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column; gap: 18px; max-width: 62ch; }
+.quickstart-steps li { display: flex; align-items: flex-start; gap: 16px; }
+.qs-num {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  color: var(--ink);
+}
+.quickstart-steps p { margin: 0; color: var(--ink-soft); font-weight: 500; }
 
 @media (max-width: 820px) {
   .cta-card--split { flex-direction: column; align-items: flex-start; gap: 28px; }
@@ -1517,6 +1554,7 @@ a { color: inherit; }
   .feature-grid { grid-template-columns: 1fr; }
   .btn-lg { width: 100%; justify-content: center; }
   .nav-actions .btn-outline { display: none; }
+  .nav-social { display: none; }
   /* nav fits a true 375px: tighter brand, gaps, and button padding */
   .nav-inner { gap: 12px; }
   .nav-actions { gap: 8px; }
