@@ -13,18 +13,16 @@ struct ChannelGuideView: View {
     // How many 30-min slots the user has scrolled forward (0-44 for 24-hour window)
     @State private var slotOffset: Int = 0
     @State private var suppressFocusScroll: Bool = false
-    /// When focus last actually landed on a different channel. The wrap decision needs it
-    /// because .onMoveCommand's ordering relative to the focus engine differs across tvOS
-    /// builds: a "focus didn't change" snapshot alone cannot tell a press that arrived at
-    /// the edge row (change fired milliseconds ago) from a press issued while already
-    /// sitting there (change is stale). The first must land; only the second wraps.
-    @State private var lastFocusMoveAt: Date = .distantPast
 
     @State private var showBundleSidebar: Bool = false
 
     /// Sentinel focus id for the seasonal invite row. Real channels use their own id, and
     /// none of them is negative.
     private static let seasonalRowID = -900
+    /// Sentinel focus ids for the wrap rows that sit just outside the first and last
+    /// channel. See `wrapSentinel`.
+    private static let wrapTopSentinelID = -901
+    private static let wrapBottomSentinelID = -902
     @State private var seasonalPromptShown = false
 
     private let channelColumnWidth: CGFloat = 220
@@ -67,6 +65,7 @@ struct ChannelGuideView: View {
                                         .frame(maxWidth: .infinity, minHeight: 200)
                                         .focusable()
                                 }
+                                wrapSentinel(Self.wrapTopSentinelID)
                                 if let offer = appState.seasonalBundleOnOffer {
                                     Button { seasonalPromptShown = true } label: {
                                         SeasonalInviteRow(
@@ -119,10 +118,45 @@ struct ChannelGuideView: View {
                                         }
                                     }
                                 }
+                                wrapSentinel(Self.wrapBottomSentinelID)
                             }
                         }
-                        .onChange(of: focusedChannelID) { _, newID in
-                            lastFocusMoveAt = Date()
+                        .onChange(of: focusedChannelID) { oldID, newID in
+                            // The wrap. Focus landing on a sentinel is the only proof that
+                            // a press ran off the end of the list, so that is what drives
+                            // it. Nothing here reads a clock or guesses at
+                            // .onMoveCommand's ordering against the focus engine, which is
+                            // what the previous implementation had to do and why it could
+                            // behave differently under load than on a quiet simulator.
+                            //
+                            // Arriving at the real first or last row is an ordinary focus
+                            // move and lands normally — the sentinel is one row further
+                            // out — so the edge channels stay selectable.
+                            //
+                            // Where focus came FROM decides the direction. Pressing Up off
+                            // the top row is a wrap; the focus engine handing out initial
+                            // focus, or a programmatic jump, is not, and must fall through
+                            // onto the adjacent real row instead. That distinction is why
+                            // oldID is read here: without it the guide opened on the last
+                            // channel, because the engine's first focus candidate is the
+                            // top sentinel.
+                            if newID == Self.wrapTopSentinelID {
+                                let cameFromTopRow = oldID == appState.channels.first?.id
+                                    || oldID == Self.seasonalRowID
+                                let target = cameFromTopRow
+                                    ? appState.channels.last?.id
+                                    : appState.channels.first?.id
+                                if let target { focusedChannelID = target }
+                                return
+                            }
+                            if newID == Self.wrapBottomSentinelID {
+                                let cameFromBottomRow = oldID == appState.channels.last?.id
+                                let target = cameFromBottomRow
+                                    ? appState.channels.first?.id
+                                    : appState.channels.last?.id
+                                if let target { focusedChannelID = target }
+                                return
+                            }
                             if !suppressFocusScroll, let id = newID {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     proxy.scrollTo(id, anchor: .center)
@@ -199,38 +233,10 @@ struct ChannelGuideView: View {
                     } else if slotOffset < maxSlotOffset {
                         slotOffset += 1
                     }
-                case .down:
-                    // Wrap only when a press provably had nowhere to go, under EITHER
-                    // event ordering. Two signals decide it after the engine settles:
-                    // focus didn't change because of this press, AND the last real focus
-                    // change is stale. The staleness test is what separates "just arrived
-                    // at the bottom row" (change fired milliseconds ago; handler ordering
-                    // may run after it) from "pressing down while sitting on it" — the
-                    // first fix used the unchanged-snapshot alone and made arrival itself
-                    // wrap, so the bottom channel could never be selected.
-                    let beforeDown = focusedChannelID
-                    let moveStampDown = lastFocusMoveAt
-                    DispatchQueue.main.async {
-                        guard lastFocusMoveAt == moveStampDown,
-                              Date().timeIntervalSince(moveStampDown) > 0.15,
-                              let id = beforeDown, focusedChannelID == id,
-                              let idx = appState.channels.firstIndex(where: { $0.id == id }),
-                              idx == appState.channels.count - 1,
-                              let firstID = appState.channels.first?.id else { return }
-                        focusedChannelID = firstID
-                    }
-                case .up:
-                    let beforeUp = focusedChannelID
-                    let moveStampUp = lastFocusMoveAt
-                    DispatchQueue.main.async {
-                        guard lastFocusMoveAt == moveStampUp,
-                              Date().timeIntervalSince(moveStampUp) > 0.15,
-                              let id = beforeUp, focusedChannelID == id,
-                              let idx = appState.channels.firstIndex(where: { $0.id == id }),
-                              idx == 0,
-                              let lastID = appState.channels.last?.id else { return }
-                        focusedChannelID = lastID
-                    }
+                // Up and Down are deliberately not handled here. The vertical wrap is
+                // driven by focus landing on a sentinel row (see `wrapSentinel` and the
+                // focusedChannelID onChange above), which the focus engine decides, so
+                // this handler has nothing to add and no clock to race.
                 default:
                     break
                 }
@@ -288,6 +294,37 @@ struct ChannelGuideView: View {
             }
         }
         .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+    }
+
+    // MARK: - Wrap sentinels
+
+    /// A one-point focusable strip just outside the first and last channel row.
+    ///
+    /// This is how the guide knows a press ran off the end of the list. The focus engine
+    /// moves onto the sentinel exactly when there was no channel row left in that
+    /// direction, and the focusedChannelID onChange bounces focus to the other end.
+    /// Because the signal comes from the engine rather than from a timer, it behaves the
+    /// same whether the press was a single click, a held direction, or a swipe — and the
+    /// same whether the main thread is idle or busy rebuilding seventeen schedules.
+    ///
+    /// The top sentinel does a second job: it keeps Up out of the NavBar focus section.
+    /// Without it, Up from channel one left the grid for SETTINGS, so the `.up` wrap could
+    /// never fire. Settings is still one Left press away, as the first row of the package
+    /// sidebar.
+    ///
+    /// Omitted below two channels: with one row there is nothing to wrap to, and the
+    /// sentinel would bounce focus straight back onto the row it came from.
+    @ViewBuilder
+    private func wrapSentinel(_ id: Int) -> some View {
+        if appState.channels.count > 1 {
+            // Not Color.clear: a fully transparent view is not reliably a focus
+            // candidate. One point tall and ~invisible is.
+            Color.white.opacity(0.001)
+                .frame(height: 1)
+                .focusable()
+                .focused($focusedChannelID, equals: id)
+                .accessibilityHidden(true)
+        }
     }
 
     // MARK: - Now indicator
