@@ -538,6 +538,12 @@ class AppState {
         didSet { if playbackState != oldValue { refreshNowPlayingInfo() } }
     }
 
+    /// The URL the player was last given. Kept so that when a stream fails, the app can ask
+    /// the server directly what it says about that exact URL. AVFoundation does not report
+    /// the HTTP status of a failed HLS request on tvOS, and "your server answered 500" is
+    /// the single most useful thing the failure card can say. See `StreamFailureProbe`.
+    var lastStreamURL: URL?
+
     // Moved here from the shared-playback section during the AppState split:
     // @Observable requires stored properties to live in the main class body.
     /// The active server-side transcode (if any) so we can stop it on a channel change.
