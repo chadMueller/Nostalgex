@@ -41,6 +41,41 @@
     onScroll();
   }
 
+  /* ---------- Mobile menu (hamburger) ----------
+     Nav links and the social icons hide out of the bar at 1024px; this is
+     where they live instead. */
+  var navToggle = document.getElementById("navToggle");
+  var mobileMenu = document.getElementById("mobileMenu");
+  if (nav && navToggle && mobileMenu) {
+    var closeMobileMenu = function () {
+      nav.removeAttribute("data-menu-open");
+      navToggle.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
+    };
+    var openMobileMenu = function () {
+      nav.setAttribute("data-menu-open", "true");
+      navToggle.setAttribute("aria-expanded", "true");
+      document.body.style.overflow = "hidden";
+    };
+    navToggle.addEventListener("click", function () {
+      if (nav.getAttribute("data-menu-open") === "true") closeMobileMenu();
+      else openMobileMenu();
+    });
+    mobileMenu.querySelectorAll("a, button").forEach(function (el) {
+      el.addEventListener("click", closeMobileMenu);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && nav.getAttribute("data-menu-open") === "true") closeMobileMenu();
+    });
+    document.addEventListener("click", function (e) {
+      if (nav.getAttribute("data-menu-open") !== "true") return;
+      if (!nav.contains(e.target)) closeMobileMenu();
+    });
+    window.addEventListener("resize", function () {
+      if (window.innerWidth > 1024 && nav.getAttribute("data-menu-open") === "true") closeMobileMenu();
+    });
+  }
+
   /* ---------- Lineup: generated groups become collapsible bundles ----------
      render-lineup.mjs emits flat .lineup__group blocks (head + grid). Rather
      than fork the generator into <details>, progressively enhance them here. */

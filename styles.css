@@ -272,7 +272,7 @@ a { color: inherit; }
   height: 74px;
 }
 
-.brand { display: flex; align-items: center; text-decoration: none; }
+.brand { display: flex; align-items: center; text-decoration: none; flex-shrink: 0; }
 .brand-logo { width: auto; height: 42px; }
 
 /* v2 inline wordmark: N + O-as-screen + STALGEX, follows the theme ink */
@@ -291,6 +291,7 @@ a { color: inherit; }
   width: 22.7px;
   margin: 0 1px 0 0.5px;
   color: var(--ink);   /* screen frame + scanlines pick up theme ink */
+  flex-shrink: 0;       /* an SVG is a flex item too — without this it can get squeezed to 0 width */
 }
 
 .nav-links { display: flex; gap: 28px; }
@@ -302,6 +303,7 @@ a { color: inherit; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  white-space: nowrap;
   transition: color 160ms var(--ease);
 }
 .nav-links a:hover { color: var(--ink); }
@@ -352,6 +354,77 @@ a { color: inherit; }
 .social-icon svg { width: 16px; height: 16px; display: block; }
 .social-icon:hover { color: var(--pink); border-color: currentColor; transform: translateY(-2px); }
 .social-icon:active { transform: translateY(0); }
+
+/* ---------- Mobile menu (hamburger + slide-down panel) ----------
+   Hidden by default; the 1024px breakpoint below switches it on for the
+   same range where .nav-links and .nav-social are hidden from the bar. */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--rule);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease);
+}
+.nav-toggle:hover { color: var(--pink); border-color: currentColor; }
+.nav-toggle .nt-icon { width: 16px; height: 16px; display: block; }
+.nav-toggle .nt-close { display: none; }
+.nav-toggle[aria-expanded="true"] .nt-burger { display: none; }
+.nav-toggle[aria-expanded="true"] .nt-close { display: block; }
+
+.mobile-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--hairline);
+  box-shadow: 0 8px 0 var(--nav-shadow);
+  max-height: calc(100vh - 74px);
+  overflow-y: auto;
+}
+.nav[data-menu-open="true"] .mobile-menu { display: block; }
+
+.mobile-menu-links {
+  display: flex;
+  flex-direction: column;
+  width: min(var(--container), 100% - 48px);
+  margin: 8px auto 0;
+}
+.mobile-menu-links a, .mobile-menu-links button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 16px 2px;
+  cursor: pointer;
+}
+.mobile-menu-links a:last-child, .mobile-menu-links button:last-child { border-bottom: 0; }
+
+.mobile-menu-social {
+  display: flex;
+  gap: 10px;
+  width: min(var(--container), 100% - 48px);
+  margin: 20px auto 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
 
 /* ---------- CTA card ----------
    The house CTA treatment: ink frame, paper ground, hard colored slab behind it.
@@ -872,6 +945,7 @@ a { color: inherit; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  white-space: nowrap;
   cursor: pointer;
   transition: color 160ms var(--ease);
 }
@@ -1510,6 +1584,8 @@ a { color: inherit; }
 /* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
   .nav-social { display: none; }
+  .nav-links { display: none; }
+  .nav-toggle { display: inline-flex; }
   .section { padding: 88px 0; }
 
   .hero-grid { grid-template-columns: 1fr; }
@@ -1536,7 +1612,6 @@ a { color: inherit; }
 }
 
 @media (max-width: 768px) {
-  .nav-links { display: none; }
   .brand-logo { height: 36px; }
   .brand-word { font-size: 23px; }
   .brand-word .brand-o { height: 17px; width: 19.3px; }
