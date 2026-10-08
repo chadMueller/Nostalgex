@@ -435,11 +435,11 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         }
     }
 
+    /// The client seeks to the offset itself, same as Jellyfin; see
+    /// `JellyfinPlaybackResolver.offsetPlayback`.
     func resolveTranscodePlayback(for item: PlexMediaItem, offsetSeconds: Int) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
         guard let r = await resolveTranscodePlayback(for: item) else { return nil }
-        guard !r.isDirectPlay, offsetSeconds > 0 else { return (r, false) }
-        let url = JellyfinPlaybackResolver.addingStartTime(to: r.url, offsetSeconds: offsetSeconds)
-        return (PlaybackResolution(url: url, playSessionId: r.playSessionId, isDirectPlay: false), true)
+        return JellyfinPlaybackResolver.offsetPlayback(r, offsetSeconds: offsetSeconds)
     }
 
     private func fallbackResolution(for item: PlexMediaItem) -> PlaybackResolution? {

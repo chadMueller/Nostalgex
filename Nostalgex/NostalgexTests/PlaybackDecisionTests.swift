@@ -128,15 +128,20 @@ final class PlaybackDecisionTests: XCTestCase {
         XCTAssertEqual(v("session"), "s2")
     }
 
-    /// Emby only. Jellyfin rejects StartTimeTicks on HLS segment requests and seeks
-    /// client-side instead; see JellyfinPlaybackInfoTests.testOffsetTuneLeavesTranscodingUrlVerbatimAndSeeksClientSide.
-    func testEmbyGetsAStartTimeInsteadOfAClientSeek() {
-        let base = URL(string: "https://emby.local/Videos/1/master.m3u8?MediaSourceId=1&api_key=k")!
-        let url = JellyfinPlaybackResolver.addingStartTime(to: base, offsetSeconds: 1234)
-        let q = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-        XCTAssertEqual(q.first { $0.name == "StartTimeTicks" }?.value, "12340000000")
-        XCTAssertEqual(q.first { $0.name == "api_key" }?.value, "k", "existing query kept")
-        XCTAssertEqual(JellyfinPlaybackResolver.addingStartTime(to: base, offsetSeconds: 0), base, "no offset, no change")
+    func testJellyfinAndEmbyLeaveTheOffsetToAClientSeek() async throws {
+        // Loopback port 9 refuses the PlaybackInfo POST at once, so this runs the hand-built
+        // fallback URL without a server. The offset rule is the same on either path.
+        let backends: [any MediaBackend] = [
+            JellyfinAPIService(serverURL: "http://127.0.0.1:9", accessToken: "k", userId: "u"),
+            EmbyAPIService(serverURL: "http://127.0.0.1:9", accessToken: "k", userId: "u"),
+        ]
+        for backend in backends {
+            let result = await backend.resolveTranscodePlayback(for: item(), offsetSeconds: 1234)
+            let resolved = try XCTUnwrap(result)
+            XCTAssertFalse(resolved.startsAtOffset, "the HLS playlist starts at zero, so the player has to seek")
+            let q = URLComponents(url: resolved.resolution.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            XCTAssertNil(q.first { $0.name == "StartTimeTicks" }, "Jellyfin 10.10+ rejects every segment of an HLS URL that carries StartTimeTicks")
+        }
     }
 
     func testTranscodeAudioTargetIsLossyOnly() {

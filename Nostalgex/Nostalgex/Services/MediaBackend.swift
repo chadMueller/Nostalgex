@@ -55,8 +55,11 @@ protocol MediaBackend: Sendable {
     func resolveTranscodePlayback(for item: PlexMediaItem) async -> PlaybackResolution?
 
     /// Like the above, but the backend may start the stream at `offsetSeconds` itself.
-    /// `startsAtOffset` true means the client must NOT seek: seeking into an HLS transcode
-    /// that began at zero fails (finished=false) and nothing ever renders.
+    /// `startsAtOffset` true means the client must NOT seek: seeking into a Plex HLS transcode
+    /// that began at zero fails (finished=false) and nothing ever renders. Only Plex does
+    /// this. Jellyfin and Emby return false (`JellyfinPlaybackResolver.offsetPlayback`): their
+    /// HLS playlist covers the whole runtime and the server transcodes from whichever segment
+    /// is requested, so the client seeks, and an offset on the URL breaks the segment requests.
     func resolveTranscodePlayback(for item: PlexMediaItem, offsetSeconds: Int) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)?
 
     /// Stops an active server-side transcode session so it doesn't linger (matters on a

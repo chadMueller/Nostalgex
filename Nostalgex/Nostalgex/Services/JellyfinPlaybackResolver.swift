@@ -24,22 +24,14 @@ extension JellyfinPlaybackResolver {
     /// A cold request for segment N starts the transcode at N (measured: segment 11 came
     /// back in 9 ms with its first PTS at 114.58 s), so a client-side seek on the full
     /// playlist is the designed path, and the one Jellyfin's own web player takes.
+    /// Emby goes through here too. Jellyfin's HLS controller is forked from Emby's, with the
+    /// same full-runtime playlist and query string copied onto every segment URL. Not yet
+    /// measured against an Emby server.
     static func offsetPlayback(
         _ resolution: PlaybackResolution,
         offsetSeconds: Int
     ) -> (resolution: PlaybackResolution, startsAtOffset: Bool) {
         (resolution, false)
-    }
-
-    /// Emby starts an HLS transcode at StartTimeTicks (100ns units); seeking the client
-    /// into a transcode that began at zero never completes, so the offset goes here.
-    /// Not used for Jellyfin, see `offsetPlayback`.
-    static func addingStartTime(to url: URL, offsetSeconds: Int) -> URL {
-        guard offsetSeconds > 0, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
-        var items = (c.queryItems ?? []).filter { $0.name != "StartTimeTicks" }
-        items.append(.init(name: "StartTimeTicks", value: String(Int64(offsetSeconds) * 10_000_000)))
-        c.queryItems = items
-        return c.url ?? url
     }
 }
 
