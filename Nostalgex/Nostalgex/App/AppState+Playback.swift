@@ -901,10 +901,16 @@ extension AppState {
                 print("[Plex90] gen=\(generation) | WATCHDOG: \(deadline)s deadline, no picture (\(detail)) — retrying once with video capped at 1080p")
                 PlaybackDiagnostics.record(outcome: "retry capped at 1080p after \(deadline)s", title: item.title, detail: detail)
                 self.stopActiveTranscodeIfNeeded()
-                let session = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "session" }?.value
+                let query = URLComponents(url: capped, resolvingAgainstBaseURL: false)?.queryItems
+                let session = query?.first { $0.name == "session" || $0.name == "PlaySessionId" }?.value
                 self.activeTranscode = (item.serverID, session)
-                self.hlsRequestedOffset = self.seekOffset
-                self.fallbackToTranscode(url: capped, seekTo: nil, generation: generation, allowCappedRetry: false)
+                // Same split as the starvation ladder: Plex builds the offset into the
+                // capped request, Jellyfin and Emby reject a start time on segment
+                // requests so their capped stream begins at zero and we seek.
+                let startsAtOffset = backend.cappedStreamStartsAtOffset
+                self.hlsRequestedOffset = startsAtOffset ? self.seekOffset : 0
+                self.fallbackToTranscode(url: capped, seekTo: startsAtOffset ? nil : self.seekOffset,
+                                         generation: generation, allowCappedRetry: false)
                 return
             }
             print("[Plex90] gen=\(generation) | WATCHDOG: \(deadline)s deadline, no picture (\(detail)) — advancing to next item")
