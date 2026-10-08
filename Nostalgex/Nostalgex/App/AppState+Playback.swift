@@ -338,6 +338,41 @@ extension AppState {
         }
     }
 
+    /// Ends a load early when the server has already said no.
+    ///
+    /// The startup watchdog gives a 4K source forty seconds to produce a picture, which is
+    /// right for a transcoder spinning up and wrong for a server that refused the job in a
+    /// tenth of a second. The viewer should not watch static for forty seconds to be told
+    /// something the server said immediately.
+    ///
+    /// Probing the URL handed to the player is not enough: that is the master playlist, and
+    /// it answers 200 while the segments beneath it fail. The failing request is named in
+    /// the player's own error log, so this takes the most recent logged URI and asks about
+    /// that. Returns true when it has taken over and shown the card.
+    ///
+    /// Only a 4xx or 5xx ends the load. A timeout, a refused connection or a slow answer
+    /// all leave the watchdog to run its full deadline, because those are the shapes a
+    /// healthy-but-slow transcode start also has.
+    private func failFastOnServerRefusal(playerItem: AVPlayerItem, item: PlexMediaItem?,
+                                         generation: Int) async -> Bool {
+        guard playbackState != .playing,
+              let events = playerItem.errorLog()?.events, !events.isEmpty,
+              let failing = events.reversed().compactMap({ $0.uri }).first,
+              let url = URL(string: failing) else { return false }
+        let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
+        guard let status = await StreamFailureProbe.status(of: url, headers: headers),
+              StreamFailureProbe.isRefusal(status),
+              loadGeneration == generation else { return false }
+        print("[Plex90] gen=\(generation) | FAIL FAST: \(url.host ?? "?") answered HTTP \(status) for \(url.lastPathComponent); not waiting out the deadline")
+        let failure = PlaybackFailure.classify(
+            backend: backendKind,
+            evidence: { var e = PlaybackFailure.Evidence(); e.httpStatuses = [status]; return e }()
+        )
+        showErrorThenSkip(failure, generation: generation, title: item?.title ?? "?",
+                          detail: "server refused \(url.lastPathComponent) with HTTP \(status) before any picture")
+        return true
+    }
+
     /// Reads back what the player actually saw, so the message on screen is evidence and
     /// not a guess.
     ///
@@ -852,6 +887,13 @@ extension AppState {
             if self.player?.rate == 0, playerItem.status != .failed {
                 print("[Plex90] gen=\(generation) | WATCHDOG: 4s in, not playing yet (state=\(self.playbackState)) — nudging play()")
                 self.player?.play()
+            }
+            // A server that has already refused the stream should not cost the viewer the
+            // whole deadline, which is 40s for a 4K source. If the player has logged a
+            // failed request by now and nothing has decoded, ask that exact URL what it
+            // answers. A refusal is final: no amount of waiting turns a 500 into a picture.
+            if await self.failFastOnServerRefusal(playerItem: playerItem, item: item, generation: generation) {
+                return
             }
             let window = PlaybackWatchdog.progressWindowSeconds
             try? await Task.sleep(for: .seconds(max(1, deadline - 4 - window)))
