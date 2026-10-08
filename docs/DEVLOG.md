@@ -80,6 +80,24 @@ nostalgex.app shipped separately the same day.
   three tests on the branch, not yet merged. This is issue #6, and it is present
   in the released 1.0.23. **Now verified end to end against an Emby server**
   (see below).
+- `feat/playback-failure-card` — **a programme that will not play now says why,
+  instead of being swapped for the next one in silence.** Only three of about eight
+  failure paths showed any UI at all; the startup watchdog, the starvation verdict and an
+  AVPlayer item reaching `.failed` all advanced with nothing on screen, which reads as a
+  broken app and hides whether the person should look at their server or at the file.
+  `PlaybackState.error` now carries a `PlaybackFailure` rather than a sentence, and every
+  failure path funnels through one place that records the verdict, emits the matching
+  analytics code and shows a card for five seconds before advancing. Amber when the server
+  is the thing to go and look at, red when the file or the device is.
+  Getting the reason right needed a new source of truth: tvOS has no `httpStatusCode` on
+  `AVPlayerItemErrorLogEvent`, so the status of a refused segment cannot be read out of the
+  player, and that status is the difference between "your server refused this" and "this
+  file will not decode". `StreamFailureProbe` asks the server instead, with one ranged GET
+  on the URL that just failed. 14 tests, classification being a pure function over what was
+  observed. Not merged.
+- The startup watchdog's capped retry had the same missing client-side seek the starvation
+  ladder got, so a watchdog retry on Jellyfin or Emby would have restarted the film from
+  frame one. Fixed on the same branch as the ladder.
 - `fix/starvation-ladder-all-backends` — **the starvation ladder had no rung on
   Jellyfin or Emby, so one stall skipped the programme.** `handleStarvation` steps
   a starving stream down to 1080p and only advances once there is nothing smaller
