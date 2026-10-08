@@ -80,6 +80,18 @@ nostalgex.app shipped separately the same day.
   three tests on the branch, not yet merged. This is issue #6, and it is present
   in the released 1.0.23. **Now verified end to end against an Emby server**
   (see below).
+- `fix/starvation-ladder-all-backends` — **the starvation ladder had no rung on
+  Jellyfin or Emby, so one stall skipped the programme.** `handleStarvation` steps
+  a starving stream down to 1080p and only advances once there is nothing smaller
+  to ask for, but `cappedTranscodeURL` was implemented on Plex alone and the
+  `MediaBackend` default returns nil. Measured on Emby Server 4.10.1.0: each
+  6-second segment took 3.4s to produce before its first byte, at 128 Mbps once
+  flowing, so the server and not the network was the limit; a film jumped out
+  mid-scene to the next scheduled title at its first frame. Both backends now
+  build the rung at 1920 wide and 8 Mbps under their own `PlaySessionId`, with no
+  start time on the URL, because the segment handler refuses one. A new
+  `cappedStreamStartsAtOffset` says which backends seek client-side. 4 tests.
+  Not merged.
 - `fix/backend-error-copy` — error messages name the server the user actually
   connected to. `PlexAPIService.APIError` is the shared error type for all three
   backends, but every message hung off it was written for Plex, so an Emby user
