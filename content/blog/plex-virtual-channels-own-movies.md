@@ -5,8 +5,8 @@ description: "Plex Live TV won't play your own movies. Here's what it does, what
 excerpt: "Plex has a Live TV tab and a server full of your movies, but the two never meet. Here's why, and the ways to get Pluto style channels out of your own library."
 author: "Chad Mueller"
 slug: plex-virtual-channels-own-movies
-date: 2026-10-22
-updated: 2026-10-22
+date: 2026-10-21
+updated: 2026-10-21
 draft: true
 ---
 
@@ -100,7 +100,7 @@ No. Nostalgex runs on Apple TV with tvOS 18 or later, and in a browser through t
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
 Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. No separate SoftwareApplication block.
 Image to add (none exist yet): alt "Nostalgex guide on Apple TV showing the BUDDIES and VHS VAULT channels built from a Plex library".
-Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 13), /blog/apple-tv-channel-surfing-apps (Oct 20), /blog/best-90s-buddy-cop-movies-channel (Oct 10) and /blog/make-plex-feel-like-cable-tv (Oct 17). Confirm the cable post is live before publishing Oct 22; if it slipped, cut the "I'm not going to repeat the full Plex setup here" link.
+Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 12), /blog/apple-tv-channel-surfing-apps (Oct 19), /blog/best-90s-buddy-cop-movies-channel (Oct 9) and /blog/make-plex-feel-like-cable-tv (Oct 16). Confirm the cable post is live before publishing Oct 21; if it slipped, cut the "I'm not going to repeat the full Plex setup here" link.
 REMINDER Nov 1: trim the SCREAM paragraph in "What kinds of channels do you get?".
 Chad: request indexing for /plex in Search Console.
 -->

@@ -5,8 +5,8 @@ description: "Jellyfin's TV guide stays empty without a tuner. Here are 3 ways t
 excerpt: "Jellyfin's Live TV section won't show your own movies, which surprises a lot of people. Here's what it's actually for and three ways to get a real channel guide."
 author: "Chad Mueller"
 slug: jellyfin-tv-guide-own-library
-date: 2026-10-15
-updated: 2026-10-15
+date: 2026-10-14
+updated: 2026-10-14
 draft: true
 ---
 
@@ -104,8 +104,8 @@ NostalgiaTV, a separate app, supports Jellyfin on Android, Android TV and Amazon
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
 Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. HowTo for the four numbered steps is optional (no rich result anymore). No separate SoftwareApplication block.
 Images to add (none exist yet): after step 3, alt "Jellyfin Quick Connect screen with the six character code from the Nostalgex Apple TV app". Cover alt "Nostalgex TV guide on Apple TV filled with channels from a Jellyfin library".
-ADD LINKS BACK (this post publishes Oct 15; these targets are not live yet):
-1. Oct 17, once /blog/make-plex-feel-like-cable-tv is live: at the end of "Do I have to set up M3U, XMLTV or a tuner for this?", add: "If you're curious what this looks like on Plex, I wrote [a longer walkthrough here](/blog/make-plex-feel-like-cable-tv). Most of it applies to Jellyfin too."
-2. Oct 20, once /blog/apple-tv-channel-surfing-apps is live: replace the last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" ("And if you ever want those channels on a TV that isn't an Apple TV, ...") with: "Comparing Apple TV apps? Here's my roundup of [channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
+ADD LINKS BACK (this post publishes Oct 14; these targets are not live yet):
+1. Oct 16, once /blog/make-plex-feel-like-cable-tv is live: at the end of "Do I have to set up M3U, XMLTV or a tuner for this?", add: "If you're curious what this looks like on Plex, I wrote [a longer walkthrough here](/blog/make-plex-feel-like-cable-tv). Most of it applies to Jellyfin too."
+2. Oct 19, once /blog/apple-tv-channel-surfing-apps is live: replace the last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" ("And if you ever want those channels on a TV that isn't an Apple TV, ...") with: "Comparing Apple TV apps? Here's my roundup of [channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
 Chad: request indexing for /jellyfin in Search Console.
 -->
