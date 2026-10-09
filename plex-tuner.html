@@ -1004,6 +1004,21 @@
     line-height: 1.8;
   }
   .display-status.visible { opacity: 1; }
+  .display-status .failure-headline {
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 14px;
+  }
+  .display-status .failure-detail {
+    font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0;
+    line-height: 1.6; color: rgba(255,255,255,0.75); max-width: 560px; margin: 0 auto;
+    text-transform: none;
+  }
+  .display-status .failure-next {
+    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0;
+    color: rgba(255,255,255,0.4); margin-top: 14px; text-transform: none;
+  }
+  /* amber: go and look at your server. red: this file or this browser. */
+  .display-status.server-side .failure-headline { color: #FFB020; }
+  .display-status.device-side .failure-headline { color: var(--red); }
 
   /* ══════════════════════════════════════
      NOW PLAYING OVERLAY
@@ -2943,13 +2958,80 @@
     return div.innerHTML;
   }
 
-  // MediaError code → readable message
-  const VIDEO_ERRORS = {
-    1: 'PLAYBACK ABORTED',
-    2: 'NETWORK ERROR. CHECK YOUR SERVER',
-    3: 'CODEC NOT SUPPORTED. TRY A DIFFERENT BROWSER',
-    4: 'FORMAT NOT SUPPORTED BY THIS BROWSER',
-  };
+  // ══════════════════════════════════════
+  // WHY A PROGRAMME WOULD NOT PLAY
+  // Mirrors the Apple TV app's PlaybackFailure, same words, so a person sees the
+  // same verdict whichever surface they are on. The one advantage here: hls.js
+  // hands over the HTTP status directly, so there is nothing to probe.
+  // ══════════════════════════════════════
+  const BACKEND_NAMES = { plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' };
+  function backendDisplayName() {
+    return BACKEND_NAMES[mediaBackend] || 'your server';
+  }
+
+  function classifyPlaybackFailure(e) {
+    const server = backendDisplayName();
+    const status = e.httpStatus || 0;
+    if (status === 401 || status === 403) return {
+      kind: 'notAuthorised', serverSide: true,
+      headline: 'Your server refused the request',
+      detail: `${server} rejected the sign-in saved in this browser. Sign in again.`,
+    };
+    if (status === 404) return {
+      kind: 'fileMissing', serverSide: true,
+      headline: "Your server can't find this file",
+      detail: `${server} listed this title but couldn't open the file. It was probably moved or deleted since the last library scan.`,
+    };
+    if (status >= 400) return {
+      kind: 'serverRefused', serverSide: true,
+      headline: "Your server wouldn't start this one",
+      detail: `${server} answered HTTP ${status} before it started sending video. That's the server, not this file and not your network. Other titles on the same server are unaffected.`,
+    };
+    if (e.network) return {
+      kind: 'serverUnreachable', serverSide: true,
+      headline: "Can't reach your server",
+      detail: `Nothing answered at the address saved for your ${server} server. Check it's awake and on the same network.`,
+    };
+    if (e.noSource) return {
+      kind: 'noPlayableSource', serverSide: true,
+      headline: 'Nothing to play for this title',
+      detail: `${server} listed this title but gave no stream to open. A library rescan usually clears it.`,
+    };
+    if (e.tooSlow) return {
+      kind: 'serverTooSlow', serverSide: true,
+      headline: "Your server couldn't keep up",
+      detail: `${server} couldn't produce video fast enough to watch. The file is probably too heavy for it to convert.`,
+    };
+    if (e.mediaError && !e.decodedAFrame) return {
+      kind: 'deviceCannotRender', serverSide: false,
+      headline: "This browser couldn't play this file",
+      detail: `The video arrived, but this browser couldn't turn it into a picture. The server sent it in a format this browser can't decode. Safari or Chrome may differ.`,
+    };
+    return {
+      kind: 'unknown', serverSide: false,
+      headline: "This one wouldn't play",
+      detail: `No reason came back from ${server} or from the player. The browser console has the details if it keeps happening.`,
+    };
+  }
+
+  function showPlaybackFailure(failure, willSkip) {
+    const display = document.getElementById('channel-display');
+    const status = document.getElementById('display-status');
+    display.classList.add('active');
+    status.textContent = '';
+    status.classList.remove('server-side', 'device-side');
+    status.classList.add(failure.serverSide ? 'server-side' : 'device-side');
+    const h = document.createElement('div'); h.className = 'failure-headline'; h.textContent = failure.headline;
+    const d = document.createElement('div'); d.className = 'failure-detail'; d.textContent = failure.detail;
+    status.append(h, d);
+    if (willSkip) {
+      const n = document.createElement('div'); n.className = 'failure-next';
+      n.textContent = 'Moving on to the next programme.';
+      status.append(n);
+    }
+    status.classList.add('visible');
+    console.warn('[PLEX 90] Playback failed:', failure.kind, '-', failure.headline, '|', failure.detail);
+  }
 
   function showVideoError(message) {
     const display = document.getElementById('channel-display');
@@ -3619,7 +3701,7 @@
       return;
     }
     if (!item.ratingKey) {
-      showVideoError('NO MEDIA KEY. THIS ITEM DID NOT LOAD CORRECTLY');
+      showPlaybackFailure(classifyPlaybackFailure({ noSource: true }), false);
       return;
     }
 
@@ -3742,9 +3824,11 @@
           try { thisInstance.destroy(); } catch (e) {}
           if (hlsInstance === thisInstance) hlsInstance = null;
           const code = data.response && data.response.code;
-          failCurrentItem(channel, item, code === 400
-            ? 'YOUR SERVER CANNOT PLAY THIS FILE'
-            : 'STREAM UNAVAILABLE');
+          failCurrentItem(channel, item, classifyPlaybackFailure({
+            httpStatus: code,
+            network: !code && data.type === Hls.ErrorTypes.NETWORK_ERROR,
+            decodedAFrame: video.currentTime > 0.5,
+          }));
           return;
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !networkRetried) {
@@ -3761,12 +3845,15 @@
         // parking on an error card the way a broken file used to.
         try { thisInstance.destroy(); } catch (e) {}
         if (hlsInstance === thisInstance) hlsInstance = null;
-        const why = data.type === Hls.ErrorTypes.NETWORK_ERROR
-          ? 'NETWORK ERROR. CANNOT REACH YOUR SERVER'
-          : (data.type === Hls.ErrorTypes.MEDIA_ERROR
-            ? 'CODEC NOT SUPPORTED. TRY A DIFFERENT BROWSER'
-            : `STREAM FAILED (${data.details || 'UNKNOWN'})`);
-        failCurrentItem(channel, item, why);
+        const code = data.response && data.response.code;
+        failCurrentItem(channel, item, classifyPlaybackFailure({
+          httpStatus: code,
+          network: !code && data.type === Hls.ErrorTypes.NETWORK_ERROR,
+          // bufferStalledError after a picture is the server falling behind, not a codec
+          tooSlow: data.details === 'bufferStalledError' || data.details === 'bufferNudgeOnStall',
+          mediaError: data.type === Hls.ErrorTypes.MEDIA_ERROR,
+          decodedAFrame: video.currentTime > 0.5,
+        }));
       });
     } else if (isHLS && video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
@@ -3832,7 +3919,13 @@
         playCurrentItem({ ...item, _forceTranscode: true, _retryHls: true }, channel);
         return;
       }
-      showVideoError(VIDEO_ERRORS[code] || `PLAYBACK FAILED (ERROR ${code ?? '?'})`);
+      // MediaError: 1 aborted, 2 network, 3 decode, 4 source not supported. Same verdict
+      // and same five-second skip as the HLS path and the Apple TV app.
+      failCurrentItem(channel, item, classifyPlaybackFailure({
+        network: code === 2,
+        mediaError: code === 3 || code === 4,
+        decodedAFrame: code === 3 && video.currentTime > 0.5,
+      }));
     };
   }
 
@@ -3840,20 +3933,19 @@
   // move on, the way the Apple TV app does. After three in a row the channel stops instead
   // of racing through the schedule, because that means the server, not the file.
   const MAX_CONSECUTIVE_FAILURES = 3;
-  function failCurrentItem(channel, item, message) {
+  function failCurrentItem(channel, item, failure) {
     consecutivePlaybackFailures += 1;
-    console.warn('[PLEX 90] Playback failed', item && item.title, message,
+    console.warn('[PLEX 90] Playback failed', item && item.title,
       `(${consecutivePlaybackFailures}/${MAX_CONSECUTIVE_FAILURES})`);
-    if (consecutivePlaybackFailures >= MAX_CONSECUTIVE_FAILURES) {
-      showVideoError(message);
-      return;
-    }
-    showVideoError(`${message} — SKIPPING`);
+    const willSkip = consecutivePlaybackFailures < MAX_CONSECUTIVE_FAILURES;
+    showPlaybackFailure(failure, willSkip);
+    if (!willSkip) return;   // three in a row points at the server; park rather than spin
+    // Five seconds, same as the Apple TV: long enough to read why.
     setTimeout(() => {
       if (currentChannel !== (channel && channel.id)) return;  // user already tuned away
       clearVideoError();
       onItemEnded(channel);
-    }, 2500);
+    }, 5000);
   }
 
   function onItemEnded(channel) {
