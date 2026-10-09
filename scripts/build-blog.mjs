@@ -96,6 +96,81 @@ function stripLeadingH1(markdown, title) {
   return trimmed;
 }
 
+// Remove HTML comment blocks (build notes, link-back reminders) so they never
+// reach the rendered page. These are standalone <!-- ... --> blocks in the
+// posts; marked otherwise passes them straight through into the HTML source.
+function stripHtmlComments(markdown) {
+  return markdown.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+// Collapse a snippet of Markdown to plain text for use in JSON-LD values.
+// Turns [label](url) into label, drops emphasis/backticks, and flattens
+// whitespace so FAQ answers are clean strings a validator will accept.
+function markdownToText(markdown) {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links -> label
+    .replace(/[*_`]/g, "") // emphasis / code marks
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Pull the "## FAQ" section apart into { question, answer } pairs: each "### "
+// is a question, and the prose until the next "###" or "##" is its answer.
+// Returns [] when the post has no FAQ section, so FAQPage is only emitted for
+// posts that actually carry one.
+function extractFaq(markdown) {
+  const lines = markdown.split("\n");
+  let i = lines.findIndex((l) => /^##\s+FAQ\s*$/i.test(l.trim()));
+  if (i === -1) return [];
+
+  const items = [];
+  i += 1;
+  let question = null;
+  let answerLines = [];
+  const flush = () => {
+    if (question) {
+      const answer = markdownToText(answerLines.join("\n"));
+      if (answer) items.push({ question, answer });
+    }
+    question = null;
+    answerLines = [];
+  };
+
+  for (; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^##\s+/.test(line) && !/^###\s+/.test(line)) {
+      // next top-level section ends the FAQ
+      break;
+    }
+    const q = line.match(/^###\s+(.+?)\s*$/);
+    if (q) {
+      flush();
+      question = markdownToText(q[1]);
+      continue;
+    }
+    if (question) answerLines.push(line);
+  }
+  flush();
+  return items;
+}
+
+function buildFaqJsonLd(faqItems) {
+  if (!faqItems.length) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+}
+
 function renderNav() {
   return `
   <header class="nav" id="nav">
@@ -244,6 +319,15 @@ function renderHead({
     `<script defer data-site="nostalgex" src="https://statsngraphs.lol/s.js"></script>`,
   ].join("\n");
 
+  // jsonLd may be a single object or an array; emit one script tag per entry.
+  const jsonLdBlocks = (Array.isArray(jsonLd) ? jsonLd : [jsonLd])
+    .filter(Boolean)
+    .map(
+      (block) =>
+        `<script type="application/ld+json">\n${JSON.stringify(block, null, 2)}\n</script>`,
+    )
+    .join("\n");
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -269,9 +353,7 @@ function renderHead({
 <meta name="twitter:image" content="${escapeAttr(ogImage)}">
 ${extraMeta}
 ${scripts}
-<script type="application/ld+json">
-${JSON.stringify(jsonLd, null, 2)}
-</script>
+${jsonLdBlocks}
 </head>`;
 }
 
@@ -296,20 +378,19 @@ function renderPostPage(post, assetHrefs = {}) {
 
   const seoTitle = post.seoTitle || post.title;
   const pageTitle = `${seoTitle} | Nostalgex Blog`;
+  const dateModified = post.updatedIso || post.dateIso;
 
-  const jsonLd = {
+  const articleJsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
     headline: post.title,
     description: post.description,
     image: [ogImage],
     datePublished: post.dateIso,
-    dateModified: post.dateIso,
-    author: {
-      "@type": "Organization",
-      name: "Nostalgex",
-      url: SITE_ORIGIN,
-    },
+    dateModified,
+    author: post.author
+      ? { "@type": "Person", name: post.author }
+      : { "@type": "Organization", name: "Nostalgex", url: SITE_ORIGIN },
     publisher: {
       "@type": "Organization",
       name: "Muell Haus Inc.",
@@ -319,6 +400,10 @@ function renderPostPage(post, assetHrefs = {}) {
         url: `${SITE_ORIGIN}/logo/nostalgex-black.svg`,
       },
     },
+    about: {
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_ORIGIN}/#app`,
+    },
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": canonical,
@@ -326,9 +411,11 @@ function renderPostPage(post, assetHrefs = {}) {
     url: canonical,
   };
 
+  const jsonLd = [articleJsonLd, ...post.extraSchema, buildFaqJsonLd(post.faq)];
+
   const extraMeta = [
     `<meta property="article:published_time" content="${escapeAttr(post.dateIso)}">`,
-    `<meta property="article:modified_time" content="${escapeAttr(post.dateIso)}">`,
+    `<meta property="article:modified_time" content="${escapeAttr(dateModified)}">`,
   ].join("\n");
 
   const coverBlock = post.coverUrl
@@ -359,7 +446,7 @@ ${renderNav()}
       <div class="container container-narrow">
         <p class="blog-post-eyebrow"><a href="/blog">Nostalgex Blog</a></p>
         <h1 class="blog-post-title">${escapeHtml(post.title)}</h1>
-        <p class="blog-post-meta"><time datetime="${escapeAttr(post.dateIso)}">${escapeHtml(post.dateHuman)}</time></p>${coverBlock}
+        <p class="blog-post-meta">${post.author ? `By ${escapeHtml(post.author)} &middot; ` : ""}<time datetime="${escapeAttr(post.dateIso)}">${escapeHtml(post.dateHuman)}</time></p>${coverBlock}
         <div class="blog-post-body">
 ${bodyHtml}
         </div>
@@ -487,11 +574,25 @@ export async function loadPosts() {
     const coverUrl = fm.cover ? String(fm.cover) : null;
     const seoTitle = fm.seo_title ? String(fm.seo_title) : null;
     const draft = fm.draft === true;
+    const author = fm.author ? String(fm.author) : null;
+    const updatedIso = fm.updated ? formatIsoDate(fm.updated) : null;
+
+    // Optional extra JSON-LD: a `schema` list in frontmatter. Each entry is
+    // emitted verbatim as its own <script type="application/ld+json"> next to
+    // the Article and auto-generated FAQPage tags. None of today's posts use
+    // it; it's here so a future post can carry HowTo, ItemList, etc.
+    let extraSchema = [];
+    if (fm.schema != null) {
+      extraSchema = Array.isArray(fm.schema) ? fm.schema : [fm.schema];
+    }
 
     if (seenSlugs.has(slug)) {
       throw new Error(`${file}: duplicate slug "${slug}"`);
     }
     seenSlugs.add(slug);
+
+    const markdown = stripHtmlComments(parsed.content);
+    const faq = extractFaq(markdown);
 
     posts.push({
       file,
@@ -503,7 +604,11 @@ export async function loadPosts() {
       coverUrl,
       seoTitle,
       draft,
-      markdown: parsed.content,
+      author,
+      updatedIso,
+      extraSchema,
+      faq,
+      markdown,
     });
   }
 
