@@ -22,6 +22,16 @@ struct SettingsView: View {
     @State private var embyUser = ""
     @State private var embyPass = ""
 
+    /// LAN discovery on the Jellyfin and Emby forms. One state for both forms; it is
+    /// reset whenever the form changes so an Emby list never shows under Jellyfin.
+    private enum DiscoveryState: Equatable {
+        case idle
+        case searching
+        case found([DiscoveredServer])
+        case nothingFound
+    }
+    @State private var discovery: DiscoveryState = .idle
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -164,6 +174,7 @@ struct SettingsView: View {
             VStack(spacing: 16) {
                 Button {
                     appState.authError = nil
+                    discovery = .idle
                     screen = .jellyfinForm
                 } label: {
                     secondaryConnectLabel("JELLYFIN", focused: focusedControl == "jellyfin")
@@ -174,6 +185,7 @@ struct SettingsView: View {
 
                 Button {
                     appState.authError = nil
+                    discovery = .idle
                     screen = .embyForm
                 } label: {
                     secondaryConnectLabel("EMBY", focused: focusedControl == "emby")
@@ -254,6 +266,10 @@ struct SettingsView: View {
 
             VStack(spacing: 16) {
                 jellyfinField("Server URL (e.g. http://192.168.1.10:8096)", text: $jellyfinURL, id: "jfURL", secure: false)
+                discoverySection(kind: .jellyfin, idPrefix: "jf", accessibilityPrefix: "jellyfin") { address in
+                    jellyfinURL = address
+                    focusedControl = "jfUser"
+                }
                 jellyfinField("Username", text: $jellyfinUser, id: "jfUser", secure: false)
                 jellyfinField("Password", text: $jellyfinPass, id: "jfPass", secure: true)
             }
@@ -283,6 +299,7 @@ struct SettingsView: View {
 
             Button("BACK") {
                 appState.authError = nil
+                discovery = .idle
                 screen = .picker
             }
             .font(.custom("DMMono-Medium", size: 24))
@@ -310,6 +327,10 @@ struct SettingsView: View {
 
             VStack(spacing: 16) {
                 jellyfinField("Server URL (e.g. http://192.168.1.10:8096)", text: $embyURL, id: "emURL", secure: false)
+                discoverySection(kind: .emby, idPrefix: "em", accessibilityPrefix: "emby") { address in
+                    embyURL = address
+                    focusedControl = "emUser"
+                }
                 jellyfinField("Username", text: $embyUser, id: "emUser", secure: false)
                 jellyfinField("Password", text: $embyPass, id: "emPass", secure: true)
             }
@@ -326,6 +347,7 @@ struct SettingsView: View {
 
             Button("BACK") {
                 appState.authError = nil
+                discovery = .idle
                 screen = .picker
             }
             .font(.custom("DMMono-Medium", size: 24))
@@ -356,6 +378,84 @@ struct SettingsView: View {
                         lineWidth: focusedControl == id ? 2.5 : 1.5)
         )
         .focused($focusedControl, equals: id)
+    }
+
+    // MARK: - LAN discovery (Jellyfin and Emby forms)
+
+    /// The find button, then whatever the last search produced: a list of servers to
+    /// pick from, or a one-line miss. Only servers of `kind` are listed, because each
+    /// kind has its own probe string and its own socket.
+    @ViewBuilder
+    private func discoverySection(kind: MediaBackendKind, idPrefix: String, accessibilityPrefix: String,
+                                  fill: @escaping (String) -> Void) -> some View {
+        let buttonID = "\(idPrefix)Find"
+        let searching = discovery == .searching
+
+        Button {
+            guard !searching else { return }
+            discovery = .searching
+            Task {
+                let servers = await LANServerDiscovery.discover(kind: kind)
+                discovery = servers.isEmpty ? .nothingFound : .found(servers)
+            }
+        } label: {
+            secondaryConnectLabel(searching ? LANServerDiscovery.Copy.searching : LANServerDiscovery.Copy.findButton,
+                                  focused: focusedControl == buttonID)
+        }
+        .buttonStyle(NoHaloButtonStyle())
+        .focused($focusedControl, equals: buttonID)
+        .accessibilityIdentifier("\(accessibilityPrefix)FindServersButton")
+
+        switch discovery {
+        case .found(let servers):
+            ForEach(servers) { server in
+                let rowID = "\(idPrefix)Found-\(server.id)"
+                Button {
+                    fill(server.address)
+                    discovery = .idle
+                } label: {
+                    discoveredServerLabel(server, focused: focusedControl == rowID)
+                }
+                .buttonStyle(NoHaloButtonStyle())
+                .focused($focusedControl, equals: rowID)
+                .accessibilityIdentifier("\(accessibilityPrefix)DiscoveredServer-\(server.id)")
+            }
+        case .nothingFound:
+            Text(LANServerDiscovery.Copy.noneFound)
+                .font(.custom("DMMono-Regular", size: 18))
+                .foregroundStyle(Color(hex: "#FFB020").opacity(0.9))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("\(accessibilityPrefix)NoServersFound")
+        case .idle, .searching:
+            EmptyView()
+        }
+    }
+
+    /// A discovered server as a focusable row: name on top, address underneath.
+    private func discoveredServerLabel(_ server: DiscoveredServer, focused: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(server.name)
+                .font(.custom("DMMono-Medium", size: 26))
+                .foregroundStyle(.white.opacity(focused ? 0.95 : 0.7))
+                .lineLimit(1)
+            Text(server.address)
+                .font(.custom("DMMono-Regular", size: 18))
+                .foregroundStyle(Color("BrandCyan").opacity(focused ? 0.9 : 0.55))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(focused ? 0.08 : 0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color("BrandCyan").opacity(focused ? 0.9 : 0.3),
+                        lineWidth: focused ? 2.5 : 1.5)
+        )
     }
 
     private func actionLabel(_ title: String, focused: Bool) -> some View {

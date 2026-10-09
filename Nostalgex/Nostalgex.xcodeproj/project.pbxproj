@@ -594,7 +594,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nostalgex connects to your Plex Media Server on your local network to stream your personal media library.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nostalgex streams from your Plex, Jellyfin or Emby server on your local network, and looks for servers on it when you ask it to.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -627,7 +627,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nostalgex connects to your Plex Media Server on your local network to stream your personal media library.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nostalgex streams from your Plex, Jellyfin or Emby server on your local network, and looks for servers on it when you ask it to.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
