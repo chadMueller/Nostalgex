@@ -1,19 +1,20 @@
 {
   "name": "nostalgex",
   "version": "1.0.0",
-  "description": "Nostalgex \u2014 marketing site, web tuner, and shared channel-rule/schedule engine for the Plex/Jellyfin/Emby retro TV guide",
+  "description": "Nostalgex marketing site, web tuner, and shared channel rule and schedule engine for the Plex, Jellyfin and Emby retro TV guide",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "changelog:render": "node scripts/render-changelog.mjs",
+    "blog:render": "node scripts/build-blog.mjs",
     "channels:doc": "node scripts/render-channels-doc.mjs",
     "channels:doc:check": "node scripts/render-channels-doc.mjs --check",
     "test:filter": "node scripts/nostalgex-filter-smoke.mjs",
     "test:schedule": "node scripts/nostalgex-schedule-order-smoke.mjs",
     "test:subscribe": "node scripts/subscribe-smoke.mjs",
     "test": "npm run test:filter && npm run test:schedule && npm run test:subscribe && npm run channels:doc:check && npm run changelog:check",
-    "build": "npm run changelog:render && vite build",
+    "build": "npm run changelog:render && npm run blog:render && vite build",
     "preview": "vite preview",
     "snapshot": "node --env-file-if-exists=.env scripts/devtools/build-snapshot.mjs",
     "devtools": "node --env-file-if-exists=.env scripts/devtools/server.mjs",
@@ -22,6 +23,8 @@
     "changelog:check": "node scripts/changelog-check.mjs"
   },
   "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "marked": "^18.1.0",
     "vite": "^7.1.0"
   }
 }
