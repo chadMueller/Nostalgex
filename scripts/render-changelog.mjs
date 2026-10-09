@@ -57,7 +57,12 @@ function replaceBetweenMarkers(html, replacement) {
 
 const changelogRaw = await readFile(CHANGELOG_PATH, "utf8");
 const changelog = JSON.parse(changelogRaw);
-const entries = Array.isArray(changelog.entries) ? changelog.entries : [];
+// The marketing site only ever speaks about the version people can install from the
+// App Store today. A build that is on TestFlight or waiting for review carries
+// `released: false` and is left out here; it still feeds the GitHub release notes and the
+// Discord post, where the next version belongs in the conversation.
+const entries = (Array.isArray(changelog.entries) ? changelog.entries : [])
+  .filter((e) => e.released !== false);
 
 if (entries.length === 0) {
   throw new Error("No changelog entries found in content/changelog.json");

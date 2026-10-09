@@ -3,6 +3,7 @@
     {
       "version": "1.0.24",
       "date": "OCT 2026",
+      "released": false,
       "title": "Emby libraries load, and the app tells you when something won't play",
       "bullets": [
         "Emby libraries load again. The app was asking Emby for its libraries using Jellyfin's spelling of the address, and Emby answers that with a 404, so the scan failed on the very first request no matter what your libraries were called or how big they were. Every Emby user hit this. Thanks to Jay for the report.",
