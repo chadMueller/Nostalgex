@@ -417,12 +417,23 @@ extension AppState {
                                        starvedAfterCappedRetry: starvedAfterCappedRetry,
                                        hadPicture: hadPicture, item: item)
         // Starvation is already decided; asking the server would only slow the card down.
-        if !starvedAfterCappedRetry, evidence.httpStatuses.isEmpty, let url = lastStreamURL {
-            let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
-            if let status = await StreamFailureProbe.status(of: url, headers: headers),
-               StreamFailureProbe.isRefusal(status) {
-                print("[Plex90] FAILURE PROBE: \(url.host ?? "?") answered HTTP \(status) for the failed stream")
-                evidence.httpStatuses.append(status)
+        //
+        // Ask about the request that actually failed, which the player names in its error
+        // log, and only fall back to the URL the player was handed. That URL is the master
+        // playlist and it answers 200 while the segments beneath it fail, so probing it
+        // proves nothing: measured 2026-10-08, The Dark Knight failed with CoreMedia
+        // -12927 and the master still answered 200, so the card said "no reason came back"
+        // about a server that had returned 500 on every segment.
+        if !starvedAfterCappedRetry, evidence.httpStatuses.isEmpty {
+            let fromLog = playerItem?.errorLog()?.events.reversed()
+                .compactMap({ $0.uri }).compactMap(URL.init(string:)).first
+            if let url = fromLog ?? lastStreamURL {
+                let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
+                if let status = await StreamFailureProbe.status(of: url, headers: headers),
+                   StreamFailureProbe.isRefusal(status) {
+                    print("[Plex90] FAILURE PROBE: \(url.host ?? "?") answered HTTP \(status) for \(url.lastPathComponent)")
+                    evidence.httpStatuses.append(status)
+                }
             }
         }
         return PlaybackFailure.classify(backend: backendKind, evidence: evidence)
