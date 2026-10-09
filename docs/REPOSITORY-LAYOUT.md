@@ -29,7 +29,9 @@ To confirm the build picked up the current config, filter the Xcode console for 
 [Plex90] CONFIG: bundled - v24, 121 ch, CH132=NETFLIX, CH65 title rules=31
 ```
 
-A stale build shows an older version number or a different channel name. Regenerate the expected values from the config rather than trusting this doc: the diagnostic is built in `AppState+Channels.swift` (`configDiagnostic`), and its two channel labels are **mislabeled** for historical reasons. `CH132=` actually prints the name of channel **id 122**, and `CH65 title rules=` counts `titleContains` on channel **id 65**. Channel `id` and channel `number` are **not the same value** for 29 of the 121 channels, so read these as ids: id 122 is CH122 NETFLIX, and id 65 is CH78 SUPERHERO MOVIES. `channels-memberships.json` also keys off `id`, never `number`.
+(example from an older config; the channel count in a current build is 131, see below)
+
+A stale build shows an older version number or a different channel name. Regenerate the expected values from the config rather than trusting this doc: the diagnostic is built in `AppState+Channels.swift` (`configDiagnostic`), and its two channel labels are **mislabeled** for historical reasons. `CH132=` actually prints the name of channel **id 122**, and `CH65 title rules=` counts `titleContains` on channel **id 65**. Channel `id` and channel `number` are **not the same value** for 81 of the 131 channels, so read these as ids: id 122 is CH121 NETFLIX, and id 65 is CH77 SUPERHERO MOVIES. `channels-memberships.json` also keys off `id`, never `number`.
 | `CHANNELS.md` | Human-readable channel reference (keep near `channels.json`) |
 | `api/` | Vercel serverless (e.g. newsletter `subscribe`) |
 | `vercel.json` | Headers / routing; **web only** |
