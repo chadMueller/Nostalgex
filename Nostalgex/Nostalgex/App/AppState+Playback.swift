@@ -429,9 +429,14 @@ extension AppState {
                 .compactMap({ $0.uri }).compactMap(URL.init(string:)).first
             if let url = fromLog ?? lastStreamURL {
                 let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
-                if let status = await StreamFailureProbe.status(of: url, headers: headers),
-                   StreamFailureProbe.isRefusal(status) {
-                    print("[Plex90] FAILURE PROBE: \(url.host ?? "?") answered HTTP \(status) for \(url.lastPathComponent)")
+                let status = await StreamFailureProbe.status(of: url, headers: headers)
+                // Through InstallDiagnostics, not print: a bare print never reaches the
+                // unified log on a simulator, so an unexplained classification could not
+                // be told apart from a probe that never ran.
+                InstallDiagnostics.note("FAILURE PROBE: \(url.lastPathComponent) -> "
+                    + (status.map(String.init) ?? "no answer")
+                    + " (from \(fromLog == nil ? "last stream URL" : "player error log"))")
+                if let status, StreamFailureProbe.isRefusal(status) {
                     evidence.httpStatuses.append(status)
                 }
             }
@@ -1090,7 +1095,11 @@ extension AppState {
         let title = currentItem?.title ?? "Unknown"
         let reason = playerItem?.error?.localizedDescription ?? "no error on the item"
         print("[Plex90] gen=\(generation) | AUTO-SKIP: \"\(title)\" failed, skipping to next")
-        let hadPicture = playbackState == .playing
+        // Whether THIS item ever played, not whether the player is in a playing state:
+        // playbackState is still .playing for the outgoing programme while the next one
+        // loads, and reading it here marked a programme that never produced a frame as
+        // one that had, which pushed the classification into .unknown.
+        let hadPicture = (playerItem?.currentTime().seconds ?? 0) > 0.5
         Task { @MainActor [weak self] in
             guard let self, self.loadGeneration == generation else { return }
             let failure = await self.classifyFailure(for: playerItem, item: self.currentItem,
