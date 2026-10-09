@@ -150,6 +150,9 @@ extension AppState {
         selectedServers = Self.dedupingServers(servers)
         syncPrimaryServerFields()
         persistSelectedServers()
+        // A different server set is a different library; nothing a running scan brings
+        // back belongs in it.
+        invalidateInFlightLibraryLoads()
     }
 
     /// One entry per physical server. A pre-multi-server install migrated its single server
@@ -291,6 +294,9 @@ extension AppState {
         backendKind = .plex
         jellyfinUserId = ""
         LibrarySnapshotStore.clear()
+        // Any library scan still running was started for the sign-in that just ended. It
+        // must not land its items, channels or snapshot in whatever is signed in next.
+        invalidateInFlightLibraryLoads()
     }
 
     /// A Plex token alone is a sign-in: servers are rediscovered from plex.tv whenever the
@@ -670,6 +676,15 @@ extension AppState {
         channels = []
         allChannels = []
         allItems = []
+        // Collection rows hold resolved items from the old server; a later materialise
+        // would put them straight back into the guide.
+        collectionScanTask?.cancel()
+        collectionScanTask = nil
+        discoveredCollections = []
+        isLibraryStale = false
+        // Today's schedules for the outgoing sign-in go with it. Computed before
+        // clearCredentials resets the backend, or this would name the wrong directory.
+        DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
         clearCredentials()
         serverName = ""
         isConnected = false
@@ -909,7 +924,9 @@ extension AppState {
         }
     }
 
-    private func completeEmbyAuth(serverURL url: String, result: EmbyAPIService.AuthResult) async {
+    /// The one place an Emby sign-in is committed. Internal (not private) so the backend
+    /// switch test can run the real commit path with a canned auth result.
+    func completeEmbyAuth(serverURL url: String, result: EmbyAPIService.AuthResult) async {
         backendKind = .emby
         token = result.accessToken
         jellyfinUserId = result.userId

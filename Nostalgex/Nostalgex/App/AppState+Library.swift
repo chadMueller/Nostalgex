@@ -106,6 +106,23 @@ extension AppState {
 
         let isBackground = background && !channels.isEmpty
 
+        // The sign-in this load is for. Taken after server recovery, which may itself
+        // replace the server list. Checked after every await that precedes a commit: a
+        // Disconnect or a new sign-in while a scan is out means its results are for a
+        // library the user has left, and they must not touch the one they moved to.
+        let session = librarySessionGeneration
+        func superseded() -> Bool {
+            guard librarySessionGeneration != session else { return false }
+            print("[Plex90] LOAD: sign-in changed while the scan was running, discarding its results")
+            isLoadStalling = false
+            if isBackground {
+                isBackgroundRefreshing = false
+            } else if !hasCredentials {
+                isLoading = false
+            }
+            return true
+        }
+
         if isUITestStubLibrarySuccess {
             isLoading = true
             loadingMessage = "LOADING CHANNELS..."
@@ -206,7 +223,12 @@ extension AppState {
                             case .slow, .stalled: self.isLoadStalling = true
                             }
                         },
-                        abortRequested: { [weak self] in self?.consumeLoadCancelRequest() ?? false },
+                        // A sign-in change also ends the scan early rather than letting
+                        // minutes of requests run against a server the user left.
+                        abortRequested: { [weak self] in
+                            guard let self else { return true }
+                            return self.consumeLoadCancelRequest() || self.librarySessionGeneration != session
+                        },
                         operation: {
                             try await scanAPI.loadLibrary { [weak self] event in
                                 Task { @MainActor [weak self] in
@@ -261,6 +283,9 @@ extension AppState {
             }
             isLoadStalling = false
 
+            // Nothing below this line may run for a sign-in that has ended.
+            if superseded() { return }
+
             // Surface a connection error only when every server failed.
             if successCount == 0 {
                 throw lastError ?? PlexAPIService.APIError.noReachableServer
@@ -290,6 +315,13 @@ extension AppState {
             }
 
             merged = Self.dedupingItems(merged, servers: selectedServers)
+            // Belt and braces under the generation check: an item stamped with a server
+            // that is not signed in can never be played, so it never enters a pool.
+            let foreign = merged.filter { !itemBelongsToConnectedServers($0) }.count
+            if foreign > 0 {
+                print("[Plex90] LOAD: dropped \(foreign) item(s) from servers that are not signed in")
+                merged = merged.filter { itemBelongsToConnectedServers($0) }
+            }
             allItems = merged
             scanItemsFound = merged.count
             let withTMDB = merged.filter { $0.tmdbID != nil }.count
@@ -307,6 +339,9 @@ extension AppState {
             await pulseLibraryPhase(.enrichingMetadata, detail: "\(enrichableCount) titles")
             await enrichmentService.enrichItems(allItems)
             await briefUILBeat()
+
+            // Collections and enrichment both waited on the network.
+            if superseded() { return }
 
             applyMusicCacheToLibrary()
             if isMusicBundleEnabled {
@@ -326,6 +361,9 @@ extension AppState {
                 items: allItems,
                 onlyChannelIDs: poolChannelIDs
             )
+
+            // The pool build ran off the main actor.
+            if superseded() { return }
 
             let dynamicChannels = allChannels.filter { $0.rules == nil }
             allChannels = (staticBuilt + dynamicChannels).sorted { $0.number < $1.number }
@@ -378,8 +416,11 @@ extension AppState {
             // The alternative, a new snapshot field, would invalidate every snapshot on
             // every device.
             let completedAt = Int(Date().timeIntervalSince1970)
+            let signature = scanWasAbandoned ? nil : await currentLibrarySignature()
+            // The signature request is one more await before the snapshot is written.
+            if superseded() { return }
             lastLoadAtUnix = scanWasAbandoned ? completedAt - 86_400 : completedAt
-            librarySignature = scanWasAbandoned ? nil : await currentLibrarySignature()
+            librarySignature = signature
             lastLibraryCheckAtUnix = completedAt
             saveLibrarySnapshotIfNeeded()
 
@@ -521,6 +562,16 @@ extension AppState {
             return false
         }
         guard let loaded else { return false }
+        // A snapshot whose items were scanned from a server that is no longer signed in
+        // (written by a scan that outlived a Disconnect, before that was stopped) would
+        // restore a guide where nothing plays. Rescan instead.
+        let foreign = loaded.snapshot.allItems.filter { !itemBelongsToConnectedServers($0) }.count
+        if foreign > 0 {
+            InstallDiagnostics.note("snapshot: \(foreign) of \(loaded.snapshot.allItems.count) items belong to a server that is not signed in, rescanning")
+            LibrarySnapshotStore.clear()
+            DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
+            return false
+        }
         applyLibrarySnapshot(loaded.snapshot)
         isLibraryStale = loaded.isStale
         InstallDiagnostics.note("snapshot: restored, stale=\(loaded.isStale)")

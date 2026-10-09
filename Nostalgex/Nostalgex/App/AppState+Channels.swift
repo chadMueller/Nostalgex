@@ -270,6 +270,8 @@ extension AppState {
 
         var collections4Plus: [DiscoveredCollection] = []
         var loggedSampleKeys = false
+        // Every collection costs a round-trip; the sign-in can end while they run.
+        let session = librarySessionGeneration
 
         for server in serversToScan {
             let scanAPI = server.machineIdentifier.isEmpty ? api : apiForServer(server)
@@ -388,6 +390,13 @@ extension AppState {
 
         collectionScanIndex = 0
         collectionScanTotal = 0
+
+        guard librarySessionGeneration == session else {
+            print("[Plex90] COLLECTIONS: sign-in changed during the scan, discarding its results")
+            isScanning = false
+            scanningMessage = ""
+            return
+        }
 
         // Sort alphabetically
         collections4Plus.sort { a, b in

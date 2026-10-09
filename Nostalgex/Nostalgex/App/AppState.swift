@@ -605,6 +605,44 @@ class AppState {
         LibrarySnapshotStore.fingerprint(identity: snapshotIdentitySeed)
     }
 
+    /// Which sign-in the library in memory belongs to. Bumped whenever the server set
+    /// changes (Disconnect, a new sign-in, a server toggled in Settings). A library load
+    /// records the value when it starts and refuses to commit anything if it has moved.
+    ///
+    /// This is the backend-switch bug: a stale Plex snapshot at launch starts a background
+    /// rescan of the whole Plex library, which takes minutes. If the user disconnects and
+    /// connects Emby while it runs, the Plex scan finishes later and writes Plex items into
+    /// the Emby session, rebuilds every channel from them, and saves them to the snapshot
+    /// under the Emby identity. From then on every tune sends a Plex rating key to Emby,
+    /// which answers 500, and the guide loops over unplayable titles until a reinstall.
+    var librarySessionGeneration: Int = 0
+
+    func invalidateInFlightLibraryLoads() {
+        librarySessionGeneration += 1
+    }
+
+    /// Whether an item can be served by the servers that are signed in now. Items with no
+    /// server id (demo mode, App Review repro, snapshots written before ids were stamped)
+    /// are accepted: they can only have come from the single connected server. So is
+    /// everything while the server list is empty (a Plex install whose saved list is being
+    /// rediscovered from plex.tv): with nothing to compare against there is no verdict.
+    func itemBelongsToConnectedServers(_ item: PlexMediaItem) -> Bool {
+        guard let id = item.serverID, !id.isEmpty else { return true }
+        if selectedServers.isEmpty { return true }
+        if selectedServers.contains(where: { $0.machineIdentifier == id }) { return true }
+        // A pre-multi-server install stamped items with the server URL rather than its
+        // machine identifier (see dedupingServers). Same host and port is the same server.
+        guard id.lowercased().hasPrefix("http") else { return false }
+        let host = Self.serverHostKey(id)
+        return selectedServers.contains { Self.serverHostKey($0.baseURL) == host }
+    }
+
+    /// `host:port` of a server URL, the key dedupingServers / dedupingItems compare on.
+    static func serverHostKey(_ url: String) -> String {
+        guard let u = URL(string: url), let h = u.host?.lowercased() else { return url.lowercased() }
+        return "\(h):\(u.port ?? 32400)"
+    }
+
     /// What the snapshot and schedules are keyed on. Plex: the server set (accounts are
     /// separated by Disconnect clearing the snapshot). Jellyfin/Emby: server plus user id,
     /// since those tokens are per-user and the user id is stable across sign-ins.
@@ -638,10 +676,16 @@ class AppState {
         return api
     }
 
+    /// Test seam. When set, every backend lookup goes through here instead of building a
+    /// real Plex / Jellyfin / Emby service, so a library load can be driven end to end
+    /// against canned items and no network. Nil in the app.
+    @ObservationIgnored var backendOverride: ((ServerRef?) -> any MediaBackend)? = nil
+
     /// Constructs the right backend for a server. Backends are lightweight value types
     /// (a few stored strings + a shared URLSession), so we build them on demand rather
     /// than caching — avoids stale-token bugs across re-auth.
     func apiForServer(_ server: ServerRef?) -> any MediaBackend {
+        if let backendOverride { return backendOverride(server) }
         switch backendKind {
         case .plex:
             // Demo / App Review repro: no structured server, use raw serverURL+token.
