@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Effective: September 30, 2026
+Effective: October 9, 2026
 
 Nostalgex turns your own Plex, Jellyfin, or Emby library into live TV channels. We do not host, supply, or stream any media. Everything you watch comes off your own server.
 
@@ -94,11 +94,11 @@ Alongside each event, the analytics library also records ordinary technical deta
 
 ## The website
 
-Three pages on nostalgex.app load two analytics scripts, Data Haus (our own) and statsngraphs: the home page, the connect page, and the support page. They count page visits, referrers, and basic device and country information. They do not use advertising cookies and do not build a profile of you across other sites.
+The marketing pages on nostalgex.app load one analytics script, statsngraphs: the home page, the Plex, Jellyfin and Emby pages, the connect page, the support page, and the blog. It counts page visits, referrers, and basic device and country information. It does not use advertising cookies and does not build a profile of you across other sites.
 
 If you sign up for update emails, your email address goes to Resend, the service that sends them. Along with it we store which signup form or QR code you used (for example the home page, the connect page, or the Apple TV app's settings screen), the page you signed up on, and any campaign tags that were on the link you followed. Nothing else about your visit is stored with it, and it is never joined to app analytics. Every email has an unsubscribe link.
 
-The web tuner itself loads neither. Once you are connected and watching, no analytics script is running on the page, so nothing about your library or what you play is measured. The privacy policy page does not load them either. All of this is separate from the app, and nothing from the app is joined to anything from the website.
+The web tuner itself does not load it. Once you are connected and watching, no analytics script is running on the page, so nothing about your library or what you play is measured. The privacy policy page does not load them either. All of this is separate from the app, and nothing from the app is joined to anything from the website.
 
 ## What the app stores on your device
 

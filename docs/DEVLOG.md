@@ -3,6 +3,56 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-09
+
+**Shipped.** Nothing yet. Site wide SEO and speed work is on branch
+`seo/site-wide`, opened as a PR stacked on `feat/seo-blog-posts` (#15). No app
+change.
+
+**Changed.**
+
+- Hero text no longer waits for JavaScript. `.hero-copy` (and `.hero-shot`) on
+  `/`, `/plex`, `/jellyfin` and `/emby` lost the `reveal` class, which kept them
+  at opacity 0 until `app.js` ran. That was most of the mobile LCP.
+- Hero media is lighter and off the critical path. New poster
+  `guide-hero-1280.webp` (54 KB, was 511 KB) is preloaded; the video is
+  `preload="none"` and `app.js` starts it after `load`, never under reduced
+  motion or Save Data. New encodes: 480p mp4 412 KB (phones), 1600 webm 1.46 MB
+  and 1280 mp4 1.37 MB (desktop). Old files stay for one release so cached
+  pages don't 404. Screenshots below the hero get 1280 and 1920 `srcset` sizes.
+- Lighthouse mobile, local static build, same machine before and after: `/`
+  went 71 to 96 (LCP 6.3 s to 2.4 s, 1,068 to 745 KiB), `/jellyfin` 74 to 94
+  (LCP 8.1 s to 2.3 s). Not yet measured on the Vercel preview.
+- `/plex`, `/jellyfin` and `/emby` were near copies, and two of them sat outside
+  Google's index. Each now has its own H1, direct answer, setup steps, tips and
+  gotchas, and six server specific FAQs.
+- Every page has new titles and descriptions, a 1200x630 card image
+  (`og-image-1200.png`, letterboxed because a center crop clipped the logo), a
+  48px favicon, an apple-touch-icon, and one JSON-LD `@graph` linking the app,
+  Chad and Muell Haus by `@id`. Visible FAQs and FAQPage text are generated from
+  the same strings.
+- Blog: titles end in " | Nostalgex", Article author is the Person `#chad`,
+  posts get a BreadcrumbList, and new optional front matter `cover_alt`. FAQPage
+  and table wrapping from #15 are kept, folded into the single graph.
+- Sitemap entries carry `lastmod` only (Google ignores changefreq and priority).
+  Added `public/llms.txt`.
+- Support page CORS configs said `https://nostalgex.app`, but the tuner runs on
+  `https://www.nostalgex.app`, so the documented config could not work. Fixed.
+- Removed the Data Haus analytics script from every page, the blog template and
+  the CSP. statsngraphs stays. The privacy page, README and the support FAQ
+  now describe one analytics script; the support FAQ no longer says there are
+  no analytics on the tuner pages, because the connect page loads one.
+- "Over a hundred" is now 131 everywhere it appeared.
+- `Nostalgex/PRIVACY_POLICY.md` matches the privacy page: statsngraphs only,
+  effective October 9. `docs/FAQ.md` named 1.0.22 for the Tailscale/VPN http fix,
+  which shipped in 1.0.23 (support page was already right).
+
+**Half-done.** Rich Results Test and a Lighthouse run against production still
+need doing.
+
+**Next.** Merge #15 first, then this. After deploy, resubmit the sitemap and
+request indexing for /plex, /jellyfin, /support and the blog post.
+
 ## 2026-10-08
 
 **Shipped.** 1.0.23 reached the App Store (build 44). It carries the Jellyfin

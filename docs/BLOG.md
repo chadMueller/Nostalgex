@@ -35,6 +35,9 @@ date: 2026-10-08
 # optional:
 seo_title: "Shorter SEO tuned <title> if the display title is long or awkward in SERPs"
 cover: /blog/public-page-title-and-h1/cover.jpg
+cover_alt: "What the cover image shows, in one plain sentence"
+author: "Chad Mueller"
+updated: 2026-10-12
 ---
 ```
 
@@ -44,8 +47,12 @@ cover: /blog/public-page-title-and-h1/cover.jpg
 | `description` | yes      | Used verbatim for `<meta description>`, OpenGraph and Twitter cards.      |
 | `slug`        | yes      | Lowercase `a-z0-9-`. Final URL is `/blog/<slug>`.                         |
 | `date`        | yes      | ISO date (`YYYY-MM-DD`). Also used in Article JSON-LD and the sitemap.    |
-| `seo_title`   | no       | Overrides the `<title>` only; the page `<h1>` still uses `title`.         |
-| `cover`       | no       | Absolute URL path to a cover image. Falls back to `/og-image.png` for OG. |
+| `seo_title`   | no       | Overrides the `<title>` only; the page `<h1>` still uses `title`. The build adds " \| Nostalgex", so keep it to about 48 characters. |
+| `cover`       | no       | Absolute URL path to a cover image. Falls back to `/og-image-1200.png` for OG. |
+| `cover_alt`   | no       | Alt text for the cover image, also used as `og:image:alt`. Leave it out and the cover gets an empty alt and the default card alt. |
+| `author`      | no       | Renders a "By ..." byline. JSON-LD always credits Chad Mueller (the shared `#chad` Person) unless this names someone else. |
+| `updated`     | no       | ISO date of the last real content change. Becomes `dateModified`, `article:modified_time` and the sitemap `lastmod`. Defaults to `date`. |
+| `schema`      | no       | Extra JSON-LD nodes (a list). Each is merged into the page's single `@graph`, with any `@context` dropped. |
 | `draft`       | no       | `true` keeps the post out of the index, `dist/`, and the sitemap. The file stays in `content/blog/` and is still validated by the build. |
 
 The build script validates these and fails loudly if a required field is
@@ -108,12 +115,18 @@ Every post is rendered with:
 - A unique `<meta name="description">`.
 - A `<link rel="canonical" href="https://www.nostalgex.app/blog/<slug>">`.
 - OpenGraph `og:*` and Twitter `twitter:*` tags (image falls back to
-  `/og-image.png` if the post has no `cover`).
+  `/og-image-1200.png` if the post has no `cover`).
 - `<meta property="article:published_time">` and `article:modified_time`.
-- An `Article` JSON-LD block with publisher, author, image, URL, and date.
+- One JSON-LD `@graph` holding the `Article` (Person author `#chad`,
+  publisher `#org`, `about` the app `#app`), a `BreadcrumbList` of Home, Blog
+  and the post, the Person and Organization nodes, and a `FAQPage` built from
+  the post's `## FAQ` section when it has one.
 
-The index page gets `BlogPosting` summaries for every post in a `Blog`
-JSON-LD block, plus its own canonical and OG/Twitter tags.
+The `<title>` is the `seo_title` (or `title`) plus " | Nostalgex".
+
+The index page gets one `@graph` with the `Blog` node (and a `BlogPosting`
+summary per post) plus a Home > Blog `BreadcrumbList`, along with its own
+canonical and OG/Twitter tags.
 
 Each post ends with a shared CTA pointing at
 [`/web-tuner`](https://www.nostalgex.app/web-tuner) and the Apple TV app.

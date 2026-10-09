@@ -1,7 +1,7 @@
 ---
 title: "The 90s Slasher Movie Marathon: A Halloween Night on the SCREAM Channels"
-seo_title: "90s Slasher Movies: A Halloween Movie Marathon Lineup"
-description: "A Halloween movie marathon of 90s slasher movies, and what a night on the Nostalgex SCREAM channels looks like with those films sitting in your library."
+seo_title: "90s Slasher Movies for a Halloween Marathon"
+description: "A Halloween marathon of 90s slasher movies, and what a night on the Nostalgex SCREAM channels looks like with those films in your own library."
 slug: 90s-slasher-movies-halloween-marathon
 date: 2026-10-08
 ---

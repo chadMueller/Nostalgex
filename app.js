@@ -142,12 +142,23 @@
     revealEls.forEach(function (el) { el.classList.add("is-visible"); });
   }
 
-  /* ---------- Hero video: respect prefers-reduced-motion ---------- */
-  var heroVideo = document.querySelector(".hero-video");
-  if (heroVideo && reduceMotion) {
-    heroVideo.removeAttribute("autoplay");
-    heroVideo.pause();
-    heroVideo.currentTime = 0;
+  /* ---------- Hero video: start after load, never for reduced motion ----------
+     The <video> ships with preload="none" and no autoplay, so first paint only
+     pays for the poster. Once the page has loaded, start it, unless the visitor
+     asked for reduced motion or Save Data, in which case the poster stays up. */
+  var heroVideos = document.querySelectorAll("video[data-autoplay]");
+  var saveData = navigator.connection && navigator.connection.saveData;
+  if (heroVideos.length && !reduceMotion && !saveData) {
+    var startHeroVideos = function () {
+      heroVideos.forEach(function (v) {
+        v.preload = "auto";
+        v.autoplay = true;
+        var played = v.play();
+        if (played && played.catch) played.catch(function () {});
+      });
+    };
+    if (document.readyState === "complete") startHeroVideos();
+    else window.addEventListener("load", startHeroVideos, { once: true });
   }
 
   /* ---------- FAQ: close others when one opens ---------- */
