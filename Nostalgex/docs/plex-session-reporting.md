@@ -5,7 +5,7 @@
 
 Timeline reporting and scrobbling ship in the tvOS app, implemented in `Services/PlaybackTracker.swift`. Plex uses its timeline and scrobble endpoints. Jellyfin and Emby use their session reports, and the app reads `PlayCount` back when it loads the library. Rewatchables filters on `viewCount >= 3` for all three.
 
-**Activity sync defaults to OFF.** The user turns it on in Settings under PLAYBACK REPORTING. Nothing is reported until they do. Plays they already made in Plex, Jellyfin, or Emby still count toward Rewatchables, because those counts live on the server.
+**Activity sync defaults to OFF.** The user turns it on in Settings under CONNECTION (REPORT PLAYBACK). Nothing is reported until they do. Plays they already made in Plex, Jellyfin, or Emby still count toward Rewatchables, because those counts live on the server.
 
 The rest of this document is the original design, kept because the gates, endpoints, and edge cases below are what actually shipped.
 
@@ -102,7 +102,7 @@ Verify params against your Plex server before implementation.
 
 ## Opt-in default
 
-Reporting is **off unless the user turns it on** (Settings → PLAYBACK REPORTING; web tuner: Settings → PLAYBACK). Channel surfing tunes past far more programs than a user deliberately starts, and reporting each one buries the household's real Continue Watching row. Consequence for the Rewatchables channel: `viewCount` stays as reliable as it ever was, but Nostalgex only adds to it for users who opted in.
+Reporting is **off unless the user turns it on** (Settings → CONNECTION → REPORT PLAYBACK; web tuner: Settings → PLAYBACK). Channel surfing tunes past far more programs than a user deliberately starts, and reporting each one buries the household's real Continue Watching row. Consequence for the Rewatchables channel: `viewCount` stays as reliable as it ever was, but Nostalgex only adds to it for users who opted in.
 
 ---
 

@@ -9,7 +9,8 @@
         "Jellyfin and Emby: a FIND SERVERS ON MY NETWORK button on the connect screen. Press it and the app asks your network who is there, lists the servers that answer, and fills in the address when you pick one. It only runs when you press it, stays on your own network, and stores nothing.",
         "Switching from Plex to Emby or Jellyfin works. If the app was still refreshing your Plex library in the background when you disconnected and signed into the other server, that refresh could finish late and overwrite the new library with the old one, so every channel tried to play Plex titles on Emby and nothing worked until you reinstalled. A scan now knows which sign-in it belongs to and throws its results away if that sign-in has ended.",
         "If an old library did get mixed in, the app notices on launch, clears it and rescans instead of showing a guide where nothing plays.",
-        "Disconnecting now also clears today's schedules, so the next sign-in starts clean."
+        "Disconnecting now also clears today's schedules, so the next sign-in starts clean.",
+        "Settings is tidier. Connection sits near the top and now holds the report-playback switch. Subtitles are one setting instead of two switches: press it to go between Off, Foreign audio and Always. The QR codes are gone."
       ]
     },
     {

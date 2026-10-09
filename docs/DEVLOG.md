@@ -40,16 +40,26 @@ Commits carry the detail of *what*; this carries the *why*.
   request it will answer 500. Disconnect now also clears today's manifests and
   the collection scan. Behaviour change: disconnect and re-sign-in to the same
   server reshuffles today's guide.
+- Settings: Connection moved above Display and took in the report-playback
+  switch (it had its own section). The two subtitle switches became one
+  SUBTITLES row cycling Off, Foreign audio, Always: the fullscreen switch only
+  ever overrode the foreign-audio one, so they were one three-way setting.
+  Subtitle language only shows when subtitles are not Off. The Buy Me a Coffee
+  and update-email QR codes are gone from Settings, with their analytics event.
+  The in-player panel still has separate CC and auto buttons.
 - `NostalgexTests`: 436 passed, 0 failed, 2 skipped on the merged tree
   (417 before, 9 discovery, 9 backend switch, 1 moved).
 
-**Half-done.** The race itself is proven by the harness and a poisoned snapshot
-was recovered in the simulator, but the real sequence (stale snapshot, Disconnect
-mid refresh, Emby sign-in) has not been run on hardware. First press of FIND
-SERVERS on a real Apple TV is also owed, to see whether tvOS shows the local
-network prompt.
+**Verified on hardware** (Apple TV 4K, first generation): RESCAN LIBRARY on a
+Plex library of about 11,600 items, Disconnect mid scan, then Emby found via FIND
+SERVERS. The log read "sign-in changed while the scan was running, discarding its
+results", the Emby library loaded, and five programmes played with no HTTP 500s.
+The automatic background refresh that started the original report was not
+reproduced (the snapshot was only hours old) but runs through the same check. No
+local network prompt appeared; a clean install is still the true first press.
+A 4K HEVC title with EAC3 audio that stalled in the simulator played cleanly.
 
-**Next.** Hardware checks above, then archive 46 for TestFlight. App Store
+**Next.** 46 to TestFlight. App Store
 listing for the next submission: "131 themed channels across 14 bundles" and
 new screenshots. Discussion #2 (Fire TV fork): ordering and DayPacker ports match
 the JS reference byte for byte; the channel filter does not (22 channels

@@ -13,7 +13,6 @@ struct SettingsPageView: View {
     @State private var streamQuality = StreamQuality.current
     @State private var showStreamQualityPicker = false
     @State private var showAudioLanguagePicker = false
-    @State private var signupQRShownReported = false
 
     var body: some View {
         ZStack {
@@ -32,7 +31,7 @@ struct SettingsPageView: View {
                     VStack(alignment: .leading, spacing: 48) {
 
                         VStack(alignment: .leading, spacing: 20) {
-                            sectionHeader("SUPPORT NOSTALGEX", subtitle: "Star ratings help other Plex households find Nostalgex")
+                            sectionHeader("SUPPORT NOSTALGEX", subtitle: "Star ratings help other households find Nostalgex")
 
                             SettingsToggleRow(
                                 title: "RATE NOSTALGEX",
@@ -48,93 +47,16 @@ struct SettingsPageView: View {
                             .id("rate")
                             .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
 
-                            // Decorative only — neither QR takes a focus row from the button above.
-                            HStack(alignment: .top, spacing: 64) {
-                                HStack(alignment: .center, spacing: 24) {
-                                    QRCodeView(url: "https://buymeacoffee.com/chadmueller")
-                                        .frame(width: 120, height: 120)
-                                        .padding(10)
-                                        .background(Color.white)
-                                        .cornerRadius(8)
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("BUY ME A COFFEE")
-                                            .font(.custom("DMMono-Medium", size: 22))
-                                            .foregroundStyle(Color(hex: "#FFE500"))
-                                        Text("Scan with your phone to support development")
-                                            .font(.custom("DMMono-Regular", size: 20))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                        Text("buymeacoffee.com/chadmueller")
-                                            .font(.custom("DMMono-Regular", size: 20))
-                                            .foregroundStyle(.white.opacity(0.7))
-                                            .padding(.top, 2)
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel("Support: scan QR code to visit buymeacoffee.com slash chadmueller")
-
-                                HStack(alignment: .center, spacing: 24) {
-                                    QRCodeView(url: "https://www.nostalgex.app/?utm_source=appletv&utm_medium=app&utm_campaign=qr_signup&utm_content=settings#signup")
-                                        .frame(width: 120, height: 120)
-                                        .padding(10)
-                                        .background(Color.white)
-                                        .cornerRadius(8)
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("GET UPDATE EMAILS")
-                                            .font(.custom("DMMono-Medium", size: 22))
-                                            .foregroundStyle(Color(hex: "#00C4FF"))
-                                        Text("Scan to hear when new channels ship")
-                                            .font(.custom("DMMono-Regular", size: 20))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                        Text("nostalgex.app")
-                                            .font(.custom("DMMono-Regular", size: 20))
-                                            .foregroundStyle(.white.opacity(0.7))
-                                            .padding(.top, 2)
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel("Update emails: scan QR code to sign up at nostalgex.app")
-                            }
-                            .padding(.top, 8)
-                            .allowsHitTesting(false)
                         }
 
-                        // Playback reporting. Same switch on every server: off, a watch here
-                        // stays in the app; on, it counts on the server they connected.
-                        if !appState.isDemoMode {
-                            settingsDivider
+                        settingsDivider
 
-                            let serverName = switch appState.backendKind {
-                            case .jellyfin: "Jellyfin"
-                            case .emby: "Emby"
-                            case .plex: "Plex"
-                            }
+                        // Connection
+                        connectionSection
 
-                            VStack(alignment: .leading, spacing: 20) {
-                                sectionHeader(
-                                    "PLAYBACK REPORTING",
-                                    subtitle: "Whether watching here writes back to your \(serverName) server"
-                                )
-
-                                SettingsToggleRow(
-                                    title: "REPORT PLAYBACK TO \(serverName.uppercased())",
-                                    subtitle: "Off by default. When on, a real watch here counts on your server.",
-                                    // Warning stays full-brightness while the row's own text dims,
-                                    // so the side effect is legible exactly when it applies.
-                                    warning: appState.syncPlexActivity
-                                        ? "Channel surfing can mark plays and leave resume points"
-                                        : nil,
-                                    isOn: appState.syncPlexActivity,
-                                    isFocused: focusedItem == "plex_sync"
-                                ) {
-                                    appState.syncPlexActivity.toggle()
-                                }
-                                .focused($focusedItem, equals: "plex_sync")
-                                .id("plex_sync")
-                                .accessibilityHint("Updates play counts, resume points and Continue Watching in \(serverName)")
-                            }
-                        }
+                        // Enrichment status (only shown when enriching)
+                        // Isolated into its own view so progress updates don't redraw the entire settings list
+                        EnrichmentStatusView(enrichmentService: appState.enrichmentService)
 
                         settingsDivider
 
@@ -166,29 +88,36 @@ struct SettingsPageView: View {
                             .focused($focusedItem, equals: "stream_quality")
                             .id("stream_quality")
 
+                            // One row for what used to be two switches. "Always" is the
+                            // fullscreen switch; "Foreign audio" is the auto fallback alone.
+                            // Subtitles never draw over the guide in any mode.
                             SettingsToggleRow(
-                                title: "SUBTITLES (FULLSCREEN)",
-                                subtitle: "Show subtitles only in fullscreen; the channel tuner stays clean",
-                                isOn: appState.subtitlesInFullscreenEnabled,
-                                isFocused: focusedItem == "sub_full"
-                            ) {
-                                appState.subtitlesInFullscreenEnabled.toggle()
-                            }
-                            .focused($focusedItem, equals: "sub_full")
-                            .id("sub_full")
-
-                            SettingsToggleRow(
-                                title: "SUBTITLE LANGUAGE",
-                                subtitle: "When the video has multiple subtitle tracks, prefer this language",
-                                detail: subtitleLanguageDetailLabel(appState.preferredSubtitleLanguageCode),
+                                title: "SUBTITLES",
+                                subtitle: subtitleModeExplanation,
+                                detail: subtitleModeLabel,
                                 isOn: true,
-                                isFocused: focusedItem == "sub_lang",
+                                isFocused: focusedItem == "sub_mode",
                                 showToggle: false
                             ) {
-                                showSubtitleLanguagePicker = true
+                                cycleSubtitleMode()
                             }
-                            .focused($focusedItem, equals: "sub_lang")
-                            .id("sub_lang")
+                            .focused($focusedItem, equals: "sub_mode")
+                            .id("sub_mode")
+
+                            if appState.subtitlesInFullscreenEnabled || appState.autoSubtitlesForForeignAudioEnabled {
+                                SettingsToggleRow(
+                                    title: "SUBTITLE LANGUAGE",
+                                    subtitle: "When the video has multiple subtitle tracks, prefer this language",
+                                    detail: subtitleLanguageDetailLabel(appState.preferredSubtitleLanguageCode),
+                                    isOn: true,
+                                    isFocused: focusedItem == "sub_lang",
+                                    showToggle: false
+                                ) {
+                                    showSubtitleLanguagePicker = true
+                                }
+                                .focused($focusedItem, equals: "sub_lang")
+                                .id("sub_lang")
+                            }
 
                             SettingsToggleRow(
                                 title: "AUDIO LANGUAGE",
@@ -202,27 +131,8 @@ struct SettingsPageView: View {
                             }
                             .focused($focusedItem, equals: "audio_lang")
                             .id("audio_lang")
-
-                            SettingsToggleRow(
-                                title: "AUTO SUBTITLES (FOREIGN AUDIO)",
-                                subtitle: "Auto-show subtitles when the audio isn't in your language",
-                                isOn: appState.autoSubtitlesForForeignAudioEnabled,
-                                isFocused: focusedItem == "auto_subs"
-                            ) {
-                                appState.autoSubtitlesForForeignAudioEnabled.toggle()
-                            }
-                            .focused($focusedItem, equals: "auto_subs")
-                            .id("auto_subs")
                         }
 
-                        settingsDivider
-
-                        // Connection
-                        connectionSection
-
-                        // Enrichment status (only shown when enriching)
-                        // Isolated into its own view so progress updates don't redraw the entire settings list
-                        EnrichmentStatusView(enrichmentService: appState.enrichmentService)
 
                         settingsDivider
 
@@ -327,12 +237,6 @@ struct SettingsPageView: View {
             // Nil lets tvOS pick first focusable (RATE NOSTALGEX is the top row).
             focusedItem = nil
             appState.player?.isMuted = true
-            // Once per settings visit, not per render or per picker sheet. The QR sits
-            // in the first section, so it's on screen whenever this page is.
-            if !signupQRShownReported && !appState.isDemoMode {
-                signupQRShownReported = true
-                Analytics.track(.signupQRShown(backend: appState.analyticsBackend))
-            }
         }
         .task {
             // Refresh the reachable-server list so deselected servers can be re-added.
@@ -365,6 +269,30 @@ struct SettingsPageView: View {
     }
 
     // MARK: - Helpers
+
+    private var subtitleModeLabel: String {
+        if appState.subtitlesInFullscreenEnabled { return "ALWAYS" }
+        if appState.autoSubtitlesForForeignAudioEnabled { return "FOREIGN AUDIO" }
+        return "OFF"
+    }
+
+    private var subtitleModeExplanation: String {
+        if appState.subtitlesInFullscreenEnabled { return "Shown in fullscreen whenever the video has them" }
+        if appState.autoSubtitlesForForeignAudioEnabled { return "Shown in fullscreen when the audio isn't in your language" }
+        return "Never shown. Press to change"
+    }
+
+    /// Off, then foreign audio only, then always, then back to off.
+    private func cycleSubtitleMode() {
+        if appState.subtitlesInFullscreenEnabled {
+            appState.subtitlesInFullscreenEnabled = false
+            appState.autoSubtitlesForForeignAudioEnabled = false
+        } else if appState.autoSubtitlesForForeignAudioEnabled {
+            appState.subtitlesInFullscreenEnabled = true
+        } else {
+            appState.autoSubtitlesForForeignAudioEnabled = true
+        }
+    }
 
     /// Marketing version plus build, e.g. "VERSION 1.0.10 (17)". Both matter: the build
     /// number is what distinguishes two submissions of the same version.
@@ -633,6 +561,27 @@ struct SettingsPageView: View {
             .id("rescan")
             .accessibilityLabel("Rescan library")
             .padding(.top, 8)
+
+            // Playback reporting. Same switch on every server: off, a watch here
+            // stays in the app; on, it counts on the server they connected.
+            if !appState.isDemoMode {
+                SettingsToggleRow(
+                    title: "REPORT PLAYBACK TO \(appState.backendDisplayName.uppercased())",
+                    subtitle: "Off by default. When on, a real watch here counts on your server.",
+                    // Warning stays full-brightness while the row's own text dims,
+                    // so the side effect is legible exactly when it applies.
+                    warning: appState.syncPlexActivity
+                        ? "Channel surfing can mark plays and leave resume points"
+                        : nil,
+                    isOn: appState.syncPlexActivity,
+                    isFocused: focusedItem == "plex_sync"
+                ) {
+                    appState.syncPlexActivity.toggle()
+                }
+                .focused($focusedItem, equals: "plex_sync")
+                .id("plex_sync")
+                .accessibilityHint("Updates play counts, resume points and Continue Watching in \(appState.backendDisplayName)")
+            }
 
             SettingsToggleRow(
                 title: "DISCONNECT FROM \(appState.backendDisplayName.uppercased())",
