@@ -59,10 +59,14 @@ enum StreamFailureProbe {
                               session: URLSession = .shared) async -> Int? {
         var current = url
         var last: Int?
-        for _ in 0..<3 {
+        for hop in 0..<3 {
             let isPlaylist = current.pathExtension.lowercased() == "m3u8"
             let (status, body) = await fetch(current, headers: headers, wantBody: isPlaylist,
                                              timeout: timeout, session: session)
+            // Every hop is logged so a walk that stops short can be read off a device.
+            InstallDiagnostics.note("FAILURE PROBE hop \(hop): \(current.lastPathComponent) -> "
+                + (status.map(String.init) ?? "no answer")
+                + (isPlaylist ? " (playlist, \(body?.count ?? 0) chars)" : " (media)"))
             guard let status else { return last }
             last = status
             if isRefusal(status) { return status }
