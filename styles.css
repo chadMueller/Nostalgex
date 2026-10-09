@@ -2032,6 +2032,7 @@ a { color: inherit; }
   max-width: 60ch;
 }
 .blog-post-cta .cta-row { margin-top: 0; }
+.blog-post-cta-discord { margin: 18px 0 0; font-size: 14px; color: var(--ink-soft); }
 
 @media (min-width: 720px) {
   .blog-list { grid-template-columns: 1fr; }

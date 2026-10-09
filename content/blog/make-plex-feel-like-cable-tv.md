@@ -1,9 +1,10 @@
 ---
 title: "How to Make Plex Feel Like Cable TV Again (Yes, With a Real Channel Guide)"
 seo_title: "Make Plex Like Cable: A Live TV Guide for Your Library"
-description: "Turn your own Plex library into live channels with a retro TV guide. How Nostalgex works, how to set it up free, and notes for Jellyfin and Emby."
+description: "Turn your own Plex library into live channels with a retro TV guide. How Nostalgex works, how to set it up for free, plus notes for Jellyfin and Emby."
 slug: make-plex-feel-like-cable-tv
-date: 2026-10-08
+date: 2026-10-17
+draft: true
 ---
 
 # How to Make Plex Feel Like Cable TV Again (Yes, With a Real Channel Guide)
@@ -26,15 +27,15 @@ Plex has its own Live TV section, but it's built around Plex's streaming channel
 
 - Every channel runs a schedule all day, even when nobody is watching.
 - When you tune in, you drop into whatever is airing right now, in the middle of a movie, like real TV.
-- The schedule is rebuilt fresh every day from what's in your library.
+- The lineup refreshes through the day from what's in your library.
 
-There are over a hundred channels, sorted into bundles like the back of a cable bill. NOSTALGEX has things like SAT MORNING CARTOONS, 90S SITCOMS, VHS VAULT, TEEN MOVIES, and BUDDIES (home of our [Friday night buddy cop channel](/blog/best-90s-buddy-cop-movies-channel)). KIDZ ZONE has channels like DIZNEY TOONS. There are decade channels, franchise channels, and seasonal ones too, like SCREAM for October (here's our [Halloween slasher lineup](/blog/90s-slasher-movies-halloween-marathon)) and TIS THE SEASON for December. What actually shows up depends on your library. No westerns, no Westerns channel.
+There are 131 channels in 14 bundles, sorted like the back of a cable bill. NOSTALGEX has things like SAT MORNING CARTOONS, 90S SITCOMS, VHS VAULT, TEEN MOVIES, and BUDDIES (home of our [Friday night buddy cop channel](/blog/best-90s-buddy-cop-movies-channel)). KIDZ ZONE has channels like DIZNEY TOONS. There are decade channels, franchise channels, and seasonal ones too, like SCREAM for October (here's our [Halloween slasher lineup](/blog/90s-slasher-movies-halloween-marathon)) and TIS THE SEASON for December. What actually shows up depends on your library. No westerns, no Westerns channel.
 
 ## What Nostalgex Is (and Isn't)
 
 It's a front end for your own server. It does not host, stream, or supply any media. Every frame comes off your machine.
 
-It's also free. No ads, no Nostalgex account, and no upsell screen. The Apple TV app, the web tuner, and the channel rules are all open source on GitHub under the MIT license. Sign in and playback happen directly between your device and your server, and the app reads your library without adding, renaming, moving, or deleting anything. You don't need a Plex Pass, either.
+It's also free, with no ads in the app and no Nostalgex account. The Apple TV app, the web tuner, and the channel rules are all open source on GitHub under the MIT license. Sign in and playback happen directly between your device and your server, and the app reads your library without adding, renaming, moving, or deleting anything.
 
 And it's plug and play. Connect your server and Nostalgex builds every channel and every schedule from your library on its own. No playlists, no programming, nothing to set up. The movies you already own just start airing.
 
@@ -64,9 +65,9 @@ For Plex, this usually isn't an issue, because Plex hands out its own secure add
 
 ## Move It to the Living Room: The Apple TV App
 
-The web tuner is the test drive. The Apple TV app is where this really clicks. It's a native tvOS app from the App Store, free, and it needs tvOS 18 or later. Open it, choose Plex, and enter the code it shows at plex.tv/link. No typing a password with the remote.
+The web tuner is the test drive. The Apple TV app is where this really clicks. It's a native tvOS app from the App Store, free, and it needs tvOS 18 or later. Open it, choose Plex, and sign in with your Plex account. You get a code to approve on Plex's site, so you never type your password with the remote.
 
-A few things only make sense on the couch. The Siri Remote flips channels the way remotes used to. Put Nostalgex in the top row of your home screen and it shows what's on right now, and picking a channel tunes straight to it. A Now Playing panel handles captions, audio language, retro mode, and a sleep timer without leaving the show. And reporting playback to Plex is off by default, so an evening of channel surfing won't bury your Continue Watching row.
+A few things only make sense on the couch. The Siri Remote flips channels the way remotes used to. Put Nostalgex in the top row of your home screen and it shows what's on right now, and picking a channel tunes straight to it. A Now Playing panel handles captions, audio language, retro mode, and a sleep timer without leaving the show.
 
 ## Turn Your Library Back into TV
 

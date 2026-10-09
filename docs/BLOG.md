@@ -46,6 +46,7 @@ cover: /blog/public-page-title-and-h1/cover.jpg
 | `date`        | yes      | ISO date (`YYYY-MM-DD`). Also used in Article JSON-LD and the sitemap.    |
 | `seo_title`   | no       | Overrides the `<title>` only; the page `<h1>` still uses `title`.         |
 | `cover`       | no       | Absolute URL path to a cover image. Falls back to `/og-image.png` for OG. |
+| `draft`       | no       | `true` keeps the post out of the index, `dist/`, and the sitemap. The file stays in `content/blog/` and is still validated by the build. |
 
 The build script validates these and fails loudly if a required field is
 missing, dates don't parse, or slugs collide. See
@@ -82,7 +83,8 @@ OpenGraph/Twitter card image.
 3. `vite build` builds the main site pages into `dist/`.
 4. The `nostalgex-blog` Vite plugin (in [`vite.config.js`](../vite.config.js))
    runs after Vite finishes and emits:
-   - `dist/blog/index.html`, the blog index page.
+   - `dist/blog.html`, the blog index page, served at `/blog` by Vercel's
+     `cleanUrls` (see below).
    - `dist/blog/<slug>.html`, one page per post.
 
    The plugin reads the hashed CSS and JS filenames Vite emitted into
@@ -93,7 +95,7 @@ OpenGraph/Twitter card image.
 
 [`vercel.json`](../vercel.json) sets `cleanUrls: true`, so Vercel maps:
 
-- `dist/blog/index.html` → `https://www.nostalgex.app/blog`
+- `dist/blog.html` → `https://www.nostalgex.app/blog`
 - `dist/blog/<slug>.html` → `https://www.nostalgex.app/blog/<slug>`
 
 No new rewrites or redirects are needed, and the existing CSP applies.

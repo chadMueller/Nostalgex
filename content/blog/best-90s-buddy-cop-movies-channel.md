@@ -3,7 +3,8 @@ title: "Partners Night: A Friday on the 90s Buddy Cop Channel"
 seo_title: "Best 90s Buddy Cop Movies: A Friday Night Channel Lineup"
 description: "The best 90s buddy cop movies, from Tango & Cash to Bad Boys, and what a Friday on the Nostalgex BUDDIES channel looks like with them in your library."
 slug: best-90s-buddy-cop-movies-channel
-date: 2026-10-08
+date: 2026-10-10
+draft: true
 ---
 
 # Partners Night: A Friday on the 90s Buddy Cop Channel
@@ -20,7 +21,7 @@ Every good buddy cop movie runs on the same engine. Two people who should never 
 
 ### First Flip: Tango & Cash (1989)
 
-Yes, it's from 1989, the 80s handing the baton to the 90s, and BUDDIES takes anything from 1980 on. Sylvester Stallone plays Ray Tango, a suit and glasses narcotics cop, and Kurt Russell plays Gabe Cash, a slob. Rival LAPD guys, both framed by Jack Palance, who keeps mice in a maze in his lair because of course he does. There's a prison escape, a Kurt Russell drag scene, Teri Hatcher, and Stallone saying "Rambo is a pussy" with a straight face. It's ridiculous. It's the perfect thing to land on with the pizza still hot.
+Yes, it's from 1989, the 80s handing the baton to the 90s, and BUDDIES includes movies from 1980 through 2004. Sylvester Stallone plays Ray Tango, a suit and glasses narcotics cop, and Kurt Russell plays Gabe Cash, a slob. Rival LAPD guys, both framed by Jack Palance, who keeps mice in a maze in his lair because of course he does. There's a prison escape, a Kurt Russell drag scene, Teri Hatcher, and Stallone saying "Rambo is a pussy" with a straight face. It's ridiculous. It's the perfect thing to land on with the pizza still hot.
 
 ### Early Evening: Rush Hour (1998)
 
@@ -36,7 +37,7 @@ The kids are asleep, so the volume goes up. Michael Bay's first movie stars Will
 
 ### After Midnight: The Last Boy Scout (1991)
 
-The meanest movie here, and the best one to stumble onto after midnight. Bruce Willis is Joe Hallenbeck, a burned out private eye and former Secret Service agent, and Damon Wayans is Jimmy Dix, a former quarterback banned over gambling. Neither one is technically a cop, and it does not matter. Shane Black's script sold for a record price, Tony Scott shot it like a beer commercial on fire, and the opening on a pro football field is genuinely shocking. Danielle Harris plays Joe's foul mouthed daughter, the same Danielle Harris from my [Halloween lineup](/blog/90s-slasher-movies-halloween-marathon).
+The meanest movie here, and the best one to stumble onto after midnight. Bruce Willis is Joe Hallenbeck, a burned out private eye and former Secret Service agent, and Damon Wayans is Jimmy Dix, a former quarterback banned over gambling. Neither one is technically a cop, and it does not matter. Shane Black's script sold for a record price, Tony Scott shot it like a beer commercial on fire, and the opening on a pro football field is genuinely shocking. Danielle Harris plays Joe's foul mouthed daughter.
 
 ## The Graveyard Shift
 
@@ -46,7 +47,7 @@ Every channel has a 3 AM movie. On BUDDIES, hope it's this one. Wesley Snipes an
 
 ### Saturday Morning: Men in Black (1997)
 
-Leave BUDDIES on into Saturday and this one plays great with cereal. Tommy Lee Jones as K, Will Smith as J, Vincent D'Onofrio walking around in a farmer's skin as Edgar the bug, Frank the pug, the Noisy Cricket, and the neuralyzer. It's 98 minutes and PG-13, so the kids can finally see what everyone was laughing about last night. Technically they're agents, not cops. Same format, better sunglasses.
+Leave BUDDIES on into Saturday. Men in Black (1997) is the kind of thing that may turn up, depending on your library: Tommy Lee Jones as K, Will Smith as J, Vincent D'Onofrio walking around in a farmer's skin as Edgar the bug, Frank the pug, the Noisy Cricket, and the neuralyzer. It's 98 minutes and PG-13. Technically they're agents, not cops. Same format, better sunglasses.
 
 ### The One I'd Flip Past: Beverly Hills Cop III (1994)
 
@@ -54,11 +55,11 @@ If it's in your library, it'll turn up on BUDDIES eventually. Axel Foley at a th
 
 ## How It Works on Nostalgex
 
-Nostalgex is a free, open source Apple TV app, plus a free [web tuner](/web-tuner), that turns your own Plex, Jellyfin, or Emby library into live channels with a retro TV guide. It's plug and play. Connect your server and it builds the channels and schedules from your library, so BUDDIES is already airing the moment you open the guide. Quick honesty check: it doesn't come with movies. It plays what you've already got on your server, so these need to be in your library. (First time? Here's how to [set up your Plex library as live channels](/blog/make-plex-feel-like-cable-tv).)
+Nostalgex is a free, open source Apple TV app, plus a free [web tuner](/web-tuner), that turns your own Plex, Jellyfin, or Emby library into live channels with a retro TV guide. It's plug and play. Connect your server and it builds the channels and schedules from your library, so BUDDIES is already airing the moment you open the guide. Quick honesty check: it doesn't come with movies. It plays what you've already got on your server, so these need to be in your library. (First time? Here's how to set up your Plex library as live channels.)
 
 ### BUDDIES is on channel 14
 
-There's a channel built for exactly this, and it fills itself. BUDDIES (channel 14, in the NOSTALGEX bundle) pulls action and comedy movies from 1980 to 2004 and leans on keywords like "buddy cop" and "mismatched pair." Its neighbor LAST ACTION HEROES (channel 13) handles straighter action. Every channel runs a real schedule all day, so you tune in to a car chase already in progress like it's 1995.
+BUDDIES (channel 14, in the NOSTALGEX bundle) fills itself from action and comedy movies, 1980 through 2004. Keywords like "buddy cop" and "mismatched pair" pull more titles in. They do not limit the channel to buddy cop movies. Its neighbor LAST ACTION HEROES (channel 13) handles straighter action. Every channel runs a real schedule all day, so you tune in to a car chase already in progress like it's 1995.
 
 ### Flip like it's 1996
 

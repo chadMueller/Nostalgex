@@ -16,10 +16,11 @@
 import { readFile, writeFile, readdir, mkdir, copyFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { marked } from "marked";
 import matter from "gray-matter";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONTENT_DIR = path.join(ROOT, "content", "blog");
 const PUBLIC_DIR = path.join(ROOT, "public");
 const SITEMAP_PATH = path.join(PUBLIC_DIR, "sitemap.xml");
@@ -236,8 +237,9 @@ function renderPostCta() {
         <p>Nostalgex turns your own Plex, Jellyfin or Emby library into live channels with a retro TV guide. It's free and open source.</p>
         <div class="cta-row cta-center">
           <a class="btn btn-ink btn-lg" href="/web-tuner">Try the free web tuner</a>
-          <a class="btn btn-paper btn-lg" href="${APPLE_TV_URL}" target="_blank" rel="noopener">Get the Apple TV app</a>
+          <a class="btn btn-paper btn-lg" href="${APPLE_TV_URL}" target="_blank" rel="noopener">Free on Apple TV</a>
         </div>
+        <p class="blog-post-cta-discord"><a href="https://discord.gg/FgnZcr5bDT" target="_blank" rel="noopener">Discord</a></p>
       </section>`;
 }
 
@@ -439,6 +441,7 @@ export async function loadPosts() {
     const dateHuman = formatHumanDate(dateIso);
     const coverUrl = fm.cover ? String(fm.cover) : null;
     const seoTitle = fm.seo_title ? String(fm.seo_title) : null;
+    const draft = fm.draft === true;
 
     if (seenSlugs.has(slug)) {
       throw new Error(`${file}: duplicate slug "${slug}"`);
@@ -454,12 +457,15 @@ export async function loadPosts() {
       dateHuman,
       coverUrl,
       seoTitle,
+      draft,
       markdown: parsed.content,
     });
   }
 
   posts.sort((a, b) => (a.dateIso < b.dateIso ? 1 : a.dateIso > b.dateIso ? -1 : a.slug.localeCompare(b.slug)));
-  return posts;
+  // A draft stays in content/blog/ (so it's still validated above) but gets no
+  // dist page, index card, or sitemap URL until its `draft: true` is removed.
+  return posts.filter((post) => !post.draft);
 }
 
 export function renderBlogAssets(posts, assetHrefs = {}) {
@@ -610,7 +616,7 @@ async function main() {
 }
 
 const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
-const selfPath = path.resolve(new URL(import.meta.url).pathname);
+const selfPath = path.resolve(fileURLToPath(import.meta.url));
 
 if (entryPath === selfPath) {
   main().catch((err) => {

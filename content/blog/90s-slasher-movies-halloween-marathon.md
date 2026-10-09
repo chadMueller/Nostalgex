@@ -1,7 +1,7 @@
 ---
 title: "The 90s Slasher Movie Marathon: A Halloween Night on the SCREAM Channels"
 seo_title: "90s Slasher Movies: A Halloween Movie Marathon Lineup"
-description: "A Halloween movie marathon of 90s slasher movies, and what a night on the Nostalgex SCREAM channels looks like with them in your Plex library."
+description: "A Halloween movie marathon of 90s slasher movies, and what a night on the Nostalgex SCREAM channels looks like with those films sitting in your library."
 slug: 90s-slasher-movies-halloween-marathon
 date: 2026-10-08
 ---
@@ -52,11 +52,11 @@ The oldest and best made movie here, and the worst one to stumble onto when you'
 
 ### Also worth catching
 
-The Faculty (1998) is Robert Rodriguez doing Invasion of the Body Snatchers in a high school, with Elijah Wood and Jon Stewart as a science teacher. More science fiction than slasher, but FRIGHT NIGHT takes horror of any kind. Final Destination came out in March 2000, so it misses NOSTALGEX HORROR's 90s cutoff, but FRIGHT NIGHT and SCREAM ADULTS will happily air it.
+The Faculty (1998) is Robert Rodriguez doing Invasion of the Body Snatchers in a high school, with Elijah Wood and Jon Stewart as a science teacher. It is more science fiction than slasher. Whether it turns up on FRIGHT NIGHT depends on your library and how the file is tagged. Final Destination came out in March 2000, so it misses NOSTALGEX HORROR, which only runs horror from 1975 to 1999. It may turn up on another horror channel if the metadata lines up. It may not.
 
 ## How It Works on Nostalgex
 
-Nostalgex is a free, open source app for Apple TV, plus a free [web tuner](/web-tuner), that turns your own Plex, Jellyfin, or Emby library into live channels with a retro TV guide. It's plug and play. Connect your server and it builds the channels and the schedules from what you own, so the SCREAM channels are already airing when you open the guide. It doesn't come with movies, though. It plays what's on your server, so these films need to be in your library. (New to the idea? Here's how to [make your Plex library feel like cable](/blog/make-plex-feel-like-cable-tv).)
+Nostalgex is a free, open source app for Apple TV, plus a free [web tuner](/web-tuner), that turns your own Plex, Jellyfin, or Emby library into live channels with a retro TV guide. It's plug and play. Connect your server and it builds the channels and the schedules from what you own, so the SCREAM channels are already airing when you open the guide. It doesn't come with movies, though. It plays what's on your server, so these films need to be in your library. (New to the idea? Here's how to make your Plex library feel like cable.)
 
 ### SCREAM is on channels 137 to 140
 
@@ -76,4 +76,4 @@ Retro mode gives you the CRT look. In the web tuner it adds scanlines, a vignett
 
 The fastest way to try it is the free [web tuner](/web-tuner) at [nostalgex.app](https://www.nostalgex.app/). Connect your server, and the SCREAM channels are already on. One heads up: the web tuner needs your media server reachable over HTTPS. Plex usually handles that for you. If you'd rather have it on the big screen (you would), Nostalgex is free on Apple TV, too.
 
-Lights off. Phone face down. And whatever you do, don't answer if it rings. If you survive, the [buddy cop block](/blog/best-90s-buddy-cop-movies-channel) is waiting next Friday.
+Lights off. Phone face down. And whatever you do, don't answer if it rings. If you survive, the buddy cop block is waiting next Friday.
