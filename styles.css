@@ -226,6 +226,8 @@ a { color: inherit; }
 
 .btn-lg { padding: 15px 24px; }
 .btn-sm { padding: 8px 15px; font-size: 12.5px; }
+.btn-icon { width: 36px; height: 36px; padding: 0; justify-content: center; gap: 0; }
+.btn-icon svg { width: 16px; height: 16px; display: block; }
 
 .btn-ink {
   background: var(--ink);
@@ -1625,13 +1627,12 @@ a { color: inherit; }
   .section { padding: 68px 0; }
   .feature-grid { grid-template-columns: 1fr; }
   .btn-lg { width: 100%; justify-content: center; }
-  .nav-actions .btn-outline { display: none; }
-  /* nav fits a true 375px: tighter brand, gaps, and button padding */
+  /* nav fits a true 375px: tighter brand and gaps. The nav buttons are icon-only
+     now (.btn-icon), so they no longer need shrinking or hiding here. */
   .nav-inner { gap: 12px; }
   .nav-actions { gap: 8px; }
   .brand-word { font-size: 20px; }
   .brand-word .brand-o { height: 15px; width: 17px; }
-  .nav-actions .btn-sm { padding: 8px 10px; font-size: 11.5px; }
   .theme-toggle { width: 30px; height: 30px; }
   .privacy-card, .signup-card { padding: 32px 26px; }
   .subscribe-btn { width: 100%; }
