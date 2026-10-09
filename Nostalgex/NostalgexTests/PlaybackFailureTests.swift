@@ -53,6 +53,40 @@ final class PlaybackFailureTests: XCTestCase {
         guard case .unknown = f else { return XCTFail("got \(f)") }
     }
 
+    /// The exact shape seen on an Apple TV HD on 2026-10-08: a frame decoded, the playhead
+    /// never moved, and CoreMedia reported -12889 (no response in 3s) and -15628 (segment
+    /// abandoned). The server was measured at 1.07x for that request, so it was late, not
+    /// undecodable. Calling it a decode failure blames the wrong machine.
+    func testLateMediaIsTheServerBeingSlowNotTheDeviceFailingToDecode() {
+        let f = classify {
+            $0.coreMediaStatuses = [-15628, -12889]
+            $0.decodedAFrame = true
+            $0.everShowedPicture = false
+            $0.sourceCodec = "hevc"
+            $0.serverDeliveredBytes = true
+        }
+        XCTAssertEqual(f, .serverTooSlow(server: "Emby"))
+        XCTAssertFalse(f.detail.lowercased().contains("apple tv"),
+                       "a late stream is not the device's fault")
+    }
+
+    /// A frame reaching the screen is proof the device can decode the stream.
+    func testADecodedFrameVetoesTheDeviceCannotRenderVerdict() {
+        let f = classify { $0.coreMediaStatuses = [-12909]; $0.decodedAFrame = true }
+        guard case .deviceCannotRender = f else { return }
+        XCTFail("a decoded frame must rule out deviceCannotRender, got \(f)")
+    }
+
+    /// And the genuine case still works: no frame ever, a decode error, nothing late.
+    func testATrulyUndecodableStreamIsStillBlamedOnTheDevice() {
+        let f = classify {
+            $0.coreMediaStatuses = [-12909]
+            $0.decodedAFrame = false
+            $0.sourceCodec = "hevc"
+        }
+        XCTAssertEqual(f, .deviceCannotRender(codec: "hevc"))
+    }
+
     func testStarvationOutranksEverythingBecauseTheServerAnsweredCorrectly() {
         let f = classify {
             $0.starvedAfterCappedRetry = true

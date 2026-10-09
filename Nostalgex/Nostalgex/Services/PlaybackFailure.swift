@@ -55,6 +55,12 @@ enum PlaybackFailure: Equatable, Sendable {
         var everShowedPicture: Bool = false
         /// Source video codec, for the message when the device is the limit.
         var sourceCodec: String?
+        /// Whether any frame reached the screen for this item. A decoded frame is proof the
+        /// device can decode the stream, so it vetoes `deviceCannotRender` outright even
+        /// when the playhead never advanced.
+        var decodedAFrame: Bool = false
+        /// Whether the server actually delivered media for this item.
+        var serverDeliveredBytes: Bool = false
     }
 
     /// Order matters. A server that answered with an error is a more specific and more
@@ -79,15 +85,37 @@ enum PlaybackFailure: Equatable, Sendable {
             return .serverUnreachable(server: server)
         }
 
-        // Bytes arrived and no picture came of them. Only claim this when the device really
-        // never showed a frame; a mid-film decode failure is far more likely to be the
-        // stream going wrong than the file being undecodable all along.
-        if !e.everShowedPicture, !e.coreMediaStatuses.isEmpty {
+        // These two CoreMedia codes mean the media did not arrive in time, not that it
+        // could not be decoded: -12889 is "no response for media file in 3s" and -15628 is
+        // a segment abandoned for being too slow. Measured 2026-10-08 on an Apple TV HD,
+        // which has no HEVC decoder and so forces the server into a full HEVC to h264
+        // re-encode: the server held 1.07x at the 4K ceiling and 1.28x at the 1080p rung,
+        // with a 2.1 to 2.7s first segment against CoreMedia's 3s patience. The same file
+        // for a client that accepts HEVC is a remux at 17.3x. Nothing was undecodable; it
+        // was late.
+        if e.coreMediaStatuses.contains(where: Self.deliveryTooSlowCodes.contains) {
+            return .serverTooSlow(server: server)
+        }
+
+        // Bytes arrived and no picture came of them. A frame that did decode is proof the
+        // device can handle the stream, so it vetoes this outright: without that check a
+        // stream that decoded one frame and then starved was reported as "Apple TV
+        // couldn't play this file", which blames the wrong thing entirely.
+        if !e.everShowedPicture, !e.decodedAFrame, !e.coreMediaStatuses.isEmpty {
             return .deviceCannotRender(codec: e.sourceCodec)
+        }
+
+        // The server answered, kept answering, and the picture still never moved.
+        if !e.everShowedPicture, e.serverDeliveredBytes {
+            return .serverTooSlow(server: server)
         }
 
         return .unknown(server: server)
     }
+
+    /// CoreMedia codes that mean the media was late rather than unplayable.
+    /// -12889: no response for a media file within 3s. -15628: segment abandoned.
+    private static let deliveryTooSlowCodes: Set<Int> = [-12889, -15628]
 
     /// `URLError.Code` raw values that mean nothing answered. Spelled as integers so the
     /// type stays free of Foundation networking at the point of use.

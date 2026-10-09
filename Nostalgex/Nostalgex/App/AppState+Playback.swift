@@ -360,7 +360,7 @@ extension AppState {
               let failing = events.reversed().compactMap({ $0.uri }).first,
               let url = URL(string: failing) else { return false }
         let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
-        guard let status = await StreamFailureProbe.status(of: url, headers: headers),
+        guard let status = await StreamFailureProbe.refusalStatus(of: url, headers: headers),
               StreamFailureProbe.isRefusal(status),
               loadGeneration == generation else { return false }
         print("[Plex90] gen=\(generation) | FAIL FAST: \(url.host ?? "?") answered HTTP \(status) for \(url.lastPathComponent); not waiting out the deadline")
@@ -388,6 +388,13 @@ extension AppState {
         e.starvedAfterCappedRetry = starvedAfterCappedRetry
         e.everShowedPicture = hadPicture
         e.sourceCodec = item?.videoCodec
+        // A decoded frame proves the device can handle the stream, whatever happened next.
+        if let probe = videoFrameProbe, let playerItem {
+            e.decodedAFrame = probe.hasNewPixelBuffer(forItemTime: playerItem.currentTime())
+        }
+        if let access = playerItem?.accessLog()?.events.last {
+            e.serverDeliveredBytes = access.numberOfBytesTransferred > 0
+        }
         if let events = playerItem?.errorLog()?.events {
             e.coreMediaStatuses = events.map(\.errorStatusCode).filter { $0 != 0 }
             // tvOS has no httpStatusCode on an error-log event, but AVFoundation often
@@ -429,7 +436,9 @@ extension AppState {
                 .compactMap({ $0.uri }).compactMap(URL.init(string:)).first
             if let url = fromLog ?? lastStreamURL {
                 let headers = item.map { api(for: $0.serverID).authHeaders } ?? [:]
-                let status = await StreamFailureProbe.status(of: url, headers: headers)
+                // Walks the playlist down to real media: the master answers 200 even
+                // when every segment under it is refused.
+                let status = await StreamFailureProbe.refusalStatus(of: url, headers: headers)
                 // Through InstallDiagnostics, not print: a bare print never reaches the
                 // unified log on a simulator, so an unexplained classification could not
                 // be told apart from a probe that never ran.
