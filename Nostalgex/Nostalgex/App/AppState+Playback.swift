@@ -519,6 +519,17 @@ extension AppState {
             return
         }
 
+        // An item stamped with a server that is not signed in cannot be played by the one
+        // that is: its rating key means something else there (on Emby, a Plex key resolved
+        // to a Person record and the server answered 500). Say so and move on rather than
+        // sending the request.
+        if !isDemoMode, !itemBelongsToConnectedServers(item) {
+            print("[Plex90] gen=\(generation) | \"\(item.title)\" belongs to server \(item.serverID ?? "?") which is not signed in, skipping")
+            showErrorThenSkip(.noPlayableSource(server: backendKind.displayName), generation: generation,
+                              title: item.title, detail: "Item belongs to a server that is not signed in")
+            return
+        }
+
         // Create a fresh tracker for this item. Reporting stays off unless the user
         // turned it on: Plex gets timeline + scrobble, Jellyfin and Emby get the same
         // watch counted on their server. Either way the tracker still accumulates time.
