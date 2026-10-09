@@ -228,6 +228,14 @@ a { color: inherit; }
 .btn-sm { padding: 8px 15px; font-size: 12.5px; }
 .btn-icon { width: 36px; height: 36px; padding: 0; justify-content: center; gap: 0; }
 .btn-icon svg { width: 16px; height: 16px; display: block; }
+.btn-icon-text { display: none; }
+
+/* Room for the label once the nav isn't fighting nav-links + nav-social
+   for space too. Below this the buttons stay icon-only. */
+@media (min-width: 1280px) {
+  .btn-icon { width: auto; height: auto; padding: 8px 15px; gap: 10px; }
+  .btn-icon-text { display: inline; }
+}
 
 .btn-ink {
   background: var(--ink);
