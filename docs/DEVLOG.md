@@ -3,6 +3,60 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-09 (app)
+
+**Shipped.** Nothing to Apple. 1.0.24 (45) is still in TestFlight beta review.
+`main` now carries 1.0.25 (46), not archived or uploaded.
+
+**Changed.**
+
+- Jellyfin and Emby connect forms have a FIND SERVERS ON MY NETWORK button
+  (`LANServerDiscovery.swift`). UDP 7359, `who is JellyfinServer?` and
+  `who is EmbyServer?`, three second listen, deduped by server id, kind taken
+  from which probe the server answered. Measured before writing it: the Emby
+  under test answered the subnet directed broadcast and ignored
+  255.255.255.255, so the app sends to both, computing the directed broadcast
+  from every live IPv4 interface. Network.framework could not receive the reply
+  (a connected UDP socket drops datagrams from the server's unicast address),
+  so it is a BSD socket with SO_BROADCAST. No system prompt seen in the tvOS 26
+  simulator; `NSLocalNetworkUsageDescription` now names all three servers in
+  case hardware asks. Jellyfin side verified only as far as the parser, no
+  Jellyfin server was on the test network. Plex skipped on purpose: that form
+  has no address field.
+- The Plex to Emby switch bug from the 2026-10-08 entry is fixed, and the cause
+  was not either suspect named there. It was a race: a stale snapshot starts a
+  background Plex refresh at launch, which on a large library runs for minutes;
+  the user disconnects and signs into Emby meanwhile; Emby's scan finishes
+  first; then the Plex scan returns and, with nothing checking that its sign-in
+  still exists, rebuilt every pool from Plex items and saved the snapshot under
+  the Emby identity. That poisoned snapshot is why it survived relaunch. The
+  harness (`BackendSwitchScheduleTests.swift`) showed the clean switch passing
+  on the old code and the race failing with "CH 7 VHS VAULT schedule would send
+  18 Plex key(s) to Emby". Fix: a session generation bumped on Disconnect or a
+  server change, checked before every commit in `loadLibrary` and used to abort
+  the remaining requests; items from servers not signed in are dropped at load;
+  a snapshot holding such items is refused on launch and rescanned; playback
+  skips a foreign item with the failure card instead of sending the server a
+  request it will answer 500. Disconnect now also clears today's manifests and
+  the collection scan. Behaviour change: disconnect and re-sign-in to the same
+  server reshuffles today's guide.
+- `NostalgexTests`: 436 passed, 0 failed, 2 skipped on the merged tree
+  (417 before, 9 discovery, 9 backend switch, 1 moved).
+
+**Half-done.** The race itself is proven by the harness and a poisoned snapshot
+was recovered in the simulator, but the real sequence (stale snapshot, Disconnect
+mid refresh, Emby sign-in) has not been run on hardware. First press of FIND
+SERVERS on a real Apple TV is also owed, to see whether tvOS shows the local
+network prompt.
+
+**Next.** Hardware checks above, then archive 46 for TestFlight. App Store
+listing for the next submission: "131 themed channels across 14 bundles" and
+new screenshots. Discussion #2 (Fire TV fork): ordering and DayPacker ports match
+the JS reference byte for byte; the channel filter does not (22 channels
+diverge), asked the contributor for filter golden vectors in `scripts/` before
+deciding where it lives. Discussions #8 (Roku) and #14 (languages) are
+unanswered.
+
 ## 2026-10-09
 
 **Shipped.** nostalgex.app: the four SEO blog drafts and table styling (#15),
