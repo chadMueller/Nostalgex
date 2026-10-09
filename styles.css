@@ -2116,7 +2116,21 @@ a { color: inherit; }
   max-width: 60ch;
 }
 .blog-post-cta .cta-row { margin-top: 0; }
-.blog-post-cta-discord { margin: 18px 0 0; font-size: 14px; color: var(--ink-soft); }
+.blog-post-cta .blog-post-cta-discord { margin: 30px auto 0; font-size: 14px; }
+.blog-post-cta-discord a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-soft);
+  transition: color 160ms var(--ease);
+}
+.blog-post-cta-discord a:hover { color: var(--ink); }
+.blog-post-cta-discord svg { width: 16px; height: 16px; display: block; }
 
 @media (min-width: 720px) {
   .blog-list { grid-template-columns: 1fr; }
