@@ -5,9 +5,10 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-10-09
 
-**Shipped.** Nothing yet. Site wide SEO and speed work is on branch
-`seo/site-wide`, opened as a PR stacked on `feat/seo-blog-posts` (#15). No app
-change.
+**Shipped.** nostalgex.app: the four SEO blog drafts and table styling (#15),
+then site wide SEO and speed work (#16). The buddy cop post went live a day
+early; the other drafts each moved up a day (Oct 12, 14, 16, 19, 21) and still
+need their `draft: true` removed on the day. No app change.
 
 **Changed.**
 

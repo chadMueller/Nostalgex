@@ -5,8 +5,8 @@ description: "ErsatzTV is in maintenance mode and Tunarr needs a server. Here's 
 excerpt: "I love what Tunarr and ErsatzTV do. But if your channels only ever play on one Apple TV, you might not need a server tool at all. Here's how I'd decide."
 author: "Chad Mueller"
 slug: tunarr-ersatztv-alternative-apple-tv
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-12
+updated: 2026-10-12
 draft: true
 ---
 
@@ -120,10 +120,10 @@ No. The channels live inside the Apple TV app and the web tuner. If you need cha
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
 Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"} (needs the @id added to the homepage SoftwareApplication). No separate SoftwareApplication block.
 Images to add (none exist yet): cover alt "Nostalgex channel guide on Apple TV showing live channels built from a Jellyfin library". Inline next to the table: "Side by side of a Tunarr channel editor and the Nostalgex guide" only if Chad has his own Tunarr screenshot, otherwise the guide alone.
-ADD LINKS BACK (this post publishes Oct 13; these targets are not live yet):
-1. Oct 15, once /blog/jellyfin-tv-guide-own-library is live: in "How does Nostalgex compare to Tunarr and ErsatzTV?", change "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin)." to "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin) or my post on [getting a TV guide for your own Jellyfin library](/blog/jellyfin-tv-guide-own-library)."
-2. Oct 17, once /blog/make-plex-feel-like-cable-tv is live: in the same paragraph, after the Plex sentence, add: "For the full Plex walkthrough, here's [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv)."
-3. Oct 20, once /blog/apple-tv-channel-surfing-apps is live: at the end of "Which one should I pick?", add: "Comparing Apple TV apps instead? I lined them up in [the best channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
-4. Oct 22, once /blog/plex-virtual-channels-own-movies is live: optional, not in the review map. Skip unless Chad wants it.
+ADD LINKS BACK (this post publishes Oct 12; these targets are not live yet):
+1. Oct 14, once /blog/jellyfin-tv-guide-own-library is live: in "How does Nostalgex compare to Tunarr and ErsatzTV?", change "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin)." to "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin) or my post on [getting a TV guide for your own Jellyfin library](/blog/jellyfin-tv-guide-own-library)."
+2. Oct 16, once /blog/make-plex-feel-like-cable-tv is live: in the same paragraph, after the Plex sentence, add: "For the full Plex walkthrough, here's [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv)."
+3. Oct 19, once /blog/apple-tv-channel-surfing-apps is live: at the end of "Which one should I pick?", add: "Comparing Apple TV apps instead? I lined them up in [the best channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
+4. Oct 21, once /blog/plex-virtual-channels-own-movies is live: optional, not in the review map. Skip unless Chad wants it.
 Publish day check: NostalgiaTV Pro pricing (one time or subscription) before quoting any price.
 -->

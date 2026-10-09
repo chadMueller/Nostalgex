@@ -3,8 +3,7 @@ title: "Partners Night: A Friday on the 90s Buddy Cop Channel"
 seo_title: "Best 90s Buddy Cop Movies for a Friday Night"
 description: "The best 90s buddy cop movies, from Tango & Cash to Bad Boys, and what a Friday on the Nostalgex BUDDIES channel looks like with them in your library."
 slug: best-90s-buddy-cop-movies-channel
-date: 2026-10-10
-draft: true
+date: 2026-10-09
 ---
 
 # Partners Night: A Friday on the 90s Buddy Cop Channel

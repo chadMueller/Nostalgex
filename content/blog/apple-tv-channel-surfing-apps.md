@@ -5,8 +5,8 @@ description: "Coax, Bunny Ears TV, TubeTime+, analoq and Nostalgex turn Plex or 
 excerpt: "Coax, Bunny Ears TV, TubeTime+, analoq and Nostalgex all turn your library into live TV on Apple TV. I built one of them, so here's the fairest comparison I can write."
 author: "Chad Mueller"
 slug: apple-tv-channel-surfing-apps
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-19
+updated: 2026-10-19
 draft: true
 ---
 
@@ -125,8 +125,8 @@ No. NostalgiaTV is on Android, Android TV and Amazon devices as of October 2026.
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
 Intended schema: ItemList with Nostalgex, Coax, Bunny Ears TV, TubeTime+, analoq in review order (NostalgiaTV left out, it isn't an Apple TV app). FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. No separate SoftwareApplication block.
 Image to add (none exist yet): alt "Nostalgex guide on Apple TV with channels like Saturday Morning Cartoons and 90s Sitcoms filled from a Plex library".
-PUBLISH MORNING Oct 20: recheck every competitor price, tvOS minimum and platform (Coax, Bunny Ears TV, TubeTime+, analoq, NostalgiaTV on Apple TV) and change "October 9, 2026" / "Oct 9, 2026" in the disclosure, table header, NostalgiaTV H2 and Bunny Ears paragraph to the recheck date. Bunny Ears: the US App Store listing says "Only for Apple TV" while its website says Apple TV, iPhone and iPad; recheck.
-ADD LINKS BACK (this post publishes Oct 20; this target is not live yet):
-1. Oct 22, once /blog/plex-virtual-channels-own-movies is live: at the end of "Is there a free app that turns my Plex library into live TV channels?" add: If you're on Plex and confused by its Live TV tab, see [does Plex Live TV play your own movies?](/blog/plex-virtual-channels-own-movies).
-Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 13) and /blog/jellyfin-tv-guide-own-library (Oct 15), both live before this post.
+PUBLISH MORNING Oct 19: recheck every competitor price, tvOS minimum and platform (Coax, Bunny Ears TV, TubeTime+, analoq, NostalgiaTV on Apple TV) and change "October 9, 2026" / "Oct 9, 2026" in the disclosure, table header, NostalgiaTV H2 and Bunny Ears paragraph to the recheck date. Bunny Ears: the US App Store listing says "Only for Apple TV" while its website says Apple TV, iPhone and iPad; recheck.
+ADD LINKS BACK (this post publishes Oct 19; this target is not live yet):
+1. Oct 21, once /blog/plex-virtual-channels-own-movies is live: at the end of "Is there a free app that turns my Plex library into live TV channels?" add: If you're on Plex and confused by its Live TV tab, see [does Plex Live TV play your own movies?](/blog/plex-virtual-channels-own-movies).
+Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 12) and /blog/jellyfin-tv-guide-own-library (Oct 14), both live before this post.
 -->
