@@ -2093,6 +2093,52 @@ a { color: inherit; }
   margin: 2em 0;
   opacity: 0.4;
 }
+.blog-table-wrap {
+  margin: 1.8em 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 5px 5px 0 var(--cyan);
+}
+.blog-post-body table {
+  width: 100%;
+  min-width: 680px;        /* scroll on phones instead of crushing columns */
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.blog-post-body thead th {
+  background: var(--paper-deep);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink);
+  padding: 13px 16px;
+  border-bottom: 2px solid var(--ink);
+  vertical-align: bottom;
+}
+.blog-post-body tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+  color: var(--ink-soft);
+}
+.blog-post-body tbody tr:last-child td { border-bottom: 0; }
+.blog-post-body tbody td:first-child {
+  font-weight: 700;
+  color: var(--ink);
+}
+.blog-post-body tbody tr:nth-child(even) td { background: var(--paper-deep); }
+/* Links inside a cell shouldn't carry the body's underline-grow background. */
+.blog-post-body table a { background: none; }
+/* On wide screens, let tables break out of the narrow reading column. */
+@media (min-width: 1100px) {
+  .blog-table-wrap { margin-left: -90px; margin-right: -90px; }
+}
 
 /* End-of-post CTA */
 .blog-post-cta {

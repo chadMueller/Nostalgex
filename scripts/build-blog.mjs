@@ -155,6 +155,16 @@ function extractFaq(markdown) {
   return items;
 }
 
+// Wrap each rendered <table> in a scroll container so wide comparison tables
+// scroll horizontally on phones instead of crushing their columns. marked
+// emits bare <table> tags, so a string wrap is simpler and more
+// version-proof than overriding the renderer.
+function wrapTables(html) {
+  return html
+    .replace(/<table>/g, '<div class="blog-table-wrap"><table>')
+    .replace(/<\/table>/g, "</table></div>");
+}
+
 function buildFaqJsonLd(faqItems) {
   if (!faqItems.length) return null;
   return {
@@ -423,7 +433,7 @@ function renderPostPage(post, assetHrefs = {}) {
         <img class="blog-post-cover" src="${escapeAttr(post.coverUrl)}" alt="" loading="eager" decoding="async">`
     : "";
 
-  const bodyHtml = marked.parse(stripLeadingH1(post.markdown, post.title));
+  const bodyHtml = wrapTables(marked.parse(stripLeadingH1(post.markdown, post.title)));
 
   const appScript = assetHrefs.appScriptHref || "/app.js";
 
