@@ -43,10 +43,12 @@ change.
   now describe one analytics script; the support FAQ no longer says there are
   no analytics on the tuner pages, because the connect page loads one.
 - "Over a hundred" is now 131 everywhere it appeared.
+- `Nostalgex/PRIVACY_POLICY.md` matches the privacy page: statsngraphs only,
+  effective October 9. `docs/FAQ.md` named 1.0.22 for the Tailscale/VPN http fix,
+  which shipped in 1.0.23 (support page was already right).
 
-**Half-done.** `Nostalgex/PRIVACY_POLICY.md` still names Data Haus. It lives in
-the app folder, so it was left for a separate change. Rich Results Test and
-the Vercel preview Lighthouse run still need doing on the PR preview.
+**Half-done.** Rich Results Test and a Lighthouse run against production still
+need doing.
 
 **Next.** Merge #15 first, then this. After deploy, resubmit the sitemap and
 request indexing for /plex, /jellyfin, /support and the blog post.

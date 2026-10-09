@@ -5,9 +5,9 @@
 Work through these in order. Most reports are one of the four.
 
 1. **Address.** Type the scheme, host and port exactly as another client uses them, for example `http://192.168.1.20:8096`. A `100.x.x.x` address is Tailscale.
-2. **Read the error.** Since 1.0.22 the connect screen names the cause: transport security, unknown host, wrong port, timeout, or certificate. Each one points at a different fix.
+2. **Read the error.** Since 1.0.23 the connect screen names the cause: transport security, unknown host, wrong port, timeout, or certificate. Each one points at a different fix.
 3. **Does another app on the same Apple TV reach the same server?** If Swiftfin or the Jellyfin app connects and Nostalgex does not, open an issue with the exact address and the exact error text. If nothing connects, it is the network or the server, not the app.
-4. **Plain http to a non-local address** (VPN, Tailscale, a public IP) was blocked by App Transport Security before 1.0.22. Update the app.
+4. **Plain http to a non-local address** (VPN, Tailscale, a public IP) was blocked by App Transport Security before 1.0.23. Update the app.
 
 ## Plex over Tailscale or VPN
 
@@ -25,7 +25,7 @@ First ask the server whether it can actually read the file. On Plex: `GET /libra
 
 | Symptom | Cause | Fixed in |
 |---|---|---|
-| Jellyfin or Emby "could not reach" over Tailscale or VPN while other apps work | Transport security blocked plain http off the local network | 1.0.22 |
+| Jellyfin or Emby "could not reach" over Tailscale or VPN while other apps work | Transport security blocked plain http off the local network | 1.0.23 |
 | Tuning screen never clears, fast channel changes fail | Playback decision call was skipped before the stream started | 1.0.21 |
 | Sound over a black picture on re-encoded files (tvOS 26) | Timestamp handling on transcodes | 1.0.21 |
 | Sign-in forgotten after a force quit | PIN sign-in was never saved | 1.0.17 |
