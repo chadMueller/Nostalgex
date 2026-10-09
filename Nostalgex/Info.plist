@@ -24,7 +24,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Nostalgex connects to your Plex Media Server on your local network to stream your personal media library.</string>
+	<string>Nostalgex streams from your Plex, Jellyfin or Emby server on your local network, and looks for servers on it when you ask it to.</string>
 	<key>TelemetryDeckAppID</key>
 	<string>2943D3D0-35BC-430F-B0BD-EFF3A5FE79D7</string>
 </dict>
