@@ -70,6 +70,53 @@ nostalgex.app shipped separately the same day.
   file was added, and Deezer's year is the album's, wrong on 15 of 15 sampled, so
   the decade channels were sorting by the wrong year.
 
+**Changed, evening session (real hardware).** Build 1.0.24 (45) ran on an Apple TV HD
+(tvOS 26.6) and an Apple TV 4K simulator against an Emby 4.10.1.0 server. Everything below
+was measured there, not inferred.
+
+- **Issue #6 confirmed fixed on hardware, with a controlled before/after.** The shipped
+  1.0.23 (44) from TestFlight on the same device: `HTTP 404. The file '/UserViews' could
+  not be found.` Build 45 ten minutes later: `[Emby] LIBRARY: 1541 items`, 69 channels,
+  playback at a 57-minute mid-schedule join. Gorbataras's #5 Emby seek is confirmed by the
+  same run.
+- **The guide wrap works on tvOS 26.6**, the reporter's exact version, which the 26.1
+  simulator could never reproduce. Down wraps, Up reaches SETTINGS.
+- **The failure card now says why, accurately.** Three classifier corrections from
+  watching it misfire: the probe walks master to variant to first segment, because the
+  master answers 200 while every segment beneath it is refused; CoreMedia -12889 (no
+  response in 3s) and -15628 (segment abandoned) classify as the server being too slow,
+  not the device failing to decode; and a decoded frame vetoes "Apple TV couldn't play
+  this file" outright. Verified verdicts on hardware: `Emby HTTP 500, refused before
+  video` and `Emby below real time on the capped stream`.
+- **Audio track selection.** Jellyfin and Emby hand back the file's default track, and
+  Joe Dirt's default is Spanish 2ch with English 5.1 unflagged, so it played in Spanish
+  on a channel with no picker. The resolver now reads MediaStreams from PlaybackInfo,
+  prefers a track in the viewer's language with the most channels, then the default,
+  then the first, and pins `AudioStreamIndex` on the transcode URL. Verified against the
+  server: Emby's own URL pinned index 1 (spa); ours pins 2 (eng); Emby accepts it. 7 tests.
+- **The starvation ladder's Emby rung fired for real** (The Wedding Singer, 13 Going on
+  30): starve, cap to 1080p, `TRANSCODE READY`. It recovers what it can.
+
+**Found, not fixed.**
+
+- **Switching backend keeps the old day schedule.** A device signed into Plex, then
+  Disconnected and connected to Emby for the first time, kept playing the Plex running
+  order: Plex rating keys sent to Emby resolve to Person records and 500, every channel,
+  looping between two titles indefinitely. A fresh install is flawless, so it is the
+  transition that leaks. `DailyManifestStore.clearAll` on Disconnect uses the fingerprint
+  current at that moment, and `apiForServer` never checks an item's `serverID` belongs to
+  the connected backend. Workaround: delete and reinstall. Worth fixing before a wide push.
+- **Two test rigs invent failures.** The tvOS simulator has no EAC3/AC3 decoder, so ~25%
+  of a typical library stalls 3s in and looks like starvation; the Apple TV HD has no HEVC
+  decoder, so every HEVC title forces a server re-encode that held 1.07x here against
+  CoreMedia's 3s first-segment patience. The same file for an HEVC-capable client is a
+  17.3x remux. Playback claims need the 4K unit.
+- **On this Emby, 10-bit sources cannot transcode at all.** `VideoFilters.format..ctor()`
+  throws "An item with the same key has already been added. Key: threads" before ffmpeg
+  starts; 190 of 1541 movies affected. Ruled out by measurement with the server restored
+  afterwards: codec, resolution, bitrate, subtitles, audio stream, thread count, hardware
+  acceleration. A server bug, reported by the card as a refusal, nothing for the app to do.
+
 **Half-done.**
 
 - `fix/emby-userviews-404` — **Emby library scans fail immediately.**
