@@ -3,26 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connect your server - Nostalgex Web Tuner</title>
-<meta name="description" content="Connect Plex, Jellyfin, or Emby and start watching your library as live channels in the browser. Free, no account needed.">
+<title>Nostalgex Web Tuner: Watch Your Library as Live TV</title>
+<meta name="description" content="Watch your Plex, Jellyfin or Emby library as live channels with a retro guide in your browser. Free, no account. Jellyfin and Emby need an https address.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://www.nostalgex.app/web-tuner">
-<link rel="icon" type="image/png" href="./logo/favicon.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/logo/favicon-48.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <!-- Open Graph -->
-<meta property="og:title" content="Connect your server - Nostalgex Web Tuner">
-<meta property="og:description" content="Connect Plex, Jellyfin, or Emby and start watching your library as live channels in the browser. Free, no account needed.">
+<meta property="og:title" content="Nostalgex Web Tuner: Watch Your Library as Live TV">
+<meta property="og:description" content="Watch your Plex, Jellyfin or Emby library as live channels with a retro guide in your browser. Free, no account. Jellyfin and Emby need an https address.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nostalgex.app/web-tuner">
 <meta property="og:site_name" content="Nostalgex">
-<meta property="og:image" content="https://www.nostalgex.app/og-image.png">
-<meta property="og:image:alt" content="Nostalgex retro TV logo">
+<meta property="og:image" content="https://www.nostalgex.app/og-image-1200.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Nostalgex channel guide: a grid of live channels built from your own library">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Connect your server - Nostalgex Web Tuner">
-<meta name="twitter:description" content="Connect Plex, Jellyfin, or Emby and start watching your library as live channels in the browser. Free, no account needed.">
-<meta name="twitter:image" content="https://www.nostalgex.app/og-image.png">
+<meta name="twitter:title" content="Nostalgex Web Tuner: Watch Your Library as Live TV">
+<meta name="twitter:description" content="Watch your Plex, Jellyfin or Emby library as live channels with a retro guide in your browser. Free, no account. Jellyfin and Emby need an https address.">
+<meta name="twitter:image" content="https://www.nostalgex.app/og-image-1200.png">
 
 <script>
   /* Theme boot — runs before first paint so there's no flash on reload.
@@ -44,29 +47,69 @@
 <link rel="stylesheet" href="./styles.css">
 <!-- Required by the Plex PIN flow below (renders the plex.tv/link QR code). -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
-<script defer src="https://data-haus.vercel.app/track.js" data-site="f5b3399a2c57176a"></script>
 <script defer data-site="nostalgex" src="https://statsngraphs.lol/s.js"></script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Nostalgex",
-  "url": "https://www.nostalgex.app/web-tuner",
-  "applicationCategory": "MultimediaApplication",
-  "applicationSubCategory": "Plex, Jellyfin and Emby channel guide",
-  "operatingSystem": "Web browser",
-  "description": "Turn your Plex, Jellyfin, or Emby library into over a hundred retro TV channels with a fresh daily schedule. A free web tuner that feels just like flipping through cable in the 90s.",
-  "image": "https://www.nostalgex.app/og-image.png",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Muell Haus Inc.",
-    "url": "https://www.muellhaus.com/"
-  }
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": "https://www.nostalgex.app/web-tuner#webapp",
+      "name": "Nostalgex Web Tuner",
+      "url": "https://www.nostalgex.app/web-tuner",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Any modern web browser",
+      "browserRequirements": "Plex works as is. Jellyfin and Emby servers need an https address.",
+      "description": "A free web tuner that plays your Plex, Jellyfin or Emby library as live channels with a retro TV guide, in your browser.",
+      "isAccessibleForFree": true,
+      "license": "https://opensource.org/licenses/MIT",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {
+        "@id": "https://www.nostalgex.app/#org"
+      },
+      "author": {
+        "@id": "https://www.nostalgex.app/#chad"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.nostalgex.app/web-tuner#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://www.nostalgex.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Web tuner",
+          "item": "https://www.nostalgex.app/web-tuner"
+        }
+      ]
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.nostalgex.app/#org",
+      "name": "Muell Haus Inc.",
+      "url": "https://www.muellhaus.com/",
+      "logo": "https://www.nostalgex.app/logo/nostalgex-512.png"
+    },
+    {
+      "@type": "Person",
+      "@id": "https://www.nostalgex.app/#chad",
+      "name": "Chad Mueller",
+      "url": "https://github.com/chadMueller",
+      "worksFor": {
+        "@id": "https://www.nostalgex.app/#org"
+      }
+    }
+  ]
 }
 </script>
 <!-- Returning-user fast redirect: runs before body renders so users never see the connect page -->
@@ -91,7 +134,7 @@
 
   <header class="nav" id="nav">
     <div class="nav-inner">
-      <a class="brand" href="/" aria-label="Nostalgex home">
+      <a class="brand" href="/" aria-label="Nostalgex, home">
         <span class="brand-word" role="img" aria-label="Nostalgex">N<svg class="brand-o" viewBox="0 0 126 111" aria-hidden="true"><defs><linearGradient id="brandSun" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0.05" stop-color="#f838ac"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="0.95" stop-color="#ffd91c"/></linearGradient></defs><rect x="6" y="6" width="114" height="99" rx="30" fill="url(#brandSun)" stroke="currentColor" stroke-width="11"/><path d="M12 43 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/><path d="M12 70 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/></svg>STALGEX</span>
       </a>
       <div class="nav-actions">
@@ -150,8 +193,9 @@
   <main class="connect-main">
     <div class="connect-wrap">
 
-      <h1 class="connect-title">Connect your server.</h1>
-      <p class="connect-lede">Sign in once and Nostalgex turns your library into channels, then drops you straight into the guide.</p>
+      <h1 class="connect-title">Watch your library as live TV in a browser.</h1>
+      <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide, right in your browser. It's free and needs no account. Plex works as is. Jellyfin and Emby need an https address, and Emby connects through the Jellyfin option.</p>
+      <p class="connect-lede connect-lede--follow">Sign in once and Nostalgex turns your library into channels, then drops you straight into the guide.</p>
 
       <div class="cta-card cta-card--cyan connect-card">
 
@@ -222,6 +266,12 @@
       </div>
 
       <p class="connect-privacy">Your credentials go straight from this browser to your server. Nothing lands on ours.</p>
+
+      <section class="connect-how" aria-labelledby="connect-how-title">
+        <h2 class="connect-how-title" id="connect-how-title">How the web tuner connects</h2>
+        <p>Plex works as is: sign in with a code and the tuner finds your server. Jellyfin and Emby have to be reachable over https, because browsers block a secure page from talking to a plain http server. Running Emby? It connects through the Jellyfin option. A plain http server on your network works in the Apple TV app instead.</p>
+        <p>New here? See how it works with <a href="/plex">Plex</a>, <a href="/jellyfin">Jellyfin</a> or <a href="/emby">Emby</a>.</p>
+      </section>
 
       <div class="footer-signup connect-signup">
         <p class="footer-signup-label">Want an email when new channels ship?</p>

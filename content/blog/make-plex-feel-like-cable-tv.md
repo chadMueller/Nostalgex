@@ -1,6 +1,6 @@
 ---
 title: "How to Make Plex Feel Like Cable TV Again (Yes, With a Real Channel Guide)"
-seo_title: "Make Plex Like Cable: A Live TV Guide for Your Library"
+seo_title: "Make Plex Feel Like Cable TV Again"
 description: "Turn your own Plex library into live channels with a retro TV guide. How Nostalgex works, how to set it up for free, plus notes for Jellyfin and Emby."
 slug: make-plex-feel-like-cable-tv
 date: 2026-10-17

@@ -3,21 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nostalgex Support - Setup, channels &amp; troubleshooting</title>
-<meta name="description" content="How to connect Plex, Jellyfin, or Emby to Nostalgex, how channels pick your library, and fixes for the problems that come up most.">
+<title>Nostalgex Support: Setup, Channels and Troubleshooting</title>
+<meta name="description" content="How to connect Plex, Jellyfin or Emby to Nostalgex, fix https and CORS errors in the web tuner, and get the right movies onto the right channels.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://www.nostalgex.app/support">
-<link rel="icon" type="image/png" href="./logo/favicon.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/logo/favicon-48.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-<meta property="og:title" content="Nostalgex Support">
-<meta property="og:description" content="Setup, how channels pick your library, and troubleshooting.">
+<!-- Open Graph -->
+<meta property="og:title" content="Nostalgex Support: Setup, Channels and Troubleshooting">
+<meta property="og:description" content="How to connect Plex, Jellyfin or Emby to Nostalgex, fix https and CORS errors in the web tuner, and get the right movies onto the right channels.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nostalgex.app/support">
 <meta property="og:site_name" content="Nostalgex">
-<meta property="og:image" content="https://www.nostalgex.app/og-image.png">
+<meta property="og:image" content="https://www.nostalgex.app/og-image-1200.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Nostalgex channel guide: a grid of live channels built from your own library">
 
-<script defer src="https://data-haus.vercel.app/track.js" data-site="f5b3399a2c57176a"></script>
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nostalgex Support: Setup, Channels and Troubleshooting">
+<meta name="twitter:description" content="How to connect Plex, Jellyfin or Emby to Nostalgex, fix https and CORS errors in the web tuner, and get the right movies onto the right channels.">
+<meta name="twitter:image" content="https://www.nostalgex.app/og-image-1200.png">
+
 <script defer data-site="nostalgex" src="https://statsngraphs.lol/s.js"></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://www.nostalgex.app/support#webpage",
+      "url": "https://www.nostalgex.app/support",
+      "name": "Nostalgex Support: Setup, Channels and Troubleshooting",
+      "about": {
+        "@id": "https://www.nostalgex.app/#app"
+      },
+      "breadcrumb": {
+        "@id": "https://www.nostalgex.app/support#breadcrumb"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.nostalgex.app/support#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://www.nostalgex.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Support",
+          "item": "https://www.nostalgex.app/support"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.nostalgex.app/support#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Does my data go through your servers?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. It's a straight line from your browser or app to your own server. Your login, server URL, library, and video never reach me. I only host the web page. If you want to check, open the Network tab in your browser and watch where the requests go. Every one of them hits your server, not mine."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the web tuner tracking me?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The site and the web tuner's connect page load one page analytics script that counts visits, the one described in the privacy policy. It never collects your server address, credentials or library, and once you're connected and watching, no analytics script runs on the page."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use it with an M3U / IPTV playlist?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not right now. Nostalgex builds channels out of your own Plex, Jellyfin, or Emby library, it doesn't read a list of live streams. M3U isn't on the roadmap yet."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does the web tuner need https when the app doesn't?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Browsers won't let a secure page reach a plain http or raw-IP server, and they enforce CORS on top of that. A native app has neither rule, so the Apple TV app just connects to your local box directly."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "A channel is a black screen, or takes a while to start. What gives?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "First, make sure you're on the latest version. Older builds couldn't play HEVC/H.265 or mkv and would sit on a black screen, and on tvOS 26 anything the server had to convert would freeze on one frame. 1.0.21 fixed both and was tested against MKV, MP4, AVI, AV1, VC-1, 4K and HDR files. A few seconds of the \"tuning\" screen at the start is normal too: anything that isn't directly playable gets transcoded by your server, and that takes a moment to spin up. If a channel never starts, check that transcoding is turned on (Jellyfin: Dashboard → Playback). If one specific title never plays but everything else does, it's almost always a file the server itself can't read (an unmounted drive is the usual culprit). Try it in Plex Web or the Jellyfin web player: if it fails there too, it isn't the app."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 
 <script>
   /* Theme boot — runs before first paint so there's no flash on reload.
@@ -43,7 +136,7 @@
 
   <header class="nav" id="nav">
     <div class="nav-inner">
-      <a class="brand" href="/" aria-label="Nostalgex home">
+      <a class="brand" href="/" aria-label="Nostalgex, home">
         <span class="brand-word" role="img" aria-label="Nostalgex">N<svg class="brand-o" viewBox="0 0 126 111" aria-hidden="true"><defs><linearGradient id="brandSun" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0.05" stop-color="#f838ac"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="0.95" stop-color="#ffd91c"/></linearGradient></defs><rect x="6" y="6" width="114" height="99" rx="30" fill="url(#brandSun)" stroke="currentColor" stroke-width="11"/><path d="M12 43 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/><path d="M12 70 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/></svg>STALGEX</span>
       </a>
       <nav class="nav-links" aria-label="Main">
@@ -117,7 +210,8 @@
   <main id="top">
     <section class="section doc-hero">
       <div class="container">
-        <h1>Support</h1>
+        <h1>Nostalgex support</h1>
+        <p>Most setup problems come down to one of three things: the server address, https for the web tuner, or your server's metadata. The Apple TV app connects to plain http servers on your network, so if the web tuner won't reach your Jellyfin or Emby server, start with https.</p>
         <p>Getting connected, how the channels decide what plays, and fixes for the things that go wrong most often.</p>
       </div>
     </section>
@@ -126,7 +220,7 @@
       <nav class="doc-toc" aria-label="Contents">
           <a href="#getting-started">Getting started</a>
           <a href="#connect">Connecting your server</a>
-          <a href="#cors">Reverse proxy &amp; CORS</a>
+          <a href="#cors">Web tuner CORS errors</a>
           <a href="#channels">How channels work</a>
           <a href="#faq">FAQ</a>
           <a href="#troubleshooting">Troubleshooting</a>
@@ -156,12 +250,15 @@
 
     <h3><a href="/plex">Plex</a></h3>
     <p>Sign in with your Plex account and Nostalgex finds your server on its own. Plex hands out its own secure addresses (<code>plex.direct</code>), so it usually just works on both the app and the web tuner with nothing extra to set up.</p>
+    <p>More on the <a href="/plex">Plex setup page</a>.</p>
 
     <h3><a href="/jellyfin">Jellyfin</a></h3>
     <p>Drop in your Jellyfin server URL and sign in, either with your username and password or Quick Connect. Use the whole URL with the scheme on the front, like <code>https://jellyfin.yourdomain.com</code>.</p>
+    <p>More on the <a href="/jellyfin">Jellyfin setup page</a>.</p>
 
     <h3><a href="/emby">Emby</a></h3>
     <p>Emby and Jellyfin share an API, so Emby works the same way: drop in your Emby server URL and sign in with your username and password. In the Apple TV app it's its own option; on the web tuner, use the Jellyfin connect and point it at your Emby server.</p>
+    <p>More on the <a href="/emby">Emby setup page</a>.</p>
 
     <h3>Why the web tuner needs https</h3>
     <p>The web tuner runs on an https page, and browsers won't let an https page reach out to a plain <code>http</code> or raw-IP address. They call it mixed content, and they just block it. If your server opens fine in another browser tab but the tuner swears it can't reach it, that's almost always what's happening. It's the browser's rule, not something I can flip off from the web.</p>
@@ -173,31 +270,31 @@
         </section>
 
         <section class="doc-section" id="cors">
-<h2>Reverse proxy &amp; CORS (Jellyfin or Emby behind nginx, haproxy, Caddy)</h2>
-    <p>Here's the one that catches people. Your Jellyfin is on https and reachable, but the tuner still says <em>"COULD NOT REACH THE JELLYFIN SERVER"</em>, and if you pop open the browser dev console you see a <strong>CORS</strong> error. That means your reverse proxy is rejecting the request because it's coming from a different domain (this site). The browser throws away the response unless your server says it's OK for <code>https://nostalgex.app</code> to talk to it.</p>
+<h2>Web tuner CORS errors behind nginx, haproxy or Caddy</h2>
+    <p>Here's the one that catches people. Your Jellyfin is on https and reachable, but the tuner still says <em>"COULD NOT REACH THE JELLYFIN SERVER"</em>, and if you pop open the browser dev console you see a <strong>CORS</strong> error. That means your reverse proxy is rejecting the request because it's coming from a different domain (this site). The browser throws away the response unless your server says it's OK for <code>https://www.nostalgex.app</code> to talk to it.</p>
     <div class="callout warn">This is a web-tuner-only thing. The Apple TV app doesn't use CORS, so if you're on the app you can ignore all of this.</div>
-    <p>The fix is one header at your proxy: allow requests from <code>https://nostalgex.app</code>. How you do that depends on what you run.</p>
+    <p>The fix is one header at your proxy: allow requests from <code>https://www.nostalgex.app</code>. How you do that depends on what you run.</p>
 
     <h3>haproxy</h3>
     <pre><code>http-request set-var(txn.cors_origin) req.hdr(Origin)
-acl cors_allowed var(txn.cors_origin) -m str https://nostalgex.app
+acl cors_allowed var(txn.cors_origin) -m str https://www.nostalgex.app https://nostalgex.app
 http-response set-header Access-Control-Allow-Origin %[var(txn.cors_origin)] if cors_allowed</code></pre>
 
     <h3>nginx</h3>
-    <pre><code>add_header Access-Control-Allow-Origin "https://nostalgex.app" always;
+    <pre><code>add_header Access-Control-Allow-Origin "https://www.nostalgex.app" always;
 add_header Access-Control-Allow-Methods "GET, POST, OPTIONS, DELETE" always;
 add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-Emby-Authorization" always;
 # answer the preflight
 if ($request_method = OPTIONS) { return 204; }</code></pre>
 
     <h3>Caddy</h3>
-    <pre><code>header Access-Control-Allow-Origin "https://nostalgex.app"
+    <pre><code>header Access-Control-Allow-Origin "https://www.nostalgex.app"
 header Access-Control-Allow-Methods "GET, POST, OPTIONS, DELETE"
 header Access-Control-Allow-Headers "Authorization, Content-Type, X-Emby-Authorization"
 @options method OPTIONS
 respond @options 204</code></pre>
 
-    <p>Reload the proxy, hard-refresh the tuner, and try again. The exact syntax shifts around between versions, but the goal is always the same: every response (including the OPTIONS preflight) needs to carry <code>Access-Control-Allow-Origin: https://nostalgex.app</code>.</p>
+    <p>Reload the proxy, hard-refresh the tuner, and try again. The exact syntax shifts around between versions, but the goal is always the same: every response (including the OPTIONS preflight) needs to carry <code>Access-Control-Allow-Origin: https://www.nostalgex.app</code>.</p>
     <p>Don't feel like touching your proxy config? Use the Apple TV app. It needs none of this.</p>
         </section>
 
@@ -245,7 +342,7 @@ respond @options 204</code></pre>
     </details>
 
     <details><summary>Is the web tuner tracking me?</summary>
-      <div><p>No. There are no analytics or tracking scripts on the tuner pages. The marketing landing page counts basic visits, but the part that connects to your server doesn't run anything.</p></div>
+      <div><p>No. The site and the web tuner's connect page load one page analytics script that counts visits, the one described in the <a href="/privacy">privacy policy</a>. It never collects your server address, credentials or library, and once you're connected and watching, no analytics script runs on the page.</p></div>
     </details>
 
     <details><summary>Can I use it with an M3U / IPTV playlist?</summary>
@@ -268,7 +365,7 @@ respond @options 204</code></pre>
       <li>Type the whole URL with the scheme: <code>https://your-server</code>.</li>
       <li>On the web tuner the server has to be https-reachable. A raw IP or http LAN address won't fly in a browser, so use the Apple TV app for those.</li>
       <li>On the Apple TV app, a plain <code>http://</code> address on a VPN like Tailscale (the <code>100.x.x.x</code> ones) is blocked by tvOS before 1.0.23, even though other apps allow it. Fixed in 1.0.23. On an older build, use an https address instead: on the server, <code>tailscale serve --bg 8096</code> gives you one.</li>
-      <li>Running behind a reverse proxy? Jump to <a href="#cors">Reverse proxy &amp; CORS</a>.</li>
+      <li>Running behind a reverse proxy? Jump to <a href="#cors">Web tuner CORS errors</a>.</li>
     </ul>
     <h3>"Could not load library"</h3>
     <ul>

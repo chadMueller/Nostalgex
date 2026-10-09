@@ -26,12 +26,35 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 const SITEMAP_PATH = path.join(PUBLIC_DIR, "sitemap.xml");
 
 const SITE_ORIGIN = "https://www.nostalgex.app";
-const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image.png`;
+const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image-1200.png`;
+const DEFAULT_OG_ALT =
+  "The Nostalgex channel guide: a grid of live channels built from your own library";
 const APPLE_TV_URL = "https://apps.apple.com/app/nostalgex/id6762563534";
 
 const BLOG_TITLE = "Nostalgex Blog";
 const BLOG_DESCRIPTION =
-  "Nostalgia lists and setup guides for turning your Plex, Jellyfin or Emby library into live TV channels with Nostalgex.";
+  "Retro TV lineups and setup guides for turning your Plex, Jellyfin or Emby library into live channels with a retro TV guide.";
+
+// Shared JSON-LD nodes. The @id values match the ones on the static pages
+// (index.html etc.), so search engines join the blog to the same app, person
+// and organization.
+const ORG_ID = `${SITE_ORIGIN}/#org`;
+const APP_ID = `${SITE_ORIGIN}/#app`;
+const AUTHOR_ID = `${SITE_ORIGIN}/#chad`;
+const AUTHOR_NODE = {
+  "@type": "Person",
+  "@id": AUTHOR_ID,
+  name: "Chad Mueller",
+  url: "https://github.com/chadMueller",
+  worksFor: { "@id": ORG_ID },
+};
+const ORG_NODE = {
+  "@type": "Organization",
+  "@id": ORG_ID,
+  name: "Muell Haus Inc.",
+  url: "https://www.muellhaus.com/",
+  logo: `${SITE_ORIGIN}/logo/nostalgex-512.png`,
+};
 
 function escapeHtml(text) {
   return String(text)
@@ -165,11 +188,11 @@ function wrapTables(html) {
     .replace(/<\/table>/g, "</table></div>");
 }
 
-function buildFaqJsonLd(faqItems) {
+function buildFaqJsonLd(faqItems, id) {
   if (!faqItems.length) return null;
   return {
-    "@context": "https://schema.org",
     "@type": "FAQPage",
+    "@id": id,
     mainEntity: faqItems.map((item) => ({
       "@type": "Question",
       name: item.question,
@@ -185,7 +208,7 @@ function renderNav() {
   return `
   <header class="nav" id="nav">
     <div class="nav-inner">
-      <a class="brand" href="/" aria-label="Nostalgex home">
+      <a class="brand" href="/" aria-label="Nostalgex, home">
         <span class="brand-word" role="img" aria-label="Nostalgex">N<svg class="brand-o" viewBox="0 0 126 111" aria-hidden="true"><defs><linearGradient id="brandSun" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0.05" stop-color="#f838ac"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="0.95" stop-color="#ffd91c"/></linearGradient></defs><rect x="6" y="6" width="114" height="99" rx="30" fill="url(#brandSun)" stroke="currentColor" stroke-width="11"/><path d="M12 43 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/><path d="M12 70 H114" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/></svg>STALGEX</span>
       </a>
       <nav class="nav-links" aria-label="Main">
@@ -314,6 +337,7 @@ function renderHead({
   canonical,
   ogImage,
   ogType,
+  ogImageAlt = DEFAULT_OG_ALT,
   jsonLd,
   extraMeta = "",
   stylesHref = "/styles.css",
@@ -325,11 +349,11 @@ function renderHead({
     `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`,
     `<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">`,
     `<link rel="stylesheet" href="${escapeAttr(stylesHref)}">`,
-    `<script defer src="https://data-haus.vercel.app/track.js" data-site="f5b3399a2c57176a"></script>`,
     `<script defer data-site="nostalgex" src="https://statsngraphs.lol/s.js"></script>`,
   ].join("\n");
 
   // jsonLd may be a single object or an array; emit one script tag per entry.
+  // Pages pass one @graph object today, so each page carries one block.
   const jsonLdBlocks = (Array.isArray(jsonLd) ? jsonLd : [jsonLd])
     .filter(Boolean)
     .map(
@@ -347,7 +371,8 @@ function renderHead({
 <meta name="description" content="${escapeAttr(description)}">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="${escapeAttr(canonical)}">
-<link rel="icon" type="image/png" href="/logo/favicon.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/logo/favicon-48.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <meta property="og:title" content="${escapeAttr(title)}">
 <meta property="og:description" content="${escapeAttr(description)}">
@@ -355,7 +380,9 @@ function renderHead({
 <meta property="og:url" content="${escapeAttr(canonical)}">
 <meta property="og:site_name" content="Nostalgex">
 <meta property="og:image" content="${escapeAttr(ogImage)}">
-<meta property="og:image:alt" content="Nostalgex retro TV logo">
+${ogImage === DEFAULT_OG_IMAGE ? `<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+` : ""}<meta property="og:image:alt" content="${escapeAttr(ogImageAlt)}">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeAttr(title)}">
@@ -376,6 +403,7 @@ function renderPostCta() {
           <a class="btn btn-ink btn-lg" href="/web-tuner">Try the free web tuner</a>
           <a class="btn btn-paper btn-lg" href="${APPLE_TV_URL}" target="_blank" rel="noopener">Free on Apple TV</a>
         </div>
+        <p class="blog-post-cta-guides">Setup guides: <a href="/plex">Nostalgex for Plex</a>, <a href="/jellyfin">Nostalgex for Jellyfin</a>, <a href="/emby">Nostalgex for Emby</a>.</p>
         <p class="blog-post-cta-discord"><a href="https://discord.gg/FgnZcr5bDT" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.07.07 0 0 0-.075.035c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.035A19.736 19.736 0 0 0 3.68 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.073.073 0 0 1 .078.01c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.893a.076.076 0 0 0-.04.106c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.673-3.549-13.662a.06.06 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.955 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/></svg>Join the Discord</a></p>
       </section>`;
 }
@@ -387,41 +415,62 @@ function renderPostPage(post, assetHrefs = {}) {
     : DEFAULT_OG_IMAGE;
 
   const seoTitle = post.seoTitle || post.title;
-  const pageTitle = `${seoTitle} | Nostalgex Blog`;
+  const pageTitle = `${seoTitle} | Nostalgex`;
   const dateModified = post.updatedIso || post.dateIso;
 
-  const articleJsonLd = {
-    "@context": "https://schema.org",
+  // Chad writes the posts. A post that names a different author in its front
+  // matter gets that person as a plain Person instead of the shared #chad node.
+  const authorRef =
+    post.author && post.author !== AUTHOR_NODE.name
+      ? { "@type": "Person", name: post.author }
+      : { "@id": AUTHOR_ID };
+
+  const article = {
     "@type": "Article",
+    "@id": `${canonical}#article`,
     headline: post.title,
     description: post.description,
     image: [ogImage],
     datePublished: post.dateIso,
     dateModified,
-    author: post.author
-      ? { "@type": "Person", name: post.author }
-      : { "@type": "Organization", name: "Nostalgex", url: SITE_ORIGIN },
-    publisher: {
-      "@type": "Organization",
-      name: "Muell Haus Inc.",
-      url: "https://www.muellhaus.com/",
-      logo: {
-        "@type": "ImageObject",
-        url: `${SITE_ORIGIN}/logo/nostalgex-black.svg`,
-      },
-    },
-    about: {
-      "@type": "SoftwareApplication",
-      "@id": `${SITE_ORIGIN}/#app`,
-    },
-    mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": canonical,
-    },
+    author: authorRef,
+    publisher: { "@id": ORG_ID },
+    about: { "@id": APP_ID },
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonical },
     url: canonical,
   };
 
-  const jsonLd = [articleJsonLd, ...post.extraSchema, buildFaqJsonLd(post.faq)];
+  const breadcrumb = {
+    "@type": "BreadcrumbList",
+    "@id": `${canonical}#breadcrumb`,
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
+      { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_ORIGIN}/blog` },
+      { "@type": "ListItem", position: 3, name: post.title, item: canonical },
+    ],
+  };
+
+  // One @graph per page: Article, breadcrumbs, the shared Person and
+  // Organization nodes, the auto-generated FAQPage (when the post has a
+  // "## FAQ" section) and any extra `schema` entries from front matter.
+  const extraNodes = post.extraSchema.map((node) => {
+    if (node && typeof node === "object" && !Array.isArray(node)) {
+      const { "@context": _ctx, ...rest } = node;
+      return rest;
+    }
+    return node;
+  });
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      article,
+      breadcrumb,
+      AUTHOR_NODE,
+      ORG_NODE,
+      buildFaqJsonLd(post.faq, `${canonical}#faq`),
+      ...extraNodes,
+    ].filter(Boolean),
+  };
 
   const extraMeta = [
     `<meta property="article:published_time" content="${escapeAttr(post.dateIso)}">`,
@@ -430,7 +479,7 @@ function renderPostPage(post, assetHrefs = {}) {
 
   const coverBlock = post.coverUrl
     ? `
-        <img class="blog-post-cover" src="${escapeAttr(post.coverUrl)}" alt="" loading="eager" decoding="async">`
+        <img class="blog-post-cover" src="${escapeAttr(post.coverUrl)}" alt="${escapeAttr(post.coverAlt)}" loading="eager" decoding="async">`
     : "";
 
   const bodyHtml = wrapTables(marked.parse(stripLeadingH1(post.markdown, post.title)));
@@ -443,6 +492,7 @@ function renderPostPage(post, assetHrefs = {}) {
     canonical,
     ogImage,
     ogType: "article",
+    ogImageAlt: post.coverUrl ? post.coverAlt || DEFAULT_OG_ALT : DEFAULT_OG_ALT,
     jsonLd,
     extraMeta,
     stylesHref: assetHrefs.stylesHref,
@@ -475,26 +525,39 @@ ${renderFooter()}
 
 function renderIndexPage(posts, assetHrefs = {}) {
   const canonical = `${SITE_ORIGIN}/blog`;
-  const pageTitle = `${BLOG_TITLE} | Nostalgia lists and setup guides`;
+  const pageTitle = "Nostalgex Blog: Retro TV Lineups and Setup Guides";
 
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Blog",
-    name: BLOG_TITLE,
-    description: BLOG_DESCRIPTION,
-    url: canonical,
-    publisher: {
-      "@type": "Organization",
-      name: "Muell Haus Inc.",
-      url: "https://www.muellhaus.com/",
-    },
-    blogPost: posts.map((post) => ({
-      "@type": "BlogPosting",
-      headline: post.title,
-      description: post.description,
-      datePublished: post.dateIso,
-      url: `${SITE_ORIGIN}/blog/${post.slug}`,
-    })),
+    "@graph": [
+      {
+        "@type": "Blog",
+        "@id": `${canonical}#blog`,
+        name: BLOG_TITLE,
+        description: BLOG_DESCRIPTION,
+        url: canonical,
+        publisher: { "@id": ORG_ID },
+        blogPost: posts.map((post) => ({
+          "@type": "BlogPosting",
+          headline: post.title,
+          description: post.description,
+          datePublished: post.dateIso,
+          dateModified: post.updatedIso || post.dateIso,
+          author: { "@id": AUTHOR_ID },
+          url: `${SITE_ORIGIN}/blog/${post.slug}`,
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonical}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
+          { "@type": "ListItem", position: 2, name: "Blog", item: canonical },
+        ],
+      },
+      AUTHOR_NODE,
+      ORG_NODE,
+    ],
   };
 
   const cardsHtml = posts
@@ -541,7 +604,7 @@ ${renderNav()}
       <div class="container container-narrow">
         <header class="blog-index-head">
           <p class="blog-post-eyebrow">${escapeHtml(BLOG_TITLE)}</p>
-          <h1>Nostalgia lists and setup guides.</h1>
+          <h1>Retro TV lineups and setup guides.</h1>
           <p class="blog-index-dek">${escapeHtml(BLOG_DESCRIPTION)}</p>
         </header>
         <ul class="blog-list">
@@ -586,6 +649,7 @@ export async function loadPosts() {
     const draft = fm.draft === true;
     const author = fm.author ? String(fm.author) : null;
     const updatedIso = fm.updated ? formatIsoDate(fm.updated) : null;
+    const coverAlt = fm.cover_alt ? String(fm.cover_alt) : "";
 
     // Optional extra JSON-LD: a `schema` list in frontmatter. Each entry is
     // emitted verbatim as its own <script type="application/ld+json"> next to
@@ -616,6 +680,7 @@ export async function loadPosts() {
       draft,
       author,
       updatedIso,
+      coverAlt,
       extraSchema,
       faq,
       markdown,
@@ -661,33 +726,25 @@ async function updateSitemap(posts) {
     "",
   );
 
+  // Google ignores changefreq and priority, so entries carry loc + lastmod
+  // only, matching the static block above the marker. /blog's lastmod is the
+  // newest post date (published or updated).
+  const postDates = posts.map((post) => post.updatedIso || post.dateIso);
+  const newest = postDates.length ? postDates.slice().sort().at(-1) : null;
   const urls = [
-    {
-      loc: `${SITE_ORIGIN}/blog`,
-      changefreq: "weekly",
-      priority: "0.6",
-      lastmod: posts[0]?.dateIso,
-    },
-    ...posts.map((post) => ({
+    { loc: `${SITE_ORIGIN}/blog`, lastmod: newest },
+    ...posts.map((post, i) => ({
       loc: `${SITE_ORIGIN}/blog/${post.slug}`,
-      changefreq: "monthly",
-      priority: "0.6",
-      lastmod: post.dateIso,
+      lastmod: postDates[i],
     })),
   ];
 
   const urlXml = urls
-    .map((entry) => {
-      const bits = [
-        "  <url>",
-        `    <loc>${entry.loc}</loc>`,
-        entry.lastmod ? `    <lastmod>${entry.lastmod}</lastmod>` : null,
-        `    <changefreq>${entry.changefreq}</changefreq>`,
-        `    <priority>${entry.priority}</priority>`,
-        "  </url>",
-      ].filter(Boolean);
-      return bits.join("\n");
-    })
+    .map((entry) =>
+      entry.lastmod
+        ? `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod></url>`
+        : `  <url><loc>${entry.loc}</loc></url>`,
+    )
     .join("\n");
 
   const block = `${START}\n${urlXml}\n  ${END}`;

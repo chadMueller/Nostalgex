@@ -129,7 +129,7 @@ The whole point of running your own server is knowing where your data goes, so h
 - **TMDB, OMDb, Supabase.** Only if you build with keys, see above.
 - **TelemetryDeck.** Anonymous usage signals in the App Store build. No identifiers, no library contents, no server addresses. Off in your own build unless you keep the key.
 
-The website and web tuner at nostalgex.app load two page analytics scripts (Data Haus and statsngraphs). The privacy policy at `/privacy` covers all of this in plain language.
+The website and web tuner at nostalgex.app load one page analytics script (statsngraphs). The privacy policy at `/privacy` covers all of this in plain language.
 
 ## Community and support
 
