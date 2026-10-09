@@ -188,6 +188,53 @@ enum JellyfinPlaybackResolver {
         return profiles
     }
 
+    /// Which audio track to ask for, when the file offers more than one.
+    ///
+    /// Jellyfin and Emby hand back whichever track the file marks default, and plenty of
+    /// files mark a dubbed track. Measured 2026-10-08: Joe Dirt carries
+    /// `spa 2ch "Spanish [Latinoamericano]" IsDefault=true` ahead of
+    /// `eng 6ch "English [US]" IsDefault=false`, so the film played in Spanish on a
+    /// channel with no way for the viewer to change it. A retro TV guide has no audio
+    /// picker and should not need one; it should just pick the sensible track.
+    ///
+    /// Preference order: a track in one of the viewer's languages, most channels first so
+    /// a 5.1 mix wins over a stereo one; then whatever the file calls default; then the
+    /// first audio track there is. Returns nil when there is nothing to choose between,
+    /// which leaves the server's own choice alone.
+    static func preferredAudioIndex(
+        in streams: [PlaybackInfoResponse.MediaStream]?,
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> Int? {
+        let audio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
+        guard audio.count > 1 else { return nil }
+
+        // "en-GB" and "eng" both have to match a track tagged "eng" or "en".
+        let wanted = Set(preferredLanguages.compactMap {
+            Locale(identifier: $0).language.languageCode?.identifier.lowercased()
+        } + ["en"])
+        func matches(_ language: String?) -> Bool {
+            guard let l = language?.lowercased(), !l.isEmpty else { return false }
+            return wanted.contains(String(l.prefix(2)))
+        }
+
+        let inLanguage = audio.filter { matches($0.Language) }
+        if let best = inLanguage.max(by: { ($0.Channels ?? 0) < ($1.Channels ?? 0) }) {
+            return best.Index
+        }
+        return audio.first(where: { $0.IsDefault == true })?.Index ?? audio.first?.Index
+    }
+
+    /// Puts `AudioStreamIndex` on a transcode URL, replacing any the server already set.
+    static func pinningAudioStream(_ url: URL, index: Int?) -> URL {
+        guard let index, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        var items = (c.queryItems ?? []).filter { $0.name != "AudioStreamIndex" }
+        items.append(.init(name: "AudioStreamIndex", value: "\(index)"))
+        c.queryItems = items
+        return c.url ?? url
+    }
+
     /// Decoded shape of a PlaybackInfo response (capital-letter Jellyfin keys).
     struct PlaybackInfoResponse: Decodable, Sendable {
         let MediaSources: [PlaybackMediaSource]?
@@ -199,6 +246,21 @@ enum JellyfinPlaybackResolver {
             let SupportsDirectStream: Bool?
             let SupportsTranscoding: Bool?
             let TranscodingUrl: String?
+            let MediaStreams: [MediaStream]?
+        }
+
+        struct MediaStream: Decodable, Sendable {
+            let Index: Int?
+            /// Wire key is "Type"; Swift reserves that as a member name.
+            let mediaType: String?
+            let Language: String?
+            let IsDefault: Bool?
+            let Channels: Int?
+
+            enum CodingKeys: String, CodingKey {
+                case Index, Language, IsDefault, Channels
+                case mediaType = "Type"
+            }
         }
     }
 
@@ -216,10 +278,15 @@ enum JellyfinPlaybackResolver {
         let source = sources.first(where: { $0.Id == mediaSourceId }) ?? sources.first
 
         // 1) Server handed us a transcode/remux URL — use it verbatim (it carries the right
-        //    session + params). Only ensure api_key is present for the segment requests.
+        //    session + params). Only ensure api_key is present for the segment requests,
+        //    and pin the audio track, because the server picks the file's default and that
+        //    is not always a language the viewer speaks.
         if let relative = source?.TranscodingUrl, !relative.isEmpty {
             if let url = makeURL(serverURL: serverURL, relativeOrAbsolute: relative, apiKey: apiKey) {
-                return PlaybackResolution(url: url, playSessionId: info.PlaySessionId, isDirectPlay: false)
+                let pinned = pinningAudioStream(
+                    url, index: preferredAudioIndex(in: source?.MediaStreams)
+                )
+                return PlaybackResolution(url: pinned, playSessionId: info.PlaySessionId, isDirectPlay: false)
             }
         }
 
