@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-19 (publish Jellyfin TV guide post)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-tv-guide-own-library`.
+
+**Why.** Chad's daily schedule, one post per morning. This one sat as a draft dated 2026-10-14.
+
+**Changed.** Front matter only: `draft: false`, `date` and `updated` both 2026-10-19. Article copy is unchanged. The HTML comment block of build notes at the end stays in the Markdown because `scripts/build-blog.mjs` runs `stripHtmlComments` before rendering, so those notes never reach the public HTML. No links added to `/blog/apple-tv-channel-surfing-apps` or `/blog/make-plex-feel-like-cable-tv`; those pages are still drafts. The live links already in the post (`/`, `/jellyfin`, `/web-tuner`, `/blog/tunarr-ersatztv-alternative-apple-tv`) stay as they were. `npm run blog:render` writes the new URL into `public/sitemap.xml`; there is no RSS/Atom feed. Images stay on R2.
+
+**Half-done.** The other drafts are still drafts: `apple-tv-channel-surfing-apps`, `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
+
+**Next.** Nothing on this post. Indexing `/jellyfin` in Search Console is Chad's, from the build notes.
+
 ## 2026-10-16 (blog screenshot sizes)
 
 **Shipped.** Nothing until this lands on main. The live pages pick it up on the next Vercel deploy.

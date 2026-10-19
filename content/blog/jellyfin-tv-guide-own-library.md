@@ -7,9 +7,9 @@ cover_alt: "Nostalgex TV guide on Apple TV airing a teen comedy on the Teen Movi
 excerpt: "Jellyfin's Live TV section won't show your own movies, which surprises a lot of people. Here's what it's actually for and three ways to get a real channel guide."
 author: "Chad Mueller"
 slug: jellyfin-tv-guide-own-library
-date: 2026-10-14
-updated: 2026-10-14
-draft: true
+date: 2026-10-19
+updated: 2026-10-19
+draft: false
 ---
 
 # Jellyfin TV Guide for Your Own Library: Live Channels Without a Tuner
