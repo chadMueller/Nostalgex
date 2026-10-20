@@ -56,7 +56,7 @@ The [Nostalgex for Jellyfin](/jellyfin) page has a look at the guide and the sho
 
 ![Nostalgex on Apple TV after setup, tuned to the Buddies channel with the program info and guide below](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/jellyfin-tv-guide-own-library/buddies-channel-eurotrip.webp)
 
-1. **Install Nostalgex** free from the [App Store](https://apps.apple.com/app/nostalgex/id6762563534) on your Apple TV.
+1. **Install Nostalgex** free from the [App Store](https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&ct=blog_jellyfin_guide&mt=8) on your Apple TV.
 2. **Choose Jellyfin** when it asks which server you use.
 3. **Sign in with Quick Connect.** The Apple TV shows a code. Open Jellyfin in a browser where you're already signed in, go to Quick Connect, and enter it. No typing a long password with the Siri Remote. You can also type your server address and log in the normal way. Typing just the IP works, since it looks on port 8096 for you.
 4. **Open the guide.** That's it. Your library gets sorted into channels on its own: Saturday morning cartoons, 90s sitcoms, the VHS vault, decades, franchises. There are 130+ channels in 14 bundles, and the ones you see depend on what's in your library. No westerns, no westerns channel.
@@ -78,7 +78,7 @@ Yes, with one catch. The free [web tuner](/web-tuner) runs the same channels in 
 
 No. That's the whole point of route three. You don't touch Jellyfin's Live TV settings at all, and nothing about your server changes. If you already have an antenna set up in Jellyfin, it keeps working exactly as before.
 
-And if you ever want those channels on a TV that isn't an Apple TV, a channel server from option 2 is still the way to share them everywhere.
+Comparing Apple TV apps? Here's my roundup of [channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps).
 
 ## FAQ
 
@@ -111,7 +111,7 @@ Build notes: build-blog.mjs ignores author, updated and excerpt today. Article J
 Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. HowTo for the four numbered steps is optional (no rich result anymore). No separate SoftwareApplication block.
 Images to add (none exist yet): after step 3, alt "Jellyfin Quick Connect screen with the six character code from the Nostalgex Apple TV app". Cover alt "Nostalgex TV guide on Apple TV filled with channels from a Jellyfin library".
 ADD LINKS BACK (this post publishes Oct 14; these targets are not live yet):
-1. Oct 16, once /blog/make-plex-feel-like-cable-tv is live: at the end of "Do I have to set up M3U, XMLTV or a tuner for this?", add: "If you're curious what this looks like on Plex, I wrote [a longer walkthrough here](/blog/make-plex-feel-like-cable-tv). Most of it applies to Jellyfin too."
-2. Oct 19, once /blog/apple-tv-channel-surfing-apps is live: replace the last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" ("And if you ever want those channels on a TV that isn't an Apple TV, ...") with: "Comparing Apple TV apps? Here's my roundup of [channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
+1. Oct 27, once /blog/make-plex-feel-like-cable-tv is live: at the end of "Do I have to set up M3U, XMLTV or a tuner for this?", add: "If you're curious what this looks like on Plex, I wrote [a longer walkthrough here](/blog/make-plex-feel-like-cable-tv). Most of it applies to Jellyfin too."
+2. DONE Oct 20, once /blog/apple-tv-channel-surfing-apps is live: replace the last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" ("And if you ever want those channels on a TV that isn't an Apple TV, ...") with: "Comparing Apple TV apps? Here's my roundup of [channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
 Chad: request indexing for /jellyfin in Search Console.
 -->
