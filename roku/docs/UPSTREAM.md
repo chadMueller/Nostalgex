@@ -499,6 +499,26 @@ on 2026-10-21: the beta goes on both TVs this evening, `nostalgex-roku` is
 archived with a pointer to `roku/`, and the clock fix comes as a PR once it
 is on their `main`.
 
+[Answered](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19103690)
+on 2026-10-21: they ported the clock-change fix themselves (`85cb3a1`) and
+shipped it as beta 1.0.2. `NxPackDay` takes `dayEndSec` after `dayStartSec`;
+`nx_build` depends on the shell's sort locale. It ends "please pull it into
+your fork before your next round:", which leads into the next post.
+
+[Listed](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19103692)
+the same day: where Roku sits against the Apple TV, as phase 1 (ten items,
+in the order testers hit them), phase 2, and theirs. Claim an item here
+before starting it, then a PR into `roku/`.
+
+[Claimed](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19104645)
+on 2026-10-21: phase 1's 2, 3 and 4 (decode-aware direct play, plain http to
+home hostnames and Tailscale, the version line), one PR each. The decode
+check asks the Roku rather than carrying over AVPlayer's limits such as DV
+profile 7; Tailscale is covered by tests only, since our TVs aren't on it.
+We'll start from `2f68a9e`, which has the fix and the 1.0.2 release. As
+first posted it asked what followed the colon above; edited the same day,
+once it was clear the next post was the answer.
+
 ## Channel ideas: Discussion #29
 
 [Posted](https://github.com/chadMueller/Nostalgex/discussions/29) on
