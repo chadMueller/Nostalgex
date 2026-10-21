@@ -69,11 +69,11 @@ for (const c of golden.check) {
 // Where FIND MY SERVER looks from a browser (web only).
 check("find: an https page can't look", S.findCandidates({ pageProtocol: "https:", pageHostname: "www.nostalgex.app" }), []);
 check("find: the tuner's own machine, then localhost",
-  S.findCandidates({ pageProtocol: "http:", pageHostname: "192.168.1.20" }),
-  ["http://192.168.1.20:8096", "http://localhost:8096"]);
+  S.findCandidates({ pageProtocol: "http:", pageHostname: "192.0.2.20" }),
+  ["http://192.0.2.20:8096", "http://localhost:8096"]);
 check("find: the last address used comes first",
-  S.findCandidates({ pageProtocol: "http:", pageHostname: "nas.local", savedAddress: "http://192.168.1.30:8096/" }),
-  ["http://192.168.1.30:8096", "http://nas.local:8096", "http://localhost:8096"]);
+  S.findCandidates({ pageProtocol: "http:", pageHostname: "nas.local", savedAddress: "http://192.0.2.30:8096/" }),
+  ["http://192.0.2.30:8096", "http://nas.local:8096", "http://localhost:8096"]);
 check("find: a page on localhost asks localhost once",
   S.findCandidates({ pageProtocol: "http:", pageHostname: "localhost", savedAddress: "localhost" }),
   ["http://localhost:8096"]);
@@ -81,15 +81,15 @@ check("find: a page on localhost asks localhost once",
 // findServers: same outcome rules, the kind looked for only, one server heard twice is one.
 {
   const routes = {
-    "http://192.168.1.20:8096/System/Info/Public": [200, '{"ServerName":"NAS","ProductName":"Jellyfin Server","Id":"jf1"}'],
+    "http://192.0.2.20:8096/System/Info/Public": [200, '{"ServerName":"NAS","ProductName":"Jellyfin Server","Id":"jf1"}'],
     "http://localhost:8096/System/Info/Public": [200, '{"ServerName":"NAS","ProductName":"Jellyfin Server","Id":"jf1"}'],
   };
   const f = fakeFetch({ routes }, []);
-  const one = await S.findServers("jellyfin", ["http://192.168.1.20:8096", "http://localhost:8096"], { fetch: f, windowMs: 200 });
-  check("findServers: the same server on two addresses is one", [one.type, one.servers.map((s) => s.address)], ["single", ["http://192.168.1.20:8096"]]);
-  const other = await S.findServers("emby", ["http://192.168.1.20:8096"], { fetch: f, windowMs: 200 });
+  const one = await S.findServers("jellyfin", ["http://192.0.2.20:8096", "http://localhost:8096"], { fetch: f, windowMs: 200 });
+  check("findServers: the same server on two addresses is one", [one.type, one.servers.map((s) => s.address)], ["single", ["http://192.0.2.20:8096"]]);
+  const other = await S.findServers("emby", ["http://192.0.2.20:8096"], { fetch: f, windowMs: 200 });
   check("findServers: a Jellyfin is not an Emby answer", other.type, "none");
-  const quiet = await S.findServers("jellyfin", ["http://10.9.9.9:8096"], { fetch: fakeFetch({ timeout: ["http://10.9.9.9"] }, []), windowMs: 100 });
+  const quiet = await S.findServers("jellyfin", ["http://192.0.2.9:8096"], { fetch: fakeFetch({ timeout: ["http://192.0.2.9"] }, []), windowMs: 100 });
   check("findServers: silence is none", quiet.type, "none");
 }
 
@@ -99,13 +99,27 @@ const http = { protocol: "http:", online: true };
 check("error: not a server", S.checkErrorMessage({ code: "notAServer" }, "emby", http), S.COPY.notAServer);
 check("error: timeout names the kind", S.checkErrorMessage({ code: "timeout" }, "emby", http), S.COPY.timeout("emby"));
 check("error: offline", S.checkErrorMessage({ code: "network" }, "jellyfin", { protocol: "http:", online: false }), S.COPY.offline);
-check("error: a LAN address from the secure page", S.checkErrorMessage({ code: "network", url: "http://192.168.1.10:8096" }, "jellyfin", https), S.COPY.localFromSecure);
-check("error: a typed LAN IP, made https by default, from the secure page", S.checkErrorMessage({ code: "network", url: "https://192.168.1.10" }, "emby", https), S.COPY.localFromSecure);
+check("error: a LAN address from the secure page", S.checkErrorMessage({ code: "network", url: "http://172.16.0.10:8096" }, "jellyfin", https), S.COPY.localFromSecure);
+check("error: a typed LAN IP, made https by default, from the secure page", S.checkErrorMessage({ code: "network", url: "https://172.16.0.10" }, "emby", https), S.COPY.localFromSecure);
 check("error: localhost from the secure page", S.checkErrorMessage({ code: "network", url: "http://localhost:8096" }, "jellyfin", https), S.COPY.localFromSecure);
 check("error: a public name that merely starts with localhost is not local", S.checkErrorMessage({ code: "network", url: "https://localhost.example.com" }, "jellyfin", https), S.COPY.nothingAnswered);
 check("error: plain http from the secure page", S.checkErrorMessage({ code: "network", url: "http://media.example.com:8096" }, "jellyfin", https), S.COPY.mixedContent);
 check("error: nothing answered", S.checkErrorMessage({ code: "network", url: "https://media.example.com" }, "jellyfin", https), S.COPY.nothingAnswered);
-check("error: nothing answered on the Docker page", S.checkErrorMessage({ code: "network", url: "http://192.168.1.10:8096" }, "jellyfin", http), S.COPY.nothingAnswered);
+check("error: nothing answered on the Docker page", S.checkErrorMessage({ code: "network", url: "http://192.0.2.10:8096" }, "jellyfin", http), S.COPY.nothingAnswered);
+
+// Every C.<name> the connect page uses is in COPY. A missing one is a TypeError the
+// page swallows: an unreachable shared Plex server sat on FINDING YOUR SERVERS forever.
+const page = readFileSync(new URL("../web-tuner.html", import.meta.url), "utf8");
+function missingCopy(html) {
+  const used = new Set([...html.matchAll(/\bC\.([A-Za-z_$][\w$]*)/g)].map((m) => m[1]));
+  return { used: used.size, missing: [...used].filter((name) => !(name in S.COPY)) };
+}
+{
+  const r = missingCopy(page);
+  check(`page copy: all ${r.used} names the page uses exist`, r.missing, []);
+  check("page copy: the page uses the shared-server line", /C\.plexSharedUnreachable\(/.test(page), true);
+  check("negative control: a name COPY lacks is caught", missingCopy(page + "\n C.noSuchLine(1);").missing, ["noSuchLine"]);
+}
 
 // Copy: no em dashes, no emoji, nothing empty.
 const strings = Object.entries(S.COPY).map(([k, v]) => [k, typeof v === "function" ? v("jellyfin") : v]);

@@ -37,7 +37,7 @@ Commits carry the detail of *what*; this carries the *why*.
 - An Emby user with a password signing in for real: the lab account's password couldn't be recovered, so only the 401 path was seen. The same call signed in a Jellyfin user and an Emby user without a password.
 - Docker find covers the tuner's own machine and localhost, not another machine on the LAN. Real discovery would need host networking on Linux plus a small helper in the image.
 - Not tried in TV Bro on a Google TV, or in Safari or Firefox.
-- No Swift test reads `signin-golden.json` yet: `SignInFlow` lives on `signin-redesign`. The Roku app has no port of this flow.
+- No Swift test reads `signin-golden.json` yet: `SignInFlow` lives on `signin-redesign`. Roku has its own port, on `roku/signin`.
 
 **Next.** Chad's look at the preview. Then the separation of the tuner from the site.
 

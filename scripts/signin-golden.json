@@ -3,17 +3,17 @@
   "about": "Golden cases for the Jellyfin and Emby connect screens (the sign-in redesign, Apple TV 1.0.28). Read by scripts/nostalgex-signin-smoke.mjs (scripts/nostalgex-signin.js, web tuner and Docker; npm run test:signin). Written from Nostalgex/NostalgexTests/SignInFlowTests.swift and ServerURLNormalizerTests.swift and the spec in the Apple TV app, so a Swift test (ServerURLNormalizer.candidates, LANServerDiscovery.parse and dedupe, SignInFlow.outcome, parsePublicInfo, parseQuickConnectEnabled, parsePublicUsers, preferredMethod, offersQuickConnect) and the Roku port can read the same file. Bodies are the raw text a server sends. null means none (no server, can't say).",
   "candidates": [
     {
-      "raw": "192.168.1.10",
+      "raw": "192.0.2.10",
       "out": [
-        "http://192.168.1.10:8096",
-        "http://192.168.1.10"
+        "http://192.0.2.10:8096",
+        "http://192.0.2.10"
       ],
       "about": "a bare IP tries Jellyfin's and Emby's 8096 first"
     },
     {
-      "raw": "http://192.168.1.10:8096/web/#/home",
+      "raw": "http://192.0.2.10:8096/web/#/home",
       "out": [
-        "http://192.168.1.10:8096"
+        "http://192.0.2.10:8096"
       ],
       "about": "an address copied from the web UI"
     },
@@ -24,9 +24,9 @@
       ]
     },
     {
-      "raw": "http://10.0.0.5:8920",
+      "raw": "http://192.0.2.5:8920",
       "out": [
-        "http://10.0.0.5:8920"
+        "http://192.0.2.5:8920"
       ]
     },
     {
@@ -57,9 +57,9 @@
       "out": []
     },
     {
-      "raw": "192.168.1.10:8096",
+      "raw": "192.0.2.10:8096",
       "out": [
-        "http://192.168.1.10:8096"
+        "http://192.0.2.10:8096"
       ]
     },
     {
@@ -77,9 +77,9 @@
       "about": "a path means a proxy, so no port is added"
     },
     {
-      "raw": "192.168.1.10 : 8096",
+      "raw": "192.0.2.10 : 8096",
       "out": [
-        "http://192.168.1.10:8096"
+        "http://192.0.2.10:8096"
       ],
       "about": "spaces anywhere are dropped"
     },
@@ -92,11 +92,11 @@
       "about": "the hosted page defaults to https and never adds a port to https"
     },
     {
-      "raw": "http://192.168.1.10",
+      "raw": "http://192.0.2.10",
       "defaultScheme": "https",
       "out": [
-        "http://192.168.1.10:8096",
-        "http://192.168.1.10"
+        "http://192.0.2.10:8096",
+        "http://192.0.2.10"
       ],
       "about": "a typed scheme wins over the default"
     },
@@ -123,40 +123,40 @@
   "discoveryReplies": [
     {
       "kind": "jellyfin",
-      "reply": "{\"Address\":\"http://192.168.4.49:8096\",\"Id\":\"c573338c\",\"Name\":\"Chads-MacBook-Pro-2\",\"EndpointAddress\":null}",
+      "reply": "{\"Address\":\"http://192.0.2.49:8096\",\"Id\":\"a1b2c3d4\",\"Name\":\"Lab Jellyfin\",\"EndpointAddress\":null}",
       "out": {
         "kind": "jellyfin",
-        "name": "Chads-MacBook-Pro-2",
-        "address": "http://192.168.4.49:8096",
-        "id": "c573338c"
+        "name": "Lab Jellyfin",
+        "address": "http://192.0.2.49:8096",
+        "id": "a1b2c3d4"
       },
-      "about": "captured from Jellyfin 12.2.0, Id shortened"
+      "about": "shape captured from Jellyfin 12.2.0; address, name and Id made up"
     },
     {
       "kind": "emby",
-      "reply": "{\"Address\":\"http://192.168.4.79:8096\",\"Id\":\"fb66e05e\",\"Name\":\"Medias-Mac-mini\"}",
+      "reply": "{\"Address\":\"http://192.0.2.79:8096\",\"Id\":\"e5f6a7b8\",\"Name\":\"Den NAS\"}",
       "out": {
         "kind": "emby",
-        "name": "Medias-Mac-mini",
-        "address": "http://192.168.4.79:8096",
-        "id": "fb66e05e"
+        "name": "Den NAS",
+        "address": "http://192.0.2.79:8096",
+        "id": "e5f6a7b8"
       },
-      "about": "captured from Emby 4.10.1.0, Id shortened"
+      "about": "shape captured from Emby 4.10.1.0; address, name and Id made up"
     },
     {
       "kind": "emby",
-      "reply": "{\"Address\":\" http://10.0.0.2:8096 \",\"Id\":\"x1\",\"Name\":\"  \"}",
+      "reply": "{\"Address\":\" http://192.0.2.2:8096 \",\"Id\":\"x1\",\"Name\":\"  \"}",
       "out": {
         "kind": "emby",
-        "name": "http://10.0.0.2:8096",
-        "address": "http://10.0.0.2:8096",
+        "name": "http://192.0.2.2:8096",
+        "address": "http://192.0.2.2:8096",
         "id": "x1"
       },
       "about": "an empty name becomes the address"
     },
     {
       "kind": "jellyfin",
-      "reply": "{\"Address\":\"http://10.0.0.2:8096\",\"Name\":\"no id\"}",
+      "reply": "{\"Address\":\"http://192.0.2.2:8096\",\"Name\":\"no id\"}",
       "out": null
     },
     {
@@ -190,7 +190,7 @@
       "servers": [
         [
           "a",
-          "http://192.168.1.10:8096"
+          "http://192.0.2.10:8096"
         ]
       ],
       "out": "single",
@@ -202,29 +202,29 @@
       "servers": [
         [
           "a",
-          "http://192.168.4.45:8096"
+          "http://192.0.2.45:8096"
         ],
         [
           "a",
-          "http://192.168.4.49:8096"
+          "http://192.0.2.49:8096"
         ]
       ],
       "out": "single",
       "ids": [
         "a"
       ],
-      "keep": "http://192.168.4.45:8096",
+      "keep": "http://192.0.2.45:8096",
       "about": "the same server on Wi-Fi and Ethernet is one server, the first heard"
     },
     {
       "servers": [
         [
           "a",
-          "http://192.168.1.10:8096"
+          "http://192.0.2.10:8096"
         ],
         [
           "b",
-          "http://192.168.1.11:8096"
+          "http://192.0.2.11:8096"
         ]
       ],
       "out": "several",
@@ -237,15 +237,15 @@
       "servers": [
         [
           "b",
-          "http://192.168.1.11:8096"
+          "http://192.0.2.11:8096"
         ],
         [
           "a",
-          "http://192.168.1.10:8096"
+          "http://192.0.2.10:8096"
         ],
         [
           "b",
-          "http://192.168.1.12:8096"
+          "http://192.0.2.12:8096"
         ]
       ],
       "out": "several",
@@ -258,19 +258,19 @@
   ],
   "publicInfo": [
     {
-      "body": "{\"LocalAddress\":\"http://127.0.0.1:8096\",\"ServerName\":\"Living Room\",\"Version\":\"12.2.0\",\"ProductName\":\"Jellyfin Server\",\"OperatingSystem\":\"\",\"Id\":\"c573338c\",\"StartupWizardCompleted\":true}",
+      "body": "{\"LocalAddress\":\"http://127.0.0.1:8096\",\"ServerName\":\"Living Room\",\"Version\":\"12.2.0\",\"ProductName\":\"Jellyfin Server\",\"OperatingSystem\":\"\",\"Id\":\"a1b2c3d4\",\"StartupWizardCompleted\":true}",
       "out": {
-        "id": "c573338c",
+        "id": "a1b2c3d4",
         "name": "Living Room",
         "kind": "jellyfin"
       },
       "about": "Jellyfin 12.2.0"
     },
     {
-      "body": "{\"LocalAddresses\":[],\"RemoteAddresses\":[],\"ServerName\":\"Medias-Mac-mini\",\"Version\":\"4.10.1.0\",\"Id\":\"8844f187\"}",
+      "body": "{\"LocalAddresses\":[],\"RemoteAddresses\":[],\"ServerName\":\"Den NAS\",\"Version\":\"4.10.1.0\",\"Id\":\"c9d0e1f2\"}",
       "out": {
-        "id": "8844f187",
-        "name": "Medias-Mac-mini",
+        "id": "c9d0e1f2",
+        "name": "Den NAS",
         "kind": "emby"
       },
       "about": "Emby 4.10.1.0 has no ProductName"
@@ -480,24 +480,24 @@
   "check": [
     {
       "name": "bare-address-finds-jellyfin-on-8096-and-opens-on-quick-connect",
-      "address": "192.168.1.10",
+      "address": "192.0.2.10",
       "routes": {
-        "http://192.168.1.10:8096/System/Info/Public": [
+        "http://192.0.2.10:8096/System/Info/Public": [
           200,
           "{\"ServerName\":\"Living Room\",\"ProductName\":\"Jellyfin Server\",\"Id\":\"jf1\"}"
         ],
-        "http://192.168.1.10:8096/QuickConnect/Enabled": [
+        "http://192.0.2.10:8096/QuickConnect/Enabled": [
           200,
           "true"
         ],
-        "http://192.168.1.10:8096/Users/Public": [
+        "http://192.0.2.10:8096/Users/Public": [
           200,
           "[]"
         ]
       },
       "out": {
         "kind": "jellyfin",
-        "url": "http://192.168.1.10:8096",
+        "url": "http://192.0.2.10:8096",
         "name": "Living Room",
         "quickConnectEnabled": true,
         "users": [],
@@ -528,20 +528,20 @@
     },
     {
       "name": "emby-is-never-asked-about-quick-connect-and-shows-its-users",
-      "address": "http://192.168.1.20:8096",
+      "address": "http://192.0.2.20:8096",
       "routes": {
-        "http://192.168.1.20:8096/System/Info/Public": [
+        "http://192.0.2.20:8096/System/Info/Public": [
           200,
           "{\"ServerName\":\"Den\",\"Id\":\"em1\"}"
         ],
-        "http://192.168.1.20:8096/Users/Public": [
+        "http://192.0.2.20:8096/Users/Public": [
           200,
           "[{\"Name\":\"dad\",\"Id\":\"d\",\"HasPassword\":false}]"
         ]
       },
       "out": {
         "kind": "emby",
-        "url": "http://192.168.1.20:8096",
+        "url": "http://192.0.2.20:8096",
         "name": "Den",
         "quickConnectEnabled": null,
         "users": [
@@ -557,19 +557,19 @@
     },
     {
       "name": "nothing-on-8096-tries-the-address-as-typed",
-      "address": "10.0.0.5",
+      "address": "192.0.2.5",
       "refused": [
-        "http://10.0.0.5:8096"
+        "http://192.0.2.5:8096"
       ],
       "routes": {
-        "http://10.0.0.5/System/Info/Public": [
+        "http://192.0.2.5/System/Info/Public": [
           200,
           "{\"ServerName\":\"Den\",\"Id\":\"em1\"}"
         ]
       },
       "out": {
         "kind": "emby",
-        "url": "http://10.0.0.5",
+        "url": "http://192.0.2.5",
         "name": "Den",
         "quickConnectEnabled": null,
         "users": [],
@@ -578,13 +578,13 @@
     },
     {
       "name": "a-web-page-is-not-a-server",
-      "address": "192.168.1.1",
+      "address": "192.0.2.1",
       "routes": {
-        "http://192.168.1.1:8096/System/Info/Public": [
+        "http://192.0.2.1:8096/System/Info/Public": [
           200,
           "<html>router</html>"
         ],
-        "http://192.168.1.1/System/Info/Public": [
+        "http://192.0.2.1/System/Info/Public": [
           200,
           "<html>router</html>"
         ]
@@ -593,37 +593,37 @@
     },
     {
       "name": "a-refused-address-is-the-network-error",
-      "address": "192.168.1.99",
+      "address": "192.0.2.99",
       "refused": [
-        "http://192.168.1.99"
+        "http://192.0.2.99"
       ],
       "error": "network"
     },
     {
       "name": "a-timeout-fails-once-not-twice",
-      "address": "192.168.1.98",
+      "address": "192.0.2.98",
       "timeout": [
-        "http://192.168.1.98:8096"
+        "http://192.0.2.98:8096"
       ],
       "error": "timeout",
       "asked": 1
     },
     {
       "name": "the-server-says-which-kind-it-is",
-      "address": "192.168.1.10:8096",
+      "address": "192.0.2.10:8096",
       "routes": {
-        "http://192.168.1.10:8096/System/Info/Public": [
+        "http://192.0.2.10:8096/System/Info/Public": [
           200,
           "{\"ServerName\":\"Living Room\",\"ProductName\":\"Jellyfin Server\",\"Id\":\"jf1\"}"
         ],
-        "http://192.168.1.10:8096/QuickConnect/Enabled": [
+        "http://192.0.2.10:8096/QuickConnect/Enabled": [
           200,
           "true"
         ]
       },
       "out": {
         "kind": "jellyfin",
-        "url": "http://192.168.1.10:8096",
+        "url": "http://192.0.2.10:8096",
         "name": "Living Room",
         "quickConnectEnabled": true,
         "users": [],
