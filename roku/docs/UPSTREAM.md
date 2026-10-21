@@ -519,6 +519,13 @@ We'll start from `2f68a9e`, which has the fix and the 1.0.2 release. As
 first posted it asked what followed the colon above; edited the same day,
 once it was clear the next post was the answer.
 
+[Reported](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19110028)
+on 2026-10-21: the beta on the living room TV (55R617, OS 15.3.4), about
+50 s from Plex sign-in to the guide on a first launch (5,373 items) and
+about 2 s to relaunch, counted by hand; and PRs #46 (decode check), #47
+(home names), #48 (version line) and #49 (this file), each checked on the
+43" first. `.local` got no answer on the TV, so the examples say `nas`.
+
 ## Channel ideas: Discussion #29
 
 [Posted](https://github.com/chadMueller/Nostalgex/discussions/29) on
