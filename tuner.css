@@ -33,6 +33,14 @@
 .signin [hidden] { display: none !important; }
 /* The panel draws its own focus (the cyan slab or frame); no page-wide outline on top. */
 .signin :focus-visible { outline: none; }
+/* The site's styles.css also rounds every :focus-visible to 2px, and on the hosted build
+   it loads after this file. Restate the panel's corners with enough weight to win in
+   either order, so hosted and Docker look the same. */
+.signin .signin-btn,
+.signin .signin-row,
+.signin .signin-tile,
+.signin .signin-input { border-radius: 14px; }
+.signin .signin-btn--quiet { border-radius: 999px; }
 
 .signin-screen {
   display: flex;
