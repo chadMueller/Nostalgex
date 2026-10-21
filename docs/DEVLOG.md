@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-21 (publish Plex remote streaming post)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-remote-streaming-changes-explained`.
+
+**Why.** New live post. Chad's copy was already `draft: false` and dated 2026-10-21. The article explains Plex's late-September 2026 remote playback rule for third party apps (Infuse, Plezy, and Nostalgex), who needs a pass when a family shares a server, and why a TV at home can still look remote.
+
+**Changed.**
+- Added `content/blog/plex-remote-streaming-changes-explained.md` as given. No copy edits. Other posts untouched, including the two remaining drafts (`make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`).
+- `scripts/media-sizes.json`: cover at `site/blog/plex-remote-streaming-changes-explained/cover.jpg` is 1200x630. The inline Buddies / EuroTrip still from the Jellyfin post already had its 1280x720 entry. Images stay on R2; none committed.
+- `npm run blog:render` wrote seven live posts into `public/sitemap.xml`, including `/blog/plex-remote-streaming-changes-explained` with lastmod 2026-10-21. `/blog` lastmod is 2026-10-21. The blog block sits after the channels block because the script re-inserts it just before `</urlset>`.
+
+**Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
+
+**Next.** Nothing on this post. The article points at a separate post about switching the channel guide to Jellyfin or Emby; that is not this file.
+
 ## 2026-10-20 (the web tuner says its version in Settings)
 
 **Shipped.** Nothing yet. Branch `web/tuner-version` on build-50 (473c5ca), this entry included, not pushed. nostalgex.app gets it when main is pushed, Docker with `tuner-v1.0.3`, cut right after.
