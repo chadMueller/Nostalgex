@@ -12,7 +12,7 @@ Commits carry the detail of *what*; this carries the *why*.
 **Changed.**
 - Added `content/blog/plex-remote-streaming-changes-explained.md` as given. No copy edits. Other posts untouched, including the two remaining drafts (`make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`).
 - `scripts/media-sizes.json`: cover at `site/blog/plex-remote-streaming-changes-explained/cover.jpg` is 1200x630. The inline Buddies / EuroTrip still from the Jellyfin post already had its 1280x720 entry. Images stay on R2; none committed.
-- `npm run blog:render` wrote seven live posts into `public/sitemap.xml`, including `/blog/plex-remote-streaming-changes-explained` with lastmod 2026-10-21. `/blog` lastmod is 2026-10-21. The blog block sits after the channels block because the script re-inserts it just before `</urlset>`.
+- `npm run blog:render` wrote seven live posts into `public/sitemap.xml`, including `/blog/plex-remote-streaming-changes-explained` with lastmod 2026-10-21. `/blog` lastmod is 2026-10-21. `npm run build` then ran `bundles:render` after the blog step, so the committed sitemap has the blog block above the channels block, matching main.
 
 **Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
 
