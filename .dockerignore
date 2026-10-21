@@ -7,6 +7,7 @@
 !web-tuner.html
 !plex-tuner.html
 !styles.css
+!tuner.css
 !app.js
 !logo/
 # public/*.json are symlinks to these three at the root.

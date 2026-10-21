@@ -31,6 +31,8 @@
 }
 
 .signin [hidden] { display: none !important; }
+/* The panel draws its own focus (the cyan slab or frame); no page-wide outline on top. */
+.signin :focus-visible { outline: none; }
 
 .signin-screen {
   display: flex;
@@ -175,7 +177,8 @@
 .signin-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* ---- Server rows and user tiles ---- */
-.signin-list { display: flex; flex-direction: column; gap: 10px; }
+.signin-list,
+.signin-users { display: flex; flex-direction: column; gap: 14px; }
 .signin-rows { display: flex; flex-direction: column; gap: 10px; }
 .signin-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .signin-row,

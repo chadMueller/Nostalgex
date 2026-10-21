@@ -507,7 +507,9 @@
     if (code === 'timeout') return COPY.timeout(kind);
     const url = (err && err.url) || '';
     if (p.protocol === 'https:') {
-      if (/^http:\/\/(?:10\.|127\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?|localhost)/i.test(url)) return COPY.localFromSecure;
+      // A private address can't answer this page: over http the browser blocks it, and
+      // over https (the default here) no certificate is valid for it.
+      if (/^https?:\/\/(?:[^@/]*@)?(?:10\.|127\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|\[(?:::1|f[cd][0-9a-f]{2}:|fe80:)|localhost(?:[:/]|$))/i.test(url)) return COPY.localFromSecure;
       if (/^http:\/\//i.test(url)) return COPY.mixedContent;
     }
     return COPY.nothingAnswered;

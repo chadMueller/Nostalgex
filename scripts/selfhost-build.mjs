@@ -190,6 +190,18 @@ function writeFontSheet(outDir, sheet) {
   writeFileSync(outFile, parts.join('\n'))
 }
 
+/** Local stylesheets and scripts a built page links (not http(s), data: or protocol-relative). */
+export function pageLocalRefs(html) {
+  const refs = [
+    ...[...html.matchAll(/<link[^>]*\srel="stylesheet"[^>]*\shref="([^"]+)"/g)].map((m) => m[1]),
+    ...[...html.matchAll(/<link[^>]*\shref="([^"]+)"[^>]*\srel="stylesheet"/g)].map((m) => m[1]),
+    ...[...html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1]),
+  ]
+  return [...new Set(refs)]
+    .filter((r) => !/^(?:[a-z]+:|\/\/)/i.test(r))
+    .map((r) => r.replace(/^\.?\//, '').replace(/[?#].*$/, ''))
+}
+
 /** The `scripts/...` files a page loads with a plain <script src>. */
 function pageScripts(html) {
   return [...html.matchAll(/<script[^>]*\ssrc="(?:\.\/)?(scripts\/[^"]+)"/g)].map((m) => m[1])
@@ -262,6 +274,19 @@ export function selfhostPlugins({ root, version }) {
           resolve(outDir, 'config.json'),
           JSON.stringify({ tunerVersion: version, musicLookups: false, enrichment: true }, null, 2) + '\n',
         )
+
+        // Every local file a page links has to be in the output. A stylesheet Vite can't
+        // find is only a warning ("will remain unchanged to be resolved at runtime"), and
+        // the Docker context is an allowlist (.dockerignore), so tuner.css once shipped as
+        // a link to nothing: the sign-in screens unstyled in the container.
+        for (const page of pages) {
+          const html = readFileSync(resolve(outDir, page), 'utf8')
+          for (const ref of pageLocalRefs(html)) {
+            if (!existsSync(resolve(outDir, ref))) {
+              throw new Error(`self-host build: ${page} links ${ref}, which is not in the output (missing from the build context? see .dockerignore)`)
+            }
+          }
+        }
 
         const shipped = readdirSync(outDir).sort()
         // eslint-disable-next-line no-console

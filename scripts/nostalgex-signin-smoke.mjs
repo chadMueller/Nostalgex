@@ -100,6 +100,9 @@ check("error: not a server", S.checkErrorMessage({ code: "notAServer" }, "emby",
 check("error: timeout names the kind", S.checkErrorMessage({ code: "timeout" }, "emby", http), S.COPY.timeout("emby"));
 check("error: offline", S.checkErrorMessage({ code: "network" }, "jellyfin", { protocol: "http:", online: false }), S.COPY.offline);
 check("error: a LAN address from the secure page", S.checkErrorMessage({ code: "network", url: "http://192.168.1.10:8096" }, "jellyfin", https), S.COPY.localFromSecure);
+check("error: a typed LAN IP, made https by default, from the secure page", S.checkErrorMessage({ code: "network", url: "https://192.168.1.10" }, "emby", https), S.COPY.localFromSecure);
+check("error: localhost from the secure page", S.checkErrorMessage({ code: "network", url: "http://localhost:8096" }, "jellyfin", https), S.COPY.localFromSecure);
+check("error: a public name that merely starts with localhost is not local", S.checkErrorMessage({ code: "network", url: "https://localhost.example.com" }, "jellyfin", https), S.COPY.nothingAnswered);
 check("error: plain http from the secure page", S.checkErrorMessage({ code: "network", url: "http://media.example.com:8096" }, "jellyfin", https), S.COPY.mixedContent);
 check("error: nothing answered", S.checkErrorMessage({ code: "network", url: "https://media.example.com" }, "jellyfin", https), S.COPY.nothingAnswered);
 check("error: nothing answered on the Docker page", S.checkErrorMessage({ code: "network", url: "http://192.168.1.10:8096" }, "jellyfin", http), S.COPY.nothingAnswered);
