@@ -1,0 +1,283 @@
+/* ==========================================================================
+   Web tuner stylesheet. Tuner pages only: the marketing site never loads this,
+   and nothing here may depend on the site's styles.css (Chad, 2026-10-21).
+
+   SIGN-IN (web-tuner.html #signin): the Apple TV connect screens (1.0.28) in a
+   browser. Colours, focus styles and sizes follow the Apple TV spec
+   (nostalgex-internal SIGNIN-FLOW.md, "Focus styles"). The panel is black in
+   both page themes, like a TV screen. Space Mono stands in for DM Mono: the
+   page already loads it, and the Docker build vendors it.
+   Exactly one thing is bright: the focused control. A cursor remote (TV Bro)
+   and a mouse get the same look on hover.
+   ========================================================================== */
+
+.signin {
+  --sg-cyan: #00d4ff;
+  --sg-on-cyan: #000f17;
+  --sg-error: #ff2244;
+  --sg-warn: #ffb020;
+  --sg-wait: #00c4ff;
+  --sg-ease: 0.14s ease-out;
+  --sg-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  width: 100%;
+  padding: 36px 32px;
+  border-radius: 14px;
+  background: #000;
+  color: #fff;
+  font-family: var(--sg-mono);
+  text-align: center;
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.28), 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.signin [hidden] { display: none !important; }
+
+.signin-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+.signin-form { display: flex; flex-direction: column; gap: 16px; margin: 0; }
+
+/* ---- Text ---- */
+.signin p { margin: 0; }
+.signin-title {
+  margin: 0;
+  font: 700 22px/1.25 var(--sg-mono);
+  letter-spacing: 0.06em;
+  color: var(--sg-cyan);
+}
+.signin-text { font-size: 15px; line-height: 1.55; color: rgba(255, 255, 255, 0.7); }
+.signin-small { font-size: 14px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.78); }
+.signin-small a { color: var(--sg-cyan); text-underline-offset: 4px; }
+.signin-dim, .signin-or {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.45);
+}
+.signin-or { margin-top: 6px; }
+.signin-meta { letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.signin-server {
+  font: 700 26px/1.2 var(--sg-mono);
+  letter-spacing: 0.04em;
+  color: var(--sg-cyan);
+  overflow-wrap: anywhere;
+}
+.signin-head { display: flex; flex-direction: column; gap: 6px; }
+.signin-code {
+  font: 700 clamp(46px, 9vw, 68px)/1.1 var(--sg-mono);
+  letter-spacing: 0.18em;
+  color: #fff;
+  padding-left: 0.18em; /* balance the trailing letter-spacing */
+}
+.signin-code--digits { letter-spacing: 0.24em; padding-left: 0.24em; }
+.signin-status { font-size: 15px; letter-spacing: 0.12em; color: var(--sg-wait); }
+.signin-error {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sg-error);
+}
+.signin-warn { font-size: 14px; line-height: 1.5; color: var(--sg-warn); }
+.signin-hint { margin: -6px 0 0 4px; font-size: 13px; text-align: left; color: rgba(255, 255, 255, 0.45); }
+
+/* Waiting lines: ".", "..", "..." every half second. */
+.signin-dots::after {
+  content: "...";
+  display: inline-block;
+  width: 3ch;
+  overflow: hidden;
+  vertical-align: bottom;
+  text-align: left;
+  animation: signin-dots 1.5s steps(1, end) infinite;
+}
+@keyframes signin-dots {
+  0% { width: 1ch; }
+  33.33% { width: 2ch; }
+  66.66% { width: 3ch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signin-dots::after { animation: none; }
+}
+
+/* ---- Buttons ---- */
+.signin-btn {
+  appearance: none;
+  width: 100%;
+  min-height: 58px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 14px;
+  font: 700 17px/1.2 var(--sg-mono);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sg-ease), background-color var(--sg-ease), box-shadow var(--sg-ease), color var(--sg-ease);
+}
+.signin-btn--primary {
+  min-height: 64px;
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 2.5px rgba(0, 212, 255, 0.75);
+  color: var(--sg-cyan);
+}
+.signin-btn--secondary {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.62);
+}
+.signin-btn--quiet {
+  width: auto;
+  min-height: 44px;
+  align-self: center;
+  padding: 8px 28px;
+  border-radius: 999px;
+  background: none;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+/* Focused: the solid cyan slab. */
+.signin-btn:not(:disabled):focus-visible {
+  background: var(--sg-cyan);
+  color: var(--sg-on-cyan);
+  box-shadow: 0 0 28px rgba(0, 212, 255, 0.6);
+  transform: scale(1.04);
+}
+.signin-btn--quiet:not(:disabled):focus-visible { transform: scale(1.07); }
+/* On the two code screens the code stays the brightest thing: an outline glow instead. */
+.signin-btn--code:not(:disabled):focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  box-shadow: inset 0 0 0 3px var(--sg-cyan), 0 0 18px rgba(0, 212, 255, 0.45);
+  transform: scale(1.03);
+}
+@media (hover: hover) {
+  .signin-btn:not(:disabled):hover {
+    background: var(--sg-cyan);
+    color: var(--sg-on-cyan);
+    box-shadow: 0 0 28px rgba(0, 212, 255, 0.6);
+    transform: scale(1.04);
+  }
+  .signin-btn--quiet:not(:disabled):hover { transform: scale(1.07); }
+  .signin-btn--code:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+    box-shadow: inset 0 0 0 3px var(--sg-cyan), 0 0 18px rgba(0, 212, 255, 0.45);
+    transform: scale(1.03);
+  }
+}
+.signin-btn:not(:disabled):active { transform: scale(1.02); }
+.signin-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ---- Server rows and user tiles ---- */
+.signin-list { display: flex; flex-direction: column; gap: 10px; }
+.signin-rows { display: flex; flex-direction: column; gap: 10px; }
+.signin-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.signin-row,
+.signin-tile {
+  appearance: none;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font: 700 16px/1.25 var(--sg-mono);
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sg-ease), background-color var(--sg-ease), box-shadow var(--sg-ease), color var(--sg-ease);
+}
+.signin-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 18px;
+  text-align: left;
+}
+.signin-row-address { font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, 0.55); overflow-wrap: anywhere; }
+.signin-tile { min-height: 72px; padding: 12px 8px; overflow-wrap: anywhere; }
+.signin-tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px rgba(0, 212, 255, 0.75); color: var(--sg-cyan); }
+.signin-row:focus-visible,
+.signin-tile:focus-visible {
+  background: var(--sg-cyan);
+  color: var(--sg-on-cyan);
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.55);
+  transform: scale(1.04);
+}
+.signin-row:focus-visible .signin-row-address { color: var(--sg-on-cyan); }
+@media (hover: hover) {
+  .signin-row:hover,
+  .signin-tile:hover {
+    background: var(--sg-cyan);
+    color: var(--sg-on-cyan);
+    box-shadow: 0 0 24px rgba(0, 212, 255, 0.55);
+    transform: scale(1.04);
+  }
+  .signin-row:hover .signin-row-address { color: var(--sg-on-cyan); }
+}
+@media (max-width: 420px) {
+  .signin-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- Text fields: a dark well; focused, a cyan frame and glow ---- */
+.signin-field { display: block; text-align: left; }
+.signin-caption {
+  display: block;
+  margin: 0 0 8px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color var(--sg-ease);
+}
+.signin-field:focus-within .signin-caption { color: var(--sg-cyan); }
+.signin-input {
+  display: block;
+  width: 100%;
+  height: 60px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: #0f0f0f;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.78);
+  caret-color: rgba(255, 255, 255, 0.9);
+  font: 400 20px var(--sg-mono);
+  outline: none;
+  transition: transform var(--sg-ease), background-color var(--sg-ease), box-shadow var(--sg-ease), color var(--sg-ease);
+}
+.signin-input::placeholder { color: rgba(255, 255, 255, 0.48); opacity: 1; }
+.signin-input:focus {
+  background: #081a21;
+  box-shadow: 0 0 0 4px var(--sg-cyan), 0 0 26px rgba(0, 212, 255, 0.55);
+  color: #fff;
+  transform: scale(1.02);
+}
+.signin-input:focus::placeholder { color: rgba(255, 255, 255, 0.6); }
+.signin-input[type="password"]:not(:placeholder-shown) { letter-spacing: 0.25em; }
+@media (hover: hover) {
+  .signin-input:not(:focus):hover { box-shadow: inset 0 0 0 1.5px rgba(0, 212, 255, 0.6); }
+}
+
+/* ---- Plex QR ---- */
+.signin-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.signin-qr-code { padding: 10px; border-radius: 10px; background: #fff; line-height: 0; }
+.signin-qr-code img,
+.signin-qr-code canvas { display: block; }
+
+/* ---- Signing in: only the waiting line and CANCEL ---- */
+.signin-busy-only { display: none; }
+.signin .is-busy > :not(.signin-head):not(.signin-busy-only):not(.signin-error) { display: none; }
+.signin .is-busy > .signin-busy-only { display: block; }
+
+@media (max-width: 480px) {
+  .signin { padding: 28px 18px; }
+  .signin-btn--primary { font-size: 18px; }
+  .signin-server { font-size: 22px; }
+}

@@ -35,7 +35,7 @@
     "test:emby-dolby-vision": "node scripts/nostalgex-emby-dolby-vision-smoke.mjs",
     "test:tuner-version": "node scripts/tuner-version-smoke.mjs",
     "test:tuner-version:builds": "node scripts/tuner-version-smoke.mjs --builds",
-    "test": "npm run test:filter && npm run test:filter-golden && npm run test:library-load && npm run test:season && npm run test:schedule && npm run test:schedule-dst && npm run test:franchises && npm run test:watch-state && npm run test:reporting-controls && npm run test:jellyfin-urls && npm run test:jellyfin-quick-connect && npm run test:jellyfin-subtitles && npm run test:subscribe && npm run test:tmdb && npm run test:enrichment && npm run test:collections && npm run test:tuner-gate && npm run test:web-player && npm run test:web-tune-ownership && npm run test:sleep-timer && npm run test:playback-info && npm run test:emby-dolby-vision && npm run test:tuner-version && npm run channels:doc:check && npm run changelog:check && npm run bundles:render:strict && npm run selfhost:render:check && npm run roku:render:check",
+    "test": "npm run test:filter && npm run test:filter-golden && npm run test:library-load && npm run test:season && npm run test:schedule && npm run test:schedule-dst && npm run test:franchises && npm run test:watch-state && npm run test:reporting-controls && npm run test:jellyfin-urls && npm run test:jellyfin-quick-connect && npm run test:signin && npm run test:jellyfin-subtitles && npm run test:subscribe && npm run test:tmdb && npm run test:enrichment && npm run test:collections && npm run test:tuner-gate && npm run test:web-player && npm run test:web-tune-ownership && npm run test:sleep-timer && npm run test:playback-info && npm run test:emby-dolby-vision && npm run test:tuner-version && npm run channels:doc:check && npm run changelog:check && npm run bundles:render:strict && npm run selfhost:render:check && npm run roku:render:check",
     "build": "npm run selfhost:render && npm run roku:render && npm run changelog:render && npm run blog:render && npm run bundles:render && vite build && node scripts/dist-asset-check.mjs",
     "dist:check": "node scripts/dist-asset-check.mjs",
     "build:selfhost": "vite build --mode selfhost --outDir dist-selfhost",
@@ -49,6 +49,7 @@
     "test:watch-state": "node scripts/nostalgex-watch-state-smoke.mjs",
     "test:jellyfin-urls": "node scripts/nostalgex-jellyfin-urls-smoke.mjs",
     "test:jellyfin-quick-connect": "node scripts/nostalgex-jellyfin-quick-connect-smoke.mjs",
+    "test:signin": "node scripts/nostalgex-signin-smoke.mjs",
     "test:jellyfin-subtitles": "node scripts/nostalgex-jellyfin-subtitles-smoke.mjs",
     "media:measure": "node scripts/measure-media.mjs",
     "test:reporting-controls": "node scripts/playback-reporting-controls-smoke.mjs"

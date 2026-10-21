@@ -49,6 +49,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./styles.css">
+<!-- Tuner-only styles (the sign-in screens). The site never loads this file. -->
+<link rel="stylesheet" href="./tuner.css">
 <!-- Required by the Plex PIN flow below (renders the plex.tv/link QR code). -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
 <!-- selfhost:strip:start -->
@@ -223,106 +225,113 @@
       <!-- selfhost:only: <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide. This copy runs on your own server, so a plain http:// Jellyfin or Emby address on your network works.</p> -->
       <p class="connect-lede connect-lede--follow">Sign in once and Nostalgex turns your library into channels, then drops you straight into the guide.</p>
 
-      <div class="cta-card cta-card--cyan connect-card">
+      <!-- The sign-in, screen by screen, as on Apple TV (nostalgex-internal SIGNIN-FLOW.md).
+           One <section data-screen> shows at a time; the connect script at the bottom of
+           this file switches them with showScreen(). -->
+      <div class="signin" id="signin">
 
-        <!-- Plex: default state -->
-        <div id="connect-default">
-          <button class="connect-btn" id="connect-btn" type="button">Connect with Plex</button>
-          <p class="connect-fine-print">Free. Uses your Plex account.</p>
-        </div>
+        <!-- 1. Picker -->
+        <section class="signin-screen" data-screen="picker" aria-label="Connect your server">
+          <p class="signin-error" id="picker-error" role="alert" hidden></p>
+          <button class="signin-btn signin-btn--primary" id="connect-btn" type="button">CONNECT TO PLEX</button>
+          <p class="signin-or">OR CONNECT WITH</p>
+          <button class="signin-btn signin-btn--secondary" id="connect-jellyfin-btn" type="button">JELLYFIN</button>
+          <button class="signin-btn signin-btn--secondary" id="connect-emby-btn" type="button">EMBY</button>
+        </section>
 
-        <!-- Plex: error -->
-        <div class="connect-error" id="connect-error"></div>
-
-        <!-- Plex: waiting on the PIN (code + QR) -->
-        <div class="connect-waiting" id="connect-waiting">
-          <p class="connect-label">Enter this code at</p>
-          <p class="connect-link"><a href="https://www.plex.tv/link/" target="_blank" rel="noopener">plex.tv/link</a></p>
-          <div class="connect-pin-code" id="connect-pin"></div>
-          <p class="connect-or">or scan it</p>
-          <div class="connect-qr" id="connect-qr"></div>
-          <p class="connect-polling">Waiting for authorization</p>
-        </div>
-
-        <!-- Plex: success -->
-        <div class="connect-success" id="connect-success">
-          <p class="connect-success-text">Connected</p>
-          <p class="connect-redirect">Loading Nostalgex...</p>
-        </div>
-
-        <div class="connect-divider"><span>or</span></div>
-
-        <!-- Jellyfin and Emby: one row of two choices. Each opens its own form. -->
-        <div class="connect-alt" id="connect-alt">
-          <div id="connect-jellyfin-intro">
-            <button class="connect-link-btn" id="connect-jellyfin-btn" type="button">Connect with Jellyfin</button>
+        <!-- 2. Plex code -->
+        <section class="signin-screen" data-screen="plex" aria-label="Plex code" hidden>
+          <p class="signin-small">GO TO <a href="https://www.plex.tv/link/" target="_blank" rel="noopener">plex.tv/link</a> AND ENTER:</p>
+          <div class="signin-code" id="connect-pin" aria-live="polite">----</div>
+          <p class="signin-status signin-dots" id="plex-status">CONNECTING TO PLEX.TV</p>
+          <div class="signin-qr">
+            <div class="signin-qr-code" id="connect-qr"></div>
+            <p class="signin-dim">SCAN TO CONNECT</p>
           </div>
-          <div id="connect-emby-intro">
-            <button class="connect-link-btn" id="connect-emby-btn" type="button">Connect with Emby</button>
-          </div>
-        </div>
+          <button class="signin-btn signin-btn--quiet signin-btn--code" id="plex-cancel" type="button">CANCEL</button>
+        </section>
 
-        <!-- Jellyfin: login form -->
-        <div id="connect-jellyfin" class="connect-form">
-          <div class="connect-field">
-            <label class="connect-label" for="jf-url">Jellyfin server URL</label>
-            <!-- selfhost:strip:start -->
-            <input class="connect-input" id="jf-url" type="url" inputmode="url" autocomplete="off" placeholder="https://jellyfin.yourdomain.com">
-            <p class="connect-fine-print connect-fine-print--left">Has to be reachable over HTTPS. Plain http:// LAN servers get blocked by your browser here, so use the Apple TV app for those, or <a href="/self-host">run the tuner on your own server</a>.</p>
-            <!-- selfhost:strip:end -->
-            <!-- selfhost:only: <input class="connect-input" id="jf-url" type="url" inputmode="url" autocomplete="off" placeholder="http://192.168.1.20:8096"> -->
-            <!-- selfhost:only: <p class="connect-fine-print connect-fine-print--left">The address you use for Jellyfin on your network, like http://192.168.1.20:8096. If this page is on https, your server has to be on https too.</p> -->
+        <!-- 4. Find (Jellyfin or Emby), only on a page that can reach your network -->
+        <section class="signin-screen" data-screen="find" aria-labelledby="find-title" hidden>
+          <h2 class="signin-title" id="find-title">CONNECT TO JELLYFIN</h2>
+          <p class="signin-text" id="find-text"></p>
+          <p class="signin-warn" id="find-warn" role="alert" hidden></p>
+          <div class="signin-list" id="find-list" hidden>
+            <p class="signin-dim">PICK YOUR SERVER</p>
+            <div class="signin-rows" id="find-rows"></div>
           </div>
-          <div class="connect-field">
-            <label class="connect-label" for="jf-user">Username</label>
-            <input class="connect-input" id="jf-user" type="text" autocomplete="username" placeholder="username">
-          </div>
-          <div class="connect-field">
-            <label class="connect-label" for="jf-pass">Password</label>
-            <input class="connect-input" id="jf-pass" type="password" autocomplete="current-password" placeholder="password">
-          </div>
-          <button class="connect-btn" id="jf-signin-btn" type="button">Sign in</button>
-          <button class="connect-btn connect-btn--secondary" id="jf-quick-btn" type="button">Use Quick Connect</button>
-          <button class="connect-text-link" id="jf-back-btn" type="button">Back</button>
-        </div>
+          <button class="signin-btn signin-btn--primary" id="find-btn" type="button">FIND MY SERVER</button>
+          <button class="signin-btn signin-btn--secondary" id="find-type-btn" type="button">TYPE AN ADDRESS</button>
+          <button class="signin-btn signin-btn--quiet" id="find-back" type="button">BACK</button>
+        </section>
 
-        <!-- Jellyfin: Quick Connect code -->
-        <div class="connect-waiting" id="connect-jellyfin-quick">
-          <p class="connect-label">In Jellyfin, open Quick Connect and enter</p>
-          <div class="connect-pin-code" id="connect-jf-code"></div>
-          <p class="connect-polling">Waiting for approval</p>
-          <button class="connect-text-link" id="jf-quick-cancel" type="button">Cancel</button>
-        </div>
+        <!-- 5. Type an address -->
+        <section class="signin-screen" data-screen="address" aria-labelledby="address-title" hidden>
+          <h2 class="signin-title" id="address-title">CONNECT TO JELLYFIN</h2>
+          <p class="signin-warn" id="address-warn" role="alert" hidden></p>
+          <form class="signin-form" id="address-form" novalidate>
+            <label class="signin-field">
+              <span class="signin-caption">SERVER ADDRESS</span>
+              <input class="signin-input" id="address-input" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+            </label>
+            <p class="signin-hint" id="address-hint"></p>
+            <button class="signin-btn signin-btn--primary" id="address-connect" type="submit" disabled>CONNECT</button>
+          </form>
+          <button class="signin-btn signin-btn--quiet" id="address-back" type="button">BACK</button>
+        </section>
 
-        <!-- Jellyfin: error -->
-        <div class="connect-error" id="connect-jellyfin-error"></div>
+        <!-- 6. Checking the address -->
+        <section class="signin-screen" data-screen="checking" aria-live="polite" hidden>
+          <p class="signin-status signin-dots" id="checking-status">CONNECTING</p>
+          <button class="signin-btn signin-btn--quiet" id="checking-cancel" type="button">CANCEL</button>
+        </section>
 
-        <!-- Emby: login form. Emby has no Quick Connect, so it is username and password,
-             the same as the Apple TV app. -->
-        <div id="connect-emby" class="connect-form">
-          <div class="connect-field">
-            <label class="connect-label" for="em-url">Emby server URL</label>
-            <!-- selfhost:strip:start -->
-            <input class="connect-input" id="em-url" type="url" inputmode="url" autocomplete="off" placeholder="https://emby.yourdomain.com">
-            <p class="connect-fine-print connect-fine-print--left">Has to be reachable over HTTPS. Plain http:// LAN servers get blocked by your browser here, so use the Apple TV app for those, or <a href="/self-host">run the tuner on your own server</a>.</p>
-            <!-- selfhost:strip:end -->
-            <!-- selfhost:only: <input class="connect-input" id="em-url" type="url" inputmode="url" autocomplete="off" placeholder="http://192.168.1.20:8096"> -->
-            <!-- selfhost:only: <p class="connect-fine-print connect-fine-print--left">The address you use for Emby on your network, like http://192.168.1.20:8096. If this page is on https, your server has to be on https too.</p> -->
+        <!-- 7. Sign in -->
+        <section class="signin-screen" data-screen="signin" id="signin-screen-box" aria-labelledby="signin-name" hidden>
+          <div class="signin-head">
+            <p class="signin-dim">SIGN IN TO</p>
+            <p class="signin-server" id="signin-name"></p>
+            <p class="signin-dim signin-meta" id="signin-meta"></p>
           </div>
-          <div class="connect-field">
-            <label class="connect-label" for="em-user">Username</label>
-            <input class="connect-input" id="em-user" type="text" autocomplete="username" placeholder="username">
+          <p class="signin-warn" id="signin-note" hidden></p>
+          <p class="signin-error" id="signin-error" role="alert" hidden></p>
+          <div class="signin-users" id="signin-users" hidden>
+            <p class="signin-dim">WHO'S WATCHING?</p>
+            <div class="signin-tiles" id="signin-tiles"></div>
           </div>
-          <div class="connect-field">
-            <label class="connect-label" for="em-pass">Password</label>
-            <input class="connect-input" id="em-pass" type="password" autocomplete="current-password" placeholder="password">
-          </div>
-          <button class="connect-btn" id="em-signin-btn" type="button">Sign in</button>
-          <button class="connect-text-link" id="em-back-btn" type="button">Back</button>
-        </div>
+          <form class="signin-form" id="signin-form" novalidate>
+            <label class="signin-field" id="signin-user-field">
+              <span class="signin-caption">USERNAME</span>
+              <input class="signin-input" id="signin-user" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Type here" enterkeyhint="next">
+            </label>
+            <label class="signin-field" id="signin-pass-field">
+              <span class="signin-caption" id="signin-pass-caption">PASSWORD</span>
+              <input class="signin-input" id="signin-pass" type="password" autocomplete="current-password" placeholder="Type here" enterkeyhint="go">
+            </label>
+            <button class="signin-btn signin-btn--primary" id="signin-btn" type="submit">SIGN IN</button>
+          </form>
+          <p class="signin-status signin-dots signin-busy-only" id="signin-busy">SIGNING IN</p>
+          <button class="signin-btn signin-btn--quiet signin-busy-only" id="signin-busy-cancel" type="button">CANCEL</button>
+          <button class="signin-btn signin-btn--secondary" id="signin-qc" type="button">USE QUICK CONNECT</button>
+          <button class="signin-btn signin-btn--quiet" id="signin-back" type="button">BACK</button>
+        </section>
 
-        <!-- Emby: error -->
-        <div class="connect-error" id="connect-emby-error"></div>
+        <!-- 8. Quick Connect (Jellyfin) -->
+        <section class="signin-screen" data-screen="quick" aria-labelledby="quick-title" hidden>
+          <h2 class="signin-title" id="quick-title">APPROVE NOSTALGEX IN JELLYFIN</h2>
+          <p class="signin-text">On your phone or computer, open Jellyfin, then your profile, then Quick Connect, and enter this code.</p>
+          <div class="signin-code signin-code--digits" id="quick-code" aria-live="polite">------</div>
+          <p class="signin-status signin-dots">WAITING FOR APPROVAL</p>
+          <p class="signin-dim signin-meta" id="quick-meta"></p>
+          <button class="signin-btn signin-btn--secondary signin-btn--code" id="quick-password" type="button">SIGN IN WITH A PASSWORD</button>
+          <button class="signin-btn signin-btn--quiet signin-btn--code" id="quick-back" type="button">BACK</button>
+        </section>
+
+        <!-- Signed in: on to the guide -->
+        <section class="signin-screen" data-screen="done" aria-live="polite" hidden>
+          <p class="signin-server">CONNECTED</p>
+          <p class="signin-status signin-dots">LOADING NOSTALGEX</p>
+        </section>
 
       </div>
 
@@ -376,11 +385,69 @@
 
   <!-- Shared site script (theme toggle, nav scroll state). type="module" so Vite bundles it. -->
   <script type="module" src="./app.js"></script>
-  <!-- Tells Jellyfin and Emby apart after sign-in (serverKindFromPublicInfo) and starts Quick Connect. -->
+  <!-- Starts Quick Connect (quickConnectInitiate: POST, then GET on older Jellyfin). -->
   <script src="scripts/nostalgex-jellyfin-urls.js"></script>
+  <!-- The connect screens' logic, shared with the Apple TV spec: address check, find, Quick Connect. -->
+  <script src="scripts/nostalgex-signin.js"></script>
 
 <script>
-  // ---- Plex Auth ----
+  // ════ Connect: Plex, Jellyfin and Emby, screen by screen, as on Apple TV ════
+  // The flow and its copy are the Apple TV sign-in (1.0.28). The decisions live in
+  // scripts/nostalgex-signin.js (NostalgexSignIn), tested against scripts/signin-golden.json;
+  // this script only moves between the screens in #signin.
+  const S = window.NostalgexSignIn;
+  const C = S.COPY;
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Screens, focus and keys ----
+  let screen = 'picker';
+  const BACK = {};
+
+  function showScreen(name, focusId) {
+    screen = name;
+    document.querySelectorAll('#signin [data-screen]').forEach((el) => { el.hidden = el.dataset.screen !== name; });
+    $('signin').dataset.screen = name;
+    if (focusId) focusOn(focusId);
+  }
+  // Every screen opens with focus on its first choice, so Enter (or OK on a remote) does
+  // the usual thing. preventScroll on page load keeps the page where it is.
+  function focusOn(target, keepScroll) {
+    const el = typeof target === 'string' ? $(target) : target;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (!keepScroll) el.scrollIntoView({ block: 'nearest' });
+  }
+  function setLine(id, text) {
+    const el = $(id);
+    el.textContent = text || '';
+    el.hidden = !text;
+  }
+
+  // Escape is BACK. The arrow keys move through the screen's controls, as a remote's
+  // D-pad does; TV Bro sends no keys at all, so every step also has its own button.
+  document.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'Escape' && BACK[screen]) { e.preventDefault(); BACK[screen](); return; }
+    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    const box = document.querySelector(`#signin [data-screen="${screen}"]`);
+    const active = document.activeElement;
+    if (!box || !box.contains(active)) return;
+    if (active.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    const items = [...box.querySelectorAll('button, input, a[href]')]
+      .filter((el) => !el.disabled && el.getClientRects().length > 0);
+    const i = items.indexOf(active);
+    const next = items[i + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1)];
+    if (i >= 0 && next) { e.preventDefault(); focusOn(next); }
+  });
+
+  function showPicker(error) {
+    stopPlex();
+    stopMedia();
+    setLine('picker-error', error || '');
+    showScreen('picker', 'connect-btn');
+  }
+
+  // ---- Plex ----
   const PLEX_HEADERS = {
     'Accept': 'application/json',
     'X-Plex-Product': 'Nostalgex',
@@ -413,74 +480,68 @@
   }
 
   let pollInterval = null;
+  let plexRun = 0;
 
-  async function startPlexAuth() {
-    const errorEl = document.getElementById('connect-error');
-    errorEl.style.display = 'none';
-    if (pollInterval) clearInterval(pollInterval);
+  function stopPlex() {
+    plexRun++;
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  }
 
+  function drawPlexQr(text) {
     try {
-      const res = await fetch('https://plex.tv/api/v2/pins', {
-        method: 'POST',
-        headers: plexHeaders(),
-      });
-      if (!res.ok) throw new Error('PIN request failed');
-      const pin = await res.json();
-
-      // Show waiting state
-      document.getElementById('connect-default').style.display = 'none';
-      document.getElementById('connect-waiting').classList.add('active');
-      document.getElementById('connect-pin').textContent = pin.code.toUpperCase();
-
-      // Generate QR code
-      try {
-        const qrEl = document.getElementById('connect-qr');
-        qrEl.innerHTML = '';
-        new QRCode(qrEl, {
-          text: 'https://www.plex.tv/link/',
-          width: 140,
-          height: 140,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-        });
-      } catch (e) {
-        // QR not critical
-      }
-
-      // Poll for token
-      let attempts = 0;
-      pollInterval = setInterval(async () => {
-        attempts++;
-        if (attempts > 150) {
-          clearInterval(pollInterval);
-          resetConnect();
-          errorEl.textContent = 'AUTHORIZATION TIMED OUT';
-          errorEl.style.display = 'block';
-          return;
-        }
-        try {
-          const checkRes = await fetch('https://plex.tv/api/v2/pins/' + pin.id, {
-            headers: plexHeaders(),
-          });
-          const data = await checkRes.json();
-          if (data.authToken) {
-            clearInterval(pollInterval);
-            // Show success state
-            document.getElementById('connect-waiting').classList.remove('active');
-            document.getElementById('connect-success').classList.add('active');
-            // Discover servers, store everything, then redirect
-            await completeAuth(data.authToken);
-          }
-        } catch (e) {
-          // keep polling
-        }
-      }, 2000);
-
-    } catch (err) {
-      errorEl.textContent = 'COULD NOT REACH PLEX.TV';
-      errorEl.style.display = 'block';
+      const qrEl = $('connect-qr');
+      qrEl.innerHTML = '';
+      new QRCode(qrEl, { text, width: 140, height: 140, colorDark: '#000000', colorLight: '#ffffff' });
+    } catch (e) {
+      // QR not critical
     }
   }
+
+  async function startPlexAuth() {
+    stopPlex();
+    stopMedia();
+    const run = plexRun;
+    setLine('picker-error', '');
+    $('connect-pin').textContent = '----';
+    $('plex-status').textContent = C.plexConnecting;
+    drawPlexQr('https://www.plex.tv/link/');
+    // CANCEL takes focus quietly, so the code stays the brightest thing on screen.
+    showScreen('plex', 'plex-cancel');
+
+    let pin;
+    try {
+      const res = await fetch('https://plex.tv/api/v2/pins', { method: 'POST', headers: plexHeaders() });
+      if (run !== plexRun) return;
+      if (res.status === 429) return showPicker(C.plexRateLimited);
+      if (!res.ok) return showPicker(C.plexHttp(res.status));
+      pin = await res.json();
+    } catch (err) {
+      if (run !== plexRun) return;
+      return showPicker(navigator.onLine === false ? C.plexOffline : C.plexUnreachable);
+    }
+    if (run !== plexRun) return;
+    $('connect-pin').textContent = String(pin.code).toUpperCase();
+    $('plex-status').textContent = C.plexWaiting;
+    drawPlexQr(`https://www.plex.tv/link/?pin=${encodeURIComponent(pin.code)}`);
+
+    let attempts = 0;
+    pollInterval = setInterval(async () => {
+      attempts++;
+      if (attempts > 150) return showPicker(C.plexCodeExpired);
+      try {
+        const checkRes = await fetch('https://plex.tv/api/v2/pins/' + pin.id, { headers: plexHeaders() });
+        const data = await checkRes.json();
+        if (run !== plexRun || !data.authToken) return;
+        clearInterval(pollInterval);
+        pollInterval = null;
+        $('plex-status').textContent = C.plexFinding;
+        await completeAuth(data.authToken, run);
+      } catch (e) {
+        // keep polling
+      }
+    }, 2000);
+  }
+  BACK.plex = () => showPicker();
 
   // Test a single Plex server connection URL
   async function testConnection(uri, token) {
@@ -498,306 +559,384 @@
     }
   }
 
-  async function completeAuth(authToken) {
+  async function completeAuth(authToken, run) {
     const headers = { ...PLEX_HEADERS, 'X-Plex-Client-Identifier': getClientId(), 'X-Plex-Token': authToken };
+    let servers;
     try {
       const res = await fetch('https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1', { headers });
       const resources = await res.json();
-      const servers = resources.filter(r => r.provides && r.provides.includes('server'));
-
-      if (servers.length === 0) {
-        document.getElementById('connect-success').classList.remove('active');
-        const errorEl = document.getElementById('connect-error');
-        errorEl.textContent = 'NO PLEX SERVERS FOUND';
-        errorEl.style.display = 'block';
-        resetConnect();
-        return;
-      }
-
-      // Multiple servers — hand off to the player's server picker so the user chooses
-      // (unified connect flow). Single server falls through to the fast auto-pick below.
-      if (servers.length > 1) {
-        sessionStorage.setItem('plex90_token', authToken);
-        sessionStorage.setItem('plex90_user_token', authToken);
-        sessionStorage.setItem('plex90_pick_server', '1');
-        sessionStorage.removeItem('plex90_server_url');
-        sessionStorage.removeItem('plex90_server_name');
-        window.location.href = 'plex-tuner.html';
-        return;
-      }
-
-      // Pick first server (prefer owned)
-      const server = servers.find(s => s.owned) || servers[0];
-      const token = server.accessToken || authToken;
-
-      // Test all connections and find one that actually works
-      const sorted = [...(server.connections || [])].sort((a, b) => {
-        if (!a.relay && a.protocol === 'https' && (b.relay || b.protocol !== 'https')) return -1;
-        if (!b.relay && b.protocol === 'https' && (a.relay || a.protocol !== 'https')) return 1;
-        if (a.local && !b.local) return -1;
-        if (b.local && !a.local) return 1;
-        return 0;
-      });
-
-      const results = await Promise.all(
-        sorted.map(async (conn) => ({
-          conn,
-          ok: await testConnection(conn.uri, token),
-        }))
-      );
-      const working = results.find(r => r.ok);
-
-      if (!working) {
-        document.getElementById('connect-success').classList.remove('active');
-        const errorEl = document.getElementById('connect-error');
-        errorEl.textContent = 'CANNOT REACH YOUR PLEX SERVER';
-        errorEl.style.display = 'block';
-        resetConnect();
-        return;
-      }
-
-      sessionStorage.setItem('plex90_token', token);
-      sessionStorage.setItem('plex90_user_token', authToken);
-      sessionStorage.setItem('plex90_server_url', working.conn.uri);
-      sessionStorage.setItem('plex90_server_name', server.name);
-      try {
-        localStorage.setItem('plex90_saved_auth', JSON.stringify({
-          backend: 'plex', token, userToken: authToken,
-          serverUrl: working.conn.uri, serverName: server.name,
-        }));
-      } catch (e) {}
-
-      window.location.href = 'plex-tuner.html';
+      servers = resources.filter(r => r.provides && r.provides.includes('server'));
     } catch (err) {
-      document.getElementById('connect-success').classList.remove('active');
-      const errorEl = document.getElementById('connect-error');
-      errorEl.textContent = 'SERVER DISCOVERY FAILED';
-      errorEl.style.display = 'block';
-      resetConnect();
+      if (run === plexRun) showPicker(C.plexFindFailed);
+      return;
     }
-  }
+    if (run !== plexRun) return;
+    if (servers.length === 0) return showPicker(C.plexNoServer);
 
-  function resetConnect() {
-    document.getElementById('connect-waiting').classList.remove('active');
-    document.getElementById('connect-success').classList.remove('active');
-    document.getElementById('connect-default').style.display = 'block';
-  }
-
-  // Wire up buttons
-  document.getElementById('connect-btn').addEventListener('click', startPlexAuth);
-  // The old page had a second "connect" button in a bottom CTA section. That section is
-  // gone, so this is optional-chained rather than deleted: same behavior if it ever returns.
-  document.getElementById('final-connect-btn')?.addEventListener('click', () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(startPlexAuth, 600);
-  });
-
-  // ---- Jellyfin Auth ----
-  let jfPollInterval = null;
-
-  function normalizeJellyfinUrl(raw) {
-    let s = (raw || '').trim();
-    if (!s) return '';
-    // Default to https on the hosted page: it is served over https, and browsers block
-    // http:// requests from a secure page (mixed content). A self-hosted copy on plain
-    // http is usually next to a plain http server, so a bare host gets http there.
-    if (!/^https?:\/\//i.test(s)) s = (location.protocol === 'http:' ? 'http://' : 'https://') + s;
-    return s.replace(/\/+$/, '');
-  }
-
-  // Jellyfin and Emby share one sign-in. These are the parts that name the server.
-  const MEDIA_FORMS = {
-    jellyfin: { NAME: 'JELLYFIN', fallbackName: 'Jellyfin', intro: 'connect-jellyfin-intro', form: 'connect-jellyfin',
-      error: 'connect-jellyfin-error', url: 'jf-url', user: 'jf-user', pass: 'jf-pass' },
-    emby: { NAME: 'EMBY', fallbackName: 'Emby', intro: 'connect-emby-intro', form: 'connect-emby',
-      error: 'connect-emby-error', url: 'em-url', user: 'em-user', pass: 'em-pass' },
-  };
-
-  // A thrown fetch from this https page to an http:// server is the browser blocking
-  // mixed content, not a real network failure — say so, since "check the URL" misleads users.
-  function mediaServerUnreachableMsg(url, NAME) {
-    // On a plain http page (self-hosted) nothing is blocked as mixed content, so the
-    // https advice below would be wrong. It is a plain network or address problem.
-    if (location.protocol === 'http:') {
-      return `COULD NOT REACH THE ${NAME} SERVER. CHECK THE ADDRESS AND THAT THE SERVER IS RUNNING`;
+    // Several servers: the tuner page's own picker asks which libraries to use.
+    if (servers.length > 1) {
+      sessionStorage.setItem('plex90_token', authToken);
+      sessionStorage.setItem('plex90_user_token', authToken);
+      sessionStorage.setItem('plex90_pick_server', '1');
+      sessionStorage.removeItem('plex90_server_url');
+      sessionStorage.removeItem('plex90_server_name');
+      showScreen('done');
+      window.location.href = 'plex-tuner.html';
+      return;
     }
-    // A private address can never answer over https with a valid certificate, so the
-    // generic "use an https URL" advice is a dead end. Name the real fix.
-    if (/^https?:\/\/(?:10\.|127\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2[0-9]|3[01])\.|\[?::1\]?|localhost)/i.test(url)) {
-      return 'THAT IS A LOCAL NETWORK ADDRESS. BROWSERS CANNOT REACH IT FROM A SECURE PAGE. USE THE APPLE TV APP, A PUBLIC HTTPS ADDRESS, OR RUN THE TUNER ON YOUR OWN SERVER (NOSTALGEX.APP/SELF-HOST)';
-    }
-    if (/^http:\/\//i.test(url)) {
-      return 'YOUR SERVER USES HTTP. BROWSERS BLOCK THAT ON A SECURE PAGE. USE AN HTTPS URL, THE APPLE TV APP, OR RUN THE TUNER ON YOUR OWN SERVER (NOSTALGEX.APP/SELF-HOST)';
-    }
-    return `COULD NOT REACH THE ${NAME} SERVER. CHECK THE URL AND THAT IT ANSWERS OVER HTTPS`;
-  }
-  function jellyfinUnreachableMsg(url) { return mediaServerUnreachableMsg(url, 'JELLYFIN'); }
 
-  function jellyfinAuthHeader(token) {
-    const fields = ['Client="Nostalgex"', 'Device="Browser"', `DeviceId="${getClientId()}"`, 'Version="1.0"'];
-    if (token) fields.push(`Token="${token}"`);
-    return 'MediaBrowser ' + fields.join(', ');
-  }
+    const server = servers[0];
+    const token = server.accessToken || authToken;
+    // Test all connections and use the first that answers: direct https first, then local.
+    const sorted = [...(server.connections || [])].sort((a, b) => {
+      if (!a.relay && a.protocol === 'https' && (b.relay || b.protocol !== 'https')) return -1;
+      if (!b.relay && b.protocol === 'https' && (a.relay || a.protocol !== 'https')) return 1;
+      if (a.local && !b.local) return -1;
+      if (b.local && !a.local) return 1;
+      return 0;
+    });
+    const results = await Promise.all(sorted.map(async (conn) => ({ conn, ok: await testConnection(conn.uri, token) })));
+    if (run !== plexRun) return;
+    const working = results.find(r => r.ok);
+    if (!working) return showPicker(server.owned === false ? C.plexSharedUnreachable(servers.length) : C.plexOwnUnreachable(servers.length));
 
-  function showMediaError(kind, msg) {
-    const errorEl = document.getElementById(MEDIA_FORMS[kind].error);
-    errorEl.textContent = msg;
-    errorEl.style.display = 'block';
-  }
-  function showJellyfinError(msg) { showMediaError('jellyfin', msg); }
-
-  // One form open at a time. Both choices hide while either form is open, so Back is
-  // the one way out, as before.
-  function showMediaForm(kind) {
-    const f = MEDIA_FORMS[kind];
-    document.getElementById('connect-alt').style.display = 'none';
-    for (const k of Object.keys(MEDIA_FORMS)) {
-      document.getElementById(MEDIA_FORMS[k].error).style.display = 'none';
-      document.getElementById(MEDIA_FORMS[k].intro).style.display = 'none';
-      document.getElementById(MEDIA_FORMS[k].form).style.display = k === kind ? 'block' : 'none';
-    }
+    sessionStorage.setItem('plex90_token', token);
+    sessionStorage.setItem('plex90_user_token', authToken);
+    sessionStorage.setItem('plex90_server_url', working.conn.uri);
+    sessionStorage.setItem('plex90_server_name', server.name);
     try {
-      const saved = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null');
-      if (saved && saved.backend === kind) {
-        if (saved.jfUrl) document.getElementById(f.url).value = saved.jfUrl;
-        if (saved.jfUser) document.getElementById(f.user).value = saved.jfUser;
-      }
+      localStorage.setItem('plex90_saved_auth', JSON.stringify({
+        backend: 'plex', token, userToken: authToken,
+        serverUrl: working.conn.uri, serverName: server.name,
+      }));
     } catch (e) {}
+    showScreen('done');
+    window.location.href = 'plex-tuner.html';
   }
-  function showJellyfinForm() { showMediaForm('jellyfin'); }
-  function showEmbyForm() { showMediaForm('emby'); }
 
-  function resetMediaForms() {
-    if (jfPollInterval) { clearInterval(jfPollInterval); jfPollInterval = null; }
-    document.getElementById('connect-jellyfin-quick').classList.remove('active');
-    document.getElementById('connect-alt').style.display = '';
-    for (const k of Object.keys(MEDIA_FORMS)) {
-      document.getElementById(MEDIA_FORMS[k].form).style.display = 'none';
-      document.getElementById(MEDIA_FORMS[k].intro).style.display = 'block';
+  $('connect-btn').addEventListener('click', startPlexAuth);
+  $('plex-cancel').addEventListener('click', () => showPicker());
+
+  // ---- Jellyfin and Emby ----
+  // Only a page served over plain http (the Docker tuner) can reach a server on your
+  // network, so only there is there a FIND MY SERVER (scripts/nostalgex-signin.js, 1 to 3).
+  // The hosted page opens on TYPE AN ADDRESS and defaults a typed address to https.
+  const CAN_FIND = location.protocol === 'http:';
+  const DEFAULT_SCHEME = location.protocol === 'https:' ? 'https' : 'http';
+  const KIND_NAME = { jellyfin: 'JELLYFIN', emby: 'EMBY' };
+  // run: bumped whenever the viewer leaves a step, so a late answer from it is ignored.
+  const flow = { kind: 'jellyfin', origin: 'address', server: null, user: null, note: '', run: 0, finding: false, qc: null };
+
+  function stopMedia() {
+    flow.run++;
+    if (flow.qc) { flow.qc.cancel(); flow.qc = null; }
+  }
+
+  function savedAuth() {
+    try { return JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null'); } catch (e) { return null; }
+  }
+  function savedAddress(kind) {
+    const saved = savedAuth();
+    return saved && saved.backend === kind ? (saved.jfUrl || saved.serverUrl || '') : '';
+  }
+  function authorization() { return S.authHeader(getClientId(), ''); }
+  function pageInfo() { return { protocol: location.protocol, online: navigator.onLine }; }
+
+  function chooseKind(kind) {
+    stopPlex();
+    flow.kind = kind;
+    setLine('picker-error', '');
+    if (CAN_FIND) showFind(true);
+    else showAddress();
+  }
+
+  // 4. Find. Searches the moment JELLYFIN or EMBY is picked; coming back here does not.
+  function showFind(search) {
+    stopMedia();
+    $('find-title').textContent = C.connectTitle(flow.kind);
+    $('find-text').textContent = C.findIntro(flow.kind);
+    setLine('find-warn', '');
+    $('find-list').hidden = true;
+    setFindButton(C.findButton, true);
+    showScreen('find', 'find-btn');
+    if (search) runFind();
+  }
+  function setFindButton(text, primary) {
+    const b = $('find-btn');
+    b.textContent = text;
+    b.classList.toggle('signin-btn--primary', primary);
+    b.classList.toggle('signin-btn--secondary', !primary);
+  }
+
+  async function runFind() {
+    if (flow.finding) return;
+    flow.finding = true;
+    const run = ++flow.run;
+    setLine('find-warn', '');
+    $('find-list').hidden = true;
+    const primary = $('find-btn').classList.contains('signin-btn--primary');
+    setFindButton(C.searching, primary);
+    const candidates = S.findCandidates({
+      pageProtocol: location.protocol, pageHostname: location.hostname, savedAddress: savedAddress(flow.kind),
+    });
+    let outcome = { type: 'none', servers: [] };
+    try { outcome = await S.findServers(flow.kind, candidates); } catch (e) {}
+    flow.finding = false;
+    if (run !== flow.run || screen !== 'find') return;
+    if (outcome.type === 'single') {
+      const only = outcome.servers[0];
+      return startCheck(only.address, only.name, 'find');
+    }
+    setFindButton(C.searchAgain, false);
+    if (outcome.type === 'several') {
+      const rows = $('find-rows');
+      rows.replaceChildren(...outcome.servers.map((srv) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'signin-row';
+        const name = document.createElement('span');
+        name.className = 'signin-row-name';
+        name.textContent = srv.name;
+        const address = document.createElement('span');
+        address.className = 'signin-row-address';
+        address.textContent = srv.address;
+        b.append(name, address);
+        b.addEventListener('click', () => startCheck(srv.address, srv.name, 'find'));
+        return b;
+      }));
+      $('find-list').hidden = false;
+      focusOn(rows.firstElementChild);
+    } else {
+      setLine('find-warn', C.noneFound);
+      focusOn('find-type-btn');
     }
   }
-  function resetJellyfin() { resetMediaForms(); }
+  BACK.find = () => showPicker();
 
-  // Which server answered. Jellyfin's public info says "Jellyfin Server"; Emby's has no
-  // product name (see scripts/nostalgex-jellyfin-urls.js). Emby's sign-in result has no
-  // server name either, so it comes from here too. Never fails the sign-in: an
-  // unreadable answer keeps the choice the person made.
-  async function readPublicInfo(url) {
+  // 5. Type an address.
+  function showAddress(warn) {
+    stopMedia();
+    $('address-title').textContent = C.connectTitle(flow.kind);
+    const input = $('address-input');
+    input.placeholder = DEFAULT_SCHEME === 'https' ? C.addressPlaceholderHttps : C.addressPlaceholderHttp;
+    $('address-hint').textContent = DEFAULT_SCHEME === 'https' ? C.addressHintHttps : C.addressHintHttp;
+    if (!input.value) input.value = savedAddress(flow.kind);
+    syncAddress();
+    setLine('address-warn', warn || '');
+    showScreen('address', 'address-input');
+  }
+  function syncAddress() { $('address-connect').disabled = !$('address-input').value.trim(); }
+  BACK.address = () => (CAN_FIND ? showFind(false) : showPicker());
+
+  // 6. Checking: ask the address who it is before anyone types.
+  async function startCheck(address, label, origin) {
+    stopMedia();
+    const run = flow.run;
+    flow.origin = origin;
+    $('checking-status').textContent = C.connecting(label);
+    showScreen('checking', 'checking-cancel');
+    let server;
     try {
-      const res = await fetch(`${url}/System/Info/Public`, { headers: { 'Accept': 'application/json' } });
-      return res.ok ? await res.json() : null;
-    } catch (e) { return null; }
+      server = await S.checkServer(address, { defaultScheme: DEFAULT_SCHEME });
+    } catch (err) {
+      if (run !== flow.run) return;
+      return backToOrigin(S.checkErrorMessage(err, flow.kind, pageInfo()));
+    }
+    if (run !== flow.run) return;
+    // The server's own answer wins over the button that was pressed.
+    flow.note = server.kind !== flow.kind ? C.switchedKind(server.kind) : '';
+    flow.kind = server.kind;
+    flow.server = server;
+    if (S.preferredMethod(server.kind, server.quickConnectEnabled) === 'quickConnect') startQuick();
+    else showSignIn();
+  }
+  function backToOrigin(warn) {
+    if (flow.origin !== 'find') return showAddress(warn);
+    showFind(false);
+    if (warn) {
+      setLine('find-warn', warn);
+      setFindButton(C.searchAgain, false);
+      focusOn('find-type-btn');
+    }
+  }
+  function backFromServer() { return CAN_FIND ? showFind(false) : showAddress(); }
+  BACK.checking = () => backToOrigin();
+
+  // 7. Sign in: the server's users as tiles when it lists them, otherwise the fields.
+  function showSignIn(error) {
+    stopMedia();
+    const srv = flow.server;
+    $('signin-name').textContent = srv.name.toUpperCase();
+    $('signin-meta').textContent = `${KIND_NAME[srv.kind]}  ${srv.url}`;
+    setLine('signin-note', flow.note);
+    setLine('signin-error', error || '');
+    setBusy(false);
+    flow.user = null;
+    const saved = savedAuth();
+    $('signin-user').value = saved && saved.backend === srv.kind && saved.serverUrl === srv.url ? (saved.jfUser || '') : '';
+    $('signin-pass').value = '';
+    $('signin-pass-caption').textContent = C.password;
+    $('signin-qc').hidden = !S.offersQuickConnect(srv.kind, srv.quickConnectEnabled);
+    const users = srv.users.slice(0, 8);
+    const tiles = $('signin-tiles');
+    tiles.replaceChildren(...users.map((u) => userTile(u.name, () => pickUser(u))),
+      ...(users.length ? [userTile(C.someoneElse, someoneElse)] : []));
+    if (users.length) {
+      showFields(false, false);
+      $('signin-users').hidden = false;
+      showScreen('signin');
+      focusOn(tiles.firstElementChild);
+    } else {
+      $('signin-users').hidden = true;
+      showFields(true, true);
+      showScreen('signin', 'signin-user');
+    }
+  }
+  function userTile(label, onPick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'signin-tile';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => onPick(b));
+    return b;
+  }
+  function showFields(user, password) {
+    $('signin-user-field').hidden = !user;
+    $('signin-pass-field').hidden = !password;
+    $('signin-btn').hidden = !password;
+    syncSignIn();
+  }
+  function syncSignIn() { $('signin-btn').disabled = !flow.user && !$('signin-user').value.trim(); }
+
+  function pickUser(u) {
+    // No password: signed in on this click.
+    if (!u.hasPassword) return passwordSignIn(u.name, '');
+    flow.user = u;
+    for (const t of $('signin-tiles').children) t.setAttribute('aria-pressed', String(t.textContent === u.name));
+    $('signin-pass-caption').textContent = C.passwordFor(u.name);
+    $('signin-pass').value = '';
+    showFields(false, true);
+    focusOn('signin-pass');
+  }
+  function someoneElse() {
+    flow.user = null;
+    $('signin-users').hidden = true;
+    $('signin-pass-caption').textContent = C.password;
+    showFields(true, true);
+    focusOn('signin-user');
   }
 
-  // Persist creds the tuner reads, then redirect. `picked` is the button they used; the
-  // server's own answer wins, so an Emby server signed in through Connect with Jellyfin
-  // (or the other way round) is saved as what it really is.
-  async function completeMediaAuth(picked, url, result) {
-    const info = await readPublicInfo(url);
-    const detected = window.NostalgexJellyfinUrls && NostalgexJellyfinUrls.serverKindFromPublicInfo(info);
-    const kind = detected || picked;
-    const serverName = (result.User && result.User.ServerName) || (info && info.ServerName)
-      || MEDIA_FORMS[kind].fallbackName;
+  function setBusy(on) { $('signin-screen-box').classList.toggle('is-busy', on); }
+  async function passwordSignIn(username, password) {
+    const srv = flow.server;
+    if (!username) {
+      setLine('signin-error', C.enterUsername(srv.kind));
+      return focusOn('signin-user');
+    }
+    const run = ++flow.run;
+    setLine('signin-error', '');
+    setBusy(true);
+    focusOn('signin-busy-cancel');
+    try {
+      const result = await S.signInWithPassword(srv.url, username, password, { authorization: authorization() });
+      if (run !== flow.run) return;
+      finishMediaSignIn(result, username);
+    } catch (err) {
+      if (run !== flow.run) return;
+      setBusy(false);
+      const msg = err.code === 'incorrect' ? C.incorrect
+        : err.code === 'notReached' ? C.couldNotReach(srv.kind)
+        : S.checkErrorMessage(err, srv.kind, pageInfo());
+      setLine('signin-error', msg);
+      focusOn(!$('signin-pass-field').hidden ? 'signin-pass' : $('signin-tiles').firstElementChild || 'signin-back');
+    }
+  }
+  function cancelBusy() {
+    flow.run++;
+    setBusy(false);
+    focusOn(!$('signin-pass-field').hidden ? 'signin-pass' : $('signin-tiles').firstElementChild || 'signin-back');
+  }
+  BACK.signin = () => ($('signin-screen-box').classList.contains('is-busy') ? cancelBusy() : backFromServer());
+
+  // 8. Quick Connect: the code, until it is approved on the viewer's phone or computer.
+  function startQuick() {
+    stopMedia();
+    const srv = flow.server;
+    $('quick-code').textContent = '------';
+    $('quick-meta').textContent = `${srv.name.toUpperCase()}  ${srv.url}`;
+    showScreen('quick', 'quick-password');
+    const qc = S.quickConnect({
+      url: srv.url,
+      authorization: authorization(),
+      initiate: NostalgexJellyfinUrls.quickConnectInitiate,
+      onCode: (code) => { if (flow.qc === qc) $('quick-code').textContent = code; },
+    });
+    flow.qc = qc;
+    qc.done.then((r) => {
+      if (flow.qc !== qc) return;
+      flow.qc = null;
+      if (r.status === 'approved') return finishMediaSignIn(r.result, '');
+      if (r.status === 'off') srv.quickConnectEnabled = false;
+      const msg = { expired: C.codeExpired, off: C.quickConnectOff, notJellyfin: C.quickConnectNotJellyfin }[r.status];
+      showSignIn(msg || C.quickConnectFailed);
+    });
+  }
+  BACK.quick = () => backFromServer();
+
+  // Save what the tuner page reads, then go to it.
+  function finishMediaSignIn(result, username) {
+    const srv = flow.server;
+    const serverName = (result.User && result.User.ServerName) || srv.name;
     const jellyfinUserId = (result.User && result.User.Id) || '';
-    sessionStorage.setItem('plex90_backend', kind);
+    sessionStorage.setItem('plex90_backend', srv.kind);
     sessionStorage.setItem('plex90_token', result.AccessToken);
-    sessionStorage.setItem('plex90_server_url', url);
+    sessionStorage.setItem('plex90_server_url', srv.url);
     sessionStorage.setItem('plex90_server_name', serverName);
     sessionStorage.setItem('plex90_jellyfin_user_id', jellyfinUserId);
     try {
       localStorage.setItem('plex90_saved_auth', JSON.stringify({
-        backend: kind, token: result.AccessToken,
-        serverUrl: url, serverName, jellyfinUserId,
-        jfUrl: url,
-        jfUser: document.getElementById(MEDIA_FORMS[picked].user)?.value?.trim() || '',
+        backend: srv.kind, token: result.AccessToken,
+        serverUrl: srv.url, serverName, jellyfinUserId,
+        jfUrl: srv.url,
+        jfUser: username || (result.User && result.User.Name) || '',
       }));
     } catch (e) {}
+    showScreen('done');
     window.location.href = 'plex-tuner.html';
   }
-  function completeJellyfinAuth(url, result) { return completeMediaAuth('jellyfin', url, result); }
 
-  async function mediaSignIn(kind) {
-    const f = MEDIA_FORMS[kind];
-    const url = normalizeJellyfinUrl(document.getElementById(f.url).value);
-    const username = document.getElementById(f.user).value.trim();
-    const password = document.getElementById(f.pass).value;
-    document.getElementById(f.error).style.display = 'none';
-    if (!url) return showMediaError(kind, `ENTER YOUR ${f.NAME} SERVER URL`);
-    if (!username) return showMediaError(kind, 'ENTER YOUR USERNAME');
-    try {
-      const res = await fetch(`${url}/Users/AuthenticateByName`, {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': jellyfinAuthHeader('') },
-        body: JSON.stringify({ Username: username, Pw: password }),
-      });
-      if (res.status === 401 || res.status === 403) return showMediaError(kind, 'INCORRECT USERNAME OR PASSWORD');
-      if (!res.ok) return showMediaError(kind, `COULD NOT REACH THE ${f.NAME} SERVER`);
-      const result = await res.json();
-      if (!result.AccessToken) return showMediaError(kind, 'SIGN IN FAILED');
-      await completeMediaAuth(kind, url, result);
-    } catch (err) {
-      showMediaError(kind, mediaServerUnreachableMsg(url, f.NAME));
-    }
-  }
-  function jellyfinSignIn() { return mediaSignIn('jellyfin'); }
-  function embySignIn() { return mediaSignIn('emby'); }
+  $('connect-jellyfin-btn').addEventListener('click', () => chooseKind('jellyfin'));
+  $('connect-emby-btn').addEventListener('click', () => chooseKind('emby'));
+  $('find-btn').addEventListener('click', runFind);
+  $('find-type-btn').addEventListener('click', () => showAddress());
+  $('find-back').addEventListener('click', BACK.find);
+  $('address-input').addEventListener('input', syncAddress);
+  $('address-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const value = $('address-input').value.trim();
+    if (value) startCheck(value, value, 'address');
+  });
+  $('address-back').addEventListener('click', BACK.address);
+  $('checking-cancel').addEventListener('click', BACK.checking);
+  $('signin-user').addEventListener('input', syncSignIn);
+  // Enter in the username field moves on to the password, as closing the keyboard does on a TV.
+  $('signin-user').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !$('signin-pass-field').hidden) { e.preventDefault(); focusOn('signin-pass'); }
+  });
+  $('signin-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    passwordSignIn(flow.user ? flow.user.name : $('signin-user').value.trim(), $('signin-pass').value);
+  });
+  $('signin-busy-cancel').addEventListener('click', cancelBusy);
+  $('signin-qc').addEventListener('click', startQuick);
+  $('signin-back').addEventListener('click', backFromServer);
+  $('quick-password').addEventListener('click', () => showSignIn());
+  $('quick-back').addEventListener('click', backFromServer);
 
-  async function jellyfinQuickConnect() {
-    const url = normalizeJellyfinUrl(document.getElementById('jf-url').value);
-    document.getElementById('connect-jellyfin-error').style.display = 'none';
-    if (!url) return showJellyfinError('ENTER YOUR JELLYFIN SERVER URL');
-    try {
-      // POST, then GET for Jellyfin 10.7 and 10.8 (scripts/nostalgex-jellyfin-urls.js, 7).
-      const initRes = await NostalgexJellyfinUrls.quickConnectInitiate(url,
-        { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader('') });
-      if (!initRes.ok) return showJellyfinError('QUICK CONNECT IS NOT ENABLED ON THIS SERVER');
-      const init = await initRes.json();
-      if (!init.Code || !init.Secret) return showJellyfinError('QUICK CONNECT IS NOT ENABLED ON THIS SERVER');
-
-      document.getElementById('connect-jellyfin').style.display = 'none';
-      document.getElementById('connect-jellyfin-quick').classList.add('active');
-      document.getElementById('connect-jf-code').textContent = init.Code;
-
-      let attempts = 0;
-      jfPollInterval = setInterval(async () => {
-        attempts++;
-        if (attempts > 150) {
-          clearInterval(jfPollInterval); jfPollInterval = null;
-          resetJellyfin();
-          showJellyfinError('QUICK CONNECT TIMED OUT');
-          return;
-        }
-        try {
-          const checkRes = await fetch(`${url}/QuickConnect/Connect?Secret=${encodeURIComponent(init.Secret)}`, {
-            headers: { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader('') },
-          });
-          const data = await checkRes.json();
-          if (data.Authenticated) {
-            clearInterval(jfPollInterval); jfPollInterval = null;
-            const authRes = await fetch(`${url}/Users/AuthenticateWithQuickConnect`, {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': jellyfinAuthHeader('') },
-              body: JSON.stringify({ Secret: init.Secret }),
-            });
-            const result = await authRes.json();
-            if (result.AccessToken) completeJellyfinAuth(url, result);
-            else { resetJellyfin(); showJellyfinError('QUICK CONNECT SIGN IN FAILED'); }
-          }
-        } catch (e) { /* keep polling */ }
-      }, 2000);
-    } catch (err) {
-      showJellyfinError(jellyfinUnreachableMsg(url));
-    }
-  }
-
-  document.getElementById('connect-jellyfin-btn').addEventListener('click', showJellyfinForm);
-  document.getElementById('jf-signin-btn').addEventListener('click', jellyfinSignIn);
-  document.getElementById('jf-quick-btn').addEventListener('click', jellyfinQuickConnect);
-  document.getElementById('jf-back-btn').addEventListener('click', resetJellyfin);
-  document.getElementById('jf-quick-cancel').addEventListener('click', resetJellyfin);
-  document.getElementById('connect-emby-btn').addEventListener('click', showEmbyForm);
-  document.getElementById('em-signin-btn').addEventListener('click', embySignIn);
-  document.getElementById('em-back-btn').addEventListener('click', resetMediaForms);
+  // A fresh page starts on CONNECT TO PLEX, as the Apple TV app does.
+  showScreen('picker');
+  focusOn('connect-btn', true);
 
   // ---- Scroll fade-ins ----
   const observer = new IntersectionObserver((entries) => {

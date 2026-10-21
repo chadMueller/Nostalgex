@@ -1,0 +1,634 @@
+{
+  "version": 1,
+  "about": "Golden cases for the Jellyfin and Emby connect screens (the sign-in redesign, Apple TV 1.0.28). Read by scripts/nostalgex-signin-smoke.mjs (scripts/nostalgex-signin.js, web tuner and Docker; npm run test:signin). Written from Nostalgex/NostalgexTests/SignInFlowTests.swift and ServerURLNormalizerTests.swift and the spec in the Apple TV app, so a Swift test (ServerURLNormalizer.candidates, LANServerDiscovery.parse and dedupe, SignInFlow.outcome, parsePublicInfo, parseQuickConnectEnabled, parsePublicUsers, preferredMethod, offersQuickConnect) and the Roku port can read the same file. Bodies are the raw text a server sends. null means none (no server, can't say).",
+  "candidates": [
+    {
+      "raw": "192.168.1.10",
+      "out": [
+        "http://192.168.1.10:8096",
+        "http://192.168.1.10"
+      ],
+      "about": "a bare IP tries Jellyfin's and Emby's 8096 first"
+    },
+    {
+      "raw": "http://192.168.1.10:8096/web/#/home",
+      "out": [
+        "http://192.168.1.10:8096"
+      ],
+      "about": "an address copied from the web UI"
+    },
+    {
+      "raw": "http://nas.local:8096/web/index.html#!/home",
+      "out": [
+        "http://nas.local:8096"
+      ]
+    },
+    {
+      "raw": "http://10.0.0.5:8920",
+      "out": [
+        "http://10.0.0.5:8920"
+      ]
+    },
+    {
+      "raw": "https://media.example.com",
+      "out": [
+        "https://media.example.com"
+      ]
+    },
+    {
+      "raw": "https://example.com/jellyfin/",
+      "out": [
+        "https://example.com/jellyfin"
+      ],
+      "about": "a reverse proxy path is kept"
+    },
+    {
+      "raw": "  HTTP://NAS.Local:8096/ ",
+      "out": [
+        "http://nas.local:8096"
+      ]
+    },
+    {
+      "raw": "   ",
+      "out": []
+    },
+    {
+      "raw": "",
+      "out": []
+    },
+    {
+      "raw": "192.168.1.10:8096",
+      "out": [
+        "http://192.168.1.10:8096"
+      ]
+    },
+    {
+      "raw": "nas.local",
+      "out": [
+        "http://nas.local:8096",
+        "http://nas.local"
+      ]
+    },
+    {
+      "raw": "http://nas.local/jellyfin",
+      "out": [
+        "http://nas.local/jellyfin"
+      ],
+      "about": "a path means a proxy, so no port is added"
+    },
+    {
+      "raw": "192.168.1.10 : 8096",
+      "out": [
+        "http://192.168.1.10:8096"
+      ],
+      "about": "spaces anywhere are dropped"
+    },
+    {
+      "raw": "jellyfin.example.com",
+      "defaultScheme": "https",
+      "out": [
+        "https://jellyfin.example.com"
+      ],
+      "about": "the hosted page defaults to https and never adds a port to https"
+    },
+    {
+      "raw": "http://192.168.1.10",
+      "defaultScheme": "https",
+      "out": [
+        "http://192.168.1.10:8096",
+        "http://192.168.1.10"
+      ],
+      "about": "a typed scheme wins over the default"
+    },
+    {
+      "raw": "fe80::1",
+      "out": [
+        "http://[fe80::1]:8096",
+        "http://[fe80::1]"
+      ]
+    },
+    {
+      "raw": "[fe80::1]:8920",
+      "out": [
+        "http://[fe80::1]:8920"
+      ]
+    },
+    {
+      "raw": "user@nas.local:8096",
+      "out": [
+        "http://user@nas.local:8096"
+      ]
+    }
+  ],
+  "discoveryReplies": [
+    {
+      "kind": "jellyfin",
+      "reply": "{\"Address\":\"http://192.168.4.49:8096\",\"Id\":\"c573338c\",\"Name\":\"Chads-MacBook-Pro-2\",\"EndpointAddress\":null}",
+      "out": {
+        "kind": "jellyfin",
+        "name": "Chads-MacBook-Pro-2",
+        "address": "http://192.168.4.49:8096",
+        "id": "c573338c"
+      },
+      "about": "captured from Jellyfin 12.2.0, Id shortened"
+    },
+    {
+      "kind": "emby",
+      "reply": "{\"Address\":\"http://192.168.4.79:8096\",\"Id\":\"fb66e05e\",\"Name\":\"Medias-Mac-mini\"}",
+      "out": {
+        "kind": "emby",
+        "name": "Medias-Mac-mini",
+        "address": "http://192.168.4.79:8096",
+        "id": "fb66e05e"
+      },
+      "about": "captured from Emby 4.10.1.0, Id shortened"
+    },
+    {
+      "kind": "emby",
+      "reply": "{\"Address\":\" http://10.0.0.2:8096 \",\"Id\":\"x1\",\"Name\":\"  \"}",
+      "out": {
+        "kind": "emby",
+        "name": "http://10.0.0.2:8096",
+        "address": "http://10.0.0.2:8096",
+        "id": "x1"
+      },
+      "about": "an empty name becomes the address"
+    },
+    {
+      "kind": "jellyfin",
+      "reply": "{\"Address\":\"http://10.0.0.2:8096\",\"Name\":\"no id\"}",
+      "out": null
+    },
+    {
+      "kind": "jellyfin",
+      "reply": "{\"Id\":\"x2\",\"Name\":\"no address\"}",
+      "out": null
+    },
+    {
+      "kind": "jellyfin",
+      "reply": "{\"Address\":\"\",\"Id\":\"x3\"}",
+      "out": null
+    },
+    {
+      "kind": "jellyfin",
+      "reply": "not json",
+      "out": null
+    },
+    {
+      "kind": "jellyfin",
+      "reply": "[1,2]",
+      "out": null
+    }
+  ],
+  "outcomes": [
+    {
+      "servers": [],
+      "out": "none",
+      "about": "nothing answered: offer the typed address"
+    },
+    {
+      "servers": [
+        [
+          "a",
+          "http://192.168.1.10:8096"
+        ]
+      ],
+      "out": "single",
+      "ids": [
+        "a"
+      ]
+    },
+    {
+      "servers": [
+        [
+          "a",
+          "http://192.168.4.45:8096"
+        ],
+        [
+          "a",
+          "http://192.168.4.49:8096"
+        ]
+      ],
+      "out": "single",
+      "ids": [
+        "a"
+      ],
+      "keep": "http://192.168.4.45:8096",
+      "about": "the same server on Wi-Fi and Ethernet is one server, the first heard"
+    },
+    {
+      "servers": [
+        [
+          "a",
+          "http://192.168.1.10:8096"
+        ],
+        [
+          "b",
+          "http://192.168.1.11:8096"
+        ]
+      ],
+      "out": "several",
+      "ids": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "servers": [
+        [
+          "b",
+          "http://192.168.1.11:8096"
+        ],
+        [
+          "a",
+          "http://192.168.1.10:8096"
+        ],
+        [
+          "b",
+          "http://192.168.1.12:8096"
+        ]
+      ],
+      "out": "several",
+      "ids": [
+        "b",
+        "a"
+      ],
+      "about": "arrival order is kept"
+    }
+  ],
+  "publicInfo": [
+    {
+      "body": "{\"LocalAddress\":\"http://127.0.0.1:8096\",\"ServerName\":\"Living Room\",\"Version\":\"12.2.0\",\"ProductName\":\"Jellyfin Server\",\"OperatingSystem\":\"\",\"Id\":\"c573338c\",\"StartupWizardCompleted\":true}",
+      "out": {
+        "id": "c573338c",
+        "name": "Living Room",
+        "kind": "jellyfin"
+      },
+      "about": "Jellyfin 12.2.0"
+    },
+    {
+      "body": "{\"LocalAddresses\":[],\"RemoteAddresses\":[],\"ServerName\":\"Medias-Mac-mini\",\"Version\":\"4.10.1.0\",\"Id\":\"8844f187\"}",
+      "out": {
+        "id": "8844f187",
+        "name": "Medias-Mac-mini",
+        "kind": "emby"
+      },
+      "about": "Emby 4.10.1.0 has no ProductName"
+    },
+    {
+      "body": "{\"ServerName\":\"router\"}",
+      "out": null,
+      "about": "no Id is not a server"
+    },
+    {
+      "body": "<!doctype html>",
+      "out": null
+    },
+    {
+      "body": "{\"Id\":\"j2\",\"ProductName\":\"JELLYFIN SERVER\",\"ServerName\":\"\"}",
+      "out": {
+        "id": "j2",
+        "name": "Jellyfin",
+        "kind": "jellyfin"
+      },
+      "about": "an empty name is the kind's name"
+    },
+    {
+      "body": "{\"Id\":\"  \",\"ServerName\":\"blank id\"}",
+      "out": null
+    },
+    {
+      "body": "{\"Id\":\"e2\"}",
+      "out": {
+        "id": "e2",
+        "name": "Emby",
+        "kind": "emby"
+      }
+    }
+  ],
+  "quickConnectEnabled": [
+    {
+      "body": "true",
+      "status": 200,
+      "out": true
+    },
+    {
+      "body": " false\n",
+      "status": 200,
+      "out": false
+    },
+    {
+      "body": "The file '/QuickConnect/Enabled' could not be found.",
+      "status": 404,
+      "out": null,
+      "about": "Emby 4.10.1.0"
+    },
+    {
+      "body": "<html></html>",
+      "status": 200,
+      "out": null
+    },
+    {
+      "body": "true",
+      "status": 500,
+      "out": null
+    },
+    {
+      "body": "TRUE",
+      "status": 200,
+      "out": true
+    }
+  ],
+  "publicUsers": [
+    {
+      "body": "[{\"Name\":\"avsync\",\"Id\":\"u1\",\"HasPassword\":true},{\"Name\":\"kids\",\"Id\":\"u2\",\"HasPassword\":false},{\"Name\":\"\",\"Id\":\"u3\"},{\"Name\":\"no id\"}]",
+      "out": [
+        {
+          "id": "u1",
+          "name": "avsync",
+          "hasPassword": true
+        },
+        {
+          "id": "u2",
+          "name": "kids",
+          "hasPassword": false
+        }
+      ]
+    },
+    {
+      "body": "[]",
+      "out": [],
+      "about": "Jellyfin 12.2 with its users hidden from the login screen"
+    },
+    {
+      "body": "nope",
+      "out": []
+    },
+    {
+      "body": "[{\"Name\":\"dad\",\"Id\":\"d\"}]",
+      "out": [
+        {
+          "id": "d",
+          "name": "dad",
+          "hasPassword": true
+        }
+      ],
+      "about": "no HasPassword: assume one"
+    }
+  ],
+  "method": [
+    {
+      "kind": "jellyfin",
+      "quickConnectEnabled": true,
+      "preferred": "quickConnect",
+      "offers": true
+    },
+    {
+      "kind": "jellyfin",
+      "quickConnectEnabled": false,
+      "preferred": "password",
+      "offers": false
+    },
+    {
+      "kind": "jellyfin",
+      "quickConnectEnabled": null,
+      "preferred": "password",
+      "offers": true,
+      "about": "an older server that can't say still gets the button"
+    },
+    {
+      "kind": "emby",
+      "quickConnectEnabled": true,
+      "preferred": "password",
+      "offers": false
+    },
+    {
+      "kind": "emby",
+      "quickConnectEnabled": false,
+      "preferred": "password",
+      "offers": false
+    },
+    {
+      "kind": "emby",
+      "quickConnectEnabled": null,
+      "preferred": "password",
+      "offers": false
+    }
+  ],
+  "quickConnectInitiate": [
+    {
+      "status": 200,
+      "body": "{\"Code\":\"415226\",\"Secret\":\"s\"}",
+      "out": "start"
+    },
+    {
+      "status": 401,
+      "body": "",
+      "out": "off",
+      "about": "Quick Connect switched off on the server"
+    },
+    {
+      "status": 404,
+      "body": "",
+      "out": "notJellyfin"
+    },
+    {
+      "status": 200,
+      "body": "<html>web page</html>",
+      "out": "notJellyfin"
+    },
+    {
+      "status": 200,
+      "body": "{\"Code\":\"\"}",
+      "out": "failed"
+    },
+    {
+      "status": 500,
+      "body": "",
+      "out": "failed"
+    }
+  ],
+  "quickConnectPoll": [
+    {
+      "poll": 1,
+      "body": "{\"Authenticated\":false}",
+      "out": "waiting"
+    },
+    {
+      "poll": 7,
+      "body": "{\"Authenticated\":true,\"Secret\":\"s\"}",
+      "out": "approved"
+    },
+    {
+      "poll": 149,
+      "body": "",
+      "out": "waiting",
+      "about": "a network error keeps polling"
+    },
+    {
+      "poll": 150,
+      "body": "{\"Authenticated\":false}",
+      "out": "expired",
+      "about": "150 polls every 2 s is 5 minutes"
+    },
+    {
+      "poll": 150,
+      "body": "{\"Authenticated\":true}",
+      "out": "approved"
+    }
+  ],
+  "check": [
+    {
+      "name": "bare-address-finds-jellyfin-on-8096-and-opens-on-quick-connect",
+      "address": "192.168.1.10",
+      "routes": {
+        "http://192.168.1.10:8096/System/Info/Public": [
+          200,
+          "{\"ServerName\":\"Living Room\",\"ProductName\":\"Jellyfin Server\",\"Id\":\"jf1\"}"
+        ],
+        "http://192.168.1.10:8096/QuickConnect/Enabled": [
+          200,
+          "true"
+        ],
+        "http://192.168.1.10:8096/Users/Public": [
+          200,
+          "[]"
+        ]
+      },
+      "out": {
+        "kind": "jellyfin",
+        "url": "http://192.168.1.10:8096",
+        "name": "Living Room",
+        "quickConnectEnabled": true,
+        "users": [],
+        "preferred": "quickConnect"
+      }
+    },
+    {
+      "name": "jellyfin-with-quick-connect-off-opens-on-password",
+      "address": "http://jf.local:8096",
+      "routes": {
+        "http://jf.local:8096/System/Info/Public": [
+          200,
+          "{\"ServerName\":\"Living Room\",\"ProductName\":\"Jellyfin Server\",\"Id\":\"jf1\"}"
+        ],
+        "http://jf.local:8096/QuickConnect/Enabled": [
+          200,
+          "false"
+        ]
+      },
+      "out": {
+        "kind": "jellyfin",
+        "url": "http://jf.local:8096",
+        "name": "Living Room",
+        "quickConnectEnabled": false,
+        "users": [],
+        "preferred": "password"
+      }
+    },
+    {
+      "name": "emby-is-never-asked-about-quick-connect-and-shows-its-users",
+      "address": "http://192.168.1.20:8096",
+      "routes": {
+        "http://192.168.1.20:8096/System/Info/Public": [
+          200,
+          "{\"ServerName\":\"Den\",\"Id\":\"em1\"}"
+        ],
+        "http://192.168.1.20:8096/Users/Public": [
+          200,
+          "[{\"Name\":\"dad\",\"Id\":\"d\",\"HasPassword\":false}]"
+        ]
+      },
+      "out": {
+        "kind": "emby",
+        "url": "http://192.168.1.20:8096",
+        "name": "Den",
+        "quickConnectEnabled": null,
+        "users": [
+          {
+            "id": "d",
+            "name": "dad",
+            "hasPassword": false
+          }
+        ],
+        "preferred": "password"
+      },
+      "neverAsked": "QuickConnect"
+    },
+    {
+      "name": "nothing-on-8096-tries-the-address-as-typed",
+      "address": "10.0.0.5",
+      "refused": [
+        "http://10.0.0.5:8096"
+      ],
+      "routes": {
+        "http://10.0.0.5/System/Info/Public": [
+          200,
+          "{\"ServerName\":\"Den\",\"Id\":\"em1\"}"
+        ]
+      },
+      "out": {
+        "kind": "emby",
+        "url": "http://10.0.0.5",
+        "name": "Den",
+        "quickConnectEnabled": null,
+        "users": [],
+        "preferred": "password"
+      }
+    },
+    {
+      "name": "a-web-page-is-not-a-server",
+      "address": "192.168.1.1",
+      "routes": {
+        "http://192.168.1.1:8096/System/Info/Public": [
+          200,
+          "<html>router</html>"
+        ],
+        "http://192.168.1.1/System/Info/Public": [
+          200,
+          "<html>router</html>"
+        ]
+      },
+      "error": "notAServer"
+    },
+    {
+      "name": "a-refused-address-is-the-network-error",
+      "address": "192.168.1.99",
+      "refused": [
+        "http://192.168.1.99"
+      ],
+      "error": "network"
+    },
+    {
+      "name": "a-timeout-fails-once-not-twice",
+      "address": "192.168.1.98",
+      "timeout": [
+        "http://192.168.1.98:8096"
+      ],
+      "error": "timeout",
+      "asked": 1
+    },
+    {
+      "name": "the-server-says-which-kind-it-is",
+      "address": "192.168.1.10:8096",
+      "routes": {
+        "http://192.168.1.10:8096/System/Info/Public": [
+          200,
+          "{\"ServerName\":\"Living Room\",\"ProductName\":\"Jellyfin Server\",\"Id\":\"jf1\"}"
+        ],
+        "http://192.168.1.10:8096/QuickConnect/Enabled": [
+          200,
+          "true"
+        ]
+      },
+      "out": {
+        "kind": "jellyfin",
+        "url": "http://192.168.1.10:8096",
+        "name": "Living Room",
+        "quickConnectEnabled": true,
+        "users": [],
+        "preferred": "quickConnect"
+      }
+    }
+  ]
+}

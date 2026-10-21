@@ -4,12 +4,13 @@
  *
  *   1. NostalgexJellyfinUrls.quickConnectInitiate against a recording fetch: POST first,
  *      GET again only on 405 or 404, same URL and headers, no body.
- *   2. web-tuner.html's own Jellyfin sign-in section, run in a VM with a small fake DOM
- *      against fake servers with each Jellyfin route table for Initiate (12.x POST only,
- *      10.9 to 10.11 both, 10.7 and 10.8 GET only): code shown, poll, sign-in saved.
+ *   2. The sign-in screens' Quick Connect (NostalgexSignIn.quickConnect, which web-tuner.html
+ *      runs with quickConnectInitiate) against fake servers with each Jellyfin route table
+ *      for Initiate (12.x POST only, 10.9 to 10.11 both, 10.7 and 10.8 GET only): code shown,
+ *      poll, sign-in. Off, unreachable, not Jellyfin, flaky polls, expiry and cancel.
  *      Negative controls: the old GET-only initiate fails the same 12.x checks.
  *   3. Live, only when NOSTALGEX_JF_URL, NOSTALGEX_JF_APPROVER_TOKEN (admin API key or the
- *      user's own token) and NOSTALGEX_JF_USER are set: the same page section with Node's
+ *      user's own token) and NOSTALGEX_JF_USER are set: the same controller with Node's
  *      fetch against a real Jellyfin, through AuthenticateWithQuickConnect. Prints no token.
  *
  * Measured 2026-10-19 on Jellyfin 12.2.0: GET /QuickConnect/Initiate 405, POST 200.
@@ -17,7 +18,6 @@
  * Run: `npm run test:jellyfin-quick-connect`
  */
 import { readFileSync } from "node:fs";
-import vm from "node:vm";
 import assert from "node:assert/strict";
 import "./nostalgex-jellyfin-urls.js";
 
@@ -118,83 +118,21 @@ for (const label of Object.keys(initiateChecks)) {
     assert.equal(await fails(() => initiateChecks[label](oldInitiate)), true));
 }
 
-// ── 2. web-tuner.html's own Jellyfin section, against a fake DOM ────────────
+// ── 2. The sign-in screens' Quick Connect, against fake servers ────────────
+// web-tuner.html runs Quick Connect through NostalgexSignIn.quickConnect
+// (scripts/nostalgex-signin.js) with NostalgexJellyfinUrls.quickConnectInitiate as its
+// initiate step. Each Jellyfin version's route table, start to sign-in.
 
+await import("./nostalgex-signin.js");
+const SI = globalThis.NostalgexSignIn;
 const page = readFileSync(new URL("../web-tuner.html", import.meta.url), "utf8");
-const moduleSource = readFileSync(new URL("./nostalgex-jellyfin-urls.js", import.meta.url), "utf8");
-const htmlIds = new Set([...page.matchAll(/\bid=["']([^"']+)["']/g)].map((m) => m[1]));
-const sectionStart = "  // ---- Jellyfin Auth ----";
-const sectionEnd = "  document.getElementById('connect-jellyfin-btn').addEventListener";
-const a = page.indexOf(sectionStart), b = page.indexOf(sectionEnd, a);
-assert(a >= 0 && b > a, "web-tuner.html Jellyfin section anchors");
-const section = page.slice(a, b);
-
-const NEW_CALL = `      const initRes = await NostalgexJellyfinUrls.quickConnectInitiate(url,
-        { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader('') });`;
-const OLD_CALL = `      const initRes = await fetch(\`\${url}/QuickConnect/Initiate\`, {
-        headers: { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader('') },
-      });`;
-
-class FakeElement {
-  constructor(id) {
-    this.id = id; this.value = ""; this.textContent = ""; this.style = {}; this._classes = new Set();
-    this.classList = { add: (c) => this._classes.add(c), remove: (c) => this._classes.delete(c), contains: (c) => this._classes.has(c) };
-  }
-  addEventListener() {}
-}
-class FakeStorage {
-  constructor() { this.m = new Map(); }
-  getItem(k) { return this.m.has(k) ? this.m.get(k) : null; }
-  setItem(k, v) { this.m.set(k, String(v)); }
-  removeItem(k) { this.m.delete(k); }
-}
-
-/** The page section in a VM. `fetch` is what the page's own fetch calls go through. */
-function pageFixture({ fetch, transform = (src) => src, serverUrl = S, clientId = "nostalgex-qc-smoke" }) {
-  const elements = new Map();
-  const intervals = new Map();
-  let seq = 0;
-  const document = {
-    getElementById(id) {
-      assert(htmlIds.has(id), `fixture element exists in web-tuner.html: ${id}`);
-      if (!elements.has(id)) elements.set(id, new FakeElement(id));
-      return elements.get(id);
-    },
-  };
-  const context = {
-    console: { log() {}, warn() {}, error() {} },
-    document, fetch,
-    location: { protocol: "http:", href: "http://tuner.local/web-tuner.html" },
-    sessionStorage: new FakeStorage(), localStorage: new FakeStorage(),
-    setInterval: (fn) => { const id = ++seq; intervals.set(id, fn); return id; },
-    clearInterval: (id) => intervals.delete(id),
-    getClientId: () => clientId,
-  };
-  context.window = context;
-  vm.createContext(context);
-  const src = transform(section);
-  vm.runInContext(`${moduleSource}\n${src}`, context);
-  document.getElementById("jf-url").value = serverUrl;
-  return {
-    context,
-    el: (id) => document.getElementById(id),
-    intervals,
-    // One poll, awaited, then let the sign-in finish (completeJellyfinAuth is not awaited).
-    async tick() {
-      for (const fn of [...intervals.values()]) await fn();
-      for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
-    },
-    saved: () => JSON.parse(context.localStorage.getItem("plex90_saved_auth") || "null"),
-    shownError: () => (document.getElementById("connect-jellyfin-error").style.display === "block"
-      ? document.getElementById("connect-jellyfin-error").textContent : null),
-  };
-}
+const AUTH = SI.authHeader("nostalgex-qc-smoke", "");
 
 /** A fake Jellyfin with one version's route table for Initiate. */
 function fakeJellyfin({ initiate, quickConnectOn = true, unreachable = false, notJellyfin = false }) {
   const calls = [];
   let approved = false;
-  const json = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
+  const json = (status, body) => ({ status, ok: status >= 200 && status < 300, text: async () => (body == null ? "" : JSON.stringify(body)) });
   const fetch = async (url, init = {}) => {
     const u = new URL(url);
     const method = init.method || "GET";
@@ -213,8 +151,6 @@ function fakeJellyfin({ initiate, quickConnectOn = true, unreachable = false, no
         if (method !== "POST") return json(405, null);
         if (!approved || JSON.parse(init.body).Secret !== "s3cr3t") return json(401, null);
         return json(200, { AccessToken: "tok", ServerId: "srv", User: { Id: "u1", Name: "lab", ServerName: "Lab" } });
-      case "/System/Info/Public":
-        return json(200, { ServerName: "Lab", Version: "12.2.0", ProductName: "Jellyfin Server", Id: "srv" });
       default:
         return json(404, null);
     }
@@ -228,75 +164,93 @@ const VERSIONS = {
   "Jellyfin 10.7 and 10.8": ["GET"],
 };
 
+/** Quick Connect as the page runs it. `approveAfter` polls happen before approval. */
+function runQuickConnect(server, { initiate = JU.quickConnectInitiate, approveAfter = 1 } = {}) {
+  let polls = 0;
+  let code = null;
+  const qc = SI.quickConnect({
+    url: S, authorization: AUTH, fetch: server.fetch, initiate,
+    onCode: (c) => { code = c; },
+    sleep: async () => { polls++; if (polls > approveAfter) server.approve(); },
+  });
+  return { qc, code: () => code, polls: () => polls };
+}
+
 /** The whole sign-in on one fake server. Throws when anything is off. */
-async function signInScenario(version, transform) {
+async function signInScenario(version, initiate) {
   const server = fakeJellyfin({ initiate: VERSIONS[version] });
-  const f = pageFixture({ fetch: server.fetch, transform });
-  await f.context.jellyfinQuickConnect();
-  assert.equal(f.shownError(), null, "no error after Initiate");
-  assert.equal(f.el("connect-jf-code").textContent, "123456", "code shown");
-  assert.equal(f.el("connect-jellyfin-quick").classList.contains("active"), true);
-  assert.equal(f.intervals.size, 1, "polling");
-  await f.tick();
-  assert.equal(f.saved(), null, "nothing saved before approval");
-  server.approve();
-  await f.tick();
-  assert.equal(f.intervals.size, 0, "polling stopped");
-  const initiate = version === "Jellyfin 10.7 and 10.8" ? ["POST /QuickConnect/Initiate", "GET /QuickConnect/Initiate"] : ["POST /QuickConnect/Initiate"];
-  assert.deepEqual(server.log(), [...initiate, "GET /QuickConnect/Connect", "GET /QuickConnect/Connect",
-    "POST /Users/AuthenticateWithQuickConnect", "GET /System/Info/Public"]);
-  const connect = server.calls.find((c) => c.path === "/QuickConnect/Connect");
-  assert.equal(connect.query.Secret, "s3cr3t");
+  const run = runQuickConnect(server, { initiate, approveAfter: 1 });
+  const r = await run.qc.done;
+  assert.equal(r.status, "approved", `status ${r.status}`);
+  assert.equal(run.code(), "123456", "code shown");
+  assert.equal(r.result.AccessToken, "tok");
+  assert.equal(r.result.User.Id, "u1");
+  const init = version === "Jellyfin 10.7 and 10.8" ? ["POST /QuickConnect/Initiate", "GET /QuickConnect/Initiate"] : ["POST /QuickConnect/Initiate"];
+  assert.deepEqual(server.log(), [...init, "GET /QuickConnect/Connect", "GET /QuickConnect/Connect", "POST /Users/AuthenticateWithQuickConnect"]);
+  assert.equal(server.calls.find((c) => c.path === "/QuickConnect/Connect").query.Secret, "s3cr3t");
   const auth = server.calls.find((c) => c.path === "/Users/AuthenticateWithQuickConnect");
   assert.deepEqual(JSON.parse(auth.body), { Secret: "s3cr3t" });
   assert.match(auth.headers.Authorization, /^MediaBrowser Client="Nostalgex", Device="Browser", DeviceId="nostalgex-qc-smoke"/);
-  const saved = f.saved();
-  assert.equal(saved.backend, "jellyfin");
-  assert.equal(saved.token, "tok");
-  assert.equal(saved.jellyfinUserId, "u1");
-  assert.equal(saved.serverUrl, S);
-  assert.equal(f.context.location.href, "plex-tuner.html");
   return server;
 }
 
 for (const version of Object.keys(VERSIONS)) {
-  await check(`page: Quick Connect signs in on ${version}`, () => signInScenario(version));
+  await check(`sign-in screens: Quick Connect signs in on ${version}`, () => signInScenario(version));
 }
-await check("page: Quick Connect off says so, one request, no polling", async () => {
+await check("sign-in screens: Quick Connect off is 'off', one request, no polling", async () => {
   const server = fakeJellyfin({ initiate: ["POST"], quickConnectOn: false });
-  const f = pageFixture({ fetch: server.fetch });
-  await f.context.jellyfinQuickConnect();
-  assert.equal(f.shownError(), "QUICK CONNECT IS NOT ENABLED ON THIS SERVER");
+  const run = runQuickConnect(server);
+  assert.equal((await run.qc.done).status, "off");
   assert.deepEqual(server.log(), ["POST /QuickConnect/Initiate"]);
-  assert.equal(f.intervals.size, 0);
+  assert.equal(run.polls(), 0);
 });
-await check("page: an unreachable server gets the network message, no retry", async () => {
+await check("sign-in screens: an unreachable server is 'network', no retry", async () => {
   const server = fakeJellyfin({ initiate: ["POST"], unreachable: true });
-  const f = pageFixture({ fetch: server.fetch });
-  await f.context.jellyfinQuickConnect();
-  assert.match(f.shownError(), /^COULD NOT REACH THE JELLYFIN SERVER/);
+  assert.equal((await runQuickConnect(server).qc.done).status, "network");
   assert.deepEqual(server.log(), ["POST /QuickConnect/Initiate"]);
 });
-await check("page: a server that isn't Jellyfin (404 both ways) is an error, not a code", async () => {
+await check("sign-in screens: a server that isn't Jellyfin (404 both ways) is 'notJellyfin', not a code", async () => {
   const server = fakeJellyfin({ initiate: [], notJellyfin: true });
-  const f = pageFixture({ fetch: server.fetch });
-  await f.context.jellyfinQuickConnect();
-  assert.equal(f.shownError(), "QUICK CONNECT IS NOT ENABLED ON THIS SERVER");
+  const run = runQuickConnect(server);
+  assert.equal((await run.qc.done).status, "notJellyfin");
   assert.deepEqual(server.log(), ["POST /QuickConnect/Initiate", "GET /QuickConnect/Initiate"]);
-  assert.equal(f.intervals.size, 0);
+  assert.equal(run.code(), null);
 });
-
-// The page as it was: its own section with the old GET-only call put back.
-await check("negative control: the page still has the call this test swaps out", () =>
-  assert.equal(section.includes(NEW_CALL), true));
-const toOldCall = (src) => src.replace(NEW_CALL, OLD_CALL);
-await check("negative control: the old page fails the Jellyfin 12.x sign-in", async () =>
-  assert.equal(await fails(() => signInScenario("Jellyfin 12.x", toOldCall)), true));
-await check("negative control: the old page shows NOT ENABLED on Jellyfin 12.x after a GET 405", async () => {
+await check("sign-in screens: polls that fail on the network keep polling", async () => {
   const server = fakeJellyfin({ initiate: ["POST"] });
-  const f = pageFixture({ fetch: server.fetch, transform: toOldCall });
-  await f.context.jellyfinQuickConnect();
-  assert.equal(f.shownError(), "QUICK CONNECT IS NOT ENABLED ON THIS SERVER");
+  let failNext = 2;
+  const flaky = async (url, init) => {
+    if (url.includes("/QuickConnect/Connect") && failNext-- > 0) throw new TypeError("Failed to fetch");
+    return server.fetch(url, init);
+  };
+  let polls = 0;
+  const qc = SI.quickConnect({ url: S, authorization: AUTH, fetch: flaky, initiate: JU.quickConnectInitiate,
+    sleep: async () => { polls++; if (polls > 2) server.approve(); } });
+  assert.equal((await qc.done).status, "approved");
+});
+await check("sign-in screens: the code expires after 150 polls", async () => {
+  const server = fakeJellyfin({ initiate: ["POST"] });
+  let polls = 0;
+  const qc = SI.quickConnect({ url: S, authorization: AUTH, fetch: server.fetch, initiate: JU.quickConnectInitiate, sleep: async () => { polls++; } });
+  assert.equal((await qc.done).status, "expired");
+  assert.equal(polls, 150);
+});
+await check("sign-in screens: cancel stops it", async () => {
+  const server = fakeJellyfin({ initiate: ["POST"] });
+  let qc;
+  qc = SI.quickConnect({ url: S, authorization: AUTH, fetch: server.fetch, initiate: JU.quickConnectInitiate, sleep: async () => { qc.cancel(); } });
+  assert.equal((await qc.done).status, "cancelled");
+  assert.equal(server.log().includes("POST /Users/AuthenticateWithQuickConnect"), false);
+});
+await check("the page starts Quick Connect with quickConnectInitiate", () =>
+  assert.match(page, /S\.quickConnect\(\{[\s\S]{0,200}initiate: NostalgexJellyfinUrls\.quickConnectInitiate/));
+
+// The old GET-only start, through the same checks.
+await check("negative control: a GET-only initiate fails the Jellyfin 12.x sign-in", async () =>
+  assert.equal(await fails(() => signInScenario("Jellyfin 12.x", oldInitiate)), true));
+await check("negative control: a GET-only initiate on Jellyfin 12.x comes back 'failed' after a GET 405", async () => {
+  const server = fakeJellyfin({ initiate: ["POST"] });
+  assert.equal((await runQuickConnect(server, { initiate: oldInitiate }).qc.done).status, "failed");
   assert.deepEqual(server.log(), ["GET /QuickConnect/Initiate"]);
 });
 
@@ -312,35 +266,34 @@ if (live.url && live.approver && live.user) {
       log.push(`${init.method || "GET"} ${new URL(url).pathname} ${res.status}`);
       return res;
     };
-    const f = pageFixture({ fetch: fetchLogged, serverUrl: live.url, clientId: `nostalgex-qc-live-${Date.now()}` });
-    await f.context.jellyfinQuickConnect();
-    assert.equal(f.shownError(), null, `error: ${f.shownError()}`);
-    const code = f.el("connect-jf-code").textContent;
-    assert.match(code, /^\d{6}$/);
-    await f.tick();
-    assert.equal(f.saved(), null, "not signed in before approval");
-    const approve = await fetch(`${live.url}/QuickConnect/Authorize?code=${encodeURIComponent(code)}&userId=${encodeURIComponent(live.user)}`, {
-      method: "POST",
-      headers: { Authorization: `MediaBrowser Client="Nostalgex", Device="Smoke", DeviceId="nostalgex-qc-approver", Version="1.0", Token="${live.approver}"` },
+    let code = null;
+    let approved = false;
+    const qc = SI.quickConnect({
+      url: live.url, authorization: SI.authHeader(`nostalgex-qc-live-${Date.now()}`, ""), fetch: fetchLogged,
+      initiate: JU.quickConnectInitiate, onCode: (c) => { code = c; }, pollMs: 300,
+      sleep: async (ms) => {
+        await new Promise((r) => setTimeout(r, ms));
+        if (code && !approved) {
+          approved = true;
+          const approve = await fetch(`${live.url}/QuickConnect/Authorize?code=${encodeURIComponent(code)}&userId=${encodeURIComponent(live.user)}`, {
+            method: "POST",
+            headers: { Authorization: `MediaBrowser Client="Nostalgex", Device="Smoke", DeviceId="nostalgex-qc-approver", Version="1.0", Token="${live.approver}"` },
+          });
+          log.push(`POST /QuickConnect/Authorize ${approve.status} (approver)`);
+        }
+      },
     });
-    log.push(`POST /QuickConnect/Authorize ${approve.status} (approver)`);
-    assert.equal(approve.status, 200);
-    for (let i = 0; i < 10 && !f.saved(); i++) {
-      await f.tick();
-      if (!f.saved()) await new Promise((r) => setTimeout(r, 300));
-    }
-    const saved = f.saved();
-    assert(saved, "signed in");
-    assert.equal(saved.backend, "jellyfin");
-    assert.equal(saved.jellyfinUserId, live.user);
-    assert.equal(f.context.location.href, "plex-tuner.html");
-    const views = await fetch(`${live.url}/UserViews?userId=${encodeURIComponent(saved.jellyfinUserId)}`, {
-      headers: { Accept: "application/json", Authorization: f.context.jellyfinAuthHeader(saved.token) },
+    const r = await qc.done;
+    assert.equal(r.status, "approved", `status ${r.status}`);
+    assert.match(code, /^\d{6}$/);
+    assert.equal(r.result.User.Id, live.user);
+    const views = await fetch(`${live.url}/UserViews?userId=${encodeURIComponent(r.result.User.Id)}`, {
+      headers: { Accept: "application/json", Authorization: SI.authHeader("nostalgex-qc-live", r.result.AccessToken) },
     });
     const libraries = views.ok ? ((await views.json()).Items || []).length : -1;
     assert.equal(views.status, 200);
-    liveSummary = `live: ${log.join(" | ")} | saved backend=${saved.backend} token length ${saved.token.length}`
-      + ` user matches ${saved.jellyfinUserId === live.user} | GET /UserViews with the new token ${views.status}, ${libraries} libraries`;
+    liveSummary = `live: ${log.join(" | ")} | token length ${r.result.AccessToken.length}`
+      + ` | GET /UserViews with the new token ${views.status}, ${libraries} libraries`;
   });
 }
 
