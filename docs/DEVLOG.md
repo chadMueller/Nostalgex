@@ -3,6 +3,44 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-21 (web tuner: the Apple TV sign-in, screen by screen)
+
+**Shipped.** Nothing. Branch `web/signin`, not pushed. A Vercel preview of the hosted page exists; Docker was built and run locally only. No `tunerVersion` bump: it goes out with whichever `tuner-v` tag Chad picks.
+
+**Why.** The Apple TV app's connect screens were rebuilt for 1.0.28 (find the server first, Quick Connect by default, user tiles, focus you can see from the couch). The web tuner and Docker get the same flow so every product signs in the same way.
+
+**What each casing can do (measured).**
+- A browser can't send UDP, so no LAN discovery the Apple TV way.
+- From the hosted page (https), headless Chromium could fetch no http server at all: not `localhost:8096`, not `127.0.0.1:8096`, not two servers on the LAN. Mixed content plus local network rules.
+- From a page served over http (the Docker container), all four answered, and Jellyfin 12.2.0 and Emby 4.10.1.0 send CORS headers on every call the flow makes.
+- Broadcast discovery from inside the container got no replies, on Docker's default bridge network and on host networking under Colima, whose VM sits behind its own NAT. The same probe from the Mac got both servers. A Linux host with host networking is unverified.
+
+**Changed.**
+- `web-tuner.html`: the connect card is now the Apple TV screens: picker, find, type an address, checking, sign in, Quick Connect. Focus lands on each screen's first choice, Enter in a field moves on as closing the keyboard does on a TV, Escape is BACK, arrow keys move like a D-pad, and every step has a button for TV Bro, which sends no keys. Plex keeps its flow, gains a CANCEL, and its errors use the spec's lines ("Click CONNECT TO PLEX for a new one").
+- The hosted page opens Jellyfin and Emby on TYPE AN ADDRESS and defaults a typed address to https. On Docker, FIND MY SERVER runs as the screen opens and asks, in parallel, the last address used, the machine the tuner page came from, and localhost, all on 8096. One answer goes straight to it, several give a list, none gives the amber line with focus on TYPE AN ADDRESS.
+- After the address, both casings match Apple TV: the check (`/System/Info/Public`, then `/QuickConnect/Enabled` on Jellyfin, then `/Users/Public`), a Jellyfin with Quick Connect on opening on the code, Emby user tiles where a user with no password signs in on one click, and the server's own answer beating the button that was pressed.
+- New `scripts/nostalgex-signin.js` holds the logic (address candidates, discovery replies, the three parsers, the check, find, the Quick Connect controller, password sign-in, copy). `scripts/signin-golden.json` has the cases, written from the Apple TV tests, for a Swift test and the Roku port to read too; `npm run test:signin` runs them. The Quick Connect smoke test now drives the controller the page uses.
+- New `tuner.css` holds every sign-in style, so nothing here depends on the site's `styles.css` (Chad's rule from today). The panel is black with the spec's cyan focus slab, outline-glow on the code screens, and dark-well fields with a cyan frame.
+- `.dockerignore` allows `tuner.css`. Without it the image linked a stylesheet it didn't have: Vite only warns. `scripts/selfhost-build.mjs` now fails the build when a tuner page links a local file the output doesn't contain.
+- CI: the sign-in files start the channel engine job (which runs `npm test`), and `tuner.css` the web and Docker jobs.
+
+**Measured.** Headless Chromium, keyboard only, against a lab Jellyfin 12.2.0 and Emby 4.10.1.0, on the Docker build and on the hosted build served over http:
+- Jellyfin, Quick Connect: 2 presses (Tab, Enter), the same as Apple TV. The code was approved through the Jellyfin API and the page landed in the tuner.
+- Jellyfin, password: 5 (typing a field and pressing Enter counted as one). Wrong password: the red line, still on the screen.
+- Emby on another port, typed, user with no password: 7, one of them an arrow key to reach the tile. Then the tuner loaded the library and started a channel, no page errors.
+- Escape walked back screen by screen, and coming back to the find screen did not search again.
+- Hosted preview (https): Jellyfin opened on the address field, a LAN address got the "address on your own network" line, a site that isn't a server got the "isn't a Jellyfin or Emby server" line, and the Plex code came up with CANCEL focused.
+- No horizontal scroll and no page errors at 1440x900, 960x540, 820x1180 and 390x844, dark and light.
+- `npm test`, `npm run build`, `build:selfhost` green. The live Quick Connect smoke test passed against the lab Jellyfin, through `AuthenticateWithQuickConnect` and a library list with the new token.
+
+**Not done or not verified.**
+- An Emby user with a password signing in for real: the lab account's password couldn't be recovered, so only the 401 path was seen. The same call signed in a Jellyfin user and an Emby user without a password.
+- Docker find covers the tuner's own machine and localhost, not another machine on the LAN. Real discovery would need host networking on Linux plus a small helper in the image.
+- Not tried in TV Bro on a Google TV, or in Safari or Firefox.
+- No Swift test reads `signin-golden.json` yet: `SignInFlow` lives on `signin-redesign`. The Roku app has no port of this flow.
+
+**Next.** Chad's look at the preview. Then the separation of the tuner from the site.
+
 ## 2026-10-21 (a real /apple-tv page, the 404 in the house style, one CTA button everywhere)
 
 **Shipped.** Nothing until this lands on main. Branch `site/apple-tv-404`, a Vercel preview for Chad's review.
