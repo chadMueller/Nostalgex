@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-22 (publish Plex Apple TV sit-back alternative)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-apple-tv-app-sit-back-alternative`.
+
+**Why.** New live post. Chad's copy was already `draft: false` and dated 2026-10-22. The article is a sit-back alternative for people who miss things in the redesigned Plex Apple TV app (Watch Together, the trailer button, some library filters) and would rather not browse at all.
+
+**Changed.**
+- Added `content/blog/plex-apple-tv-app-sit-back-alternative.md` as given. No copy edits. Other posts untouched, including the two remaining drafts (`make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`).
+- `scripts/media-sizes.json`: cover at `site/blog/plex-apple-tv-app-sit-back-alternative/cover.jpg` is 1200x630. The inline Girls Night guide still from the Jellyfin post already had its 1280x720 entry. Both R2 URLs returned 200. Images stay on R2; none committed.
+- `npm run blog:render` wrote eight live posts into `public/sitemap.xml`, including `/blog/plex-apple-tv-app-sit-back-alternative` with lastmod 2026-10-22. `/blog` lastmod is 2026-10-22. `npm run bundles:render` then ran after the blog step, so the committed sitemap has the blog block above the channels block, matching main.
+
+**Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
+
+**Next.** Nothing on this post.
+
 ## 2026-10-21 (Roku 1.0.3: the sign-in redesign and ratings from other countries)
 
 **Shipped.** Roku beta 1.0.3 (channel 888351), signed and published 2026-10-22 09:29 UTC; package md5 `fe816755723e0cbed9697bc98cb66394` (in `roku/releases.tsv`). Branch `roku/1.0.3` = main `65c886f` (the sign-in redesign and the ratings fix) plus the build number and a fixed build hash. The dashboard's static analysis gave the same three known items as 1.0.2: the getUserData (RFI) error and two Authentication warnings.
