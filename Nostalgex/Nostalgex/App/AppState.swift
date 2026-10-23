@@ -335,6 +335,24 @@ class AppState {
         loadCancelRequested = true
     }
 
+    /// True when the last two library loads ended with the app being killed. RootView then
+    /// shows TRY AGAIN / START OVER instead of starting the same load a third time.
+    var isHoldingAfterUnfinishedLoads: Bool = false
+
+    /// START OVER: abandon whatever is loading and sign out to the connect screen. The
+    /// cancel request stops the server fetch itself (the stall watch cancels it on its next
+    /// poll); disconnect() bumps the session generation so nothing the load still has in
+    /// flight lands afterwards.
+    func startOver() {
+        Analytics.track(.settingChanged(key: "start_over", value: isHoldingAfterUnfinishedLoads ? "after_unfinished_loads" : "loading_screen"))
+        if isLoading { loadCancelRequested = true }
+        isHoldingAfterUnfinishedLoads = false
+        LaunchGuard.loadEnded()
+        disconnect()
+        isLoading = false
+        isLoadStalling = false
+    }
+
     func consumeLoadCancelRequest() -> Bool {
         guard loadCancelRequested else { return false }
         loadCancelRequested = false

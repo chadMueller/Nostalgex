@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-23 (Apple TV: a way out of a library load that keeps closing the app)
+
+**Shipped.** Nothing. Branch `fix/reinstall-and-stuck-load`, for 1.0.29 (changelog entry `released: false`).
+
+**Why.** Two #support reports on 1.0.28: a very large Emby library closed the app after about ten minutes of loading, and deleting and reinstalling the app came straight back into the same load. tvOS keeps keychain items after an app is deleted, so a fresh install found the old sign-in. The crash itself is not reproduced (below); this makes sure it can't trap anyone while it is found.
+
+**Changed.**
+- `Services/LaunchGuard.swift` (new). Reinstall: a launch where UserDefaults has none of the keys an earlier launch writes (launch count, first-run time, launch analytics marker, held-sign-in marker, initial-load flag) and the `install.stamp` file is missing too is a fresh install; any credential found then is deleted, both keychain copies and the UserDefaults mirror, before anything reads it. Two witnesses, so a device whose UserDefaults alone go missing (what `InstallDiagnostics` watches for) stays signed in. Unfinished loads: a UserDefaults marker set when a load starts and cleared by a `defer` when it ends; still set at the next launch means the app died mid-load. Two in a row and the next launch asks first.
+- `RootView`: runs the reinstall check before launch analytics and `InstallDiagnostics.recordLaunch` write their keys. The launch load moved into `launchLoad()`, which TRY AGAIN reruns. A snapshot restore carries the marker too but does not reset the count, so a restore that works followed by a refresh that kills the app still adds up.
+- `UnfinishedLoadsView` (new): LOADING DIDN'T FINISH, TRY AGAIN / START OVER.
+- `LoadingView`: START OVER under the step rail for the whole load, behind a confirm (it is often the focused control). `AppState.startOver()` requests the cancel the stall watch already honours, so the server fetch itself stops, then `disconnect()` bumps the session generation so nothing still in flight lands.
+- `loadLibrary` sets and clears the marker.
+
+**Measured.**
+- Before (1.0.28, locally signed simulator build so the keychain works): signed in to Emby, deleted the app, reinstalled. Every credential came back from the keychain (status 0) and the guide built with no sign-in. An unsigned simulator build can't show this: its keychain fails -34018 and only the UserDefaults mirror holds the sign-in, which deleting the app wipes.
+- After, same setup: install over the top keeps the sign-in (status 0, guide). Delete and reinstall: log line "fresh install found a sign-in from a deleted install (5 keys), cleared it", connect screen, every key -25300, and still signed out on the next launch.
+- Two kills mid-load (simctl terminate during a slow fake-Emby scan): count 1, then 2; the third launch opens on LOADING DIDN'T FINISH.
+- iCloud: the keychain items are written without `kSecAttrSynchronizable`, so they never sync through iCloud Keychain and deleting them only touches this Apple TV. `PreferenceSync` keeps server addresses, tokens and user ids out of iCloud by design (`syncedKeys`). Not tested across two devices.
+- The crash: big-library harness against a fake Emby 4.10 server built from real lab item JSON, enrichment off, M4 Pro simulator: 65k items 82 s and 278 MB peak (1.0.26: 143 s, 298 MB), 150k 123 s and 491 MB, 300k 220 s and 877 MB. Nothing near ten minutes; the Apple TV's memory ceiling is unmeasured.
+- NostalgexTests: 910 passed, 0 failures (12 new in `LaunchGuardTests`, `StartOverTests`).
+
+**Half-done.** The crash's cause. Needs the reporters' Apple TV model, Emby version and item count, the Xcode Organizer crash list for build 52, and the Emby harness on the bedroom Apple TV HD. Lower memory per item (map each Emby page instead of holding a whole section's decoded items) is the follow-up if it is memory.
+
+**Next.** Chad tries it in Xcode, then 1.0.29 when he says so. Web and Docker: n/a (browser storage goes with the site's data). Roku: check whether a sign-in survives removing and re-adding the channel.
 ## 2026-10-23 (web and Docker: START OVER while the library loads)
 
 **Shipped.** The web tuner on nostalgex.app when this lands on main, and Docker as `tuner-v1.0.8` from the same commit.
