@@ -60,6 +60,9 @@ sub init()
     styleLabel("ccToast", "VT323-Regular", 48, "0xFFFFFFFF")
     m.deadlineTimer = newTimer(15, false, "onDeadline")
     m.cardTimer = newTimer(5, false, "onCardDone")
+    ' The playhead, once a second, for NxStarvationObserve.
+    m.starveTimer = newTimer(1, true, "onStarveTick")
+    m.starveClock = CreateObject("roTimespan")
 
     m.video = m.top.FindNode("video")
     m.video.ObserveField("state", "onVideoState")
@@ -791,6 +794,9 @@ sub startTune(idx as Integer)
     m.tuneAudio = stream.audioTrack
     m.deadlineTimer.duration = NxPictureDeadline(m.attempt.rung, b.videoWidth, b.videoHeight)
     m.deadlineTimer.control = "start"
+    ' Each start watched afresh, so an old stream's stalls never count here.
+    m.starve = NxStarvation()
+    m.starveTimer.control = "start"
     print "player: tuned channel "; ch.id; ", "; stream.content.streamFormat; " stream over "; stream.route; ", "; offset&; " s into the airing ("; m.attempt.rung; ", "; m.deadlineTimer.duration; " s for a picture)"
     refreshNowPlaying()
 end sub
@@ -798,6 +804,31 @@ end sub
 sub onBuffering()
     st = m.video.bufferingStatus
     if st <> invalid then print "player: buffering "; st.percentage; "%"
+end sub
+
+' A stream that played and now can't be fed (PlaybackStarvation): one rung
+' down from where it got to, and "couldn't keep up" once the 1080p stream
+' starves too (handleStarvation). Only after a picture: the start is the
+' deadline's, and a stop or a probe owns the player meanwhile.
+sub onStarveTick()
+    if m.attempt = invalid or m.playing = invalid or m.probing = true or m.sawPlaying <> true then return
+    state = m.video.state
+    if state <> "playing" and state <> "buffering" and state <> "paused" then return
+    position = m.video.position
+    if not NxIsNumber(position) then return
+    remaining = invalid
+    duration = m.video.duration
+    if NxIsNumber(duration) and duration > 0 then remaining = duration - position
+    v = NxStarvationObserve(m.starve, position, m.starveClock.TotalMilliseconds() / 1000#, state = "paused", remaining)
+    if v = invalid then return
+    m.starveTimer.control = "stop"
+    print "player: starved on the "; m.attempt.rung; " stream: "; v.stalls; " stall(s), longest "; Int(v.longest); " s, at "; Int(position); " s"
+    nxt = NxStarvedNext(m.attempt)
+    if nxt = invalid then
+        giveUp("starved")
+        return
+    end if
+    stepDown(nxt, "starved")
 end sub
 
 ' Release the transcode the last airing started, so the NAS stops working
@@ -951,6 +982,7 @@ sub onProbeDone(ev as Object)
 end sub
 
 sub stepDown(nxt as Object, event as String)
+    m.starveTimer.control = "stop"
     ' The same airing at the same point: where it got to, if it played.
     offset& = m.tuneOffset
     played = m.video.position
@@ -982,6 +1014,7 @@ end sub
 ' after five seconds the next programme starts. The fifth in a row on a
 ' channel stops it instead, card and all, until the viewer tunes.
 sub giveUp(event as String, probe = 1 as Integer)
+    m.starveTimer.control = "stop"
     e = { server: "", event: event, rung: "", errorCode: 0, category: "", probe: probe, codec: invalid }
     if m.attempt <> invalid then e.rung = m.attempt.rung
     s = invalid

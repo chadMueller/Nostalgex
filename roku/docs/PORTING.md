@@ -34,7 +34,7 @@ and already pinned to the Apple TV.
 | `scripts/nostalgex-collections.js`: server collections as channels from CH 500 (web, since 43f6ee7), collections of shows included (4b37674); MY COLLECTIONS in Settings (`plex-tuner.html` `renderCollectionList`) | `source/collections/Collections.brs`, `components/` | ported, Plex only; checked live against upstream (below). On both TVs (2026-10-16) the load reads 67 collections and lists 26; a CH 500 channel hasn't been seen |
 | `FranchiseCollectionFold.swift` (`applyFranchiseFolds`, `AppState+Franchises.swift`): a collection that is a franchise the package carries folds into it | `source/collections/Collections.brs` | ported, after the Apple TV app (below); cases transcribed from `CollectionShowsTests.swift` and `FranchiseSettingsTests.swift` |
 | Playback | BrightScript | Roku's Video node over Plex, Jellyfin or Emby; with the guide |
-| The fallback ladder in `AppState+Playback.swift` (`fallbackToTranscode`, `retryLoad`, `handleWatchdogNoPicture`), `PlaybackWatchdog`, `ChannelFailureRun`, `PlaybackFailure`, `PlaybackFailureCard`, `StreamFailureProbe` | `source/guide/Fallback.brs`, `components/GuideView.*`, `components/StreamProbeTask.*` | ported (issue #57; differences in [When a programme won't play](#when-a-programme-wont-play)); cases in `tests/FallbackTests.brs`; measured on a 43S45 against Emby |
+| The fallback ladder in `AppState+Playback.swift` (`fallbackToTranscode`, `retryLoad`, `handleWatchdogNoPicture`, `handleStarvation`), `PlaybackWatchdog`, `PlaybackStarvation`, `ChannelFailureRun`, `PlaybackFailure`, `PlaybackFailureCard`, `StreamFailureProbe` | `source/guide/Fallback.brs`, `components/GuideView.*`, `components/StreamProbeTask.*` | ported (issues #57 and #59; differences in [When a programme won't play](#when-a-programme-wont-play)); cases in `tests/FallbackTests.brs`; measured on a 43S45 against Emby |
 | Guide remote: the vertical wrap in `ChannelGuideView.swift` (`66033f6`) | `source/guide/GuideNav.brs` | ported: Down off the last channel wraps to channel one, Up off channel one does not; cases in `tests/GuideNavTests.brs`. Not yet pressed on a TV |
 | `SubtitleSelectionLogic.swift`; the SUBTITLES setting (`BundleManagerView.swift`) and CC toggle (`NowPlayingPanel.swift`) | `source/subtitles/`, `components/` | ported; cases transcribed from `SubtitleSelectionLogicTests.swift`. CC is the ★ key in fullscreen, and a row of the Now Playing panel. No language picker, as Plex sends one track (below) |
 | Guide look: the Apple TV app's TunerView, InfoPanelView, ChannelGuideView, CRTOverlayView, StaticScreenView, PlayerView's ChannelOSD (upstream f51e72b) | `components/GuideView.*`, `images/look/` from `scripts/look-images.py` | recreated to its measurements (below); DM Mono and VT323 bundled (`THIRD-PARTY-LICENSES.md`). The logo, home-screen icons and splash are the nostalgex.app wordmark from upstream's `logo/png/` (`scripts/icons.sh`), as the maintainer asked ([Discussion #8](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19003344)); the Apple TV app itself still shows its earlier lightning-bolt logo |
@@ -221,7 +221,7 @@ Where it differs:
 - A server stream Emby couldn't make (its file gone) ended as `finished`,
   which the guide otherwise takes for a join past the end of a short file.
   It is asked about first, and hands over only if the server answers.
-- Starvation after a picture (upstream's starvation monitor) is issue #59.
+- Starvation after a picture: below.
 
 Measured on the 43S45 against the lab Emby (2026-10-23), with 10-minute
 clips, on this build:
@@ -251,6 +251,34 @@ clips, on this build:
   thread stalled for about ten minutes during a 1080p start (the guide's
   clock stopped; no BrightScript was running). It came back after Emby was
   started again, and didn't recur in the later runs.
+
+**A stream that starves after its picture** (issue #59, after upstream's
+`PlaybackStarvation` and `handleStarvation`). Once a start has played, the
+playhead is read once a second: under 0.25 s of progress for 3 s is a stall,
+and three stalls in 120 s, or one of 20 s, is starving (not in the first
+second of progress, nor in an item's last 5 s). Direct play then moves to
+the server stream and a server stream to the 1080p one, from where it got
+to; the 1080p stream starving too gets "Your server couldn't keep up" with
+no probe, upstream's first-ranked card. Each start gets a new monitor. As
+upstream, the playhead decides, not `bufferingStatus`.
+
+Measured on the 43S45 against the lab Emby (2026-10-23), on this build,
+with Emby limited to one CPU through its cgroup's `cpu.max`, and a 10-minute
+4K H.264 clip at 23.8 Mb/s with Opus audio swapped into the Lab, so it went
+through the server re-encoded at 3840:
+- Re-encoding that clip on one CPU, measured off the TV, ran at 0.63x real
+  time at 4K and 0.67x at 1080p (two CPUs: 1.12x and 1.24x). Decoding the
+  4K source is most of the work, so the 1080p rung barely helps on it.
+- Started under the limit: the 4K stream starved at 105 s (2 stalls, the
+  longest 20 s), the 1080p stream took over from 105 s and starved at
+  235 s, card "Your server couldn't keep up", then the next programme.
+- The limit lifted as the 1080p stream started (from 39 s, after the 4K
+  one starved there): Emby re-encoded at 1920x1080, `-maxrate` 8 Mb/s, and
+  it played on with no further stall for 3 minutes, position advancing.
+- A programme already playing when the limit came on didn't starve: Emby
+  had re-encoded the rest of it at full speed before the limit.
+- Not exercised: a slow network (no root on the test box to slow it), so
+  direct play starving, and Plex or Jellyfin.
 
 Home leaves a server stream running until the next launch stops it (the
 stop address is kept in the registry). An exit hook in `source/main.brs`

@@ -96,7 +96,11 @@ function NxPlaybackFailure(e as Object) as Object
     status = 0
     if NxProbeVerdict(probe) = "refused" then status = probe
     kind = "unknown"
-    if e.event = "nostream" then
+    ' Starving outranks the rest: the server answered and still couldn't be
+    ' watched (PlaybackFailure.classify, starvedAfterCappedRetry).
+    if e.event = "starved" then
+        kind = "serverTooSlow"
+    else if e.event = "nostream" then
         kind = "noPlayableSource"
     else if status = 401 or status = 403 then
         kind = "notAuthorised"
@@ -217,4 +221,59 @@ function NxFirstMediaUrl(text as String, base as String) as String
         end if
     end for
     return ""
+end function
+
+' ── Starving (PlaybackStarvation) ───────────────────────────────────────────
+
+' A stream that was playing and can't be fed: three stalls in 120 s, or one
+' of 20 s. A stall is under 0.25 s of playhead progress for 3 s or more,
+' judged by the playhead, not the player's buffering flags. It arms after
+' 1 s of progress, so a start is the deadline's call, and the last 5 s of an
+' item are the end, not a stall. Fed one sample a second.
+function NxStarvation() as Object
+    return { armed: false, first: invalid, last: invalid, stallStart: invalid, stallsEnded: [], longest: 0# }
+end function
+
+' One sample. playhead and wall in seconds (only differences matter);
+' remaining, seconds to the end of the item, or invalid. Returns
+' { stalls, longest } once it is starving, else invalid.
+function NxStarvationObserve(s as Object, playhead as Double, wall as Double, paused as Boolean, remaining as Dynamic) as Dynamic
+    if paused then return invalid
+    if remaining <> invalid and remaining <= 5 then return invalid
+    if s.first = invalid then s.first = playhead
+    last = s.last
+    s.last = playhead
+    if not s.armed then
+        if playhead - s.first >= 1 then s.armed = true
+        return invalid
+    end if
+    if last = invalid then return invalid
+    if playhead - last >= 0.25 then
+        if s.stallStart <> invalid and wall - s.stallStart >= 3 then
+            s.stallsEnded.Push(wall)
+            if wall - s.stallStart > s.longest then s.longest = wall - s.stallStart
+        end if
+        s.stallStart = invalid
+    else
+        if s.stallStart = invalid then s.stallStart = wall
+        length = wall - s.stallStart
+        if length > s.longest then s.longest = length
+        if length >= 20 then return { stalls: s.stallsEnded.Count() + 1, longest: s.longest }
+    end if
+    kept = []
+    for each t in s.stallsEnded
+        if wall - t <= 120 then kept.Push(t)
+    end for
+    s.stallsEnded = kept
+    if kept.Count() >= 3 then return { stalls: kept.Count(), longest: s.longest }
+    return invalid
+end function
+
+' The step after a starving stream (handleStarvation): direct play to the
+' server's stream, a server stream to the 1080p one, both from where it got
+' to; the 1080p stream starving too, invalid: "couldn't keep up".
+function NxStarvedNext(attempt as Object) as Dynamic
+    if attempt.rung = "direct" then return { rung: "server", retry: false, fellBack: true }
+    if attempt.rung = "server" then return { rung: "capped", retry: false, fellBack: attempt.fellBack }
+    return invalid
 end function

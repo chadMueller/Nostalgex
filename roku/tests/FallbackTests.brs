@@ -122,6 +122,81 @@ function NxRunFallbackTests() as Integer
     NxCheck(r, "Jellyfin/Emby 1080p", NxMbVideoQuery(29000000, "capped"), "&VideoBitrate=8000000&MaxWidth=1920")
     NxCheck(r, "Jellyfin/Emby server stream as before", NxMbVideoQuery(29000000, "server"), "&VideoBitrate=40000000&MaxWidth=3840&AllowVideoStreamCopy=false")
 
+    ' Starving: PlaybackStarvationTests, case for case. The measured shape is
+    ' the basement Apple TV's Armageddon, 2026-10-06.
+    st = NxStarvation()
+    NxCheck(r, "starve: healthy never starves", NxStarveText(NxStarveFeed(st, NxPlayingTrace(0, 600))), "none")
+    NxCheck(r, "starve: healthy arms", st.armed.ToStr(), "true")
+    t = []
+    head = 0
+    for i = 1 to 3
+        t.Append(NxPlayingTrace(head, 25))
+        head = head + 25
+        t.Append(NxFrozenTrace(head, 10))
+    end for
+    t.Append(NxPlayingTrace(head, 5))
+    v = NxStarveFeed(NxStarvation(), t)
+    NxCheck(r, "starve: three stalls in the window", NxStarveText(v), "3")
+    if v <> invalid then NxCheck(r, "starve: three stalls, longest at least 9", (v.longest >= 9).ToStr(), "true")
+    t = NxPlayingTrace(100, 30)
+    t.Append(NxFrozenTrace(130, 25))
+    v = NxStarveFeed(NxStarvation(), t)
+    NxCheck(r, "starve: one long freeze", NxStarveText(v), "1")
+    if v <> invalid then NxCheck(r, "starve: one long freeze, longest at least 20", (v.longest >= 20).ToStr(), "true")
+    st = NxStarvation()
+    NxCheck(r, "starve: startup is not a stall", NxStarveText(NxStarveFeed(st, NxFrozenTrace(0, 60))), "none")
+    NxCheck(r, "starve: startup doesn't arm", st.armed.ToStr(), "false")
+    t = []
+    head = 0
+    for i = 1 to 40
+        t.Append(NxPlayingTrace(head, 8))
+        head = head + 8
+        t.Append(NxFrozenTrace(head, 2))
+    end for
+    NxCheck(r, "starve: brief segment pauses", NxStarveText(NxStarveFeed(NxStarvation(), t)), "none")
+    t = []
+    head = 0
+    for i = 1 to 3
+        t.Append(NxPlayingTrace(head, 90))
+        head = head + 90
+        t.Append(NxFrozenTrace(head, 5))
+    end for
+    t.Append(NxPlayingTrace(head, 5))
+    NxCheck(r, "starve: stalls wider than the window", NxStarveText(NxStarveFeed(NxStarvation(), t)), "none")
+    st = NxStarvation()
+    for i = 0 to 9
+        NxStarvationObserve(st, i, i, false, 3000)
+    end for
+    quiet = true
+    for i = 10 to 59
+        if NxStarvationObserve(st, 10, i, true, 3000) <> invalid then quiet = false
+    end for
+    NxCheck(r, "starve: paused samples ignored", quiet.ToStr(), "true")
+    st = NxStarvation()
+    for i = 0 to 9
+        NxStarvationObserve(st, i, i, false, 3000)
+    end for
+    quiet = true
+    for i = 10 to 59
+        if NxStarvationObserve(st, 10, i, false, 2) <> invalid then quiet = false
+    end for
+    NxCheck(r, "starve: the tail is the end's", quiet.ToStr(), "true")
+    t = NxPlayingTrace(0, 20)
+    t.Append(NxFrozenTrace(20, 5))
+    t.Append(NxPlayingTrace(20, 20))
+    t.Append(NxFrozenTrace(40, 5))
+    t.Append(NxPlayingTrace(40, 200))
+    NxCheck(r, "starve: two stalls then recovery", NxStarveText(NxStarveFeed(NxStarvation(), t)), "none")
+
+    ' The step after starving (handleStarvation), and its card.
+    NxCheck(r, "starved direct", NxAttemptText(NxStarvedNext(direct)), "server fellBack")
+    NxCheck(r, "starved server", NxAttemptText(NxStarvedNext(server)), "capped")
+    NxCheck(r, "starved server from direct", NxAttemptText(NxStarvedNext({ rung: "server", retry: false, fellBack: true })), "capped fellBack")
+    NxCheck(r, "starved retried server", NxAttemptText(NxStarvedNext({ rung: "server", retry: true, fellBack: false })), "capped")
+    NxCheck(r, "starved 1080p", NxAttemptText(NxStarvedNext({ rung: "capped", retry: false, fellBack: false })), "none")
+    NxCheck(r, "starved card", NxFailureKind(0, 0, "", "starved", "capped"), "serverTooSlow")
+    NxCheck(r, "starved outranks a refusal", NxFailureKind(500, -1, "http", "starved", "capped"), "serverTooSlow")
+
     print "fallback cases (upstream ladder): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
@@ -138,4 +213,35 @@ function NxFailureKind(status as Integer, errorCode as Integer, category as Stri
     probe = 206
     if status > 0 then probe = status
     return NxPlaybackFailure({ server: "Plex", event: event, rung: rung, errorCode: errorCode, category: category, probe: probe, codec: invalid }).kind
+end function
+
+' Feeds playheads one a second from wall 0, remaining 3000 s, until a verdict.
+function NxStarveFeed(st as Object, playheads as Object) as Dynamic
+    for i = 0 to playheads.Count() - 1
+        v = NxStarvationObserve(st, playheads[i], i, false, 3000)
+        if v <> invalid then return v
+    end for
+    return invalid
+end function
+
+function NxStarveText(v as Dynamic) as String
+    if v = invalid then return "none"
+    return v.stalls.ToStr()
+end function
+
+' 1 s of playhead a second, from `from`.
+function NxPlayingTrace(from as Double, seconds as Integer) as Object
+    out = []
+    for i = 0 to seconds - 1
+        out.Push(from + i)
+    end for
+    return out
+end function
+
+function NxFrozenTrace(at as Double, seconds as Integer) as Object
+    out = []
+    for i = 1 to seconds
+        out.Push(at)
+    end for
+    return out
 end function
