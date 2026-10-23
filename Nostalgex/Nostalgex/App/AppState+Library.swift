@@ -90,9 +90,12 @@ extension AppState {
         // Demo mode is fully bundled — never hit the network
         if isDemoMode { return }
         // Cleared by the defer on every end this process lives to see. Still set at the
-        // next launch means the app died inside this load (LaunchGuard).
-        LaunchGuard.loadStarted()
-        defer { LaunchGuard.loadEnded() }
+        // next launch means the app died inside this load (LaunchGuard). Only a load the
+        // viewer is waiting on counts: tvOS ending a suspended app during a background
+        // refresh says nothing about whether the library can load.
+        let tracksLoad = LaunchGuard.tracksLoad(background: background, hasChannels: !channels.isEmpty)
+        if tracksLoad { LaunchGuard.loadStarted() }
+        defer { if tracksLoad { LaunchGuard.loadEnded() } }
         InstallDiagnostics.note("loadLibrary: background=\(background) channels=\(self.channels.count) servers=\(self.selectedServers.count) lastLoadAge=\(Int(Date().timeIntervalSince1970) - self.lastLoadAtUnix)s")
         // Wall-clock start for the load duration on library.load.completed. Placed
         // before the UI-test stub bailout on purpose: a stubbed load is still a load,

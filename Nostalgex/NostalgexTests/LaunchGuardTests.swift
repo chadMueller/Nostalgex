@@ -99,16 +99,41 @@ final class LaunchGuardTests: XCTestCase {
         XCTAssertFalse(LaunchGuard.shouldAskBeforeLoading(defaults: defaults))
     }
 
-    func testARestoreThatWorksDoesNotHideAKillingRefresh() {
-        // Launch 1: snapshot restores, then the refresh kills the app.
-        LaunchGuard.loadStarted(defaults: defaults)
-        LaunchGuard.loadEnded(resetCount: false, defaults: defaults)
-        LaunchGuard.loadStarted(defaults: defaults)
+    /// The launch path as RootView and loadLibrary run it: restore carries the marker
+    /// without resetting the count, a load carries it only when tracksLoad says so.
+    private func launch(restoreWorks: Bool, thenLoad background: Bool, hasChannels: Bool) {
         LaunchGuard.recordLaunch(defaults: defaults)
-        // Launch 2: same again.
         LaunchGuard.loadStarted(defaults: defaults)
-        LaunchGuard.loadEnded(resetCount: false, defaults: defaults)
-        LaunchGuard.loadStarted(defaults: defaults)
+        if restoreWorks { LaunchGuard.loadEnded(resetCount: false, defaults: defaults) }
+        else { return }                                   // killed inside the restore
+        if LaunchGuard.tracksLoad(background: background, hasChannels: hasChannels) {
+            LaunchGuard.loadStarted(defaults: defaults)   // killed inside the load
+        }
+    }
+
+    func testAnInterruptedBackgroundRefreshCountsNothing() {
+        // Snapshot restores, guide on screen, tvOS ends the app during the refresh. Twice,
+        // days apart: the library is fine and must not get LOADING DIDN'T FINISH.
+        launch(restoreWorks: true, thenLoad: true, hasChannels: true)
+        launch(restoreWorks: true, thenLoad: true, hasChannels: true)
+        LaunchGuard.recordLaunch(defaults: defaults)
+        XCTAssertFalse(LaunchGuard.shouldAskBeforeLoading(defaults: defaults))
+        XCTAssertEqual(defaults.integer(forKey: LaunchGuard.unfinishedLoadsKey), 0)
+        XCTAssertFalse(LaunchGuard.tracksLoad(background: true, hasChannels: true))
+    }
+
+    func testABackgroundCallWithNoGuideYetIsAForegroundLoad() {
+        XCTAssertTrue(LaunchGuard.tracksLoad(background: true, hasChannels: false))
+        XCTAssertTrue(LaunchGuard.tracksLoad(background: false, hasChannels: true))
+        launch(restoreWorks: true, thenLoad: true, hasChannels: false)
+        launch(restoreWorks: true, thenLoad: true, hasChannels: false)
+        LaunchGuard.recordLaunch(defaults: defaults)
+        XCTAssertTrue(LaunchGuard.shouldAskBeforeLoading(defaults: defaults))
+    }
+
+    func testARestoreThatKeepsDyingStillAsks() {
+        launch(restoreWorks: false, thenLoad: false, hasChannels: false)
+        launch(restoreWorks: false, thenLoad: false, hasChannels: false)
         LaunchGuard.recordLaunch(defaults: defaults)
         XCTAssertTrue(LaunchGuard.shouldAskBeforeLoading(defaults: defaults))
     }

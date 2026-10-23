@@ -87,8 +87,8 @@ struct RootView: View {
     private func launchLoad() async {
         if appState.hasCredentials && appState.channels.isEmpty {
             // A snapshot restore can die on a huge library too, so it carries the same marker.
-            // It does not reset the count: a restore that works followed by a refresh that
-            // kills the app must still add up to the TRY AGAIN screen.
+            // It does not reset the count: only a finished foreground load proves the library
+            // loads.
             LaunchGuard.loadStarted()
             let restored = await appState.restoreLibraryFromSnapshotIfNeeded()
             LaunchGuard.loadEnded(resetCount: false)
