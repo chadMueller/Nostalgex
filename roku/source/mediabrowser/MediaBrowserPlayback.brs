@@ -98,7 +98,7 @@ function NxMbStreamContent(b as Object, offsetSec as LongInteger, s as Object, r
     aac51 = NxDecodeAnswer(info.CanDecodeAudio({ Codec: "aac", ChCnt: 6 }))
     q = q + NxMbAudioQuery(ac3, eac3, aac51)
     if rung <> "capped" then rung = "server"
-    q = q + NxMbVideoQuery(b.bitrate, rung)
+    q = q + NxMbVideoQuery(b.bitrate, rung, NxMaxWidthFor(info.GetVideoMode()))
     if pickIndex <> invalid then q = q + "&AudioStreamIndex=" + pickIndex.ToStr()
     ' TS segments on both servers, HEVC included. A Roku played no sound
     ' from fMP4, even stereo AAC, on Emby and on Jellyfin (Discussion #8,
@@ -215,11 +215,32 @@ end function
 ' file played copied, pieces up to 32 MB included (docs/JELLYFIN-EMBY.md).
 ' bitrate invalid (none reported) copies. The "capped" rung is upstream's
 ' cappedTranscodeURL (JellyfinPlaybackResolver.swift), 1080p at 8 Mb/s.
-function NxMbVideoQuery(bitrate as Dynamic, rung = "server" as String) as String
+' A file re-encoded anyway comes no wider than this TV shows (width, from
+' NxMaxWidthFor): a 4K re-encode costs about four times a 1080p one, for a
+' 1080p TV that shows no more (PR #77). One that may be copied keeps 3840,
+' since a narrower MaxWidth makes Emby re-encode what it would copy: a
+' 46 Mb/s 4K HEVC clip came back copied at 3840 and as 1080p H.264 at 1920.
+function NxMbVideoQuery(bitrate as Dynamic, rung = "server" as String, width = 3840 as Integer) as String
     if rung = "capped" then return "&VideoBitrate=8000000&MaxWidth=1920"
-    q = "&VideoBitrate=40000000&MaxWidth=3840"
-    if NxIsNumber(bitrate) and bitrate > 20000000 then q = q + "&AllowVideoStreamCopy=false"
-    return q
+    if NxIsNumber(bitrate) and bitrate > 20000000 then return "&VideoBitrate=40000000&MaxWidth=" + width.ToStr() + "&AllowVideoStreamCopy=false"
+    return "&VideoBitrate=40000000&MaxWidth=3840"
+end function
+
+' The width to ask the server for, from roDeviceInfo's GetVideoMode: the
+' TV's output ("1080p", "2160p60"), not the UI's resolution, which is 1080p
+' on a 4K TCL. 1280 below 1080 lines. A mode it can't read keeps 3840, as
+' before.
+function NxMaxWidthFor(videoMode as String) as Integer
+    ' The leading digits, read by hand: Val("1080p") is 0 off the TV.
+    lines = 0
+    for i = 1 to Len(videoMode)
+        c = Asc(Mid(videoMode, i, 1))
+        if c < 48 or c > 57 then exit for
+        lines = lines * 10 + (c - 48)
+    end for
+    if lines <= 0 or lines >= 2160 then return 3840
+    if lines >= 1080 then return 1920
+    return 1280
 end function
 
 ' The audio the server stream may carry: AAC, and AC3 or E-AC-3 only when

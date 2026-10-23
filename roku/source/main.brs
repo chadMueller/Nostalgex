@@ -22,6 +22,9 @@ sub Main(args = invalid as Dynamic)
     device = CreateObject("roDeviceInfo")
     device.SetMessagePort(port)
     device.EnableLowGeneralMemoryEvent(true)
+    ' What the server stream is sized to (NxMaxWidthFor), and whether this
+    ' display takes HDR: a re-encode keeps the file's HDR tags on 8-bit video.
+    print "app: video mode "; device.GetVideoMode(); ", display "; FormatJson(device.GetDisplayProperties())
     while true
         msg = Wait(0, port)
         if type(msg) = "roSGScreenEvent" and msg.IsScreenClosed() then return

@@ -145,6 +145,16 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     NxCheck(r, "video, 19 Mb/s copies", NxMbVideoQuery(19269041), "&VideoBitrate=40000000&MaxWidth=3840")
     NxCheck(r, "video, 20 Mb/s copies", NxMbVideoQuery(20000000), "&VideoBitrate=40000000&MaxWidth=3840")
     NxCheck(r, "video, 29 Mb/s re-encodes", NxMbVideoQuery(29000000), "&VideoBitrate=40000000&MaxWidth=3840&AllowVideoStreamCopy=false")
+    NxCheck(r, "video, re-encode on a 1080p TV is 1080p", NxMbVideoQuery(29000000, "server", 1920), "&VideoBitrate=40000000&MaxWidth=1920&AllowVideoStreamCopy=false")
+    NxCheck(r, "video, a copy on a 1080p TV stays 3840", NxMbVideoQuery(19269041, "server", 1920), "&VideoBitrate=40000000&MaxWidth=3840")
+    NxCheck(r, "video, no bitrate on a 1080p TV copies", NxMbVideoQuery(invalid, "server", 1920), "&VideoBitrate=40000000&MaxWidth=3840")
+    NxCheck(r, "video, 1080p rung whatever the TV", NxMbVideoQuery(29000000, "capped", 1280), "&VideoBitrate=8000000&MaxWidth=1920")
+    NxCheck(r, "width, 2160p60", NxMaxWidthFor("2160p60").ToStr(), "3840")
+    NxCheck(r, "width, 2160p60b10", NxMaxWidthFor("2160p60b10").ToStr(), "3840")
+    NxCheck(r, "width, 1080p", NxMaxWidthFor("1080p").ToStr(), "1920")
+    NxCheck(r, "width, 1080i", NxMaxWidthFor("1080i").ToStr(), "1920")
+    NxCheck(r, "width, 720p", NxMaxWidthFor("720p").ToStr(), "1280")
+    NxCheck(r, "width, unreadable keeps 3840", NxMaxWidthFor("").ToStr(), "3840")
     NxCheck(r, "audio, eac3 only, 5.1", NxMbAudioQuery(false, true, true), "&AudioCodec=aac,eac3&TranscodingMaxAudioChannels=6")
 
     print "mediabrowser cases:"; r.pass; " passed,"; r.fail; " failed"

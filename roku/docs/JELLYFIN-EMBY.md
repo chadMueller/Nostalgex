@@ -244,9 +244,10 @@ servers, driven over ECP.
   still gave 53 MB pieces (#55, where the remux he first reported is
   29 Mb/s). So over 20 Mb/s the request now asks for
   `AllowVideoStreamCopy=false`, and always for
-  `VideoBitrate=40000000&MaxWidth=3840`, the Apple TV's Auto ceiling
+  `VideoBitrate=40000000`, the Apple TV's Auto ceiling
   (`StreamQuality`), where it asked for 120 Mb/s so the server would always
-  copy (`NxMbVideoQuery`). Re-encoded, Emby makes H.264 with a keyframe at
+  copy (`NxMbVideoQuery`), with `MaxWidth=3840`, or the TV's width when
+  it re-encodes (below). Re-encoded, Emby makes H.264 with a keyframe at
   every segment. Measured on the lab Emby and the 43S45 with one-minute 4K
   HDR10 clips, keyframes 10 s apart, one cut from 12 Angry Men (46 Mb/s)
   and two from La La Land (41.8 and 26.5 Mb/s, film grain):
@@ -271,6 +272,26 @@ servers, driven over ECP.
     software only (to 1080p, 5 to 8×). The 8-bit H.264 keeps the HDR10
     tags without tone mapping: fine on the 43S45, unseen on a TV without
     HDR. Jellyfin untried.
+- **MaxWidth from the TV** (Chad on #77: his stick is 1080p, and a 4K
+  re-encode costs about four times a 1080p one). A file re-encoded anyway,
+  over 20 Mb/s, asks for the width of the TV's video mode
+  (`NxMaxWidthFor`, from `GetVideoMode`: 1920 at 1080 lines, 1280 below,
+  3840 at 2160 or when the mode can't be read; the 43S45 reads `2160p60`,
+  where ECP's `ui-resolution` says 1080p). A file that may be copied
+  keeps 3840: a narrower `MaxWidth` makes Emby re-encode what it would
+  copy. On the lab Emby (2026-10-23), with the ceiling above the file, a
+  46 Mb/s 4K HEVC clip came back copied at 3840 and as 1080p H.264 at
+  3.5 Mb/s at 1920.
+  - No fixed 1080p bitrate: Emby runs libx264 at CRF 23 with the
+    request's `VideoBitrate` only as `-maxrate`. The 26.5 Mb/s La La Land
+    clip at 1920 came out at 2.0 Mb/s with a 40 Mb/s ceiling and with an
+    8 Mb/s one (at 3840, 5.9 Mb/s). The soft 1080p above was seen on a 4K
+    TV.
+  - HDR: every re-encode measured, at 3840 and 1920, was 8-bit `yuv420p`
+    still tagged `smpte2084` and `bt2020`; Emby's chain has no tone
+    mapping. The app prints the TV's video mode and
+    `GetDisplayProperties` at launch, so a tester's console shows whether
+    the display takes HDR.
 
 ## How it fits the app
 
