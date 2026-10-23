@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A sideloaded build's "item:<id>" deep link (NxDeepLinkItem): finds the
+     item in the saved library (source/plex/LibrarySnapshot.brs), off the
+     render thread, and hands it back as an airing from now. -->
+<component name="ItemLinkTask" extends="Task">
+  <interface>
+    <field id="itemId" type="string" />
+    <!-- NxLinkedAiring's block, or {} when the item isn't saved. -->
+    <field id="airing" type="assocarray" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
+  <script type="text/brightscript" uri="pkg:/source/filter/ChannelFilter.brs" />
+  <script type="text/brightscript" uri="pkg:/source/schedule/DailyManifest.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/Lineup.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
+  <script type="text/brightscript" uri="pkg:/source/plex/LibrarySnapshot.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideSchedule.brs" />
+  <script type="text/brightscript" uri="pkg:/components/ItemLinkTask.brs" />
+</component>

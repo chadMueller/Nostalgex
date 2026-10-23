@@ -50,6 +50,22 @@ curl -d '' "http://<tv>:8060/launch/dev?contentId=7&mediaType=live" # at launch
 curl -d '' "http://<tv>:8060/input?contentId=12&mediaType=live"     # while running
 ```
 
+A sideloaded build also takes `contentId=item:<id>`, a server's item id
+(Plex's ratingKey, the `Id` on Jellyfin or Emby). That film or episode plays
+fullscreen from its start, on the channel tuned, and when its file ends,
+however long it stalled on the way, the channel goes on live, part way into
+what airs. It's for trying a fix on a given file without waiting for it to
+air. The item comes from the library the app saved on the TV, so a file
+added since the last scan isn't there yet, and after the TV restarts nothing
+is until the app has scanned once; an item not found leaves the channel
+playing, and the console says so. A store build ignores the link. The
+control port refuses a bare `:` (404), so send it as `%3A`:
+
+```sh
+curl -d '' "http://<tv>:8060/launch/dev?contentId=item%3A50929&mediaType=movie"
+curl -d '' "http://<tv>:8060/input?contentId=item%3A50929&mediaType=movie"
+```
+
 ## Security
 
 - **Sign-in is plex.tv's link code**, typed in or scanned from the QR code

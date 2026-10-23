@@ -5,6 +5,11 @@
 ' contentId names a guide channel, by its id or else by the number on the
 ' guide, and the app tunes it fullscreen. Any mediaType is taken, since every
 ' channel is live; one that names no channel leaves the guide as it is.
+'
+' A sideloaded build also takes contentId "item:<id>", a server's item id
+' (Plex's ratingKey, Jellyfin's or Emby's Id): that film or episode plays
+' fullscreen from its start, for trying a fix on a given file without
+' waiting for it to air. A store build ignores it.
 
 ' The link in launch args or an roInput event's info, or invalid when it has
 ' no contentId and mediaType.
@@ -23,6 +28,16 @@ function NxDeepLinkText(v as Dynamic) as String
     ' never produces, so any numeric type is taken.
     if NxIsNumber(v) then return v.ToStr()
     return ""
+end function
+
+' The item id an "item:<id>" link names, or "" for any other link, and for
+' every link when isDev is false (roAppInfo.IsDev(): not sideloaded).
+function NxDeepLinkItem(link as Dynamic, isDev as Boolean) as String
+    if not isDev or link = invalid then return ""
+    ' An unset node field reads as {}, not invalid.
+    id = NxDeepLinkText(link.contentId)
+    if LCase(Left(id, 5)) <> "item:" then return ""
+    return Mid(id, 6).Trim()
 end function
 
 ' The index in channels of the channel the link names, or -1.

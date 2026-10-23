@@ -14,7 +14,7 @@
     <field id="bundleRequest" type="boolean" alwaysNotify="true" />
     <field id="bundleBuilt" type="string" alwaysNotify="true" onChange="onBundleBuilt" />
     <!-- A deep link from MainScene ({ contentId, mediaType }): tune that
-         channel fullscreen. -->
+         channel fullscreen, or in a sideloaded build play "item:<id>". -->
     <field id="deepLink" type="assocarray" alwaysNotify="true" onChange="onDeepLink" />
     <!-- Set before the first guide, after a full rebuild from Settings: the
          channel to tune and focus instead of the top row, by id. -->

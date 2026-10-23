@@ -91,6 +91,33 @@ function NxSnapshotLoadServer(dir as String, meta as Object, key as String, serv
     return { items: items, collections: collections, entry: entry }
 end function
 
+' The saved item whose ratingKey is ratingKey, given its server's index (its
+' place in keys, the servers' save keys), or invalid. One chunk at a time,
+' so a lookup never holds a whole library.
+function NxSnapshotFindItem(dir as String, meta as Object, keys as Object, ratingKey as String) as Dynamic
+    if ratingKey = "" then return invalid
+    for i = 0 to keys.Count() - 1
+        entry = meta.servers[keys[i]]
+        if type(entry) = "roAssociativeArray" and NxIsNumber(entry.chunks) then
+            for c = 0 to entry.chunks - 1
+                text = NxSnapshotReadFile(NxSnapshotChunkPath(dir, keys[i], entry.gen, c))
+                chunk = invalid
+                if text <> "" then chunk = ParseJson(text)
+                text = ""
+                if type(chunk) = "roArray" then
+                    for each it in chunk
+                        if type(it) = "roAssociativeArray" and NxToStr(it.ratingKey) = ratingKey then
+                            it.serverIndex = i
+                            return it
+                        end if
+                    end for
+                end if
+            end for
+        end if
+    end for
+    return invalid
+end function
+
 ' Saves one server's items (only those with this serverIndex) and
 ' collections under a new generation, then the meta, then drops the old
 ' generation's chunks. `collections` may be invalid when they couldn't be read.

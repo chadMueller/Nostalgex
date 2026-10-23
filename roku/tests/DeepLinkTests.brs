@@ -33,6 +33,26 @@ function NxRunDeepLinkTests() as Integer
     NxCheck(r, "float contentId", NxDeepLinkChannel(channels, NxDeepLinkFrom({ contentId: 300.0, mediaType: "live" })).ToStr(), "3")
     NxCheck(r, "unset field", NxDeepLinkChannel(channels, {}).ToStr(), "-1")
 
+    ' ── A sideloaded build's item link ──
+    item = NxDeepLinkFrom({ contentId: "item:50929", mediaType: "movie" })
+    NxCheck(r, "item link", NxDeepLinkItem(item, true), "50929")
+    NxCheck(r, "item link in a store build", NxDeepLinkItem(item, false), "")
+    NxCheck(r, "item link names no channel", NxDeepLinkChannel(channels, item).ToStr(), "-1")
+    NxCheck(r, "item link, any case, spaces", NxDeepLinkItem(NxDeepLinkFrom({ contentId: " Item: ab12cd ", mediaType: "movie" }), true), "ab12cd")
+    NxCheck(r, "item link without an id", NxDeepLinkItem({ contentId: "item:", mediaType: "movie" }, true), "")
+    NxCheck(r, "channel link is no item", NxDeepLinkItem(link, true), "")
+    NxCheck(r, "item: unset field", NxDeepLinkItem({}, true), "")
+    NxCheck(r, "item: no link", NxDeepLinkItem(invalid, true), "")
+
+    ' The airing it plays as (NxLinkedAiring).
+    b = NxLinkedAiring({ ratingKey: "50929", title: "Lab Clip", type: "movie", year: 1990, duration: 10, videoCodec: "h264", serverIndex: 0 }, 1000)
+    NxCheck(r, "airing from now", b.startSec.ToStr(), "1000")
+    NxCheck(r, "airing for its length", b.endSec.ToStr(), "1600")
+    NxCheck(r, "airing marked linked", FormatJson(b.linked), "true")
+    NxCheck(r, "airing's item", b.ratingKey + " " + b.title + " " + b.videoCodec + " " + b.serverIndex.ToStr(), "50929 Lab Clip h264 0")
+    b = NxLinkedAiring({ ratingKey: "1", title: "No Length", type: "movie" }, 1000)
+    NxCheck(r, "airing without a length: two hours", b.endSec.ToStr(), "8200")
+
     print "deep link cases: "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

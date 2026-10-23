@@ -72,6 +72,24 @@ function NxRunSnapshotTests() as Integer
     NxSnapshotForgetServers(dir, meta, ["DEF"])
     NxSnapCheck(r, "kept server stays whatever the key's case", NxSnapshotReadMeta(dir).servers.DoesExist("def"), true)
 
+    ' A sideloaded build's item link (NxSnapshotFindItem), across servers.
+    meta = NxSnapshotReadMeta(dir)
+    NxSnapshotSaveServer(dir, meta, "abc", items, 0, invalid, invalid, 7000)
+    keys = ["def", "abc"]
+    found = NxSnapshotFindItem(dir, meta, keys, "4321")
+    NxSnapCheck(r, "find: an item in a later chunk", found <> invalid, true)
+    if found <> invalid then
+        NxSnapCheck(r, "find: that item", found.title, "T4321")
+        NxSnapCheck(r, "find: its server's place in keys", found.serverIndex, 1)
+    end if
+    found = NxSnapshotFindItem(dir, meta, keys, "9")
+    NxSnapCheck(r, "find: the other server's", found <> invalid, true)
+    if found <> invalid then NxSnapCheck(r, "find: the other server's index", found.serverIndex, 0)
+    NxSnapCheck(r, "find: not saved", NxSnapshotFindItem(dir, meta, keys, "99999") = invalid, true)
+    NxSnapCheck(r, "find: no id", NxSnapshotFindItem(dir, meta, keys, "") = invalid, true)
+    NxSnapCheck(r, "find: a server not saved", NxSnapshotFindItem(dir, meta, ["zzz"], "9") = invalid, true)
+    NxSnapCheck(r, "find: nothing saved", NxSnapshotFindItem(dir, { servers: {} }, keys, "9") = invalid, true)
+
     ' Another format is ignored.
     NxSnapshotWriteFile(dir + "/meta.json", "{""format"":0,""servers"":{""def"":{}}}")
     NxSnapCheck(r, "other format ignored", NxSnapshotReadMeta(dir).servers.Count(), 0)
