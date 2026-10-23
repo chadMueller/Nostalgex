@@ -1,6 +1,17 @@
 {
   "entries": [
     {
+      "version": "1.0.29",
+      "date": "OCT 2026",
+      "released": false,
+      "title": "A way out of a library that won't finish loading",
+      "bullets": [
+        "Deleting Nostalgex and installing it again now starts you at the connect screen. Before, the Apple TV kept your sign-in after the app was deleted, so a fresh install went straight back into the same library. Updating the app keeps your sign-in as always.",
+        "START OVER is on the loading screen the whole time a library loads. It stops loading and signs you out, after asking first.",
+        "If Nostalgex closes twice in a row before your library finishes loading, it asks before loading again: TRY AGAIN, or START OVER to sign in again or pick a different server."
+      ]
+    },
+    {
       "version": "1.0.28",
       "date": "OCT 2026",
       "released": true,

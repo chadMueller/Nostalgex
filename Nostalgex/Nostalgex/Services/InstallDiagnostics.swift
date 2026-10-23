@@ -28,6 +28,12 @@ enum InstallDiagnostics {
         LocalStore.rootDirectory?.appendingPathComponent("install.stamp")
     }
 
+    /// The stamp file is the second witness LaunchGuard uses before treating a launch as a
+    /// fresh install.
+    static var installStampExists: Bool {
+        stampURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+    }
+
     /// Call once per process launch, before credentials are read.
     static func recordLaunch() {
         let defaults = UserDefaults.standard
