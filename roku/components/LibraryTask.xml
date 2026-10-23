@@ -22,6 +22,14 @@
     <!-- firstRun after a library was saved before: the OS cleared it. -->
     <field id="savedBefore" type="boolean" value="false" />
     <field id="message" type="string" value="" />
+    <!-- The stall watch (source/util/LoadStall.brs), as upstream's
+         withLibraryLoadStallWatch: scanning is true while a server's library
+         is read, scanAnswers counts its answers, and stopWaiting set to
+         "viewer" (STOP WAITING) or "stall" (210 s without progress) ends
+         that scan with what it has read. -->
+    <field id="scanning" type="boolean" value="false" />
+    <field id="scanAnswers" type="integer" value="0" />
+    <field id="stopWaiting" type="string" value="" />
     <field id="guide" type="assocarray" />
     <!-- Show the saved guide first when it is still what a fresh build would
          give, then rebuild in the background. -->

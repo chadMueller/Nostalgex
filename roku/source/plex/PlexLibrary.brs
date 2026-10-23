@@ -35,6 +35,9 @@ function NxPlexGetContainer(server as Object, path as String, err = invalid as D
     base = NxPlexBase(server)
     for attempt = 1 to 3
         res = NxPlexServerGet(base + path, NxToStr(server.accessToken), timeoutMs)
+        ' A scan told to stop waiting keeps an answer that came, and tries
+        ' nothing again.
+        if NxLoadStopped() and (res.code < 200 or res.code > 299) then return invalid
         if res.code = 401 or res.code = 403 or (res.code >= 200 and res.code <= 299) then exit for
         print "plex: a library request failed ("; res.code; "), try "; attempt; " of 3"
         if attempt = 2 and base <> NxToStr(server.uri) then
@@ -72,7 +75,9 @@ function NxMinInt(a as Integer, b as Integer) as Integer
 end function
 
 ' Every item in a section, 300 at a time, as fetchPlexSectionPaged. invalid
-' if a page fails (upstream throws and skips the section). includeGuids=1 puts
+' if a page fails (upstream throws and skips the section), except when the
+' scan was told to stop waiting: then the pages read so far, as the Apple
+' TV's fetchSectionItemsPaged keeps them. includeGuids=1 puts
 ' the `Guid` list (`tmdb://603`, ...) on each item; without it, a library on
 ' Plex's current agents has only `plex://` guids and no TMDB ids.
 function NxPlexSectionItems(server as Object, key as String) as Dynamic
@@ -81,7 +86,10 @@ function NxPlexSectionItems(server as Object, key as String) as Dynamic
     start = 0
     while true
         mc = NxPlexGetContainer(server, "/library/sections/" + key + "/all?includeGuids=1&X-Plex-Container-Start=" + start.ToStr() + "&X-Plex-Container-Size=" + pageSize.ToStr(), invalid, 30000)
-        if mc = invalid then return invalid
+        if mc = invalid then
+            if NxLoadStopped() then return all
+            return invalid
+        end if
         page = NxList(mc.Metadata)
         all.Append(page)
         if page.Count() = 0 then exit while
@@ -128,7 +136,9 @@ end function
 ' `barCaption` how far through a section's shows. Returns invalid
 ' when the server rejected the token or its section list failed, as
 ' upstream's scan throws. `info`, if given, gets the library's `signature`
-' as the scan found it (NxLibrarySignature).
+' as the scan found it (NxLibrarySignature). A scan told to stop waiting
+' (NxLoadStopped) returns what it has read, as the Apple TV's
+' LibraryScanInterrupted carries it.
 function NxPlexScanServer(server as Object, serverIndex as Integer, progress = invalid as Dynamic, info = invalid as Dynamic) as Dynamic
     err = { auth: false }
     mc = NxPlexGetContainer(server, "/library/sections", err)
@@ -166,7 +176,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         ' carries no show Guid list.
                         showTmdb = NxParseTmdbIdFromPlex(show, false)
                         leaves = NxPlexContainerOf(answers[s])
-                        if leaves = invalid then leaves = NxPlexGetContainer(server, "/library/metadata/" + NxToStr(show.ratingKey) + "/allLeaves")
+                        if leaves = invalid and not NxLoadStopped() then leaves = NxPlexGetContainer(server, "/library/metadata/" + NxToStr(show.ratingKey) + "/allLeaves")
                         if leaves <> invalid then
                             for each ep in NxList(leaves.Metadata)
                                 it = NxPlexEpisodeItem(ep, show, showGenres, showTmdb, isMusicVideoSection)
@@ -183,6 +193,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         progress.bar = NxMinInt(b + batch, items.Count()) / items.Count()
                         progress.barCaption = NxMinInt(b + batch, items.Count()).ToStr() + " of " + items.Count().ToStr() + " shows"
                     end if
+                    if NxLoadStopped() then exit for
                 end for
             else
                 for each raw in items
@@ -198,6 +209,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                 end if
             end if
         end if
+        if NxLoadStopped() then exit for
     end for
     return out
 end function

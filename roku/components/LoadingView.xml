@@ -2,10 +2,13 @@
 <!-- The progress screen of a library load, as upstream's LoadingView and
      LibraryLoadStepRail (App/Plex90App.swift): the logo, the first-run
      warning, the step rail, the step's headline, a detail line and a bar.
-     It reads everything from the LibraryTask it is given. -->
+     It reads everything from the LibraryTask it is given. stalling, set by
+     MainScene's stall watch, adds upstream's STOP WAITING block; OK on it
+     goes to MainScene, which holds the focus. -->
 <component name="LoadingView" extends="Group">
   <interface>
     <field id="task" type="node" onChange="onTask" />
+    <field id="stalling" type="boolean" value="false" onChange="render" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/components/LoadingView.brs" />

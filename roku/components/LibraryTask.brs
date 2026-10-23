@@ -314,6 +314,13 @@ sub loadLibrary()
     end for
     items = []
     scanned = []
+    ' Set when a server's scan was stopped part way: its items are in, but
+    ' not saved, so the next load reads it again, as upstream marks the
+    ' library stale.
+    partial = false
+    ' Who stopped a scan that had read nothing: the load fails with that
+    ' only if no server gave any items, as upstream counts its successes.
+    emptyStop = ""
     ' Every server on, as NxSnapshotSaveServer takes it, so a save the OS
     ' has cleared from cachefs: can be written again from memory.
     saves = []
@@ -363,8 +370,25 @@ sub loadLibrary()
             else
                 m.top.progress = "Reading your library from " + NxToStr(servers[i].name) + "…"
                 info = { signature: invalid }
-                got = NxScanServerFor(servers[i], i, m.top, info)
-                if got = invalid then
+                got = scanUnderWatch(servers[i], i, info)
+                stopped = info.stopped
+                if stopped <> "" then
+                    count = 0
+                    if got <> invalid then count = got.Count()
+                    print "library: stopped waiting on server "; i; " ("; stopped; ") with "; count; " items read"
+                    ' A background refresh stopped part way is dropped, as
+                    ' upstream's: its items are a subset of the guide on
+                    ' screen.
+                    if shown then
+                        keepSavedGuide()
+                        return
+                    end if
+                    if count = 0 then
+                        emptyStop = stopped
+                        got = []
+                    end if
+                    partial = true
+                else if got = invalid then
                     if shown then
                         print "library: background refresh couldn't read the library; keeping the saved guide"
                         keepSavedGuide()
@@ -374,13 +398,22 @@ sub loadLibrary()
                     return
                 end if
                 items.Append(got)
-                s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec& }
-                scanned.Push(s)
-                saves.Push(s)
+                if stopped = "" then
+                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec& }
+                    scanned.Push(s)
+                    saves.Push(s)
+                end if
             end if
         end if
     end for
     print "library: "; items.Count(); " items in "; timer.TotalMilliseconds(); " ms ("; scanned.Count(); " servers scanned)"
+    if items.Count() = 0 and emptyStop = "viewer" then
+        fail("Stopped waiting. Nothing had come back from your server, so no channels were built. Press OK to try again when the connection looks better.")
+        return
+    else if items.Count() = 0 and emptyStop <> "" then
+        fail("Your server stopped sending data partway through the scan and never resumed. Check that it is awake and reachable on this network, then press OK to try again.")
+        return
+    end if
 
     ' Server collections (source/collections/Collections.brs), read after the
     ' library as the web tuner's scan runs after its load, for the servers
@@ -426,7 +459,7 @@ sub loadLibrary()
     ' Every server from its save: the last build's filter results stand for
     ' all but the channels that read the clock (NxSavedFiltered).
     reuse = invalid
-    if scanned.Count() = 0 then
+    if scanned.Count() = 0 and not partial then
         timer.Mark()
         reuse = NxSavedFiltered(items, config, NxFilterClock(), NxEnabledBundles())
         if reuse <> invalid then print "library: "; reuse.Count(); " channels' filter results from the last build, read in "; timer.TotalMilliseconds(); " ms"
@@ -935,6 +968,23 @@ function NxPoolsFingerprint(ordered as Object) as String
         d.Update(b)
     end for
     return Left(d.Final(), 12)
+end function
+
+' NxScanServerFor under the stall watch: MainScene watches scanning and
+' scanAnswers, and the server requests (NxServerWait) end early once it
+' sets stopWaiting. info.stopped gets who stopped it ("viewer" or "stall"),
+' or "". MainScene sets stopWaiting only while scanning is true.
+function scanUnderWatch(server as Object, index as Integer, info as Object) as Dynamic
+    m.top.stopWaiting = ""
+    m.top.scanAnswers = 0
+    m.nxLoadWatch = m.top
+    m.top.scanning = true
+    got = NxScanServerFor(server, index, m.top, info)
+    info.stopped = m.top.stopWaiting
+    m.nxLoadWatch = invalid
+    m.top.scanning = false
+    m.top.stopWaiting = ""
+    return got
 end function
 
 ' A new step on the loading screen's rail; the last step's bar goes with it.

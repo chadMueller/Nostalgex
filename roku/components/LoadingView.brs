@@ -103,7 +103,7 @@ sub render()
     if detail = "" and st.id <> "channels" then detail = UCase(st.hint)
     value = t.bar
     if value > 1 then value = 1
-    layout = st.id + "|" + t.firstRun.ToStr() + "|" + t.savedBefore.ToStr() + "|" + (detail <> "").ToStr() + "|" + (t.bar >= 0).ToStr()
+    layout = st.id + "|" + t.firstRun.ToStr() + "|" + t.savedBefore.ToStr() + "|" + (detail <> "").ToStr() + "|" + (t.bar >= 0).ToStr() + "|" + m.top.stalling.ToStr()
     if layout = m.layout then
         if m.detail <> invalid then m.detail.text = detail
         if m.barFill <> invalid then
@@ -125,6 +125,7 @@ sub render()
     if t.firstRun then h = h + 30 + gap
     if detail <> "" then h = h + 30 + gap
     if t.bar >= 0 then h = h + 44 + gap
+    if m.top.stalling then h = h + 12 + stallHeight()
     y = (1080 - h) / 2
 
     ' The brand wordmark, 500 wide as upstream's (scripts/icons.sh).
@@ -165,7 +166,51 @@ sub render()
         g.AppendChild(m.barFill)
         m.barCaption = centred(UCase(NxToStr(t.barCaption)), "DMMono-Regular", 19, "0xFFFFFF66", y + 16)
         g.AppendChild(m.barCaption)
+        y = y + 44 + gap
     end if
+    if m.top.stalling then renderStall(g, y + 12)
+end sub
+
+' Upstream's stallBlock (App/Plex90App.swift): once the scan has gone quiet,
+' a line saying so, STOP WAITING as the focused primary button
+' (OnboardingButtonStyle, 24 pt) and what it does, 14 apart.
+function stallHeight() as Float
+    return 28 + 14 + 80 + 14 + 24
+end function
+
+sub renderStall(g as Object, y as Float)
+    g.AppendChild(centred("Still waiting on your server. Nothing has come back for a while.", "DMMono-Regular", 20, "0xFFFFFF80", y))
+    y = y + 28 + 14
+    label = "STOP WAITING"
+    font = fontOf("DMMono-Medium", 24)
+    probe = CreateObject("roSGNode", "Label")
+    probe.font = font
+    probe.text = label
+    w = probe.boundingRect().width + 2 * 36
+    h = 80
+    b = CreateObject("roSGNode", "Group")
+    b.translation = [(1920 - w) / 2, y]
+    b.scaleRotateCenter = [w / 2, h / 2]
+    b.scale = [1.07, 1.07]
+    slab = CreateObject("roSGNode", "Poster")
+    slab.uri = "pkg:/images/look/ob_slab.9.png"
+    slab.blendColor = m.cyan + "FF"
+    slab.translation = [-44, -44]
+    slab.width = w + 88
+    slab.height = h + 88
+    b.AppendChild(slab)
+    lbl = CreateObject("roSGNode", "Label")
+    lbl.text = label
+    lbl.font = font
+    lbl.color = "0x000F17FF"
+    lbl.width = w
+    lbl.height = h
+    lbl.horizAlign = "center"
+    lbl.vertAlign = "center"
+    b.AppendChild(lbl)
+    g.AppendChild(b)
+    y = y + h + 14
+    g.AppendChild(centred("Keeps whatever has loaded so far and finishes the rest later.", "DMMono-Regular", 17, "0xFFFFFF4D", y))
 end sub
 
 ' LibraryLoadStepRail: a circle per step, done ones ticked, the current one

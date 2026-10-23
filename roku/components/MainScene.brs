@@ -231,7 +231,63 @@ sub startLibrary(useCache = false as Boolean, rebuild = false as Boolean)
     m.library.rebuild = rebuild
     m.library.ObserveField("phase", "onLibraryPhase")
     m.library.ObserveField("status", "onLibraryStatus")
+    m.library.ObserveField("scanning", "onScanning")
     m.library.control = "run"
+end sub
+
+' The stall watch over a server's scan (source/util/LoadStall.brs), as
+' upstream's withLibraryLoadStallWatch: every 2 s while it runs, the scan's
+' progress fields and answers count, compared with the last look. Quiet
+' for 60 s, the loading screen offers STOP WAITING; for 210 s, the scan is
+' stopped. A background refresh, under the guide, says nothing and is only
+' stopped.
+sub onScanning()
+    if m.library = invalid then return
+    if not m.library.scanning then
+        stopStallWatch()
+        return
+    end if
+    if m.stallTimer = invalid then
+        m.stallTimer = CreateObject("roSGNode", "Timer")
+        m.stallTimer.duration = 2
+        m.stallTimer.repeat = true
+        m.stallTimer.ObserveField("fire", "onStallTick")
+    end if
+    m.stallClock = CreateObject("roTimespan")
+    m.stall = NxStallStart(stallSample(), 0)
+    m.stallTimer.control = "start"
+end sub
+
+function stallSample() as String
+    t = m.library
+    return t.phase + "|" + t.progress + "|" + t.bar.ToStr() + "|" + t.barCaption + "|" + t.scanAnswers.ToStr()
+end function
+
+sub onStallTick()
+    if m.library = invalid or not m.library.scanning or m.stall = invalid then
+        stopStallWatch()
+        return
+    end if
+    verdict = NxStallVerdict(m.stall, stallSample(), m.stallClock.TotalMilliseconds())
+    if m.loading <> invalid then m.loading.stalling = verdict <> "progressing"
+    if verdict = "stalled" then
+        print "library: no scan progress for "; NxStallStopAfterMs() \ 1000; " s, abandoning this scan"
+        stopWaiting("stall")
+    end if
+end sub
+
+' Ends the scan running, with what it has read (LibraryTask.stopWaiting).
+sub stopWaiting(reason as String)
+    if m.library = invalid or not m.library.scanning then return
+    if m.library.stopWaiting <> "" then return
+    m.library.stopWaiting = reason
+    stopStallWatch()
+end sub
+
+sub stopStallWatch()
+    if m.stallTimer <> invalid then m.stallTimer.control = "stop"
+    m.stall = invalid
+    if m.loading <> invalid then m.loading.stalling = false
 end sub
 
 ' The progress screen (LoadingView) goes up once the load is under way and
@@ -330,6 +386,8 @@ sub releaseLibrary()
     m.library.UnobserveField("bundleBuilt")
     m.library.UnobserveField("phase")
     m.library.UnobserveField("status")
+    m.library.UnobserveField("scanning")
+    stopStallWatch()
     m.library.control = "stop"
     m.library = invalid
 end sub
@@ -394,6 +452,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if key = "OK" and m.signIn <> invalid and m.signIn.status = "error" then
         startSignIn()
+        return true
+    end if
+    ' STOP WAITING, on a loading screen whose scan has gone quiet.
+    if key = "OK" and m.loading <> invalid and m.loading.stalling then
+        print "library: the viewer stopped waiting on the library scan"
+        stopWaiting("viewer")
         return true
     end if
     if key = "OK" and m.library <> invalid and m.library.status = "error" then

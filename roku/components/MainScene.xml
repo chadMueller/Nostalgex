@@ -8,6 +8,7 @@
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/LibrarySnapshot.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/ServerKind.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LoadStall.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0E11FF" />

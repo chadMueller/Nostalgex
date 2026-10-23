@@ -349,7 +349,8 @@ end function
 ' invalid, getMany(paths) one per path, and auth is set once the server
 ' rejected the token. `progress`, if given, gets `progress`, `bar` and
 ' `barCaption` as NxPlexScanServer's does. Returns invalid when the token
-' was rejected or the libraries list failed.
+' was rejected or the libraries list failed. A scan told to stop waiting
+' (NxLoadStopped) returns what it has read, as NxPlexScanServer's does.
 function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic) as Dynamic
     viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId))
     if viewsAnswer = invalid then return invalid
@@ -396,6 +397,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         progress.bar = done / series.Count()
                         progress.barCaption = done.ToStr() + " of " + series.Count().ToStr() + " shows"
                     end if
+                    if NxLoadStopped() then exit for
                 end for
             else
                 items = NxMbMorePages(fetcher, userId, parentId, "Movie", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Movie", 0)))
@@ -415,6 +417,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
             end if
         end if
         if fetcher.auth then return invalid
+        if NxLoadStopped() then exit for
     end for
     return out
 end function

@@ -154,6 +154,9 @@ function NxMbFetcher(server as Object) as Object
         getJSON: function(path as String) as Dynamic
             for attempt = 1 to 3
                 res = NxServerRequest("GET", m.base + path, m.headers, "", 30000)
+                ' A scan told to stop waiting keeps an answer that came,
+                ' and tries nothing again.
+                if NxLoadStopped() and (res.code < 200 or res.code > 299) then return invalid
                 if res.code = 401 or res.code = 403 then
                     m.auth = true
                     return invalid
@@ -177,6 +180,8 @@ function NxMbFetcher(server as Object) as Object
                     out.Push(invalid)
                 else if res.code >= 200 and res.code <= 299 then
                     out.Push(res.json)
+                else if NxLoadStopped() then
+                    out.Push(invalid)
                 else
                     out.Push(m.getJSON(paths[i]))
                 end if

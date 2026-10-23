@@ -159,7 +159,7 @@ function NxServerRequest(method as String, url as String, headers as Object, bod
         ok = xfer.AsyncPostFromString(body)
     end if
     if not ok then return { code: -1, json: invalid }
-    msg = Wait(timeoutMs, port)
+    msg = NxServerWait(timeoutMs, port)
     if type(msg) <> "roUrlEvent" then
         xfer.AsyncCancel()
         return { code: -28, json: invalid }
@@ -179,6 +179,14 @@ function NxServerGetMany(urls as Object, headers as Object, width as Integer, ti
     nextIdx = 0
     pending = 0
     while nextIdx < urls.Count() or pending > 0
+        ' A scan told to stop waiting starts nothing more; what's left
+        ' answers -1.
+        if NxLoadStopped() then
+            for each id in live
+                live[id].xfer.AsyncCancel()
+            end for
+            exit while
+        end if
         while pending < width and nextIdx < urls.Count()
             xfer = NxServerTransfer(urls[nextIdx], headers)
             if xfer = invalid then
@@ -193,7 +201,7 @@ function NxServerGetMany(urls as Object, headers as Object, width as Integer, ti
             nextIdx = nextIdx + 1
         end while
         if pending = 0 then exit while
-        msg = Wait(timeoutMs, port)
+        msg = NxServerWait(timeoutMs, port)
         if type(msg) = "roUrlEvent" then
             id = msg.GetSourceIdentity().ToStr()
             job = live[id]
@@ -213,6 +221,36 @@ function NxServerGetMany(urls as Object, headers as Object, width as Integer, ti
         end if
     end while
     return out
+end function
+
+' A server's answer on `port`, as Wait(timeoutMs, port), while a library
+' scan runs under the loading screen's stall watch (LibraryTask's
+' stopWaiting): every answer that came back 2xx counts as progress there
+' (scanAnswers), and a stop ends the wait within a quarter second, as a
+' timeout. Outside a scan, a plain Wait.
+function NxServerWait(timeoutMs as Integer, port as Object) as Dynamic
+    watch = m.nxLoadWatch
+    if watch = invalid then return Wait(timeoutMs, port)
+    clock = CreateObject("roTimespan")
+    while not NxLoadStopped()
+        left = timeoutMs - clock.TotalMilliseconds()
+        if left <= 0 then return invalid
+        if left > 250 then left = 250
+        msg = Wait(left, port)
+        if type(msg) = "roUrlEvent" then
+            code = msg.GetResponseCode()
+            if code >= 200 and code <= 299 then watch.scanAnswers = watch.scanAnswers + 1
+            return msg
+        end if
+    end while
+    return invalid
+end function
+
+' True once the library scan running was told to stop waiting: no more
+' requests or tries for it.
+function NxLoadStopped() as Boolean
+    watch = m.nxLoadWatch
+    return watch <> invalid and watch.stopWaiting <> ""
 end function
 
 ' A response body as JSON, or invalid. Only a body that starts as JSON is

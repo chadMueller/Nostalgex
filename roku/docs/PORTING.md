@@ -22,6 +22,7 @@ and already pinned to the Apple TV.
 | `ServerPickerView` (`Plex90App.swift`): CHOOSE YOUR LIBRARIES after sign-in when the account lists more than one server; owned servers on, all of them when none is owned | `components/ServerPickerView.*`, `source/plex/ServerChoice.brs`, Settings › CONNECTION | ported; cases in `tests/ServerChoiceTests.brs`. Not yet seen on a TV (one-server account). Unlike upstream, no server is checked before it, as the maintainer asked |
 | `PlexAPIService.bestReachableURI`: one verified address per server, best of local, remote, relay | `source/plex/ServerResolve.brs` | ported for the servers on, every address at once, an answer counting only if `/identity` names that server; saved, not re-checked on later launches. Cases in `tests/ServerResolveTests.brs` |
 | `LoadingView`, `LibraryLoadStepRail`, `LibraryLoadPhase` (`Plex90App.swift`) | `components/LoadingView.*`, phases from `components/LibraryTask.brs` | ported; Collections is always a step, as every scan reads them |
+| `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby |
 | `SettingsPageView` order and `CollectionAccordionHeaderRow` (`BundleManagerView.swift`); `toggleBundle`, `rebuildLineupAfterBundleChange` (`AppState+Channels.swift`) | `components/SettingsView.*`, `rebuildForBundles` in `components/LibraryTask.brs` | ported; no rating, tips, stream quality or language rows. A package switch builds only its own channels, behind Settings; its pools matched a full rebuild's on the 43S45 |
 | `PlayerView`, `MiniChannelStrip`, `NowPlayingPanel`, `SleepGracePrompt`, `SleepTimerLogic` | `components/GuideView.brs`, `components/MiniStripView.*`, `components/NowPlayingView.*`, `source/guide/SleepTimer.brs` | ported (differences below); sleep-timer cases in `tests/SleepTimerTests.brs` |
 | `plex-tuner.html` `scanOnePlexServer` and helpers; `parseMusicVideoFromPlex` | `source/plex/PlexLibrary.brs` | ported; checked live against upstream (below) |
@@ -256,6 +257,48 @@ Home leaves a server stream running until the next launch stops it (the
 stop address is kept in the registry). An exit hook in `source/main.brs`
 was tried and sent nothing, on Home or on Back: the app is gone before
 the screen-closed event is acted on.
+
+## When the server goes quiet
+
+After upstream's stall watch (issue #61). While a server's library is
+read, nothing coming back for 60 s puts "Still waiting on your server"
+and STOP WAITING on the loading screen; 210 s stops the scan. A stop ends
+the request waiting within a quarter second and the guide builds from the
+items already read; with none, the load fails with upstream's message.
+Under a guide already on screen nothing shows, and a refresh stopped part
+way is dropped, as upstream's.
+
+Where it differs:
+- Progress is any change in the loading screen's step, detail line or bar,
+  or any server answer (2xx) during the scan. Upstream's sample is its
+  phase, section and item counters and detail line.
+- A server stopped part way isn't saved, so the next load reads it again,
+  where upstream marks the library stale for its refresh. The Roku reads
+  the library only at launch, so "finishes the rest later" means the next
+  launch. That server's collections aren't read that time.
+- Upstream's "Retry" is "press OK to try again", the Roku's error screen.
+- A Roku request gives up on its own, three tries at a 15 or 30 s
+  timeout, so one stuck request ends within 90 s and the scan goes on
+  without it, as before. 210 s takes several in a row with nothing
+  answering, such as a TV library's episodes.
+
+Measured on the 43S45 (2026-10-23), through a proxy in front of the lab
+Emby that held chosen requests. In the first two runs the TV library was
+the proxy's own, ten shows whose episode requests never answered, added to
+the Lab library's 16 films:
+- STOP WAITING was on screen 72 s after the last answer (not yet at 63 s;
+  the watch looks every 2 s). Pressed, the guide was up about a second
+  later, built from the 16 films.
+- Left alone, the scan stopped 210 s after the last answer and the guide
+  came up with the 16 films; under a saved guide the same stop left that
+  guide on screen. After either stop the proxy saw one request, sent at
+  the moment of the stop, and none after.
+- With the libraries list held, STOP WAITING gave upstream's "Stopped
+  waiting. Nothing had come back from your server…" error.
+- Pages answering 25 s apart, 100 s in all (the proxy asked Emby for 5
+  items a page): no STOP WAITING in screenshots every 6 s.
+- Not exercised on a TV: Plex, Jellyfin, a stop between two servers, and
+  the 210 s stop with nothing loaded.
 
 ## The connect screens
 
