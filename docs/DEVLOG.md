@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-23 (publish franchise channels from your collections)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/franchise-channels-your-collections`.
+
+**Why.** New live post. Chad's copy was already `draft: false` and dated 2026-10-23. The article is how franchise channels fill from a Plex, Jellyfin or Emby library, including TV spinoffs, and how existing server collections fold into one channel.
+
+**Changed.**
+- Added `content/blog/franchise-channels-your-collections.md` as given. No copy edits. Other posts untouched, including the two remaining drafts (`make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`).
+- `scripts/media-sizes.json`: cover at `site/blog/franchise-channels-your-collections/cover.jpg` is 1200x630. The two inline guide frames (`library-franchises-guide.webp`, `jurassic-park-guide.webp`) are 1280x720. All three R2 URLs returned 200. Images stay on R2; none committed.
+- `npm run blog:render` wrote nine live posts into `public/sitemap.xml`, including `/blog/franchise-channels-your-collections` with lastmod 2026-10-23. `/blog` lastmod is 2026-10-23. `npm run bundles:render` then ran after the blog step, so the committed sitemap has the blog block above the channels block, matching main.
+
+**Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
+
+**Next.** Nothing on this post.
+
 ## 2026-10-22 (Roku 1.0.4: sound from Jellyfin and Emby, Dolby as stereo AAC, the VERSION line)
 
 **Shipped.** Nothing yet. Branch `roku/1.0.4` = main `c21813e` (tydude001's #55, #53, #54, #56, #48 and #51, merged in that order) plus `build_version=4`. Not signed.
