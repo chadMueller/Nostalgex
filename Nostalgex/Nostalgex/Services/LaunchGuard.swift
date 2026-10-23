@@ -74,6 +74,14 @@ enum LaunchGuard {
         InstallDiagnostics.note("LOAD: the previous launch ended inside a library load (\(count) in a row)")
     }
 
+    /// Whether a load carries the marker. A background refresh (a guide already on screen)
+    /// does not: tvOS ends suspended apps whenever it likes, and two of those days apart
+    /// must not put LOADING DIDN'T FINISH in front of a library that loads fine. Mirrors
+    /// loadLibrary's own rule: `background` with no channels yet is a foreground load.
+    static func tracksLoad(background: Bool, hasChannels: Bool) -> Bool {
+        !(background && hasChannels)
+    }
+
     static func loadStarted(defaults: UserDefaults = .standard) {
         defaults.set(true, forKey: loadInFlightKey)
     }
