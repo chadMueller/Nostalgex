@@ -3,6 +3,9 @@
   <interface>
     <!-- Set by source/main.brs from a launch or roInput deep link. -->
     <field id="deepLink" type="assocarray" alwaysNotify="true" onChange="onDeepLink" />
+    <!-- Set when the app closes itself (Back on the guide, once the server
+         stream is stopped); source/main.brs returns on it. -->
+    <field id="leave" type="boolean" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />

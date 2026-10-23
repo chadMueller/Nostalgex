@@ -816,6 +816,12 @@ end sub
 
 sub onStopDone()
     if m.stopTask.state <> "stop" then return
+    if m.leaving = true then
+        print "guide: the stop answered; closing the app"
+        scene = m.top.getScene()
+        scene.leave = true
+        return
+    end if
     idx = NxTuneStopped(m.tuneQueue)
     if idx >= 0 then startTune(idx)
 end sub
@@ -1914,6 +1920,9 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press or m.channels = invalid then return false
+    ' Leaving once the stream's stop answers: Back again leaves at once, and
+    ' nothing else acts meanwhile.
+    if m.leaving = true then return key <> "back"
     ' STILL WATCHING?: any button keeps watching, as SleepGracePrompt.
     if m.graceEnd <> invalid then
         keepAwake()
@@ -2021,14 +2030,27 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         setFullscreen(true)
         return true
     end if
-    if key = "back" and (m.focus <> m.tuned or m.slotOffset <> 0) then
-        ' Back returns to the live channel, as Menu does on Apple TV.
-        m.focus = m.tuned
-        m.slotOffset = 0
-        keepFocusVisible()
-        renderGrid()
-        renderInfo()
-        return true
+    if key = "back" then
+        ' Back returns to the live channel, then leaves (NxGuideBack). A
+        ' stop already out for a channel change counts: leaving now would
+        ' cut it off.
+        stopping = m.tuneQueue.stopping = true
+        action = NxGuideBack(m.focus, m.tuned, m.slotOffset, stopping or (m.stopUrl <> invalid and m.stopUrl <> ""))
+        if action = "live" then
+            m.focus = m.tuned
+            m.slotOffset = 0
+            keepFocusVisible()
+            renderGrid()
+            renderInfo()
+            return true
+        end if
+        if action = "stop" then
+            print "guide: back, stopping the server's stream before leaving"
+            m.leaving = true
+            NxTuneDrop(m.tuneQueue)
+            if not stopping then stopPrevious()
+            return true
+        end if
     end if
     return false
 end function

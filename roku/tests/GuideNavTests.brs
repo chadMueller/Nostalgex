@@ -14,6 +14,11 @@ function NxRunGuideNavTests() as Integer
     NxCheck(r, "up first no wrap", NxGuideStep(0, 17, "up").ToStr(), "-1")
     NxCheck(r, "other key", NxGuideStep(3, 17, "left").ToStr(), "-1")
 
+    NxCheck(r, "back off live returns", NxGuideBack(5, 2, 0, true), "live")
+    NxCheck(r, "back later in the row returns", NxGuideBack(2, 2, 3, false), "live")
+    NxCheck(r, "back on live stops an encode", NxGuideBack(2, 2, 0, true), "stop")
+    NxCheck(r, "back on live, direct play, leaves", NxGuideBack(2, 2, 0, false), "leave")
+
     print "guide nav cases (upstream ChannelGuideView wrap): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

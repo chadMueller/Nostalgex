@@ -547,6 +547,11 @@ at `6f05937` with 5,363 items on one server:
 - Every Task node already has a `state` field (`init`/`run`/`stop`/`done`).
   An interface field of the same name never reaches its observer, so use
   another name (`status`).
+- `main.brs` watches a scene field only if `ObserveField(field, port)` comes
+  after `screen.Show()`. Set up before it, the field changed on the scene
+  (the guide's `leave`, logged as set) and no event reached the port; after
+  it, the app closed about 0.1 s after Emby logged the stop (43S45,
+  2026-10-23).
 - `LongInteger / Integer` divides as integers, so a fraction comes out 0;
   convert to a Float first. Node fields such as `translation` reject a Double,
   so use `!` (Float) variables for anything a node receives.
@@ -555,6 +560,12 @@ at `6f05937` with 5,363 items on one server:
   after stopping it (HTTP 400), which breaks flipping back to a channel. It
   also refuses a second stream from a device while one runs, so the app stops
   the last stream (and remembers it across launches) before starting the next.
+- Leaving the app: Roku doesn't pass Home to the app, and once the screen
+  closes a stop sent from `main.brs` never reaches the server (#81), so an
+  encode left by Home runs until the next launch stops it. Back on the live
+  channel can be caught: when the server is encoding the stream, the guide
+  sends the stop and closes the app itself once it answers (`NxGuideBack`,
+  the scene's `leave` field). A second Back leaves at once.
 - Plex's transcode playlist (`start.m3u8?offset=N`) spans the whole file
   from 0:00 whatever the offset: offset=1800 gave 5758 one-second segments
   for a 96-minute film (2026-10-16). Transcoded streams need `PlayStart`

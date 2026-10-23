@@ -11,6 +11,8 @@ sub Main(args = invalid as Dynamic)
     screen.SetMessagePort(port)
     scene = screen.CreateScene("MainScene")
     screen.Show()
+    ' After Show, or the guide's leave never arrives (docs/PORTING.md).
+    if not scene.ObserveField("leave", port) then print "app: can't watch the scene's leave field"
     link = NxDeepLinkFrom(args)
     if link <> invalid then scene.deepLink = link
     input = CreateObject("roInput")
@@ -25,6 +27,10 @@ sub Main(args = invalid as Dynamic)
     while true
         msg = Wait(0, port)
         if type(msg) = "roSGScreenEvent" and msg.IsScreenClosed() then return
+        if type(msg) = "roSGNodeEvent" and msg.GetField() = "leave" then
+            print "app: closing, as the guide asked"
+            return
+        end if
         if type(msg) = "roInputEvent" and msg.IsInput() then
             link = NxDeepLinkFrom(msg.GetInfo())
             if link <> invalid then scene.deepLink = link
