@@ -40,7 +40,7 @@ sub Main(args = invalid as Dynamic)
             ordered.Push({
                 id: def.id, number: def.number, name: NxToStr(def.name), colorHex: NxToStr(def.colorHex),
                 isPremiereChannel: def.isPremiereChannel, timeRestrictions: def.timeRestrictions,
-                built: true, basePool: pool, pool: NxSeededShuffle(pool, nowSec&)
+                built: true, pool: pool
             })
         end if
     end for

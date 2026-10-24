@@ -127,7 +127,7 @@ check, and fails on any error it reports.
 | `source/filter/` | The channel filter, ported from upstream |
 | `source/franchise/` | The franchise builder, ported from upstream |
 | `source/collections/` | Server collections as channels from CH 500, and their fold into franchises, ported from upstream |
-| `source/guide/` | Lineup: bundles, daily shuffle, time restrictions, day schedules; franchise channels and their switches |
+| `source/guide/` | Lineup: bundles, time restrictions, day schedules, the guide's window and the next pick; franchise channels and their switches |
 | `source/plex/` | Plex sign-in, library loader, playback |
 | `source/mediabrowser/` | Jellyfin and Emby: sign-in, LAN discovery, library loader, playback |
 | `source/enrich/` | TMDB and IMDb enrichment through the Nostalgex relay, off unless a build turns it on |

@@ -5,8 +5,7 @@ sub init()
 end sub
 
 ' The saved guide: the last build's output, reused only while a fresh build
-' would give the same thing (same local day and UTC day, since upstream's
-' pool shuffle is seeded by the UTC day, same packages, same servers on,
+' would give the same thing (same local day, same packages, same servers on,
 ' same build, NxBuildKey).
 ' It holds titles and schedules, nothing secret.
 function NxGuideCachePath() as String
@@ -14,7 +13,7 @@ function NxGuideCachePath() as String
 end function
 
 function NxGuideCacheKey(nowSec as LongInteger, bundles as Object) as String
-    return NxBuildKey() + "|" + (nowSec \ 86400).ToStr() + "|" + NxLocalDay(nowSec).dayKey + "|" + FormatJson(bundles) + "|" + NxChoicesKey()
+    return NxBuildKey() + "|" + NxLocalDay(nowSec).dayKey + "|" + FormatJson(bundles) + "|" + NxChoicesKey()
 end function
 
 ' Which build this is, for the cache keys: the app version and the hash of
@@ -40,10 +39,9 @@ function NxSavedServersOnKey() as String
 end function
 
 ' The saved pools: each guide channel's pool as the last build filtered it,
-' before the shuffle, with the items they hold. Filtering is most of a build
-' (over a minute on a TV), and a pool rarely changes from one day to the
-' next, so when the saved guide is a day old these are shuffled and
-' scheduled for today instead, in seconds, and the full build still runs
+' with the items they hold. Filtering is most of a build (over a minute on a
+' TV), and a pool rarely changes from one day to the next, so when the saved
+' guide is a day old these are scheduled for today instead, in seconds, and the full build still runs
 ' behind them. Kept while the build, the month and which packages are in
 ' season (NxSeasonKey: the guide's lead, and the year the filter reads),
 ' packages, franchise and collection choices and servers on are the same.
@@ -74,15 +72,13 @@ sub NxSavePools(ordered as Object, guide as Object, now as Object, built as Obje
     for each ch in ordered
         saved = {}
         ' Keys come back lowercased from an AA's iteration, so they're compared
-        ' that way: `k <> "basePool"` never matched, and every channel's pool
+        ' that way: a `k <> "basePool"` never matched, and every channel's pool
         ' was written out in full a second time (20 MB of a 23 MB file).
         for each k in ch
             lk = LCase(k)
-            if lk <> "pool" and lk <> "basepool" and lk <> "filtered" and lk <> "nxmemo" then saved[k] = ch[k]
+            if lk <> "pool" and lk <> "filtered" and lk <> "nxmemo" then saved[k] = ch[k]
         end for
-        pool = ch.basePool
-        if pool = invalid then pool = ch.pool
-        saved.poolIdx = NxPoolItemIndexes(pool, st)
+        saved.poolIdx = NxPoolItemIndexes(ch.pool, st)
         chans.Push(saved)
     end for
     filtered = {}
@@ -217,15 +213,13 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
             pool.Push(saved.items[n])
         end for
         ch.Delete("poolIdx")
-        ' Collection channels air their collection unshuffled, as the web tuner's do.
-        if NxTruthy(ch.built) and not NxTruthy(ch.collection) then pool = NxSeededShuffle(pool, nowSec)
         ch.pool = pool
         ordered.Push(ch)
     end for
     NxClearManifests()
     timer.Mark()
     channels = NxScheduleGuide(ordered, nowSec, true)
-    print "library: saved pools shuffled and today scheduled in "; timer.TotalMilliseconds(); " ms"
+    print "library: saved pools scheduled for today in "; timer.TotalMilliseconds(); " ms"
     guide = {
         channels: channels, builtAt: nowSec, items: saved.libraryItems,
         bundles: saved.bundles, enabledBundles: bundles, franchises: saved.franchises,
@@ -552,7 +546,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' FRANCHISES, as the Apple TV app has it (the web tuner doesn't call the
     ' builder): covered franchises join their classic's pool, and each found
     ' franchise switched on gets a channel from CH 300 that rides on the
-    ' package's switch. Before the shuffle, so every pool shuffles alike.
+    ' package's switch.
     franchiseRows = []
     foundIDs = []
     franchiseBundleIDs = []
@@ -597,14 +591,6 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         print "library: collection "; f.title; " ("; f.items; " items) folds into "; f.into; " by "; f.why
     end for
     timer.Mark()
-    for each ch in channels
-        ' Collection channels air their collection unshuffled, as the web
-        ' tuner's do.
-        if ch.built and not NxTruthy(ch.collection) then
-            ch.basePool = ch.pool
-            ch.pool = NxSeededShuffle(ch.pool, nowSec&)
-        end if
-    end for
 
     ' Found franchise channels show while the package is on; its own channel
     ' list stays the seven classics, as upstream's Settings row reads.
@@ -628,13 +614,12 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         guideBundles.Push("nx-collections")
     end if
     ordered = NxGuideOrder(guideConfig, channels, guideBundles, clock)
-    print "library: shuffled and ordered in "; timer.TotalMilliseconds(); " ms"
+    print "library: ordered in "; timer.TotalMilliseconds(); " ms"
     fingerprint = NxPoolsFingerprint(ordered)
     print "library: pools fingerprint "; fingerprint; " ("; ordered.Count(); " channels)"
     timer.Mark()
-    ' Pools the same as the guide on screen's, on the same local and UTC day
-    ' (the shuffle's seed): its schedules are what scheduling would give, so
-    ' they stand. A launch matching its saved guide scheduled both days again,
+    ' Pools the same as the guide on screen's, on the same local day: its
+    ' schedules are what scheduling would give, so they stand. A launch matching its saved guide scheduled both days again,
     ' 13 to 14 s at 123 channels on a Streaming Stick Plus (Discussion #8).
     ' The schedule keeps the time it was made, so a new hour since is
     ' re-checked by keepScheduling as ever.
@@ -644,7 +629,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     if shown and old <> invalid then
         if NxToStr(old.poolsFingerprint) = fingerprint and type(old.channels) = "roArray" and NxIsNumber(old.builtAt) then
             oldAt& = old.builtAt
-            sameSchedule = oldAt& \ 86400 = nowSec& \ 86400 and NxLocalDay(oldAt&).dayKey = NxLocalDay(nowSec&).dayKey
+            sameSchedule = NxLocalDay(oldAt&).dayKey = NxLocalDay(nowSec&).dayKey
         end if
     end if
     if sameSchedule then
@@ -917,17 +902,15 @@ function NxMemoryLine() as String
     return mon.GetMemoryLimitPercent().ToStr() + "%, " + mon.GetChannelAvailableMemory().ToStr() + " KB free"
 end function
 
-' SHA-1 of each guide channel's id and its pool's items before the shuffle,
+' SHA-1 of each guide channel's id and its pool's items, in library order,
 ' first 12 hex digits: a package built on its own must match a full build of
 ' the same packages. Item keys only; no titles or addresses.
 function NxPoolsFingerprint(ordered as Object) as String
     d = CreateObject("roEVPDigest")
     d.Setup("sha1")
     for each ch in ordered
-        pool = ch.basePool
-        if pool = invalid then pool = ch.pool
         keys = [NxToStr(ch.id)]
-        for each it in pool
+        for each it in ch.pool
             keys.Push(NxToStr(it.ratingKey) + "@" + NxToStr(it.serverIndex))
         end for
         b = CreateObject("roByteArray")

@@ -26,6 +26,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideNav.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/TuneQueue.brs" />
+  <script type="text/brightscript" uri="pkg:/source/schedule/LocalTime.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Advance.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Fallback.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SleepTimer.brs" />

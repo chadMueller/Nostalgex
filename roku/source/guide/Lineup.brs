@@ -3,98 +3,17 @@
 ' Copyright (c) 2024 Chad Mueller / Muell Haus Inc. (Nostalgex), MIT License.
 ' Port copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
-' Source: plex-tuner.html shuffleArray, getTimeFilteredPool,
+' Source: plex-tuner.html getTimeFilteredPool,
 ' staticChannelIDsForPoolBuild, applyBundleFilter, sortChannelsForGuide,
 ' buildChannelSchedule, and nostalgex-daily-manifest.js getManifestBlocks
-' with its day helpers and pool fingerprint. Checked against
-' tests/vectors/lineup.json.
+' and pool fingerprint; its day helpers are in source/schedule/LocalTime.brs.
+' Checked against tests/vectors/lineup.json. Pools stay in library order,
+' unshuffled, as the Apple TV's loaders build them (web tuner 1.0.7).
 '
 ' Upstream clears its per-day schedule cache on every library load, which on
 ' the web is every page load, so the cache only ever lives for a session.
 ' Here it lives in memory (NxManifestCache) for the same reason, and the
 ' library load clears it the same way.
-
-' ── Local time ──────────────────────────────────────────────────────────────
-
-' { dayStartSec, dayKey, dayNumber } for the local day holding epochSec, as
-' startOfLocalDayMs, localDayKey and localDayNumber. Tests pin the zone by
-' setting GetGlobalAA().nxTzOffsetSec, or nxTzOffsets for a zone whose
-' clocks change.
-function NxLocalDay(epochSec as LongInteger) as Object
-    dt = NxLocalClock(epochSec)
-    secOfDay = NxClockSecOfDay(dt)
-    dayStart& = epochSec - secOfDay
-    ' On a day the clocks change, the clock's time since midnight is an hour
-    ' off the real one, so look at what the clock says at that guess. Where
-    ' midnight itself is skipped, the day starts at its first moment, as
-    ' setHours(0, 0, 0, 0) has it.
-    at = NxLocalClock(dayStart&)
-    if NxClockSameDate(at, dt) then
-        s = NxClockSecOfDay(at)
-        if s > 0 and NxClockSameDate(NxLocalClock(dayStart& - s), dt) then dayStart& = dayStart& - s
-    else
-        dayStart& = dayStart& + 86400 - NxClockSecOfDay(at)
-    end if
-    key = dt.GetYear().ToStr() + "-" + NxPad2(dt.GetMonth()) + "-" + NxPad2(dt.GetDayOfMonth())
-    return { dayStartSec: dayStart&, dayKey: key, dayNumber: NxFloorDivLong(dayStart&, 86400), hour: dt.GetHours(), month: dt.GetMonth() }
-end function
-
-' The start of the local day after the one holding epochSec, as
-' startOfNextLocalDayMs. A day is 23 to 25 hours long where the clocks change
-' (23.5 or 24.5 on Lord Howe), so its start plus 86,400 s falls an hour short
-' of the next midnight when they go back and an hour into the next day when
-' they go forward. 36 hours after a day's start is always inside the next
-' day, and that day's start is the answer, even where midnight is skipped.
-function NxStartOfNextLocalDaySec(epochSec as LongInteger) as LongInteger
-    return NxLocalDay(NxLocalDay(epochSec).dayStartSec + 36 * 3600).dayStartSec
-end function
-
-' The key of the local day before the one holding epochSec, as
-' previousLocalDayKey. 12 hours before a day's start is always inside the day
-' before; 24 hours before the day after the clocks go forward is two days back.
-function NxPreviousLocalDayKey(epochSec as LongInteger) as String
-    return NxLocalDay(NxLocalDay(epochSec).dayStartSec - 12 * 3600).dayKey
-end function
-
-' An roDateTime showing the local wall clock at epochSec. nxTzOffsets is
-' [{ fromSec, offsetSec }] in time order, each offset holding from its
-' fromSec on.
-function NxLocalClock(epochSec as LongInteger) as Object
-    g = GetGlobalAA()
-    off = g.nxTzOffsetSec
-    if type(g.nxTzOffsets) = "roArray" then
-        for each z in g.nxTzOffsets
-            if epochSec >= z.fromSec then off = z.offsetSec
-        end for
-    end if
-    dt = CreateObject("roDateTime")
-    if off <> invalid then
-        dt.FromSeconds(epochSec + off)
-    else
-        dt.FromSeconds(epochSec)
-        dt.ToLocalTime()
-    end if
-    return dt
-end function
-
-function NxClockSecOfDay(dt as Object) as Integer
-    return dt.GetHours() * 3600 + dt.GetMinutes() * 60 + dt.GetSeconds()
-end function
-
-function NxClockSameDate(a as Object, b as Object) as Boolean
-    return a.GetDayOfMonth() = b.GetDayOfMonth() and a.GetMonth() = b.GetMonth() and a.GetYear() = b.GetYear()
-end function
-
-function NxPad2(n as Integer) as String
-    if n < 10 then return "0" + n.ToStr()
-    return n.ToStr()
-end function
-
-function NxFloorDivLong(a as LongInteger, b as LongInteger) as Integer
-    q = a \ b
-    if (a mod b) <> 0 and a < 0 then q = q - 1
-    return q
-end function
 
 ' ── Pools ───────────────────────────────────────────────────────────────────
 
@@ -104,27 +23,6 @@ function NxToInt32(x as LongInteger) as LongInteger
     if r < 0 then r = r + 4294967296&
     if r >= 2147483648& then r = r - 4294967296&
     return r
-end function
-
-' Mirrors shuffleArray: a linear congruential shuffle seeded by the UTC day
-' number (Date.now() / 86400000), so a pool holds still for a day. Returns
-' a new array.
-function NxSeededShuffle(arr as Object, nowSec as LongInteger) as Object
-    shuffled = []
-    shuffled.Append(arr)
-    s& = nowSec \ 86400
-    left = shuffled.Count()
-    while left > 0
-        s& = NxToInt32(s& * 1664525 + 1013904223)
-        a& = s&
-        if a& < 0 then a& = -a&
-        i% = a& mod left ' an Integer: array indexes can't be LongInteger
-        left = left - 1
-        tmp = shuffled[left]
-        shuffled[left] = shuffled[i%]
-        shuffled[i%] = tmp
-    end while
-    return shuffled
 end function
 
 ' Mirrors getTimeFilteredPool at a local hour (0-23).

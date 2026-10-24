@@ -31,6 +31,11 @@ sub Main(args = invalid as Dynamic)
         print "  schedule dst took "; timer.TotalMilliseconds(); " ms"
     end if
     timer.Mark()
+    if NxTestWants("schedule-parity") then
+        failures = failures + NxRunScheduleParityGoldenTests("pkg:/tests/vectors/schedule-parity-golden.json", "pkg:/tests/vectors/schedule-parity-zones.json")
+        print "  schedule parity took "; timer.TotalMilliseconds(); " ms"
+    end if
+    timer.Mark()
     if NxTestWants("franchise") then
         failures = failures + NxRunFranchiseTests("pkg:/tests/vectors/franchise-golden.json", "pkg:/tests/vectors/franchise.json", "pkg:/data/franchises.json")
         print "  franchise took "; timer.TotalMilliseconds(); " ms"

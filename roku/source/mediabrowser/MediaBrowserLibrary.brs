@@ -88,10 +88,12 @@ function NxMbUnixSeconds(iso as Dynamic) as Integer
     return secs&
 end function
 
-' RunTimeTicks (100 ns) to whole minutes, rounded half up as Math.round.
+' RunTimeTicks (100 ns) to whole minutes, truncated as
+' JellyfinAPIService.minutes(fromTicks:) and minutesFromTicks do.
 function NxMbMinutes(ticks as Dynamic) as Integer
     if not NxTruthy(ticks) or not NxIsNumber(ticks) then return 0
-    return Int(ticks / 600000000# + 0.5#)
+    if ticks <= 0 then return 0
+    return NxFloorDouble(ticks / 600000000#)
 end function
 
 ' The first stream of a type in a source's MediaStreams, or invalid.

@@ -355,8 +355,8 @@ end function
 
 ' materialize: switched-on, unfolded candidates in list order take CH 500
 ' up, 200 at most. Returns { channels, overCap }. The channels have the shape
-' the library load builds; their pool is the collection, unshuffled, as the
-' web tuner airs it.
+' the library load builds; their pool is the collection, in its order, as
+' the web tuner airs it.
 function NxCollectionsMaterialize(candidates as Object) as Object
     channels = []
     overCap = 0

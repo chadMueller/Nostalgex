@@ -17,6 +17,7 @@ and already pinned to the Apple TV.
 | `scripts/nostalgex-daily-manifest.js` (Swift: `SchedulePoolOrdering.swift`, `DailyManifestScheduler.swift`) | `source/schedule/DailyManifest.brs` | ported, passing on device |
 | `scripts/nostalgex-channel-filter.cjs` (Swift: `AppState+Channels.swift` `filterItems`) | `source/filter/ChannelFilter.brs` | ported, passing on device |
 | `plex-tuner.html`: `getTimeFilteredPool`, bundles, `minItems` | BrightScript | with the guide |
+| What airs, after the Apple TV (web tuner 1.0.7, `f9b5562`): pools in library order, minutes truncated (`minutesFromPlexMs`, `minutesFromTicks`); the guide's 24-hour window (`ChannelScheduleBuilder.buildSchedule`); one title on two channels kept by the lowest channel id (`resolveConflicts`); the next pick (`AppState.advanceToNextItem`: `findConflict`, `advancePick`) | `source/plex/PlexLibrary.brs`, `source/mediabrowser/MediaBrowserLibrary.brs`, `source/guide/Advance.brs`, `components/GuideView.brs` | ported; upstream's `scripts/schedule-parity-golden.json`, from the Apple TV's own code, passing off-device and on the 55R617 (`tests/ScheduleParityGoldenTests.brs`, 314 checks), and matched live against upstream (below). As on the web, the guide shows a title given way unmarked rather than the next programme as on now |
 | `plex-tuner.html` PIN sign-in and server discovery | `source/plex/PlexApi.brs` | ported; HTTPS only (below) |
 | `QRCodeView` beside the PIN (`SettingsView.swift`): the plex.tv/link address with the code, 200 px, "SCAN TO CONNECT" | `source/util/QrCode.brs`, `addQr` in `components/ConnectView.brs` | ported; encoded on the TV (level M, as Core Image's), since a QR service would see the code. Every mask's matrix matches a reference encoder (`tests/gen-qr.mjs`, `tests/vectors/qr.json`). Upstream scanned it off a Streaming Stick Plus and signed in with a phone (Discussion #8, 2026-10-20) |
 | `ServerPickerView` (`Plex90App.swift`): CHOOSE YOUR LIBRARIES after sign-in when the account lists more than one server; owned servers on, all of them when none is owned | `components/ServerPickerView.*`, `source/plex/ServerChoice.brs`, Settings › CONNECTION | ported; cases in `tests/ServerChoiceTests.brs`. Not yet seen on a TV (one-server account). Unlike upstream, no server is checked before it, as the maintainer asked |
@@ -43,8 +44,7 @@ and already pinned to the Apple TV.
 
 Start-up follows upstream's cached-library path. The last build's guide is
 saved on the TV and shown at once when a fresh build would give the same
-result: same local day, same UTC day (the pool shuffle's seed), same packages
-and same build. A build is the app version and a hash of the zip's files
+result: same local day, same packages and same build. A build is the app version and a hash of the zip's files
 that `scripts/deploy.sh` writes into the manifest (`nx_build`), since a
 sideload keeps the version:
 installed over another build, one with new channel data or filter rules
@@ -132,7 +132,8 @@ each server's collections from its movie and TV sections. A collection with
 collection of shows counts every episode of each show the library has. Every
 row starts off. A row that is switched on airs from CH 500, alphabetical, up
 to CH 699. A collection channel belongs to no package, as on the web, and
-airs its collection unshuffled. Not ported: Jellyfin and Emby BoxSets, and
+airs its collection in the collection's order, as every pool airs in library
+order. Not ported: Jellyfin and Emby BoxSets, and
 the Apple TV app's split into FRANCHISES and OTHER COLLECTIONS
 (`CollectionClassifier`), which the web tuner doesn't have either.
 
@@ -384,6 +385,22 @@ live (upstream `docs/DEVLOG.md`, 2026-10). This port does the same from the star
   saved server answers in `tests/fixtures/mediabrowser-server.json`, writing
   `tests/vectors/mediabrowser.json`: the requests and items the port's scan
   must match.
+- What airs, and when, is checked against upstream's
+  `scripts/schedule-parity-golden.json`, which
+  `NostalgexTests/ScheduleParityTests.swift` makes from the Apple TV's own
+  scheduler, guide, conflict rule, tune and advance code, and which
+  `npm run test:schedule-parity` holds the web tuner to. Copied unchanged to
+  `tests/vectors/`, it is read by `tests/ScheduleParityGoldenTests.brs` in
+  the same walk as upstream's `scripts/schedule-parity-dump.mjs`, with every
+  fixture item through the port's own loader: Plex, Jellyfin and Emby items,
+  New York's 25-hour day, London's 23-hour one and Santiago's day that starts
+  at 1 AM. Two Apple TV rules it pinned down that a block-by-block reading
+  misses: a day's last programme can run past midnight, and from midnight
+  the window reads the new day only, so its first programme is the one on;
+  and on a day that starts at 1 AM the window stops at the next midnight.
+  Rounding minutes, the highest channel id keeping a title, a next pick that
+  ignores other channels, or a window that runs past that midnight each fail
+  it (21 to 120 of its 314 checks).
 - `tests/run.sh` runs upstream's franchise, filter-golden, collections and
   season smoke tests, regenerates every vector from the same tree as
   `data/`, then runs them in the off-device interpreter. Nothing is pinned: a
@@ -497,6 +514,11 @@ at `6f05937` with 5,363 items on one server:
   - A franchise switched on in Settings built in place in 6.1 s on Back, the
     guide still on CH 2. Seven switches in a row built once.
   - Every test passed on the TV.
+- **The Apple TV's schedule, on the 55R617 (2026-10-23), 5,278 items:**
+  every test passed on the TV at `53e04d4`, the schedule-parity golden's 314
+  checks included. At `d45f4c7` (`--live`), `compare.mjs` found every item
+  identical, fields and order, and all 139 channels identical in pool and in
+  what airs today.
 - **Collections step, on the 55R617:** 457 s at `d2e276d`, where the progress
   screen rebuilt itself on each of three updates per collection (25 collections'
   updates took 66 s, then 136 s, against a 1.1 s fetch); 10.3 s once a change

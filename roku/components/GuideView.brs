@@ -147,6 +147,7 @@ end function
 sub onGuide()
     previous = m.channels
     m.channels = m.top.guide.channels
+    m.gaveWay = invalid
     if m.channels = invalid or m.channels.Count() = 0 then
         m.top.FindNode("notice").text = "NO CHANNELS AVAILABLE"
         return
@@ -267,11 +268,9 @@ end function
 
 ' ── Schedule lookups ────────────────────────────────────────────────────────
 
+' What is on at t: the schedule's now (NxBlockOnAir), what tuning in plays.
 function blockAt(ch as Object, t as LongInteger) as Dynamic
-    for each b in ch.blocks
-        if t >= b.startSec and t < b.endSec then return b
-    end for
-    return invalid
+    return NxBlockOnAir(ch.blocks, t)
 end function
 
 function blockAfter(ch as Object, b as Object) as Dynamic
@@ -320,6 +319,12 @@ sub renderGrid()
     rows = m.top.FindNode("rows")
     rows.RemoveChildrenIndex(rows.GetChildCount(), 0)
     lead = leadRows()
+    ' One title on two channels: the lowest channel id keeps it (NxGaveWay),
+    ' once per second however often the grid redraws.
+    if m.gaveWay = invalid or m.gaveWayAt <> t then
+        m.gaveWay = NxGaveWay(m.channels, t)
+        m.gaveWayAt = t
+    end if
     for idx = 0 to m.channels.Count() - 1
         y = m.scrollY + (idx + lead) * m.rowPitch
         if y > -m.rowPitch and y < m.viewHeight then rows.AppendChild(renderRow(idx, y, t, wStart&, wEnd&, scale))
@@ -358,6 +363,7 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     ch = m.channels[idx]
     focused = m.nav = "grid" and idx = m.focus
     tuned = idx = m.tuned
+    gave = m.gaveWay[idx.ToStr()]
     color = colorOf(ch.color, "FF")
     row = CreateObject("roSGNode", "Group")
     row.translation = [0, y]
@@ -372,6 +378,7 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     row.AppendChild(newRect(0, 80, 1920, 1, "0xFFFFFF14"))
 
     ' Programs, with the now-airing cell in the channel's colour.
+    nowB = blockAt(ch, t)
     for each b in ch.blocks
         if b.endSec > wStart& and b.startSec < wEnd& then
             s& = b.startSec
@@ -380,7 +387,14 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
             if e& > wEnd& then e& = wEnd&
             x = m.colX + 1 + (s& - wStart&) * scale
             w = (e& - s&) * scale
-            onNow = t >= b.startSec and t < b.endSec
+            onNow = false
+            if nowB <> invalid then onNow = b.startSec = nowB.startSec and b.ratingKey = nowB.ratingKey
+            ' A channel giving the title way to a lower one doesn't mark it as on
+            ' now, as the web tuner's guide (rebuildAllSchedules); it still plays it
+            ' when tuned, as the Apple TV does.
+            if onNow and gave <> invalid then
+                if gave.gaveWay.startSec = b.startSec and gave.gaveWay.ratingKey = b.ratingKey then onNow = false
+            end if
             past = b.endSec <= t
             if onNow then
                 fill = colorOf(ch.color, "40")
@@ -680,9 +694,10 @@ sub onTick()
     t = nowSec()
     if (t \ 1800) * 1800 <> m.lastWindow or t mod 30 = 0 then renderGrid()
     ' Live: when the airing's slot is over and its file isn't still playing,
-    ' the channel moves on to whatever is on now (source/guide/Advance.brs).
+    ' the channel moves on to what is on now, where the clock is, unless
+    ' another channel has that title on (source/guide/Advance.brs).
     ' A channel that stopped trying stays stopped until the viewer tunes.
-    if NxAiringEnded(m.playing, t, m.video.state) and not m.stopped then tune(m.tuned)
+    if NxAiringEnded(m.playing, t, m.video.state) and not m.stopped then advance(false)
 end sub
 
 ' ── Playback ────────────────────────────────────────────────────────────────
@@ -884,9 +899,24 @@ end sub
 
 sub handOver()
     if m.tuned < 0 or m.playing = invalid then return
-    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, nowSec())
-    if nxt <> invalid then print "player: finished, "; nowSec() - m.playing.endSec; " s past the slot; next from its start"
-    tune(m.tuned, nxt)
+    print "player: finished, "; nowSec() - m.playing.endSec; " s past the slot"
+    advance(true)
+end sub
+
+' What plays after the programme playing (NxAdvancePick, the Apple TV's
+' advanceToNextItem): natural, the file played to its end, so the next one
+' starts from its beginning; otherwise (a stall, a failure, a slot the file
+' never finished) one already airing joins where the clock is. Nothing in the
+' window: whatever is on now.
+sub advance(natural as Boolean)
+    if m.tuned < 0 or m.playing = invalid then return
+    p = NxAdvancePick(m.channels, m.tuned, m.playing.ratingKey, nowSec(), natural)
+    if p = invalid or p.seek > 0 then
+        tune(m.tuned)
+        return
+    end if
+    print "player: next is "; p.block.ratingKey; ", from its start"
+    tune(m.tuned, p.block)
 end sub
 
 ' No picture by the start's deadline (PlaybackWatchdog): Roku's player
@@ -1012,18 +1042,11 @@ sub giveUp(event as String, probe = 1 as Integer)
 end sub
 
 ' The card has had its five seconds: the next programme, from its start, or
-' what airs now if the schedule has moved past the one that failed
-' (advanceToNextItem).
+' what airs now, where the clock is, if the schedule has moved past the one
+' that failed (advanceToNextItem after a failure).
 sub onCardDone()
     hideCard()
-    if m.tuned < 0 or m.playing = invalid then return
-    t = nowSec()
-    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, t)
-    if nxt = invalid or (t >= nxt.startSec and t < nxt.endSec) then
-        tune(m.tuned)
-    else
-        tune(m.tuned, nxt)
-    end if
+    advance(false)
 end sub
 
 sub showCard(card as Object)

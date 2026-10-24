@@ -66,6 +66,8 @@ const context = vm.createContext({
   discoveredGenres: {},
   channelFilter: () => CF,
   NostalgexMusicBrainz: globalThis.NostalgexMusicBrainz,
+  // The loader's minute and date conversions (minutesFromPlexMs) live in the engine.
+  NostalgexDailyManifest: MD,
 });
 context.globalThis = context;
 vm.runInContext(loaderSource, context);
@@ -119,10 +121,10 @@ const exclusiveRules = (config.exclusiveRules || []).map((r) => ({
   genres: r.genres || [], titleContains: r.titleContains || [], editorialTitles: r.editorialTitles || [],
   manifestExclusive: !!r.manifestExclusive,
 }));
-// The rest of the web tuner's path from pool to airtime: shuffleArray and
-// getTimeFilteredPool lifted from plex-tuner.html, getManifestBlocks from the
-// module over a stand-in localStorage, cleared as a library load clears it.
-const tuner = new Function(`${lift("shuffleArray")}\n${lift("getTimeFilteredPool")}\nreturn { shuffleArray, getTimeFilteredPool };`)();
+// The rest of the web tuner's path from pool to airtime: the pool in library
+// order, getTimeFilteredPool lifted from plex-tuner.html, getManifestBlocks from
+// the module over a stand-in localStorage, cleared as a library load clears it.
+const tuner = new Function(`${lift("getTimeFilteredPool")}\nreturn { getTimeFilteredPool };`)();
 const store = new Map();
 globalThis.localStorage = {
   getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)),
@@ -138,7 +140,7 @@ let channelsSame = 0;
 for (const ch of config.channels) {
   const pool = CF.filterPool(items, ch, { manifest, exclusiveRules, nowSec: tv.clock.nowSec }).items;
   const poolSha = sha1(pool.map((i) => `${i.ratingKey}:${i.poolVia}`).join(",")).slice(0, 12);
-  const aired = MD.getManifestBlocks(ch, tuner.getTimeFilteredPool({ ...ch, itemPool: tuner.shuffleArray(pool) }), tv.clock.nowSec * 1000, "live");
+  const aired = MD.getManifestBlocks(ch, tuner.getTimeFilteredPool({ ...ch, itemPool: pool }), tv.clock.nowSec * 1000, "live");
   const schedSha = sha1(aired.map((b) => `${b.item.ratingKey}@${b.startSec}-${b.endSec}`).join(",")).slice(0, 12);
   const got = tv.channels.get(ch.id);
   if (!got) { report(`channel ${ch.id} missing from the TV's output`); continue; }

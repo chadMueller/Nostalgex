@@ -12,9 +12,9 @@
 // port reads. tests/vectors/ is generated, git-ignored, and rewritten by
 // tests/run.sh and scripts/deploy.sh --test on every run. It also gets byte
 // copies of upstream's scripts/franchise-golden.json, filter-golden.json,
-// rating-golden.json, season-golden.json and schedule-dst-golden.json, which
-// the Franchise, FilterGolden, RatingGolden, Seasonal and ScheduleDSTGolden
-// tests read.
+// rating-golden.json, season-golden.json, schedule-dst-golden.json and
+// schedule-parity-golden.json, which the Franchise, FilterGolden,
+// RatingGolden, Seasonal, ScheduleDSTGolden and ScheduleParityGolden tests read.
 // Every number in the output fits a 32-bit Integer, and 64-bit values travel as
 // hex strings, so the Roku's ParseJson reads them without loss.
 // The filter's date rules run in local time; pin it so the vectors don't
@@ -30,7 +30,7 @@ import { franchiseVectors } from "./gen-franchise.mjs";
 import { enrichmentVectors } from "./gen-enrichment.mjs";
 import { collectionsVectors } from "./gen-collections.mjs";
 import { mediaBrowserVectors } from "./gen-mediabrowser.mjs";
-import { dstZones } from "./gen-dst.mjs";
+import { dstZones, parityZones } from "./gen-dst.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = resolve(process.env.NOSTALGEX_DIR || join(here, "..", ".."));
@@ -254,10 +254,15 @@ const files = [
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, source: "the tz database (Intl), for scripts/schedule-dst-golden.json's zones" },
     ...dstZones(upstream),
   }],
+  [join(here, "vectors", "schedule-parity-zones.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-dst.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, source: "the tz database (Intl), for scripts/schedule-parity-golden.json's zones" },
+    ...parityZones(upstream),
+  }],
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
-  // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs and
-  // ScheduleDSTGoldenTests.brs read them.
-  ...["franchise-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json"].map((g) =>
+  // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs,
+  // ScheduleDSTGoldenTests.brs and ScheduleParityGoldenTests.brs read them.
+  ...["franchise-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;
