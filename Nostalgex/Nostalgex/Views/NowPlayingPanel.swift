@@ -64,6 +64,7 @@ enum NowPlayingFocus: Hashable {
     case audioLanguage
     case autoSubtitles
     case openInPlex
+    case compatibilityRetry
     /// A row inside an expanded picker, keyed by that option's own stable id
     /// (a `StreamQuality.id` or a language code).
     case option(String)
@@ -256,6 +257,9 @@ struct NowPlayingPanel: View {
             ) { row in
                 programRow(row)
             }
+            if appState.canRetryOriginalVideo {
+                compatibilityRetryRow
+            }
         }
         .frame(width: controlColumnWidth, alignment: .leading)
     }
@@ -331,6 +335,29 @@ struct NowPlayingPanel: View {
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .cc)
+    }
+
+    @State private var compatibilityStatus: String?
+
+    private var compatibilityRetryRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                compatibilityStatus = "CHECKING SERVER"
+                Task { @MainActor in
+                    compatibilityStatus = await appState.retryOriginalVideoCompatibility()
+                }
+            } label: {
+                controlRow(label: "RETRY ORIGINAL VIDEO", value: "",
+                           isFocused: focusedControl == .compatibilityRetry,
+                           isActive: false, disabled: appState.compatibilityRetryInFlight)
+            }
+            .buttonStyle(NoHighlightButtonStyle())
+            .focused($focusedControl, equals: .compatibilityRetry)
+            .disabled(appState.compatibilityRetryInFlight)
+            Text(compatibilityStatus ?? "Try different packaging for this program. Keeps original video; quality settings stay unchanged.")
+                .font(.system(size: 18))
+                .foregroundStyle(.secondary)
+        }
     }
 
     @State private var openInPlexStatus: String?

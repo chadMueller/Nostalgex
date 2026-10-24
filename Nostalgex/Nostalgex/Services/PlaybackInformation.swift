@@ -21,9 +21,10 @@ struct PlaybackInformation: Equatable {
     /// These describe observed recovery decisions, never a guessed root cause such as
     /// "slow Wi-Fi" or an arbitrary server error that might contain credentials.
     enum FallbackReason: Equatable {
-        case none, serverStreamSelected, directPlayFailed, startupNoPicture, streamStalled, playerRetry
+        case none, serverStreamSelected, directPlayFailed, startupNoPicture, streamStalled, playerRetry, originalVideoRetry
         var message: String {
             switch self {
+            case .originalVideoRetry: return "Original video retry requested. Server approved video copy."
             case .none: return "No fallback used."
             case .serverStreamSelected: return "Server streaming was selected for this source."
             case .directPlayFailed: return "Direct Play failed. Trying a server stream."

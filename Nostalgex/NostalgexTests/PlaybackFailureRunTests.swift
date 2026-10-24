@@ -143,7 +143,8 @@ final class PlaybackFailureRunTests: XCTestCase {
         let recorder = Recorder()
         Analytics.configure(with: recorder, gate: nil)
         state.selectChannel(ch)
-        await waitUntil(5) { isShowingFailure(state) }
+        // tvOS 27 can report the missing HLS file after the old five-second deadline.
+        await waitUntil(30) { isShowingFailure(state) }
         try? await Task.sleep(for: .milliseconds(300))
         XCTAssertTrue(isShowingFailure(state))
         XCTAssertEqual(recorder.events.filter { $0.event.name == "playback.transcode_fallback" }.count, 1)
