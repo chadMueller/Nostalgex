@@ -23,55 +23,26 @@
 // reading of the responses and its collection logic, not the TV's network
 // path, which `scripts/deploy.sh` builds then exercise.
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import vm from "node:vm";
 import { readEnv, servers } from "./plex-env.mjs";
+import { CF, exclusiveRulesOf, loadLibrary, loader, upstream } from "./plex-loader.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..");
-const upstream = resolve(repo, "..");
 const require = createRequire(import.meta.url);
 
-// ── Upstream's loader, lifted out of plex-tuner.html (as compare.mjs) ───────
-const html = readFileSync(join(upstream, "plex-tuner.html"), "utf8");
-function lift(name) {
-  const at = html.search(new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`));
-  if (at < 0) throw new Error(`plex-tuner.html has no function ${name}`);
-  let i = html.indexOf("(", at), depth = 0;
-  for (; ; i++) { if (html[i] === "(") depth++; else if (html[i] === ")" && --depth === 0) break; }
-  i = html.indexOf("{", i);
-  for (depth = 0; ; i++) { if (html[i] === "{") depth++; else if (html[i] === "}" && --depth === 0) break; }
-  return html.slice(at, i + 1) + "\n";
-}
-const pageSize = html.match(/const PLEX_PAGE_SIZE = (\d+);/)[1];
-const loaderSource = [`const PLEX_PAGE_SIZE = ${pageSize};`,
-  ...["plexLibraryFetchForServer", "fetchPlexSectionPaged", "scanOnePlexServer", "pickBestVersion", "resolutionHeight", "formatDuration"].map(lift),
-  "globalThis.scanOnePlexServer = scanOnePlexServer;", "globalThis.plexLibraryFetchForServer = plexLibraryFetchForServer;"].join("\n");
-
-const CF = require(join(upstream, "scripts", "nostalgex-channel-filter.cjs"));
-new Function(readFileSync(join(upstream, "scripts", "nostalgex-music-brainz.js"), "utf8"))();
+// ── Upstream's loader (plex-loader.mjs) ─────────────────────────────────────
 await import(pathToFileURL(join(upstream, "scripts", "nostalgex-collections.js")).href);
 const C = globalThis.NostalgexCollections;
-const quiet = { ...console, log() {}, warn() {} };
-const context = vm.createContext({
-  fetch, console: quiet, AbortController, setTimeout, clearTimeout, URLSearchParams,
-  discoveredGenres: {},
-  channelFilter: () => CF,
-  NostalgexMusicBrainz: globalThis.NostalgexMusicBrainz,
-});
-context.globalThis = context;
-vm.runInContext(loaderSource, context);
-const LL = { state: {}, pulsePhase: async () => {}, setPhase: () => {} };
 
 // HTTPS connections only, as the TV asks.
 const token = readEnv().PLEX_TOKEN;
 const list = (await servers(token)).map((s) => ({ ...s, connections: s.connections.filter((c) => c.protocol === "https") }));
 console.log(`Loading the library with upstream's loader from ${list.length} server(s)...`);
-let items = [];
-for (const s of list) items = items.concat(await context.scanOnePlexServer(s, LL, items.length, list.length > 1));
+const items = await loadLibrary(list);
 console.log(`  ${items.length} items, ${items.filter((i) => i.type === "episode" && i.showKey).length} episodes with a show key`);
 
 // ── Upstream's collections, every response recorded ────────────────────────
@@ -81,7 +52,7 @@ for (const s of list) {
   const serverKey = s.machineIdentifier || "plex";
   const docs = {};
   const getJSON = async (path) => {
-    const doc = await context.plexLibraryFetchForServer(path, s);
+    const doc = await loader.plexLibraryFetchForServer(path, s);
     docs[path] = doc;
     return doc;
   };
@@ -98,11 +69,7 @@ console.log(`  ${raw.length} server collections, ${raw.filter((c) => c.childKeys
 // library, kept when it fills its minimum, the FRANCHISES package's among them.
 const config = require(join(upstream, "channels.json"));
 const manifest = require(join(upstream, "channels-memberships.json"));
-const exclusiveRules = (config.exclusiveRules || []).map((r) => ({
-  channelIDs: r.channelIDs || (r.channelID != null ? [r.channelID] : []),
-  genres: r.genres || [], titleContains: r.titleContains || [], editorialTitles: r.editorialTitles || [],
-  manifestExclusive: !!r.manifestExclusive,
-}));
+const exclusiveRules = exclusiveRulesOf(config);
 const nowSec = Math.floor(Date.now() / 1000);
 const keyFor = (it) => it.serverID || "plex";
 const itemKey = (it) => `${keyFor(it)}|${it.ratingKey}`;

@@ -14,16 +14,13 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import vm from "node:vm";
 import { readEnv, servers } from "./plex-env.mjs";
+import { CF, MD, exclusiveRulesOf, lift, loadLibrary, upstream } from "./plex-loader.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..");
-// Upstream is the Nostalgex repo this port lives in (roku/..), the same tree
-// data/ links to.
-const upstream = resolve(repo, "..");
 const require = createRequire(import.meta.url);
 const logPath = process.argv[2] || join(repo, "out", `live-${(readEnv().ROKU_HOSTS || "").split(" ")[0]}.log`);
 
@@ -39,45 +36,9 @@ for (const raw of readFileSync(logPath, "utf8").split("\n")) {
 }
 if (!tv.all || !tv.clock) throw new Error(`no complete live run in ${logPath}`);
 
-// ── Upstream's loader, lifted out of plex-tuner.html ────────────────────────
-const html = readFileSync(join(upstream, "plex-tuner.html"), "utf8");
-function lift(name) {
-  const at = html.search(new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`));
-  if (at < 0) throw new Error(`plex-tuner.html has no function ${name}`);
-  let i = html.indexOf("(", at), depth = 0;
-  for (; ; i++) { if (html[i] === "(") depth++; else if (html[i] === ")" && --depth === 0) break; }
-  i = html.indexOf("{", i);
-  const start = i;
-  for (depth = 0; ; i++) { if (html[i] === "{") depth++; else if (html[i] === "}" && --depth === 0) break; }
-  return html.slice(at, i + 1) + "\n";
-}
-const pageSize = html.match(/const PLEX_PAGE_SIZE = (\d+);/)[1];
-const loaderSource = [`const PLEX_PAGE_SIZE = ${pageSize};`,
-  ...["plexLibraryFetchForServer", "fetchPlexSectionPaged", "scanOnePlexServer", "pickBestVersion", "resolutionHeight", "formatDuration"].map(lift),
-  "globalThis.scanOnePlexServer = scanOnePlexServer;"].join("\n");
-
-const CF = require(join(upstream, "scripts", "nostalgex-channel-filter.cjs"));
-new Function(readFileSync(join(upstream, "scripts", "nostalgex-music-brainz.js"), "utf8"))();
-new Function("module", readFileSync(join(upstream, "scripts", "nostalgex-daily-manifest.js"), "utf8"))(undefined);
-const MD = globalThis.NostalgexDailyManifest;
-const quiet = { ...console, log() {}, warn() {} };
-const context = vm.createContext({
-  fetch, console: quiet, AbortController, setTimeout, clearTimeout, URLSearchParams,
-  discoveredGenres: {},
-  channelFilter: () => CF,
-  NostalgexMusicBrainz: globalThis.NostalgexMusicBrainz,
-});
-context.globalThis = context;
-vm.runInContext(loaderSource, context);
-const LL = { state: {}, pulsePhase: async () => {}, setPhase: () => {} };
-
+// ── Upstream's loader (plex-loader.mjs) ─────────────────────────────────────
 console.log("Loading the library with upstream's loader...");
-const list = await servers(readEnv().PLEX_TOKEN);
-let items = [];
-for (const s of list) {
-  const got = await context.scanOnePlexServer(s, LL, items.length, list.length > 1);
-  items = items.concat(got);
-}
+const items = await loadLibrary(await servers(readEnv().PLEX_TOKEN));
 
 // ── Same fingerprints as tests/live/LiveMain.brs ────────────────────────────
 const FIELDS = ["ratingKey", "type", "title", "episodeTitle", "artist", "year", "contentRating", "duration", "genres",
@@ -114,11 +75,7 @@ else {
 // Channel pools and today's schedule, at the TV's own clock and day.
 const config = require(join(upstream, "channels.json"));
 const manifest = require(join(upstream, "channels-memberships.json"));
-const exclusiveRules = (config.exclusiveRules || []).map((r) => ({
-  channelIDs: r.channelIDs || (r.channelID != null ? [r.channelID] : []),
-  genres: r.genres || [], titleContains: r.titleContains || [], editorialTitles: r.editorialTitles || [],
-  manifestExclusive: !!r.manifestExclusive,
-}));
+const exclusiveRules = exclusiveRulesOf(config);
 // The rest of the web tuner's path from pool to airtime: shuffleArray and
 // getTimeFilteredPool lifted from plex-tuner.html, getManifestBlocks from the
 // module over a stand-in localStorage, cleared as a library load clears it.
