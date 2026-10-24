@@ -689,6 +689,8 @@ class AppState {
     /// The active server-side transcode (if any) so we can stop it on a channel change.
     /// `playSessionId` is Jellyfin's session token (nil for Plex, which is keyed off the
     /// stable client id). Set only when a transcode item loads; cleared by the stop helper.
+    var compatibilityRetryInFlight = false
+    var playbackRequiresOriginalVideo = false
     var activeTranscode: (serverID: String?, playSessionId: String?)?
 
     // MARK: - Sleep timer

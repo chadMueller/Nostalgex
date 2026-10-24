@@ -455,7 +455,7 @@ struct PlexAPIService: MediaBackend {
             partKey: media?.Part?.first?.key,
             container: media?.container,
             videoCodec: media?.videoCodec,
-            audioCodec: media?.audioCodec,
+            audioCodec: media?.audioStream?.codec ?? media?.audioCodec,
             videoProfile: media?.videoProfile,
             bitrate: media?.bitrate,
             genres: (show.Genre ?? []).map(\.tag),
@@ -482,7 +482,10 @@ struct PlexAPIService: MediaBackend {
             mediaIndex: ep.bestMediaIndex ?? 0,
             playbackParts: media?.playbackParts,
             exactDurationSeconds: ep.duration.map { Double($0) / 1000 },
-            showKey: show.ratingKey
+            showKey: show.ratingKey,
+            audioChannelCount: media?.audioStream?.channels,
+            doviCompatibilityID: media?.videoStream?.DOVIBLCompatID,
+            audioStreamID: media?.audioStream?.id
         )
     }
 
@@ -542,7 +545,7 @@ struct PlexAPIService: MediaBackend {
             partKey: media?.Part?.first?.key,
             container: media?.container,
             videoCodec: media?.videoCodec,
-            audioCodec: media?.audioCodec,
+            audioCodec: media?.audioStream?.codec ?? media?.audioCodec,
             videoProfile: media?.videoProfile,
             bitrate: media?.bitrate,
             genres: genres,
@@ -568,7 +571,10 @@ struct PlexAPIService: MediaBackend {
             videoHeight: media?.height,
             mediaIndex: item.bestMediaIndex ?? 0,
             playbackParts: media?.playbackParts,
-            exactDurationSeconds: item.duration.map { Double($0) / 1000 }
+            exactDurationSeconds: item.duration.map { Double($0) / 1000 },
+            audioChannelCount: media?.audioStream?.channels,
+            doviCompatibilityID: media?.videoStream?.DOVIBLCompatID,
+            audioStreamID: media?.audioStream?.id
         )
     }
 
@@ -836,8 +842,18 @@ struct PlexAPIService: MediaBackend {
     /// mid-program, and a client-side seek into a transcode that began at zero never
     /// completes, so this is the difference between picture and a black screen.
     func resolveTranscodePlayback(for item: PlexMediaItem, offsetSeconds: Int) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
+        let item = await itemWithPlaybackStreamFacts(item)
+        guard !Task.isCancelled else { return nil }
         let sessionID = UUID().uuidString
         guard let url = transcodeURL(for: item, sessionID: sessionID, offsetSeconds: max(0, offsetSeconds)) else { return nil }
+        if Self.shouldPreferOriginalVideo(item, quality: .current,
+                                          isLocal: isLikelyLocalServer,
+                                          hevcCapable: CodecSupport.deviceSupportsHEVC) {
+            guard let candidate = Self.automaticOriginalVideoURL(from: url, audioStreamID: item.audioStreamID) else { return nil }
+            return await Self.prepareOriginalVideoCandidate(url: candidate, sessionID: sessionID,
+                offsetSeconds: offsetSeconds, prepare: { await prepareTranscodeSession(startURL: $0) },
+                stop: { await stopTranscode(playSessionId: $0) })
+        }
         let decision = await prepareTranscodeSession(startURL: url)
         if Self.isDolbyVisionRefusal(decision),
            let remux = Self.dolbyVisionRemuxURL(from: url) {
@@ -858,6 +874,8 @@ struct PlexAPIService: MediaBackend {
     struct TranscodeDecision: Sendable, Equatable {
         let code: String
         let text: String
+        var preservesOriginalVideo: Bool = false
+        var preservesOriginalAudio: Bool = false
         static let unknown = TranscodeDecision(code: "?", text: "")
     }
 
@@ -891,6 +909,131 @@ struct PlexAPIService: MediaBackend {
         return components.url
     }
 
+    /// Bulk Plex listings omit Stream records. Enrich just the selected item when
+    /// its broad format could use the automatic path; never rescan or change the catalog.
+    func itemWithPlaybackStreamFacts(_ item: PlexMediaItem) async -> PlexMediaItem {
+        guard Self.needsOriginalVideoFacts(item, quality: .current, isLocal: isLikelyLocalServer,
+                                          hevcCapable: CodecSupport.deviceSupportsHEVC),
+              var req = request(path: "/library/metadata/\(item.ratingKey)") else { return item }
+        req.timeoutInterval = 5
+        do {
+            let (data, response) = try await Self.session.data(for: req)
+            guard !Task.isCancelled, let status = (response as? HTTPURLResponse)?.statusCode,
+                  (200..<300).contains(status) else { return item }
+            let raw = try Self.decodePlexJSONResponse(SectionItemsResponse.self, data: data, response: response)
+                .MediaContainer.Metadata?.first { $0.ratingKey == item.ratingKey }
+            guard let raw else { return item }
+            return Self.applyingPlaybackStreamFacts(raw, to: item)
+        } catch { return item } // Unavailable facts do not invent codec support.
+    }
+
+    static func needsOriginalVideoFacts(_ item: PlexMediaItem, quality: StreamQuality,
+                                       isLocal: Bool, hevcCapable: Bool) -> Bool {
+        isLocal && hevcCapable && [.auto, .maximum].contains(quality)
+            && item.container?.lowercased() == "mkv" && item.videoCodec?.lowercased() == "hevc"
+            && item.audioCodec?.lowercased() == "eac3" && (item.videoWidth ?? 0) > 1920
+            && (item.videoHeight ?? 0) > 1080
+            && (item.audioChannelCount == nil || item.doviCompatibilityID == nil
+                || item.audioStreamID == nil || item.doviProfile == nil || item.videoBitDepth == nil)
+    }
+
+    static func applyingPlaybackStreamFacts(_ raw: PlexRawItem, to item: PlexMediaItem) -> PlexMediaItem {
+        guard raw.ratingKey == item.ratingKey, let media = raw.Media,
+              media.indices.contains(item.mediaIndex), let parts = media[item.mediaIndex].Part,
+              parts.indices.contains(item.partIndex) else { return item }
+        let part = parts[item.partIndex]
+        guard part.key == item.partKey else { return item }
+        let video = part.Stream?.first { $0.streamType == 1 }
+        let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
+            ?? part.Stream?.first { $0.streamType == 2 }
+        guard video?.codec == item.videoCodec, audio?.codec == item.audioCodec else { return item }
+        var enriched = item
+        enriched.videoBitDepth = video?.bitDepth
+        enriched.doviProfile = video?.DOVIProfile
+        enriched.doviCompatibilityID = video?.DOVIBLCompatID
+        enriched.audioChannelCount = audio?.channels
+        enriched.audioStreamID = audio?.id
+        return enriched
+    }
+
+    /// Only the measured local DV8.1 / EAC3 5.1 combination. Missing old-cache facts,
+    /// remote playback, lower quality selections and over-budget files keep their old path.
+    static func shouldPreferOriginalVideo(_ item: PlexMediaItem, quality: StreamQuality,
+                                          isLocal: Bool, hevcCapable: Bool) -> Bool {
+        guard isLocal, hevcCapable, [.auto, .maximum].contains(quality),
+              item.container?.lowercased() == "mkv", item.videoCodec?.lowercased() == "hevc",
+              item.videoBitDepth == 10, item.doviProfile == 8, item.doviCompatibilityID == 1,
+              item.audioCodec?.lowercased() == "eac3", item.audioChannelCount == 6,
+              item.audioStreamID != nil, let bitrate = item.bitrate, bitrate > 0,
+              bitrate <= quality.maxBitrateKbps,
+              let width = item.videoWidth, let height = item.videoHeight else { return false }
+        return width > 1920 && width <= quality.width && height > 1080 && height <= quality.height
+    }
+
+    /// Unlike the explicit retry, automation never raises the bitrate/resolution ceiling
+    /// or disables the selected adaptive-quality setting. Only packaging and audio ID change.
+    static func automaticOriginalVideoURL(from original: URL, audioStreamID: Int?) -> URL? {
+        guard let id = audioStreamID, let remux = dolbyVisionRemuxURL(from: original),
+              var c = URLComponents(url: remux, resolvingAgainstBaseURL: false) else { return nil }
+        c.queryItems = (c.queryItems ?? []).filter { $0.name != "audioStreamID" }
+            + [URLQueryItem(name: "audioStreamID", value: String(id))]
+        return c.url
+    }
+
+    static func prepareOriginalVideoCandidate(url: URL, sessionID: String, offsetSeconds: Int,
+        prepare: (URL) async -> TranscodeDecision, stop: (String) async -> Void
+    ) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
+        let decision = await prepare(url)
+        guard !Task.isCancelled, decision.code.hasPrefix("1"), decision.preservesOriginalVideo, decision.preservesOriginalAudio else {
+            await stop(sessionID)
+            return nil // Fail visibly through the existing no-playable-source path; never transcode silently.
+        }
+        return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false,
+                                   requiresOriginalVideo: true), offsetSeconds > 0)
+    }
+
+    /// Opt-in remux request. Never changes persisted quality settings or normal tuning.
+    /// The caller must inspect the decision before replacing the current player.
+    static func preservationRetryURL(from startURL: URL) -> URL? {
+        guard let remux = dolbyVisionRemuxURL(from: startURL),
+              var components = URLComponents(url: remux, resolvingAgainstBaseURL: false) else { return nil }
+        let overrides = ["directPlay": "0", "directStream": "1", "directStreamAudio": "1",
+                         "maxVideoBitrate": "100000", "videoResolution": "3840x2160",
+                         "videoQuality": "100", "autoAdjustQuality": "0"]
+        components.queryItems = (components.queryItems ?? []).filter { overrides[$0.name] == nil }
+            + overrides.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        return components.url
+    }
+
+    /// Fail closed: an accepted decision is not enough; require exactly one copied HEVC
+    /// video stream in fMP4. Malformed/partial responses never authorize a player swap.
+    static func decisionPreservesOriginalVideo(_ data: Data, requireAudioCopy: Bool = false) -> Bool {
+        final class Reader: NSObject, XMLParserDelegate {
+            var videos: [(String, String)] = []
+            var containers: [String] = []
+            var audio: [[String: String]] = []
+            func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?,
+                        qualifiedName: String?, attributes: [String: String]) {
+                if name == "Stream", attributes["streamType"] == "2" { audio.append(attributes) }
+                if name == "Part" { containers.append(attributes["container"] ?? "") }
+                if name == "Stream", attributes["streamType"] == "1" {
+                    videos.append((attributes["codec"] ?? "", attributes["decision"] ?? ""))
+                }
+            }
+        }
+        let reader = Reader()
+        let parser = XMLParser(data: data)
+        parser.delegate = reader
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), reader.videos.count == 1, reader.containers.count == 1 else { return false }
+        if requireAudioCopy {
+            guard reader.audio.count == 1, let a = reader.audio.first,
+                  a["codec"] == "eac3", a["decision"] == "copy", a["channels"] == "6" else { return false }
+        }
+        return reader.videos[0].0 == "hevc" && reader.videos[0].1 == "copy"
+            && ["mp4", "fmp4"].contains(reader.containers[0])
+    }
+
     /// The `decision` call Plex's own players make before `start.m3u8`, with the same
     /// session and query. Without it the server answers `start.m3u8` with 400 (surfaced as
     /// "resource unavailable") whenever it is not idle, which on a channel-flipping app is
@@ -909,7 +1052,7 @@ struct PlexAPIService: MediaBackend {
             let code = Self.attribute("transcodeDecisionCode", in: body) ?? Self.attribute("generalDecisionCode", in: body) ?? "?"
             let text = Self.attribute("transcodeDecisionText", in: body) ?? Self.attribute("generalDecisionText", in: body) ?? ""
             print("[Plex90] DECISION: HTTP \(status) code=\(code) \(text)")
-            return TranscodeDecision(code: code, text: text)
+            return TranscodeDecision(code: code, text: text, preservesOriginalVideo: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data), preservesOriginalAudio: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAudioCopy: true))
         } catch {
             print("[Plex90] DECISION: failed (\(error.localizedDescription)), starting anyway")
             return .unknown
@@ -1458,17 +1601,42 @@ struct PlexRawItem: Decodable {
             let codec: String?
             let bitDepth: Int?
             let DOVIProfile: Int?
+            var DOVIBLCompatID: Int? = nil
+            var channels: Int? = nil
+            var id: Int? = nil
+            var selected: Int? = nil
+            private enum CodingKeys: String, CodingKey {
+                case streamType, codec, bitDepth, DOVIProfile, DOVIBLCompatID, channels, id, selected
+            }
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                streamType = try c.decodeIfPresent(Int.self, forKey: .streamType)
+                codec = try c.decodeIfPresent(String.self, forKey: .codec)
+                bitDepth = try c.decodeIfPresent(Int.self, forKey: .bitDepth)
+                DOVIProfile = try c.decodeIfPresent(Int.self, forKey: .DOVIProfile)
+                DOVIBLCompatID = try c.decodeIfPresent(Int.self, forKey: .DOVIBLCompatID)
+                channels = try c.decodeIfPresent(Int.self, forKey: .channels)
+                id = try c.decodeIfPresent(Int.self, forKey: .id)
+                selected = (try? c.decode(Bool.self, forKey: .selected)).map { $0 ? 1 : 0 }
+                    ?? (try? c.decode(Int.self, forKey: .selected))
+            }
         }
         var playbackParts: [PlexPartPlaybackInfo] {
             (Part ?? []).compactMap { part in
                 guard let key = part.key else { return nil }
                 let video = part.Stream?.first { $0.streamType == 1 }
-                let audio = part.Stream?.first { $0.streamType == 2 }
+                let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
+                    ?? part.Stream?.first { $0.streamType == 2 }
                 return PlexPartPlaybackInfo(key: key, container: part.container ?? container,
                     videoCodec: video?.codec ?? videoCodec, audioCodec: audio?.codec ?? audioCodec,
                     bitDepth: video?.bitDepth, doviProfile: video?.DOVIProfile,
-                    durationSeconds: part.duration.map { Double($0) / 1000 })
+                    durationSeconds: part.duration.map { Double($0) / 1000 },
+                    audioChannelCount: audio?.channels, doviCompatibilityID: video?.DOVIBLCompatID, audioStreamID: audio?.id)
             }
+        }
+        var audioStream: PlexStream? {
+            Part?.first?.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
+                ?? Part?.first?.Stream?.first { $0.streamType == 2 }
         }
         var videoStream: PlexStream? {
             Part?.first?.Stream?.first { $0.streamType == 1 }

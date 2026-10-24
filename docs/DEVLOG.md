@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+
+## 2026-10-24 (Plex original-video compatibility)
+
+**Shipped.** A separate development build was tested on Apple TV. No production
+release or media-library changes.
+
+**Changed.** Local 4K HEVC Main10 / Dolby Vision profile 8 compatibility ID 1
+MKV sources with six-channel EAC3 use fMP4 when within Auto/Maximum quality
+limits. Missing stream facts are fetched for the selected item. The decision
+must preserve HEVC and EAC3; rejected or stale sessions are cleaned up without
+silently reducing quality. Position, selected media/audio and quality ceilings
+are retained. Manual original-video retry remains available.
+
+**Half-done.** Owner confirmed automatic picture/audio and channel switching on
+Apple TV. Server output and an existing fragment confirmed copied 4K HEVC,
+PQ/BT.2020, Dolby Vision configuration and six-channel EAC3. Physical TV HDR mode
+and Atmos output were not verified. This is a narrow format fix, not validation
+of every source or client.
+
+Full suite: 909 passed, 13 optional harnesses skipped. Three local follow-ups
+passed: 50,000-item synthetic library load/restore, daylight-saving comparison
+and generated-video telemetry. Ten external/server harnesses remain unrun.
+The existing missing-HLS failure test needs a 30-second deadline on tvOS 27;
+its assertions are unchanged. The local harnesses also recorded a 2.289-second
+main-thread block and next-hour guide mismatches near day boundaries. Those
+separate diagnostics do not invalidate the codec tests or establish perfect
+scheduling/performance.
+
+**Next.** Review the narrow capability gate and session ownership. Native Plex
+direct-play and external deep-link navigation remain separate issues.
+
+
 ## 2026-10-23 (web and Docker: START OVER while the library loads)
 
 **Shipped.** The web tuner on nostalgex.app when this lands on main, and Docker as `tuner-v1.0.8` from the same commit.
