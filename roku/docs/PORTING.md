@@ -17,7 +17,7 @@ and already pinned to the Apple TV.
 | `scripts/nostalgex-daily-manifest.js` (Swift: `SchedulePoolOrdering.swift`, `DailyManifestScheduler.swift`) | `source/schedule/DailyManifest.brs` | ported, passing on device |
 | `scripts/nostalgex-channel-filter.cjs` (Swift: `AppState+Channels.swift` `filterItems`) | `source/filter/ChannelFilter.brs` | ported, passing on device |
 | `plex-tuner.html`: `getTimeFilteredPool`, bundles, `minItems` | BrightScript | with the guide |
-| What airs, after the Apple TV (web tuner 1.0.7, `f9b5562`): pools in library order, minutes truncated (`minutesFromPlexMs`, `minutesFromTicks`); the guide's 24-hour window (`ChannelScheduleBuilder.buildSchedule`); one title on two channels kept by the lowest channel id (`resolveConflicts`); the next pick (`AppState.advanceToNextItem`: `findConflict`, `advancePick`) | `source/plex/PlexLibrary.brs`, `source/mediabrowser/MediaBrowserLibrary.brs`, `source/guide/Advance.brs`, `components/GuideView.brs` | ported; upstream's `scripts/schedule-parity-golden.json`, from the Apple TV's own code, passing off-device (`tests/ScheduleParityGoldenTests.brs`, 314 checks). Not yet run on a TV. As on the web, the guide shows a title given way unmarked rather than the next programme as on now |
+| What airs, after the Apple TV (web tuner 1.0.7, `f9b5562`): pools in library order, minutes truncated (`minutesFromPlexMs`, `minutesFromTicks`); the guide's 24-hour window (`ChannelScheduleBuilder.buildSchedule`); one title on two channels kept by the lowest channel id (`resolveConflicts`); the next pick (`AppState.advanceToNextItem`: `findConflict`, `advancePick`) | `source/plex/PlexLibrary.brs`, `source/mediabrowser/MediaBrowserLibrary.brs`, `source/guide/Advance.brs`, `components/GuideView.brs` | ported; upstream's `scripts/schedule-parity-golden.json`, from the Apple TV's own code, passing off-device and on the 55R617 (`tests/ScheduleParityGoldenTests.brs`, 314 checks), and matched live against upstream (below). As on the web, the guide shows a title given way unmarked rather than the next programme as on now |
 | `plex-tuner.html` PIN sign-in and server discovery | `source/plex/PlexApi.brs` | ported; HTTPS only (below) |
 | `QRCodeView` beside the PIN (`SettingsView.swift`): the plex.tv/link address with the code, 200 px, "SCAN TO CONNECT" | `source/util/QrCode.brs`, `addQr` in `components/ConnectView.brs` | ported; encoded on the TV (level M, as Core Image's), since a QR service would see the code. Every mask's matrix matches a reference encoder (`tests/gen-qr.mjs`, `tests/vectors/qr.json`). Upstream scanned it off a Streaming Stick Plus and signed in with a phone (Discussion #8, 2026-10-20) |
 | `ServerPickerView` (`Plex90App.swift`): CHOOSE YOUR LIBRARIES after sign-in when the account lists more than one server; owned servers on, all of them when none is owned | `components/ServerPickerView.*`, `source/plex/ServerChoice.brs`, Settings › CONNECTION | ported; cases in `tests/ServerChoiceTests.brs`. Not yet seen on a TV (one-server account). Unlike upstream, no server is checked before it, as the maintainer asked |
@@ -514,6 +514,11 @@ at `6f05937` with 5,363 items on one server:
   - A franchise switched on in Settings built in place in 6.1 s on Back, the
     guide still on CH 2. Seven switches in a row built once.
   - Every test passed on the TV.
+- **The Apple TV's schedule, on the 55R617 (2026-10-23), 5,278 items:**
+  every test passed on the TV at `53e04d4`, the schedule-parity golden's 314
+  checks included. At `d45f4c7` (`--live`), `compare.mjs` found every item
+  identical, fields and order, and all 139 channels identical in pool and in
+  what airs today.
 - **Collections step, on the 55R617:** 457 s at `d2e276d`, where the progress
   screen rebuilt itself on each of three updates per collection (25 collections'
   updates took 66 s, then 136 s, against a 1.1 s fetch); 10.3 s once a change
