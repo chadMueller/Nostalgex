@@ -51,10 +51,10 @@ sub Main(args = invalid as Dynamic)
             parts.Push(NxToStr(row.item.ratingKey) + ":" + row.via)
             poolItems.Push(row.item)
         end for
-        ' What the guide airs: the day's shuffle, the hour's restrictions,
-        ' then the day's schedule, exactly as LibraryTask builds it.
+        ' What the guide airs: the pool in library order, the hour's
+        ' restrictions, then the day's schedule, exactly as LibraryTask builds it.
         blocks = []
-        aired = NxManifestBlocks(ch, NxTimeFilteredPool(ch, NxSeededShuffle(poolItems, clock.nowSec), NxLocalDay(clock.nowSec).hour), clock.nowSec)
+        aired = NxManifestBlocks(ch, NxTimeFilteredPool(ch, poolItems, NxLocalDay(clock.nowSec).hour), clock.nowSec)
         for each b in aired
             blocks.Push(NxToStr(b.item.ratingKey) + "@" + b.startSec.ToStr() + "-" + b.endSec.ToStr())
         end for

@@ -1,5 +1,6 @@
-// UTC offsets for the zones in upstream's scripts/schedule-dst-golden.json,
-// which ScheduleDSTGoldenTests.brs reads (copied unchanged to tests/vectors/).
+// UTC offsets for the zones in upstream's scripts/schedule-dst-golden.json and
+// schedule-parity-golden.json, which ScheduleDSTGoldenTests.brs and
+// ScheduleParityGoldenTests.brs read (copied unchanged to tests/vectors/).
 // The golden file names its zones; the port pins a zone the way LineupTests
 // does, as GetGlobalAA().nxTzOffsets, [{ fromSec, offsetSec }] in time order.
 // The offsets come from the tz database through Intl, which node 22 has (it
@@ -22,14 +23,10 @@ function offsetSec(zone, sec) {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) / 1000 - sec;
 }
 
-export function dstZones(upstream) {
-  const golden = JSON.parse(readFileSync(join(upstream, "scripts", "schedule-dst-golden.json"), "utf8"));
-  // Three days either side of the vectors: the tests look back to the day
-  // before yesterday.
-  const lo = Math.min(...golden.days.map((d) => d.start)) - 3 * 86400;
-  const hi = Math.max(...golden.days.map((d) => d.nextStart)) + 3 * 86400;
-  const zones = {};
-  for (const zone of [...new Set(golden.days.map((d) => d.zone))]) {
+// Each zone's offsets from lo to hi: [{ fromSec, offsetSec }] in time order.
+function zoneOffsets(zones, lo, hi) {
+  const out = {};
+  for (const zone of zones) {
     const offsets = [{ fromSec: 0, offsetSec: offsetSec(zone, lo) }];
     for (let t = lo; t < hi; t += 900) {
       if (offsetSec(zone, t + 900) === offsetSec(zone, t)) continue;
@@ -41,7 +38,27 @@ export function dstZones(upstream) {
       }
       offsets.push({ fromSec: b, offsetSec: offsetSec(zone, b) });
     }
-    zones[zone] = offsets;
+    out[zone] = offsets;
   }
-  return { range: { fromSec: lo, toSec: hi }, zones };
+  return out;
+}
+
+export function dstZones(upstream) {
+  const golden = JSON.parse(readFileSync(join(upstream, "scripts", "schedule-dst-golden.json"), "utf8"));
+  // Three days either side of the vectors: the tests look back to the day
+  // before yesterday.
+  const lo = Math.min(...golden.days.map((d) => d.start)) - 3 * 86400;
+  const hi = Math.max(...golden.days.map((d) => d.nextStart)) + 3 * 86400;
+  return { range: { fromSec: lo, toSec: hi }, zones: zoneOffsets([...new Set(golden.days.map((d) => d.zone))], lo, hi) };
+}
+
+// The same for scripts/schedule-parity-golden.json's zones, which
+// ScheduleParityGoldenTests.brs reads: three days either side of every
+// instant a case names.
+export function parityZones(upstream) {
+  const golden = JSON.parse(readFileSync(join(upstream, "scripts", "schedule-parity-golden.json"), "utf8"));
+  const times = golden.cases.flatMap((c) => [...c.fixture.prime, ...c.fixture.days, ...c.fixture.at]);
+  const lo = Math.min(...times) - 3 * 86400;
+  const hi = Math.max(...times) + 3 * 86400;
+  return { range: { fromSec: lo, toSec: hi }, zones: zoneOffsets([...new Set(golden.cases.map((c) => c.fixture.zone))], lo, hi) };
 }

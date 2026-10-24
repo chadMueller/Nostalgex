@@ -52,7 +52,7 @@ end function
 ' ── The library load's franchise step ───────────────────────────────────────
 
 ' Everything the FRANCHISES package adds to a lineup, run after the stock
-' pools are built and before they are shuffled, as rebuildFoundFranchises
+' pools are built and before they are scheduled, as rebuildFoundFranchises
 ' then materializeDynamicChannels run after the pool build upstream.
 '
 ' opts: channels (channels.json entries as LibraryTask builds them: `built`

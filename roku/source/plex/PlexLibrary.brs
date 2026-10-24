@@ -6,8 +6,9 @@
 ' Source: plex-tuner.html scanOnePlexServer, fetchPlexSectionPaged,
 ' pickBestVersion and resolutionHeight, and parseMusicVideoFromPlex from
 ' scripts/nostalgex-music-brainz.js. Items come out in upstream's order
-' (section, then show, then episode), because the schedule's shuffle starts
-' from that order, and with upstream's fields and fallbacks.
+' (section, then show, then episode), because the schedule starts from that
+' order (the pools stay in library order, as the Apple TV's loaders build
+' them), and with upstream's fields and fallbacks.
 '
 ' Differences, none of which reach the filter or schedule:
 '   - Items carry `serverIndex`, not upstream's serverUrl and serverToken: the
@@ -333,10 +334,12 @@ function NxPlexMovieItem(item as Object, section as Object, isMusicVideoSection 
     }
 end function
 
-' Plex milliseconds to whole minutes, rounded half up as JS Math.round.
+' Plex milliseconds to whole minutes, truncated as PlexAPIService and
+' minutesFromPlexMs do: the schedule follows the Apple TV's minute for minute.
 function NxPlexMinutes(ms as Dynamic) as Integer
     if not NxTruthy(ms) or not NxIsNumber(ms) then return 0
-    return Int(ms / 60000# + 0.5#)
+    if ms <= 0 then return 0
+    return NxFloorDouble(ms / 60000#)
 end function
 
 function NxTags(list as Dynamic) as Object
