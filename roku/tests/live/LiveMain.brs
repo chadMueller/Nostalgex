@@ -1,7 +1,7 @@
 ' Live check entry point (scripts/deploy.sh --live): loads the library from
 ' the Plex servers this TV is signed in to, then prints fingerprints of every
-' item, every channel's pool and what every channel airs today (after the
-' daily shuffle, time restrictions and the session schedule cache), for
+' item, every channel's pool and what every channel airs today (its pool in
+' library order, time restrictions and the session schedule cache), for
 ' tests/live/compare.mjs to check against upstream's own code run on the same
 ' library. Prints no token, no URL and no metadata, only ratingKeys, counts
 ' and SHA-1 prefixes.
