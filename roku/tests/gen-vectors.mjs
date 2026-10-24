@@ -4,7 +4,7 @@
 // the Apple TV Swift. The BrightScript port must reproduce every vector; a
 // divergence is a bug in the port, never a reason to regenerate.
 //
-//   node tests/gen-vectors.mjs            # write tests/vectors/{schedule,filter,lineup,franchise,enrichment,collections,mediabrowser,schedule-dst-zones}.json
+//   node tests/gen-vectors.mjs            # write tests/vectors/{schedule,filter,lineup,franchise,enrichment,collections,mediabrowser,schedule-dst-zones,schedule-parity-zones}.json
 //   node tests/gen-vectors.mjs --check    # fail if the file is stale
 //
 // Upstream: $NOSTALGEX_DIR, default the Nostalgex repo this port lives in
@@ -30,7 +30,7 @@ import { franchiseVectors } from "./gen-franchise.mjs";
 import { enrichmentVectors } from "./gen-enrichment.mjs";
 import { collectionsVectors } from "./gen-collections.mjs";
 import { mediaBrowserVectors } from "./gen-mediabrowser.mjs";
-import { dstZones } from "./gen-dst.mjs";
+import { dstZones, parityZones } from "./gen-dst.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = resolve(process.env.NOSTALGEX_DIR || join(here, "..", ".."));
@@ -254,10 +254,15 @@ const files = [
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, source: "the tz database (Intl), for scripts/schedule-dst-golden.json's zones" },
     ...dstZones(upstream),
   }],
+  [join(here, "vectors", "schedule-parity-zones.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-dst.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, source: "the tz database (Intl), for scripts/schedule-parity-golden.json's zones" },
+    ...parityZones(upstream),
+  }],
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
   // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs and
-  // ScheduleDSTGoldenTests.brs read them.
-  ...["franchise-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json"].map((g) =>
+  // ScheduleDSTGoldenTests.brs and ScheduleParityTests.brs read them.
+  ...["franchise-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;

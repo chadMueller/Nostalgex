@@ -1,6 +1,6 @@
 // Lineup golden vectors: the parts of plex-tuner.html that turn filter pools
 // into what the guide airs. getTimeFilteredPool is lifted unchanged out of
-// plex-tuner.html, shuffleArray is its last copy (see FROZEN_SHUFFLE); getManifestBlocks and poolFingerprint run
+// plex-tuner.html; getManifestBlocks and poolFingerprint run
 // from the daily-manifest module over a stand-in localStorage, two days in a
 // row, so yesterday's schedule feeds today's as it does in the browser.
 // Called by tests/gen-vectors.mjs, which owns the output, with TZ=UTC.
@@ -18,21 +18,6 @@ export function liftFunction(html, name) {
   return html.slice(at, i + 1);
 }
 
-// plex-tuner.html's shuffleArray as it was up to tuner 1.0.6 (main 693b856), verbatim.
-const FROZEN_SHUFFLE = `function shuffleArray(arr) {
-    // Seeded shuffle based on day so channels are consistent within a day
-    const seed = Math.floor(Date.now() / 86400000); // changes daily
-    const shuffled = [...arr];
-    let m = shuffled.length;
-    let s = seed;
-    while (m) {
-      s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
-      const i = Math.abs(s) % m--;
-      [shuffled[m], shuffled[i]] = [shuffled[i], shuffled[m]];
-    }
-    return shuffled;
-  }`;
-
 function withClock(ms, fn) {
   const RealDate = globalThis.Date;
   globalThis.Date = class extends RealDate {
@@ -46,20 +31,9 @@ export function lineupVectors(upstream, M, pool) {
   // getTimeFilteredPool reads ratings through the page's channel filter global.
   createRequire(import.meta.url)(join(upstream, "scripts", "nostalgex-channel-filter.cjs"));
   const html = readFileSync(join(upstream, "plex-tuner.html"), "utf8");
-  // The web tuner stopped shuffling pools in tuner 1.0.7, to follow the Apple TV's schedule
-  // (scripts/schedule-parity-golden.json). The Roku port still shuffles until it follows too
-  // (parity queue items 24 and 25), so these vectors keep the page's last shuffleArray.
-  const lifted = new Function(`${FROZEN_SHUFFLE}\n${liftFunction(html, "getTimeFilteredPool")}\nreturn { shuffleArray, getTimeFilteredPool };`)();
+  // Pools air in library order since tuner 1.0.7 (no shuffle), as on the Apple TV.
+  const lifted = new Function(`${liftFunction(html, "getTimeFilteredPool")}\nreturn { getTimeFilteredPool };`)();
   const ids = (arr) => arr.map((i) => i.ratingKey).join(",");
-
-  // shuffleArray across UTC days, including the instant a UTC day turns.
-  const shuffle = [];
-  for (const iso of ["2026-10-12T04:59:59Z", "2026-10-12T05:00:00Z", "2026-10-12T23:59:59Z", "2026-10-13T00:00:00Z", "2030-01-01T12:00:00Z"]) {
-    for (const n of [0, 1, 2, 7, pool.length]) {
-      const ms = Date.parse(iso);
-      shuffle.push({ nowSec: Math.floor(ms / 1000), n, out: ids(withClock(ms, () => lifted.shuffleArray(pool.slice(0, n)))) });
-    }
-  }
 
   // getTimeFilteredPool at each hour, for every kind of restriction.
   // Ratings from other countries count as their US labels (upstream GitHub #41).
@@ -139,5 +113,5 @@ export function lineupVectors(upstream, M, pool) {
   delete globalThis.localStorage;
 
   const fingerprint = [0, 1, 5, pool.length].map((n) => ({ n, out: globalThis.__nxRng.poolFingerprint(pool.slice(0, n)) }));
-  return { pool, shuffle, timeFilter, rated, manifests, dst, fingerprint };
+  return { pool, timeFilter, rated, manifests, dst, fingerprint };
 }

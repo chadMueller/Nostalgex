@@ -333,10 +333,16 @@ function NxPlexMovieItem(item as Object, section as Object, isMusicVideoSection 
     }
 end function
 
-' Plex milliseconds to whole minutes, rounded half up as JS Math.round.
+' Plex milliseconds to whole minutes, truncated, as the Apple TV's
+' PlexAPIService and the web tuner's minutesFromPlexMs read them: the
+' schedule packs whole minutes, so rounding up moved every later start.
 function NxPlexMinutes(ms as Dynamic) as Integer
     if not NxTruthy(ms) or not NxIsNumber(ms) then return 0
-    return Int(ms / 60000# + 0.5#)
+    if ms <= 0 then return 0
+    ' Whole-number division on a LongInteger: on a TV, an Integer over a
+    ' Double divided in single precision and 599,999,999 ticks came out 1.
+    ms& = ms
+    return ms& \ 60000
 end function
 
 function NxTags(list as Dynamic) as Object

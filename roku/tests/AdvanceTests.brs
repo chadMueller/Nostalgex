@@ -26,6 +26,14 @@ function NxRunAdvanceTests() as Integer
     NxCheck(r, "ended on time", NxNextAiring(blocks, a, 1660&).ratingKey, "b")
     NxCheck(r, "last one, nothing after", NxToStr(NxNextAiring(blocks, c, 2990&)), "")
 
+    ' The next pick is never what another channel has on now (advancePick):
+    ' c is on channel 9, so channel 5 skips to the entry after it.
+    d = { ratingKey: "d", startSec: 2980&, endSec: 3640& }
+    mine = [a, b, c, d]
+    guide = [{ id: 5, blocks: mine }, { id: 9, blocks: [{ ratingKey: "c", startSec: 2000&, endSec: 2600& }] }]
+    NxCheck(r, "ended early, the one after is on elsewhere", NxNextAiring(mine, b, 2300&, guide, 5).ratingKey, "d")
+    NxCheck(r, "ended early, its own channel doesn't count", NxNextAiring(mine, b, 2300&, [{ id: 5, blocks: mine }], 5).ratingKey, "c")
+
     print "advance cases (upstream hand-over): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

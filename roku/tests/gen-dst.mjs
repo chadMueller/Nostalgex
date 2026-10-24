@@ -45,3 +45,29 @@ export function dstZones(upstream) {
   }
   return { range: { fromSec: lo, toSec: hi }, zones };
 }
+
+// The same for scripts/schedule-parity-golden.json's zones, over every instant
+// a case looks at, three days either side.
+export function parityZones(upstream) {
+  const golden = JSON.parse(readFileSync(join(upstream, "scripts", "schedule-parity-golden.json"), "utf8"));
+  const zones = {};
+  let lo = Infinity, hi = -Infinity;
+  for (const c of golden.cases) {
+    const fx = c.fixture;
+    const ts = [...(fx.prime || []), ...(fx.days || []), ...(fx.at || [])];
+    const a = Math.min(...ts) - 3 * 86400, b = Math.max(...ts) + 3 * 86400;
+    lo = Math.min(lo, a); hi = Math.max(hi, b);
+    const offsets = [{ fromSec: 0, offsetSec: offsetSec(fx.zone, a) }];
+    for (let t = a; t < b; t += 900) {
+      if (offsetSec(fx.zone, t + 900) === offsetSec(fx.zone, t)) continue;
+      let x = t, y = t + 900;
+      while (y - x > 1) {
+        const mid = Math.floor((x + y) / 2);
+        if (offsetSec(fx.zone, mid) === offsetSec(fx.zone, t)) x = mid; else y = mid;
+      }
+      offsets.push({ fromSec: y, offsetSec: offsetSec(fx.zone, y) });
+    }
+    zones[fx.zone] = offsets;
+  }
+  return { range: { fromSec: lo, toSec: hi }, zones };
+}

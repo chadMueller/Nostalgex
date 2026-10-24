@@ -1,5 +1,5 @@
-' Runs source/guide/Lineup.brs against tests/vectors/lineup.json: the daily
-' pool shuffle, time-of-day restrictions, the pool fingerprint, and the
+' Runs source/guide/Lineup.brs against tests/vectors/lineup.json:
+' time-of-day restrictions, the pool fingerprint, and the
 ' session schedule cache across consecutive days. Pins the zone to UTC, as
 ' the vectors were made. Returns the failure count.
 
@@ -12,14 +12,6 @@ function NxRunLineupTests(vectorsPath as String) as Integer
     r = { pass: 0, fail: 0 }
     g = GetGlobalAA()
     g.nxTzOffsetSec = 0
-
-    for each c in v.shuffle
-        part = []
-        for i = 0 to c.n - 1
-            part.Push(v.pool[i])
-        end for
-        NxCheck(r, "shuffle n=" + c.n.ToStr() + " at " + c.nowSec.ToStr(), NxLineupKeys(NxSeededShuffle(part, c.nowSec)), c.out)
-    end for
 
     for each c in v.timeFilter
         got = NxTimeFilteredPool({ timeRestrictions: c.tr }, v.rated, c.hour)

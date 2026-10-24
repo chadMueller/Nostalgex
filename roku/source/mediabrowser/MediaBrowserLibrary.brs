@@ -88,10 +88,15 @@ function NxMbUnixSeconds(iso as Dynamic) as Integer
     return secs&
 end function
 
-' RunTimeTicks (100 ns) to whole minutes, rounded half up as Math.round.
+' RunTimeTicks (100 ns) to whole minutes, truncated, as the Apple TV's
+' JellyfinAPIService.minutes(fromTicks:) and the web tuner's minutesFromTicks.
 function NxMbMinutes(ticks as Dynamic) as Integer
     if not NxTruthy(ticks) or not NxIsNumber(ticks) then return 0
-    return Int(ticks / 600000000# + 0.5#)
+    if ticks <= 0 then return 0
+    ' Whole-number division on a LongInteger: on a TV, 599,999,999 / 600000000#
+    ' came out 1 (single precision), where the Apple TV and the web read 0.
+    ticks& = ticks
+    return ticks& \ 600000000
 end function
 
 ' The first stream of a type in a source's MediaStreams, or invalid.

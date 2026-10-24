@@ -106,27 +106,6 @@ function NxToInt32(x as LongInteger) as LongInteger
     return r
 end function
 
-' Mirrors shuffleArray: a linear congruential shuffle seeded by the UTC day
-' number (Date.now() / 86400000), so a pool holds still for a day. Returns
-' a new array.
-function NxSeededShuffle(arr as Object, nowSec as LongInteger) as Object
-    shuffled = []
-    shuffled.Append(arr)
-    s& = nowSec \ 86400
-    left = shuffled.Count()
-    while left > 0
-        s& = NxToInt32(s& * 1664525 + 1013904223)
-        a& = s&
-        if a& < 0 then a& = -a&
-        i% = a& mod left ' an Integer: array indexes can't be LongInteger
-        left = left - 1
-        tmp = shuffled[left]
-        shuffled[left] = shuffled[i%]
-        shuffled[i%] = tmp
-    end while
-    return shuffled
-end function
-
 ' Mirrors getTimeFilteredPool at a local hour (0-23).
 function NxTimeFilteredPool(channel as Object, pool as Object, hour as Integer) as Object
     tr = channel.timeRestrictions

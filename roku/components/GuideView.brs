@@ -884,7 +884,7 @@ end sub
 
 sub handOver()
     if m.tuned < 0 or m.playing = invalid then return
-    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, nowSec())
+    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, nowSec(), m.channels, m.channels[m.tuned].id)
     if nxt <> invalid then print "player: finished, "; nowSec() - m.playing.endSec; " s past the slot; next from its start"
     tune(m.tuned, nxt)
 end sub
@@ -1018,7 +1018,7 @@ sub onCardDone()
     hideCard()
     if m.tuned < 0 or m.playing = invalid then return
     t = nowSec()
-    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, t)
+    nxt = NxNextAiring(m.channels[m.tuned].blocks, m.playing, t, m.channels, m.channels[m.tuned].id)
     if nxt = invalid or (t >= nxt.startSec and t < nxt.endSec) then
         tune(m.tuned)
     else

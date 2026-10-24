@@ -26,6 +26,7 @@ sub Main(args = invalid as Dynamic)
         print "  lineup took "; timer.TotalMilliseconds(); " ms"
     end if
     timer.Mark()
+    if NxTestWants("schedule-parity") then failures = failures + NxRunScheduleParityTests("pkg:/tests/vectors/schedule-parity-golden.json", "pkg:/tests/vectors/schedule-parity-zones.json")
     if NxTestWants("schedule-dst") then
         failures = failures + NxRunScheduleDSTGoldenTests("pkg:/tests/vectors/schedule-dst-golden.json", "pkg:/tests/vectors/schedule-dst-zones.json")
         print "  schedule dst took "; timer.TotalMilliseconds(); " ms"

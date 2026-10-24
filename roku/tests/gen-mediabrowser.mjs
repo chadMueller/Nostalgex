@@ -87,17 +87,12 @@ export async function mediaBrowserVectors(upstream) {
     "NostalgexDailyManifest",
     body,
   );
-  // The web tuner truncates minutes since tuner 1.0.7, as the Apple TV does. The Roku port still
-  // rounds them (NxMbMinutes) until it follows (parity queue items 24 and 25), so the scan runs
-  // here with the rounding the page had up to 1.0.6.
-  const rounded = { ...globalThis.NostalgexDailyManifest,
-    minutesFromTicks: (ticks) => (ticks ? Math.round(ticks / 600000000) : 0) };
   const quiet = { log() {}, warn() {} };
   const urls = globalThis.NostalgexJellyfinUrls;
   await run(
     env.fetch, { ...globalThis, ...env }, "http://server.invalid", fx.userId, "jellyfin", [], new Set(),
     {}, () => "", () => "Jellyfin", () => {}, env.finalizeLibraryWithMusicBrainz, urls, [], () => {}, quiet,
-    rounded,
+    globalThis.NostalgexDailyManifest,
   );
   // `meta` is display text, which the port's guide builds; `subtitles` the web
   // tuner's own subtitle menu, which the port fills from the stream.

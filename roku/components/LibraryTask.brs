@@ -5,8 +5,8 @@ sub init()
 end sub
 
 ' The saved guide: the last build's output, reused only while a fresh build
-' would give the same thing (same local day and UTC day, since upstream's
-' pool shuffle is seeded by the UTC day, same packages, same servers on,
+' would give the same thing (same local day, and UTC day, which the pool
+' shuffle used to follow, same packages, same servers on,
 ' same build, NxBuildKey).
 ' It holds titles and schedules, nothing secret.
 function NxGuideCachePath() as String
@@ -42,7 +42,7 @@ end function
 ' The saved pools: each guide channel's pool as the last build filtered it,
 ' before the shuffle, with the items they hold. Filtering is most of a build
 ' (over a minute on a TV), and a pool rarely changes from one day to the
-' next, so when the saved guide is a day old these are shuffled and
+' next, so when the saved guide is a day old these are
 ' scheduled for today instead, in seconds, and the full build still runs
 ' behind them. Kept while the build, the month and which packages are in
 ' season (NxSeasonKey: the guide's lead, and the year the filter reads),
@@ -217,15 +217,15 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
             pool.Push(saved.items[n])
         end for
         ch.Delete("poolIdx")
-        ' Collection channels air their collection unshuffled, as the web tuner's do.
-        if NxTruthy(ch.built) and not NxTruthy(ch.collection) then pool = NxSeededShuffle(pool, nowSec)
+        ' Pools air in library order, as the Apple TV's and the web tuner's
+        ' (1.0.7) do: the day's order comes from the scheduler alone.
         ch.pool = pool
         ordered.Push(ch)
     end for
     NxClearManifests()
     timer.Mark()
     channels = NxScheduleGuide(ordered, nowSec, true)
-    print "library: saved pools shuffled and today scheduled in "; timer.TotalMilliseconds(); " ms"
+    print "library: saved pools read and today scheduled in "; timer.TotalMilliseconds(); " ms"
     guide = {
         channels: channels, builtAt: nowSec, items: saved.libraryItems,
         bundles: saved.bundles, enabledBundles: bundles, franchises: saved.franchises,
@@ -552,7 +552,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' FRANCHISES, as the Apple TV app has it (the web tuner doesn't call the
     ' builder): covered franchises join their classic's pool, and each found
     ' franchise switched on gets a channel from CH 300 that rides on the
-    ' package's switch. Before the shuffle, so every pool shuffles alike.
+    ' package's switch.
     franchiseRows = []
     foundIDs = []
     franchiseBundleIDs = []
@@ -598,12 +598,9 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     end for
     timer.Mark()
     for each ch in channels
-        ' Collection channels air their collection unshuffled, as the web
-        ' tuner's do.
-        if ch.built and not NxTruthy(ch.collection) then
-            ch.basePool = ch.pool
-            ch.pool = NxSeededShuffle(ch.pool, nowSec&)
-        end if
+        ' Pools air in library order, as the Apple TV's and the web tuner's
+        ' (1.0.7) do: no shuffle.
+        if ch.built and not NxTruthy(ch.collection) then ch.basePool = ch.pool
     end for
 
     ' Found franchise channels show while the package is on; its own channel

@@ -1,0 +1,44 @@
+{
+ "generatedBy": "tests/gen-vectors.mjs (tests/gen-dst.mjs)",
+ "upstream": {
+  "repo": "https://github.com/chadMueller/Nostalgex",
+  "commit": "954473bb14afacc1a807bf0cc974307c32ed548d",
+  "source": "the tz database (Intl), for scripts/schedule-parity-golden.json's zones"
+ },
+ "range": {
+  "fromSec": 1788364800,
+  "toSec": 1806519600
+ },
+ "zones": {
+  "America/New_York": [
+   {
+    "fromSec": 0,
+    "offsetSec": -14400
+   },
+   {
+    "fromSec": 1793512800,
+    "offsetSec": -18000
+   }
+  ],
+  "America/Santiago": [
+   {
+    "fromSec": 0,
+    "offsetSec": -14400
+   },
+   {
+    "fromSec": 1788667200,
+    "offsetSec": -10800
+   }
+  ],
+  "Europe/London": [
+   {
+    "fromSec": 0,
+    "offsetSec": 0
+   },
+   {
+    "fromSec": 1806195600,
+    "offsetSec": 3600
+   }
+  ]
+ }
+}
