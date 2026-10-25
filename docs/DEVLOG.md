@@ -4,6 +4,37 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-10-24 (explicit local Original quality, candidate)
+
+**Shipped.** Separate Nostalgex Test build 55 was installed on October 25.
+Production Nostalgex remains unchanged. The owner confirmed good playback and
+a normal-channel/back transition on the HDR10/EAC3 7.1 test.
+
+**Changed.** `Original (local Plex)` is an independent opt-in in Stream Quality.
+It retains supported local 4K HEVC through fMP4 with a 100 Mbps request ceiling.
+Explicit PQ/BT.2020 HDR10 with EAC3 5.1 copies audio; EAC3 7.1 converts only to
+AC3 5.1. The server decision must confirm copied video and the expected audio.
+Auto, Maximum, remote playback and other backends keep their existing settings.
+Disabling Original restores the retained capped choice. Fresh metadata accepts
+a changed timestamp URL only for the same Plex part ID and filename.
+
+**Half-done.** Follow-up on `fix/explicit-4k-compatibility-128` for draft PR #89;
+not merged or released to production.
+A decision-only server check confirmed HEVC copy plus AC3 5.1 at 100 Mbps.
+The same source required 41.6 Mbps under Plex's bandwidth calculation, so the
+existing 40 Mbps ceiling forced video conversion. No media stream was started
+by those decision-only checks. The subsequent owner-controlled Apple TV run
+confirmed the same HEVC-copy/AC3 5.1 path, advancing segments and roughly 28-51x
+processing speed. The normal channel retained its 40 Mbps request; returning to
+the test channel restored the explicit 100 Mbps path. Physical HDR display mode
+and speaker layout were not independently verified.
+Full simulator suite passed: 900 XCTest cases with 14 optional skips and zero
+failures, plus 32 Swift Testing cases passed. The signed device build also passed.
+
+**Next.** Maintainer review of draft PR #89. One HDR10/EAC3
+7.1 source and channel switching are hardware-validated; other formats and clients
+are not implied to be tested. Keep the production app unchanged.
+
 ## 2026-10-24 (Plex original-video compatibility)
 
 **Shipped.** A separate development build was tested on Apple TV. No production

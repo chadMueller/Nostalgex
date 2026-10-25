@@ -3,11 +3,11 @@ import XCTest
 
 final class OriginalVideoCompatibilityTests: XCTestCase {
     func testRetryPreservesSourceSessionOffsetAndSurround() throws {
-        let original = try XCTUnwrap(URL(string: "http://example.test/video/:/transcode/universal/start.m3u8?path=/library/metadata/1692&mediaIndex=2&partIndex=1&session=unique&offset=1792&copyts=0&directStreamAudio=0&videoResolution=1920x1080&X-Plex-Token=test&X-Plex-Platform=tvOS"))
+        let original = try XCTUnwrap(URL(string: "http://example.test/video/:/transcode/universal/start.m3u8?path=/library/metadata/1&mediaIndex=2&partIndex=1&session=unique&offset=345&copyts=0&directStreamAudio=0&videoResolution=1920x1080&X-Plex-Token=test&X-Plex-Platform=tvOS"))
         let retry = try XCTUnwrap(PlexAPIService.preservationRetryURL(from: original))
         let items = try XCTUnwrap(URLComponents(url: retry, resolvingAgainstBaseURL: false)?.queryItems)
         func values(_ key: String) -> [String] { items.filter { $0.name == key }.compactMap(\.value) }
-        for (key, value) in ["path": "/library/metadata/1692", "mediaIndex": "2", "partIndex": "1", "session": "unique", "offset": "1792", "copyts": "0", "X-Plex-Token": "test", "X-Plex-Platform": "Generic", "directStream": "1", "directStreamAudio": "1", "videoResolution": "3840x2160", "maxVideoBitrate": "100000"] {
+        for (key, value) in ["path": "/library/metadata/1", "mediaIndex": "2", "partIndex": "1", "session": "unique", "offset": "345", "copyts": "0", "X-Plex-Token": "test", "X-Plex-Platform": "Generic", "directStream": "1", "directStreamAudio": "1", "videoResolution": "3840x2160", "maxVideoBitrate": "100000"] {
             XCTAssertEqual(values(key), [value], key)
         }
         XCTAssertTrue(values("X-Plex-Client-Profile-Extra")[0].contains("container=mp4"))

@@ -12,6 +12,7 @@ struct SettingsPageView: View {
     @State private var expandedCategories: Set<String> = []
     @State private var showSubtitleLanguagePicker = false
     @State private var streamQuality = StreamQuality.current
+    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
     @State private var showStreamQualityPicker = false
     @State private var showAudioLanguagePicker = false
     private let tipJar = TipJar.shared
@@ -92,7 +93,7 @@ struct SettingsPageView: View {
                             SettingsToggleRow(
                                 title: "STREAM QUALITY",
                                 subtitle: "Lower this when your connection is slow or shared",
-                                detail: streamQuality.displayName,
+                                detail: localOriginalVideo && appState.backendKind == .plex ? "Original (local Plex)" : streamQuality.displayName,
                                 isOn: true,
                                 isFocused: focusedItem == "stream_quality",
                                 showToggle: false
@@ -299,7 +300,7 @@ struct SettingsPageView: View {
             if !has { dismiss() }
         }
         .sheet(isPresented: $showStreamQualityPicker) {
-            StreamQualityPickerSheet(selected: streamQuality) { picked in
+            StreamQualityPickerSheet(selected: streamQuality, allowsOriginal: appState.backendKind == .plex) { picked in
                 if picked != streamQuality {
                     Analytics.track(.settingChanged(key: "stream_quality", value: picked.rawValue))
                 }
@@ -1255,6 +1256,8 @@ private struct LanguagePickerSheet: View {
 
 private struct StreamQualityPickerSheet: View {
     let selected: StreamQuality
+    let allowsOriginal: Bool
+    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
     let onSelect: (StreamQuality) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1283,9 +1286,27 @@ private struct StreamQualityPickerSheet: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 6) {
+                        if allowsOriginal {
+                            Button {
+                                localOriginalVideo.toggle()
+                                dismiss()
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(localOriginalVideo ? "Original (local Plex) · ACTIVE" : "Original (local Plex)")
+                                        .font(.custom("DMMono-Medium", size: 22))
+                                    Text(LocalPlexOriginalQuality.detail)
+                                        .font(.custom("DMMono-Regular", size: 20))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(18)
+                            }
+                            .focused($focusedID, equals: "local-original")
+                        }
                         ForEach(StreamQuality.allCases) { quality in
                             let isSel = selected == quality
                             Button {
+                                localOriginalVideo = false
                                 onSelect(quality)
                                 dismiss()
                             } label: {

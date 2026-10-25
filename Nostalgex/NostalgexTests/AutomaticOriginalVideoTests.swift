@@ -11,8 +11,8 @@ final class AutomaticOriginalVideoTests: XCTestCase {
           videoBitDepth: 10, doviProfile: 8, videoWidth: 3840, videoHeight: 2160,
           audioChannelCount: 6, doviCompatibilityID: 1, audioStreamID: 22)
     }
-    private func eligible(_ i: PlexMediaItem, quality: StreamQuality = .auto, local: Bool = true, hevc: Bool = true) -> Bool {
-        PlexAPIService.shouldPreferOriginalVideo(i, quality: quality, isLocal: local, hevcCapable: hevc)
+    private func eligible(_ i: PlexMediaItem, quality: StreamQuality = .auto, local: Bool = true, hevc: Bool = true, originalLocal: Bool = false) -> Bool {
+        PlexAPIService.shouldPreferOriginalVideo(i, quality: quality, isLocal: local, hevcCapable: hevc, originalLocal: originalLocal)
     }
     func testNarrowFormatQualityAndCapabilityGate() {
         let good = item()
@@ -105,6 +105,132 @@ final class AutomaticOriginalVideoTests: XCTestCase {
         XCTAssertNil(PlexAPIService.applyingPlaybackStreamFacts(raw,to:cached).audioStreamID)
         XCTAssertFalse(PlexAPIService.needsOriginalVideoFacts(item(),quality:.auto,isLocal:true,hevcCapable:true))
         XCTAssertFalse(PlexAPIService.needsOriginalVideoFacts(cached,quality:.high,isLocal:true,hevcCapable:true))
+    }
+
+    func testHDR10SurroundRequiresExplicitColorFactsAndNoDolbyVision() {
+        var i = item(); i.doviProfile = nil; i.doviCompatibilityID = nil
+        XCTAssertFalse(eligible(i, originalLocal: true))
+        i.hasHDR10ColorMetadata = true
+        XCTAssertFalse(eligible(i)) // Existing capped playback stays unchanged.
+        XCTAssertTrue(eligible(i, originalLocal: true))
+        i.audioChannelCount = 8; XCTAssertTrue(eligible(i, originalLocal: true))
+        i.audioChannelCount = 2; XCTAssertFalse(eligible(i, originalLocal: true))
+        i.audioChannelCount = 8; i.hasHDR10ColorMetadata = false; XCTAssertFalse(eligible(i, originalLocal: true))
+        i.hasHDR10ColorMetadata = true; i.doviProfile = 7; XCTAssertFalse(eligible(i, originalLocal: true))
+        i.doviProfile = 8; i.doviCompatibilityID = 1; XCTAssertFalse(eligible(i, originalLocal: true))
+        i.doviProfile = nil
+        XCTAssertTrue(eligible(i, quality: .high, originalLocal: true)); XCTAssertFalse(eligible(i, local: false, originalLocal: true))
+        XCTAssertFalse(eligible(i, hevc: false, originalLocal: true))
+    }
+
+    func testHDR10FactsComeFromSelectedStreamAndSurviveSnapshot() throws {
+        var i = item(); i.doviProfile = nil; i.doviCompatibilityID = nil
+        let json = #"{"ratingKey":"1","type":"movie","title":"Synthetic","Media":[{"Part":[{"key":"/part","Stream":[{"streamType":1,"codec":"hevc","bitDepth":10,"colorTrc":"smpte2084","colorPrimaries":"bt2020","colorSpace":"bt2020nc"},{"streamType":2,"id":22,"codec":"eac3","channels":8,"selected":true}]}]}]}"#
+        let raw = try JSONDecoder().decode(PlexRawItem.self, from: Data(json.utf8))
+        let enriched = PlexAPIService.applyingPlaybackStreamFacts(raw, to: i)
+        XCTAssertTrue(eligible(enriched, originalLocal: true)); XCTAssertEqual(enriched.audioChannelCount, 8)
+        var withParts = enriched; withParts.playbackParts = raw.Media?.first?.playbackParts
+        let restored = try JSONDecoder().decode(PlexMediaItem.self, from: JSONEncoder().encode(withParts))
+        XCTAssertEqual(restored.hasHDR10ColorMetadata, true)
+        XCTAssertEqual(restored.withPartKey("/part").hasHDR10ColorMetadata, true)
+        for invalid in [json.replacingOccurrences(of: "smpte2084", with: "bt709"),
+                        json.replacingOccurrences(of: "bt2020nc", with: "bt709"),
+                        json.replacingOccurrences(of: "bt2020\"", with: "bt709\"")] {
+            let raw = try JSONDecoder().decode(PlexRawItem.self, from: Data(invalid.utf8))
+            XCTAssertFalse(eligible(PlexAPIService.applyingPlaybackStreamFacts(raw, to: i), originalLocal: true))
+        }
+    }
+
+    func testAudioOnlyCompatibilityRequiresCopiedVideoAndAC3SixChannels() {
+        func data(codec: String = "ac3", channels: Int = 6, audio: String = "transcode", video: String = "copy") -> Data {
+            Data("<MediaContainer><Part container=\"mp4\"><Stream streamType=\"1\" codec=\"hevc\" decision=\"\(video)\"/><Stream streamType=\"2\" codec=\"\(codec)\" decision=\"\(audio)\" channels=\"\(channels)\"/></Part></MediaContainer>".utf8)
+        }
+        XCTAssertTrue(PlexAPIService.decisionPreservesOriginalVideo(data(), requireAC3Conversion: true))
+        for rejected in [data(codec: "aac"), data(channels: 2), data(channels: 8), data(audio: "copy"), data(video: "transcode")] {
+            XCTAssertFalse(PlexAPIService.decisionPreservesOriginalVideo(rejected, requireAC3Conversion: true))
+        }
+        XCTAssertFalse(PlexAPIService.decisionPreservesOriginalVideo(data(), requireAudioCopy: true))
+    }
+
+    func testAudioOnlyCandidateIsOptInAndKeepsOriginalVideoPolicy() async {
+        let decision = PlexAPIService.TranscodeDecision(code: "1001", text: "ok", preservesOriginalVideo: true,
+                                                       convertsAudioToAC3Surround: true)
+        for allow in [false, true] {
+            var stopped: [String] = []
+            let result = await PlexAPIService.prepareOriginalVideoCandidate(url: URL(string: "http://example.test/start.m3u8")!,
+                sessionID: "audio-only", offsetSeconds: 123, allowAC3Conversion: allow,
+                prepare: { _ in decision }, stop: { stopped.append($0) })
+            XCTAssertEqual(result != nil, allow)
+            XCTAssertEqual(stopped, allow ? [] : ["audio-only"])
+            if allow { XCTAssertEqual(result?.resolution.requiresOriginalVideo, true); XCTAssertEqual(result?.startsAtOffset, true) }
+        }
+    }
+
+    func testSurroundRequestDoesNotRaiseAutomaticCeilingButExplicitRetryDoes() throws {
+        let base = URL(string: "http://example.test/start.m3u8?session=fresh&mediaIndex=2&partIndex=1&offset=345&maxVideoBitrate=40000&videoResolution=3840x2160&audioStreamID=11")!
+        let automatic = try XCTUnwrap(PlexAPIService.automaticOriginalVideoURL(from: base, audioStreamID: 22, convertSurroundAudio: true))
+        let explicit = try XCTUnwrap(PlexAPIService.preservationRetryURL(from: base, audioStreamID: 22, convertSurroundAudio: true))
+        for (url, ceiling) in [(automatic, "40000"), (explicit, "100000")] {
+            let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            let q = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+            XCTAssertEqual(q["maxVideoBitrate"], ceiling); XCTAssertEqual(q["audioStreamID"], "22")
+            XCTAssertEqual(q["offset"], "345"); XCTAssertEqual(q["mediaIndex"], "2"); XCTAssertEqual(q["partIndex"], "1")
+            XCTAssertTrue(q["X-Plex-Client-Profile-Extra"]!.contains("audioCodec=ac3,eac3)"))
+            XCTAssertFalse(q["X-Plex-Client-Profile-Extra"]!.contains("aac"))
+            XCTAssertTrue(q["X-Plex-Client-Profile-Extra"]!.contains(PlexAPIService.eac3ChannelCap))
+        }
+    }
+
+    func testChangedTimestampEnrichesSamePartButNeverAnotherPart() throws {
+        let cachedKey = "/library/parts/10/100/file.mkv"
+        let currentKey = "/library/parts/10/200/file.mkv"
+        var cached = item().withPartKey(cachedKey)
+        cached.doviProfile = nil; cached.audioChannelCount = nil
+        let json = #"{"ratingKey":"1","type":"movie","title":"Synthetic","Media":[{"Part":[{"key":"/library/parts/10/200/file.mkv","Stream":[{"streamType":1,"codec":"hevc","bitDepth":10,"colorTrc":"smpte2084","colorPrimaries":"bt2020","colorSpace":"bt2020nc"},{"streamType":2,"id":22,"codec":"eac3","channels":8,"selected":true}]}]}]}"#
+        let raw = try JSONDecoder().decode(PlexRawItem.self, from: Data(json.utf8))
+        let enriched = PlexAPIService.applyingPlaybackStreamFacts(raw, to: cached)
+        XCTAssertEqual(enriched.partKey, currentKey); XCTAssertTrue(eligible(enriched, originalLocal: true))
+        XCTAssertEqual(enriched.mediaIndex, cached.mediaIndex); XCTAssertEqual(enriched.partIndex, cached.partIndex)
+        for other in ["/library/parts/11/200/file.mkv", "/library/parts/10/200/file.mp4", "/library/parts/10/../file.mkv", "https://example.test/library/parts/10/200/file.mkv"] {
+            XCTAssertFalse(PlexAPIService.samePlexPart(other, cachedKey))
+        }
+        let wrong = cached.withPartKey("/library/parts/11/100/file.mkv")
+        XCTAssertNil(PlexAPIService.applyingPlaybackStreamFacts(raw, to: wrong).audioChannelCount)
+    }
+
+    func testExplicitLocalOriginalPreservesRemoteAndCappedChoices() throws {
+        var source = item(); source.doviProfile = nil; source.doviCompatibilityID = nil
+        source.hasHDR10ColorMetadata = true; source.audioChannelCount = 8
+        let url = URL(string: "http://example.test/start.m3u8?session=owned&mediaIndex=0&partIndex=0&offset=300&maxVideoBitrate=12000&videoResolution=1920x1080&autoAdjustQuality=0")!
+        func candidate(local: Bool, enabled: Bool, hevc: Bool = true) -> URL? {
+            PlexAPIService.preferredOriginalVideoURL(from: url, item: source, quality: .high,
+                isLocal: local, hevcCapable: hevc, originalLocal: enabled)
+        }
+        XCTAssertNil(candidate(local: false, enabled: true))
+        XCTAssertNil(candidate(local: true, enabled: false))
+        XCTAssertNil(candidate(local: true, enabled: true, hevc: false))
+        let original = try XCTUnwrap(candidate(local: true, enabled: true))
+        let q = Dictionary(uniqueKeysWithValues: URLComponents(url: original, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(q["maxVideoBitrate"], "100000"); XCTAssertEqual(q["videoResolution"], "3840x2160")
+        XCTAssertEqual(q["offset"], "300"); XCTAssertEqual(q["session"], "owned")
+        XCTAssertEqual(q["audioStreamID"], "22"); XCTAssertEqual(q["autoAdjustQuality"], "0")
+        XCTAssertEqual(StreamQuality.high.maxBitrateKbps, 12000)
+        XCTAssertEqual(StreamQuality.auto.maxBitrateKbps, 40000)
+        XCTAssertEqual(StreamQuality.maximum.maxBitrateKbps, 40000)
+        XCTAssertNotEqual(LocalPlexOriginalQuality.storageKey, StreamQuality.storageKey)
+        XCTAssertTrue(url.absoluteString.contains("maxVideoBitrate=12000"))
+        source.hasHDR10ColorMetadata = false
+        XCTAssertNil(candidate(local: true, enabled: true))
+    }
+
+    func testExplicitOriginalFetchesMissingFactsAtCappedQualityWithoutApplyingRemotely() {
+        var source = item(); source.audioChannelCount = nil
+        XCTAssertTrue(PlexAPIService.needsOriginalVideoFacts(source, quality: .low, isLocal: true,
+                                                            hevcCapable: true, originalLocal: true))
+        XCTAssertFalse(PlexAPIService.needsOriginalVideoFacts(source, quality: .low, isLocal: false,
+                                                             hevcCapable: true, originalLocal: true))
+        XCTAssertFalse(PlexAPIService.needsOriginalVideoFacts(source, quality: .low, isLocal: true,
+                                                             hevcCapable: true, originalLocal: false))
     }
 
 }

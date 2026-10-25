@@ -27,9 +27,12 @@ extension AppState {
         let attempt = playbackAttemptGeneration
         let observed = oldItem.currentTime().seconds + hlsBaseOffset
         let offset = observed.isFinite && observed >= 0 ? Int(observed) : max(0, seekOffset)
+        let playbackItem = await backend.itemWithPlaybackStreamFacts(item)
+        let convertSurround = playbackItem.audioCodec?.lowercased() == "eac3" && playbackItem.audioChannelCount == 8
         let session = UUID().uuidString
-        guard let original = backend.transcodeURL(for: item, sessionID: session, offsetSeconds: offset),
-              let url = PlexAPIService.preservationRetryURL(from: original) else { return "RETRY UNAVAILABLE" }
+        guard let original = backend.transcodeURL(for: playbackItem, sessionID: session, offsetSeconds: offset),
+              let url = PlexAPIService.preservationRetryURL(from: original, audioStreamID: playbackItem.audioStreamID,
+                                                           convertSurroundAudio: convertSurround) else { return "RETRY UNAVAILABLE" }
         let decision = await backend.prepareTranscodeSession(startURL: url)
         guard isCurrentPlaybackAttempt(generation: generation, attempt: attempt, playerItem: oldItem),
               !playbackRecoveryInFlight else {
@@ -39,6 +42,10 @@ extension AppState {
         guard decision.code.hasPrefix("1"), decision.preservesOriginalVideo else {
             await backend.stopTranscode(playSessionId: session)
             return "SERVER CANNOT KEEP ORIGINAL VIDEO"
+        }
+        guard !convertSurround || decision.convertsAudioToAC3Surround else {
+            await backend.stopTranscode(playSessionId: session)
+            return "SERVER CANNOT KEEP SURROUND AUDIO"
         }
         // Invalidate the old player's watchdogs before installing the prepared session.
         loadGeneration += 1
