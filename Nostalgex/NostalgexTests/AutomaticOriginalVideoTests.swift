@@ -233,4 +233,78 @@ final class AutomaticOriginalVideoTests: XCTestCase {
                                                              hevcCapable: true, originalLocal: false))
     }
 
+    func testAutomaticRejectionAndDecisionFailureFallBackButExplicitOriginalDoesNot() async throws {
+        let base = URL(string: "http://example.test/start.m3u8?session=candidate&offset=345&maxVideoBitrate=40000")!
+        for quality in [StreamQuality.auto, .maximum] {
+            for explicit in [false, true] {
+                for decision in [PlexAPIService.TranscodeDecision.unknown,
+                                 .init(code: "2000", text: "refused"),
+                                 .init(code: "1001", text: "video reencoded"),
+                                 .init(code: "1001", text: "audio changed", preservesOriginalVideo: true)] {
+                    let url = try XCTUnwrap(PlexAPIService.preferredOriginalVideoURL(from: base, item: item(),
+                        quality: quality, isLocal: true, hevcCapable: true, originalLocal: explicit))
+                    var events: [String] = []
+                    let normal = PlaybackResolution(url: base, playSessionId: "normal-fresh", isDirectPlay: false)
+                    let result = await PlexAPIService.resolveOriginalVideoCandidate(url: url, sessionID: "candidate",
+                        offsetSeconds: 345, requiresOriginalVideo: explicit,
+                        prepare: { _ in decision }, stop: { events.append("stop:" + $0) },
+                        fallback: { events.append("normal"); return (normal, true) })
+                    XCTAssertEqual(events, explicit ? ["stop:candidate"] : ["stop:candidate", "normal"])
+                    XCTAssertEqual(result?.resolution.playSessionId, explicit ? nil : "normal-fresh")
+                    if !explicit {
+                        XCTAssertEqual(result?.startsAtOffset, true)
+                        XCTAssertEqual(result?.resolution.requiresOriginalVideo, false)
+                    }
+                }
+            }
+        }
+    }
+
+    func testAcceptedAutomaticCandidateKeepsRecoveryWhileExplicitOriginalStaysStrict() async {
+        for explicit in [false, true] {
+            var events: [String] = []
+            let result = await PlexAPIService.resolveOriginalVideoCandidate(
+                url: URL(string: "http://example.test/start.m3u8?offset=345")!, sessionID: "candidate",
+                offsetSeconds: 345, requiresOriginalVideo: explicit,
+                prepare: { _ in .init(code: "1001", text: "ok", preservesOriginalVideo: true, preservesOriginalAudio: true) },
+                stop: { events.append($0) }, fallback: { events.append("fallback"); return nil })
+            XCTAssertEqual(result?.resolution.requiresOriginalVideo, explicit)
+            XCTAssertEqual(result?.resolution.playSessionId, "candidate")
+            XCTAssertEqual(result?.startsAtOffset, true)
+            XCTAssertTrue(events.isEmpty)
+        }
+    }
+
+    func testCancelledAutomaticDecisionDoesNotStartNormalPlayback() async {
+        let result = await Task { () -> [String] in
+            var events: [String] = []
+            let result = await PlexAPIService.resolveOriginalVideoCandidate(
+                url: URL(string: "http://example.test/start.m3u8")!, sessionID: "cancelled",
+                offsetSeconds: 0, requiresOriginalVideo: false,
+                prepare: { _ in withUnsafeCurrentTask { $0?.cancel() }; return .unknown },
+                stop: { events.append("stop:" + $0) }, fallback: { events.append("fallback"); return nil })
+            XCTAssertNil(result)
+            return events
+        }.value
+        XCTAssertEqual(result, ["stop:cancelled"])
+    }
+
+    func testManualRetryRequiresLocalSupported4KHEVC() throws {
+        let good = item()
+        func allowed(_ i: PlexMediaItem, local: Bool = true, hevc: Bool = true) -> Bool {
+            PlexAPIService.canRetryOriginalVideo(i, isLocal: local, hevcCapable: hevc)
+        }
+        XCTAssertTrue(allowed(good))
+        XCTAssertFalse(allowed(good, local: false))
+        XCTAssertFalse(allowed(good, hevc: false))
+        var wide = good; wide.videoHeight = 1608; XCTAssertTrue(allowed(wide))
+        for dimensions: (Int?, Int?) in [(1920, 1080), (1280, 720), (nil, 2160), (3840, nil), (7680, 4320)] {
+            var i = good; i.videoWidth = dimensions.0; i.videoHeight = dimensions.1
+            XCTAssertFalse(allowed(i))
+        }
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(good)) as? [String: Any])
+        json["videoCodec"] = "h264"
+        XCTAssertFalse(allowed(try JSONDecoder().decode(PlexMediaItem.self, from: JSONSerialization.data(withJSONObject: json))))
+    }
+
 }

@@ -3,69 +3,6 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-
-## 2026-10-24 (explicit local Original quality, candidate)
-
-**Shipped.** Separate Nostalgex Test build 55 was installed on October 25.
-Production Nostalgex remains unchanged. The owner confirmed good playback and
-a normal-channel/back transition on the HDR10/EAC3 7.1 test.
-
-**Changed.** `Original (local Plex)` is an independent opt-in in Stream Quality.
-It retains supported local 4K HEVC through fMP4 with a 100 Mbps request ceiling.
-Explicit PQ/BT.2020 HDR10 with EAC3 5.1 copies audio; EAC3 7.1 converts only to
-AC3 5.1. The server decision must confirm copied video and the expected audio.
-Auto, Maximum, remote playback and other backends keep their existing settings.
-Disabling Original restores the retained capped choice. Fresh metadata accepts
-a changed timestamp URL only for the same Plex part ID and filename.
-
-**Half-done.** Follow-up on `fix/explicit-4k-compatibility-128` for draft PR #89;
-not merged or released to production.
-A decision-only server check confirmed HEVC copy plus AC3 5.1 at 100 Mbps.
-The same source required 41.6 Mbps under Plex's bandwidth calculation, so the
-existing 40 Mbps ceiling forced video conversion. No media stream was started
-by those decision-only checks. The subsequent owner-controlled Apple TV run
-confirmed the same HEVC-copy/AC3 5.1 path, advancing segments and roughly 28-51x
-processing speed. The normal channel retained its 40 Mbps request; returning to
-the test channel restored the explicit 100 Mbps path. Physical HDR display mode
-and speaker layout were not independently verified.
-Full simulator suite passed: 900 XCTest cases with 14 optional skips and zero
-failures, plus 32 Swift Testing cases passed. The signed device build also passed.
-
-**Next.** Maintainer review of draft PR #89. One HDR10/EAC3
-7.1 source and channel switching are hardware-validated; other formats and clients
-are not implied to be tested. Keep the production app unchanged.
-
-## 2026-10-24 (Plex original-video compatibility)
-
-**Shipped.** A separate development build was tested on Apple TV. No production
-release or media-library changes.
-
-**Changed.** Local 4K HEVC Main10 / Dolby Vision profile 8 compatibility ID 1
-MKV sources with six-channel EAC3 use fMP4 when within Auto/Maximum quality
-limits. Missing stream facts are fetched for the selected item. The decision
-must preserve HEVC and EAC3; rejected or stale sessions are cleaned up without
-silently reducing quality. Position, selected media/audio and quality ceilings
-are retained. Manual original-video retry remains available.
-
-**Half-done.** Owner confirmed automatic picture/audio and channel switching on
-Apple TV. Server output and an existing fragment confirmed copied 4K HEVC,
-PQ/BT.2020, Dolby Vision configuration and six-channel EAC3. Physical TV HDR mode
-and Atmos output were not verified. This is a narrow format fix, not validation
-of every source or client.
-
-Full suite: 909 passed, 13 optional harnesses skipped. Three local follow-ups
-passed: 50,000-item synthetic library load/restore, daylight-saving comparison
-and generated-video telemetry. Ten external/server harnesses remain unrun.
-The existing missing-HLS failure test needs a 30-second deadline on tvOS 27;
-its assertions are unchanged. The local harnesses also recorded a 2.289-second
-main-thread block and next-hour guide mismatches near day boundaries. Those
-separate diagnostics do not invalidate the codec tests or establish perfect
-scheduling/performance.
-
-**Next.** Review the narrow capability gate and session ownership. Native Plex
-direct-play and external deep-link navigation remain separate issues.
-
-
 ## 2026-10-23 (web and Docker: START OVER while the library loads)
 
 **Shipped.** The web tuner on nostalgex.app when this lands on main, and Docker as `tuner-v1.0.8` from the same commit.

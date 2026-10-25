@@ -846,20 +846,34 @@ struct PlexAPIService: MediaBackend {
     func resolveTranscodePlayback(for item: PlexMediaItem, offsetSeconds: Int) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
         let item = await itemWithPlaybackStreamFacts(item)
         guard !Task.isCancelled else { return nil }
+        let originalLocal = LocalPlexOriginalQuality.enabled
         let sessionID = UUID().uuidString
         guard let url = transcodeURL(for: item, sessionID: sessionID, offsetSeconds: max(0, offsetSeconds)) else { return nil }
         if Self.shouldPreferOriginalVideo(item, quality: .current,
                                           isLocal: isLikelyLocalServer,
                                           hevcCapable: CodecSupport.deviceSupportsHEVC,
-                                          originalLocal: LocalPlexOriginalQuality.enabled) {
-            guard let candidate = Self.preferredOriginalVideoURL(from: url, item: item, quality: .current,
+                                          originalLocal: originalLocal) {
+            if let candidate = Self.preferredOriginalVideoURL(from: url, item: item, quality: .current,
                 isLocal: isLikelyLocalServer, hevcCapable: CodecSupport.deviceSupportsHEVC,
-                originalLocal: LocalPlexOriginalQuality.enabled) else { return nil }
-            return await Self.prepareOriginalVideoCandidate(url: candidate, sessionID: sessionID,
-                offsetSeconds: offsetSeconds, allowAC3Conversion: item.audioChannelCount == 8,
-                prepare: { await prepareTranscodeSession(startURL: $0) },
-                stop: { await stopTranscode(playSessionId: $0) })
+                originalLocal: originalLocal) {
+                return await Self.resolveOriginalVideoCandidate(url: candidate, sessionID: sessionID,
+                    offsetSeconds: offsetSeconds, requiresOriginalVideo: originalLocal,
+                    allowAC3Conversion: item.audioChannelCount == 8,
+                    prepare: { await prepareTranscodeSession(startURL: $0) },
+                    stop: { await stopTranscode(playSessionId: $0) },
+                    fallback: { await resolveNormalTranscodePlayback(for: item, offsetSeconds: offsetSeconds) })
+            }
+            if originalLocal { return nil }
         }
+        return await resolveNormalTranscodePlayback(for: item, offsetSeconds: offsetSeconds)
+    }
+
+    /// A rejected automatic candidate has already retired its session. Normal playback
+    /// gets a fresh one, retaining the selected quality, media and schedule position.
+    private func resolveNormalTranscodePlayback(for item: PlexMediaItem, offsetSeconds: Int) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
+        guard !Task.isCancelled else { return nil }
+        let sessionID = UUID().uuidString
+        guard let url = transcodeURL(for: item, sessionID: sessionID, offsetSeconds: max(0, offsetSeconds)) else { return nil }
         let decision = await prepareTranscodeSession(startURL: url)
         if Self.isDolbyVisionRefusal(decision),
            let remux = Self.dolbyVisionRemuxURL(from: url) {
@@ -1034,17 +1048,38 @@ struct PlexAPIService: MediaBackend {
     }
 
     static func prepareOriginalVideoCandidate(url: URL, sessionID: String, offsetSeconds: Int,
-        allowAC3Conversion: Bool = false,
+        allowAC3Conversion: Bool = false, requiresOriginalVideo: Bool = true,
         prepare: (URL) async -> TranscodeDecision, stop: (String) async -> Void
     ) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
         let decision = await prepare(url)
         let audioAccepted = allowAC3Conversion ? decision.convertsAudioToAC3Surround : decision.preservesOriginalAudio
         guard !Task.isCancelled, decision.code.hasPrefix("1"), decision.preservesOriginalVideo, audioAccepted else {
             await stop(sessionID)
-            return nil // Fail visibly through the existing no-playable-source path; never transcode silently.
+            return nil // The caller chooses normal recovery or explicit Original failure.
         }
         return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false,
-                                   requiresOriginalVideo: true), offsetSeconds > 0)
+                                   requiresOriginalVideo: requiresOriginalVideo), offsetSeconds > 0)
+    }
+
+    /// Auto/Maximum prefer a copy, but playback and capped recovery still take priority.
+    /// Explicit Original alone requires the accepted stream to stay at original quality.
+    static func resolveOriginalVideoCandidate(url: URL, sessionID: String, offsetSeconds: Int,
+        requiresOriginalVideo: Bool, allowAC3Conversion: Bool = false,
+        prepare: (URL) async -> TranscodeDecision, stop: (String) async -> Void,
+        fallback: () async -> (resolution: PlaybackResolution, startsAtOffset: Bool)?
+    ) async -> (resolution: PlaybackResolution, startsAtOffset: Bool)? {
+        let candidate = await prepareOriginalVideoCandidate(url: url, sessionID: sessionID,
+            offsetSeconds: offsetSeconds, allowAC3Conversion: allowAC3Conversion,
+            requiresOriginalVideo: requiresOriginalVideo, prepare: prepare, stop: stop)
+        if let candidate { return candidate }
+        guard !requiresOriginalVideo, !Task.isCancelled else { return nil }
+        return await fallback()
+    }
+
+    static func canRetryOriginalVideo(_ item: PlexMediaItem, isLocal: Bool, hevcCapable: Bool) -> Bool {
+        guard isLocal, hevcCapable, item.videoCodec?.lowercased() == "hevc",
+              let width = item.videoWidth, let height = item.videoHeight else { return false }
+        return width > 1920 && width <= 3840 && height > 1080 && height <= 2160
     }
 
     /// Opt-in remux request. Never changes persisted quality settings or normal tuning.

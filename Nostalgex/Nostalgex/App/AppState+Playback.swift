@@ -11,8 +11,10 @@ extension AppState {
     // MARK: - Explicit original-video compatibility retry
 
     var canRetryOriginalVideo: Bool {
-        backendKind == .plex && !isDemoMode && currentItem?.videoCodec?.lowercased() == "hevc"
-            && CodecSupport.deviceSupportsHEVC
+        guard backendKind == .plex, !isDemoMode, let item = currentItem,
+              let backend = api(for: item.serverID) as? PlexAPIService else { return false }
+        return PlexAPIService.canRetryOriginalVideo(item, isLocal: backend.isLikelyLocalServer,
+                                                    hevcCapable: CodecSupport.deviceSupportsHEVC)
     }
 
     /// A fresh session is prepared while the old player stays in place. Rejected or stale
