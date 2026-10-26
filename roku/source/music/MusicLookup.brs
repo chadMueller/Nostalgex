@@ -571,7 +571,8 @@ end function
 ' Rebuildable: cachefs: may be cleared, and then the lookups run again. It
 ' is keyed by the server's ratingKeys, so a sign-out clears it with the
 ' library (NxClearAccountCaches).
-function NxMusicCachePath(root = "cachefs:" as String) as String
+function NxMusicCachePath(root = "" as String) as String
+    if root = "" then root = NxCacheRoot()
     return root + "/nostalgex-music-videos.json"
 end function
 
