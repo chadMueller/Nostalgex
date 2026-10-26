@@ -10,13 +10,17 @@ sub lookUp()
     net = NxMusicNet()
     halt = { task: m.top }
     halt.shouldStop = function() as Boolean
-        return m.task.control = "stop"
+        return NxMusicShouldStop(m.task.control = "stop", NxEnabledBundles())
+    end function
+    saver = { items: items }
+    saver.save = function(cache as Object)
+        NxMusicSaveCache(NxMusicCapCache(cache, m.items))
     end function
     now& = CreateObject("roDateTime").AsSeconds()
     print "music: looking up "; items.Count(); " music videos (MusicBrainz about 1 a second, Deezer for the genres it lacks)"
     clock = CreateObject("roTimespan")
-    n = NxMusicEnrich(net, items, cache, now&, halt)
-    if n > 0 then NxMusicSaveCache(cache)
+    n = NxMusicEnrich(net, items, cache, now&, halt, saver)
+    if n > 0 then saver.save(cache)
     useful = 0
     for each k in cache
         if cache[k].useful = true then useful = useful + 1

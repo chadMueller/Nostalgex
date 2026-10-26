@@ -485,13 +485,20 @@ end function
 
 ' enrichMusicVideos over `items` (NxMusicCandidates), changing `cache` in
 ' place. Returns how many rows it wrote. `halt`, if given, is an object
-' whose shouldStop() says to give up early (the task told to stop); rows
-' already written stand.
-function NxMusicEnrich(net as Object, items as Object, cache as Object, nowSec as LongInteger, halt = invalid as Dynamic) as Integer
+' whose shouldStop() says to give up early (the task told to stop, or HIGH
+' ROTATION switched off); rows already written stand. `saver`, if given,
+' gets save(cache) every NxMusicSaveEvery() rows written, so a long first
+' pass isn't lost when the app closes (upstream saves once, at the end).
+function NxMusicEnrich(net as Object, items as Object, cache as Object, nowSec as LongInteger, halt = invalid as Dynamic, saver = invalid as Dynamic) as Integer
     updated = 0
+    savedAt = 0
     for each item in items
         if halt <> invalid then
             if halt.shouldStop() then exit for
+        end if
+        if saver <> invalid and updated - savedAt >= NxMusicSaveEvery() then
+            saver.save(cache)
+            savedAt = updated
         end if
         if NxMusicIsMusicVideo(item) then
             key = NxToStr(item.ratingKey)
@@ -535,6 +542,31 @@ function NxMusicEnrich(net as Object, items as Object, cache as Object, nowSec a
 end function
 
 ' ── The cache on the TV ─────────────────────────────────────────────────────
+
+' Rows between saves during a pass.
+function NxMusicSaveEvery() as Integer
+    return 25
+end function
+
+' The cache kept to the library's music videos: rows for anything that's
+' no longer one are dropped before a save, so the file can't outgrow the
+' library (a TV's memory is tighter than a browser's).
+function NxMusicCapCache(cache as Object, items as Object) as Object
+    keep = {}
+    for each it in items
+        keep[NxToStr(it.ratingKey)] = true
+    end for
+    out = {}
+    for each k in cache
+        if keep.DoesExist(k) then out[k] = cache[k]
+    end for
+    return out
+end function
+
+' Whether a pass stops: the task told to stop, or HIGH ROTATION off.
+function NxMusicShouldStop(taskStopped as Boolean, enabledBundles as Object) as Boolean
+    return taskStopped or not NxHasValue(enabledBundles, NxMusicBundleID())
+end function
 
 ' Rebuildable: cachefs: may be cleared, and then the lookups run again. It
 ' is keyed by the server's ratingKeys, so a sign-out clears it with the

@@ -92,6 +92,26 @@ function NxRunMusicTests(vectorsPath as String) as Integer
     cache = {}
     NxMusicEnrich(net, items, cache, now&, stops)
     NxCheck(r, "told to stop: what's done stands", FormatJson(cache.Keys()), "[" + Chr(34) + "a" + Chr(34) + "]")
+    ' The cache kept to the library's music videos.
+    capped = NxMusicCapCache({ a: { title: "A" }, gone: { title: "G" }, b: { title: "B" } }, [{ ratingKey: "a" }, { ratingKey: "b" }])
+    NxCheck(r, "cache capped to candidates", FormatJson(NxEnSorted(capped.Keys())), FormatJson(["a", "b"]))
+    ' HIGH ROTATION switched off stops a pass, as the task told to stop does.
+    NxCheck(r, "stops when high rotation is off", FormatJson(NxMusicShouldStop(false, ["nostalgex"])), "true")
+    NxCheck(r, "runs while high rotation is on", FormatJson(NxMusicShouldStop(false, ["nostalgex", "high-rotation"])), "false")
+    NxCheck(r, "stops when the task is told to", FormatJson(NxMusicShouldStop(true, ["high-rotation"])), "true")
+    ' Saved every 25 rows written: 60 rows, saves after 25 and 50 (the
+    ' task saves the rest at the end).
+    many = []
+    for i = 1 to 60
+        many.Push({ ratingKey: "s" + i.ToStr(), title: "Artist - Song " + i.ToStr(), artist: invalid, genres: [], year: "", librarySource: "musicVideo", type: "movie" })
+    end for
+    saves = { counts: [] }
+    saves.save = function(cache as Object)
+        m.counts.Push(cache.Count())
+    end function
+    NxMusicEnrich(NxMusicFakeNet({}), many, {}, now&, invalid, saves)
+    NxCheck(r, "saved partway", FormatJson(saves.counts), "[25,50]")
+
     print "music cases (upstream nostalgex-music-brainz.js): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
