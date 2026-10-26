@@ -66,7 +66,7 @@ end function
 ' them). Nothing saved is no choices; ParseJson("") logs an error, so it is
 ' skipped.
 function NxSavedFranchiseChoices() as Object
-    reg = CreateObject("roRegistrySection", "guide")
+    reg = NxRegSection("guide")
     lists = []
     for each key in ["franchisesOn", "franchisesOff"]
         raw = reg.Read(key)

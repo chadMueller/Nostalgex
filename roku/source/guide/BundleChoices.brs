@@ -5,7 +5,7 @@
 
 ' Switched-on bundles: saved on the TV, upstream's default until changed.
 function NxEnabledBundles() as Object
-    raw = CreateObject("roRegistrySection", "guide").Read("bundles")
+    raw = NxRegSection("guide").Read("bundles")
     if raw <> "" then
         saved = ParseJson(raw)
         if type(saved) = "roArray" then return saved

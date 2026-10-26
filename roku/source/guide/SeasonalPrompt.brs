@@ -106,7 +106,7 @@ end function
 ' year for "not this year".
 function NxSeasonalRegistry() as Object
     return {
-        reg: CreateObject("roRegistrySection", "guide"),
+        reg: NxRegSection("guide"),
         isSilenced: function(id as String, year as Integer) as Boolean
             if m.reg.Read("seasonalNever_" + id) = "1" then return true
             return m.reg.Read("seasonalDismissed_" + id + "_" + year.ToStr()) = "1"

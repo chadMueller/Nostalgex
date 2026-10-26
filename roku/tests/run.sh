@@ -34,6 +34,22 @@ if [ -n "$leaks" ]; then
 fi
 
 python3 tests/tools/check-includes.py
+bash tests/stamp-test.sh
+# Saved data goes through NxRegSection and NxCacheRoot (source/util/Values.brs),
+# so a test-data build keeps its own. A registry section or cachefs: path
+# opened anywhere else would be shared with the store app again.
+direct=$(grep -rnE 'roRegistrySection|"cachefs:' source components --include=*.brs | grep -vE "^source/util/Values\.brs:|^[^:]+:[0-9]+:\s*'" || true)
+if [ -n "$direct" ]; then
+    echo "FAIL saved data opened outside NxRegSection or NxCacheRoot:" >&2
+    echo "$direct" >&2
+    exit 1
+fi
+# SIGN OUT reaches NxCacheRoot on the render thread, where roFileSystem
+# isn't available: Values.brs must do without it.
+if grep -n 'roFileSystem' source/util/Values.brs | grep -v ":\s*'"; then
+    echo "FAIL source/util/Values.brs uses roFileSystem, which the render thread can't create" >&2
+    exit 1
+fi
 
 # `m` is BrightScript's implicit this: a variable of that name silently holds
 # the component's AA instead. It has cost three debugging rounds; fail fast.
@@ -94,7 +110,7 @@ for suite in $suites; do
         printf 'function NxTestShard() as Dynamic\n    return { suite: "%s", index: %d, count: %d }\nend function\n' "$suite" "$i" "$n" >"$parts/$suite-$i.brs"
     done
 done
-files=(tests/main.brs tests/runtime-interpreter.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/GuideNavTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs source/plex/PlexPoster.brs source/plex/ServerChoice.brs source/plex/ServerResolve.brs source/plex/LibrarySnapshot.brs source/plex/PlexLibrary.brs source/plex/PlexApi.brs source/plex/PlexPlayback.brs source/util/*.brs source/schedule/*.brs source/filter/*.brs source/guide/*.brs source/franchise/*.brs source/enrich/*.brs source/subtitles/*.brs source/collections/*.brs source/mediabrowser/*.brs)
+files=(tests/main.brs tests/runtime-interpreter.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/GuideNavTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/MusicTests.brs source/plex/PlexPoster.brs source/plex/ServerChoice.brs source/plex/ServerResolve.brs source/plex/LibrarySnapshot.brs source/plex/PlexLibrary.brs source/plex/PlexApi.brs source/plex/PlexPlayback.brs source/util/*.brs source/schedule/*.brs source/filter/*.brs source/guide/*.brs source/franchise/*.brs source/enrich/*.brs source/subtitles/*.brs source/collections/*.brs source/mediabrowser/*.brs source/music/*.brs)
 # One part per CPU thread at a time ($NX_TEST_JOBS overrides), the split
 # suites' parts first, so the small ones fill in around them.
 jobs=${NX_TEST_JOBS:-$cpus}

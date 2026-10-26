@@ -3,6 +3,50 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-26 (Roku: genres for HIGH ROTATION's music videos)
+
+**Shipped.** Nothing until the PR for #73 lands on main. Branch `roku/high-rotation`, off main `9fc8bfc`. For Roku 1.0.6. The Roku section of the privacy page gets its MusicBrainz and Deezer line on the site's own branch, in the same release.
+
+**Why.** Most HIGH ROTATION genre channels (POP, ROCK'N, COUNTRY SWAGGER and the rest) stayed hidden on Roku when the server had no genres on its music videos (issue #73). The web tuner and the Apple TV look the genres up on MusicBrainz, then Deezer.
+
+**Changed.**
+- `roku/source/music/MusicLookup.brs`: a port of `scripts/nostalgex-music-brainz.js`: MusicBrainz's recording search and ranking, its tags mapped to the channel genres, Deezer's search, pick and album genres for what MusicBrainz leaves blank, the settled and genre-only rules, and the cached rows applied to the items (title, artist, genres, year).
+- `roku/components/MusicLookupTask.*`: the lookups over HTTPS, paced as upstream (MusicBrainz about 1 a second with a User-Agent naming the app, Deezer 4 a second, 15 s timeout), one item at a time.
+- `roku/components/MainScene.brs`, `LibraryTask.*`: after a load, while HIGH ROTATION is on, one pass behind the guide. A failure or a slow answer only leaves a row unfilled. The cache is applied at the start of each channel build, as upstream's `applyMusicCacheToLibrary`, so what a pass finds reaches the channels at the next load (the 6-hour refresh, RESCAN LIBRARY or a launch), as on the Apple TV.
+- `roku/source/plex/LibrarySnapshot.brs`: a sign-out clears the music cache with the library.
+- `roku/tests/gen-music.mjs`, `roku/tests/MusicTests.brs`: 154 cases from upstream's own module, whole lookup passes over canned answers included.
+
+**Measured.** The cases fail without the port and pass with it, off the TV and on a Streaming Stick Plus. A probe build on the stick asked the real services once: "Take On Me" by a-ha and "Smells Like Teen Spirit" by Nirvana each resolved on MusicBrainz in about 1.2 s (paced), Deezer added Rock to the second, and the row read back from `cachefs:` applied to the item. Deezer answers a TV as plain JSON; the web tuner needs JSONP only because of CORS.
+
+**Differences.** No Music step on the loading screen: upstream's rail has one but never shows it (`includesMusic: false`).
+
+**Half-done.** Not seen on a library with music videos: the stick's server has none, and HIGH ROTATION is off there.
+## 2026-10-26 (Roku: a test build can keep its own saved data)
+
+**Shipped.** Nothing until it lands on main. Branch `roku/test-isolated-data`, off main `ae3cd6d`. Tooling for testing; a release is unchanged.
+
+**Why.** The sideloaded build and the store beta on one TV share the registry, since both are signed with one developer key. So a tester can't sign the sideload in to a lab Jellyfin or Emby server without signing the store copy out of the real one. That blocked device checks for #60 (a small library) and #70 (BoxSets).
+
+**Changed.**
+- `source/util/Values.brs`: `NxDataSpace` reads `nx_data_ns` from the manifest. `NxRegSection(name)` opens `<space>-<name>`, and `NxCacheRoot()` is `cachefs:/<space>`. A manifest without the key gives `""`, so every name stays what it was.
+- Every `roRegistrySection` in `source/` and `components/` (21) goes through `NxRegSection`. The saved library, guide, pools, enrichment cache and owner file go through `NxCacheRoot`.
+- `scripts/stamp-manifest.sh` (new): writes `nx_build`, and with `--test-data` `nx_data_ns=nxtest`. `deploy.sh` passes `--test-data` when `NX_TEST_DATA=1`. `release.sh` stamps through it without the flag, and refuses a staged manifest that has `nx_data_ns`.
+- `source/util/AppVersion.brs`: a test-data build's VERSION line ends in TEST DATA.
+- Tests: `tests/stamp-test.sh` (run by `tests/run.sh`) checks:
+  - the repo manifest has no `nx_data_ns`;
+  - release.sh's stamp never writes it, even with `NX_TEST_DATA=1` set;
+  - the test-data stamp writes it with the same build hash;
+  - release.sh keeps its single plain call and its guard.
+
+  `tests/VersionTests.brs` checks that a build without the key keeps `guide`, `cachefs:`, `cachefs:/nostalgex-library` and the plain VERSION line, and how a manifest value becomes a name.
+- `README.md`: how to make a test-data build.
+
+**Measured.** Off-device only: the stamp test fails on main (no `stamp-manifest.sh`) and passes here, and the whole suite passes one process at a time. Not on a TV yet: the tester owns the stick.
+
+**Fixed after the tester's run.** SIGN OUT crashed every test-data build on a Streaming Stick Plus (`'Dot' Operator attempted with invalid BrightScript Component`, `NxCacheRoot` from `NxClearAccountCaches`). Sign-out runs on the render thread, where `CreateObject("roFileSystem")` gives invalid. `NxCacheRoot` now makes its folder with the global `CreateDirectory`. A release never reached that line. `tests/VersionTests.brs` signs a test-data build out off the TV, where roFileSystem is missing too. It reproduces the crash on the old code and passes now. `tests/run.sh` fails if `Values.brs` uses roFileSystem.
+
+**Half-done.** Whether `cachefs:` is shared between the sideload and the store copy isn't measured; the change keeps them apart either way. The registry's per-key size limit is shared, and a test-data build adds its own few KB.
+
 ## 2026-10-26 (publish Plex virtual channels from your own movies)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-virtual-channels-own-movies`.

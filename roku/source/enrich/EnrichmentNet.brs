@@ -69,7 +69,7 @@ end function
 ' Where the OMDb backoff lives between launches.
 function NxEnrichRegistryStore() as Object
     return {
-        section: CreateObject("roRegistrySection", "enrichment"),
+        section: NxRegSection("enrichment"),
         read: function() as Dynamic
             return m.section.Read("omdbBlockedUntil")
         end function,

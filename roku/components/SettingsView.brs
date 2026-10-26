@@ -552,7 +552,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.enabled = kept
             ' Saved now and built behind Settings: only the switched-on
             ' package's channels are built, and the guide updates when done.
-            reg = CreateObject("roRegistrySection", "guide")
+            reg = NxRegSection("guide")
             reg.Write("bundles", FormatJson(m.enabled))
             reg.Flush()
             if not found then
@@ -625,7 +625,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             plex.Flush()
         end if
         if m.franchisesChanged or m.collectionsChanged then
-            reg = CreateObject("roRegistrySection", "guide")
+            reg = NxRegSection("guide")
             if m.franchisesChanged then
                 lists = NxFranchiseChoiceLists(m.choices)
                 reg.Write("franchisesOn", FormatJson(lists.enabled))

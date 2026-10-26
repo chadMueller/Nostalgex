@@ -6,11 +6,11 @@
 ' e48cdc1).
 
 function NxRetroMode() as Boolean
-    return CreateObject("roRegistrySection", "player").Read("retro") <> "0"
+    return NxRegSection("player").Read("retro") <> "0"
 end function
 
 sub NxSaveRetroMode(on as Boolean)
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     if on then reg.Write("retro", "1") else reg.Write("retro", "0")
     reg.Flush()
 end sub

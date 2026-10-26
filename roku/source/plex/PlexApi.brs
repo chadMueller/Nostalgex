@@ -21,7 +21,7 @@
 ' ── Stored state ────────────────────────────────────────────────────────────
 
 function NxPlexRegistry() as Object
-    return CreateObject("roRegistrySection", "plex")
+    return NxRegSection("plex")
 end function
 
 ' A random identifier per install, which Plex shows in its device list.

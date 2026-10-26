@@ -31,6 +31,17 @@ Until there is a store listing, it installs by sideloading. The port lives in
 A Roku holds one sideloaded app at a time, and installing replaces whatever is
 there. Debug output is on the TV's port 8085 (`nc <tv> 8085`).
 
+The sideload shares its registry (the sign-in, packages and settings) with
+any store copy of Nostalgex on the same TV, since both are signed with one
+developer key, and it may share `cachefs:` (the saved library and guide) too.
+To sign a sideload in to a test server without
+touching the store copy's sign-in, packages or saved library, build it with
+`NX_TEST_DATA=1 scripts/deploy.sh`. That build keeps its own registry
+sections (`nxtest-guide` and so on) and its files under `cachefs:/nxtest`,
+and Settings' VERSION line ends in TEST DATA. A plain `scripts/deploy.sh`
+build afterwards reads the shared data again. `release.sh` never makes a
+test-data build.
+
 ## Servers
 
 Only the Plex servers you own are read at first, since servers friends share
@@ -153,7 +164,8 @@ check, and fails on any error it reports.
 | `fonts/` | DM Mono and VT323, with their licenses (`THIRD-PARTY-LICENSES.md`) |
 | `images/` | Home-screen icons, splash and in-app logo, and the guide's overlays in `images/look/` |
 | `scripts/stage.sh` | Assemble the package (shared data copied in from the repo root); used by `deploy.sh` and `sca.sh` |
-| `scripts/deploy.sh` | Zip and sideload to every TV (`--test` runs the vectors, `--live` the live check) |
+| `scripts/deploy.sh` | Zip and sideload to every TV (`--test` runs the vectors, `--live` the live check; `NX_TEST_DATA=1` keeps the build's data apart) |
+| `scripts/stamp-manifest.sh` | Writes `nx_build` (and, for a test-data build, `nx_data_ns`) into the staged manifest; used by `deploy.sh` and `release.sh` |
 | `scripts/icons.sh` | Draws the icons, splash and logo: the Nostalgex wordmark, from upstream's `logo/` |
 | `scripts/look-images.py` | Draws `images/look/` (scanlines, vignette, focus outline, static) from the Apple TV app's drawing code |
 | `scripts/sca.sh` | Roku's Static Channel Analysis, the Channel Store's own check (`out/sca/report.txt`) |

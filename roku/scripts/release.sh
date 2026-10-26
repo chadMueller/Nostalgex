@@ -159,10 +159,10 @@ trap cleanup EXIT
 cleanup
 scripts/stage.sh "$stage"
 printf '{"supabaseURL":"%s","anonKey":"%s"}\n' "$supabase_url" "$supabase_key" >"$stage"/data/enrichment.json
-# LC_ALL=C: sort's order, and so the hash, would otherwise follow the shell's
-# locale (the 1.0.2 tree hashed cca0d38 under C and d27182e under en_US).
-build=$(cd "$stage" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha1sum | sha1sum | cut -c1-12)
-printf 'nx_build=%s\n' "$build" >>"$stage"/manifest
+# nx_build as deploy.sh stamps it. Never a test build's data space: a release
+# keeps the registry and cachefs: names every installed copy already has.
+build=$(scripts/stamp-manifest.sh "$stage")
+if grep -q '^nx_data_ns=' "$stage"/manifest; then die "the staged manifest has nx_data_ns, a test build's data space; a release must not"; fi
 (cd "$stage" && zip -qr ../"$(basename "$zip")" .)
 echo "build: $build ($(find "$stage" -type f | wc -l | tr -d ' ') files, $(($(wc -c <"$zip") / 1024)) KB zipped)"
 

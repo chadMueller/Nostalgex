@@ -21,7 +21,7 @@
 ' after the scan reads. Titles and schedules only, nothing secret.
 
 function NxSnapshotDir() as String
-    return "cachefs:/nostalgex-library"
+    return NxCacheRoot() + "/nostalgex-library"
 end function
 
 ' Bump when a saved item would no longer read the same; an old meta is ignored.
@@ -195,8 +195,10 @@ end sub
 ' library has) are one account's library. They live in cachefs:, which
 ' outlasts deleting the app while the registry (the sign-in) does not, so a
 ' file beside them says whose they are: SHA-1 of the plex.tv account id.
-' root is "cachefs:" except in the tests.
-function NxCacheOwnerPath(root = "cachefs:" as String) as String
+' root is NxCacheRoot() (cachefs:, or a test build's own folder) except in
+' the tests.
+function NxCacheOwnerPath(root = "" as String) as String
+    if root = "" then root = NxCacheRoot()
     return root + "/nostalgex-owner.txt"
 end function
 
@@ -208,11 +210,14 @@ function NxCacheOwnerHash(accountID as String) as String
     return d.Process(bytes)
 end function
 
-sub NxClearAccountCaches(root = "cachefs:" as String)
+sub NxClearAccountCaches(root = "" as String)
+    if root = "" then root = NxCacheRoot()
     NxSnapshotClear(root + "/nostalgex-library")
     DeleteFile(root + "/nostalgex-guide.json")
     DeleteFile(root + "/nostalgex-pools.json")
     DeleteFile(root + "/nostalgex-enrichment.json")
+    ' The music-video genre lookups (source/music/MusicLookup.brs, #73).
+    DeleteFile(root + "/nostalgex-music-videos.json")
     DeleteFile(NxCacheOwnerPath(root))
 end sub
 
@@ -220,7 +225,8 @@ end sub
 ' clears caches another account left, or that no account was recorded for.
 ' A saved sign-in only records the owner, since the library may already be
 ' reading the caches. Returns true when it cleared them.
-function NxClaimAccountCaches(accountID as String, fresh as Boolean, root = "cachefs:" as String) as Boolean
+function NxClaimAccountCaches(accountID as String, fresh as Boolean, root = "" as String) as Boolean
+    if root = "" then root = NxCacheRoot()
     owner = NxCacheOwnerHash(accountID)
     saved = ""
     if CreateObject("roFileSystem").Exists(NxCacheOwnerPath(root)) then saved = ReadAsciiFile(NxCacheOwnerPath(root))

@@ -107,7 +107,7 @@ end function
 
 ' PlaybackDiagnostics.record: the newest first, five kept.
 sub NxRecordPlaybackVerdict(line as String)
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     rows = invalid
     raw = reg.Read("verdicts")
     if raw <> "" then rows = ParseJson(raw)
@@ -122,7 +122,7 @@ sub NxRecordPlaybackVerdict(line as String)
 end sub
 
 function NxLastPlaybackVerdict() as String
-    raw = CreateObject("roRegistrySection", "player").Read("verdicts")
+    raw = NxRegSection("player").Read("verdicts")
     if raw = "" then return ""
     rows = ParseJson(raw)
     if type(rows) <> "roArray" or rows.Count() = 0 then return ""

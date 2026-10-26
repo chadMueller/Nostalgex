@@ -9,7 +9,7 @@ end sub
 ' same build, NxBuildKey).
 ' It holds titles and schedules, nothing secret.
 function NxGuideCachePath() as String
-    return "cachefs:/nostalgex-guide.json"
+    return NxCacheRoot() + "/nostalgex-guide.json"
 end function
 
 function NxGuideCacheKey(nowSec as LongInteger, bundles as Object) as String
@@ -46,7 +46,7 @@ end function
 ' season (NxSeasonKey: the guide's lead, and the year the filter reads),
 ' packages, franchise and collection choices and servers on are the same.
 function NxPoolCachePath() as String
-    return "cachefs:/nostalgex-pools.json"
+    return NxCacheRoot() + "/nostalgex-pools.json"
 end function
 
 function NxPoolCacheKey(season as String, bundles as Object) as String
@@ -441,7 +441,7 @@ sub loadLibrary()
     ' already showing, and the guide is rebuilt only if they added anything.
     opts = {
         config: NxEnrichmentConfig(), net: NxEnrichmentNet(),
-        cache: NxEnrichFileCache("cachefs:/nostalgex-enrichment.json"),
+        cache: NxEnrichFileCache(NxCacheRoot() + "/nostalgex-enrichment.json"),
         nowSec: NxFilterClock().nowSec, channels: config.channels,
         backoff: NxEnrichOMDbBackoff(NxEnrichRegistryStore()), progress: NxEnrichTopProgress(m.top)
     }
@@ -519,6 +519,9 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' Which server kind the items are from: an Emby Dolby Vision profile 5
     ' file goes on no channel.
     backend = NxSignedInKind()
+    ' Music videos with what the genre lookups found (#73), as upstream's
+    ' applyMusicCacheToLibrary: no network here, only the cache.
+    items = NxMusicItemsWithCache(items, NxMusicLoadCache(), CreateObject("roDateTime").GetYear())
     ' What the franchise and collection steps read, as upstream's onChannels:
     ' the filter leaves those files out itself, and these must too.
     onChannels = items
@@ -742,6 +745,9 @@ end function
 ' every 30 s, as upstream's rebuildAllSchedules runs): a time restriction
 ' lifting at 9 PM, or a new day, re-packs exactly as it would upstream.
 sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, lib as Object)
+    ' The music videos for the genre lookups, while HIGH ROTATION is on
+    ' (#73, upstream's startDeferredMusicEnrichmentIfNeeded).
+    if NxHasValue(NxEnabledBundles(), NxMusicBundleID()) then m.top.musicVideos = NxMusicCandidates(lib.items) else m.top.musicVideos = []
     m.top.refreshed = true
     port = CreateObject("roMessagePort")
     m.top.ObserveField("reschedule", port)
@@ -922,7 +928,7 @@ sub resaveClearedLibrary(lib as Object)
         if type(snap.servers[s.key]) <> "roAssociativeArray" then
             t = CreateObject("roTimespan")
             fs = CreateObject("roFileSystem")
-            print "library: server "; s.index; "'s saved library is gone (dir has "; ListDir(snapDir).Count(); " files, saved guide "; fs.Exists(NxGuideCachePath()); ", pools "; fs.Exists(NxPoolCachePath()); ", enrichment cache "; fs.Exists("cachefs:/nostalgex-enrichment.json"); "); saving it again"
+            print "library: server "; s.index; "'s saved library is gone (dir has "; ListDir(snapDir).Count(); " files, saved guide "; fs.Exists(NxGuideCachePath()); ", pools "; fs.Exists(NxPoolCachePath()); ", enrichment cache "; fs.Exists(NxCacheRoot() + "/nostalgex-enrichment.json"); "); saving it again"
             ' Its first save time, so it still ages out a day after the scan.
             ' From JSON it may be an Integer or a Double.
             savedAt& = s.savedAt

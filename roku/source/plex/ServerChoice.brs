@@ -38,7 +38,7 @@ end function
 ' The saved choices, or invalid when there are none. An empty read isn't
 ' handed to ParseJson, which logs an error for it.
 function NxSavedServerChoices() as Dynamic
-    raw = CreateObject("roRegistrySection", "plex").Read("serverChoices")
+    raw = NxRegSection("plex").Read("serverChoices")
     if raw = "" then return invalid
     return ParseJson(raw)
 end function

@@ -7,7 +7,7 @@
 ' chosen, and autoSubtitlesForForeignAudioEnabled, on until chosen
 ' (AppState.swift: `?? true`), so a fresh install reads FOREIGN AUDIO.
 function NxSubtitleSettings() as Object
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     return NxSubtitleSettingsFrom(reg.Read("subsAlways"), reg.Read("subsForeign"))
 end function
 
@@ -20,7 +20,7 @@ end function
 ' setting: the CC toggle saves ALWAYS and leaves FOREIGN AUDIO unchosen, so
 ' its default still applies.
 sub NxSaveSubtitleSettings(s as Object)
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     was = NxSubtitleSettings()
     if s.always <> was.always then reg.Write("subsAlways", NxFlag(s.always))
     if s.foreign <> was.foreign then reg.Write("subsForeign", NxFlag(s.foreign))

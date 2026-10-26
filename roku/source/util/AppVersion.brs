@@ -8,7 +8,10 @@
 
 function NxVersionLabel() as String
     info = CreateObject("roAppInfo")
-    return NxFormatVersionLabel(info.GetValue("major_version"), info.GetValue("minor_version"), info.GetValue("build_version"), info.GetValue("nx_build"))
+    label = NxFormatVersionLabel(info.GetValue("major_version"), info.GetValue("minor_version"), info.GetValue("build_version"), info.GetValue("nx_build"))
+    ' A test build keeps its own data (NxDataSpace) and says so.
+    if NxDataSpace() <> "" then label = label + " TEST DATA"
+    return label
 end function
 
 ' From the manifest's own three numbers, so "00002" still reads 2; "?" for

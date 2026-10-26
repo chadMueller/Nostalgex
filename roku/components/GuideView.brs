@@ -80,7 +80,7 @@ sub init()
     m.tick.duration = 1
     m.tick.ObserveField("fire", "onTick")
     m.lastWindow = 0
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     m.stopUrl = reg.Read("stopUrl")
     m.stopServer = reg.Read("stopServer").ToInt()
 
@@ -894,7 +894,7 @@ end sub
 ' The running transcode's stop address (no token in it), kept across
 ' launches: a transcode left running by the last launch blocks this one's.
 sub rememberStop()
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     if m.stopUrl = invalid or m.stopUrl = "" then
         reg.Delete("stopUrl")
     else
@@ -1384,7 +1384,7 @@ end sub
 ' leaving with Home puts it back too.
 sub setCaptions(show as Boolean)
     m.video.suppressCaptions = not show
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     if show and m.video.globalCaptionMode <> "On" then
         if not reg.Exists("captionModeBefore") then
             reg.Write("captionModeBefore", m.video.globalCaptionMode)
@@ -1399,7 +1399,7 @@ sub setCaptions(show as Boolean)
 end sub
 
 sub restoreCaptionMode()
-    reg = CreateObject("roRegistrySection", "player")
+    reg = NxRegSection("player")
     if not reg.Exists("captionModeBefore") then return
     m.video.globalCaptionMode = reg.Read("captionModeBefore")
     reg.Delete("captionModeBefore")
@@ -2312,7 +2312,7 @@ function promptKey(key as String) as Boolean
             ' change in Settings.
             enabled = NxEnabledBundles()
             if not NxHasValue(enabled, offer.id) then enabled.Push(offer.id)
-            reg = CreateObject("roRegistrySection", "guide")
+            reg = NxRegSection("guide")
             reg.Write("bundles", FormatJson(enabled))
             reg.Flush()
             NxTuneDrop(m.tuneQueue)

@@ -11,7 +11,7 @@
 ' The switched-on ids as a case-sensitive set. Nothing saved is none;
 ' ParseJson("") logs an error, so it is skipped.
 function NxSavedCollectionKeys() as Object
-    raw = CreateObject("roRegistrySection", "guide").Read("collectionsOn")
+    raw = NxRegSection("guide").Read("collectionsOn")
     parsed = invalid
     if raw <> "" then parsed = ParseJson(raw)
     return NxCollectionKeySet(parsed)
@@ -37,7 +37,7 @@ function NxCollectionKeyList(keys as Object) as Object
 end function
 
 sub NxSaveCollectionKeys(keys as Object)
-    reg = CreateObject("roRegistrySection", "guide")
+    reg = NxRegSection("guide")
     reg.Write("collectionsOn", FormatJson(NxCollectionKeyList(keys)))
     reg.Flush()
 end sub
