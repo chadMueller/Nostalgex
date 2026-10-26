@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-26 (publish Plex virtual channels from your own movies)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-virtual-channels-own-movies`.
+
+**Why.** Scheduled publish for the Plex virtual channels post. The cable-TV walkthrough it used to link (`/blog/make-plex-feel-like-cable-tv`) is still a draft and goes live tomorrow, so that sentence was cut so a 404 does not ship today.
+
+**Changed.**
+- `content/blog/plex-virtual-channels-own-movies.md`: `draft: false`, `date` and `updated` both 2026-10-26. Cut the paragraph that started "I'm not going to repeat the full Plex setup here" and linked the still-draft cable-TV post. Other live links left as they were (`/blog/tunarr-ersatztv-alternative-apple-tv`, `/blog/apple-tv-channel-surfing-apps`, `/blog/best-90s-buddy-cop-movies-channel`, `/blog/90s-slasher-movies-halloween-marathon`, `/plex`, `/web-tuner`).
+- `content/blog/apple-tv-channel-surfing-apps.md`: one sentence in "Is there a free app that turns my Plex library into live TV channels?" pointing at `/blog/plex-virtual-channels-own-movies`. Date on that post stays 2026-10-20.
+- `scripts/media-sizes.json`: already had both R2 images. Cover is 1200x630, `teen-movies-channel-guide.webp` is 1280x720. Both URLs returned 200. Images stay on R2; none committed.
+- `npm run blog:render` wrote ten live posts into `public/sitemap.xml`, including `/blog/plex-virtual-channels-own-movies` with lastmod 2026-10-26. `/blog` lastmod is 2026-10-26. The remaining draft (`make-plex-feel-like-cable-tv`) is not in the sitemap. `npm run bundles:render` then ran after the blog step, so the committed sitemap has the blog block above the channels block, matching main.
+
+**Half-done.** `make-plex-feel-like-cable-tv` is still a draft.
+
+**Next.** Tomorrow's publish of the cable-TV post, then the planned link-backs on the Jellyfin and Tunarr posts.
+
 ## 2026-10-23 (web and Docker: START OVER while the library loads)
 
 **Shipped.** The web tuner on nostalgex.app when this lands on main, and Docker as `tuner-v1.0.8` from the same commit.

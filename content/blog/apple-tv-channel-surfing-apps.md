@@ -58,6 +58,8 @@ You connect your Plex, Jellyfin or Emby server ([how it works on Plex](/plex), [
 
 It needs tvOS 18 or later. There's also a free [web tuner](/web-tuner) that runs the same idea in a browser, as long as your server is reachable over https.
 
+If you're wondering why Plex Live TV won't play your own movies, I explained it in [this post about Plex virtual channels](/blog/plex-virtual-channels-own-movies).
+
 Where it falls short: there's no iPhone or iPad app, and you can't build your own channels. If either of those matters, keep reading.
 
 ## Is Coax worth it for Plex?
@@ -132,7 +134,6 @@ Build notes: build-blog.mjs ignores author, updated and excerpt today. Article J
 Intended schema: ItemList with Nostalgex, Coax, Bunny Ears TV, TubeTime+, analoq in review order (NostalgiaTV left out, it isn't an Apple TV app). FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. No separate SoftwareApplication block.
 Image to add (none exist yet): alt "Nostalgex guide on Apple TV with channels like Saturday Morning Cartoons and 90s Sitcoms filled from a Plex library".
 PUBLISH MORNING Oct 20 (done Oct 20: Coax and Bunny Ears unchanged, TubeTime+ moved from TestFlight to the App Store with paid Premium, NostalgiaTV still not on Apple TV): recheck every competitor price, tvOS minimum and platform (Coax, Bunny Ears TV, TubeTime+, analoq, NostalgiaTV on Apple TV) and change "October 9, 2026" / "Oct 9, 2026" in the disclosure, table header, NostalgiaTV H2 and Bunny Ears paragraph to the recheck date. Bunny Ears: the US App Store listing says "Only for Apple TV" while its website says Apple TV, iPhone and iPad; recheck.
-ADD LINKS BACK (this post publishes Oct 20; this target is not live yet):
-1. Oct 26, once /blog/plex-virtual-channels-own-movies is live: at the end of "Is there a free app that turns my Plex library into live TV channels?" add: If you're on Plex and confused by its Live TV tab, see [does Plex Live TV play your own movies?](/blog/plex-virtual-channels-own-movies).
+LINK ADDED Oct 26: /blog/plex-virtual-channels-own-movies, in "Is there a free app that turns my Plex library into live TV channels?".
 Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 12) and /blog/jellyfin-tv-guide-own-library (Oct 14), both live before this post.
 -->
