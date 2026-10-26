@@ -64,6 +64,7 @@
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerResolve.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexLibrary.brs" />
+  <script type="text/brightscript" uri="pkg:/source/music/MusicTitle.brs" />
   <script type="text/brightscript" uri="pkg:/source/music/MusicLookup.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/LibrarySnapshot.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/MediaBrowserApi.brs" />

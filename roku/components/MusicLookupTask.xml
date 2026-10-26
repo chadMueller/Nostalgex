@@ -12,9 +12,8 @@
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
-  <script type="text/brightscript" uri="pkg:/source/plex/PlexLibrary.brs" />
-  <script type="text/brightscript" uri="pkg:/source/filter/ChannelFilter.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
+  <script type="text/brightscript" uri="pkg:/source/music/MusicTitle.brs" />
   <script type="text/brightscript" uri="pkg:/source/music/MusicLookup.brs" />
   <script type="text/brightscript" uri="pkg:/components/MusicLookupTask.brs" />
 </component>
