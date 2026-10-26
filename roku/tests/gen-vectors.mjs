@@ -30,6 +30,7 @@ import { franchiseVectors } from "./gen-franchise.mjs";
 import { enrichmentVectors } from "./gen-enrichment.mjs";
 import { collectionsVectors } from "./gen-collections.mjs";
 import { mediaBrowserVectors } from "./gen-mediabrowser.mjs";
+import { musicVectors } from "./gen-music.mjs";
 import { dstZones, parityZones } from "./gen-dst.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -248,6 +249,11 @@ const files = [
     generatedBy: "tests/gen-vectors.mjs (tests/gen-mediabrowser.mjs)",
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "plex-tuner.html fetchJellyfinLibraryFromServer" },
     ...(await mediaBrowserVectors(upstream)),
+  }],
+  [join(here, "vectors", "music.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-music.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-music-brainz.js" },
+    ...(await musicVectors(upstream)),
   }],
   [join(here, "vectors", "schedule-dst-zones.json"), {
     generatedBy: "tests/gen-vectors.mjs (tests/gen-dst.mjs)",

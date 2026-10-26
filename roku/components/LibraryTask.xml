@@ -43,6 +43,9 @@
     <!-- Set when this load is done and the task is keeping the schedule:
          Settings' RESCAN LIBRARY row stops saying UPDATING. -->
     <field id="refreshed" type="boolean" alwaysNotify="true" />
+    <!-- The music videos the genre lookups go over (NxMusicCandidates),
+         set before refreshed; empty while HIGH ROTATION is off. -->
+    <field id="musicVideos" type="array" />
     <!-- True while the guide on screen is the saved one. -->
     <field id="fromCache" type="boolean" value="false" />
     <!-- Set (any value) after Settings saved a package switch: the guide is
@@ -61,6 +64,7 @@
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerResolve.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexLibrary.brs" />
+  <script type="text/brightscript" uri="pkg:/source/music/MusicLookup.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/LibrarySnapshot.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/MediaBrowserApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/MediaBrowserLibrary.brs" />

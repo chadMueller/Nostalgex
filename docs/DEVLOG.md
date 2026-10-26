@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-26 (Roku: genres for HIGH ROTATION's music videos)
+
+**Shipped.** Nothing until the PR for #73 lands on main. Branch `roku/high-rotation`, off main `9fc8bfc`. For Roku 1.0.6. The Roku section of the privacy page gets its MusicBrainz and Deezer line on the site's own branch, in the same release.
+
+**Why.** Most HIGH ROTATION genre channels (POP, ROCK'N, COUNTRY SWAGGER and the rest) stayed hidden on Roku when the server had no genres on its music videos (issue #73). The web tuner and the Apple TV look the genres up on MusicBrainz, then Deezer.
+
+**Changed.**
+- `roku/source/music/MusicLookup.brs`: a port of `scripts/nostalgex-music-brainz.js`: MusicBrainz's recording search and ranking, its tags mapped to the channel genres, Deezer's search, pick and album genres for what MusicBrainz leaves blank, the settled and genre-only rules, and the cached rows applied to the items (title, artist, genres, year).
+- `roku/components/MusicLookupTask.*`: the lookups over HTTPS, paced as upstream (MusicBrainz about 1 a second with a User-Agent naming the app, Deezer 4 a second, 15 s timeout), one item at a time.
+- `roku/components/MainScene.brs`, `LibraryTask.*`: after a load, while HIGH ROTATION is on, one pass behind the guide. A failure or a slow answer only leaves a row unfilled. The cache is applied at the start of each channel build, as upstream's `applyMusicCacheToLibrary`, so what a pass finds reaches the channels at the next load (the 6-hour refresh, RESCAN LIBRARY or a launch), as on the Apple TV.
+- `roku/source/plex/LibrarySnapshot.brs`: a sign-out clears the music cache with the library.
+- `roku/tests/gen-music.mjs`, `roku/tests/MusicTests.brs`: 154 cases from upstream's own module, whole lookup passes over canned answers included.
+
+**Measured.** The cases fail without the port and pass with it, off the TV and on a Streaming Stick Plus. A probe build on the stick asked the real services once: "Take On Me" by a-ha and "Smells Like Teen Spirit" by Nirvana each resolved on MusicBrainz in about 1.2 s (paced), Deezer added Rock to the second, and the row read back from `cachefs:` applied to the item. Deezer answers a TV as plain JSON; the web tuner needs JSONP only because of CORS.
+
+**Differences.** No Music step on the loading screen: upstream's rail has one but never shows it (`includesMusic: false`).
+
+**Half-done.** Not seen on a library with music videos: the stick's server has none, and HIGH ROTATION is off there.
 ## 2026-10-26 (Roku: a test build can keep its own saved data)
 
 **Shipped.** Nothing until it lands on main. Branch `roku/test-isolated-data`, off main `ae3cd6d`. Tooling for testing; a release is unchanged.

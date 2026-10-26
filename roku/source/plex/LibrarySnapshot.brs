@@ -216,6 +216,8 @@ sub NxClearAccountCaches(root = "" as String)
     DeleteFile(root + "/nostalgex-guide.json")
     DeleteFile(root + "/nostalgex-pools.json")
     DeleteFile(root + "/nostalgex-enrichment.json")
+    ' The music-video genre lookups (source/music/MusicLookup.brs, #73).
+    DeleteFile(root + "/nostalgex-music-videos.json")
     DeleteFile(NxCacheOwnerPath(root))
 end sub
 

@@ -519,6 +519,9 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' Which server kind the items are from: an Emby Dolby Vision profile 5
     ' file goes on no channel.
     backend = NxSignedInKind()
+    ' Music videos with what the genre lookups found (#73), as upstream's
+    ' applyMusicCacheToLibrary: no network here, only the cache.
+    items = NxMusicItemsWithCache(items, NxMusicLoadCache(), CreateObject("roDateTime").GetYear())
     ' What the franchise and collection steps read, as upstream's onChannels:
     ' the filter leaves those files out itself, and these must too.
     onChannels = items
@@ -742,6 +745,9 @@ end function
 ' every 30 s, as upstream's rebuildAllSchedules runs): a time restriction
 ' lifting at 9 PM, or a new day, re-packs exactly as it would upstream.
 sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, lib as Object)
+    ' The music videos for the genre lookups, while HIGH ROTATION is on
+    ' (#73, upstream's startDeferredMusicEnrichmentIfNeeded).
+    if NxHasValue(NxEnabledBundles(), NxMusicBundleID()) then m.top.musicVideos = NxMusicCandidates(lib.items) else m.top.musicVideos = []
     m.top.refreshed = true
     port = CreateObject("roMessagePort")
     m.top.ObserveField("reschedule", port)

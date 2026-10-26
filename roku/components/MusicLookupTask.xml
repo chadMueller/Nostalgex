@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The music-video genre lookups behind the guide (#73,
+     source/music/MusicLookup.brs): MusicBrainz, then Deezer, paced as
+     upstream, one item at a time. Never holds the guide; a failure only
+     leaves the genre channels as they were. -->
+<component name="MusicLookupTask" extends="Task">
+  <interface>
+    <!-- NxMusicCandidates of the library. -->
+    <field id="items" type="array" />
+    <!-- How many rows the pass wrote, when it ends. -->
+    <field id="written" type="integer" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
+  <script type="text/brightscript" uri="pkg:/source/plex/PlexLibrary.brs" />
+  <script type="text/brightscript" uri="pkg:/source/filter/ChannelFilter.brs" />
+  <script type="text/brightscript" uri="pkg:/source/music/MusicLookup.brs" />
+  <script type="text/brightscript" uri="pkg:/components/MusicLookupTask.brs" />
+</component>

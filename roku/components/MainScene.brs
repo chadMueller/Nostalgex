@@ -425,6 +425,33 @@ end sub
 
 sub onLibraryRefreshed()
     setLibraryBusy(false)
+    startMusicLookup()
+end sub
+
+' The music-video genre lookups behind the guide (#73), as upstream's
+' startDeferredMusicEnrichmentIfNeeded: after the guide is up, only with
+' HIGH ROTATION on, one pass at a time. What they find is in the cache the
+' next library load reads (the 6-hour refresh, RESCAN LIBRARY or a launch),
+' as on the Apple TV, whose pass changes no channel's pool either.
+sub startMusicLookup()
+    if m.musicTask <> invalid or m.library = invalid then return
+    items = NxList(m.library.musicVideos)
+    if items.Count() = 0 then return
+    m.musicTask = CreateObject("roSGNode", "MusicLookupTask")
+    m.musicTask.items = items
+    m.musicTask.ObserveField("written", "onMusicLookupDone")
+    m.musicTask.control = "run"
+end sub
+
+sub onMusicLookupDone()
+    m.musicTask = invalid
+end sub
+
+sub stopMusicLookup()
+    if m.musicTask = invalid then return
+    m.musicTask.UnobserveField("written")
+    m.musicTask.control = "stop"
+    m.musicTask = invalid
 end sub
 
 ' Whether a library load is running, for the RESCAN LIBRARY row.
@@ -449,6 +476,7 @@ end sub
 
 sub signOut()
     if m.signIn <> invalid then m.signIn.control = "stop"
+    stopMusicLookup()
     ' A launch check still running is for the sign-in going away: its late
     ' "rejected" must not sign out the next one.
     if m.mbCheck <> invalid then
