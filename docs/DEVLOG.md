@@ -3447,6 +3447,19 @@ unchanged.
 **Half-done.** A library where no package has content still ends on the blank screen. The Apple TV and Roku show NO CHANNELS FOUND with an OPEN SETTINGS button there; the web does not yet. Nothing changes what is sent anywhere.
 
 **Next.** Decide whether the web gets that NO CHANNELS FOUND screen.
+## 2026-10-27 (Apple TV: a burned-in forced subtitle the server can't produce no longer costs 20 seconds)
+
+**Shipped.** Nothing. Branch `fix/forced-burn-probe`, held for the next Apple TV bug-fix bundle.
+
+**Why.** Board item q106. The Roku work found that Chad's Emby 4.10.1 answers every segment of a stream that burns a subtitle into the picture with HTTP 500, and that the Apple TV's own request failed the same way on a film with a forced track. The Apple TV burns a forced track in the viewer's language (2026-10-19). It chooses the burned stream on the strength of PlaybackInfo alone, the playlists come back fine, and the 500s only show on the first segment.
+
+**What the app did.** Measured on the bedroom Apple TV HD (tvOS 26.6, build 52 code) against a stand-in for that fault: a pass-through to the lab Emby 4.10.1 that answers 500 to every segment of a session whose playlist asked for SubtitleMethod=Encode. AVPlayer retried the first segment for 20 s (HTTP 500, error -16847), the startup watchdog gave up ("retry capped at 1080p after 20s"), the capped retry asked without the burn and played. Picture after 26.6 s (H.264 source) and 25.1 s (HEVC source). Same files with the burn route healthy: 3.6 s and 2.6 s. A 4K film waits 40 s for the watchdog, not 20. The film always played, without its forced lines. Not measured on Chad's real Emby: the bedroom TV has no sign-in.
+
+**Changed.** `JellyfinPlaybackResolver.negotiate`: before choosing the burned stream it fetches what the player fetches first, through the same `send` as PlaybackInfo with no header added, as the player does: the master playlist, its first variant (skipped when the master already lists segments) and the first segment. An HTTP error on any of them means the plain answer already in hand is used, as when the burn request itself fails, and the burned session is stopped (`stopRefused`, which both services point at `stopTranscode`), since nothing else will ever see it and Jellyfin starts an encode on the variant request. A timeout (12 s a request, like PlaybackInfo), a dropped connection or a playlist it can't read proves nothing and keeps the burned stream. A file with no forced track makes no extra request.
+
+**Measured after.** Same device. Refusing stand-in: picture after 3.7 s and 3.1 s, the burned session's ActiveEncodings DELETE sent, log line "BURN-IN: the server refused the burned-in stream's first segment". Healthy burn route with the check on: 4.1 s and 3.7 s, against 3.6 s and 2.6 s without it, one run each, so the check costs about a second on a forced-track tune. NostalgexTests: 0 failures; eight new in `JellyfinPlaybackInfoTests` (probe order, relative URLs with their queries, 500 on the segment and on the playlist, the stop, no stop when accepted, 12 s timeouts, a master that is a media playlist, timeout and unreadable playlist keep the burn, nothing extra without a forced track); the two fakes that answer PlaybackInfo also answer the GETs.
+
+**Half-done.** The cause of the 500 on Chad's server is not found here: the lab Emby 4.10.1 on this Mac burns SRT and PGS forced tracks fine (2026-10-19, and again today on a new SRT file). The check on Chad's own Emby is still to do. Jellyfin was not run on a device (its lab sign-in isn't available to the tester); the Jellyfin side is covered by the unit tests only. A sidecar subtitle instead of a burn (what Roku does) is a larger change and not needed for this.
 
 ## 2026-10-27 (publish how to make Plex feel like cable TV)
 

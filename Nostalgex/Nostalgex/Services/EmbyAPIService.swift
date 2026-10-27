@@ -564,7 +564,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 request: { playbackInfoRequest(for: item, serverStreamOnly: serverStreamOnly, burningSubtitle: $0) },
                 serverURL: serverURL, apiKey: accessToken, itemId: item.ratingKey, mediaSourceId: msid,
                 serverStreamOnly: serverStreamOnly, preferredSubtitleLanguage: preferredSubtitleLanguage,
-                audioLanguage: audioLanguage, send: send
+                audioLanguage: audioLanguage, send: send,
+                stopRefused: { await self.stopTranscode(playSessionId: $0) }
             ) ?? fallbackResolution(for: item)
         } catch {
             print("[Emby] PlaybackInfo failed for \(item.ratingKey): \(error) — falling back to hand-built URL")
