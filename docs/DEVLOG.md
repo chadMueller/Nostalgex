@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-27 (Apple TV: the last playback failure goes with the sign-in)
+
+**Shipped.** Nothing. Branch `fix/clear-playback-failures`, held for the next Apple TV bug-fix bundle.
+
+**Why.** Found while fixing the same thing on Roku. Settings shows "Last playback failure" under RESCAN LIBRARY, read from `PlaybackDiagnostics`. Its `clear()` was never called, so a failure from the old library kept showing after a sign-out or a switch to another server, and misled support reads of a screenshot.
+
+**Changed.** `AppState.clearCredentials()`, which Disconnect calls, clears it. `setSelectedServers` clears it when the new server list shares no server with a non-empty old one: same machine identifier, or same host and port, since a pre-multi-server install keyed its server by URL. Adding or removing one of several servers keeps it, and so does the first sign-in (Disconnect already cleared).
+
+**Measured.** NostalgexTests: 884 run, 14 skipped, 0 failures. Four new in `PlaybackFailureClearingTests`; with the fix reverted, the sign-out and switch tests fail and the two keep tests pass.
+
+**Cross-product.** Web tuner and Docker: n/a, they keep no failure line. Roku: fixed separately on its own branch.
+
 ## 2026-10-27 (publish how to make Plex feel like cable TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/make-plex-feel-like-cable-tv`.
