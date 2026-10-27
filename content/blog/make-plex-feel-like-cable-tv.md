@@ -5,8 +5,8 @@ description: "Turn your own Plex library into live channels with a retro TV guid
 cover: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/make-plex-feel-like-cable-tv/cover.jpg"
 cover_alt: "Nostalgex live channel guide on Apple TV with several channels mid program, built from a Plex library"
 slug: make-plex-feel-like-cable-tv
-date: 2026-10-16
-draft: true
+date: 2026-10-27
+draft: false
 ---
 
 # How to Make Plex Feel Like Cable TV Again (Yes, With a Real Channel Guide)
@@ -57,7 +57,7 @@ If a channel ever looks thin, it's almost always metadata. The channels read the
 
 Running Jellyfin? It works natively. Sign in with Quick Connect, or type your server address and log in. Use the full URL with the scheme on the front, like https://jellyfin.yourdomain.com. If you've been searching for Jellyfin live TV channels built from your own library rather than an IPTV list, this is that.
 
-Emby works too, with your Emby username and password. In the Apple TV app it's its own option. On the web tuner, use the Jellyfin connect option and point it at your Emby server.
+Emby works too, with your Emby username and password. In the Apple TV app it's its own option. On the web tuner, choose Connect with Emby and point it at your Emby server.
 
 ## The One Catch: The Web Tuner Needs HTTPS
 

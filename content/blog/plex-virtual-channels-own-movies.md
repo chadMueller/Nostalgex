@@ -52,6 +52,8 @@ It's basically Pluto, except the channels are made of your movies and there are 
 
 Want to compare Coax and Bunny Ears TV too? See [the best channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps).
 
+I'm not going to repeat the full Plex setup here, because I already wrote it up in [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv). That post covers why a guide beats a poster wall and walks through every step.
+
 ## Do I need Plex Pass for channels made from my own library?
 
 Not with Nostalgex. It doesn't use Plex Live TV or Plex DVR, so none of the Plex Pass features come into it. It needs nothing paid at all: no Plex Pass, no subscription, nothing.
@@ -102,7 +104,7 @@ No. Nostalgex runs on Apple TV with tvOS 18 or later, and in a browser through t
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
 Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"}. No separate SoftwareApplication block.
 Image to add (none exist yet): alt "Nostalgex guide on Apple TV showing the BUDDIES and VHS VAULT channels built from a Plex library".
-Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 12), /blog/apple-tv-channel-surfing-apps (Oct 19) and /blog/best-90s-buddy-cop-movies-channel (Oct 9). The /blog/make-plex-feel-like-cable-tv sentence was cut on publish (2026-10-26) because that post was still a draft.
+Links to /blog/tunarr-ersatztv-alternative-apple-tv (Oct 12), /blog/apple-tv-channel-surfing-apps (Oct 19), /blog/best-90s-buddy-cop-movies-channel (Oct 9) and /blog/make-plex-feel-like-cable-tv (Oct 27). The cable-TV sentence was restored on 2026-10-27 when that post went live.
 REMINDER Nov 1: trim the SCREAM paragraph in "What kinds of channels do you get?".
 Chad: request indexing for /plex in Search Console.
 -->

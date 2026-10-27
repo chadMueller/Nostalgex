@@ -59,7 +59,7 @@ And about Watch Together: Nostalgex doesn't do it. What I can tell you is that c
 
 No. Nostalgex reads the same Plex server your Plex app uses. Nothing gets installed on the server, and it never adds, moves or deletes anything. Keep Plex for browsing and use Nostalgex when you want the TV to just be on.
 
-Setup is the plug and play part, and it really is short. Install Nostalgex on your Apple TV (tvOS 18 and up) and choose Plex. Scan the code on screen with your phone (or type it in at plex.tv/link), approve it, and the guide is already airing. No server plugin, no Docker needed, no settings to fill in first. At home on your own network, you don't need a Plex Pass for any of it. The [Nostalgex for Plex](https://www.nostalgex.app/plex?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_appletv_sitback&utm_content=plex_page) page has the details.
+Setup is the plug and play part, and it really is short. Install Nostalgex on your Apple TV (tvOS 18 and up) and choose Plex. Scan the code on screen with your phone (or type it in at plex.tv/link), approve it, and the guide is already airing. No server plugin, no Docker needed, no settings to fill in first. At home on your own network, you don't need a Plex Pass for any of it. The [Nostalgex for Plex](https://www.nostalgex.app/plex?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_appletv_sitback&utm_content=plex_page) page has the details. For the longer walkthrough, here's [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv).
 
 It's free and open source (MIT), with no account. If you're on Jellyfin or Emby, it works with those too.
 

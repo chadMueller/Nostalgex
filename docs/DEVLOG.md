@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-27 (publish how to make Plex feel like cable TV)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/make-plex-feel-like-cable-tv`.
+
+**Why.** Scheduled publish for the Plex cable-TV walkthrough. Yesterday's virtual-channels post had its link to this page cut so a 404 would not ship; that sentence comes back today, plus the planned link-backs on the live Jellyfin and sit-back posts.
+
+**Changed.**
+- `content/blog/make-plex-feel-like-cable-tv.md`: `draft: false`, `date` 2026-10-27. Copy check: no em or en dashes, no "no ads" / "no upsell" / "no paid tier" / "no in app purchases". Channel count already said 130+. One fix: the web tuner Emby line now says choose Connect with Emby, because that button exists and the old "use the Jellyfin connect option" line was stale. No Apple TV version or release-date promises. Internal `/blog/` links stay on two already-live posts (`best-90s-buddy-cop-movies-channel`, `90s-slasher-movies-halloween-marathon`). None of the still-draft slugs were in the file.
+- `content/blog/plex-virtual-channels-own-movies.md`: restored the paragraph cut on Oct 26, original wording from PR #102: "I'm not going to repeat the full Plex setup here, because I already wrote it up in [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv)." Date on that post stays 2026-10-26.
+- `content/blog/jellyfin-tv-guide-own-library.md`: after the existing Apple TV channel-surfing link in "Do I have to set up M3U, XMLTV or a tuner for this?", added the planned line pointing at the Plex walkthrough. Date stays 2026-10-19.
+- `content/blog/plex-apple-tv-app-sit-back-alternative.md`: one sentence in "Do I have to give up Plex to use it?" pointing at `/blog/make-plex-feel-like-cable-tv`. Date stays 2026-10-22.
+- Images stay on R2; none committed. Cover and the Scream banner were already in `scripts/media-sizes.json`. Cover returned 200 (1200x630, 98,909 bytes). The Scream banner returned 200 (1280x720, 63,882 bytes).
+- `npm run blog:render` wrote eleven live posts into `public/sitemap.xml`, including `/blog/make-plex-feel-like-cable-tv` with lastmod 2026-10-27. `/blog` lastmod is 2026-10-27. There are no remaining drafts in `content/blog`. `npm run bundles:render` then ran after the blog step, so the committed sitemap has the blog block above the channels block, matching main.
+
+**Half-done.** None. This was the last scheduled draft in `content/blog`.
+
+**Next.** The Tunarr post still has a build-notes reminder to add this walkthrough in "How does Nostalgex compare to Tunarr and ErsatzTV?". That was not in today's publish list.
+
 ## 2026-10-26 (publish Plex virtual channels from your own movies)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-virtual-channels-own-movies`.
