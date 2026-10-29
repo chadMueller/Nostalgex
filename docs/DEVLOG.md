@@ -3,6 +3,88 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (Roku: on-device Plex sign-in, branch only)
+
+**Shipped.** Nothing. Branch `roku/plex-password-signin`, cut from `main` at
+`072b399`, head `0bc748d`, not merged, not pushed.
+
+**Why.** Roku certification rule 2.2 requires on-device authentication and
+prohibits an off-device-only sign-in flow. The Roku app only offered
+plex.tv/link (entered on a second device), the same flow Plex's own Roku app
+had to drop at version 7.6.0/7.6.1 over this same rule. Jellyfin and Emby
+already sign in on-device here; only Plex was missing it. Chad's 2026-10-29
+decision corrects the 2026-10-28 one (link code only): keep the link code as
+the easy option, add an on-device email and password option alongside it.
+
+**Changed.** Nothing on `main`.
+
+**Done, on the branch.**
+
+- `roku/source/plex/PlexApi.brs`: `NxHttp` takes an optional POST body (the
+  two existing POST callers, the pin create and check, keep sending none).
+  New `NxPlexSignInWithPassword(login, password)` posts to
+  `https://plex.tv/users/sign_in.json` with the same X-Plex-* headers the
+  link flow already sends, form-encoded `user[login]` / `user[password]`.
+  `NxPlexPasswordAuthResult(code, json)` is the pure parser: "ok" with a
+  token and name (read from whichever field the legacy JSON endpoint used,
+  nested under `user` or flat, `authToken` or the older `authenticationToken`),
+  "invalid" on 401 (a wrong password, or an account that signs in through
+  Google or Apple and has no Plex password at all; the Roku can't tell
+  those apart), "error" otherwise. A two-factor code goes on the end of the
+  password with no separator, Plex's own documented workaround for an app
+  with no separate code field; nothing in the code needs to know that.
+- `roku/components/PlexSignInTask.{brs,xml}`: a `mode` field, `""` (the link
+  code, unchanged) or `"password"` (new, with `email`/`password` fields).
+  The tail both modes share (save the token, learn the account, clear
+  another account's caches, list or confirm the servers) is now one shared
+  sub, `finishSignIn`, extracted from the existing flow rather than
+  duplicated. `password` is cleared on the task the instant the request is
+  sent; only the token reaches `NxPlexSaveToken`.
+- `roku/components/ConnectView.brs`: a USE EMAIL AND PASSWORD button next to
+  CONNECT TO PLEX on the picker, leading to a new `plexCreds` screen built
+  on the same field/keyboard pattern as the Jellyfin/Emby password screen
+  (`addField`, `openKeyboard`, `keyboardDone`). It runs its own
+  `PlexSignInTask` (mode "password") rather than going through MainScene's
+  plexState/plexCode bridge, since there is no second device and no code to
+  show. A standing line on the screen says a Google or Apple sign-in has no
+  Plex password and to use CONNECT TO PLEX instead (it has to be standing,
+  not triggered only on failure, since a 401 can't tell that case apart
+  from a wrong password); the 401 error itself reads "Incorrect email or
+  password."
+- `roku/components/MainScene.brs`: `onConnectDone` gets a `"plexSignedIn"`
+  branch (ConnectView's own task already saved the token and the servers)
+  that picks up exactly where the link code's "ready" status does: the
+  server picker if the account has more than one, else straight to the
+  library.
+- `roku/source/mediabrowser/SignInFlow.brs`: five new lines in `NxSignInCopy`
+  (swept automatically by the existing em-dash/emoji/"tap" copy test) and a
+  default-focus case for the new screen.
+- Tests: `roku/tests/SignInFlowTests.brs` adds cases for
+  `NxPlexPasswordAuthResult` (success nested under `user`, a flat response,
+  the older field name, 401, a network error, a 2xx with no token, and that
+  nothing but status/token/name ever leaves the parser, proven by handing it
+  a crafted response with a `password` field and checking it never comes
+  back) and the new screen's default focus. The request function itself,
+  like its siblings `NxPlexAccount` and `NxPlexCreatePin`, is network-only
+  and isn't tested off-device.
+- `privacy.html` and `Nostalgex/PRIVACY_POLICY.md`: the Roku sign-in
+  paragraph now says the app can send a password straight to plex.tv, the
+  same way the existing Plex sign-in already does for the link code.
+
+**Measured.** `roku/tests/run.sh`: ALL TESTS PASSED (sign-in flow: 111
+passed, 0 failed). `roku/tests/pr-check.sh` against `origin/main`: see the
+same session's report for the result.
+
+**Not measured; needs Chad.** No stick check yet. That needs the dev
+password (`ROKU_DEV_PASSWORD`, not in this worktree's `.env`) to install the
+build, and a real Plex account's email and password typed on the remote,
+either Chad's own or the demo account's; neither is something this session
+should fetch or guess. Once installed: sign in with real credentials,
+confirm it reaches the guide, sign out, confirm the link code still works
+unchanged.
+
+**Next.** The stick check above, then Chad's go to push.
+
 ## 2026-10-29 (publish moving from Plex to Jellyfin or Emby)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-to-jellyfin-emby-cable-guide`.
