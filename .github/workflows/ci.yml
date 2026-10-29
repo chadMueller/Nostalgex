@@ -22,6 +22,7 @@ jobs:
       config: ${{ steps.filter.outputs.config }}
       docker: ${{ steps.filter.outputs.docker }}
       roku: ${{ steps.filter.outputs.roku }}
+      android: ${{ steps.filter.outputs.android }}
     steps:
       - uses: actions/checkout@v4
 
@@ -153,6 +154,15 @@ jobs:
               - 'scripts/nostalgex-season-smoke.mjs'
               - 'scripts/rating-golden.json'
               - 'scripts/nostalgex-rating-smoke.mjs'
+            # The Android TV app, plus the shared data and golden files its engine
+            # tests read from the repo root.
+            android:
+              - '.github/workflows/ci.yml'
+              - 'android/**'
+              - 'channels.json'
+              - 'channels-memberships.json'
+              - 'scripts/schedule-parity-golden.json'
+              - 'scripts/filter-golden.json'
 
   channel-engine:
     name: Channel engine (rule parity, schedule order, docs)
@@ -303,6 +313,28 @@ jobs:
         run: |
           node --version
           roku/tests/pr-check.sh HEAD --here --base "origin/${{ github.base_ref }}" --summary "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Android TV (engine golden files, debug build)
+    needs: changes
+    if: ${{ needs.changes.outputs.android == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # android/engine is plain Kotlin: the schedule and filter ports checked
+      # against the Apple TV's golden files on the JVM, no device. The debug
+      # build proves the app still compiles; playback is checked on a TV.
+      - name: Engine tests and debug build
+        working-directory: android
+        run: ./gradlew --no-daemon :engine:test :app:lintRelease :app:assembleDebug
 
   tvos-unit-tests:
     name: tvOS unit tests (NostalgexTests)
