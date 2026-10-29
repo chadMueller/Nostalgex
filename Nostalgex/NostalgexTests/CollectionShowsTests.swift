@@ -246,7 +246,7 @@ final class CollectionShowsTests: XCTestCase {
         }
 
         func testConnection() async throws -> String { "lab" }
-        func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
+        func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
         func loadSections() async throws -> [PlexSection] { sections }
         func loadCollections(sectionKey: String) async throws -> [PlexCollection] { collectionsBySection[sectionKey] ?? [] }
         func loadCollectionItems(collectionKey: String) async throws -> [String] { children[collectionKey] ?? [] }

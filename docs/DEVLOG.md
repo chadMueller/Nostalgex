@@ -3,6 +3,100 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (library selection, Apple TV reference implementation, branch only)
+
+**Shipped.** Nothing. Branch `feature/library-selection`, cut from `main` at
+`ee2f5d9`, not merged, not pushed.
+
+**Why.** Two real reports converge on the same gap: an Emby user with a very
+large library saw the Apple TV app crash after about 10 minutes of loading
+(a smaller set of libraries was the workaround they found by hand); a Plex
+user with several large libraries couldn't get through first setup at all.
+Both are cheaper to avoid than to make faster: let the viewer leave a
+library out before the first scan ever touches it, instead of scanning
+everything and hoping. Spec: `projects/nostalgex-internal/docs/LIBRARY-SELECTION.md`.
+
+**Done, on the branch.**
+
+- `Services/MediaBackend.swift`: `loadLibrary` takes a new
+  `excludedSectionKeys: Set<String>` parameter. A key in that set is dropped
+  from the section list before a single item request goes out for it, not
+  fetched and then discarded. Two convenience overloads (`loadLibrary()` and
+  `loadLibrary(progress:)`) keep every existing call site compiling with
+  "every section included" as the default.
+- `Services/PlexAPIService.swift`, `Services/JellyfinAPIService.swift`,
+  `Services/EmbyAPIService.swift`: each `loadLibrary` filters its section
+  list against `excludedSectionKeys` right after reading it, before the
+  per-section fetch loop starts.
+- `Services/LibrarySelectionStore.swift` (new): `LibrarySectionRef` (a
+  section's identity, scoped by server id so two Plex servers both numbering
+  their first section "1" don't collide) and `LibrarySectionSelectionStore`,
+  plain `UserDefaults` persistence for which sections are turned off.
+  Default is every section ON (absent = on): this is opting a library OUT,
+  not opting one in, so nobody lands on an empty guide by not noticing a
+  screen or because a new library showed up later.
+- `App/AppState.swift`: new state — `needsLibrarySelection`,
+  `pendingLibrarySections` (what the onboarding screen shows),
+  `availableLibrarySections` (what Settings shows), and
+  `deselectedLibrarySectionKeys`.
+- `App/AppState+Auth.swift`: `presentLibrarySelectionOrScan()` is the new
+  step between server selection and the first scan — reads every section
+  across the chosen servers, shows the picker when there's more than one,
+  otherwise scans immediately (existing single-library accounts see no new
+  screen). `confirmLibrarySelection(includedIDs:)` commits the onboarding
+  choice. All four sign-in completion points (Plex single-server, Plex
+  multi-server picker confirm, Jellyfin, Emby) now call this instead of
+  jumping straight to `loadLibrary()`. Settings side:
+  `refreshAvailableLibrarySections()`, `toggleLibrarySection(_:)` (mirrors
+  `toggleServer`: won't turn off the last enabled section, clears the saved
+  snapshot synchronously, then reloads), and `excludedSectionKeys(forServerID:)`,
+  which turns the persisted choice into the raw keys a backend's
+  `loadLibrary` expects.
+- `App/AppState+Library.swift`: the real scan call site now computes
+  `excludedSectionKeys(forServerID:)` per server and passes it into
+  `scanAPI.loadLibrary`, before the stall-watch wraps it. Computed outside
+  the `@Sendable operation:` closure (a `Set<String>` capture is Sendable;
+  `self` is not).
+- `App/AppState+Channels.swift`: the lighter collections sweep filters its
+  section list the same way, so a deselected section's collections aren't
+  read either.
+- `App/Plex90App.swift`: new `LibrarySelectionView`, patterned directly on
+  `ServerPickerView` (same two-column layout, same `.defaultFocus` on
+  CONTINUE, same accessibility identifier convention) — one row per section
+  across every chosen server, default every row ON. `RootView` shows it
+  right after `needsServerSelection`, before the normal routing.
+- `Views/BundleManagerView.swift`: a new "LIBRARIES" block in Settings,
+  same place and shape as "SERVERS" — one row per section, the same
+  "keep at least one on" guard, refreshed in a `.task` the same way the
+  server list already is.
+- `Analytics/AnalyticsEvent.swift`: new `connectLibrarySelectionConfirmed`
+  event (backend, section count, excluded count).
+- Seven existing `MediaBackend` test fakes (`BackendSwitchScheduleTests`,
+  `BigLibraryHarness`, `CollectionShowsTests`, `EmbyDolbyVisionChannelTests`,
+  `PlaybackFailureRunTests`, `PlaybackRecoveryOwnershipTests`,
+  `TelemetryVolumeHarness`) updated to the new protocol signature.
+  `LaunchGateTests` updated to mirror `RootView`'s new branch order.
+- `NostalgexTests/LibrarySelectionTests.swift` (new): a `SectionAwareBackend`
+  test double records every section key it actually fetched, in order — the
+  proof an excluded section is skipped before any request for it, not
+  fetched and discarded. Covers: the screen shows for >1 section and is
+  skipped for exactly 1 (existing single-library accounts see no change);
+  a deselected onboarding section never reaches the fake's fetch log; the
+  Settings toggle clears the snapshot synchronously (before the reload
+  `Task` even starts) and the following reload excludes the section from
+  both the fetch log and `allItems`; the last enabled section can't be
+  turned off. 936 tests passed, 0 failed, 13 skipped
+  (`xcodebuild test -scheme Nostalgex -only-testing:NostalgexTests`).
+
+**Not done.** Web tuner and Roku both still scan every section unconditionally.
+Per the spec this one is Apple TV first, as the reference; web tuner is next
+(same backends, same idea adapted to the connect flow in
+`plex-tuner.html`/`web-tuner.html`), Roku last, ported from whichever of the
+other two settles the pattern.
+
+**Next.** Chad reviews the branch and tries the screen and the Settings row
+on the simulator; once approved, port to the web tuner.
+
 ## 2026-10-29 (Roku: on-device Plex sign-in, branch only)
 
 **Shipped.** Nothing. Branch `roku/plex-password-signin`, cut from `main` at

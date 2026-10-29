@@ -222,6 +222,28 @@ class AppState {
 
     static let serversKey = "plex_servers"
 
+    // MARK: - Library selection (I-054)
+
+    /// True once servers are chosen and there is more than one library section to pick
+    /// from across them. Drives the onboarding `LibrarySelectionView`, the step between
+    /// server selection and the first scan. A backend with exactly one section never
+    /// sets this — there is nothing to choose, so existing single-library accounts see
+    /// no new screen.
+    var needsLibrarySelection: Bool = false
+    /// Sections the library-selection screen is currently showing (onboarding only).
+    /// Cleared once CONTINUE commits a choice.
+    var pendingLibrarySections: [LibrarySectionRef] = []
+    /// Sections last seen across every selected server, kept so Settings can show the
+    /// full list (including one picked off in onboarding) without a live re-fetch on
+    /// every render. Refreshed by `refreshAvailableLibrarySections()`, the same idea as
+    /// `availableServers`.
+    var availableLibrarySections: [LibrarySectionRef] = []
+    /// Which library sections are turned off, keyed by `LibrarySectionRef.id`. Loaded at
+    /// init (plain UserDefaults, like `enabledBundleIDs`), written through
+    /// `LibrarySectionSelectionStore` on every change. Default is empty — every section
+    /// on — until the onboarding screen or Settings turns one off.
+    var deselectedLibrarySectionKeys: Set<String> = LibrarySectionSelectionStore.load()
+
     // MARK: - App state
 
     var isConnected: Bool = false

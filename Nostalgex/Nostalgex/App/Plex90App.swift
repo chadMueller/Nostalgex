@@ -18,6 +18,8 @@ struct RootView: View {
                     TunerView(navigationPath: $navigationPath)
                 } else if appState.needsServerSelection {
                     ServerPickerView()
+                } else if appState.needsLibrarySelection {
+                    LibrarySelectionView()
                 } else if forceSettings {
                     SettingsView()
                 } else if !appState.didAttemptCredentialHydration {
@@ -519,6 +521,123 @@ private struct PickerRowButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Library selection (I-054): more than one library section to choose from
+
+/// Shown once per sign-in, right after server selection (or right after connect for
+/// Jellyfin/Emby, which never show `ServerPickerView`) and before the first scan. Same
+/// two-column layout as `ServerPickerView` on purpose — same screen family, one step
+/// later in the same flow. Default is every section ON: this is opting a library OUT,
+/// not opting one in, so leaving without touching anything still builds a full guide.
+struct LibrarySelectionView: View {
+    @Environment(AppState.self) var appState
+    @State private var includedIDs: Set<String> = []
+    @FocusState private var focusedID: String?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            HStack(alignment: .center, spacing: 80) {
+                // Left: branding + explanation
+                VStack(alignment: .leading, spacing: 28) {
+                    Image("NostalgexLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 440)
+
+                    Text("CHOOSE YOUR LIBRARIES")
+                        .font(.custom("DMMono-Medium", size: 40))
+                        .foregroundStyle(.white.opacity(0.9))
+
+                    Text("Pick which of your \(appState.backendDisplayName) libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.")
+                        .font(.custom("DMMono-Regular", size: 22))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .multilineTextAlignment(.leading)
+                        .lineSpacing(4)
+                        // Without this the copy clips to two lines and ellipsises.
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 560, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Right: section list + continue
+                VStack(alignment: .leading, spacing: 24) {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 12) {
+                            ForEach(appState.pendingLibrarySections) { section in
+                                sectionRow(section)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 560)
+
+                    Button("CONTINUE") {
+                        appState.confirmLibrarySelection(includedIDs: includedIDs)
+                    }
+                    .buttonStyle(OnboardingButtonStyle(role: .primary))
+                    .disabled(includedIDs.isEmpty)
+                    .focused($focusedID, equals: "continue")
+                    .accessibilityIdentifier("librarySelectionContinue")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 100)
+            .padding(.vertical, 60)
+        }
+        .defaultFocus($focusedID, "continue")
+        .onAppear {
+            // Default: every section on, so the remote starts on CONTINUE — one press
+            // builds a full guide without having to touch a single row.
+            includedIDs = Set(appState.pendingLibrarySections.map(\.id))
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                focusedID = "continue"
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionRow(_ section: LibrarySectionRef) -> some View {
+        let isOn = includedIDs.contains(section.id)
+        let isFocused = focusedID == section.id
+        // Only worth naming the server when more than one is in play (Plex multi-server);
+        // Jellyfin/Emby and single-server Plex just show the library's own kind.
+        let multiServer = Set(appState.pendingLibrarySections.map(\.serverID)).count > 1
+        Button {
+            if isOn { includedIDs.remove(section.id) }
+            else { includedIDs.insert(section.id) }
+        } label: {
+            // Same focus language as the connect screens and the server picker.
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(section.title)
+                        .font(.custom("DMMono-Medium", size: 28))
+                        .foregroundStyle(isFocused ? OnboardingPalette.onFocus : (isOn ? .white : .white.opacity(0.55)))
+                    Text(multiServer ? "\(section.serverName) · \(section.typeLabel)" : section.typeLabel)
+                        .font(.custom("DMMono-Regular", size: 18))
+                        .foregroundStyle(isFocused ? OnboardingPalette.onFocus.opacity(0.75) : .white.opacity(0.4))
+                }
+                Spacer()
+                Text(isOn ? "INCLUDED" : "OFF")
+                    .font(.custom("DMMono-Medium", size: 22))
+                    .foregroundStyle(isFocused ? OnboardingPalette.onFocus : (isOn ? OnboardingPalette.cyan : .white.opacity(0.35)))
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(
+                isFocused ? OnboardingPalette.cyan : .white.opacity(0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(
+                isFocused ? .clear : .white.opacity(0.18), lineWidth: 1.5))
+            .shadow(color: OnboardingPalette.cyan.opacity(isFocused ? 0.6 : 0), radius: 28)
+            .scaleEffect(isFocused ? 1.04 : 1.0)
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+        }
+        .buttonStyle(PickerRowButtonStyle())
+        .focused($focusedID, equals: section.id)
+        .accessibilityIdentifier("librarySection_\(section.id)")
     }
 }
 

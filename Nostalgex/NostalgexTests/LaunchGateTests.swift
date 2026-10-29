@@ -18,6 +18,7 @@ final class LaunchGateTests: XCTestCase {
     /// Mirrors RootView's branch order. Keep in sync with Plex90App.swift.
     private func rootShowsConnectScreen(_ s: AppState) -> Bool {
         if s.needsServerSelection { return false }
+        if s.needsLibrarySelection { return false }
         if !s.didAttemptCredentialHydration { return false }
         return !s.hasCredentials
     }

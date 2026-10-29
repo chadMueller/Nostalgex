@@ -68,7 +68,7 @@ final class PlaybackRecoveryOwnershipTests: XCTestCase {
         let serverID = "synthetic"
         let authHeaders: [String: String] = [:]
         func testConnection() async throws -> String { "synthetic" }
-        func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
+        func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
         func loadSections() async throws -> [PlexSection] { [] }
         func loadCollections(sectionKey: String) async throws -> [PlexCollection] { [] }
         func loadCollectionItems(collectionKey: String) async throws -> [String] { [] }

@@ -193,12 +193,80 @@ extension AppState {
         }
     }
 
-    /// Login picker confirmed: lock in the chosen servers and scan.
+    /// Login picker confirmed: lock in the chosen servers, then let library selection
+    /// decide whether to show its own screen before scanning.
     func confirmServerSelection(_ servers: [ServerRef]) {
         guard !servers.isEmpty else { return }
         Analytics.track(.connectServerPickerConfirmed(backend: .plex, serverCount: servers.count))
         completePlexSignIn(token: token, servers: servers)
         needsServerSelection = false
+        Task { await presentLibrarySelectionOrScan() }
+    }
+
+    // MARK: - Library selection (I-054)
+
+    /// Step 3 of sign-in: after servers are chosen, read every section across them and
+    /// either show the onboarding picker or, when there's only one section (or none
+    /// could be read), go straight to the scan — existing single-library accounts see
+    /// no new screen. Resets to "every section on" for this sign-in: a deselection is a
+    /// Settings-time choice from here on, not something carried in from whatever was
+    /// last connected on this device.
+    func presentLibrarySelectionOrScan() async {
+        deselectedLibrarySectionKeys = []
+        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+
+        let sections = await loadAllLibrarySections()
+        availableLibrarySections = sections
+
+        guard sections.count > 1 else {
+            // Nothing to choose (or sections couldn't be read right after sign-in —
+            // loadLibrary will raise its own connection error if the server is
+            // genuinely unreachable, so a transient read failure here shouldn't block
+            // the user on a screen with nothing on it).
+            await loadLibrary()
+            return
+        }
+
+        pendingLibrarySections = sections
+        needsLibrarySelection = true
+    }
+
+    /// Reads every library section across every currently selected server (or the raw
+    /// `serverURL`/`token` pair when no structured server list exists, e.g. demo/App
+    /// Review repro). Shared by onboarding and by Settings' refresh.
+    func loadAllLibrarySections() async -> [LibrarySectionRef] {
+        var collected: [LibrarySectionRef] = []
+        if selectedServers.isEmpty {
+            if let sections = try? await apiForServer(nil).loadSections() {
+                collected = sections.map {
+                    LibrarySectionRef(serverID: "", serverName: serverName, sectionKey: $0.key, title: $0.title, type: $0.type)
+                }
+            }
+        } else {
+            for server in selectedServers {
+                guard let sections = try? await apiForServer(server).loadSections() else { continue }
+                collected.append(contentsOf: sections.map {
+                    LibrarySectionRef(serverID: server.machineIdentifier, serverName: server.name, sectionKey: $0.key, title: $0.title, type: $0.type)
+                })
+            }
+        }
+        return collected
+    }
+
+    /// The onboarding library-selection screen confirmed a choice: persist which
+    /// sections stay off, then run the first scan — which will skip them entirely
+    /// (see `excludedSectionKeys(forServerID:)` and each backend's `loadLibrary`).
+    func confirmLibrarySelection(includedIDs: Set<String>) {
+        let excluded = pendingLibrarySections.filter { !includedIDs.contains($0.id) }
+        deselectedLibrarySectionKeys = Set(excluded.map(\.id))
+        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+        Analytics.track(.connectLibrarySelectionConfirmed(
+            backend: analyticsBackend,
+            sectionCount: pendingLibrarySections.count,
+            excludedCount: excluded.count
+        ))
+        needsLibrarySelection = false
+        pendingLibrarySections = []
         Task { await loadLibrary() }
     }
 
@@ -237,6 +305,60 @@ extension AppState {
                 ServerRef(machineIdentifier: $0.machineIdentifier, name: $0.name, baseURL: $0.bestReachableURI, owned: $0.owned, token: $0.token)
             }
         }
+    }
+
+    // MARK: - Library selection — Settings (I-054)
+
+    /// Re-reads every library section on every currently selected server, so Settings
+    /// can show the full set — including one picked off during onboarding — and
+    /// toggling it back on works without a relaunch. Mirrors `refreshAvailableServers`.
+    func refreshAvailableLibrarySections() async {
+        guard hasCredentials, !isDemoMode else { return }
+        availableLibrarySections = await loadAllLibrarySections()
+    }
+
+    /// Sections to show in Settings.
+    var librarySectionsForSettings: [LibrarySectionRef] { availableLibrarySections }
+
+    func isLibrarySectionDeselected(_ section: LibrarySectionRef) -> Bool {
+        deselectedLibrarySectionKeys.contains(section.id)
+    }
+
+    /// How many of the sections Settings currently knows about are turned on. Backs
+    /// the "keep at least one on" guard, the same one `toggleServer` already has for
+    /// servers — same reasoning: turning the last one off leaves nothing to scan.
+    var enabledLibrarySectionCount: Int {
+        librarySectionsForSettings.filter { !isLibrarySectionDeselected($0) }.count
+    }
+
+    /// Section keys to leave out of the scan for one specific server — the raw,
+    /// unprefixed `PlexSection.key` values a backend's `loadLibrary` expects, not
+    /// `LibrarySectionRef.id`. Used at every scan call site (the main library load and
+    /// the lighter collections sweep) so a deselected section is skipped by both.
+    func excludedSectionKeys(forServerID serverID: String) -> Set<String> {
+        let prefix = LibrarySectionRef.storageKey(serverID: serverID, sectionKey: "")
+        return Set(deselectedLibrarySectionKeys.compactMap { key -> String? in
+            guard key.hasPrefix(prefix) else { return nil }
+            return String(key.dropFirst(prefix.count))
+        })
+    }
+
+    /// Include/exclude one library section from Settings, then rescan. Mirrors
+    /// `toggleServer`: won't turn off the last enabled section, clears the saved
+    /// snapshot so a newly excluded section's items are actually gone from the next
+    /// build, and reloads so a newly re-included section is fetched again.
+    func toggleLibrarySection(_ section: LibrarySectionRef) {
+        let wasOn = !isLibrarySectionDeselected(section)
+        if wasOn {
+            guard enabledLibrarySectionCount > 1 else { return }
+            deselectedLibrarySectionKeys.insert(section.id)
+        } else {
+            deselectedLibrarySectionKeys.remove(section.id)
+        }
+        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+        Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
+        LibrarySnapshotStore.clear()
+        Task { await loadLibrary() }
     }
 
     /// Display name for a channel id, whether or not it has enough content to air.
@@ -763,7 +885,7 @@ extension AppState {
                             Analytics.track(.connectCompleted(backend: .plex, serverCount: availableServers.count))
                             if availableServers.count == 1 {
                                 completePlexSignIn(token: authToken, servers: availableServers)
-                                await loadLibrary()
+                                await presentLibrarySelectionOrScan()
                             } else {
                                 // Held in memory until the picker confirms; the token is
                                 // persisted together with the chosen servers.
@@ -899,7 +1021,7 @@ extension AppState {
 
         setSelectedServers([ref])   // persists selectedServers + syncs primary fields
         saveCredentials()           // persists backendKind, token, serverURL, jellyfinUserId
-        await loadLibrary()
+        await presentLibrarySelectionOrScan()
     }
 
     // MARK: - Emby Auth
@@ -962,7 +1084,7 @@ extension AppState {
 
         setSelectedServers([ref])
         saveCredentials()
-        await loadLibrary()
+        await presentLibrarySelectionOrScan()
     }
 
     /// Cleans up a typed Jellyfin / Emby address (see `ServerURLNormalizer`). Only used to

@@ -65,7 +65,7 @@ final class BackendSwitchScheduleTests: XCTestCase {
         }
 
         func testConnection() async throws -> String { serverID }
-        func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] {
+        func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress?) async throws -> [PlexMediaItem] {
             if let gate { await gate.wait() }
             try Task.checkCancellation()
             return items

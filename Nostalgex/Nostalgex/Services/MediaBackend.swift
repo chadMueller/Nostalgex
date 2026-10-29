@@ -38,7 +38,15 @@ protocol MediaBackend: Sendable {
     func testConnection() async throws -> String
 
     /// Loads every playable item across all libraries on this server.
-    func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem]
+    ///
+    /// `excludedSectionKeys` (I-054, library selection) is read BEFORE any items are
+    /// fetched: a section whose key is in this set is skipped entirely — never
+    /// requested, not requested and discarded — so a viewer who leaves a huge library
+    /// out of the scan never pays for reading it. Keys are raw `PlexSection.key`
+    /// values, scoped to this one server (the caller does any cross-server key
+    /// composition). An empty set (the default via the convenience overloads below)
+    /// scans every section, which is every existing call site's behavior unchanged.
+    func loadLibrary(excludedSectionKeys: Set<String>, progress: LoadProgress?) async throws -> [PlexMediaItem]
 
     /// Library sections/views on this server.
     func loadSections() async throws -> [PlexSection]
@@ -218,9 +226,16 @@ extension MediaBackend {
         thumbnailURL(for: item, width: 400)
     }
 
-    /// Default convenience matching the legacy `progress: nil` call sites.
+    /// Default convenience matching the legacy `progress: nil` call sites: every
+    /// section included.
     func loadLibrary() async throws -> [PlexMediaItem] {
-        try await loadLibrary(progress: nil)
+        try await loadLibrary(excludedSectionKeys: [], progress: nil)
+    }
+
+    /// Default convenience for callers that only care about progress reporting
+    /// (every existing call site before library selection) — every section included.
+    func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: [], progress: progress)
     }
 
     /// Default: no playback handshake — use the synchronous hand-built transcode URL with

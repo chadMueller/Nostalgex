@@ -202,7 +202,7 @@ final class EmbyDolbyVisionChannelTests: XCTestCase {
         let serverID = ""
         var authHeaders: [String: String] { [:] }
         func testConnection() async throws -> String { "lab" }
-        func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
+        func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress?) async throws -> [PlexMediaItem] { [] }
         func loadSections() async throws -> [PlexSection] { [PlexSection(key: "1", title: "Movies", type: "movie")] }
         func loadCollections(sectionKey: String) async throws -> [PlexCollection] {
             [PlexCollection(ratingKey: "c-lab", title: "Lab Set", childCount: nil, thumb: nil)]
