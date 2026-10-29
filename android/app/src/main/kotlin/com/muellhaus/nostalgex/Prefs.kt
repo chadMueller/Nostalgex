@@ -4,6 +4,7 @@ import android.content.Context
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -28,6 +29,11 @@ class Prefs(context: Context) {
     var servers: List<PlexServer>
         get() = prefs.getString("servers", null)?.let { runCatching { json.decodeFromString<List<PlexServer>>(it) }.getOrNull() } ?: emptyList()
         set(value) = prefs.edit().putString("servers", json.encodeToString(value)).apply()
+
+    /** The Jellyfin or Emby server signed in to; null on Plex. One backend at a time, as the Apple TV. */
+    var mediaBrowser: MediaBrowserServer?
+        get() = prefs.getString("mediaBrowser", null)?.let { runCatching { json.decodeFromString<MediaBrowserServer>(it) }.getOrNull() }
+        set(value) = prefs.edit().putString("mediaBrowser", value?.let { json.encodeToString(it) }).apply()
 
     /** "nostalgex" on a first launch, as the web tuner and the Apple TV. */
     var enabledBundles: Set<String>
@@ -62,7 +68,7 @@ class Prefs(context: Context) {
         get() = prefs.getString(StreamQuality.STORAGE_KEY, null) ?: StreamQuality.AUTO.id
         set(value) = prefs.edit().putString(StreamQuality.STORAGE_KEY, value).apply()
 
-    fun signOut() = prefs.edit().remove("plexToken").remove("servers").apply()
+    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser").apply()
 }
 
 /**

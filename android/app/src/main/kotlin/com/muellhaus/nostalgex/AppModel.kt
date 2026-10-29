@@ -29,6 +29,11 @@ import com.muellhaus.nostalgex.engine.ChannelFailureRun
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.Pick
+import com.muellhaus.nostalgex.mediabrowser.CheckedServer
+import com.muellhaus.nostalgex.mediabrowser.DiscoveredServer
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserHttpException
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.playback.Delivery
 import com.muellhaus.nostalgex.playback.Playback
 import com.muellhaus.nostalgex.plex.PlexClient
@@ -53,19 +58,54 @@ import kotlinx.serialization.json.jsonObject
 import java.time.ZoneId
 
 sealed interface Screen {
+    /** Plex's code, after CONNECT TO PLEX. */
     data class SignIn(val pin: PlexPin?, val error: String? = null) : Screen
+    /** The connect screens: the backend picker, then Jellyfin's find, check and sign-in. */
+    data class Connect(val step: ConnectStep, val message: String? = null, val error: String? = null) : Screen
     data class Loading(val headline: String, val detail: String = "") : Screen
     data class Failed(val message: String) : Screen
     data object NoChannels : Screen
     data object Watching : Screen
 }
 
+/** Where the connect screens are, as SettingsView.Screen and its waiting states. */
+sealed interface ConnectStep {
+    data object Picker : ConnectStep
+    data class Find(val kind: String, val discovery: Discovery = Discovery.Idle) : ConnectStep
+    data class TypeAddress(val kind: String) : ConnectStep
+    data class Checking(val kind: String, val label: String) : ConnectStep
+    data class SignIn(val server: CheckedServer) : ConnectStep
+    data class QuickConnect(val server: CheckedServer, val code: String?) : ConnectStep
+    data class SigningIn(val server: CheckedServer) : ConnectStep
+}
+
+/** LAN discovery on the find screen. */
+sealed interface Discovery {
+    data object Idle : Discovery
+    data object Searching : Discovery
+    data object NothingFound : Discovery
+    data class Several(val servers: List<DiscoveredServer>) : Discovery
+}
+
 /** Everything the screens show, and every action the remote takes. One per activity. */
 class AppModel(private val context: Context) : Playback.Listener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = Prefs(context)
-    private val plex = PlexClient(prefs.clientId, context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0")
-    val playback = Playback(context, plex, this)
+    private val versionName = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
+    private val plex = PlexClient(prefs.clientId, versionName)
+    private val mediaBrowser = MediaBrowserClient(prefs.clientId, versionName)
+    val playback = Playback(context, plex, mediaBrowser, this)
+
+    /** The Jellyfin or Emby server signed in to, read once from Prefs; null on Plex. */
+    private var mbServer: MediaBrowserServer? = prefs.mediaBrowser
+        set(value) {
+            field = value
+            prefs.mediaBrowser = value
+            playback.mediaBrowserServer = value
+        }
+
+    /** "Plex", "Jellyfin" or "Emby": the Apple TV's backendDisplayName, in its copy. */
+    val backendName: String get() = mbServer?.let { MediaBrowserClient.displayName(it.kind) } ?: "Plex"
 
     var screen: Screen by mutableStateOf(Screen.Loading("NOSTALGEX"))
         private set
@@ -300,6 +340,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     suspend fun poster(item: MediaItem): ImageBitmap? {
+        // Plex only, as on the Apple TV.
+        if (mbServer != null) return null
         val thumb = item.thumb ?: return null
         val server = item.serverUrl ?: return null
         val url = Uri.parse("$server/photo/:/transcode").buildUpon()
@@ -355,6 +397,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     init {
         playback.quality = streamQuality
+        playback.mediaBrowserServer = mbServer
         playback.player.addListener(object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) = onTracks(tracks)
             override fun onVideoSizeChanged(size: VideoSize) {
@@ -365,11 +408,19 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun start() {
-        if (prefs.plexToken != null && prefs.servers.isNotEmpty()) loadLibrary() else signIn()
+        if (mbServer != null || (prefs.plexToken != null && prefs.servers.isNotEmpty())) loadLibrary() else showPicker()
     }
 
     // ── Sign-in ──────────────────────────────────────────────────────────
 
+    /** The first connect screen: CONNECT TO PLEX, or Jellyfin. */
+    fun showPicker(error: String? = null) {
+        signInJob?.cancel()
+        connectJob?.cancel()
+        screen = Screen.Connect(ConnectStep.Picker, error = error)
+    }
+
+    /** CONNECT TO PLEX: the plex.tv/link code. */
     fun signIn() {
         signInJob?.cancel()
         screen = Screen.SignIn(null)
@@ -382,6 +433,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     delay(2000)
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
+                        mbServer = null
                         prefs.plexToken = token
                         screen = Screen.Loading("FINDING YOUR SERVERS")
                         val servers = try {
@@ -416,9 +468,176 @@ class AppModel(private val context: Context) : Playback.Listener {
         closeSettings()
         playback.stop()
         prefs.signOut()
+        mbServer = null
         libraryStore.clear()
         lineup = null
-        signIn()
+        showPicker()
+    }
+
+    // ── Jellyfin and Emby sign-in (SettingsView.swift and SignInFlow) ────
+
+    private var connectJob: Job? = null
+    private val connect get() = screen as? Screen.Connect
+
+    /** What was typed last, so a wrong address or password needn't be typed again in full. */
+    var lastAddress = ""
+    var lastUsername = ""
+
+    /** Back on a connect screen goes one step back; on the picker it leaves the app. */
+    val connectCanGoBack get() = screen is Screen.SignIn || (connect != null && connect?.step != ConnectStep.Picker)
+
+    fun connectBack() {
+        when (val step = connect?.step) {
+            null -> if (screen is Screen.SignIn) showPicker()
+            ConnectStep.Picker -> {}
+            is ConnectStep.Find -> showPicker()
+            is ConnectStep.TypeAddress -> backToFind(step.kind)
+            is ConnectStep.Checking -> backToFind(step.kind)
+            is ConnectStep.SignIn -> backToFind(step.server.kind)
+            is ConnectStep.QuickConnect -> backToFind(step.server.kind)
+            is ConnectStep.SigningIn -> usePassword(step.server)
+        }
+    }
+
+    private fun go(step: ConnectStep, message: String? = null, error: String? = null) {
+        screen = Screen.Connect(step, message, error)
+    }
+
+    /** JELLYFIN on the picker: the find screen, already searching. */
+    fun connectTo(kind: String) {
+        go(ConnectStep.Find(kind))
+        findServers(kind)
+    }
+
+    /** FIND MY SERVER, or SEARCH AGAIN. One answer goes straight to it. */
+    fun findServers(kind: String) {
+        connectJob?.cancel()
+        go(ConnectStep.Find(kind, Discovery.Searching))
+        connectJob = scope.launch {
+            val found = mediaBrowser.discover(kind)
+            when (found.size) {
+                0 -> go(ConnectStep.Find(kind, Discovery.NothingFound))
+                1 -> checkServer(kind, found[0].address, found[0].name)
+                else -> go(ConnectStep.Find(kind, Discovery.Several(found)))
+            }
+        }
+    }
+
+    fun typeAddress(kind: String) {
+        connectJob?.cancel()
+        go(ConnectStep.TypeAddress(kind))
+    }
+
+    /**
+     * Who is at this address, then the shortest way in it allows (SettingsView.checkServer and
+     * open). A failure says why on the screen the check started from.
+     */
+    fun checkServer(kind: String, address: String, label: String) {
+        val trimmed = address.trim()
+        if (trimmed.isEmpty()) return
+        connectJob?.cancel()
+        val from = (connect?.step as? ConnectStep.TypeAddress) ?: ConnectStep.Find(kind)
+        go(ConnectStep.Checking(kind, label))
+        connectJob = scope.launch {
+            val server = try {
+                mediaBrowser.check(trimmed)
+            } catch (e: java.io.IOException) {
+                go(from, message = unreachableMessage(e, MediaBrowserClient.displayName(kind)))
+                return@launch
+            }
+            if (server == null) {
+                go(from, message = "That address answered, but it isn't a Jellyfin or Emby server. Check the port (both use 8096 unless you changed it).")
+                return@launch
+            }
+            val switched = if (server.kind != kind) MediaBrowserClient.displayName(server.kind).let { "That address is a $it server, so this is a $it sign-in." } else null
+            go(ConnectStep.SignIn(server), message = switched)
+            if (server.prefersQuickConnect) startQuickConnect(server)
+        }
+    }
+
+    /** CANCEL while checking, or BACK: the find screen for this kind. */
+    fun backToFind(kind: String) {
+        connectJob?.cancel()
+        go(ConnectStep.Find(kind))
+    }
+
+    /** USE QUICK CONNECT: a code to approve in Jellyfin, polled every 2 s for 5 minutes. */
+    fun startQuickConnect(server: CheckedServer) {
+        connectJob?.cancel()
+        val message = connect?.message
+        go(ConnectStep.QuickConnect(server, null), message)
+        connectJob = scope.launch {
+            val qc = try {
+                mediaBrowser.quickConnectInitiate(server)
+            } catch (e: Exception) {
+                Log.w(TAG, "Quick Connect failed to start", e)
+                go(ConnectStep.SignIn(server), message, error = quickConnectFailure(e))
+                return@launch
+            }
+            go(ConnectStep.QuickConnect(server, qc.code), message)
+            repeat(150) {
+                delay(2000)
+                if (mediaBrowser.quickConnectApproved(server, qc)) {
+                    val signedIn = runCatching { mediaBrowser.quickConnectSignIn(server, qc) }.getOrNull()
+                    if (signedIn != null) finishSignIn(signedIn)
+                    else go(ConnectStep.SignIn(server), message, error = "Could not start Quick Connect. Check the server address, or sign in with your password.")
+                    return@launch
+                }
+            }
+            go(ConnectStep.SignIn(server), message, error = "The code expired. Press USE QUICK CONNECT for a new one, or sign in with your password.")
+        }
+    }
+
+    /** SIGN IN WITH A PASSWORD, or CANCEL while signing in. */
+    fun usePassword(server: CheckedServer) {
+        connectJob?.cancel()
+        go(ConnectStep.SignIn(server), connect?.message)
+    }
+
+    /** SIGN IN, or a user tile with no password. */
+    fun signInWithPassword(server: CheckedServer, username: String, password: String) {
+        if (username.isBlank()) {
+            go(ConnectStep.SignIn(server), connect?.message, error = "Enter your ${MediaBrowserClient.displayName(server.kind)} username.")
+            return
+        }
+        connectJob?.cancel()
+        val message = connect?.message
+        go(ConnectStep.SigningIn(server), message)
+        connectJob = scope.launch {
+            try {
+                val signedIn = mediaBrowser.signIn(server, username.trim(), password)
+                if (signedIn == null) go(ConnectStep.SignIn(server), message, error = "Incorrect username or password.")
+                else finishSignIn(signedIn)
+            } catch (e: Exception) {
+                Log.w(TAG, "Sign-in failed", e)
+                go(ConnectStep.SignIn(server), message, error = unreachableMessage(e, MediaBrowserClient.displayName(server.kind)))
+            }
+        }
+    }
+
+    private fun finishSignIn(server: MediaBrowserServer) {
+        prefs.signOut()
+        libraryStore.clear()
+        mbServer = server
+        loadLibrary()
+    }
+
+    /** AppState.serverUnreachableMessage, for the errors the JVM gives. */
+    private fun unreachableMessage(e: Throwable, backend: String): String = when (e) {
+        is java.net.UnknownHostException -> "Could not find that host. Check the address."
+        is java.net.ConnectException -> "Nothing answered at that address and port. Check the port (Jellyfin and Emby default to 8096)."
+        is java.net.SocketTimeoutException, is java.io.InterruptedIOException -> "The $backend server took too long to answer. Check the address, or that the TV can reach it."
+        is javax.net.ssl.SSLException -> "The server's HTTPS certificate is not trusted by this TV."
+        else -> "Could not reach the $backend server. Check the address."
+    }
+
+    /** AppState.quickConnectFailureMessage. */
+    private fun quickConnectFailure(e: Throwable): String = when {
+        e is MediaBrowserHttpException && e.code == 401 ->
+            "Quick Connect is off on this server. Turn it on in Jellyfin (Dashboard, then General), or sign in with your password."
+        e is MediaBrowserHttpException && e.code == 404 -> "That address answered, but it isn't Jellyfin. Check the address and port (Jellyfin uses 8096)."
+        e is java.io.IOException && e !is MediaBrowserHttpException -> unreachableMessage(e, "Jellyfin")
+        else -> "Could not start Quick Connect. Check the server address, or sign in with your password."
     }
 
     // ── Settings (BundleManagerView.swift's SettingsPageView) ────────────
@@ -480,11 +699,14 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** SERVERS: every server the account can reach, plus any switched on that didn't answer this time. */
     var availableServers: List<PlexServer> by mutableStateOf(emptyList())
         private set
-    val selectedServers: List<PlexServer> get() = prefs.servers
+    /** On Jellyfin, the one server signed in to, shown as the Apple TV does: a single row with no switch. */
+    val selectedServers: List<PlexServer>
+        get() = mbServer?.let { listOf(PlexServer(it.name, "${it.serverId}/${it.userId}", it.url, it.token)) } ?: prefs.servers
     val serversForSettings: List<PlexServer>
         get() = (availableServers + selectedServers).distinctBy { it.machineIdentifier }
 
     private fun refreshServers() {
+        if (mbServer != null) return
         val token = prefs.plexToken ?: return
         scope.launch {
             availableServers = runCatching { plex.discoverServers(token, includeShared = true) }.getOrDefault(availableServers)
@@ -493,7 +715,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** Switches a server's library in or out of the lineup; the last one stays. The library is then read again. */
     fun toggleServer(server: PlexServer) {
-        if (loadingLibrary || refreshing) return
+        if (loadingLibrary || refreshing || mbServer != null) return
         val current = prefs.servers
         val included = current.any { it.machineIdentifier == server.machineIdentifier }
         if (included && current.size <= 1) return
@@ -506,7 +728,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** RESCAN LIBRARY: read every server again behind the guide, as the launch refresh does. */
     fun rescanLibrary() {
         if (loadingLibrary || refreshing) return
-        refreshInBackground(prefs.servers, libraryItems)
+        refreshInBackground(selectedServers, libraryItems)
     }
 
     /** What the app holds, for the RESCAN LIBRARY row (LibraryDiagnostics.summary). */
@@ -562,7 +784,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         loadingLibrary = true
         scope.launch {
             try {
-                val servers = prefs.servers
+                val servers = selectedServers
                 val t0 = SystemClock.elapsedRealtime()
                 val saved = withContext(Dispatchers.IO) { libraryStore.load(servers) }
                 if (saved != null) {
@@ -572,8 +794,9 @@ class AppModel(private val context: Context) : Playback.Listener {
                     if (!show(buildLineup(saved, "saved"))) return@launch
                     refreshInBackground(servers, saved)
                 } else {
-                    screen = Screen.Loading("READING YOUR PLEX LIBRARY")
-                    val items = scan(servers) { detail -> screen = Screen.Loading("READING YOUR PLEX LIBRARY", detail) }
+                    val headline = "READING YOUR ${backendName.uppercase()} LIBRARY"
+                    screen = Screen.Loading(headline)
+                    val items = scan(servers) { detail -> screen = Screen.Loading(headline, detail) }
                     Log.i(TAG, "LIBRARY ${items.size} items from ${servers.size} server(s) read in ${SystemClock.elapsedRealtime() - t0} ms")
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
                     libraryItems = items
@@ -593,6 +816,10 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** AppState.userFacingPlexAPIServiceError: what CONNECTION FAILED says for each way a load fails. */
     private fun connectionFailure(e: Throwable): String = when {
         e is PlexHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
+        e is MediaBrowserHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
+        e is MediaBrowserHttpException -> "$backendName returned HTTP ${e.code}. Check the server is running, then try again."
+        mbServer != null && e is kotlinx.serialization.SerializationException -> "Invalid reply from $backendName. Disconnect and reconnect in Settings."
+        mbServer != null -> unreachableMessage(e, backendName)
         e is PlexHttpException -> "Plex (or your network path) returned HTTP ${e.code}. If you use a reverse proxy or custom domain, " +
             "confirm it proxies /library and /identity without injecting a login page. Then reconnect."
         e is kotlinx.serialization.SerializationException -> "Invalid reply from Plex. Disconnect and reconnect in Settings."
@@ -600,6 +827,9 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private suspend fun scan(servers: List<PlexServer>, onProgress: (String) -> Unit): List<MediaItem> {
+        mbServer?.let { mb ->
+            return mediaBrowser.scan(mb) { text, count -> scope.launch { onProgress("${mb.name} · $text · $count ITEMS") } }
+        }
         val library = PlexLibrary(plex)
         val items = ArrayList<MediaItem>()
         for (server in servers) {
@@ -647,7 +877,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         withContext(Dispatchers.Main) { bundles = config.bundles }
         // Only the wait: the parse itself runs while the library is read.
         val configMs = SystemClock.elapsedRealtime() - t0
-        val serverKey = "plex_" + prefs.servers.joinToString("_") { it.machineIdentifier }.replace(Regex("[^A-Za-z0-9]"), "_").take(60)
+        val serverKey = (mbServer?.let { "${it.kind}_${it.serverId}" } ?: ("plex_" + prefs.servers.joinToString("_") { it.machineIdentifier }))
+            .replace(Regex("[^A-Za-z0-9]"), "_").take(60)
         val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey)
         var built = 0
         val switchedOn = lineup.build(items, prefs.enabledBundles) { done, _ -> built = maxOf(built, done) }
@@ -713,7 +944,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         delivery = null
         if (pick == null) {
             playback.stop()
-            failure = PlaybackFailure.NoPlayableSource("Plex")
+            failure = PlaybackFailure.NoPlayableSource(backendName)
             return
         }
         playback.play(pick.item, pick.seekSeconds)

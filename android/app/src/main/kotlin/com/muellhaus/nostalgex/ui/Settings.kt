@@ -115,15 +115,15 @@ private fun MainPage(model: AppModel) {
             } ?: "never"
             ToggleRow(
                 title = "RESCAN LIBRARY",
-                subtitle = "${model.librarySummary()}\nLast updated $updated. Pull a fresh copy of your Plex library after adding content",
+                subtitle = "${model.librarySummary()}\nLast updated $updated. Pull a fresh copy of your ${model.backendName} library after adding content",
                 on = true,
                 showToggle = false,
                 loading = if (model.refreshing) "Updating…" else null,
                 modifier = Modifier.padding(top = u(8)),
             ) { model.rescanLibrary() }
             ToggleRow(
-                title = "DISCONNECT FROM PLEX",
-                subtitle = "Clears saved Plex access. Use when switching servers",
+                title = "DISCONNECT FROM ${model.backendName.uppercase()}",
+                subtitle = "Clears saved ${model.backendName} access. Use when switching servers",
                 on = true,
                 showToggle = false,
             ) { model.signOut() }
