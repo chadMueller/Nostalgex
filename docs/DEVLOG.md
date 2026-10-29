@@ -32,7 +32,7 @@ real stall and a control case before this fix was written.
   win. Every load path (`loadCurrentItem`, `retryLoad`, `fallbackToTranscode`)
   already calls `cancellables.removeAll()` immediately before
   `installFreshPlayer` runs, so the previous player's subscription is gone
-  before the new one is added — no leaked observer, and a channel change
+  before the new one is added, no leaked observer, and a channel change
   re-attaches fresh rather than relying on a stale subscription from the old
   `AVPlayer` instance. `expireSleepTimer` and `stopChannelAfterRepeatedFailures`
   now also set `isVideoPlaying = false` explicitly, since both pause the
@@ -56,7 +56,7 @@ simulated channel change (`cancellables.removeAll()` + a second
 player's state changes no longer reach `isVideoPlaying` while the new
 player's do. Full app target and `NostalgexTests` target both build clean for
 the tvOS simulator SDK (`xcodebuild build` / `build-for-testing`). The test
-suite itself was not run — that needs booting the tvOS Simulator, which is
+suite itself was not run, that needs booting the tvOS Simulator, which is
 on hold pending a go-ahead after an unrelated audio incident the same day.
 
 **Half-done.** The actual `xcodebuild test` run (and a hardware check that

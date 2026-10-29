@@ -1354,7 +1354,7 @@ extension AppState {
         // Keep `isVideoPlaying` mirrored to this exact player for as long as it's the
         // current one. Every load path (loadCurrentItem / retryLoad / fallbackToTranscode)
         // calls `cancellables.removeAll()` right before this function runs, so the previous
-        // player's subscription is already gone before this one is added — no leaked
+        // player's subscription is already gone before this one is added, no leaked
         // observer, and a channel change re-attaches fresh rather than relying on a stale
         // one left over from the old AVPlayer instance.
         fresh.publisher(for: \.timeControlStatus)

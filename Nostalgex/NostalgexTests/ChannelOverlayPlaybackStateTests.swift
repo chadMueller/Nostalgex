@@ -81,7 +81,7 @@ final class ChannelOverlayPlaybackStateTests: XCTestCase {
         // its subscription was already cancelled by `cancellables.removeAll()`, and the
         // sink's `self.player === fresh` identity guard would reject it even if it had
         // somehow survived. A leaked or wrongly-kept observer here would be the exact
-        // "stuck overlay" bug in a different shape — the tracked property fighting the
+        // "stuck overlay" bug in a different shape, the tracked property fighting the
         // view with the wrong player's state.
         firstPlayer?.play()
         try? await Task.sleep(for: .milliseconds(50))
