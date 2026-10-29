@@ -347,7 +347,7 @@ extension AppState {
             }
             // TV libraries too: a Plex collection of shows lives in the TV library, and
             // reading movie libraries only meant it was never even listed. A section
-            // the viewer turned off in library selection (I-054) is left out here too —
+            // the viewer turned off in library selection (I-054) is left out here too,
             // its collections are never read, same as its items never are.
             let excludedKeys = excludedSectionKeys(forServerID: server.machineIdentifier)
             let collectionSections = sections.filter {

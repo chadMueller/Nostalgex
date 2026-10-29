@@ -210,7 +210,7 @@ extension AppState {
                 let serverLabel = serverIndex < serverNames.count ? serverNames[serverIndex] : "Plex"
                 let baseCount = merged.count
                 // Computed outside the `@Sendable operation:` closure below (a `Set<String>`
-                // local capture is trivially Sendable; `self` is not) — see each backend's
+                // local capture is trivially Sendable; `self` is not), see each backend's
                 // `loadLibrary`: a key in here is skipped before any item request for it.
                 let excludedKeys = excludedSectionKeys(forServerID: scanAPI.serverID)
                 do {

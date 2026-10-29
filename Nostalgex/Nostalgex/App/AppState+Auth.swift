@@ -207,7 +207,7 @@ extension AppState {
 
     /// Step 3 of sign-in: after servers are chosen, read every section across them and
     /// either show the onboarding picker or, when there's only one section (or none
-    /// could be read), go straight to the scan — existing single-library accounts see
+    /// could be read), go straight to the scan, existing single-library accounts see
     /// no new screen. Resets to "every section on" for this sign-in: a deselection is a
     /// Settings-time choice from here on, not something carried in from whatever was
     /// last connected on this device.
@@ -219,7 +219,7 @@ extension AppState {
         availableLibrarySections = sections
 
         guard sections.count > 1 else {
-            // Nothing to choose (or sections couldn't be read right after sign-in —
+            // Nothing to choose (or sections couldn't be read right after sign-in,
             // loadLibrary will raise its own connection error if the server is
             // genuinely unreachable, so a transient read failure here shouldn't block
             // the user on a screen with nothing on it).
@@ -254,7 +254,7 @@ extension AppState {
     }
 
     /// The onboarding library-selection screen confirmed a choice: persist which
-    /// sections stay off, then run the first scan — which will skip them entirely
+    /// sections stay off, then run the first scan, which will skip them entirely
     /// (see `excludedSectionKeys(forServerID:)` and each backend's `loadLibrary`).
     func confirmLibrarySelection(includedIDs: Set<String>) {
         let excluded = pendingLibrarySections.filter { !includedIDs.contains($0.id) }
@@ -307,10 +307,10 @@ extension AppState {
         }
     }
 
-    // MARK: - Library selection — Settings (I-054)
+    // MARK: - Library selection, Settings (I-054)
 
     /// Re-reads every library section on every currently selected server, so Settings
-    /// can show the full set — including one picked off during onboarding — and
+    /// can show the full set, including one picked off during onboarding, and
     /// toggling it back on works without a relaunch. Mirrors `refreshAvailableServers`.
     func refreshAvailableLibrarySections() async {
         guard hasCredentials, !isDemoMode else { return }
@@ -326,12 +326,12 @@ extension AppState {
 
     /// How many of the sections Settings currently knows about are turned on. Backs
     /// the "keep at least one on" guard, the same one `toggleServer` already has for
-    /// servers — same reasoning: turning the last one off leaves nothing to scan.
+    /// servers, same reasoning: turning the last one off leaves nothing to scan.
     var enabledLibrarySectionCount: Int {
         librarySectionsForSettings.filter { !isLibrarySectionDeselected($0) }.count
     }
 
-    /// Section keys to leave out of the scan for one specific server — the raw,
+    /// Section keys to leave out of the scan for one specific server, the raw,
     /// unprefixed `PlexSection.key` values a backend's `loadLibrary` expects, not
     /// `LibrarySectionRef.id`. Used at every scan call site (the main library load and
     /// the lighter collections sweep) so a deselected section is skipped by both.

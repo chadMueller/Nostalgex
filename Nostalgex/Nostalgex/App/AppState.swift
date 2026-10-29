@@ -227,7 +227,7 @@ class AppState {
     /// True once servers are chosen and there is more than one library section to pick
     /// from across them. Drives the onboarding `LibrarySelectionView`, the step between
     /// server selection and the first scan. A backend with exactly one section never
-    /// sets this — there is nothing to choose, so existing single-library accounts see
+    /// sets this, there is nothing to choose, so existing single-library accounts see
     /// no new screen.
     var needsLibrarySelection: Bool = false
     /// Sections the library-selection screen is currently showing (onboarding only).
@@ -240,8 +240,8 @@ class AppState {
     var availableLibrarySections: [LibrarySectionRef] = []
     /// Which library sections are turned off, keyed by `LibrarySectionRef.id`. Loaded at
     /// init (plain UserDefaults, like `enabledBundleIDs`), written through
-    /// `LibrarySectionSelectionStore` on every change. Default is empty — every section
-    /// on — until the onboarding screen or Settings turns one off.
+    /// `LibrarySectionSelectionStore` on every change. Default is empty, every section
+    /// on, until the onboarding screen or Settings turns one off.
     var deselectedLibrarySectionKeys: Set<String> = LibrarySectionSelectionStore.load()
 
     // MARK: - App state

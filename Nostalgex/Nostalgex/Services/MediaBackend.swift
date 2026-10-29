@@ -40,8 +40,8 @@ protocol MediaBackend: Sendable {
     /// Loads every playable item across all libraries on this server.
     ///
     /// `excludedSectionKeys` (I-054, library selection) is read BEFORE any items are
-    /// fetched: a section whose key is in this set is skipped entirely — never
-    /// requested, not requested and discarded — so a viewer who leaves a huge library
+    /// fetched: a section whose key is in this set is skipped entirely, never
+    /// requested, not requested and discarded, so a viewer who leaves a huge library
     /// out of the scan never pays for reading it. Keys are raw `PlexSection.key`
     /// values, scoped to this one server (the caller does any cross-server key
     /// composition). An empty set (the default via the convenience overloads below)
@@ -233,7 +233,7 @@ extension MediaBackend {
     }
 
     /// Default convenience for callers that only care about progress reporting
-    /// (every existing call site before library selection) — every section included.
+    /// (every existing call site before library selection), every section included.
     func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] {
         try await loadLibrary(excludedSectionKeys: [], progress: progress)
     }

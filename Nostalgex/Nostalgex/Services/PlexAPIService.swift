@@ -214,7 +214,7 @@ struct PlexAPIService: MediaBackend {
         let allSections = try Self.decodePlexJSONResponse(SectionsResponse.self, data: sectionsData, response: response)
             .MediaContainer.Directory ?? []
         // A section the viewer turned off in library selection (I-054) is dropped here,
-        // before a single item request for it is made — never fetched, not fetched
+        // before a single item request for it is made, never fetched, not fetched
         // and discarded.
         let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
 

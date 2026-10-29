@@ -1,8 +1,8 @@
 import Foundation
 
 /// One library section a backend can show on the library-selection screen (onboarding)
-/// or in Settings. `serverID` scopes `sectionKey`, which is only unique per server —
-/// two different Plex servers can both number their first section "1" — the same way
+/// or in Settings. `serverID` scopes `sectionKey`, which is only unique per server,
+/// two different Plex servers can both number their first section "1", the same way
 /// `PlexMediaItem.serverID` scopes a rating key.
 ///
 /// See `docs/LIBRARY-SELECTION.md` (nostalgex-internal, I-054) for the feature spec.
@@ -40,7 +40,7 @@ struct LibrarySectionRef: Identifiable, Hashable, Sendable {
 /// explicit that this is opting OUT, not opting in, so nobody lands on an empty guide
 /// by not noticing the selection screen or by a new library appearing on their server
 /// later. Plain UserDefaults, like the other simple on/off settings (enabled bundles,
-/// enabled collections) — nothing here is a credential.
+/// enabled collections), nothing here is a credential.
 enum LibrarySectionSelectionStore {
     private static let key = "nostalgex_deselected_library_sections"
 

@@ -793,7 +793,7 @@ struct SettingsPageView: View {
                     detail: isOn ? "INCLUDED" : "OFF",
                     isOn: isOn,
                     isFocused: focusedItem == "section_\(section.id)",
-                    // No toggle when it's the only section left on — it can't be removed.
+                    // No toggle when it's the only section left on, it can't be removed.
                     showToggle: !isLast
                 ) {
                     guard !isLast, !appState.isLoading, !appState.isBackgroundRefreshing else { return }

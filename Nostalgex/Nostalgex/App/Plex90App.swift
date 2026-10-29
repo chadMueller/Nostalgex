@@ -13,7 +13,7 @@ struct RootView: View {
         // library-selection screen or the full Settings page (SERVERS/LIBRARIES), with
         // canned sections, for a screenshot or a manual check with no server required.
         // The `.task` below sets `pendingLibrarySections` and THEN `needsLibrarySelection`
-        // — same order `presentLibrarySelectionOrScan()` uses — so the view never mounts
+        //, same order `presentLibrarySelectionOrScan()` uses, so the view never mounts
         // on an empty list and defaults every row to off.
         let forceSettingsPage = ProcessInfo.processInfo.arguments.contains("-uiTestForceSettingsPage")
         let uiTestInstantAuth = ProcessInfo.processInfo.arguments.contains("-uiTestInstantAuth")
@@ -557,7 +557,7 @@ private struct PickerRowButtonStyle: ButtonStyle {
 
 /// Shown once per sign-in, right after server selection (or right after connect for
 /// Jellyfin/Emby, which never show `ServerPickerView`) and before the first scan. Same
-/// two-column layout as `ServerPickerView` on purpose — same screen family, one step
+/// two-column layout as `ServerPickerView` on purpose, same screen family, one step
 /// later in the same flow. Default is every section ON: this is opting a library OUT,
 /// not opting one in, so leaving without touching anything still builds a full guide.
 struct LibrarySelectionView: View {
@@ -617,7 +617,7 @@ struct LibrarySelectionView: View {
         }
         .defaultFocus($focusedID, "continue")
         .onAppear {
-            // Default: every section on, so the remote starts on CONTINUE — one press
+            // Default: every section on, so the remote starts on CONTINUE, one press
             // builds a full guide without having to touch a single row.
             includedIDs = Set(appState.pendingLibrarySections.map(\.id))
             Task { @MainActor in

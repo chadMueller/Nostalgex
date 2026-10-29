@@ -35,12 +35,12 @@ everything and hoping. Spec: `projects/nostalgex-internal/docs/LIBRARY-SELECTION
   Default is every section ON (absent = on): this is opting a library OUT,
   not opting one in, so nobody lands on an empty guide by not noticing a
   screen or because a new library showed up later.
-- `App/AppState.swift`: new state — `needsLibrarySelection`,
+- `App/AppState.swift`: new state, `needsLibrarySelection`,
   `pendingLibrarySections` (what the onboarding screen shows),
   `availableLibrarySections` (what Settings shows), and
   `deselectedLibrarySectionKeys`.
 - `App/AppState+Auth.swift`: `presentLibrarySelectionOrScan()` is the new
-  step between server selection and the first scan — reads every section
+  step between server selection and the first scan, reads every section
   across the chosen servers, shows the picker when there's more than one,
   otherwise scans immediately (existing single-library accounts see no new
   screen). `confirmLibrarySelection(includedIDs:)` commits the onboarding
@@ -62,11 +62,11 @@ everything and hoping. Spec: `projects/nostalgex-internal/docs/LIBRARY-SELECTION
   read either.
 - `App/Plex90App.swift`: new `LibrarySelectionView`, patterned directly on
   `ServerPickerView` (same two-column layout, same `.defaultFocus` on
-  CONTINUE, same accessibility identifier convention) — one row per section
+  CONTINUE, same accessibility identifier convention), one row per section
   across every chosen server, default every row ON. `RootView` shows it
   right after `needsServerSelection`, before the normal routing.
 - `Views/BundleManagerView.swift`: a new "LIBRARIES" block in Settings,
-  same place and shape as "SERVERS" — one row per section, the same
+  same place and shape as "SERVERS", one row per section, the same
   "keep at least one on" guard, refreshed in a `.task` the same way the
   server list already is.
 - `Analytics/AnalyticsEvent.swift`: new `connectLibrarySelectionConfirmed`
@@ -77,7 +77,7 @@ everything and hoping. Spec: `projects/nostalgex-internal/docs/LIBRARY-SELECTION
   `TelemetryVolumeHarness`) updated to the new protocol signature.
   `LaunchGateTests` updated to mirror `RootView`'s new branch order.
 - `NostalgexTests/LibrarySelectionTests.swift` (new): a `SectionAwareBackend`
-  test double records every section key it actually fetched, in order — the
+  test double records every section key it actually fetched, in order, the
   proof an excluded section is skipped before any request for it, not
   fetched and discarded. Covers: the screen shows for >1 section and is
   skipped for exactly 1 (existing single-library accounts see no change);

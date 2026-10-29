@@ -2,11 +2,11 @@ import XCTest
 @testable import Nostalgex
 
 /// I-054: a library section the viewer turns off (onboarding or Settings) must never be
-/// fetched during a scan — not fetched and then discarded. These tests drive the real
+/// fetched during a scan, not fetched and then discarded. These tests drive the real
 /// sign-in gate (`presentLibrarySelectionOrScan`), the real scan wiring
 /// (`excludedSectionKeys(forServerID:)` feeding each backend's `loadLibrary`), and the
 /// real Settings toggle (`toggleLibrarySection`) against a backend instrumented to
-/// record which section keys it actually fetched — the proof is in that log, not just
+/// record which section keys it actually fetched, the proof is in that log, not just
 /// in the final item list, which a post-hoc filter could also produce.
 @MainActor
 final class LibrarySelectionTests: XCTestCase {
@@ -23,7 +23,7 @@ final class LibrarySelectionTests: XCTestCase {
 
     /// Hands back canned items per section and records every section key it actually
     /// fetched items for, in call order. A key missing from that log was skipped before
-    /// any request for it went out — not requested and discarded afterward.
+    /// any request for it went out, not requested and discarded afterward.
     private final class SectionAwareBackend: MediaBackend, @unchecked Sendable {
         let serverID: String
         let sections: [PlexSection]
@@ -134,7 +134,7 @@ final class LibrarySelectionTests: XCTestCase {
         await state.presentLibrarySelectionOrScan()
 
         XCTAssertFalse(state.needsLibrarySelection, "a single-section backend must see no new screen")
-        XCTAssertEqual(backend.fetchedSectionKeys, ["1"], "the one section must still be scanned automatically — no behavior change")
+        XCTAssertEqual(backend.fetchedSectionKeys, ["1"], "the one section must still be scanned automatically, no behavior change")
     }
 
     // MARK: - Exclusion is real: a deselected section is never fetched by the scan
@@ -196,7 +196,7 @@ final class LibrarySelectionTests: XCTestCase {
         state.toggleLibrarySection(sectionB)
 
         // Synchronous: the snapshot clear runs before the reload Task is even spawned,
-        // so this must already be gone the instant the call returns — not eventually,
+        // so this must already be gone the instant the call returns, not eventually,
         // once some background reload gets around to it.
         XCTAssertNil(try? LibrarySnapshotStore.loadIfValid(identity: state.snapshotIdentitySeed), "toggling a section must clear the snapshot immediately")
         XCTAssertTrue(state.isLibrarySectionDeselected(sectionB))
