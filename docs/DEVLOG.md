@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (publish moving from Plex to Jellyfin or Emby)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/plex-to-jellyfin-emby-cable-guide`.
+
+**Why.** Today's post: Nostalgex already works with Plex, Jellyfin and Emby, so pointing the app at a new server rebuilds the same channel guide from that library. The copy was already approved (`draft: false`, date 2026-10-29); this session only put the file in `content/blog` and recorded the image sizes.
+
+**Changed.**
+- `content/blog/plex-to-jellyfin-emby-cable-guide.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/plex-to-jellyfin-emby-cable-guide/cover.jpg` is 1200x630. The inline phone sign-in shot `web-tuner-signin-mobile.png` is 1290x2796. The reused TEEN MOVIES guide still from the 1.0.26 post was already listed at 1280x720. All three R2 URLs returned 200. Cover 88,670 bytes; the phone PNG 517,048 bytes; the reused still 57,528 bytes. Images stay on R2; none committed.
+- `npm run blog:render` wrote twelve live posts into `public/sitemap.xml`, including `/blog/plex-to-jellyfin-emby-cable-guide` with lastmod 2026-10-29. `/blog` lastmod is 2026-10-29. `npm run build` emitted the post to `dist/blog/plex-to-jellyfin-emby-cable-guide.html` with width/height on all three images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-10-28 (web tuner: an empty guide says so, issue #129)
 
 **Shipped.** Nothing until this lands on main. Branch `fix/129-empty-guide-state`, off main `52b5139`.
