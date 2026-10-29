@@ -674,6 +674,16 @@ class AppState {
     /// entered again on transcode fallback / retry. Reset in `loadCurrentItem`.
     var playbackReadyReported: Bool = false
     var player: AVPlayer?
+
+    /// Mirrors `player.timeControlStatus == .playing`, kept in sync by KVO in
+    /// `installFreshPlayer` (see AppState+Playback.swift). `timeControlStatus` lives on the
+    /// plain AVPlayer, not on an `@Observable` property, so SwiftUI has no reliable reason
+    /// to re-render when it changes on its own. A view that read the AVPlayer live (as
+    /// PlayerView used to) could show a stall-triggered overlay and then never get another
+    /// render to clear it once the stall cleared. This property gives SwiftUI something it
+    /// actually observes.
+    var isVideoPlaying: Bool = false
+
     var playbackState: PlaybackState = .idle {
         didSet { if playbackState != oldValue { refreshNowPlayingInfo() } }
     }

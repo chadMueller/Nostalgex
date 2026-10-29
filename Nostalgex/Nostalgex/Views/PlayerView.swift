@@ -56,8 +56,16 @@ struct PlayerView: View {
             }
 
             // Channel OSD -- always visible when not playing, timed when playing
+            //
+            // Reads `appState.isVideoPlaying` (an @Observable tracked property, kept in sync
+            // by KVO in AppState+Playback.swift) rather than `appState.player?.timeControlStatus`
+            // directly. `timeControlStatus` lives on the plain AVPlayer, so SwiftUI has no
+            // reliable reason to re-render when it changes on its own: a brief stall could
+            // flip it away from `.playing`, show the overlay on whatever render happened to
+            // land at that moment, then never get another render once the stall cleared --
+            // leaving the overlay stuck on screen until an unrelated interaction forced one.
             if let channel = appState.currentChannel, let item = appState.currentItem {
-                let videoActive = appState.player?.timeControlStatus == .playing
+                let videoActive = appState.isVideoPlaying
                 if showOSD || !videoActive {
                     ChannelOSD(
                         channel: channel,

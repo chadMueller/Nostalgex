@@ -3,6 +3,73 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (Apple TV: channel overlay stuck on after a stall, branch only)
+
+**Shipped.** Nothing. Branch `fix/channel-overlay-stuck`, cut from `origin/main`
+at `ee2f5d9`, not merged, not pushed.
+
+**Why.** The channel info overlay could reappear during playback after a brief
+stall and then stay on screen for good (Trello gENSCnj1). `PlayerView` read
+`appState.player?.timeControlStatus == .playing` live inside the view body to
+decide whether to show the overlay. `timeControlStatus` lives on the plain
+`AVPlayer`, not on an `@Observable` property, so SwiftUI had no reliable
+reason to re-render when it changed on its own. A brief stall flips it away
+from `.playing`; if any unrelated render happened to land at that moment, the
+overlay showed; once the stall cleared, nothing forced another render, so it
+sat there until some other interaction (channel change, Play/Pause, Back)
+happened to redraw the view. A tester harness reproduced the mechanism with a
+real stall and a control case before this fix was written.
+
+**Changed.**
+
+- `Nostalgex/Nostalgex/App/AppState.swift`: new tracked property
+  `isVideoPlaying: Bool`, mirroring `player.timeControlStatus == .playing`.
+- `Nostalgex/Nostalgex/App/AppState+Playback.swift`: `installFreshPlayer` now
+  subscribes to the fresh `AVPlayer`'s `timeControlStatus` via KVO (same
+  pattern as the existing Now Playing heartbeat observer in
+  `installStarvationMonitor`) and mirrors it into `isVideoPlaying`, guarded on
+  `self.player === fresh` so a stale observer from a retired player can never
+  win. Every load path (`loadCurrentItem`, `retryLoad`, `fallbackToTranscode`)
+  already calls `cancellables.removeAll()` immediately before
+  `installFreshPlayer` runs, so the previous player's subscription is gone
+  before the new one is added — no leaked observer, and a channel change
+  re-attaches fresh rather than relying on a stale subscription from the old
+  `AVPlayer` instance. `expireSleepTimer` and `stopChannelAfterRepeatedFailures`
+  now also set `isVideoPlaying = false` explicitly, since both pause the
+  player without installing a new one (and the latter already cleared
+  `cancellables` first, so nothing else would flip it back).
+- `Nostalgex/Nostalgex/App/AppState+Auth.swift`: `disconnect()` resets
+  `isVideoPlaying = false` alongside `player = nil`.
+- `Nostalgex/Nostalgex/Views/PlayerView.swift`: the channel OSD visibility
+  check now reads `appState.isVideoPlaying` instead of
+  `appState.player?.timeControlStatus`.
+- `installFreshPlayer` changed from `private` to internal visibility so tests
+  can drive it directly with a real `AVPlayer`.
+
+**Tests.** New `Nostalgex/NostalgexTests/ChannelOverlayPlaybackStateTests.swift`:
+drives a real `AVPlayer` through `installFreshPlayer` and confirms (1) a
+`timeControlStatus` change (`play()`/`pause()`) actually updates
+`isVideoPlaying`, polling rather than asserting immediately since the KVO
+sink is routed through `.receive(on: DispatchQueue.main)`; and (2) across a
+simulated channel change (`cancellables.removeAll()` + a second
+`installFreshPlayer` call, matching the real load paths), the retired
+player's state changes no longer reach `isVideoPlaying` while the new
+player's do. Full app target and `NostalgexTests` target both build clean for
+the tvOS simulator SDK (`xcodebuild build` / `build-for-testing`). The test
+suite itself was not run — that needs booting the tvOS Simulator, which is
+on hold pending a go-ahead after an unrelated audio incident the same day.
+
+**Half-done.** The actual `xcodebuild test` run (and a hardware check that
+the overlay no longer gets stuck after a real stall) is unverified. Needs the
+go-ahead to use the simulator, then `NostalgexTests` must show green before
+this merges.
+
+**Next.** Get the go to run `NostalgexTests` on the tvOS Simulator. If green,
+this is ready for the normal review/merge path; no device hardware check is
+strictly required since the fix is pure state-propagation (no new playback
+behavior), but one on the Apple TV would be a reasonable final check given
+"schedule and playback are the product."
+
 ## 2026-10-29 (Roku: on-device Plex sign-in, branch only)
 
 **Shipped.** Nothing. Branch `roku/plex-password-signin`, cut from `main` at

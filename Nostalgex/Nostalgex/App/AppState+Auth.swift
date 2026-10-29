@@ -685,6 +685,7 @@ extension AppState {
         stopActiveTranscodeIfNeeded()
         player?.pause()
         player = nil
+        isVideoPlaying = false
         currentChannel = nil
         currentItem = nil
         playbackState = .idle
