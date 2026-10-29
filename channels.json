@@ -1,5 +1,5 @@
 {
-  "version": 43,
+  "version": 44,
   "exclusiveRules": [
     {
       "channelIDs": [
@@ -2342,7 +2342,8 @@
         "genres": {
           "include": [
             "Comedy",
-            "Documentary"
+            "Documentary",
+            "Stand-Up"
           ]
         },
         "keywords": [
@@ -2350,9 +2351,16 @@
           "comedian"
         ],
         "keywordsRequireAnyGenre": [
-          "Comedy"
+          "Comedy",
+          "Documentary",
+          "Stand-Up"
         ],
-        "manifestOnly": true
+        "keywordGatedGenres": [
+          "Comedy",
+          "Documentary"
+        ],
+        "manifestOnly": true,
+        "manifestOnlyGenreFallback": true
       }
     },
     {

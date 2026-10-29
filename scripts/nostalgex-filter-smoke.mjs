@@ -128,6 +128,49 @@ const manifest = { items: { "movie:555": { channels: [906], exclusive: null }, "
 const moCh = { id: 906, rules: { manifestOnly: true, genres: { include: ["Comedy"] } } };
 check("manifestOnly: unclaimed item rejected even on genre match", passes(item({ genres: ["Comedy"] }), moCh, { manifest }), false);
 check("manifest claim: claimed item passes without genre match", passes(item({ tmdbID: 555 }), moCh, { manifest }), true);
+
+// manifestOnlyGenreFallback: a manifestOnly channel can opt in to a second,
+// additive claim path (STAND-UP's real shape). The gate is per-channel, keyed
+// off keywordGatedGenres, not automatic — the same bare genre that's rejected
+// above still gets rejected here unless the channel's own rules let it through
+// ungated or via a keyword.
+const moFallbackCh = {
+  id: 908,
+  rules: {
+    manifestOnly: true,
+    manifestOnlyGenreFallback: true,
+    genres: { include: ["Comedy", "Stand-Up"] },
+    keywords: ["stand-up comedy"],
+    keywordGatedGenres: ["Comedy"],
+  },
+};
+check(
+  "manifestOnlyGenreFallback off: unclaimed genre match still rejected (moCh has no opt-in)",
+  passes(item({ genres: ["Stand-Up"] }), moCh, { manifest }),
+  false,
+);
+check(
+  "manifestOnlyGenreFallback on: narrow ungated genre tag reaches the channel unclaimed",
+  passes(item({ genres: ["Stand-Up"] }), moFallbackCh, { manifest }),
+  true,
+);
+check(
+  "manifestOnlyGenreFallback on: the gated bare genre alone still fails without the keyword",
+  passes(item({ genres: ["Comedy"] }), moFallbackCh, { manifest }),
+  false,
+);
+check(
+  "manifestOnlyGenreFallback on: the keyword unlocks the gated bare genre",
+  passes(item({ genres: ["Comedy"], enrichment: { keywords: ["stand-up comedy"] } }), moFallbackCh, { manifest }),
+  true,
+);
+check(
+  "manifestOnlyGenreFallback on: an existing manifest claim still works too (additive, not a replacement)",
+  passes(item({ tmdbID: 909, genres: ["Drama"] }), moFallbackCh, {
+    manifest: { items: { "movie:909": { channels: [908], exclusive: null } } },
+  }),
+  true,
+);
 check("manifest exclusive: locked item blocked elsewhere", passes(item({ tmdbID: 777, genres: ["Drama"] }), plainCh, { manifest }), false);
 
 // A manifest claim must not bypass the channel's own genres.exclude. The manifest

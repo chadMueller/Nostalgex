@@ -2172,6 +2172,232 @@
       "out": [
         20
       ]
+    },
+    {
+      "name": "standup-genre-tells-alone-reach-stand-up-without-manifest-or-keyword",
+      "about": "STAND-UP opts in to manifestOnlyGenreFallback: a narrow server genre tag like 'Stand-Up' is specific enough to reach the channel on its own, with no manifest claim and no TMDB keyword needed.",
+      "item": {
+        "title": "A Server-Tagged Special",
+        "year": 2020,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ]
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "standup-compound-genre-tag-reaches-stand-up",
+      "about": "keywordGatedGenres gates on an EXACT genre match, so a compound tag like 'Stand-up Comedy' is not the bare 'Comedy' the gate blocks; it reaches STAND-UP without the TMDB keyword.",
+      "item": {
+        "title": "Another Server-Tagged Special",
+        "year": 2019,
+        "type": "movie",
+        "genres": [
+          "Stand-up Comedy"
+        ]
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "standup-comedy-special-genre-tag-reaches-stand-up",
+      "about": "Same exact-match gating gap as 'Stand-up Comedy': 'Comedy Special' reaches STAND-UP ungated.",
+      "item": {
+        "title": "Yet Another Server-Tagged Special",
+        "year": 2021,
+        "type": "movie",
+        "genres": [
+          "Comedy Special"
+        ]
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "standup-keyword-unlocks-bare-comedy-genre",
+      "about": "A bare 'Comedy' genre tag is gated by keywordGatedGenres, but the TMDB 'stand-up comedy' keyword unlocks it, same as any other keyword-gated channel.",
+      "item": {
+        "title": "A TMDB-Tagged Special",
+        "year": 2018,
+        "type": "movie",
+        "genres": [
+          "Comedy"
+        ],
+        "enrichment": {
+          "keywords": [
+            "stand-up comedy"
+          ]
+        }
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "anchorman-ordinary-comedy-film-stays-off-stand-up",
+      "about": "Guard: manifestOnlyGenreFallback must not turn STAND-UP into a catch-all for ordinary Comedy films. Anchorman carries only the gated 'Comedy' genre and no stand-up TMDB keyword (verified live against TMDB 2026-10-29), so it stays off the channel.",
+      "item": {
+        "title": "Anchorman: The Legend of Ron Burgundy",
+        "year": 2004,
+        "type": "movie",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "PG-13",
+        "tmdbID": "8699"
+      },
+      "out": [
+        58
+      ]
+    },
+    {
+      "name": "bare-documentary-genre-alone-stays-off-stand-up",
+      "about": "Documentary is in STAND-UP's genres.include (some specials are tagged that way) but is also gated, so a plain documentary with no stand-up keyword stays off the channel.",
+      "item": {
+        "title": "An Ordinary Documentary",
+        "year": 2015,
+        "type": "movie",
+        "genres": [
+          "Documentary"
+        ]
+      },
+      "out": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-live-2003-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 26575 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Carl Barron: Live",
+        "year": 2003,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "26575"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-whatever-comes-next-2005-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 36824 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Carl Barron: Whatever Comes Next",
+        "year": 2005,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "36824"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "arj-barker-live-2006-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 31904 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Arj Barker: Live",
+        "year": 2006,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "31904"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "arj-barker-balls-2008-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 53059 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Arj Barker: Balls",
+        "year": 2008,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "53059"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-walking-down-the-street-2009-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 21638 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Carl Barron: Walking Down the Street",
+        "year": 2009,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "21638"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-a-one-ended-stick-2013-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 233813 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Carl Barron: A One Ended Stick",
+        "year": 2013,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "233813"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-wompoo-street-2014-reaches-stand-up-with-a-stand-up-genre-tag",
+      "about": "Trello F9euJWiF: one of the 7 titles Chad reported missing from STAND-UP. TMDB (checked live 2026-10-29) tags this 429749 with only the bare 'Comedy' genre and no 'stand-up comedy' keyword, so it was never claimed by the manifest and the old manifestOnly gate turned it away with no fallback. This case assumes the kind of server genre tag the fix is meant to catch ('Stand-Up', since Plex/Jellyfin/Emby metadata for a special is not always identical to TMDB's); unverified against Chad's real library, since we have no access to its actual genre tag for this title.",
+      "item": {
+        "title": "Carl Barron: Wompoo Street",
+        "year": 2014,
+        "type": "movie",
+        "genres": [
+          "Stand-Up"
+        ],
+        "tmdbID": "429749"
+      },
+      "in": [
+        58
+      ]
+    },
+    {
+      "name": "carl-barron-wompoo-street-real-tmdb-genre-alone-stays-out-today",
+      "about": "Same title as carl-barron-wompoo-street-2014, but using its REAL bare TMDB genres (Documentary, Comedy; checked live 2026-10-29) with no assumed server tag and no TMDB stand-up keyword. It stays off STAND-UP: the fix only reaches it if the media server tags it more narrowly than TMDB does, or if TMDB's 'stand-up comedy' keyword gets added to this title later. Unverified against Chad's real library.",
+      "item": {
+        "title": "Carl Barron: Wompoo Street",
+        "year": 2014,
+        "type": "movie",
+        "genres": [
+          "Documentary",
+          "Comedy"
+        ],
+        "tmdbID": "429749"
+      },
+      "out": [
+        58
+      ]
     }
   ]
 }

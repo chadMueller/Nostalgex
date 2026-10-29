@@ -135,7 +135,11 @@ function summariseRules(rules) {
   const parts = [];
   const g = rules.genres || {};
 
-  if (rules.manifestOnly) parts.push("**TMDB manifest only**");
+  if (rules.manifestOnly) {
+    parts.push(rules.manifestOnlyGenreFallback
+      ? "**TMDB manifest + gated genre/keyword fallback**"
+      : "**TMDB manifest only**");
+  }
   if (rules.episodeTitleContains?.length) parts.push(`episode title words (${rules.episodeTitleContains.length})`);
   if (rules.episodeSeasonalTitleContains?.length) {
     const w = rules.episodeAirWindow || {};

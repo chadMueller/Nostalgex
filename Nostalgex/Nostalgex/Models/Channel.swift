@@ -300,7 +300,8 @@ struct ChannelRules {
     var rtScoreMin: Int?                 // Rotten Tomatoes critic score 0-100
     var metacriticMin: Int?              // Metacritic score 0-100
     var wonOscar: Bool = false           // Awards string contains "won" + "oscar" (case-insensitive)
-    var manifestOnly: Bool = false       // membership comes ONLY from the TMDB manifest — no genre/title fallback (for keyword-precise channels like STAND-UP, ANIME)
+    var manifestOnly: Bool = false       // membership comes ONLY from the TMDB manifest — no genre/title fallback (for keyword-precise channels like ANIME, CRITERION)
+    var manifestOnlyGenreFallback: Bool = false // opt-in, per channel: on a manifestOnly channel, also run the normal genre/keyword content-matching block below as a second, additive claim path. Only set this when the channel's own genres/keywords/keywordGatedGenres are reviewed to be tight — this flag does not itself guard against a catch-all; the channel's rules do. STAND-UP opts in (Comedy/Documentary stay keyword-gated via keywordGatedGenres; the narrower "Stand-Up" server genre tag is specific enough to stand alone). See AppState+Channels.swift.
 }
 
 // MARK: - Channel
@@ -570,6 +571,7 @@ struct ChannelRulesJSON: Codable {
     let metacriticMin: Int?
     let wonOscar: Bool?
     let manifestOnly: Bool?
+    let manifestOnlyGenreFallback: Bool?
 
     func toChannelRules() -> ChannelRules {
         var mediaType: MediaType?
@@ -612,7 +614,8 @@ struct ChannelRulesJSON: Codable {
             rtScoreMin: rtScoreMin,
             metacriticMin: metacriticMin,
             wonOscar: wonOscar ?? false,
-            manifestOnly: manifestOnly ?? false
+            manifestOnly: manifestOnly ?? false,
+            manifestOnlyGenreFallback: manifestOnlyGenreFallback ?? false
         )
     }
 }

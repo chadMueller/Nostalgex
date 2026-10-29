@@ -43,7 +43,8 @@ extension ChannelRules {
             rtScoreMin: rtScoreMin,
             metacriticMin: metacriticMin,
             wonOscar: wonOscar,
-            manifestOnly: manifestOnly
+            manifestOnly: manifestOnly,
+            manifestOnlyGenreFallback: manifestOnlyGenreFallback
         )
     }
 }

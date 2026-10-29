@@ -491,10 +491,21 @@ function itemPasses(item, channel, opts = {}) {
     return { pass: true, via: "manifest" };
   }
 
-  // manifestOnly: membership comes solely from the manifest. If we reach here the
-  // item wasn't claimed for this channel, so reject — no genre/title fallback
-  // (e.g. STAND-UP must not pull every Comedy; ANIME relies on TMDB anime claims).
-  if (r.manifestOnly) return false;
+  // manifestOnly: membership normally comes solely from the manifest. A channel
+  // can opt in to a second, additive claim path by also setting
+  // manifestOnlyGenreFallback: true — the normal content-matching block below
+  // then runs too, the same keyword/genre/keywordGatedGenres rules as any other
+  // channel. STAND-UP opts in this way: Comedy/Documentary alone still need the
+  // "stand-up comedy"/"comedian" keyword (keywordGatedGenres), but the narrower
+  // "Stand-Up" server genre tag is specific enough on its own, so a title TMDB
+  // never tagged with that keyword can still reach the channel if the server
+  // tagged it that way. The flag is a per-channel opt-in, not an automatic
+  // inference — it does not itself guard against a catch-all, the channel's own
+  // rules do, so each manifestOnly channel's rules get reviewed before it's set.
+  // CRITERION defines no genre/keyword rules at all; ANIME, WORLD HORROR and
+  // MYSTERY BOX TV haven't opted in (same gap, tracked separately). Keep in
+  // sync with AppState+Channels.swift.
+  if (r.manifestOnly && !r.manifestOnlyGenreFallback) return false;
 
   if (Array.isArray(r.titleExcludes) && r.titleExcludes.length) {
     if (r.titleExcludes.some((t) => titleContainsWord(titleLower, t))) return false;

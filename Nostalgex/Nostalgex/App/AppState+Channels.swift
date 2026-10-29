@@ -1323,10 +1323,22 @@ extension AppState {
                 }
             }
 
-            // manifestOnly: membership comes solely from the manifest. If we got
-            // here the item wasn't claimed for this channel, so reject — no broad
-            // genre/title fallback (e.g. STAND-UP must not pull every Comedy).
-            if rules.manifestOnly { return nil }
+            // manifestOnly: membership normally comes solely from the manifest. A
+            // channel can opt in to a second, additive claim path by also setting
+            // `manifestOnlyGenreFallback: true` — the normal content-matching block
+            // below then runs too, the same keyword/genre/keywordGatedGenres rules
+            // as any other channel. STAND-UP opts in this way: Comedy/Documentary
+            // alone still need the "stand-up comedy"/"comedian" keyword
+            // (keywordGatedGenres), but the narrower "Stand-Up" server genre tag is
+            // specific enough on its own, so a title TMDB never tagged with that
+            // keyword can still reach the channel if the server tagged it that way.
+            // The flag is a per-channel opt-in, not an automatic inference — it does
+            // not itself guard against a catch-all, the channel's own rules do, so
+            // each manifestOnly channel's rules get reviewed before it's set. CRITERION
+            // defines no genre/keyword rules at all; ANIME, WORLD HORROR and MYSTERY
+            // BOX TV haven't opted in (same gap, tracked separately). Keep in sync
+            // with nostalgex-channel-filter.cjs.
+            if rules.manifestOnly && !rules.manifestOnlyGenreFallback { return nil }
 
             // Title excludes: reject if title contains any excluded WORD.
             // Word-boundary match prevents short rule entries from accidentally

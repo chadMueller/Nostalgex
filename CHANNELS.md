@@ -44,7 +44,7 @@ only name the channel's own defining genre.
 
 **`rewatched` means `viewCount >= 3`** in both implementations.
 
-**Config version:** 43 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
+**Config version:** 44 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
 
 ---
 
@@ -180,7 +180,7 @@ _Premium channels_
 | 61 | **`55`** ⚠︎ | GAME SHOWS | `#FFB300` | Episodes | 3 | incl Game Show/Game-Show/Competition, title allowlist (30) |
 | 62 | **`63`** ⚠︎ | ADULT CARTOONS | `#8E44AD` | Episodes | 3 | incl Animation/Animated/Cartoon, title allowlist (21) |
 | 63 | **`64`** ⚠︎ | DATE NIGHT | `#E74C8B` | Movies | 3 | needs ALL Romance, no Horror/Animation/Family/Children/Kids, kw +7, kw excl (2) |
-| 64 | **`58`** ⚠︎ | STAND-UP | `#F5B041` | Any | 3 | **TMDB manifest only**, incl Comedy/Documentary, kw +2, kw needs genre Comedy |
+| 64 | **`58`** ⚠︎ | STAND-UP | `#F5B041` | Any | 3 | **TMDB manifest + gated genre/keyword fallback**, incl Comedy/Documentary/Stand-Up, kw +2, kw needs genre Comedy/Documentary/Stand-Up, kw-gated genre Comedy/Documentary |
 | 65 | **`201`** ⚠︎ | BIOPICS | `#C9A84C` | Movies | 5 | kw +6 |
 | 66 | **`67`** ⚠︎ | ALL TIME GREATS | `#FFD700` | Movies | 5 | Plex rating ≥ 8.2, ≥ 60 min |
 | 67 | **`68`** ⚠︎ | CERTIFIED GOLD | `#F56040` | Movies | 3 | Plex rating ≥ 8, ≥ 60 min |
@@ -440,4 +440,4 @@ _Music videos by genre_
 
 ---
 
-_Generated from `channels.json` v43 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
+_Generated from `channels.json` v44 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
