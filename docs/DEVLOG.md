@@ -54,21 +54,45 @@ sink is routed through `.receive(on: DispatchQueue.main)`; and (2) across a
 simulated channel change (`cancellables.removeAll()` + a second
 `installFreshPlayer` call, matching the real load paths), the retired
 player's state changes no longer reach `isVideoPlaying` while the new
-player's do. Full app target and `NostalgexTests` target both build clean for
-the tvOS simulator SDK (`xcodebuild build` / `build-for-testing`). The test
-suite itself was not run, that needs booting the tvOS Simulator, which is
-on hold pending a go-ahead after an unrelated audio incident the same day.
+player's do.
 
-**Half-done.** The actual `xcodebuild test` run (and a hardware check that
-the overlay no longer gets stuck after a real stall) is unverified. Needs the
-go-ahead to use the simulator, then `NostalgexTests` must show green before
-this merges.
+**Update, same day.** The earlier "ready" claim above was wrong: the device
+test suite had never actually been run, only `build-for-testing` had, and
+when `NostalgexTests` was actually run on the tvOS Simulator both tests in
+this file failed, `isVideoPlaying` never observed becoming `true` after
+`play()`. Root-caused before touching anything: the fixture in both tests,
+`AVPlayerItem(asset: AVMutableComposition())`, builds an item from an empty
+composition with zero tracks and zero duration. A standalone macOS probe
+(plain Swift + AVFoundation, outside the test target and the simulator,
+driving a real `AVPlayer` with the same empty-composition fixture under
+direct KVO) showed this is not a reliable "paused player" at all: across
+repeated runs the player either flashed to `.playing` for under 50ms before
+settling straight back to `.paused` (nothing to decode, nothing to play), or
+never left `.waitingToPlayAtSpecifiedRate` /
+`AVPlayerWaitingWithNoItemToPlayReason` within several seconds. Neither
+outcome gives a polling assertion a stable playing window to observe,
+regardless of whether the KVO bridge in `installFreshPlayer` is correct. The
+bridge itself was not at fault.
 
-**Next.** Get the go to run `NostalgexTests` on the tvOS Simulator. If green,
-this is ready for the normal review/merge path; no device hardware check is
-strictly required since the fix is pure state-propagation (no new playback
-behavior), but one on the Apple TV would be a reasonable final check given
-"schedule and playback are the product."
+Fix: added `PlayableTestAsset` to the test file, which writes a tiny real
+`.mov` (a handful of solid-colour frames via `AVAssetWriter`, ~64x64, a few
+seconds, generated once per test run into a temp file, no network access and
+no binary asset added to the repo) and both tests now build their
+`AVPlayerItem`s from that file instead of the empty composition. A second
+standalone probe confirmed a real `AVPlayer` given that generated file
+reaches and holds `.playing` reliably across repeated runs. `NostalgexTests`
+builds clean again (`build-for-testing`) with the new fixture.
+
+**Half-done.** The actual `xcodebuild test` run against the tvOS Simulator
+with the corrected fixture has not been confirmed green yet. That needs a
+go-ahead before it runs again, per the standing rule after today's audio
+incident.
+
+**Next.** Get the go to run `NostalgexTests` on the tvOS Simulator with the
+corrected fixture. If green, this is ready for the normal review/merge path;
+no device hardware check is strictly required since the fix itself is pure
+state-propagation (no new playback behavior), but one on the Apple TV would
+be a reasonable final check given "schedule and playback are the product."
 
 ## 2026-10-29 (Roku: on-device Plex sign-in, branch only)
 
