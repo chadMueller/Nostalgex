@@ -60,7 +60,7 @@ import java.time.ZoneId
 sealed interface Screen {
     /** Plex's code, after CONNECT TO PLEX. */
     data class SignIn(val pin: PlexPin?, val error: String? = null) : Screen
-    /** The connect screens: the backend picker, then Jellyfin's find, check and sign-in. */
+    /** The connect screens: the backend picker, then Jellyfin or Emby: find, check and sign in. */
     data class Connect(val step: ConnectStep, val message: String? = null, val error: String? = null) : Screen
     data class Loading(val headline: String, val detail: String = "") : Screen
     data class Failed(val message: String) : Screen
@@ -413,7 +413,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     // ── Sign-in ──────────────────────────────────────────────────────────
 
-    /** The first connect screen: CONNECT TO PLEX, or Jellyfin. */
+    /** The first connect screen: CONNECT TO PLEX, or Jellyfin or Emby. */
     fun showPicker(error: String? = null) {
         signInJob?.cancel()
         connectJob?.cancel()
@@ -699,7 +699,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** SERVERS: every server the account can reach, plus any switched on that didn't answer this time. */
     var availableServers: List<PlexServer> by mutableStateOf(emptyList())
         private set
-    /** On Jellyfin, the one server signed in to, shown as the Apple TV does: a single row with no switch. */
+    /** On Jellyfin and Emby, the one server signed in to, shown as the Apple TV does: a single row with no switch. */
     val selectedServers: List<PlexServer>
         get() = mbServer?.let { listOf(PlexServer(it.name, "${it.serverId}/${it.userId}", it.url, it.token)) } ?: prefs.servers
     val serversForSettings: List<PlexServer>

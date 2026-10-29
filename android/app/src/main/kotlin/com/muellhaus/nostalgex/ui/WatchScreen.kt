@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -962,20 +964,22 @@ internal fun OnboardingButton(
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(u(14))
     val slab = focused && !quietFocus
-    Text(
+    val style = font(
+        DMMonoMedium, fontSize,
+        when {
+            slab -> Color(0f, 0.06f, 0.09f)
+            focused -> Color.White
+            primary -> BrandCyan
+            else -> Color.White.copy(alpha = 0.62f)
+        },
+        tracking = 1,
+    ).copy(textAlign = TextAlign.Center)
+    // A label too long for its button shrinks to as little as 60%, as minimumScaleFactor(0.6).
+    BasicText(
         label,
-        style = font(
-            DMMonoMedium, fontSize,
-            when {
-                slab -> Color(0f, 0.06f, 0.09f)
-                focused -> Color.White
-                primary -> BrandCyan
-                else -> Color.White.copy(alpha = 0.62f)
-            },
-            tracking = 1,
-        ),
+        style = style,
         maxLines = 1,
-        textAlign = TextAlign.Center,
+        autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.6f, maxFontSize = style.fontSize),
         modifier = Modifier
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused }

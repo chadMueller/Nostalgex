@@ -66,8 +66,8 @@ private val ErrorRed = Color(0xFFFF2244)
 
 /**
  * The connect screens (SettingsView.swift): branding on the left, controls on the right. The
- * picker offers Plex first, then Jellyfin; Jellyfin finds the server on the network or takes
- * a typed address, checks it, and signs in the shortest way it allows (Quick Connect when the
+ * picker offers Plex first, then Jellyfin and Emby, which find the server on the network or take
+ * a typed address, check it, and sign in the shortest way it allows (Quick Connect when the
  * server has it on, else a user tile or a name and password).
  */
 @Composable
@@ -136,6 +136,7 @@ private fun Picker(model: AppModel, error: String?) {
         OnboardingButton("CONNECT TO PLEX", primary = true, focusFirst = true, fontSize = 34, fullWidth = true, onClick = model::signIn)
         Text("OR CONNECT WITH", style = font(DMMono, 20, Color.White.copy(alpha = 0.35f), tracking = 2), modifier = Modifier.padding(top = u(10)))
         OnboardingButton("JELLYFIN", primary = false, fontSize = 28, fullWidth = true) { model.connectTo("jellyfin") }
+        OnboardingButton("EMBY", primary = false, fontSize = 28, fullWidth = true) { model.connectTo("emby") }
     }
 }
 

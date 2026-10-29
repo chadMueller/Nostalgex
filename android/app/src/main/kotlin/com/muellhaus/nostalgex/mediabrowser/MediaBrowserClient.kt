@@ -245,14 +245,22 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         library.scan(progress).map { it.copy(serverUrl = server.url, serverToken = server.token) }
     }
 
-    /** DELETE /Videos/ActiveEncodings: ends this app's encode, by its own session only. */
+    /**
+     * DELETE /Videos/ActiveEncodings: ends this app's encode, by its own session only. Emby is
+     * also told the session stopped (EmbyAPIService.stopTranscode).
+     */
     fun stopEncoding(server: MediaBrowserServer, playSessionId: String) {
-        val req = request("${server.url}/Videos/ActiveEncodings?deviceId=$deviceId&playSessionId=$playSessionId", server.token).delete().build()
-        http.newCall(req).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: IOException) {}
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()
-        })
+        enqueue(request("${server.url}/Videos/ActiveEncodings?deviceId=$deviceId&playSessionId=$playSessionId", server.token).delete().build())
+        if (server.kind == "emby") {
+            val body = buildJsonObject { put("PlaySessionId", playSessionId) }.toString().toRequestBody("application/json".toMediaType())
+            enqueue(request("${server.url}/Sessions/Playing/Stopped", server.token).post(body).build())
+        }
     }
+
+    private fun enqueue(req: Request) = http.newCall(req).enqueue(object : okhttp3.Callback {
+        override fun onFailure(call: okhttp3.Call, e: IOException) {}
+        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()
+    })
 
     companion object {
         private const val TAG = "Nostalgex"
