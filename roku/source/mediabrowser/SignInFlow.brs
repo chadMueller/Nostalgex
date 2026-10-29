@@ -336,6 +336,7 @@ function NxSignInDefaultFocus(s as Object) as String
         return "find"
     end if
     if s.screen = "type" then return "address"
+    if s.screen = "plexCreds" then return "plexEmail"
     if s.screen = "signin" then
         if s.picked then return "password"
         if s.users > 0 and not s.typingName then return "user-0"
@@ -354,6 +355,11 @@ function NxSignInCopy() as Object
         screenTitle: "CONNECT YOUR SERVER",
         screenBody: "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get started.",
         connectPlex: "CONNECT TO PLEX",
+        useEmailPassword: "USE EMAIL AND PASSWORD",
+        plexEmailLabel: "EMAIL",
+        plexCredsNote: "If this account signs in to Plex with Google or Apple, it has no Plex password. Use CONNECT TO PLEX instead.",
+        plexIncorrectPassword: "Incorrect email or password.",
+        plexCredsUnreachable: "Could not reach plex.tv. Check your connection, then try again.",
         orConnectWith: "OR CONNECT WITH",
         findButton: "FIND MY SERVER",
         searching: "SEARCHING...",

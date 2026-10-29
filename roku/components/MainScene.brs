@@ -76,6 +76,22 @@ sub onConnectDone()
         startSignIn()
         return
     end if
+    if done = "plexSignedIn" then
+        ' ConnectView's own PlexSignInTask (mode "password") already saved
+        ' the token and the servers; pick up exactly where the link code's
+        ' "ready" status does, below.
+        closeConnect()
+        signInDone()
+        m.signedInClock = CreateObject("roTimespan")
+        m.prompt.text = "Connecting to Plex…"
+        m.hint.text = signOutHint()
+        if NxPlexRegistry().Read("needsPick") <> "" then
+            showPicker()
+        else if m.library = invalid then
+            startLibrary(true)
+        end if
+        return
+    end if
     closeConnect()
     ' Signed in to Jellyfin or Emby: the first run's clock starts here, as it
     ' does once a Plex code is entered.

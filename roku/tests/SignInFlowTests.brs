@@ -240,6 +240,8 @@ function NxRunSignInFlowTests() as Integer
     NxCheck(r, "focus find, none", NxSignInDefaultFocus(f), "type")
     f.screen = "type"
     NxCheck(r, "focus typed address", NxSignInDefaultFocus(f), "address")
+    f.screen = "plexCreds"
+    NxCheck(r, "focus plex credentials", NxSignInDefaultFocus(f), "plexEmail")
     f.screen = "signin"
     NxCheck(r, "focus sign-in, no users", NxSignInDefaultFocus(f), "username")
     f.users = 2
@@ -292,6 +294,33 @@ function NxRunSignInFlowTests() as Integer
         if tap.IsMatch(text) then taps.Push(text)
     end for
     NxCheck(r, "no line says tap", taps.Join(" | "), "")
+
+    ' ── Plex, on-device email and password (NxPlexPasswordAuthResult; the
+    ' request itself, like NxPlexAccount and NxPlexCreatePin, is network-only
+    ' and isn't tested off-device) ──
+    ok = NxPlexPasswordAuthResult(201, ParseJson("{""user"":{""authToken"":""tok123"",""username"":""chad""}}"))
+    NxCheck(r, "password sign-in: success, token nested under user", ok.status + " " + ok.token + " " + ok.name, "ok tok123 chad")
+    ok = NxPlexPasswordAuthResult(200, ParseJson("{""user"":{""authToken"":""tok456"",""title"":""Chad Mueller""}}"))
+    NxCheck(r, "password sign-in: 200 counts, name falls back to title", ok.status + " " + ok.token + " " + ok.name, "ok tok456 Chad Mueller")
+    ok = NxPlexPasswordAuthResult(201, ParseJson("{""authToken"":""tok789"",""username"":""flat""}"))
+    NxCheck(r, "password sign-in: a flat response (no user key) still reads", ok.status + " " + ok.token + " " + ok.name, "ok tok789 flat")
+    ok = NxPlexPasswordAuthResult(201, ParseJson("{""user"":{""authenticationToken"":""tokOld"",""username"":""legacy""}}"))
+    NxCheck(r, "password sign-in: the older field name also reads", ok.status + " " + ok.token, "ok tokOld")
+    bad = NxPlexPasswordAuthResult(401, ParseJson("{""error"":""Invalid email, username, or password.""}"))
+    NxCheck(r, "password sign-in: 401 is wrong credentials, or an SSO-only account; the UI can't tell which", bad.status + " " + bad.token, "invalid ")
+    err = NxPlexPasswordAuthResult(0, invalid)
+    NxCheck(r, "password sign-in: no connection", err.status + " " + err.token, "error ")
+    err = NxPlexPasswordAuthResult(500, invalid)
+    NxCheck(r, "password sign-in: plex.tv's own error", err.status + " " + err.token, "error ")
+    err = NxPlexPasswordAuthResult(201, ParseJson("{""user"":{""username"":""chad""}}"))
+    NxCheck(r, "password sign-in: 2xx with no token is still an error", err.status, "error")
+    ' No field the response carried crosses into what's returned except
+    ' status, token and name: a password echoed back by a crafted response
+    ' never reaches the caller, which is as close as an off-device test can
+    ' get to proving the password is never logged (the print guard,
+    ' tests/tools/check-guards.sh, covers the rest).
+    leak = NxPlexPasswordAuthResult(201, ParseJson("{""user"":{""authToken"":""tok999"",""password"":""should-never-appear""}}"))
+    NxCheck(r, "password sign-in: only status, token and name come back", leak.status + " " + leak.token + " " + leak.name + " " + NxToStr(leak.DoesExist("password")), "ok tok999 Plex false")
 
     print "sign-in flow cases (upstream SignInFlowTests):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail

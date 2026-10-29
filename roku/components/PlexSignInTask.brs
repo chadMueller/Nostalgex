@@ -5,6 +5,43 @@ sub init()
 end sub
 
 sub runSignIn()
+    if m.top.mode = "password" then
+        runPasswordSignIn()
+    else
+        runLinkSignIn()
+    end if
+end sub
+
+' On-device email and password, straight to plex.tv: Roku certification
+' rule 2.2 requires a way to sign in without a second device, and Plex's
+' own Roku app dropped a link-code-only sign-in at version 7.6.0/7.6.1 over
+' this same rule. The link code (runLinkSignIn) stays as the other, easier
+' way in; this is additional, not a replacement. m.top.password is cleared
+' at once: only the token NxPlexSignInWithPassword's answer carries goes on
+' to NxPlexSaveToken, through finishSignIn below, the same as the link
+' code's token.
+sub runPasswordSignIn()
+    print "plex: password sign-in started"
+    email = m.top.email
+    pw = m.top.password
+    m.top.password = ""
+    m.top.status = "checking"
+    result = NxPlexSignInWithPassword(email, pw)
+    if result.status = "invalid" then
+        fail(NxSignInCopy().plexIncorrectPassword)
+        return
+    end if
+    if result.status <> "ok" or result.token = "" then
+        fail(NxSignInCopy().plexCredsUnreachable)
+        return
+    end if
+    ' Always a fresh sign-in: ConnectView only offers this screen before the
+    ' TV is signed in, so a different account's caches are cleared, as a
+    ' first sign-in's are.
+    finishSignIn(result.token, invalid, true)
+end sub
+
+sub runLinkSignIn()
     print "plex: sign-in task started"
     token = NxPlexLoadToken()
     ' No saved sign-in: a first run, or the app deleted and installed again.
@@ -65,6 +102,13 @@ sub runSignIn()
             token = got
         end while
     end if
+    finishSignIn(token, account, fresh)
+end sub
+
+' The tail both sign-ins share once a token is in hand: save it, learn (or
+' confirm) the account, clear another account's caches on a fresh sign-in,
+' then the account's servers, saved or freshly listed.
+sub finishSignIn(token as String, account as Dynamic, fresh as Boolean)
     NxPlexSaveToken(token)
     if type(account) <> "roAssociativeArray" then account = NxPlexAccount(token)
     ' Caches the deleted app left behind may be another account's library.

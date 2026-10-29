@@ -13,10 +13,18 @@
 ' - Closing the keyboard moves on: the address gets checked, the username goes
 '   to the password, the password to SIGN IN (OK on the keyboard signs in).
 '
-' Screens: picker, find, type, signin. Over them, m.auth: "checking" (the
-' address check), "quick" (the Quick Connect code), "signing", "plex" (the
-' plex.tv/link code, driven by MainScene). Back is the screen's BACK or
-' CANCEL; on the picker it is MainScene's, which leaves the app.
+' Screens: picker, find, type, signin, plexCreds. Over them, m.auth:
+' "checking" (the address check), "quick" (the Quick Connect code),
+' "signing", "plex" (the plex.tv/link code, driven by MainScene). Back is
+' the screen's BACK or CANCEL; on the picker it is MainScene's, which
+' leaves the app.
+'
+' plexCreds is Plex's other way in, on-device email and password straight
+' to plex.tv (Roku certification rule 2.2), next to the plex.tv/link code:
+' this view runs its own PlexSignInTask (mode "password") for it, the same
+' as Jellyfin and Emby's password sign-in does with MediaBrowserSignInTask,
+' rather than through MainScene's plexState/plexCode bridge, since it needs
+' no second device and no code to show.
 '
 ' The look: the focused control is a solid cyan slab with dark text that
 ' grows and glows, every other control an outline, so the one bright thing on
@@ -43,10 +51,13 @@ sub init()
     m.address = ""
     m.username = ""
     m.password = ""
+    m.plexEmail = ""
+    m.plexPw = ""
     m.picked = invalid
     m.typingName = false
     m.qcCode = ""
     m.task = invalid
+    m.plexTask = invalid
     m.keyboard = invalid
     m.focusId = ""
     m.controls = []
@@ -458,6 +469,8 @@ sub build()
         h = buildType(col)
     else if m.screen = "signin" then
         h = buildSignIn(col)
+    else if m.screen = "plexCreds" then
+        h = buildPlexCreds(col)
     else
         h = buildPicker(col)
     end if
@@ -478,10 +491,27 @@ function buildPicker(col as Object) as Float
     if m.authError <> "" then
         y = y + heightOf(addText(col, UCase(m.authError), "DMMono-Medium", 26, "0xFF2244FF", y, m.colInner)) + 22
     end if
-    y = y + addButton(col, "plex", m.copy.connectPlex, "primary", y, {}) + 22 + 10
+    y = y + addButton(col, "plex", m.copy.connectPlex, "primary", y, {}) + 22
+    y = y + addButton(col, "plexCreds", m.copy.useEmailPassword, "secondary", y, {}) + 22 + 10
     y = y + heightOf(addText(col, m.copy.orConnectWith, "DMMono-Regular", 20, "0xFFFFFF59", y, m.colInner)) + 22
     y = y + addButton(col, "jellyfin", "JELLYFIN", "secondary", y, {}) + 22
     y = y + addButton(col, "emby", "EMBY", "secondary", y, {})
+    return y
+end function
+
+' SIGN IN TO PLEX: email and password straight to plex.tv, the other way
+' in next to the link code. The SSO line is always on screen, not only
+' after a failed try, since a 401 from plex.tv looks the same whether the
+' password was wrong or the account has none at all (Google or Apple
+' sign-in); the Roku can't tell those apart, so the note goes up front.
+function buildPlexCreds(col as Object) as Float
+    y = stepTitle(col, "SIGN IN TO PLEX", 0) + 22
+    y = y + heightOf(addText(col, m.copy.plexCredsNote, "DMMono-Regular", 19, "0xFFFFFF66", y, m.colInner)) + 22
+    if m.authError <> "" then y = y + heightOf(addText(col, UCase(m.authError), "DMMono-Medium", 22, "0xFF2244FF", y, m.colInner)) + 22
+    y = y + addField(col, "plexEmail", m.copy.plexEmailLabel, m.copy.pressToType, m.plexEmail, false, y) + 20
+    y = y + addField(col, "plexPw", m.copy.password, m.copy.pressToType, m.plexPw, true, y) + 20
+    y = y + addButton(col, "plexCredsSignIn", m.copy.signIn, "primary", y, { enabled: m.plexEmail.Trim() <> "" and m.plexPw <> "" }) + 20 + 6
+    y = y + addButton(col, "back", m.copy.back, "quiet", y, {})
     return y
 end function
 
@@ -713,6 +743,14 @@ sub activate(id as String)
     end for
     if id = "plex" then
         m.top.done = "plex"
+    else if id = "plexCreds" then
+        m.kind = "plex"
+        go("plexCreds")
+        render()
+    else if id = "plexEmail" or id = "plexPw" then
+        openKeyboard(id)
+    else if id = "plexCredsSignIn" then
+        plexPasswordSignIn()
     else if id = "jellyfin" or id = "emby" then
         m.kind = id
         go("find")
@@ -755,12 +793,14 @@ end sub
 function goBack() as Boolean
     if m.auth = "checking" then
         stopTask()
+        stopPlexTask()
         m.auth = ""
         m.checkingLabel = ""
         m.focusId = ""
         render()
     else if m.auth = "signing" then
         stopTask()
+        stopPlexTask()
         m.auth = ""
         m.focusId = ""
         render()
@@ -778,6 +818,9 @@ function goBack() as Boolean
     else if m.screen = "type" or m.screen = "signin" then
         go("find")
         render()
+    else if m.screen = "plexCreds" then
+        go("picker")
+        render()
     else
         return false
     end if
@@ -790,6 +833,7 @@ end function
 ' one server answering would bounce the viewer straight back.
 sub go(nextScreen as String)
     stopTask()
+    stopPlexTask()
     if m.fixtureTimer <> invalid then m.fixtureTimer.control = "stop"
     m.auth = ""
     m.checkingLabel = ""
@@ -798,6 +842,8 @@ sub go(nextScreen as String)
     m.authError = ""
     m.username = ""
     m.password = ""
+    m.plexEmail = ""
+    m.plexPw = ""
     m.picked = invalid
     m.typingName = false
     m.qcCode = ""
@@ -929,6 +975,15 @@ sub openKeyboard(field as String)
     else if field = "username" then
         kb.title = m.copy.username
         kb.text = m.username
+    else if field = "plexEmail" then
+        kb.title = m.copy.plexEmailLabel
+        kb.text = m.plexEmail
+    else if field = "plexPw" then
+        kb.title = m.copy.password
+        kb.text = m.plexPw
+        kb.textEditBox.secureMode = true
+        ' Voice keyboards take it as a password (Roku certification 4.12).
+        kb.keyboardDomain = "password"
     else
         kb.title = m.copy.password
         if m.picked <> invalid then kb.title = "PASSWORD FOR " + UCase(m.picked.name)
@@ -974,6 +1029,18 @@ sub keyboardDone(viaOK as Boolean)
         m.username = text
         m.focusId = "password"
         render()
+    else if field = "plexEmail" then
+        m.plexEmail = text
+        m.focusId = "plexPw"
+        render()
+    else if field = "plexPw" then
+        m.plexPw = text
+        if viaOK then
+            plexPasswordSignIn()
+        else
+            m.focusId = "plexCredsSignIn"
+            render()
+        end if
     else if field = "password" then
         m.password = text
         if viaOK then
@@ -1044,6 +1111,57 @@ sub onTaskStatus()
         end if
         m.auth = ""
         m.checkingLabel = ""
+        m.focusId = ""
+        render()
+    end if
+end sub
+
+' ── Plex, on-device ─────────────────────────────────────────────────────────
+
+sub plexPasswordSignIn()
+    email = m.plexEmail.Trim()
+    pw = m.plexPw
+    if email = "" or pw = "" then return
+    m.authError = ""
+    m.auth = "signing"
+    m.focusId = ""
+    runPlexTask(email, pw)
+    render()
+end sub
+
+sub runPlexTask(email as String, pw as String)
+    stopPlexTask()
+    t = CreateObject("roSGNode", "PlexSignInTask")
+    t.mode = "password"
+    t.email = email
+    t.password = pw
+    t.ObserveField("status", "onPlexTaskStatus")
+    m.plexTask = t
+    t.control = "run"
+end sub
+
+' Stops the task's thread outright, as MainScene's own cancel of the link
+' code does (m.signIn.control = "stop"): this run has no poll loop to let
+' finish on its own, so there is nothing a cooperative cancel flag would add.
+sub stopPlexTask()
+    if m.plexTask = invalid then return
+    m.plexTask.UnobserveField("status")
+    m.plexTask.control = "stop"
+    m.plexTask = invalid
+end sub
+
+sub onPlexTaskStatus()
+    t = m.plexTask
+    if t = invalid then return
+    status = t.status
+    if status = "ready" then
+        stopPlexTask()
+        m.top.done = "plexSignedIn"
+    else if status = "error" then
+        message = t.message
+        stopPlexTask()
+        m.authError = message
+        m.auth = ""
         m.focusId = ""
         render()
     end if

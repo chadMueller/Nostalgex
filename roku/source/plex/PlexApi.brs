@@ -97,7 +97,7 @@ end function
 ' One HTTPS request. Returns { code, json } where code is the HTTP status, or
 ' a negative curl code (-28 is a timeout), or 0 if the URL was refused. With
 ' plex set, the answer is repaired first (NxPlexUtf8Repair).
-function NxHttp(method as String, url as String, headers as Object, timeoutMs = 10000 as Integer, plex = false as Boolean) as Object
+function NxHttp(method as String, url as String, headers as Object, timeoutMs = 10000 as Integer, plex = false as Boolean, body = "" as String) as Object
     if LCase(Left(url, 8)) <> "https://" then
         print "nxhttp: refused a non-HTTPS URL"
         return { code: 0, json: invalid }
@@ -113,7 +113,7 @@ function NxHttp(method as String, url as String, headers as Object, timeoutMs = 
     xfer.SetHeaders(headers)
     xfer.SetRequest(method)
     if method = "POST" then
-        ok = xfer.AsyncPostFromString("")
+        ok = xfer.AsyncPostFromString(body)
     else
         ok = xfer.AsyncGetToString()
     end if
@@ -532,6 +532,57 @@ function NxPlexServers(token as String) as Dynamic
         end if
     end for
     return out
+end function
+
+' Plex's answer to POST /users/sign_in.json, read into { status, token,
+' name }: "ok" with the token and the account name (from whichever of the
+' response's fields carries them: the field name has drifted between Plex
+' API versions, and this is the legacy JSON endpoint), "invalid" (401: a
+' wrong password, a wrong two-factor code, or an account that signs in
+' through Google or Apple and so has no Plex password at all, which the
+' Roku can't tell apart from a wrong password) or "error" (anything else,
+' including no connection, or a 2xx with no token in it). Pure, so this is
+' where tests/SignInFlowTests.brs holds the parsing to cases; only status,
+' token and name ever leave it, nothing else the response carried.
+function NxPlexPasswordAuthResult(code as Integer, json as Dynamic) as Object
+    if code = 401 then return { status: "invalid", token: "", name: "" }
+    if code >= 200 and code <= 299 then
+        auth = invalid
+        if type(json) = "roAssociativeArray" then
+            if type(json.user) = "roAssociativeArray" then auth = json.user else auth = json
+        end if
+        if type(auth) = "roAssociativeArray" then
+            token = ""
+            if NxIsString(auth.authToken) then token = auth.authToken
+            if token = "" and NxIsString(auth.authenticationToken) then token = auth.authenticationToken
+            if token <> "" then
+                name = auth.username
+                if not NxIsString(name) or name = "" then name = auth.title
+                if not NxIsString(name) or name = "" then name = "Plex"
+                return { status: "ok", token: token, name: name }
+            end if
+        end if
+    end if
+    return { status: "error", token: "", name: "" }
+end function
+
+' Email and password sign-in direct to plex.tv (POST /users/sign_in.json),
+' the on-device path Roku certification rule 2.2 requires alongside the
+' plex.tv/link code (NxPlexCreatePin / NxPlexCheckPin): Plex's own Roku app
+' dropped a link-code-only sign-in at version 7.6.0/7.6.1 over this same
+' rule. A two-factor code, when the account has one on, goes on the end of
+' the password with no separator, Plex's own documented way for an app with
+' no separate code field; nothing here needs to know that. The password is
+' sent once and never kept: this function returns only what
+' NxPlexPasswordAuthResult reads out of the answer, and the caller
+' (PlexSignInTask) saves only the token (NxPlexSaveToken), the same as the
+' link code's token.
+function NxPlexSignInWithPassword(login as String, password as String) as Object
+    headers = NxPlexHeaders("")
+    headers["Content-Type"] = "application/x-www-form-urlencoded"
+    body = "user%5Blogin%5D=" + NxUrlEncode(login) + "&user%5Bpassword%5D=" + NxUrlEncode(password)
+    res = NxHttp("POST", "https://plex.tv/users/sign_in.json", headers, 15000, true, body)
+    return NxPlexPasswordAuthResult(res.code, res.json)
 end function
 
 ' True for a host on the home network, the only place plain HTTP may go
