@@ -273,8 +273,13 @@ typealias LoadProgress = @Sendable (LoadProgressEvent) -> Void
 /// guide: an abandoned scan that threw a bare `CancellationError` would discard minutes of
 /// fetched library for nothing. Only sections that finished are included — the section that
 /// was in flight is dropped.
+///
+/// `userInitiated` starts `false` because the backend that throws this (deep inside
+/// `PlexAPIService`) only knows it was cancelled, not why. `withLibraryLoadStallWatch` fills
+/// it in afterward from its own watchdog verdict, see the note there.
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
+    var userInitiated: Bool = false
 }
 
 
