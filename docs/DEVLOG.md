@@ -17,16 +17,16 @@ specials (Carl Barron and Arj Barker) were reported missing; checked live
 against TMDB on 2026-10-29, none of the seven carry the "stand-up comedy"
 keyword, and all carry only a bare "Comedy" genre (one also "Documentary").
 Rerunning the discovery script (below) does not pick them up, since TMDB's
-own signal for them is too coarse — the fix has to accept a narrower signal
+own signal for them is too coarse, the fix has to accept a narrower signal
 than TMDB gives these titles.
 
-**Changed (Swift + JS, channels.json, the shared golden file — not merged).**
+**Changed (Swift + JS, channels.json, the shared golden file, not merged).**
 
 - `manifestOnly` channels can now opt in to a second, additive claim path
   with a new flag, `manifestOnlyGenreFallback: true`. When set, the normal
   genre/keyword content-matching block also runs, same as any other channel
   (`AppState+Channels.swift`, `scripts/nostalgex-channel-filter.cjs`). The
-  flag is a per-channel opt-in, not an automatic inference from the rules —
+  flag is a per-channel opt-in, not an automatic inference from the rules,
   it does not itself guard against a catch-all, the channel's own
   genres/keywords/`keywordGatedGenres` do, so each manifestOnly channel gets
   reviewed before it's set.
@@ -41,7 +41,7 @@ than TMDB gives these titles.
   (any of "Stand-Up", "Stand-up Comedy" or "Comedy Special", as the server
   itself tags it) or the TMDB "stand-up comedy"/"comedian" keyword now reach
   STAND-UP without a manifest claim; a bare "Comedy" or "Documentary" genre
-  alone, with neither signal, still does not — verified with a real comedy
+  alone, with neither signal, still does not, verified with a real comedy
   film (Anchorman, TMDB id 8699, Comedy only, no stand-up keyword) that stays
   off the channel.
 - Reran `discover-standup.mjs` against live TMDB: manifest version 1 to 2,
@@ -55,7 +55,7 @@ than TMDB gives these titles.
   channel under an assumed "Stand-Up" server tag (their real TMDB ids, with a
   note that this is unverified against any real library), and one of them
   (Carl Barron: Wompoo Street) tested again with its REAL bare TMDB genre and
-  no assumed tag, which still stays off the channel today — the honest
+  no assumed tag, which still stays off the channel today, the honest
   current limit of the fix. `scripts/nostalgex-filter-smoke.mjs` gained 5
   unit cases for the new flag directly (off stays locked, the narrow genre
   passes unclaimed, the gated genre still needs the keyword, the keyword
@@ -67,7 +67,7 @@ than TMDB gives these titles.
 card's own ask (F9euJWiF). None get `manifestOnlyGenreFallback` in this
 branch.
 
-- **ANIME** (id 60): same shape as STAND-UP before this fix — has
+- **ANIME** (id 60): same shape as STAND-UP before this fix, has
   `genres.include: ["Animation"]` and a keyword list, but no
   `keywordGatedGenres`, so turning the flag on today would let EVERY
   animated title through ungated (Disney, Pixar, kids cartoons), not just
@@ -86,14 +86,14 @@ branch.
   unrelated shows (Lost, Dark, From). A genre fallback on Mystery/Horror
   alone, with no reliable keyword to gate it, would catch most mystery and
   horror shows. Not a safe candidate without new curation work.
-- **CRITERION** (id 211): defines no genre or keyword rules at all — just
+- **CRITERION** (id 211): defines no genre or keyword rules at all, just
   `type: movie` and the manifest. "Criterion Collection" isn't a genre or a
   TMDB keyword; there's no signal to build a fallback from without a new
   rule concept (a collection or distributor check). Separate investigation.
 
 **Half-done.** Everything above is on the branch, not merged. Roku has not
 been touched; the Roku `manifestOnly` filter in `roku/source/filter/ChannelFilter.brs`
-needs the same `manifestOnlyGenreFallback` logic ported once this merges —
+needs the same `manifestOnlyGenreFallback` logic ported once this merges,
 tracked as the next Roku parity item, not done here.
 
 **Next.** Chad's go to merge. After that: the ANIME follow-up (add

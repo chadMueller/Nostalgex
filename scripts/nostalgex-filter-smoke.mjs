@@ -131,7 +131,7 @@ check("manifest claim: claimed item passes without genre match", passes(item({ t
 
 // manifestOnlyGenreFallback: a manifestOnly channel can opt in to a second,
 // additive claim path (STAND-UP's real shape). The gate is per-channel, keyed
-// off keywordGatedGenres, not automatic — the same bare genre that's rejected
+// off keywordGatedGenres, not automatic, the same bare genre that's rejected
 // above still gets rejected here unless the channel's own rules let it through
 // ungated or via a keyword.
 const moFallbackCh = {
