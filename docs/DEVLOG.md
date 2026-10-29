@@ -3,6 +3,108 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (ANIME: the same second claim path, with its own guard, branch only)
+
+**Shipped.** Nothing. Branch `fix/standup-missing-specials`, on top of the
+STAND-UP commits (not a new branch; a direct follow-up Chad asked for in the
+same session), not merged, not pushed.
+
+**Why.** ANIME (channel id 60, CH 59) was `manifestOnly: true`, same shape as
+STAND-UP before its fix: a title reached it only if its TMDB ID was already
+in `channels-memberships.json`. The STAND-UP commit flagged ANIME as a real
+candidate for `manifestOnlyGenreFallback`, but said flipping it on as-is
+would let every TMDB "Animation" title through (Disney, Pixar, kids
+cartoons), since ANIME had `genres.include: ["Animation"]` and a keyword
+list but no `keywordGatedGenres`.
+
+**Adding `keywordGatedGenres: ["Animation"]` alone was not enough.** Checked
+against live TMDB data (API key already in `.env`), not guessed:
+`keywordGatedGenres` only applies when nothing else matched first. A keyword
+hit (`matchesKeyword` in the content-matching block) bypasses it entirely,
+and two of ANIME's own keywords were too generic to be a safe keyword
+signal once this fallback could actually run:
+
+- **"dark fantasy" and "supernatural"** are TMDB keywords on real anime
+  (Jujutsu Kaisen, Demon Slayer, Attack on Titan all carry them), but also
+  on Western, non-anime content that already carries the "Animation" genre
+  tag `keywordGatedGenres` was meant to gate. Coraline (TMDB id 14836) is
+  tagged Animation/Family/Fantasy/Horror with the "dark fantasy" keyword and
+  would have reached ANIME regardless of the new gate, since the keyword hit
+  short-circuits past it. Dropped both from ANIME's keyword list; every real
+  anime title checked (Jujutsu Kaisen, Demon Slayer, Attack on Titan, Akira,
+  Ghost in the Shell, Paprika, Jin-Roh, Vampire Hunter D, Mob Psycho 100,
+  Devilman Crybaby, Rurouni Kenshin) also carries the literal "anime"
+  keyword, so nothing real is lost.
+- **`keywordsRequireAnyGenre`** was `["Animation", "Action & Adventure",
+  "Sci-Fi & Fantasy"]`, broader than `genres.include`. Every real anime
+  show checked also carries the "Animation" genre tag on TMDB, so the extra
+  two never widened the real catch, but they did open a hole: a live-action
+  show tagged Sci-Fi & Fantasy with no Animation genre at all (Supernatural,
+  TMDB tv id 1622) or Action & Adventure (Alice in Borderland, TMDB tv id
+  110316, carries the real "based on manga" keyword ANIME still uses) would
+  have cleared the keyword path on genre alone, Animation tag or not.
+  Narrowed to `["Animation", "Anime"]`, matching `genres.include`.
+
+**Changed (channels.json only; the engine already supports both flags from
+the STAND-UP commit, no Swift/JS changes needed here).**
+
+- ANIME's `genres.include` gained the narrow server tag "Anime" (the same
+  tag the shipped `exclusiveRules` entry already locks to channels 32/60),
+  mirroring STAND-UP's narrow-tag pattern: specific enough to reach the
+  channel ungated, so it's left out of `keywordGatedGenres`.
+- `keywords`: dropped "dark fantasy" and "supernatural"; kept "anime",
+  "based on manga", "seinen", "shounen", "mecha".
+- `keywordsRequireAnyGenre`: narrowed from `["Animation", "Action &
+  Adventure", "Sci-Fi & Fantasy"]` to `["Animation", "Anime"]`.
+- Added `keywordGatedGenres: ["Animation"]` and `manifestOnlyGenreFallback:
+  true`.
+- `channels.json` v44 to v45. `CHANNELS.md`, `scripts/bundle-lastmod.json`
+  regenerated to match (`npm run channels:doc`, `npm test`'s bundle render).
+
+**Editorial overrides and SCI-FI exclusivity, checked.**
+
+- ANIME's 138-entry `editorialOverrides` list matches by exact title before
+  any manifest, `manifestOnly` or genre/keyword logic runs at all (same code
+  path on both engines), so the new fallback can never contradict or
+  duplicate an override decision, it only ever adds a second way to reach
+  titles the override list doesn't name. Verified with Pokémon (on the
+  override list, no anime TMDB keyword) still reaching the channel on the
+  title match alone.
+- SCI-FI (channel 73) excludes Animation/Family/Kids in its own
+  `genres.exclude`, checked at the end of every path including a manifest
+  claim (already proven by the shipped Aladdin/SCI-FI case in
+  `nostalgex-filter-smoke.mjs`), so it was never going to take anime
+  content regardless of ANIME's fallback. Added a case with a synthetic
+  sci-fi-anime title reaching ANIME through the new fallback and staying
+  off SCI-FI through that same exclude.
+- The shipped `exclusiveRules` entry (`genres: ["Anime"]`, `channelIDs: [32,
+  60]`, `manifestExclusive: true`) already locks manifest-claimed anime away
+  from every other channel. Confirmed it still holds after the `genres.include`
+  edit with a real, non-override manifest claim (Akame ga Kill!, tv:61223,
+  claimed for channel 60 only): it still reaches ANIME and still stays off
+  ANIMATION (channel 25), which would otherwise take its bare "Animation" tag.
+
+**Tests.** `scripts/filter-golden.json`: 9 new cases (117 to 125, after
+STAND-UP's own 14): a new title reaching ANIME on genre + keyword alone, the
+narrow "Anime" tag reaching it ungated, the bare-Animation catch-all guard,
+the three real-title guards above (Coraline, Supernatural, Alice in
+Borderland), the sci-fi-anime fallback case, the Akame ga Kill! exclusivity
+regression, and the Pokémon editorial-override case.
+`scripts/nostalgex-filter-smoke.mjs`: 5 new direct unit cases on ANIME's own
+rule shape, including one that deliberately shows a too-broad keyword still
+leaking past `keywordGatedGenres` on an allowed genre, to document why the
+keyword list and `keywordsRequireAnyGenre` needed narrowing and not just the
+new gate. `npm test`: all green (`test:filter` 69 passed, `test:filter-golden`
+125 passed, full suite and bundle renders clean). `NostalgexTests` not run
+this session; flagged to the orchestrator first per standing instruction to
+ask before using the simulator.
+
+**Next.** Chad's go to merge. After that: the Roku port of both
+`manifestOnlyGenreFallback` channels (STAND-UP and ANIME) in
+`roku/source/filter/ChannelFilter.brs`; WORLD HORROR, MYSTERY BOX TV and
+CRITERION remain unsafe candidates for this flag for the reasons STAND-UP's
+entry below already gives.
+
 ## 2026-10-29 (STAND-UP: a second claim path, not just a manifest, branch only)
 
 **Shipped.** Nothing. Branch `fix/standup-missing-specials`, cut from `main`

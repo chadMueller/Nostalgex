@@ -173,6 +173,58 @@ check(
 );
 check("manifest exclusive: locked item blocked elsewhere", passes(item({ tmdbID: 777, genres: ["Drama"] }), plainCh, { manifest }), false);
 
+// ANIME's real shape: manifestOnlyGenreFallback + keywordGatedGenres alone is NOT
+// enough. A keyword match (matchesKeyword) bypasses the genre-matching branch
+// entirely, so keywordGatedGenres never even runs for it. The gate only applies
+// when no keyword matched and the channel falls back to a bare genre check.
+// ANIME's real channels.json rules were tightened for this reason: "dark fantasy"
+// and "supernatural" were dropped from its keywords (too generic, any Western
+// animated horror film carries them), and keywordsRequireAnyGenre was narrowed
+// from [Animation, Action & Adventure, Sci-Fi & Fantasy] to [Animation, Anime]
+// (a live-action show tagged Sci-Fi & Fantasy, with no Animation genre at all,
+// otherwise cleared the old cross-check on genre alone). See filter-golden.json's
+// coraline-western-stop-motion-film-stays-off-anime and
+// supernatural-tv-series-live-action-stays-off-anime for the real-title version
+// of this same guard.
+const animeShapeCh = {
+  id: 912,
+  rules: {
+    manifestOnly: true,
+    manifestOnlyGenreFallback: true,
+    genres: { include: ["Animation", "Anime"] },
+    keywords: ["anime", "based on manga"],
+    keywordsRequireAnyGenre: ["Animation", "Anime"],
+    keywordGatedGenres: ["Animation"],
+  },
+};
+check(
+  "ANIME shape: genre + anime keyword reaches the channel (the real fallback case)",
+  passes(item({ genres: ["Animation"], enrichment: { keywords: ["anime"] } }), animeShapeCh),
+  true,
+);
+check(
+  "ANIME shape: bare Animation genre alone still fails without the keyword (keywordGatedGenres holds)",
+  passes(item({ genres: ["Animation"] }), animeShapeCh),
+  false,
+);
+check(
+  "ANIME shape: narrow 'Anime' genre tag alone reaches the channel ungated",
+  passes(item({ genres: ["Anime"] }), animeShapeCh),
+  true,
+);
+check(
+  "ANIME shape: a keyword match bypasses keywordGatedGenres entirely, so a too-broad keyword " +
+    "still leaks on a non-Animation genre the cross-check allows (this is why the real keyword list dropped " +
+    "'dark fantasy'/'supernatural' and the cross-check was narrowed to Animation/Anime, not left broader)",
+  passes(item({ genres: ["Anime"], enrichment: { keywords: ["based on manga"] } }), animeShapeCh),
+  true,
+);
+check(
+  "ANIME shape: the narrowed keywordsRequireAnyGenre blocks a keyword hit on a genre outside Animation/Anime",
+  passes(item({ genres: ["Sci-Fi & Fantasy"], enrichment: { keywords: ["anime"] } }), animeShapeCh),
+  false,
+);
+
 // A manifest claim must not bypass the channel's own genres.exclude. The manifest
 // is built from TMDB "similar" expansion, which put Aladdin (Animation, Family)
 // on SCI-FI, a channel that explicitly excludes both.

@@ -44,7 +44,7 @@ only name the channel's own defining genre.
 
 **`rewatched` means `viewCount >= 3`** in both implementations.
 
-**Config version:** 44 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
+**Config version:** 45 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
 
 ---
 
@@ -175,7 +175,7 @@ _Premium channels_
 
 | CH | `id` | Name | Color | Type | Min items | Rules |
 |---|---|---|---|---|---|---|
-| 59 | **`60`** ⚠︎ | ANIME | `#FF3D6E` | Any | 3 | **TMDB manifest only**, incl Animation, editorial always-in (138), kw +7, kw needs genre Animation/Action & Adventure/Sci-Fi & Fantasy |
+| 59 | **`60`** ⚠︎ | ANIME | `#FF3D6E` | Any | 3 | **TMDB manifest + gated genre/keyword fallback**, incl Animation/Anime, editorial always-in (138), kw +5, kw needs genre Animation/Anime, kw-gated genre Animation |
 | 60 | **`61`** ⚠︎ | MUSICALS | `#C2185B` | Movies | 3 | incl Music/Musical, kw +5, kw needs genre Music/Comedy/Romance, kw-gated genre Music |
 | 61 | **`55`** ⚠︎ | GAME SHOWS | `#FFB300` | Episodes | 3 | incl Game Show/Game-Show/Competition, title allowlist (30) |
 | 62 | **`63`** ⚠︎ | ADULT CARTOONS | `#8E44AD` | Episodes | 3 | incl Animation/Animated/Cartoon, title allowlist (21) |
@@ -440,4 +440,4 @@ _Music videos by genre_
 
 ---
 
-_Generated from `channels.json` v44 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
+_Generated from `channels.json` v45 by `scripts/render-channels-doc.mjs`. Do not edit by hand._

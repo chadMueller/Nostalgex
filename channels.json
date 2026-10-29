@@ -1,5 +1,5 @@
 {
-  "version": 44,
+  "version": 45,
   "exclusiveRules": [
     {
       "channelIDs": [
@@ -2012,7 +2012,8 @@
       "rules": {
         "genres": {
           "include": [
-            "Animation"
+            "Animation",
+            "Anime"
           ]
         },
         "keywords": [
@@ -2020,16 +2021,17 @@
           "based on manga",
           "seinen",
           "shounen",
-          "dark fantasy",
-          "supernatural",
           "mecha"
         ],
         "keywordsRequireAnyGenre": [
           "Animation",
-          "Action & Adventure",
-          "Sci-Fi & Fantasy"
+          "Anime"
+        ],
+        "keywordGatedGenres": [
+          "Animation"
         ],
         "manifestOnly": true,
+        "manifestOnlyGenreFallback": true,
         "editorialOverrides": [
           "Pokémon",
           "Pokémon Horizons",

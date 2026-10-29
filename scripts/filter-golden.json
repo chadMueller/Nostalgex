@@ -2398,6 +2398,207 @@
       "out": [
         58
       ]
+    },
+    {
+      "name": "anime-fallback-reaches-a-new-title-with-genre-and-keyword-no-manifest-or-editorial",
+      "about": "ANIME opts in to manifestOnlyGenreFallback (same shape as STAND-UP): a new title TMDB keyword-tags as anime, with the Animation genre, now reaches the channel with no manifest claim and no editorial-override entry needed.",
+      "item": {
+        "title": "A Totally New Shounen Anime Nobody Added Yet",
+        "year": 2026,
+        "type": "episode",
+        "genres": [
+          "Animation",
+          "Action & Adventure"
+        ],
+        "enrichment": {
+          "keywords": [
+            "anime",
+            "shounen"
+          ]
+        }
+      },
+      "in": [
+        60
+      ]
+    },
+    {
+      "name": "anime-narrow-genre-tag-alone-reaches-anime-ungated",
+      "about": "The narrow server genre tag 'Anime' (the same tag scripts/nostalgex-channel-filter.cjs's exclusiveRules reference for channel 60) is specific enough to reach ANIME on its own, same as STAND-UP's 'Stand-Up' tag: no TMDB keyword, no manifest claim.",
+      "item": {
+        "title": "A Server-Tagged Anime Nobody Added Yet",
+        "year": 2026,
+        "type": "movie",
+        "genres": [
+          "Anime"
+        ]
+      },
+      "in": [
+        60
+      ]
+    },
+    {
+      "name": "bare-animation-genre-alone-stays-off-anime",
+      "about": "Guard: manifestOnlyGenreFallback must not turn ANIME into a catch-all for every TMDB 'Animation' title. A generic Western cartoon with no anime keyword stays off the channel. This is the exact risk the orchestrator flagged before flipping the flag; keywordGatedGenres: ['Animation'] closes it.",
+      "item": {
+        "title": "A Totally New Western Cartoon",
+        "year": 2026,
+        "type": "movie",
+        "genres": [
+          "Animation",
+          "Comedy"
+        ],
+        "enrichment": {
+          "keywords": [
+            "talking animals"
+          ]
+        }
+      },
+      "out": [
+        60
+      ]
+    },
+    {
+      "name": "coraline-western-stop-motion-film-stays-off-anime",
+      "about": "Guard, real title: Coraline (TMDB id 14836, checked live 2026-10-29) is Western stop-motion, genres Animation/Family/Fantasy/Horror, and carries TMDB's 'dark fantasy' keyword. That keyword used to be in ANIME's own keyword list; kept, it would have let this reach ANIME even with keywordGatedGenres on Animation, since a keyword match bypasses the genre gate entirely. 'dark fantasy' and 'supernatural' were dropped from ANIME's keywords for this reason; the remaining keywords (anime, based on manga, seinen, shounen, mecha) do not appear on this title, so it stays off.",
+      "item": {
+        "title": "Coraline",
+        "year": 2009,
+        "type": "movie",
+        "genres": [
+          "Animation",
+          "Family",
+          "Fantasy",
+          "Horror"
+        ],
+        "tmdbID": "14836",
+        "enrichment": {
+          "keywords": [
+            "dark fantasy",
+            "stop motion",
+            "parallel world",
+            "reality vs fantasy"
+          ]
+        }
+      },
+      "out": [
+        60
+      ]
+    },
+    {
+      "name": "supernatural-tv-series-live-action-stays-off-anime",
+      "about": "Guard, real title: Supernatural (TMDB tv id 1622, checked live 2026-10-29) is live action, genres Drama/Mystery/Sci-Fi & Fantasy, with TMDB keywords 'supernatural' and 'dark fantasy'. Before this fix, ANIME's keywordsRequireAnyGenre included Sci-Fi & Fantasy (not just Animation/Anime), so this live-action show would have matched the keyword path purely on its Sci-Fi & Fantasy genre tag, with no Animation genre at all. keywordsRequireAnyGenre is now Animation/Anime only, so it stays off.",
+      "item": {
+        "title": "Supernatural",
+        "year": 2005,
+        "type": "episode",
+        "genres": [
+          "Drama",
+          "Mystery",
+          "Sci-Fi & Fantasy"
+        ],
+        "tmdbID": "1622",
+        "enrichment": {
+          "keywords": [
+            "supernatural",
+            "dark fantasy",
+            "demon"
+          ]
+        }
+      },
+      "out": [
+        60
+      ]
+    },
+    {
+      "name": "alice-in-borderland-live-action-manga-adaptation-stays-off-anime",
+      "about": "Guard, real title: Alice in Borderland (TMDB tv id 110316, checked live 2026-10-29) is a live-action Japanese Netflix series, genres Mystery/Drama/Action & Adventure, carrying TMDB's 'based on manga' keyword (a real signal ANIME still uses). With the old broader keywordsRequireAnyGenre (including Action & Adventure), this would have matched the keyword path on genre alone despite having no Animation tag at all. Narrowed to Animation/Anime, it stays off.",
+      "item": {
+        "title": "Alice in Borderland",
+        "year": 2020,
+        "type": "episode",
+        "genres": [
+          "Mystery",
+          "Drama",
+          "Action & Adventure"
+        ],
+        "tmdbID": "110316",
+        "enrichment": {
+          "keywords": [
+            "based on manga",
+            "dystopia",
+            "survival"
+          ]
+        }
+      },
+      "out": [
+        60
+      ]
+    },
+    {
+      "name": "anime-sci-fi-title-reaches-anime-via-fallback-and-stays-off-sci-fi",
+      "about": "ANIME and SCI-FI (channel 73) compete for the same titles (anime that's also sci-fi). SCI-FI's own genres.exclude (Animation/Family/Kids) already keeps every Animation-tagged title off it, manifest claim or not (see nostalgex-filter-smoke.mjs's Aladdin case); this confirms the new ANIME fallback path respects that the same way. No manifest claim, no editorial-override entry: reaches ANIME through the new fallback alone, stays off SCI-FI through SCI-FI's own exclude.",
+      "item": {
+        "title": "A New Sci-Fi Anime Nobody Added Yet",
+        "year": 2026,
+        "type": "movie",
+        "genres": [
+          "Animation",
+          "Science Fiction"
+        ],
+        "enrichment": {
+          "keywords": [
+            "anime",
+            "cyberpunk"
+          ]
+        }
+      },
+      "in": [
+        60
+      ],
+      "out": [
+        73
+      ]
+    },
+    {
+      "name": "anime-exclusive-rule-still-blocks-other-channels-after-the-channels-json-edit",
+      "about": "Regression guard: the shipped exclusiveRules entry (genres: ['Anime'], channelIDs: [32, 60], manifestExclusive) locks a title the manifest claims for ANIME away from every other channel, even when it is only tagged the broad 'Animation' genre. Akame ga Kill! (tv:61223) is a real manifest-only claim for channel 60, not one of ANIME's editorialOverrides. Editing ANIME's own rules (adding 'Anime' to genres.include, keywordGatedGenres, manifestOnlyGenreFallback) must not weaken that lock: it still reaches ANIME via the manifest and stays off ANIMATION (channel 25, a Western-cartoon channel whose own genres.include: ['Animation'] would otherwise take it).",
+      "item": {
+        "title": "Akame ga Kill!",
+        "year": 2014,
+        "type": "episode",
+        "genres": [
+          "Animation",
+          "Action & Adventure"
+        ],
+        "tmdbID": "61223"
+      },
+      "in": [
+        60
+      ],
+      "out": [
+        25
+      ]
+    },
+    {
+      "name": "pokemon-editorial-override-unaffected-by-the-new-fallback",
+      "about": "Pokémon is one of ANIME's editorialOverrides (exact-title match, checked before any manifest/manifestOnly/genre logic runs). It reaches ANIME on the title match alone, with no anime TMDB keyword present, confirming the new fallback path is purely additive and never contradicts an editorial decision.",
+      "item": {
+        "title": "Pokémon",
+        "year": 1998,
+        "type": "episode",
+        "genres": [
+          "Animation",
+          "Family"
+        ],
+        "enrichment": {
+          "keywords": [
+            "pocket monster"
+          ]
+        }
+      },
+      "in": [
+        60
+      ]
     }
   ]
 }
