@@ -64,6 +64,7 @@ enum NowPlayingFocus: Hashable {
     case audioLanguage
     case autoSubtitles
     case openInPlex
+    case compatibilityRetry
     /// A row inside an expanded picker, keyed by that option's own stable id
     /// (a `StreamQuality.id` or a language code).
     case option(String)
@@ -103,6 +104,7 @@ struct NowPlayingPanel: View {
     @State private var focusAfterCollapse: NowPlayingFocus?
 
     @State private var streamQuality = StreamQuality.current
+    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
 
     /// Wide enough for the longest title the panel carries, "AUTO SUBTITLES (FOREIGN
     /// AUDIO)", without truncating its value.
@@ -256,6 +258,9 @@ struct NowPlayingPanel: View {
             ) { row in
                 programRow(row)
             }
+            if appState.canRetryOriginalVideo {
+                compatibilityRetryRow
+            }
         }
         .frame(width: controlColumnWidth, alignment: .leading)
     }
@@ -333,6 +338,29 @@ struct NowPlayingPanel: View {
         .focused($focusedControl, equals: .cc)
     }
 
+    @State private var compatibilityStatus: String?
+
+    private var compatibilityRetryRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                compatibilityStatus = "CHECKING SERVER"
+                Task { @MainActor in
+                    compatibilityStatus = await appState.retryOriginalVideoCompatibility()
+                }
+            } label: {
+                controlRow(label: "RETRY ORIGINAL VIDEO", value: "",
+                           isFocused: focusedControl == .compatibilityRetry,
+                           isActive: false, disabled: appState.compatibilityRetryInFlight)
+            }
+            .buttonStyle(NoHighlightButtonStyle())
+            .focused($focusedControl, equals: .compatibilityRetry)
+            .disabled(appState.compatibilityRetryInFlight)
+            Text(compatibilityStatus ?? "Try different packaging for this program. Keeps original video; quality settings stay unchanged.")
+                .font(.system(size: 18))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     @State private var openInPlexStatus: String?
 
     private var openInPlexRow: some View {
@@ -394,7 +422,7 @@ struct NowPlayingPanel: View {
         pickerRow(
             .streamQuality,
             title: "STREAM QUALITY",
-            value: streamQuality.displayName.uppercased(),
+            value: localOriginalVideo && appState.backendKind == .plex ? "ORIGINAL (LOCAL PLEX)" : streamQuality.displayName.uppercased(),
             focus: .streamQuality,
             note: "Takes effect on the next program."
         )
@@ -589,15 +617,28 @@ struct NowPlayingPanel: View {
 
     private var streamQualityOptions: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if appState.backendKind == .plex {
+                Button {
+                    localOriginalVideo.toggle()
+                    collapsePicker(owner: .streamQuality)
+                } label: {
+                    controlRow(label: "ORIGINAL (LOCAL PLEX)", value: localOriginalVideo ? "ACTIVE" : nil,
+                               isFocused: focusedControl == .option("local-original"), isActive: localOriginalVideo,
+                               disabled: false, note: LocalPlexOriginalQuality.detail)
+                }
+                .buttonStyle(NoHighlightButtonStyle())
+                .focused($focusedControl, equals: .option("local-original"))
+            }
             ForEach(StreamQuality.allCases) { quality in
                 Button {
+                    localOriginalVideo = false
                     StreamQuality.current = quality
                     streamQuality = quality
                     collapsePicker(owner: .streamQuality)
                 } label: {
                     controlRow(
                         label: quality.displayName.uppercased(),
-                        value: quality == streamQuality ? "ACTIVE" : nil,
+                        value: quality == streamQuality ? (localOriginalVideo ? "OTHER PLAYBACK" : "ACTIVE") : nil,
                         isFocused: focusedControl == .option(quality.id),
                         isActive: quality == streamQuality,
                         disabled: false,
@@ -680,7 +721,7 @@ struct NowPlayingPanel: View {
     /// Which option row focus should open on — the one currently in effect.
     private func selectedOptionID(_ picker: PanelPicker) -> String {
         switch picker {
-        case .streamQuality:    return streamQuality.id
+        case .streamQuality:    return localOriginalVideo && appState.backendKind == .plex ? "local-original" : streamQuality.id
         case .subtitleLanguage: return appState.preferredSubtitleLanguageCode
         case .audioLanguage:    return appState.preferredAudioLanguageCode
         case .playbackInformation: return "information-back"

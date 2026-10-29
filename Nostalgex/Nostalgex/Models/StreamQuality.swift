@@ -123,3 +123,15 @@ enum StreamQuality: String, CaseIterable, Identifiable, Sendable {
     /// seconds. Quality stepping is the app's own job now (PlaybackStarvation).
     var allowsAutoAdjust: Bool { false }
 }
+
+/// Independent local Plex opt-in. Capped quality remains stored for remote servers,
+/// other backends and formats outside the verified original-video path.
+enum LocalPlexOriginalQuality {
+    static let storageKey = "nostalgex_local_plex_original_video"
+    static let requestCeilingKbps = 100_000
+    static let detail = "Keep supported local 4K video unchanged, up to 100 Mbps. Audio may convert to 5.1. Other playback keeps your capped quality. Applies on the next tune."
+    static var enabled: Bool {
+        get { UserDefaults.standard.bool(forKey: storageKey) }
+        set { UserDefaults.standard.set(newValue, forKey: storageKey) }
+    }
+}

@@ -8,6 +8,65 @@ import UIKit
 // Player control, subtitles and audio selection, sleep timer, retries and auto-advance.
 // Split out of AppState.swift; behavior unchanged.
 extension AppState {
+    // MARK: - Explicit original-video compatibility retry
+
+    var canRetryOriginalVideo: Bool {
+        guard backendKind == .plex, !isDemoMode, let item = currentItem,
+              let backend = api(for: item.serverID) as? PlexAPIService else { return false }
+        return PlexAPIService.canRetryOriginalVideo(item, isLocal: backend.isLikelyLocalServer,
+                                                    hevcCapable: CodecSupport.deviceSupportsHEVC)
+    }
+
+    /// A fresh session is prepared while the old player stays in place. Rejected or stale
+    /// decisions clean up only their own session. No automatic 1080p recovery is allowed.
+    func retryOriginalVideoCompatibility() async -> String {
+        guard canRetryOriginalVideo, !compatibilityRetryInFlight, !playbackRecoveryInFlight, let item = currentItem,
+              let backend = api(for: item.serverID) as? PlexAPIService,
+              let oldItem = player?.currentItem else { return "RETRY UNAVAILABLE" }
+        compatibilityRetryInFlight = true
+        defer { compatibilityRetryInFlight = false }
+        let generation = loadGeneration
+        let attempt = playbackAttemptGeneration
+        let observed = oldItem.currentTime().seconds + hlsBaseOffset
+        let offset = observed.isFinite && observed >= 0 ? Int(observed) : max(0, seekOffset)
+        let playbackItem = await backend.itemWithPlaybackStreamFacts(item)
+        let convertSurround = playbackItem.audioCodec?.lowercased() == "eac3" && playbackItem.audioChannelCount == 8
+        let session = UUID().uuidString
+        guard let original = backend.transcodeURL(for: playbackItem, sessionID: session, offsetSeconds: offset),
+              let url = PlexAPIService.preservationRetryURL(from: original, audioStreamID: playbackItem.audioStreamID,
+                                                           convertSurroundAudio: convertSurround) else { return "RETRY UNAVAILABLE" }
+        let decision = await backend.prepareTranscodeSession(startURL: url)
+        guard isCurrentPlaybackAttempt(generation: generation, attempt: attempt, playerItem: oldItem),
+              !playbackRecoveryInFlight else {
+            await backend.stopTranscode(playSessionId: session)
+            return "PROGRAM CHANGED"
+        }
+        guard decision.code.hasPrefix("1"), decision.preservesOriginalVideo else {
+            await backend.stopTranscode(playSessionId: session)
+            return "SERVER CANNOT KEEP ORIGINAL VIDEO"
+        }
+        guard !convertSurround || decision.convertsAudioToAC3Surround else {
+            await backend.stopTranscode(playSessionId: session)
+            return "SERVER CANNOT KEEP SURROUND AUDIO"
+        }
+        // Invalidate the old player's watchdogs before installing the prepared session.
+        loadGeneration += 1
+        stopActiveTranscodeIfNeeded()
+        activeTranscode = (item.serverID, session)
+        playbackRequiresOriginalVideo = true
+        seekOffset = offset
+        hlsRequestedOffset = offset
+        hlsBaseOffset = 0
+        audioTracks = []
+        audibleGroup = nil
+        audibleGroupItem = nil
+        selectedAudioTrackID = nil
+        fallbackToTranscode(url: url, seekTo: nil, generation: loadGeneration,
+                            allowCappedRetry: false, prepared: true,
+                            informationReason: .originalVideoRetry)
+        return "RETRYING ORIGINAL VIDEO"
+    }
+
     // MARK: - Open in Plex
 
     /// Whether the current program can be handed to the Plex app: Plex backend, not demo,
@@ -304,6 +363,7 @@ extension AppState {
             self.stopActiveTranscodeIfNeeded()
             self.seekOffset = position
             self.activeTranscode = (item.serverID, resolved.resolution.playSessionId)
+            self.playbackRequiresOriginalVideo = resolved.resolution.requiresOriginalVideo
             self.hlsRequestedOffset = resolved.startsAtOffset ? position : 0
             self.fallbackToTranscode(url: resolved.resolution.url, seekTo: resolved.startsAtOffset ? nil : position,
                                      generation: generation, allowCappedRetry: true, prepared: true,
@@ -630,6 +690,7 @@ extension AppState {
         stopActiveTranscodeIfNeeded()
 
         playbackInformation = nil
+        playbackRequiresOriginalVideo = false
         guard var item = currentItem else {
             print("[Plex90] gen=\(generation) | No item, going idle")
             playbackState = .idle
@@ -771,6 +832,7 @@ extension AppState {
                 resolvedURL = resolution.url
                 isDirectPlay = resolution.isDirectPlay
                 self.activeTranscode = (itemServerID, resolution.playSessionId)
+                self.playbackRequiresOriginalVideo = resolution.requiresOriginalVideo
             }
 
             print("[Plex90] gen=\(generation) | Creating AVPlayerItem for \"\(title)\" (direct=\(isDirectPlay))")
@@ -1144,7 +1206,7 @@ extension AppState {
             return
         }
         guard self.claimPlaybackRecovery(for: playerItem, generation: generation, attempt: attempt) else { return }
-        if allowCappedRetry, !isDirectPlay, let item,
+        if allowCappedRetry, !playbackRequiresOriginalVideo, !isDirectPlay, let item,
            let backend = Optional(self.api(for: item.serverID)),
            let capped = backend.cappedTranscodeURL(for: item, offsetSeconds: self.seekOffset, sessionID: UUID().uuidString) {
             print("[Plex90] gen=\(generation) | WATCHDOG: \(deadline)s deadline, no picture (\(detail)) — retrying once with video capped at 1080p")
@@ -1243,7 +1305,7 @@ extension AppState {
             return
         }
         guard claimPlaybackRecovery(for: playerItem, generation: generation, attempt: attempt) else { return }
-        if allowCappedRetry, let item,
+        if allowCappedRetry, !playbackRequiresOriginalVideo, let item,
            let capped = api(for: item.serverID).cappedTranscodeURL(for: item, offsetSeconds: position, sessionID: UUID().uuidString) {
             // Plex builds the offset into the capped request; Jellyfin and Emby reject a
             // start time on segment requests, so their capped stream begins at zero and we

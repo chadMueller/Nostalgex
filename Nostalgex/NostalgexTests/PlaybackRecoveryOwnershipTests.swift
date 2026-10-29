@@ -418,4 +418,50 @@ final class PlaybackRecoveryOwnershipTests: XCTestCase {
         state.stopActiveTranscodeIfNeeded()
         state.player = nil
     }
+    private func checkOriginalVideoRecovery(startup: Bool) async {
+        for explicit in [false, true] {
+            let backend = Backend(offersCappedStream: true)
+            let (state, playerItem) = makeState(backend)
+            let candidate = await PlexAPIService.resolveOriginalVideoCandidate(
+                url: URL(fileURLWithPath: "/synthetic-original.m3u8"), sessionID: "original",
+                offsetSeconds: 50, requiresOriginalVideo: explicit,
+                prepare: { _ in .init(code: "1001", text: "ok", preservesOriginalVideo: true, preservesOriginalAudio: true) },
+                stop: { _ in }, fallback: { nil })
+            state.playbackRequiresOriginalVideo = candidate!.resolution.requiresOriginalVideo
+            if startup {
+                state.handleWatchdogNoPicture(playerItem: playerItem, item: state.currentItem,
+                    isDirectPlay: false, generation: state.loadGeneration, attempt: state.playbackAttemptGeneration,
+                    allowCappedRetry: true, deadline: 20, detail: "controlled original-video startup")
+            } else {
+                state.handleStarvation(item: state.currentItem, isDirectPlay: false,
+                    generation: state.loadGeneration, attempt: state.playbackAttemptGeneration,
+                    playerItem: playerItem, allowCappedRetry: true, position: 50,
+                    title: "Synthetic", detail: "controlled original-video stall")
+            }
+            if explicit {
+                XCTAssertNil(state.activeTranscode)
+                let requests = await backend.requests.snapshot()
+                XCTAssertTrue(requests.kinds.isEmpty, "explicit Original must not request a capped stream")
+            } else {
+                XCTAssertNotNil(state.activeTranscode?.playSessionId)
+                XCTAssertEqual(state.playbackInformation?.recoveryRequest, .compatibility1080p)
+                await waitForRequests(1, backend: backend)
+            }
+            let pending = state.playbackResolutionTask
+            state.currentItem = nil
+            state.loadCurrentItem()
+            if !explicit { await backend.requests.finish(0, session: nil) }
+            await pending?.value
+            state.player = nil
+        }
+    }
+
+    func testAutomaticOriginalVideoKeepsStartupCappedRescue() async {
+        await checkOriginalVideoRecovery(startup: true)
+    }
+
+    func testAutomaticOriginalVideoKeepsStallCappedRescue() async {
+        await checkOriginalVideoRecovery(startup: false)
+    }
+
 }

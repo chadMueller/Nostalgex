@@ -19,6 +19,10 @@ struct PlexPartPlaybackInfo: Codable, Hashable {
     let bitDepth: Int?
     let doviProfile: Int?
     var durationSeconds: Double? = nil
+    var audioChannelCount: Int? = nil
+    var doviCompatibilityID: Int? = nil
+    var audioStreamID: Int? = nil
+    var hasHDR10ColorMetadata: Bool? = nil
 }
 
 struct PlexMediaItem: Identifiable, Hashable {
@@ -77,6 +81,10 @@ struct PlexMediaItem: Identifiable, Hashable {
     /// episodes the library load already holds. Optional so older snapshots still
     /// decode; nil until the next full library scan.
     var showKey: String? = nil
+    var audioChannelCount: Int? = nil
+    var doviCompatibilityID: Int? = nil
+    var audioStreamID: Int? = nil
+    var hasHDR10ColorMetadata: Bool? = nil
 }
 
 extension PlexMediaItem {
@@ -102,7 +110,11 @@ extension PlexMediaItem {
             videoWidth: videoWidth, videoHeight: videoHeight,
             mediaIndex: mediaIndex, partIndex: (additionalPartKeys?.firstIndex(of: key).map { $0 + 1 }) ?? partIndex,
             playbackParts: playbackParts, exactDurationSeconds: exactDurationSeconds,
-            showKey: showKey
+            showKey: showKey,
+            audioChannelCount: part == nil ? audioChannelCount : part?.audioChannelCount,
+            doviCompatibilityID: part == nil ? doviCompatibilityID : part?.doviCompatibilityID,
+            audioStreamID: part == nil ? audioStreamID : part?.audioStreamID,
+            hasHDR10ColorMetadata: part == nil ? hasHDR10ColorMetadata : part?.hasHDR10ColorMetadata
         )
     }
 
@@ -132,6 +144,7 @@ extension MediaType: Codable {}
 extension PlexMediaItem: Codable {
     enum CodingKeys: String, CodingKey {
         case id, title, artist, episodeTitle, seTag, summary, year, originallyAvailableAt
+        case audioChannelCount, doviCompatibilityID, audioStreamID, hasHDR10ColorMetadata
         case contentRating, duration, ratingKey, partKey, container, videoCodec, audioCodec
         case videoProfile, bitrate, genres, rating, userRating, type, thumb, art
         case viewCount, addedAt, studio, tmdbID, imdbID, librarySource, serverID
@@ -175,6 +188,10 @@ extension PlexMediaItem: Codable {
         additionalPartKeys = try c.decodeIfPresent([String].self, forKey: .additionalPartKeys)
         videoBitDepth = try c.decodeIfPresent(Int.self, forKey: .videoBitDepth)
         doviProfile = try c.decodeIfPresent(Int.self, forKey: .doviProfile)
+        audioChannelCount = try c.decodeIfPresent(Int.self, forKey: .audioChannelCount)
+        doviCompatibilityID = try c.decodeIfPresent(Int.self, forKey: .doviCompatibilityID)
+        audioStreamID = try c.decodeIfPresent(Int.self, forKey: .audioStreamID)
+        hasHDR10ColorMetadata = try c.decodeIfPresent(Bool.self, forKey: .hasHDR10ColorMetadata)
         videoWidth = try c.decodeIfPresent(Int.self, forKey: .videoWidth)
         videoHeight = try c.decodeIfPresent(Int.self, forKey: .videoHeight)
         mediaIndex = try c.decodeIfPresent(Int.self, forKey: .mediaIndex) ?? 0
@@ -219,6 +236,10 @@ extension PlexMediaItem: Codable {
         try c.encodeIfPresent(additionalPartKeys, forKey: .additionalPartKeys)
         try c.encodeIfPresent(videoBitDepth, forKey: .videoBitDepth)
         try c.encodeIfPresent(doviProfile, forKey: .doviProfile)
+        try c.encodeIfPresent(audioChannelCount, forKey: .audioChannelCount)
+        try c.encodeIfPresent(doviCompatibilityID, forKey: .doviCompatibilityID)
+        try c.encodeIfPresent(audioStreamID, forKey: .audioStreamID)
+        try c.encodeIfPresent(hasHDR10ColorMetadata, forKey: .hasHDR10ColorMetadata)
         try c.encodeIfPresent(videoWidth, forKey: .videoWidth)
         try c.encodeIfPresent(videoHeight, forKey: .videoHeight)
         try c.encode(mediaIndex, forKey: .mediaIndex)

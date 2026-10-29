@@ -7,6 +7,7 @@ struct PlaybackResolution: Sendable {
     let url: URL
     let playSessionId: String?
     let isDirectPlay: Bool
+    var requiresOriginalVideo: Bool = false
 }
 
 extension JellyfinPlaybackResolver {
