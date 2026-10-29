@@ -163,6 +163,14 @@ jobs:
               - 'channels-memberships.json'
               - 'scripts/schedule-parity-golden.json'
               - 'scripts/filter-golden.json'
+              - 'scripts/stream-quality-golden.json'
+              - 'scripts/season-golden.json'
+              - 'scripts/nostalgex-daily-manifest.js'
+              - 'scripts/nostalgex-music-brainz.js'
+              - 'scripts/nostalgex-jellyfin-urls.js'
+              - 'plex-tuner.html'
+              - 'roku/tests/gen-mediabrowser.mjs'
+              - 'roku/tests/fixtures/mediabrowser-server.json'
 
   channel-engine:
     name: Channel engine (rule parity, schedule order, docs)

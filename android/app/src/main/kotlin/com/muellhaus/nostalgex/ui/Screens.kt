@@ -73,38 +73,6 @@ private fun Wordmark() {
     Image(painterResource(R.drawable.wordmark), contentDescription = "Nostalgex", modifier = Modifier.width(360.dp))
 }
 
-/** The Apple TV's sign-in (SettingsView.swift): the code, plex.tv/link, and a QR with the code in it. */
-@Composable
-fun SignInScreen(state: Screen.SignIn) {
-    Centered {
-        Wordmark()
-        Spacer(Modifier.height(16.dp))
-        if (state.error != null) {
-            Text(state.error, style = mono(18, Palette.accent))
-        }
-        val pin = state.pin
-        if (pin == null) {
-            Text("CONNECTING TO PLEX…", style = retro(32, Palette.dim))
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(48.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("GO TO plex.tv/link AND ENTER:", style = mono(20, Palette.dim))
-                    Spacer(Modifier.height(12.dp))
-                    Text(pin.code, style = retro(96, Palette.accent))
-                    Spacer(Modifier.height(12.dp))
-                    Text("WAITING FOR AUTHORIZATION", style = mono(16, Palette.faint))
-                }
-                val qr = remember(pin.code) { qrBitmap("https://www.plex.tv/link/?pin=${pin.code}", 400) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(qr.asImageBitmap(), contentDescription = "QR code for plex.tv/link", modifier = Modifier.size(200.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text("SCAN TO CONNECT", style = mono(14, Palette.dim))
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun LoadingScreen(state: Screen.Loading) {
     Centered {
@@ -115,7 +83,7 @@ fun LoadingScreen(state: Screen.Loading) {
     }
 }
 
-private fun qrBitmap(text: String, size: Int): Bitmap {
+internal fun qrBitmap(text: String, size: Int): Bitmap {
     val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2))
     val pixels = IntArray(size * size) { i -> if (matrix[i % size, i / size]) AndroidColor.BLACK else AndroidColor.WHITE }
     return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)

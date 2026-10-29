@@ -20,6 +20,8 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.StreamQuality
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
+import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.plex.PlexClient
 import java.util.UUID
 
@@ -28,8 +30,9 @@ enum class Delivery(val label: String) { DIRECT_PLAY("DIRECT PLAY"), TRANSCODE("
 
 /**
  * One ExoPlayer for the whole session. Each programme tries direct play first, the file as
- * the server stores it, and falls back to a Plex HLS transcode when the player fails or a
- * track it needs has no decoder here. The web tuner can only direct play MP4, WebM and MOV;
+ * the server stores it, and falls back to the server's HLS transcode when the player fails or
+ * a track it needs has no decoder here. Plex, Jellyfin and Emby take the same path; only the
+ * URLs and the way a transcode is stopped differ. The web tuner can only direct play MP4, WebM and MOV;
  * finding out how much more a SHIELD plays directly is what this spike is for, so every
  * decision is logged under the "Nostalgex" tag (`adb logcat -s Nostalgex`).
  */
@@ -37,8 +40,15 @@ enum class Delivery(val label: String) { DIRECT_PLAY("DIRECT PLAY"), TRANSCODE("
 class Playback(
     context: Context,
     private val plex: PlexClient,
+    private val mediaBrowser: MediaBrowserClient,
     private val listener: Listener,
 ) {
+    /** The Jellyfin or Emby server signed in to; null on Plex. */
+    var mediaBrowserServer: MediaBrowserServer? = null
+
+    /** The server's name in failure cards, as the Apple TV's backendDisplayName. */
+    private val serverName get() = mediaBrowserServer?.let { MediaBrowserClient.displayName(it.kind) } ?: "Plex"
+
     interface Listener {
         fun onStarted(item: MediaItem, delivery: Delivery)
         /** The programme played to its end. */
@@ -112,7 +122,7 @@ class Playback(
                     if (c.delivery == Delivery.DIRECT_PLAY) {
                         fallBack(c, "${error.errorCodeName}: ${error.message}")
                     } else {
-                        val failure = PlaybackFailure.classify("Plex", evidence(error, c.item))
+                        val failure = PlaybackFailure.classify(serverName, evidence(error, c.item))
                         Log.w(TAG, "FAILED TRANSCODE ${describe(c.item)}: ${error.errorCodeName}; ${failure.headline}", error)
                         stopSession()
                         listener.onFailed(c.item, failure)
@@ -141,13 +151,14 @@ class Playback(
     }
 
     private fun start(item: MediaItem, offsetSec: Long, delivery: Delivery, reason: PlaybackInfo.Reason) {
-        val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource("Plex"))
+        val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource(serverName))
         val token = item.serverToken ?: ""
         started = false
         firstFrame = false
         info = info?.copy(delivery = delivery, reason = reason, ready = false)
         val q = info?.qualityAtTune ?: quality
-        val exo = when (delivery) {
+        val mb = mediaBrowserServer
+        val exo = if (mb != null) mediaBrowserItem(mb, item, offsetSec, delivery, q) else when (delivery) {
             Delivery.DIRECT_PLAY -> {
                 current = Current(item, offsetSec, delivery, null, System.currentTimeMillis())
                 ExoItem.Builder().setUri("$server${item.partKey}?X-Plex-Token=${Uri.encode(token)}").build()
@@ -188,12 +199,59 @@ class Playback(
         player.prepare()
     }
 
+    /**
+     * Jellyfin and Emby, as the web tuner's nostalgex-jellyfin-urls.js. Direct play is the file
+     * as stored (`Static=true`), labelled `stream.mp4` for the MP4 family so the server sends
+     * `video/mp4` rather than going by the file's name. The transcode is the hand-built HLS
+     * request in MPEG-TS, H.264 and AAC, with its own PlaySessionId so a channel change stops
+     * exactly this encode. It carries no start time: Jellyfin copies the query onto every
+     * segment URL and refuses `StartTimeTicks` there with HTTP 400, so the player seeks
+     * instead (JellyfinPlaybackResolver.offsetPlayback), which `setMediaItem` does.
+     */
+    private fun mediaBrowserItem(mb: MediaBrowserServer, item: MediaItem, offsetSec: Long, delivery: Delivery, q: StreamQuality): ExoItem {
+        val source = item.partKey ?: item.ratingKey
+        return when (delivery) {
+            Delivery.DIRECT_PLAY -> {
+                current = Current(item, offsetSec, delivery, null, System.currentTimeMillis())
+                val path = if (isMp4Family(item.container)) "stream.mp4" else "stream"
+                val url = Uri.parse("${mb.url}/Videos/${item.ratingKey}/$path").buildUpon()
+                    .appendQueryParameter("Static", "true")
+                    .appendQueryParameter("MediaSourceId", source)
+                    // Jellyfin 12 with legacy authorization off (a new install) answers 401
+                    // to api_key alone; api_key stays for servers older than ApiKey.
+                    .appendQueryParameter("api_key", mb.token)
+                    .appendQueryParameter("ApiKey", mb.token)
+                    .build()
+                ExoItem.Builder().setUri(url).build()
+            }
+            Delivery.TRANSCODE -> {
+                val session = UUID.randomUUID().toString().replace("-", "")
+                current = Current(item, offsetSec, delivery, session, System.currentTimeMillis())
+                val url = Uri.parse("${mb.url}/Videos/${item.ratingKey}/master.m3u8").buildUpon()
+                    .appendQueryParameter("MediaSourceId", source)
+                    .appendQueryParameter("api_key", mb.token)
+                    .appendQueryParameter("ApiKey", mb.token)
+                    .appendQueryParameter("VideoCodec", "h264")
+                    .appendQueryParameter("AudioCodec", "aac")
+                    .appendQueryParameter("MaxWidth", q.width.toString())
+                    .appendQueryParameter("VideoBitrate", (q.maxBitrateKbps * 1000L).toString())
+                    .appendQueryParameter("SegmentContainer", "ts")
+                    .appendQueryParameter("DeviceId", mediaBrowser.deviceId)
+                    .appendQueryParameter("PlaySessionId", session)
+                    .build()
+                ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+            }
+        }
+    }
+
     /** Ends this app's transcode, once: the session is forgotten as soon as its stop is sent. */
     private fun stopSession() {
         val c = current ?: return
         val session = c.session ?: return
         current = c.copy(session = null)
-        plex.stopTranscode(c.item.serverUrl ?: return, c.item.serverToken ?: "", session)
+        val mb = mediaBrowserServer
+        if (mb != null) mediaBrowser.stopEncoding(mb, session)
+        else plex.stopTranscode(c.item.serverUrl ?: return, c.item.serverToken ?: "", session)
     }
 
     /** Pauses on the picture and ends any transcode, for the sleep timer; the next tune plays again. */
@@ -252,8 +310,14 @@ class Playback(
         /** Containers Media3 has an extractor for. The codecs are the device's question; tracks tell. */
         private val DIRECT_CONTAINERS = setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "ts", "mpegts", "flv", "ogg")
 
+        /** Jellyfin can report ffprobe's comma list ("mov,mp4,m4a,3gp,3g2,mj2"). */
+        private fun containers(item: MediaItem) = item.container?.lowercase()?.split(',')?.map { it.trim() } ?: emptyList()
+
         fun canTryDirectPlay(item: MediaItem) =
-            item.partKey != null && item.container?.lowercase() in DIRECT_CONTAINERS
+            item.partKey != null && containers(item).any { it in DIRECT_CONTAINERS }
+
+        private fun isMp4Family(container: String?) =
+            container?.lowercase()?.split(',')?.any { it.trim() in setOf("mp4", "m4v", "mov") } == true
 
         fun describe(item: MediaItem) =
             "\"${item.title}${item.episodeTitle?.let { " / $it" } ?: ""}\" [${item.container}/${item.videoCodec}/${item.audioCodec}] key=${item.ratingKey}"

@@ -26,7 +26,23 @@ dependencies {
     testImplementation(libs.junit)
 }
 
+/**
+ * The web tuner's Jellyfin and Emby scan run over the Roku port's saved server answers, so
+ * MediaBrowserScanTest compares the Kotlin scan with the JS's own output. Needs node.
+ */
+val genMediaBrowserVectors = tasks.register<Exec>("genMediaBrowserVectors") {
+    val out = layout.buildDirectory.file("vectors/mediabrowser.json")
+    inputs.file("scripts/gen-mediabrowser-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("plex-tuner.html"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/fixtures/mediabrowser-server.json"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/gen-mediabrowser.mjs"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-mediabrowser-vectors.mjs", out.get().asFile.absolutePath)
+}
+
 tasks.test {
+    dependsOn(genMediaBrowserVectors)
+    systemProperty("nostalgex.mediaBrowserVectors", layout.buildDirectory.file("vectors/mediabrowser.json").get().asFile.absolutePath)
     // The golden files and channels.json live at the repo root, shared with every surface.
     systemProperty("nostalgex.repoRoot", rootDir.parentFile.absolutePath)
     inputs.files(

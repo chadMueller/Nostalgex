@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex.plex
 
 import com.muellhaus.nostalgex.engine.DailyManifest
 import com.muellhaus.nostalgex.engine.MediaItem
+import com.muellhaus.nostalgex.engine.MusicTitle
 import com.muellhaus.nostalgex.plex.PlexClient.Companion.long
 import com.muellhaus.nostalgex.plex.PlexClient.Companion.str
 import kotlinx.coroutines.async
@@ -128,9 +129,14 @@ class PlexLibrary(private val client: PlexClient) {
         // A dedicated music-video library, or a short item tagged Music (10-minute cap keeps out musicals).
         val isMusicVideo = isMusicVideoSection || (minutes <= 10 && genres.any { MUSIC.containsMatchIn(it) })
         val media = pickBestVersion(item.array("Media"))
+        // "Artist - Song" for a music video, as the web tuner's parseMusicVideoFromPlex.
+        val (title, artist) = (item.str("title") ?: "Unknown").let {
+            if (isMusicVideo) MusicTitle.musicVideo(it, item.str("parentTitle"), item.str("grandparentTitle")) else it to null
+        }
         return MediaItem(
             ratingKey = item.str("ratingKey")!!,
-            title = item.str("title") ?: "Unknown",
+            title = title,
+            artist = artist,
             type = if (sectionType == "show") "episode" else sectionType,
             duration = minutes,
             addedAt = item.long("addedAt") ?: 0,

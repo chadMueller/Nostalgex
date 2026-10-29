@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import com.muellhaus.nostalgex.ui.LoadingScreen
 import com.muellhaus.nostalgex.ui.ConnectionFailedScreen
 import com.muellhaus.nostalgex.ui.NoChannelsScreen
-import com.muellhaus.nostalgex.ui.SignInScreen
+import com.muellhaus.nostalgex.ui.ConnectScreen
 import com.muellhaus.nostalgex.ui.WatchScreen
 
 class MainActivity : ComponentActivity() {
@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         model = AppModel(applicationContext)
         setContent {
             when (val s = model.screen) {
-                is Screen.SignIn -> SignInScreen(s)
+                is Screen.SignIn, is Screen.Connect -> ConnectScreen(model)
                 is Screen.Loading -> LoadingScreen(s)
                 is Screen.Failed -> ConnectionFailedScreen(model, s.message)
                 Screen.NoChannels -> NoChannelsScreen(model)
