@@ -9,6 +9,13 @@ struct RootView: View {
 
     var body: some View {
         let forceSettings = ProcessInfo.processInfo.arguments.contains("-uiTestForceSettings")
+        // Debug-only, same idea as `-uiTestForceSettings`: jumps straight to the new
+        // library-selection screen or the full Settings page (SERVERS/LIBRARIES), with
+        // canned sections, for a screenshot or a manual check with no server required.
+        // The `.task` below sets `pendingLibrarySections` and THEN `needsLibrarySelection`
+        // — same order `presentLibrarySelectionOrScan()` uses — so the view never mounts
+        // on an empty list and defaults every row to off.
+        let forceSettingsPage = ProcessInfo.processInfo.arguments.contains("-uiTestForceSettingsPage")
         let uiTestInstantAuth = ProcessInfo.processInfo.arguments.contains("-uiTestInstantAuth")
             || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
         let reproAppReviewFlow = ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
@@ -20,6 +27,8 @@ struct RootView: View {
                     ServerPickerView()
                 } else if appState.needsLibrarySelection {
                     LibrarySelectionView()
+                } else if forceSettingsPage {
+                    SettingsPageView()
                 } else if forceSettings {
                     SettingsView()
                 } else if !appState.didAttemptCredentialHydration {
@@ -53,6 +62,26 @@ struct RootView: View {
             UIApplication.shared.isIdleTimerDisabled = (newState == .playing)
         }
         .task {
+            if ProcessInfo.processInfo.arguments.contains("-uiTestForceLibrarySelection") {
+                appState.didAttemptCredentialHydration = true
+                appState.pendingLibrarySections = [
+                    LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "1", title: "Movies", type: "movie"),
+                    LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "2", title: "TV Shows", type: "show"),
+                    LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "3", title: "Home Videos", type: "movie"),
+                ]
+                // Set only after the list above, matching `presentLibrarySelectionOrScan()`'s
+                // order: the view must never mount before it has rows to default to on.
+                appState.needsLibrarySelection = true
+                return
+            }
+            if forceSettingsPage {
+                appState.didAttemptCredentialHydration = true
+                appState.availableLibrarySections = [
+                    LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "1", title: "Movies", type: "movie"),
+                    LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "2", title: "TV Shows", type: "show"),
+                ]
+                return
+            }
             if forceSettings { appState.didAttemptCredentialHydration = true; return }
             if reproAppReviewFlow { appState.didAttemptCredentialHydration = true; return }
             emitLaunchAnalyticsIfNeeded()
