@@ -106,7 +106,7 @@ internal fun hex(s: String?): Color =
 
 private val GuideBackground = Color(0.05f, 0.05f, 0.12f)
 private val PanelTop = Color(0.04f, 0.04f, 0.10f)
-private val BrandCyan = Color(0f, 0.831f, 1f)
+internal val BrandCyan = Color(0f, 0.831f, 1f)
 private val Yellow = Color(0xFFFFE500)
 
 private const val CHANNEL_COLUMN = 220
@@ -948,22 +948,34 @@ private fun StatusScreen(model: AppModel, content: @Composable () -> Unit) {
  * slab with dark text, a little larger, when focused.
  */
 @Composable
-private fun OnboardingButton(label: String, primary: Boolean, focusFirst: Boolean = false, onClick: () -> Unit) {
+internal fun OnboardingButton(
+    label: String,
+    primary: Boolean,
+    focusFirst: Boolean = false,
+    fontSize: Int = 24,
+    fullWidth: Boolean = false,
+    /** A cyan outline instead of the slab, for a screen whose main thing is a code. */
+    quietFocus: Boolean = false,
+    requester: FocusRequester = remember { FocusRequester() },
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
     val shape = RoundedCornerShape(u(14))
+    val slab = focused && !quietFocus
     Text(
         label,
         style = font(
-            DMMonoMedium, 24,
+            DMMonoMedium, fontSize,
             when {
-                focused -> Color(0f, 0.06f, 0.09f)
+                slab -> Color(0f, 0.06f, 0.09f)
+                focused -> Color.White
                 primary -> BrandCyan
                 else -> Color.White.copy(alpha = 0.62f)
             },
             tracking = 1,
         ),
         maxLines = 1,
+        textAlign = TextAlign.Center,
         modifier = Modifier
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused }
@@ -977,12 +989,16 @@ private fun OnboardingButton(label: String, primary: Boolean, focusFirst: Boolea
                     else -> false
                 }
             }
-            .graphicsLayer { scaleX = if (focused) 1.07f else 1f; scaleY = scaleX }
+            .graphicsLayer { scaleX = if (focused) (if (quietFocus) 1.04f else 1.07f) else 1f; scaleY = scaleX }
+            .then(if (fullWidth) Modifier.fillMaxWidth() else Modifier)
             .clip(shape)
-            .background(if (focused) BrandCyan else Color.White.copy(alpha = 0.03f))
+            .background(if (slab) BrandCyan else Color.White.copy(alpha = if (focused) 0.07f else 0.03f))
             .then(
-                if (focused) Modifier
-                else Modifier.border(u(if (primary) 2.5 else 1.5), if (primary) BrandCyan.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.28f), shape),
+                when {
+                    focused && quietFocus -> Modifier.border(u(3), BrandCyan, shape)
+                    focused -> Modifier
+                    else -> Modifier.border(u(if (primary) 2.5 else 1.5), if (primary) BrandCyan.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.28f), shape)
+                },
             )
             .padding(horizontal = u(36), vertical = u(if (primary) 24 else 20)),
     )
