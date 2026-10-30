@@ -44,6 +44,59 @@ another quota-shaped report comes in naming a different save.
 tuner picks it up on deploy; a Docker release still needs its own `tuner-v` tag and a
 `tunerVersion` bump in that commit.
 
+## 2026-10-30 (Roku: channel pools filtered one server at a time, I-065)
+
+**Shipped.** Nothing yet. Branch `roku/i065-multi-server-oom`, cut from `main` at
+`c4d936f`, not merged, not pushed.
+
+**Changed.** `roku/components/LibraryTask.brs`'s `loadLibrary()` combines every
+enabled server's items into one array before `buildGuide()` runs one filter pass
+over all of it, per channel. With several large servers on at once that scales
+peak memory with the sum of every server's library, not the largest one: reported
+on a Roku Streaming Stick 4K (Trello I-065), a crash about 30 minutes into channel
+generation with several large servers selected, where one server of about 1,000
+files worked.
+
+New `NxFilterPoolsByServer` (`roku/source/filter/ChannelFilter.brs`) filters one
+server's items against every pool channel, folds the matches into a running
+per-channel pool, then deletes that server's items' `nxFilter` (the per-item
+filter cache `NxFilterItem` memoizes) before moving to the next server, instead of
+leaving every server's cache resident for the rest of the build. `NxFilterPool`
+has no state carried between items, so this gives the exact same pools, in the
+exact same order, as one pass over everything; `tests/MultiServerFilterTests.brs`
+proves it across every real channel in `data/channels.json` against a synthetic
+4-server, 100-item fixture (144 checks, 0 failed, off-device).
+`buildGuide()`'s own per-channel loop now calls it instead of its old inline
+`NxFilterPool(items, ...)` call; `rebuildForBundles` (a package switched on or off
+in Settings) goes through `buildGuide()` too, so a package switch over a large
+multi-server library gets the same fix with no separate change.
+
+Franchise and collection classification, enrichment and the saved-library write
+still read the full combined item list once `loadLibrary()` has built it (they
+need every server's items together: a franchise can span servers, and a server's
+collections are matched against the whole library by ratingKey). That part is
+unchanged; only the channel-pool filter pass, which was the one place doing
+`O(channels) * O(every server's items)` work over the combined array, is now
+server-incremental. One known, minor trade: when remote enrichment adds new
+records mid-build, the second filter pass used to reuse `nxFilter` for items that
+didn't change; it now recomputes it for every item (recomputing that per-item
+cache is cheap; the actual channel-matching cost was already paid twice either
+way, since that second pass always re-filters with no reuse).
+
+Also chunked `NxSavePools`' channel summaries and filtered map into one
+`FormatJson` per channel instead of one call over the whole array each time,
+matching how the per-item write path was already chunked after the Discussion #8
+Streaming Stick Plus OOM crash; triage flagged it as a plausible secondary
+contributor on top of the main cause above.
+
+**Half-done.** Not yet run on a real multi-server stick (needs the tester; the
+off-device suite and a synthetic fixture are as far as this went). Not yet
+reviewed.
+
+**Next.** Reviewer pass, then the tester with two or more real servers enabled on
+the stick, watching the `library: ... memory N%` lines through a full build. Then
+Chad's go to merge.
+
 ## 2026-10-29 (Watershed: an opt-in 9 PM hold for 18/R-rated content, every channel)
 
 **Shipped.** Nothing yet. Branch `feature/watershed`, cut from `main` at `56ee192`, not
