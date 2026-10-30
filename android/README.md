@@ -43,7 +43,8 @@ listing; it installs over `adb`.
   availability, and WATERSHED. The sidebar jumps to a package's first channel.
 - Library selection: after sign-in, a server with more than one library offers
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
-  never scanned.
+  never scanned. A Plex music library adds nothing on either app (Plex lists
+  artists, with no running time), so switching it off only saves its requests.
 - The loading screen's step rail, with what the scan is reading and a progress
   bar, and START OVER (it asks first) for the whole load. After two loads in a
   row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY
@@ -61,9 +62,9 @@ Not ported yet: server collections, found franchises and MY COLLECTIONS;
 TMDB enrichment; SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
 above channel one; demo mode; the Apple TV's playback recovery ladder
 (watchdog, stalls, compatibility retry) and the loading screen's STOP WAITING
-when a scan goes quiet; the
-PlaybackInfo handshake on Jellyfin and Emby (this app asks for the stored
-file, then the hand-built HLS stream, which is the Apple TV's fallback path).
+when a scan goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
+app asks for the stored file, then the hand-built HLS stream, which is the
+Apple TV's fallback path).
 
 Different on purpose, because the Apple TV's version has no counterpart here:
 - No SUPPORT NOSTALGEX (App Store ratings and tips) and no iCloud sync.
@@ -95,11 +96,13 @@ Different in the detail:
 ## Parity
 
 `engine/` is plain Kotlin with no Android in it: the schedule
-(`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`), the
-channel filter (`ChannelFilter.kt`, from `scripts/nostalgex-channel-filter.cjs`)
-and the Jellyfin and Emby library scan (`MediaBrowserLibrary.kt`, from
-`plex-tuner.html`'s `fetchJellyfinLibraryFromServer`).
-Its tests read the Apple TV's golden files from `scripts/` and run on the JVM:
+(`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`), the channel
+filter and Watershed (`ChannelFilter.kt`, from
+`scripts/nostalgex-channel-filter.cjs`), stream quality (`StreamQuality.kt`),
+seasonal packages (`Season.kt`), and the Jellyfin and Emby library scan
+(`MediaBrowserLibrary.kt`, from `plex-tuner.html`'s
+`fetchJellyfinLibraryFromServer`). Its tests read the Apple TV's golden files
+from `scripts/` and run on the JVM:
 
 ```sh
 ./gradlew :engine:test
@@ -107,7 +110,10 @@ Its tests read the Apple TV's golden files from `scripts/` and run on the JVM:
 
 `scripts/schedule-parity-golden.json` is compared field for field with the
 Apple TV's answers, and `scripts/filter-golden.json` case for case against the
-shipped `channels.json`. The scan is compared item for item with the web
+shipped `channels.json`; `scripts/stream-quality-golden.json`,
+`scripts/season-golden.json` and `scripts/watershed-golden.json` hold the
+quality table, the package seasons and Watershed's hold to the same answers.
+The scan is compared item for item with the web
 tuner's, run by `engine/scripts/gen-mediabrowser-vectors.mjs` over the Roku
 port's fixture server (`roku/tests/fixtures/mediabrowser-server.json`), so the
 engine tests need Node. Change the JS engines and these have to follow.
