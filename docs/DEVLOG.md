@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Docker post: full-size header.webp as the page hero)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys the uncropped header on `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
+
+**Why.** The 1200x630 `cover.jpg` is the right social crop, but it was also the on-page hero, so the screenshot looked cropped in the post. The uncropped frame is already on R2 as `header.webp` (1600x1306). The renderer already splits those jobs: `cover` is the lead image on the post page, `og_image` is the Open Graph / Twitter card when it needs to differ. Other posts omit `og_image` and keep using `cover` for both.
+
+**Changed.**
+- `content/blog/docker-web-tuner-1-0-1-how-to.md`: `cover` now points at `header.webp`. New `og_image` / `og_image_alt` keep `cover.jpg` as the 1200x630 social preview. Alt text is unchanged. Copy was not rewritten.
+- `scripts/media-sizes.json`: `site/blog/docker-web-tuner-1-0-1-how-to/header.webp` is 1600x1306. The R2 URL returned 200 and Content-Length 131,196. Images stay on R2; none committed.
+- CSS was left alone. `.blog-post-cover` is already `width: 100%; height: auto` with no fixed `aspect-ratio`, so the 1600x1306 width/height attributes let the hero fill the frame at its natural ratio. Other posts stay 1200x630 because their `cover` files are that size.
+
+**Half-done.** None.
+
+**Next.** Confirm the live HTML after deploy: the post-page `<img class="blog-post-cover">` is `header.webp`, and `og:image` / `twitter:image` are still `cover.jpg`.
+
 ## 2026-10-30 (publish Docker web tuner 1.0.1 how-to)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
