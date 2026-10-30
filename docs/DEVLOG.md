@@ -52,6 +52,55 @@ unverified.
 **Next.** Chad's go to merge. If a real device look turns up a problem with the
 accordion's focus order inside the Channel Packages list, fix before merge rather than
 after.
+## 2026-10-30 (Docker post: full-size header.webp as the page hero)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys the uncropped header on `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
+
+**Why.** The 1200x630 `cover.jpg` is the right social crop, but it was also the on-page hero, so the screenshot looked cropped in the post. The uncropped frame is already on R2 as `header.webp` (1600x1306). The renderer already splits those jobs: `cover` is the lead image on the post page, `og_image` is the Open Graph / Twitter card when it needs to differ. Other posts omit `og_image` and keep using `cover` for both.
+
+**Changed.**
+- `content/blog/docker-web-tuner-1-0-1-how-to.md`: `cover` now points at `header.webp`. New `og_image` / `og_image_alt` keep `cover.jpg` as the 1200x630 social preview. Alt text is unchanged. Copy was not rewritten.
+- `scripts/media-sizes.json`: `site/blog/docker-web-tuner-1-0-1-how-to/header.webp` is 1600x1306. The R2 URL returned 200 and Content-Length 131,196. Images stay on R2; none committed.
+- CSS was left alone. `.blog-post-cover` is already `width: 100%; height: auto` with no fixed `aspect-ratio`, so the 1600x1306 width/height attributes let the hero fill the frame at its natural ratio. Other posts stay 1200x630 because their `cover` files are that size.
+
+**Half-done.** None.
+
+**Next.** Confirm the live HTML after deploy: the post-page `<img class="blog-post-cover">` is `header.webp`, and `og:image` / `twitter:image` are still `cover.jpg`.
+
+## 2026-10-30 (publish Docker web tuner 1.0.1 how-to)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
+
+**Why.** Today's post: how to run the Nostalgex web tuner as a Docker container, plus what tuner 1.0.1 added (sleep timer, playback info, Connect with Emby, eight SCREAM channels, MYSTERY BOX TV / CRINGE TV / A24). The copy was already approved (`draft: false`, date 2026-10-30); this session only put the file in `content/blog`, recorded the image sizes, and pointed the Plex-to-Jellyfin/Emby post's "Docker container guide" link at the new URL.
+
+**Changed.**
+- `content/blog/docker-web-tuner-1-0-1-how-to.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/docker-web-tuner-1-0-1-how-to/cover.jpg` is 1200x630. Inline stills `sleep-timer.webp` 1600x1219 and `playback-info.webp` 1600x1216. All three R2 URLs returned 200. Cover 111,448 bytes; sleep timer 68,484 bytes; playback info 83,006 bytes. Images stay on R2; none committed.
+- `content/blog/plex-to-jellyfin-emby-cable-guide.md`: the "Docker container guide" link now points at `/blog/docker-web-tuner-1-0-1-how-to` instead of `/self-host`. The existing UTM (`utm_source=blog`, `utm_medium=internal`, `utm_campaign=launch_oct26_blog_plex_to_jellyfin_emby`, `utm_content=docker_guide`) is unchanged. Nothing else in that file changed. Date stays 2026-10-29.
+- Copy check on the new and edited files: no em or en dashes, no "no ads" / "no upsell" / "no paid tier" / "no in app purchases".
+- `npm run blog:render` wrote fourteen live posts into `public/sitemap.xml`, including `/blog/docker-web-tuner-1-0-1-how-to` with lastmod 2026-10-30. `/blog` lastmod is 2026-10-30. `npm run build` emitted the post to `dist/blog/docker-web-tuner-1-0-1-how-to.html` with width/height on all three images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 335 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
+## 2026-10-30 (publish NostalgiaTV for Apple TV)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgiatv-alternative-apple-tv`.
+
+**Why.** Today's post: NostalgiaTV is a separate Android/Fire TV app with no tvOS build as of October 2026, and people searching for a nostalgia TV app on Apple TV land here. The copy was already approved (`draft: false`, date 2026-10-30); this session only put the file in `content/blog`, recorded the image sizes, and pointed the Plex remote post at the switch guide that went live yesterday.
+
+**Changed.**
+- `content/blog/nostalgiatv-alternative-apple-tv.md`: added exactly as approved. Copy was not rewritten. Front matter matches the Oct 29 post (`keyword`, not a different field name).
+- `scripts/media-sizes.json`: cover at `site/blog/nostalgiatv-alternative-apple-tv/cover.jpg` is 1200x630. The inline retro-mode still `retro-mode-retro-toons.webp` is 1280x720. Both R2 URLs returned 200. Cover 89,863 bytes; the still 40,230 bytes. Images stay on R2; none committed.
+- `content/blog/plex-remote-streaming-changes-explained.md`: the "I'm writing a separate post" sentence now links to the live `/blog/plex-to-jellyfin-emby-cable-guide` post. Nothing else in that file changed. Date stays 2026-10-21.
+- `content/blog/jellyfin-tv-guide-own-library.md`: verified only. The M3U/XMLTV section already links to `/blog/apple-tv-channel-surfing-apps` and ends with the `/blog/make-plex-feel-like-cable-tv` line. Left untouched.
+- Copy check on the new and edited files: no em or en dashes, no "no ads" / "no upsell" / "no paid tier" / "no in app purchases".
+- `npm run blog:render` wrote thirteen live posts into `public/sitemap.xml`, including `/blog/nostalgiatv-alternative-apple-tv` with lastmod 2026-10-30. `/blog` lastmod is 2026-10-30. `npm run build` emitted the post to `dist/blog/nostalgiatv-alternative-apple-tv.html` with width/height on both images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 328 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
 
 ## 2026-10-30 (Web tuner: a storage-quota exception no longer looks like an unreachable server)
 
