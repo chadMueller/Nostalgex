@@ -54,7 +54,7 @@ struct RootView: View {
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .settings:
-                    SettingsPageView()
+                    SettingsContainerView()
                 }
             }
         }

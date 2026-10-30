@@ -3,6 +3,53 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Settings rail, Phase 1 prototype)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign` only, not pushed, for a hands-on
+review with the Siri Remote before any more of the redesign is built.
+
+**Why.** Settings is one long scrolling list (support, connection, playback, packages,
+schedule, collections). It does not scale to the 10 to 15 rows a Pro tier would add,
+and SUPPORT NOSTALGEX is just one more section in the scroll. The plan is the tvOS
+System Settings shape: a fixed left rail of six categories and a detail pane on the
+right with a large picture per category. Phase 1 proves the remote mechanics before
+any content moves or any art is made.
+
+**Changed.**
+- `Views/Settings/SettingsCategory.swift`: the six tabs (SUPPORT NOSTALGEX pinned,
+  then PLAYBACK & PICTURE, CHANNELS & BUNDLES, SERVERS & ACCOUNTS, NOSTALGEX PRO,
+  ABOUT) and one focus enum for the whole screen.
+- `Views/Settings/SettingsRailView.swift`: the rail. Same focus grammar as the guide's
+  package sidebar (accent bar that thickens on focus, rounded glow border), in cyan.
+  The selected tab stays marked while you are in its rows. Very faint scanlines on the
+  rail background only. No ScrollView: six rows fit, and a ScrollView clips the glow.
+- `Views/Settings/SettingsContainerView.swift`: rail plus detail pane. Up and down on
+  the rail swap the hero and title with no press. Right or select goes into the rows.
+  Menu from a row goes back to the rail; Menu on the rail leaves Settings as before.
+  Left from any row lands on the selected tab, so the pane never swaps on the way out.
+  The detail pane scrolls on its own; the rail never moves.
+- `AppDestination.settings` now pushes `SettingsContainerView`. `SettingsPageView` is
+  still in `BundleManagerView.swift` (and still what `-uiTestForceSettingsPage` shows).
+- `SettingsToggleRow`, `ToggleSwitch`, `SettingsButtonStyle`, `SupportTile` and the
+  three picker sheets went from `private` to internal so the new screen reuses them.
+
+**Placeholder.** Only SUPPORT NOSTALGEX (rate plus tip tiles) and PLAYBACK & PICTURE
+(retro mode, stream quality, subtitles, subtitle and audio language) have real rows,
+wired to the same AppState fields and Analytics calls as the old page. The other four
+tabs show one focusable "COMING IN PHASE 2" row, so right and Menu can be tried on
+every tab. On this branch their settings (servers, packages, collections, schedule,
+disconnect) are not reachable from the guide. Hero art is an SF Symbol in a 16:9 tile.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. A throwaway
+UI test on the tvOS simulator drove the real focus engine through: initial focus on
+SUPPORT, down to PLAYBACK swaps the hero, right lands on RETRO MODE, left from SUBTITLE
+LANGUAGE returns to PLAYBACK, select on the rail enters the rows, Menu from rows returns
+to the rail, CHANNELS placeholder right and Menu, the stream quality sheet opens and
+closes, Menu on the rail returns to the guide. All passed. Not tried on a real Apple TV.
+
+**Next.** Chad clicks through it in Xcode. Phase 2 (moving every remaining row into its
+tab, then deleting `SettingsPageView`) waits on his sign-off on the mechanics.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now

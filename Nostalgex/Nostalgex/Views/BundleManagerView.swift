@@ -1125,7 +1125,7 @@ private struct FranchiseActionButton: View {
 
 /// One of the four SUPPORT NOSTALGEX tiles: a pixel icon, a title and one short line.
 /// Focus matches SettingsToggleRow (cyan stroke, lighter fill) plus a small lift.
-private struct SupportTile: View {
+struct SupportTile: View {
     let art: PixelArt
     let title: String
     let caption: String
@@ -1180,7 +1180,7 @@ private struct SupportTile: View {
 
 // MARK: - Toggle Row
 
-private struct SettingsToggleRow: View {
+struct SettingsToggleRow: View {
     let title: String
     let subtitle: String?
     var detail: String? = nil
@@ -1270,7 +1270,7 @@ private struct SettingsToggleRow: View {
 
 // MARK: - Toggle Switch
 
-private struct ToggleSwitch: View {
+struct ToggleSwitch: View {
     let isOn: Bool
 
     var body: some View {
@@ -1333,7 +1333,7 @@ private struct EnrichmentStatusView: View {
 
 // MARK: - Button Style
 
-private struct SettingsButtonStyle: ButtonStyle {
+struct SettingsButtonStyle: ButtonStyle {
     let isFocused: Bool
     var accentColor: Color = Color("BrandCyan")
 
@@ -1427,7 +1427,7 @@ private struct LanguagePickerSheet: View {
     }
 }
 
-private struct StreamQualityPickerSheet: View {
+struct StreamQualityPickerSheet: View {
     let selected: StreamQuality
     let allowsOriginal: Bool
     @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
@@ -1528,7 +1528,7 @@ private struct StreamQualityPickerSheet: View {
     }
 }
 
-private struct SubtitleLanguagePickerSheet: View {
+struct SubtitleLanguagePickerSheet: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -1541,7 +1541,7 @@ private struct SubtitleLanguagePickerSheet: View {
     }
 }
 
-private struct AudioLanguagePickerSheet: View {
+struct AudioLanguagePickerSheet: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
