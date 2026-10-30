@@ -166,11 +166,15 @@ struct SettingsContainerView: View {
     private var hero: some View {
         HStack(alignment: .center, spacing: 44) {
             ZStack {
+                // The art's own background, so no box edge shows at the rounded
+                // corners or while an image loads.
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
+                    .fill(Self.heroBackground)
                 heroArt
                     .id(selected)
                     .transition(.opacity)
+                // Kept: without it the dark tile reads as a smudge on the pane, and the
+                // Support tiles below carry the same edge.
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
             }
@@ -196,6 +200,9 @@ struct SettingsContainerView: View {
         }
     }
 
+    /// The near-black navy every hero PNG is painted on.
+    static let heroBackground = Color(hex: "#050718")
+
     /// 16:9, to match the hero PNGs.
     static let heroSize = CGSize(width: 384, height: 216)
 
@@ -204,6 +211,8 @@ struct SettingsContainerView: View {
         if UIImage(named: selected.heroImageName) != nil {
             Image(selected.heroImageName)
                 .resizable()
+                // Default (smooth) sampling. At this size the art is drawn at about 0.6x
+                // and nearest-neighbour looked no sharper on a 4K capture.
                 .scaledToFill()
                 .frame(width: Self.heroSize.width, height: Self.heroSize.height)
         } else {
@@ -211,7 +220,8 @@ struct SettingsContainerView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 110, height: 110)
-                .foregroundStyle(selected.heroTint)
+                .foregroundStyle(Color("BrandCyan"))
         }
     }
 }
+

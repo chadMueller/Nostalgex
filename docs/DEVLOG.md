@@ -3,6 +3,28 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Settings rail, Phase 3, hero illustrations)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.
+
+**Changed.**
+- Six hero illustrations in `Assets.xcassets/SettingsHero` (SettingsHeroSupport,
+  Playback, Channels, Servers, Pro, About): a matched set of 16-bit pixel pictures, one
+  subject each (tip jar with a star, wood CRT with colour bars, VHS stack, beige tower,
+  gold crown, the logo bolt), 16:9, tv idiom, 640x360 at 1x and 1280x720 at 2x,
+  256-colour PNGs, 2.8 MB for all six.
+- The picture fills the hero tile edge to edge, clipped to its rounded corners, on a
+  #050718 tile (the art's own background) so no box edge shows at the corners or while
+  it loads. The faint border stays: without it the dark tile read as a smudge on the
+  pane. The SF Symbol is still the fallback if an asset goes missing. The per-category
+  placeholder tints are gone.
+- Smooth sampling, not nearest-neighbour: the art is drawn at about 0.6x here, and on a
+  4K simulator capture the two looked the same.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. The same
+throwaway UI walk as Phase 2 passed again, with a screenshot of every tab. Colour on a
+real Apple TV and TV panel not checked yet.
+
 ## 2026-10-30 (Apple TV: Settings rail, Phase 2, every row moved into its tab)
 
 **Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.

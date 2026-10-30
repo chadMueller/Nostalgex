@@ -50,18 +50,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Tint for the placeholder hero only. Focus is always BrandCyan.
-    var heroTint: Color {
-        switch self {
-        case .support: return Color(hex: "#FFE500")
-        case .playback: return Color("BrandCyan")
-        case .channels: return Color(hex: "#FF2DB4")
-        case .servers: return Color("BrandCyan")
-        case .pro: return Color(hex: "#FFB020")
-        case .about: return .white.opacity(0.8)
-        }
-    }
-
     /// Asset name of the 16:9 hero illustration in Assets.xcassets/SettingsHero.
     /// The hero falls back to sfSymbolPlaceholder while an asset is missing.
     var heroImageName: String {
