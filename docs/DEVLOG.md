@@ -23,7 +23,7 @@ with the real `DailyManifestScheduler` and counts the minutes that differ. Befor
 Jellyfin 16,434 of 17,280 channel-minutes differed (95.1%), Emby 16,458 (95.2%), Plex's
 per-show fallback 15,780 (91.3%). Plex's normal path, one paged `type=4` sweep, was already
 stable: 0. These are worst-case numbers (every batch fully reordered, episode-only
-channels); the field figure on the card was 7 to 9% of channel-minutes. After: 0 on all
+channels); the field figure on card N-011 was 7 to 9% of channel-minutes. After: 0 on all
 four.
 
 **Changed.** Jellyfin, Emby and the Plex per-show fallback keep each batch's results by

@@ -101,7 +101,11 @@ final class EpisodeBatchOrderHarnessTests: XCTestCase {
 
         init(route: @escaping @Sendable (String, [String: String]) -> Reply?) throws {
             self.route = route
-            listener = try NWListener(using: .tcp, on: .any)
+            // Loopback only: nothing off this machine can reach it, and no firewall prompt.
+            let params = NWParameters.tcp
+            params.requiredInterfaceType = .loopback
+            params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
+            listener = try NWListener(using: params)
         }
 
         func start() async throws {
