@@ -214,6 +214,12 @@ extension AppState {
             var scanWasAbandoned = false
 
             for (serverIndex, scanAPI) in apisToScan.enumerated() {
+                // Signed out (Disconnect, START OVER) while the previous server was being
+                // read: this scan is for a sign-in that has ended, so the next server is
+                // not asked for anything with the old token. `superseded()` below then
+                // drops what was fetched. The stall watch used to be the only thing to
+                // notice, at its first poll, after up to 2s of requests.
+                if librarySessionGeneration != session { break }
                 let serverLabel = serverIndex < serverNames.count ? serverNames[serverIndex] : "Plex"
                 let baseCount = merged.count
                 // Computed outside the `@Sendable operation:` closure below (a `Set<String>`

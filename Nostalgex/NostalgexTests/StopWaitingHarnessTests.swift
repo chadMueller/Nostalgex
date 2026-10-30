@@ -441,6 +441,44 @@ final class StopWaitingHarnessTests: XCTestCase {
         XCTAssertFalse(state.isLibraryStale, "nothing was abandoned, so the library is not partial")
     }
 
+    /// The viewer signs out (Disconnect, or START OVER) as server A's scan finishes. The
+    /// scan is for a sign-in that has ended, so server B must not be asked for anything:
+    /// no request, not even the sections list, with the old token.
+    func testSigningOutBetweenServersSendsNothingToTheNext() async throws {
+        final class Counter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var n = 0
+            func hit() { lock.lock(); n += 1; lock.unlock() }
+            var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+        }
+        let requestsToB = Counter()
+        let specs = Self.baseSections()
+        let fakeB = try FakeServer { path, query in
+            requestsToB.hit()
+            return Self.plexReply(path: path, query: query, sections: specs)
+        }
+        try await fakeB.start()
+        defer { fakeB.stop() }
+
+        let a = AppState.ServerRef(machineIdentifier: "srv-a", name: "A", baseURL: "http://127.0.0.1:9", owned: true, token: "a")
+        let b = AppState.ServerRef(machineIdentifier: "srv-b", name: "B", baseURL: "http://127.0.0.1:\(fakeB.port)", owned: false, token: "b")
+        let state = AppState(credentialStore: InMemoryStore())
+        let backendA = ScriptedBackend(serverID: "srv-a", items: movieItems("a", 40, serverID: "srv-a"), seconds: 0.2) { [weak state] in
+            state?.disconnect()
+        }
+        // B is the real Plex service, so every request it would make reaches the counter.
+        let backendB: any MediaBackend = PlexAPIService(serverURL: b.baseURL, token: "b", serverID: "srv-b")
+        state.backendOverride = { ref in ref?.machineIdentifier == "srv-b" ? backendB : backendA }
+        state.completePlexSignIn(token: "acct", servers: [a, b])
+
+        await state.loadLibrary()
+        // Anything already sent would have arrived by now.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(requestsToB.value, 0, "server B was scanned with the old sign-in after the viewer signed out")
+        XCTAssertTrue(state.allItems.isEmpty, "a scan for an ended sign-in must not land items")
+    }
+
     // MARK: - Soak
 
     /// Off by default. Many first loads with stuck sections and STOP WAITING taps.

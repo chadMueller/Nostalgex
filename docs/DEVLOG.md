@@ -45,9 +45,11 @@ iteration is written to the host file before it runs, so a crash names its itera
 **Changed.** `AppState.loadLibrary` clears the pending press and the "still waiting" flag
 at the start of each server's scan. A press now only stops the server it was made on, and
 the STOP WAITING block leaves the screen once the server it was about has answered. START
-OVER is unaffected: it also ends the sign-in, which the stall watch checks on its own.
+OVER is unaffected: it also ends the sign-in, which the stall watch checks on its own. Also (review follow-up): signing out between
+servers now stops the scan before the next server, which before the fix still received 18
+requests with the old token in the 2s until the stall watch noticed; now 0.
 
-**Verified.** NostalgexTests on the tvOS simulator: 983 tests, 968 passed, 0 failed, 15
+**Verified.** NostalgexTests on the tvOS simulator: 984 tests, 969 passed, 0 failed, 15
 skipped (the soak among them).
 
 **Not verified.** The crash itself. Things the harness cannot see: memory on a real Apple
