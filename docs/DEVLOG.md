@@ -3,6 +3,81 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (three 80s channels, additive)
+
+**Shipped.** Nothing yet. Branch `feature/80s-channels`, cut from `main` at
+`56ee192`, not merged, not pushed.
+
+**Changed.** Added 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV to the
+NOSTALGEX bundle. Each one is an existing channel's exact rule with its
+`yearRange` narrowed to 1980-1989: 80S SITCOMS mirrors 90S SITCOMS, 80S LOL
+mirrors NOSTALGEX LOL, 80S AFTER SCHOOL TV mirrors AFTER SCHOOL TV. Additive
+only: NOSTALGEX LOL and AFTER SCHOOL TV keep their existing 1980-1999 range
+unsplit, so 1980s titles legitimately air on both the old channel and its
+new sibling. That overlap is intentional, the same way Y2K SITCOMS and 90S
+SITCOMS already sit side by side without splitting anything.
+
+Channel numbers 1-19 (NOSTALGEX's own packed range) and the 400s id pool up
+to 407 are already taken, so the new channels took the next free static ids
+(423-425). They first landed on numbers 35-37, a block picked because it
+was the nearest free, unclaimed range between KIDZ ZONE and PRIME TIME,
+but that left the NOSTALGEX bundle itself as two disconnected spans (1-19,
+then 35-37) with KIDZ ZONE's 20-34 sitting unbroken in between. A device
+run of `ChannelNumberingTests.testEveryBundleIsOneUnbrokenRunOfNumbers()`
+caught it: see the fix below. `channels.json` version 46 to 47.
+CHANNELS.md, llms.txt and sitemap.xml regenerated.
+
+`scripts/filter-golden.json` gets 9 new cases, run by both
+`nostalgex-filter-golden-smoke.mjs` (140 cases passed) and Swift's
+`FilterGoldenTests` (not run yet, see below): the 80s and 90s sitcom
+siblings don't cross-claim each other's decade, the two unsplit-parent
+siblings correctly overlap for 1980s titles but exclude 1990s ones, and the
+Animation/Anime exclusions plus the GB-15 non-US rating normalization carry
+over to the new channels exactly like their mirrors.
+
+**Half-done.** `npm test` is green (142 channels, filter-golden 140/140,
+`xcodebuild build` for tvOS Simulator succeeds). `NostalgexTests` itself has
+not run on this branch; that needs Chad's go for a simulator run, per the
+standing rule this session. Nothing else pending.
+
+**Next.** Chad's go to run NostalgexTests, then merge/push when he's ready.
+
+### Fix: renumbered to keep NOSTALGEX as one unbroken block
+
+A real device run of `NostalgexTests` failed
+`ChannelNumberingTests.testEveryBundleIsOneUnbrokenRunOfNumbers()`: the three
+new channels at 35-37 were a disconnected block, since NOSTALGEX's real
+range is 1-19 with KIDZ ZONE immediately following at 20-34, zero slack
+between them. There was no free gap to drop 35-37 into; the whole lineup
+from 20 up had to shift.
+
+Moved 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV (ids 423-425) from 35-37
+to 20-22, right after NOSTALGEX's existing 1-19, and shifted every other
+channel numbered 20 or above up by exactly 3 to stay contiguous with no
+gaps or collisions: KIDZ ZONE moves from 20-34 to 23-37, and every later
+bundle (PRIME TIME, MARQUEE, ADVENTURELAND, OVERTIME, CASE FILES, DECADES,
+FRANCHISES, ARTHOUSE, NETWORKS, SCREAM, TIS THE SEASON, HIGH ROTATION)
+shifts the same +3. Only the `number` field moved; every `id` is untouched,
+so TopShelf's `nostalgex://channel/<id>` deep links (the only deep link in
+the app) are unaffected, confirmed by reading `ContentProvider.swift`
+rather than assuming the earlier decision still held. No other file keys
+playback, docs or golden tests off channel number; `filter-golden.json` and
+the franchise/schedule goldens all reference channel `id`.
+
+`channels.json` version 47 to 48. CHANNELS.md, sitemap.xml, llms.txt and
+`bundle-lastmod.json` regenerated via `npm run channels:doc` and
+`npm run bundles:render` rather than hand-edited. `npm test` green,
+including `channels:doc:check` and `bundles:render:strict`.
+
+Full `NostalgexTests` run on the simulator caught one more fallout from the
+shift: `SeasonalBundleTests.testShippedScreamLineupAndLock()` and
+`testShippedHolidayLineupAndLock()` hardcoded SCREAM's and TIS THE SEASON's
+pre-shift number ranges (`137...144` and `145...152`). Checked the live
+`channels.json` directly rather than trusting the DEVLOG math, confirmed the
+real numbers are now `140...147` and `148...155`, and updated both
+assertions to match. No other test file hardcodes a static channel number;
+the franchise/collection numbering tests read `channels.json` live for their
+disjointness check. Full `NostalgexTests` suite now green.
 ## 2026-10-29 (ratingMin falls back to OMDb when Emby's CommunityRating is null)
 
 **Shipped.** Nothing. Branch `fix/emby-rating-fallback`, cut from `main` at

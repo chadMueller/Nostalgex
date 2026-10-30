@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Golden vectors for the channel pool filter. Read by BOTH Nostalgex/NostalgexTests/FilterGoldenTests.swift (AppState.filterItems, tvOS) and scripts/nostalgex-filter-golden-smoke.mjs (scripts/nostalgex-channel-filter.cjs, web tuner and Docker; npm run test:filter-golden). Each case is one item run against the SHIPPED channels.json, its exclusiveRules and channels-memberships.json. `in` lists channel ids (not numbers) the item must reach, `out` the ids it must not. Item fields: title, artist (music videos), episodeTitle, summary, originallyAvailableAt (YYYY-MM-DD, first aired), year, type (movie|episode), librarySource (movie|tv|musicVideo), genres, contentRating (as the server sends it, so GB-15 or FSK-16 for a Jellyfin library outside the US), duration (minutes, default 100), rating, studio, tmdbID (string; only when the case is about a manifest claim), and enrichment ({ keywords, productionCompanies, networks, tmdbGenres, imdbRating }; absent means not enriched), backend (plex|jellyfin|emby, default plex; the server the item came from) and doviProfile (Dolby Vision profile; absent means unknown). enrichment.imdbRating is the OMDb rating a plain ratingMin gate falls back to when rating and userRating both miss the bar (added for the Emby CommunityRating-is-always-null fix; see the ratingMin cases near the end). When a rule changes, change both engines, then update or add a case here.",
+  "about": "Golden vectors for the channel pool filter. Read by BOTH Nostalgex/NostalgexTests/FilterGoldenTests.swift (AppState.filterItems, tvOS) and scripts/nostalgex-filter-golden-smoke.mjs (scripts/nostalgex-channel-filter.cjs, web tuner and Docker; npm run test:filter-golden). Each case is one item run against the SHIPPED channels.json, its exclusiveRules and channels-memberships.json. `in` lists channel ids (not numbers) the item must reach, `out` the ids it must not. Item fields: title, artist (music videos), episodeTitle, summary, originallyAvailableAt (YYYY-MM-DD, first aired), year, type (movie|episode), librarySource (movie|tv|musicVideo), genres, contentRating (as the server sends it, so GB-15 or FSK-16 for a Jellyfin library outside the US), duration (minutes, default 100), rating, studio, tmdbID (string; only when the case is about a manifest claim), and enrichment ({ keywords, productionCompanies, networks, tmdbGenres }; absent means not enriched), backend (plex|jellyfin|emby, default plex; the server the item came from) and doviProfile (Dolby Vision profile; absent means unknown). When a rule changes, change both engines, then update or add a case here.",
   "cases": [
     {
       "name": "kicking-and-screaming-is-not-a-scream-film",
@@ -2758,6 +2758,180 @@
       },
       "in": [
         26
+      ]
+    },
+    {
+      "name": "an-80s-sitcom-lands-on-80s-sitcoms-not-90s-sitcoms",
+      "about": "80S SITCOMS (423) and 90S SITCOMS (5) mirror the same rule with a different yearRange, so a title from one decade must not leak onto the other's channel.",
+      "item": {
+        "title": "Who's the Boss?",
+        "year": 1985,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "TV-PG"
+      },
+      "in": [
+        423
+      ],
+      "out": [
+        5
+      ]
+    },
+    {
+      "name": "a-90s-sitcom-stays-off-80s-sitcoms",
+      "about": "The reverse of the case above: a 90s sitcom must not land on the new 80s channel.",
+      "item": {
+        "title": "Seinfeld",
+        "year": 1995,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "TV-PG"
+      },
+      "in": [
+        5
+      ],
+      "out": [
+        423
+      ]
+    },
+    {
+      "name": "an-animated-80s-sitcom-stays-off-both-sitcom-channels",
+      "about": "Both sitcom channels exclude Anime/Animation, same as the rule they mirror.",
+      "item": {
+        "title": "The Flintstone Kids",
+        "year": 1984,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Animation"
+        ],
+        "contentRating": "TV-G"
+      },
+      "out": [
+        423,
+        5
+      ]
+    },
+    {
+      "name": "an-80s-comedy-movie-overlaps-nostalgex-lol-and-80s-lol",
+      "about": "NOSTALGEX LOL (3) keeps its own 1980-1999 range unsplit; 80S LOL (424) is additive and overlaps it for 1980s titles. The overlap is expected, not a bug.",
+      "item": {
+        "title": "Trading Places",
+        "year": 1983,
+        "type": "movie",
+        "librarySource": "movie",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "R"
+      },
+      "in": [
+        3,
+        424
+      ]
+    },
+    {
+      "name": "a-90s-comedy-movie-stays-off-80s-lol",
+      "about": "80S LOL is scoped to 1980-1989 only, so a 90s title stays on NOSTALGEX LOL alone.",
+      "item": {
+        "title": "Dumb and Dumber",
+        "year": 1994,
+        "type": "movie",
+        "librarySource": "movie",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "PG-13"
+      },
+      "in": [
+        3
+      ],
+      "out": [
+        424
+      ]
+    },
+    {
+      "name": "an-80s-after-school-episode-overlaps-after-school-tv-and-80s-sibling",
+      "about": "AFTER SCHOOL TV (6) keeps its own 1980-1999 range unsplit; 80S AFTER SCHOOL TV (425) is additive and overlaps it for 1980s titles.",
+      "item": {
+        "title": "Diff'rent Strokes",
+        "year": 1983,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Family"
+        ],
+        "contentRating": "TV-PG"
+      },
+      "in": [
+        6,
+        425
+      ]
+    },
+    {
+      "name": "a-90s-after-school-episode-stays-off-80s-sibling",
+      "about": "80S AFTER SCHOOL TV is scoped to 1980-1989 only.",
+      "item": {
+        "title": "Boy Meets World",
+        "year": 1995,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Drama"
+        ],
+        "contentRating": "TV-PG"
+      },
+      "in": [
+        6
+      ],
+      "out": [
+        425
+      ]
+    },
+    {
+      "name": "gb-15-80s-after-school-episode-stays-off-both-after-school-channels",
+      "about": "The non-US rating normalizer applies to the new 80s sibling the same way it already applies to AFTER SCHOOL TV: GB-15 falls outside TV-G/TV-PG/TV-14 and allowUnrated only covers a missing rating, not a present adult one.",
+      "item": {
+        "title": "The Young Ones",
+        "year": 1984,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy"
+        ],
+        "contentRating": "GB-15"
+      },
+      "out": [
+        6,
+        425
+      ]
+    },
+    {
+      "name": "an-80s-animated-comedy-movie-stays-off-80s-lol",
+      "about": "80S LOL excludes Animation/Animated, same as the rule it mirrors.",
+      "item": {
+        "title": "Heavy Metal",
+        "year": 1981,
+        "type": "movie",
+        "librarySource": "movie",
+        "genres": [
+          "Comedy",
+          "Animation"
+        ],
+        "contentRating": "R"
+      },
+      "out": [
+        424,
+        3
       ]
     },
     {
