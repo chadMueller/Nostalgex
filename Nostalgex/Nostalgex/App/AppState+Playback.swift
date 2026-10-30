@@ -432,6 +432,7 @@ extension AppState {
     private func expireSleepTimer() {
         emitPlaybackStoppedForActiveSession()
         player?.pause()
+        isVideoPlaying = false
         stopActiveTranscodeIfNeeded()
         cancelSleepTimer()
         isFullScreen = false
@@ -498,6 +499,9 @@ extension AppState {
         cancellables.removeAll()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+        // cancellables.removeAll() just cancelled the KVO mirror from installFreshPlayer,
+        // so nothing will flip this to false on its own.
+        isVideoPlaying = false
         stopActiveTranscodeIfNeeded()
         emitPlaybackStoppedForActiveSession()
         let outgoing = playbackTracker
@@ -1335,13 +1339,32 @@ extension AppState {
     /// HLS and raw files, degraded on a real Apple TV: after about forty channel changes,
     /// files that had played fine minutes earlier stopped reaching ready. The video layer
     /// follows `player`, so swapping the instance costs nothing visible.
-    private func installFreshPlayer(with playerItem: AVPlayerItem, generation: Int) {
+    // Not private: PlaybackRecoveryOwnershipTests-style harnesses and the dedicated
+    // ChannelOverlayPlaybackStateTests exercise this directly to drive a real AVPlayer's
+    // KVO without going through the full network-resolving loadCurrentItem path.
+    func installFreshPlayer(with playerItem: AVPlayerItem, generation: Int) {
         let old = player
         old?.pause()
         old?.replaceCurrentItem(with: nil)
         let fresh = AVPlayer(playerItem: playerItem)
         fresh.automaticallyWaitsToMinimizeStalling = true
         player = fresh
+        isVideoPlaying = fresh.timeControlStatus == .playing
+
+        // Keep `isVideoPlaying` mirrored to this exact player for as long as it's the
+        // current one. Every load path (loadCurrentItem / retryLoad / fallbackToTranscode)
+        // calls `cancellables.removeAll()` right before this function runs, so the previous
+        // player's subscription is already gone before this one is added, no leaked
+        // observer, and a channel change re-attaches fresh rather than relying on a stale
+        // one left over from the old AVPlayer instance.
+        fresh.publisher(for: \.timeControlStatus)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak fresh] status in
+                guard let self, let fresh, self.player === fresh else { return }
+                self.isVideoPlaying = status == .playing
+            }
+            .store(in: &cancellables)
+
         print("[Plex90] gen=\(generation) | Fresh AVPlayer")
     }
 

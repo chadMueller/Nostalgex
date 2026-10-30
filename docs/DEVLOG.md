@@ -295,6 +295,96 @@ other two settles the pattern.
 
 **Next.** Chad reviews the branch and tries the screen and the Settings row
 on the simulator; once approved, port to the web tuner.
+## 2026-10-29 (Apple TV: channel overlay stuck on after a stall, branch only)
+
+**Shipped.** Nothing. Branch `fix/channel-overlay-stuck`, cut from `origin/main`
+at `ee2f5d9`, not merged, not pushed.
+
+**Why.** The channel info overlay could reappear during playback after a brief
+stall and then stay on screen for good (Trello gENSCnj1). `PlayerView` read
+`appState.player?.timeControlStatus == .playing` live inside the view body to
+decide whether to show the overlay. `timeControlStatus` lives on the plain
+`AVPlayer`, not on an `@Observable` property, so SwiftUI had no reliable
+reason to re-render when it changed on its own. A brief stall flips it away
+from `.playing`; if any unrelated render happened to land at that moment, the
+overlay showed; once the stall cleared, nothing forced another render, so it
+sat there until some other interaction (channel change, Play/Pause, Back)
+happened to redraw the view. A tester harness reproduced the mechanism with a
+real stall and a control case before this fix was written.
+
+**Changed.**
+
+- `Nostalgex/Nostalgex/App/AppState.swift`: new tracked property
+  `isVideoPlaying: Bool`, mirroring `player.timeControlStatus == .playing`.
+- `Nostalgex/Nostalgex/App/AppState+Playback.swift`: `installFreshPlayer` now
+  subscribes to the fresh `AVPlayer`'s `timeControlStatus` via KVO (same
+  pattern as the existing Now Playing heartbeat observer in
+  `installStarvationMonitor`) and mirrors it into `isVideoPlaying`, guarded on
+  `self.player === fresh` so a stale observer from a retired player can never
+  win. Every load path (`loadCurrentItem`, `retryLoad`, `fallbackToTranscode`)
+  already calls `cancellables.removeAll()` immediately before
+  `installFreshPlayer` runs, so the previous player's subscription is gone
+  before the new one is added, no leaked observer, and a channel change
+  re-attaches fresh rather than relying on a stale subscription from the old
+  `AVPlayer` instance. `expireSleepTimer` and `stopChannelAfterRepeatedFailures`
+  now also set `isVideoPlaying = false` explicitly, since both pause the
+  player without installing a new one (and the latter already cleared
+  `cancellables` first, so nothing else would flip it back).
+- `Nostalgex/Nostalgex/App/AppState+Auth.swift`: `disconnect()` resets
+  `isVideoPlaying = false` alongside `player = nil`.
+- `Nostalgex/Nostalgex/Views/PlayerView.swift`: the channel OSD visibility
+  check now reads `appState.isVideoPlaying` instead of
+  `appState.player?.timeControlStatus`.
+- `installFreshPlayer` changed from `private` to internal visibility so tests
+  can drive it directly with a real `AVPlayer`.
+
+**Tests.** New `Nostalgex/NostalgexTests/ChannelOverlayPlaybackStateTests.swift`:
+drives a real `AVPlayer` through `installFreshPlayer` and confirms (1) a
+`timeControlStatus` change (`play()`/`pause()`) actually updates
+`isVideoPlaying`, polling rather than asserting immediately since the KVO
+sink is routed through `.receive(on: DispatchQueue.main)`; and (2) across a
+simulated channel change (`cancellables.removeAll()` + a second
+`installFreshPlayer` call, matching the real load paths), the retired
+player's state changes no longer reach `isVideoPlaying` while the new
+player's do.
+
+**Update, same day.** The earlier "ready" claim above was wrong: the device
+test suite had never actually been run, only `build-for-testing` had, and
+when `NostalgexTests` was actually run on the tvOS Simulator both tests in
+this file failed, `isVideoPlaying` never observed becoming `true` after
+`play()`. Root-caused before touching anything: the fixture in both tests,
+`AVPlayerItem(asset: AVMutableComposition())`, builds an item from an empty
+composition with zero tracks and zero duration. A standalone macOS probe
+(plain Swift + AVFoundation, outside the test target and the simulator,
+driving a real `AVPlayer` with the same empty-composition fixture under
+direct KVO) showed this is not a reliable "paused player" at all: across
+repeated runs the player either flashed to `.playing` for under 50ms before
+settling straight back to `.paused` (nothing to decode, nothing to play), or
+never left `.waitingToPlayAtSpecifiedRate` /
+`AVPlayerWaitingWithNoItemToPlayReason` within several seconds. Neither
+outcome gives a polling assertion a stable playing window to observe,
+regardless of whether the KVO bridge in `installFreshPlayer` is correct. The
+bridge itself was not at fault.
+
+Fix: added `PlayableTestAsset` to the test file, which writes a tiny real
+`.mov` (a handful of solid-colour frames via `AVAssetWriter`, ~64x64, a few
+seconds, generated once per test run into a temp file, no network access and
+no binary asset added to the repo) and both tests now build their
+`AVPlayerItem`s from that file instead of the empty composition. A second
+standalone probe confirmed a real `AVPlayer` given that generated file
+reaches and holds `.playing` reliably across repeated runs. `NostalgexTests`
+builds clean again (`build-for-testing`) with the new fixture.
+
+**Half-done.** The actual `xcodebuild test` run against the tvOS Simulator
+with the corrected fixture has not been confirmed green yet. That needs a
+go-ahead before it runs again, per the standing rule after today's audio
+incident.
+
+**Next.** Get the go to run `NostalgexTests` on the tvOS Simulator with the
+corrected fixture. If green, this is ready for the normal review/merge path;
+no device hardware check is strictly required since the fix itself is pure
+state-propagation (no new playback behavior), but one on the Apple TV would
+be a reasonable final check given "schedule and playback are the product."
 
 ## 2026-10-29 (Roku: on-device Plex sign-in, branch only)
 
