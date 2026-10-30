@@ -972,7 +972,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val configMs = SystemClock.elapsedRealtime() - t0
         val serverKey = (mbServer?.let { "${it.kind}_${it.serverId}" } ?: ("plex_" + prefs.servers.joinToString("_") { it.machineIdentifier }))
             .replace(Regex("[^A-Za-z0-9]"), "_").take(60)
-        val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey)
+        val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex")
         lineup.watershed = prefs.watershed
         var built = 0
         val switchedOn = lineup.build(items, prefs.enabledBundles) { done, _ -> built = maxOf(built, done) }

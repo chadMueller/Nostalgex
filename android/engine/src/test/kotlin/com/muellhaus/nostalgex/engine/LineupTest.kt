@@ -123,4 +123,16 @@ class LineupTest {
         l.build(emptyList(), setOf("nostalgex"))
         assertTrue(l.channels.isEmpty())
     }
+
+    /** Emby's Dolby Vision profile 5 titles stay off channels (isLeftOffChannels); on Plex they air. */
+    @Test
+    fun embyLeavesDolbyVisionProfileFiveOffChannels() {
+        val items = library(600, 10).mapIndexed { i, it -> if (it.type == "movie" && i % 3 == 0) it.copy(doviProfile = 5) else it }
+        val dv5 = items.filter { it.doviProfile == 5 }.map { it.ratingKey }.toSet()
+        fun aired(backend: String) = Lineup(config, memberships, DailyManifest(zone, InMemoryManifestStore()), "test", backend)
+            .also { it.build(items, setOf("nostalgex")) }
+            .channels.flatMap { ch -> ch.pool.map { it.ratingKey } }.toSet()
+        assertTrue("Plex airs some profile 5 titles", aired("plex").any { it in dv5 })
+        assertTrue("Emby airs none", aired("emby").none { it in dv5 })
+    }
 }
