@@ -368,13 +368,22 @@ extension AppState {
             ?? channelConfigChannels.first(where: { $0.id == id })?.name
     }
 
+    /// The channel's full definition (rules, color, minItems) whether or not it currently
+    /// has enough content to air. Same fallback as `channelName`, for Settings' "why is
+    /// this channel off the air" explainer (I-004), which needs the rules of channels
+    /// `allChannels` already dropped.
+    func channelDefinition(for id: Int) -> Channel? {
+        allChannels.first(where: { $0.id == id })
+            ?? channelConfigChannels.first(where: { $0.id == id })
+    }
+
     /// Every channel in a bundle (config order), flagged by whether it currently has
     /// enough content to air. Lets Settings show the full lineup and mark missing ones.
-    func bundleChannelAvailability(for bundle: ChannelBundle) -> [(name: String, hasContent: Bool)] {
+    func bundleChannelAvailability(for bundle: ChannelBundle) -> [(id: Int, name: String, hasContent: Bool)] {
         let availableIDs = Set(allChannels.map(\.id))
         return bundle.channelIDs.compactMap { id in
             guard let name = channelName(for: id) else { return nil }
-            return (name, availableIDs.contains(id))
+            return (id, name, availableIDs.contains(id))
         }
     }
 

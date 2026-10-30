@@ -184,15 +184,18 @@ struct NowPlayingPanel: View {
                 .font(.custom("DMMono-Medium", size: 23))
                 .foregroundStyle(channel.color)
 
-            Text(channel.name)
+            // Title leads as the big headline, channel name follows smaller below it
+            // (Discord feedback, jussaren, 2026-10-29: viewers read this as "what's
+            // playing", so the title should dominate and the channel is secondary).
+            Text(nowPlayingLine)
                 .font(.custom("DMMono-Medium", size: 30))
                 .foregroundStyle(.white)
-                .lineLimit(1)
+                .lineLimit(2)
 
-            Text(nowPlayingLine)
+            Text(channel.name)
                 .font(.custom("DMMono-Regular", size: 25))
                 .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(2)
+                .lineLimit(1)
 
             if let rating = item.contentRating, !rating.isEmpty {
                 Text(rating.uppercased())
