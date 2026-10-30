@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Jellyfin/Emby audio language codes match exactly, N-014)
+
+**Shipped.** Nothing yet. Branch `fix/n014-iso639-language-match`, cut from `origin/main`
+at `0fe27e9`, not merged, not pushed.
+
+**Why.** `JellyfinPlaybackResolver.preferredAudioIndex` compared the first two letters of
+a track's three-letter code with the viewer's two-letter language. Measured with the new
+tests against the old code: "est" (Estonian) passed as Spanish, "arm" (Armenian) as
+Arabic, "jav" (Javanese) as Japanese, and 66 codes in all matched the language their first
+two letters happen to spell ("swe" as Swahili, "rum" as Russian, "slo" as Slovenian). The
+other way round was worse: "spa", "ger", "por", "jpn", "chi", "dut", "pol", "swe", "tur",
+"gre", "cze" and "ces" never matched a Spanish, German, Portuguese, Japanese, Chinese,
+Dutch, Polish, Swedish, Turkish, Greek or Czech viewer, so the file's default track won.
+English viewers were not affected ("eng" starts with "en").
+
+**Changed.** `SubtitleSelectionLogic.primaryLanguage` now reduces a tag through one ISO
+639-2 to 639-1 table, both the terminology and bibliographic forms, and the audio pick
+compares those codes exactly. The table string is the Roku app's `NxIso639Table` from issue
+#119, character for character, so both apps agree; `LanguageCodeMatchingTests` reads the
+Roku file and fails if the two drift. Codes the table does not hold stay as themselves
+(like Roku), and Foundation's own code lookup is no longer used: it disagreed with the
+table on "tgl" (Tagalog). The forced-subtitle burn-in check already went through
+`sameLanguage` and passed every look-alike before the change; it now uses the same table.
+
+**Verified.** NostalgexTests on the tvOS simulator: 995 tests, 981 passed, 0 failed, 14
+skipped. Not checked on a real Apple TV against a real multi-language file.
+
+**Next.** The web tuner's `langMatches` in `plex-tuner.html` has the same class of bug
+(measured: "est" matches "es", "arm" "ar", "jav" "ja", "slo" "sl", and "ces" misses "cs")
+and needs the same table. Not changed here: that file belongs to the web tuner work.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
