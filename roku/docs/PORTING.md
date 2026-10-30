@@ -626,6 +626,13 @@ direct play within 0.5 s (43S45) and 1.2 s (55R617), on a server stream once
 its stop was answered, 1.2 s and 1.8 s.
 `sca.sh` is clean.
 
+Deep links, Back and the launch-cache fix reconfirmed on Chad's own stick
+(192.168.4.46), 2026-10-30, `nx_build` `1496a6502e4e`/`acce19bd7ded`, an
+11,798-item Plex library. Channel 5 tunes fullscreen (996 s into the airing,
+picture in 1.652 s); Back exits in 2 presses from a deep-linked live channel.
+First launch after an update: `AppLaunchComplete` at 927 ms via the
+saved-guide-from-another-build path ([#142](https://github.com/chadMueller/Nostalgex/pull/142)).
+
 [The Channel Store bar](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-18982978), on the 43S45 (Roku OS 16.0.4), 2026-10-16
 at `6f05937` with 5,363 items on one server:
 
