@@ -23,9 +23,8 @@ which it holds only as SHA-256 hashes. It is a Node script rather than a Swift t
 because only git knows which files are tracked; a test walking the folder would also read
 gitignored secrets and build output. It runs first in `npm test` and as its own CI job,
 `public-repo-hygiene`, on every pull request: the other jobs only run when their paths
-change. One file still matches, `roku/docs/PORTING.md` (the Roku stick's address in a test
-note); it is on the guard's pending list for the Roku maintainer, and the guard fails once
-that file is clean so the exception gets removed.
+change. `roku/docs/PORTING.md` also had the test stick's address and a library size in a
+note added the same day; that note now names neither, so the guard's pending list is empty.
 
 **Verified.** On unchanged main the guard reports all 19 findings; on the branch it
 passes (698 files, 0.3 s). `npm test` passes. NostalgexTests on the tvOS simulator: 981

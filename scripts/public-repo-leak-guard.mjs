@@ -44,10 +44,8 @@ const HASHED_TOKENS = new Map([
 ]);
 const TOKEN_LENGTHS = new Set([15, 32, 40]);
 
-// path -> who fixes it. roku/ belongs to the Roku maintainer, so it is listed, not edited.
-const PENDING = new Map([
-  ["roku/docs/PORTING.md", "Roku maintainer: the stick's home address in a test note"],
-]);
+// path -> who fixes it. Files listed here still match and are waiting on their owner.
+const PENDING = new Map([]);
 
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 
