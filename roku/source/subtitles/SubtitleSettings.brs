@@ -120,6 +120,19 @@ function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
     return invalid
 end function
 
+' The name the Now Playing panel lists an audio track under. Roku lists
+' some tracks with "#uniq:" in front of the name ("#uniq:Italiano ..."), seen
+' on an Emby film's audio tracks (2026-10-28): that marker isn't for the
+' viewer, so it is dropped. A track with no name is its language in capitals,
+' else "Track" and its place in the list, as before.
+function NxAudioTrackLabel(name as Dynamic, language as Dynamic, position as Integer) as String
+    label = NxToStr(name).Trim()
+    if LCase(Left(label, 6)) = "#uniq:" then label = Mid(label, 7).Trim()
+    if label = "" then label = UCase(NxToStr(language).Trim())
+    if label = "" then label = "Track " + (position + 1).ToStr()
+    return label
+end function
+
 ' Roku reports a track's language as the stream gives it: Plex's HLS says
 ' "eng", where AVFoundation hands upstream "en". A track's language as one
 ' code, so two are the same language only when their codes are equal

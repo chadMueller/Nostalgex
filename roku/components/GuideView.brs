@@ -1762,9 +1762,7 @@ function npState() as Object
     tracks = NxList(m.video.availableAudioTracks)
     for i = 0 to tracks.Count() - 1
         t = tracks[i]
-        name = NxToStr(t.Name)
-        if name = "" then name = UCase(NxToStr(t.Language))
-        if name = "" then name = "Track " + (i + 1).ToStr()
+        name = NxAudioTrackLabel(t.Name, t.Language, i)
         st.audio.Push({ name: name, active: NxToStr(t.Track) = NxToStr(m.video.currentAudioTrack) })
     end for
     if m.sleepEnd <> invalid then
