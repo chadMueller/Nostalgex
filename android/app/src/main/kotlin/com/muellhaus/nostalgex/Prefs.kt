@@ -3,6 +3,7 @@ package com.muellhaus.nostalgex
 import android.content.Context
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.LanguageChoice
+import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
@@ -63,6 +64,11 @@ class Prefs(context: Context) {
     var audioLanguage: String
         get() = prefs.getString("audioLanguage", null) ?: LanguageChoice.SYSTEM
         set(value) = prefs.edit().putString("audioLanguage", value).apply()
+
+    /** The libraries switched off (LibrarySection ids), under the Apple TV's key. Absent means every library is on. */
+    var deselectedSections: Set<String>
+        get() = prefs.getStringSet(LibrarySection.STORAGE_KEY, null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(LibrarySection.STORAGE_KEY, value).apply()
 
     /** WATERSHED (Settings > SCHEDULE), off unless switched on, under the Apple TV's key. */
     var watershed: Boolean

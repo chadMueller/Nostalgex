@@ -107,4 +107,23 @@ class MediaBrowserScanTest {
         assertEquals(8, MediaBrowserLibrary.embyDoviProfile("doviprofile81"))
         assertEquals(null, MediaBrowserLibrary.embyDoviProfile("Hdr10"))
     }
+
+    /**
+     * Library selection (LibrarySelectionTests.swift): a library switched off is skipped before
+     * any request for its items, not fetched and dropped; the others scan as before.
+     */
+    @Test
+    fun anExcludedLibraryIsNeverFetched() {
+        val userId = vectors["userId"]!!.jsonPrimitive.content
+        val library = MediaBrowserLibrary(::serve, userId, "jellyfin")
+        val sections = library.sections("server", "Server")
+        assertTrue("the fixture has more than one library", sections.size > 1)
+        val off = sections.first()
+        val requests = ArrayList<String>()
+        val got = MediaBrowserLibrary({ p -> requests += p; serve(p) }, userId, "jellyfin").scan(excluded = setOf(off.key))
+        assertTrue("no request names ${off.key}", requests.none { "ParentId=${off.key}" in it })
+        val all = MediaBrowserLibrary(::serve, userId, "jellyfin").scan()
+        assertTrue("fewer items without ${off.title}", got.size < all.size)
+        assertEquals("everything else is unchanged", all.filter { it in got }, got)
+    }
 }
