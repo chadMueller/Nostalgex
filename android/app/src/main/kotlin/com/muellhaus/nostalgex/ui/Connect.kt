@@ -26,6 +26,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -459,6 +461,10 @@ private fun Field(
 ) {
     var focused by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    // The keyboard has to be told to close. Left attached when its field goes away, Android
+    // TV's keyboard stayed live but unseen and turned every OK press into the key it had
+    // focused (a "q"), so the next screen's buttons ignored OK until an arrow was pressed.
+    val keyboardController = LocalSoftwareKeyboardController.current
     var inputFocused by remember { mutableStateOf(false) }
     val input = remember { FocusRequester() }
     val shape = RoundedCornerShape(u(12))
@@ -482,6 +488,7 @@ private fun Field(
                 visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = imeAction, autoCorrectEnabled = false),
                 keyboardActions = KeyboardActions(onAny = {
+                    keyboardController?.hide()
                     editing = false
                     onSubmit()
                 }),
@@ -492,12 +499,15 @@ private fun Field(
                         if (it.isFocused) inputFocused = true
                         else if (inputFocused) {
                             inputFocused = false
+                            keyboardController?.hide()
                             editing = false
                         }
                     },
                 decorationBox = { inner -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { inner() } },
             )
             LaunchedEffect(Unit) { runCatching { input.requestFocus() } }
+            // A screen change while typing removes the field without a focus change.
+            DisposableEffect(Unit) { onDispose { keyboardController?.hide() } }
         } else {
             Box(
                 well

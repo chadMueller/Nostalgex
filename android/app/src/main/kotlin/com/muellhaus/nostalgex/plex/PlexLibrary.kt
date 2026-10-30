@@ -3,6 +3,7 @@ package com.muellhaus.nostalgex.plex
 import com.muellhaus.nostalgex.engine.DailyManifest
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaItem
+import com.muellhaus.nostalgex.engine.ScanProgress
 import com.muellhaus.nostalgex.engine.MusicTitle
 import com.muellhaus.nostalgex.plex.PlexClient.Companion.long
 import com.muellhaus.nostalgex.plex.PlexClient.Companion.str
@@ -27,7 +28,7 @@ import android.util.Log
  */
 class PlexLibrary(private val client: PlexClient) {
     fun interface Progress {
-        fun update(text: String, itemsSoFar: Int)
+        fun update(progress: ScanProgress)
     }
 
     private suspend fun directories(server: PlexServer) =
@@ -42,24 +43,27 @@ class PlexLibrary(private val client: PlexClient) {
     suspend fun scan(server: PlexServer, progress: Progress, baseCount: Int = 0, excluded: Set<String> = emptySet()): List<MediaItem> {
         val sections = directories(server).filter { (it.str("key") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
-        for (section in sections) {
+        for ((index, section) in sections.withIndex()) {
             val title = section.str("title") ?: ""
             val type = section.str("type") ?: ""
             try {
-                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, total ->
-                    progress.update("$title ($loaded${total?.let { "/$it" } ?: ""})", baseCount + out.size + loaded)
+                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, _ ->
+                    progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded))
                 }
                 val isMusicVideoSection = MUSIC_VIDEO_SECTION.containsMatchIn(title.trim())
                 if (type == "show") {
-                    var episodes = 0
+                    var shows = 0
                     for (batch in items.chunked(5)) {
                         val results = coroutineScope { batch.map { show -> async { showEpisodes(server, show, isMusicVideoSection) } }.awaitAll() }
-                        results.forEach { out.addAll(it); episodes += it.size }
-                        progress.update("$title · $episodes eps", baseCount + out.size)
+                        results.forEach { out.addAll(it) }
+                        shows += batch.size
+                        progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size, shows, items.size))
                     }
                 } else {
                     items.mapNotNullTo(out) { movieItem(server, it, type, isMusicVideoSection) }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch section $title", e)
             }

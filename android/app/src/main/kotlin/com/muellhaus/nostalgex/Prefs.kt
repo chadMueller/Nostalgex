@@ -65,6 +65,11 @@ class Prefs(context: Context) {
         get() = prefs.getString("audioLanguage", null) ?: LanguageChoice.SYSTEM
         set(value) = prefs.edit().putString("audioLanguage", value).apply()
 
+    /** Set once a full library load has finished on this device: later ones skip the first-setup warning. */
+    var initialLoadComplete: Boolean
+        get() = prefs.getBoolean("nostalgex_completed_initial_load", false)
+        set(value) = prefs.edit().putBoolean("nostalgex_completed_initial_load", value).apply()
+
     /** The libraries switched off (LibrarySection ids), under the Apple TV's key. Absent means every library is on. */
     var deselectedSections: Set<String>
         get() = prefs.getStringSet(LibrarySection.STORAGE_KEY, null) ?: emptySet()
