@@ -117,6 +117,40 @@ final class ChannelEmptyExplainerTests: XCTestCase {
         XCTAssertEqual(state.currentMatchCount(for: dynamic), 1)
     }
 
+    /// currentMatchCounts (the batched form the explainer view actually calls once a
+    /// package is expanded) must agree with currentMatchCount called one at a time,
+    /// including the dynamic-channel fallback, while only building the library cache
+    /// once for the whole set.
+    func testCurrentMatchCountsAgreesWithCallingOneAtATime() {
+        let state = AppState()
+        state.allItems = [
+            film("h1", genres: ["Horror"]),
+            film("h2", genres: ["Horror", "Thriller"]),
+            film("c1", genres: ["Comedy"]),
+        ]
+        var dynamic = Channel(
+            id: 903, number: 903, name: "USER COLLECTION", color: .blue, category: "franchises",
+            rules: nil, timeRestrictions: nil, minItems: 0
+        )
+        dynamic.itemPool = [film("x1", genres: []), film("x2", genres: [])]
+
+        var comedyRules = ChannelRules()
+        comedyRules.genres = GenreRules(include: ["Comedy"])
+        let comedyChannel = Channel(
+            id: 904, number: 904, name: "TEST COMEDY", color: .blue, category: nil,
+            rules: comedyRules, timeRestrictions: nil, minItems: 1
+        )
+        let horror = horrorChannel(minItems: 50)
+
+        let counts = state.currentMatchCounts(for: [horror, comedyChannel, dynamic])
+        XCTAssertEqual(counts[horror.id], state.currentMatchCount(for: horror))
+        XCTAssertEqual(counts[comedyChannel.id], state.currentMatchCount(for: comedyChannel))
+        XCTAssertEqual(counts[dynamic.id], state.currentMatchCount(for: dynamic))
+        XCTAssertEqual(counts[horror.id], 2)
+        XCTAssertEqual(counts[comedyChannel.id], 1)
+        XCTAssertEqual(counts[dynamic.id], 2)
+    }
+
     // MARK: - channelDefinition fallback
 
     func testChannelDefinitionFallsBackToConfigForADroppedChannel() {

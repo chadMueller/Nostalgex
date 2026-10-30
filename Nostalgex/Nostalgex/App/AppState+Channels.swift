@@ -1130,6 +1130,31 @@ extension AppState {
         ).count
     }
 
+    /// Same as `currentMatchCount(for:)`, for several channels at once: the library
+    /// cache is built once and reused for every channel, rather than once per channel.
+    /// The explainer (I-004) calls this instead of looping `currentMatchCount` itself,
+    /// so expanding a package with several missing channels doesn't re-scan the whole
+    /// library once per row.
+    func currentMatchCounts(for channels: [Channel]) -> [Int: Int] {
+        let cached = makeFilterCache(allItems)
+        var result: [Int: Int] = [:]
+        for channel in channels {
+            guard let rules = channel.rules else {
+                result[channel.id] = channel.itemPool.count
+                continue
+            }
+            result[channel.id] = Self.filterItems(
+                cached,
+                rules: rules,
+                forChannelID: channel.id,
+                category: channel.category,
+                memberships: channelMemberships,
+                exclusiveRules: exclusiveRules
+            ).count
+        }
+        return result
+    }
+
     /// Build a snapshot cache for a set of items. Called once per filter pass —
     /// per `loadLibrary`, per `rebuildPoolsForBundle`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later

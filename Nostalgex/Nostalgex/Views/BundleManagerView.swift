@@ -738,18 +738,25 @@ struct SettingsPageView: View {
     /// accordion has nothing to show and renders nothing.
     @ViewBuilder
     private func missingChannelsExplainer(headerID: String, missingIDs: [Int]) -> some View {
-        let rows: [(channel: Channel, matched: Int)] = missingIDs.compactMap { id in
+        // Cheap: just which missing channels have rules to explain at all. No library
+        // scan here, so this is safe to compute on every render of every package row.
+        let explainable: [Channel] = missingIDs.compactMap { id in
             guard let channel = appState.channelDefinition(for: id), channel.rules != nil else { return nil }
-            return (channel, appState.currentMatchCount(for: channel))
+            return channel
         }
 
-        if !rows.isEmpty {
+        if !explainable.isEmpty {
             let expanded = expandedCategories.contains(headerID)
+            // Expensive: a full-library re-filter per channel. Only run it once the
+            // viewer actually opens the accordion, and only once for every channel in
+            // it (currentMatchCounts builds the library cache a single time), not once
+            // per render of a package the viewer never expands.
+            let matchCounts = expanded ? appState.currentMatchCounts(for: explainable) : [:]
             VStack(alignment: .leading, spacing: 6) {
                 CollectionAccordionHeaderRow(
                     title: "WHY AREN'T THESE ON AIR?",
                     subtitle: "See what each channel needs from your library",
-                    detail: "\(rows.count) CHANNEL\(rows.count == 1 ? "" : "S")",
+                    detail: "\(explainable.count) CHANNEL\(explainable.count == 1 ? "" : "S")",
                     isExpanded: expanded,
                     isFocused: focusedItem == "explain_\(headerID)"
                 ) {
@@ -765,8 +772,8 @@ struct SettingsPageView: View {
                 .id("explain_\(headerID)")
 
                 if expanded {
-                    ForEach(rows, id: \.channel.id) { row in
-                        ChannelRequirementCard(channel: row.channel, matchedCount: row.matched)
+                    ForEach(explainable, id: \.id) { channel in
+                        ChannelRequirementCard(channel: channel, matchedCount: matchCounts[channel.id] ?? channel.itemPool.count)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
