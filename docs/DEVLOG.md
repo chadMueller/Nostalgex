@@ -91,6 +91,32 @@ the bug needs a library short of a classic, which is what the new test builds.
 `ChannelFilter.brs`: until then `filter` and `filter-golden` stay red and the `roku` CI job
 with them. `scripts/deploy.sh --test` needs GNU `stat -c` and `timeout`, which macOS lacks.
 
+## 2026-10-30 (Roku: the Now Playing panel's audio rows no longer show Roku's "#uniq:" marker)
+
+**Shipped.** Nothing yet. Branch `roku/audio-track-uniq-prefix`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. Trello E3zRnEIL.
+
+**Why.** On 2026-10-28, testing a batch of tydude001's PRs on a stick signed in to Emby, the
+panel's audio rows read `#uniq:Italiano ...` and `#uniq:English ...`: Roku's own track names,
+shown as they come. The marker is for the player, not the viewer. The row builder
+(`npState` in `components/GuideView.brs`) was already on main before that batch.
+
+**Changed.** `NxAudioTrackLabel` in `source/subtitles/SubtitleSettings.brs` makes the row
+label: the track's name with a leading `#uniq:` taken off (any case, spaces trimmed), else
+the language in capitals, else `Track n`, as before. `npState` calls it. Only a leading
+marker goes; the same text inside a name stays. 9 new cases in `tests/SubtitleTests.brs`:
+the marker alone, with the rest of the name, in capitals, a plain name, mid-name, nothing
+after it, no name, no name and no language.
+
+**Verified.** `subtitle` suite, off-device and on the Streaming Stick Plus: 72 passed, 0
+failed (63 before). Not seen on the stick itself: it is signed in to Plex now, the marker was
+only ever seen on Emby, and a temporary log of the raw track list printed nothing across 10
+Plex channels stepped through (the panel on a direct-play film read SINGLE TRACK). So what
+follows `#uniq:` on a real name is unverified; the label keeps it whatever it is.
+
+**Next.** On an Emby sign-in, open the panel on a film with two audio tracks and look at the
+rows.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
