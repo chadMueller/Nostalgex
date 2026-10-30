@@ -3,6 +3,47 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Web tuner: a storage-quota exception no longer looks like an unreachable server)
+
+**Shipped.** Nothing yet. Branch `fix/web-tuner-quota-crash`, cut from `origin/main` at
+`c4d936f`, not merged, not pushed.
+
+**Changed.** Fixed issue #152 (reported by tyleerb, web tuner/Docker 1.0.9, a Plex
+library of about 6,220 episodes and 519 movies): a large library could show "COULD NOT
+LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE" even though the server answered fine.
+`saveChannelConfig()` ran right after `saveLibraryCache()`, which can land `localStorage`
+right at its quota on a library that size. `saveLibraryCache()` already falls back
+gracefully on `QuotaExceededError` (strip summaries, then give up quietly); the smaller
+`saveChannelConfig()` write next to it had no try/catch of its own, so the exception was
+uncaught, propagated out of `fetchPlexLibrary()`, and landed in its generic catch block,
+which blames the server for a Plex backend. Wrapped the write in the same try/catch
+shape as `saveLibraryCache()`: on failure it logs to the console and moves on, so losing
+the channel-config save (toggles don't persist that run) never blocks the rest of the
+library load. Left `fetchPlexLibrary()`'s catch block itself alone, since the actual fix
+is making sure a storage exception can't escape the save functions in the first place.
+
+New `scripts/channel-config-quota-browser-smoke.mjs` (`npm run test:channel-config-quota`,
+not wired into `npm test`, same as the other Playwright browser-smoke scripts): loads the
+real `plex-tuner.html` headless against a Plex-shaped server, overrides
+`localStorage.setItem` to throw `QuotaExceededError` only for the `plex90_channel_config`
+key, and checks the library still loads and tunes. A negative control reverts
+`saveChannelConfig()` to its pre-fix shape and confirms the same thrown exception then
+does reproduce the original symptom: the generic "server unreachable" message, and the
+connect screen instead of the guide. 10/10 checks passed, including the negative
+control; `npm test` is green.
+
+**Half-done.** Not yet reviewed or pushed; Chad has not seen a go for this branch.
+Several other `localStorage.setItem` calls elsewhere in `plex-tuner.html` have no
+try/catch of their own either (bundle preferences, collection switches, and a few
+smaller settings keys). None of them are the one this report named, and none sit right
+after the big library-cache write the way `saveChannelConfig()` does, so they were left
+alone rather than widening this fix past what was asked for. Worth a pass later if
+another quota-shaped report comes in naming a different save.
+
+**Next.** Needs review and a push decision from Chad. If pushed to `main`, the hosted
+tuner picks it up on deploy; a Docker release still needs its own `tuner-v` tag and a
+`tunerVersion` bump in that commit.
+
 ## 2026-10-29 (Watershed: an opt-in 9 PM hold for 18/R-rated content, every channel)
 
 **Shipped.** Nothing yet. Branch `feature/watershed`, cut from `main` at `56ee192`, not

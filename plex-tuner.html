@@ -6328,7 +6328,17 @@
       rules: ch.rules || {},
       timeRestrictions: ch.timeRestrictions || null,
     }));
-    localStorage.setItem('plex90_channel_config', JSON.stringify(config));
+    // On a large library this runs right after saveLibraryCache(), which can land near
+    // the localStorage quota. This write is small on its own, but a full quota leaves no
+    // room for even a small write, and an uncaught QuotaExceededError here used to
+    // propagate out of fetchPlexLibrary() and get shown as "server unreachable" (#152).
+    // Losing this save just means the channel toggles don't persist; it should never
+    // block the user from seeing their library.
+    try {
+      localStorage.setItem('plex90_channel_config', JSON.stringify(config));
+    } catch (e) {
+      console.error('[Nostalgex] Could not save channel config (storage full or unavailable):', e);
+    }
   }
 
   const CONFIG_VERSION = 11;

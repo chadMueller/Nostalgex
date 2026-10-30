@@ -34,6 +34,7 @@
     "test:stream-quality": "node scripts/nostalgex-stream-quality-smoke.mjs",
     "test:stream-quality:browser": "node scripts/stream-quality-browser-smoke.mjs",
     "test:cache-restore-crash": "node scripts/cache-restore-crash-browser-smoke.mjs",
+    "test:channel-config-quota": "node scripts/channel-config-quota-browser-smoke.mjs",
     "test:empty-guide": "node scripts/empty-guide-browser-smoke.mjs",
     "test:subscribe": "node scripts/subscribe-smoke.mjs",
     "test:tmdb": "node scripts/tmdb-proxy-smoke.mjs",
