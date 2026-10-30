@@ -19,8 +19,12 @@ SITCOMS already sit side by side without splitting anything.
 
 Channel numbers 1-19 (NOSTALGEX's own packed range) and the 400s id pool up
 to 407 are already taken, so the new channels took the next free static ids
-(423-425) and the nearest free, unclaimed number block (35-37, the gap
-between KIDZ ZONE and PRIME TIME). `channels.json` version 46 to 47.
+(423-425). They first landed on numbers 35-37, a block picked because it
+was the nearest free, unclaimed range between KIDZ ZONE and PRIME TIME —
+but that left the NOSTALGEX bundle itself as two disconnected spans (1-19,
+then 35-37) with KIDZ ZONE's 20-34 sitting unbroken in between. A device
+run of `ChannelNumberingTests.testEveryBundleIsOneUnbrokenRunOfNumbers()`
+caught it: see the fix below. `channels.json` version 46 to 47.
 CHANNELS.md, llms.txt and sitemap.xml regenerated.
 
 `scripts/filter-golden.json` gets 9 new cases, run by both
@@ -37,6 +41,35 @@ not run on this branch; that needs Chad's go for a simulator run, per the
 standing rule this session. Nothing else pending.
 
 **Next.** Chad's go to run NostalgexTests, then merge/push when he's ready.
+
+### Fix: renumbered to keep NOSTALGEX as one unbroken block
+
+A real device run of `NostalgexTests` failed
+`ChannelNumberingTests.testEveryBundleIsOneUnbrokenRunOfNumbers()`: the three
+new channels at 35-37 were a disconnected block, since NOSTALGEX's real
+range is 1-19 with KIDZ ZONE immediately following at 20-34, zero slack
+between them. There was no free gap to drop 35-37 into; the whole lineup
+from 20 up had to shift.
+
+Moved 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV (ids 423-425) from 35-37
+to 20-22, right after NOSTALGEX's existing 1-19, and shifted every other
+channel numbered 20 or above up by exactly 3 to stay contiguous with no
+gaps or collisions: KIDZ ZONE moves from 20-34 to 23-37, and every later
+bundle (PRIME TIME, MARQUEE, ADVENTURELAND, OVERTIME, CASE FILES, DECADES,
+FRANCHISES, ARTHOUSE, NETWORKS, SCREAM, TIS THE SEASON, HIGH ROTATION)
+shifts the same +3. Only the `number` field moved; every `id` is untouched,
+so TopShelf's `nostalgex://channel/<id>` deep links (the only deep link in
+the app) are unaffected — confirmed by reading `ContentProvider.swift`
+rather than assuming the earlier decision still held. No other file keys
+playback, docs or golden tests off channel number; `filter-golden.json` and
+the franchise/schedule goldens all reference channel `id`.
+
+`channels.json` version 47 to 48. CHANNELS.md, sitemap.xml, llms.txt and
+`bundle-lastmod.json` regenerated via `npm run channels:doc` and
+`npm run bundles:render` rather than hand-edited. `npm test` green,
+including `channels:doc:check` and `bundles:render:strict`.
+`ChannelNumberingTests` itself still needs a device run, same as the rest
+of `NostalgexTests` on this branch.
 
 ## 2026-10-29 (SLIME TV: matching who made a show let two adult NBC shows through)
 
