@@ -117,7 +117,13 @@ function NxRunFranchiseGuideTests(configPath as String, dictionaryPath as String
         names.Push(row.name)
     end for
     NxCheck(r, "list: alphabetical, stock and found", names.Join(","), "HARRY POTTER,JASON BOURNE,JOHN WICK,JURASSIC PARK,LORD OF THE RINGS,MARVEL,MISSION IMPOSSIBLE,STAR WARS,THE HUNGER GAMES")
-    NxCheck(r, "list: star wars number", NxToStr(NxFgRow(s, "STAR WARS").channelNumber), "100")
+    NxCheck(r, "list: star wars number", NxToStr(NxFgRow(s, "STAR WARS").channelNumber), NxFgLiveNumber(t.config, 100))
+    ' Every stock classic's row shows its channel's number, in the library or
+    ' not: a classic cut for too few films has no built channel, and its row
+    ' must not fall back to the channel's id (100 to 106 are CH 103 to 109).
+    for each row in s.rows
+        if row.stockChannelID <> invalid then NxCheck(r, "list: " + row.name + " row number is its channel's", NxToStr(row.channelNumber), NxFgLiveNumber(t.config, row.stockChannelID))
+    end for
     NxCheck(r, "list: stock classics default on", NxFgBool(NxFgRow(s, "STAR WARS").enabled), "true")
     NxCheck(r, "list: star wars count", NxFgRow(s, "STAR WARS").countLabel, "3 movies")
     NxCheck(r, "list: found has no number", NxToStr(NxFgRow(s, "JOHN WICK").channelNumber), "")
@@ -360,6 +366,18 @@ function NxFgRow(s as Object, name as String) as Object
         if row.name = name then return row
     end for
     return { id: "", countLabel: "(no row)", enabled: invalid, channelNumber: invalid, stockChannelID: invalid }
+end function
+
+' The number channels.json gives the channel with this id, as text. The Swift
+' cases make their own channels (Channel(id: 100, number: 100)); these build
+' the stock channels from the real channels.json, whose numbers are not its ids
+' (the three 80s channels took CH 20 to 22 on 2026-10-29 and every later
+' channel moved up by 3), so what a row should say is read from it too.
+function NxFgLiveNumber(config as Object, id as Integer) as String
+    for each c in config.channels
+        if c.id = id then return NxToStr(c.number)
+    end for
+    return "no channel " + id.ToStr()
 end function
 
 function NxFgChannel(s as Object, id as Integer) as Object
