@@ -3,6 +3,44 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Plex sign-in, a grace window sized by what is still pending)
+
+**Shipped.** Nothing. Branch `fix/livingroom-test-findings`, local, on top of the early-exit
+fix below. Not yet confirmed on a real Apple TV.
+
+**Why.** After the early-exit fix, a live retest still took about 48 seconds. Timing logs
+from a real device trace showed the second cause: a shared server whose only working path
+was relay had its relay candidate succeed in about 0.5s, but relay is the lowest priority,
+so the early exit correctly waited for the remote-HTTPS candidate ranked above it. That
+candidate never succeeds for this server, yet takes its full patient budget (25s, one
+retry, up to 50s) to fail. `discoverServers` waits for every server before deciding whether
+to show a picker, so one slow server set the pace for the whole sign-in.
+
+**Changed.** Once any candidate succeeds, whatever still outranks it gets one grace window
+instead of its full budget, scheduled as a timer task in the same task group (a time check
+inside the loop alone would never fire, since the loop only wakes when a task reports).
+The window is sized by what is pending, because lost and no-connection rates are tracked
+and this must not trade a slow but real connection for a faster, worse one:
+
+- Anything patient still outranks the hit (remote or relay, which can take 10 to 20s to
+  cold-establish and still succeed): 15s.
+- Only local candidates outrank the hit (local answers fast or not at all): 3s.
+
+A flat 4s window measured 5 seconds on the same multi-server account; this version trades
+some of that back for safety, so the relay-only case should now settle at about 15s.
+
+**Verified.** `ConnectionDiscoveryEarlyExitTests`: 7 tests reproducing the task-group shape
+with timed synthetic candidates (fast local hit, second candidate winning, nothing
+reachable, earlier-ranked hit inside the grace window, patient vs local-only grace, a
+higher-priority hit inside the window still winning), all passing; full `NostalgexTests`
+green.
+
+**Half-done.** Temporary `DISCOVERY TIMING` prints are still in `bestReachableURI` for the
+one on-device confirmation run. Remove them after that run.
+
+**Next.** One sign-in on a real Apple TV with a multi-server Plex account, console
+captured, to confirm which tier wins and the total time. Then drop the prints and merge.
+
 ## 2026-10-30 (Apple TV: Plex sign-in waited on a slow relay probe even after a fast local hit)
 
 **Shipped.** Nothing until this lands on main.
