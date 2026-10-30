@@ -25,7 +25,9 @@ compares those codes exactly. The table string is the Roku app's `NxIso639Table`
 Roku file and fails if the two drift. Codes the table does not hold stay as themselves
 (like Roku), and Foundation's own code lookup is no longer used: it disagreed with the
 table on "tgl" (Tagalog). The forced-subtitle burn-in check already went through
-`sameLanguage` and passed every look-alike before the change; it now uses the same table.
+`sameLanguage` and passed every look-alike before the change; it now uses the same table. A
+track whose language is a full name ("English") no longer matches by its first letters;
+Jellyfin and Emby send ISO codes, so this is low risk.
 
 **Verified.** NostalgexTests on the tvOS simulator: 995 tests, 981 passed, 0 failed, 14
 skipped. Not checked on a real Apple TV against a real multi-language file.

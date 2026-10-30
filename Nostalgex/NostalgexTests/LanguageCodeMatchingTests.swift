@@ -58,6 +58,13 @@ final class LanguageCodeMatchingTests: XCTestCase {
         XCTAssertTrue(pairs.contains { $0 == ("ces", "cs") })
     }
 
+    /// The Swift table is the Roku string, character for character: a pair added on one
+    /// side only fails here, whichever side it is.
+    func testTheSwiftTableIsTheRokuTable() throws {
+        let rokuString = try Self.rokuPairs().map { "\($0.three):\($0.two)" }.joined(separator: " ")
+        XCTAssertEqual(SubtitleSelectionLogic.iso639Pairs, rokuString)
+    }
+
     /// Both apps reduce every three-letter code to the same two-letter one.
     func testEveryCodeInTheRokuTableReducesTheSameWayOnAppleTV() throws {
         var wrong: [String] = []
