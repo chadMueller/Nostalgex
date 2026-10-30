@@ -429,14 +429,13 @@ private struct ChannelOSD: View {
                         .font(.custom("DMMono-Medium", size: 20))
                         .foregroundStyle(channel.color)
 
-                    Text(channel.name)
-                        .font(.custom("DMMono-Medium", size: 32))
-                        .foregroundStyle(.white)
-
+                    // Title leads as the big headline, channel name follows smaller below it
+                    // (Discord feedback, jussaren, 2026-10-29: viewers read this as "what's
+                    // playing", so the title should dominate and the channel is secondary).
                     Group {
                         if item.type == .episode, let epTitle = item.episodeTitle {
                             Text("\(item.title)  \(item.seTag ?? "")  \"\(epTitle)\"")
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(.white.opacity(0.95))
                         } else if item.isMusicVideo {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.title)
@@ -457,10 +456,14 @@ private struct ChannelOSD: View {
                             }
                         } else {
                             Text("\(item.title)\(item.year.map { "  \(String($0))" } ?? "")")
-                                .foregroundStyle(.white.opacity(0.9))
+                                .foregroundStyle(.white.opacity(0.95))
                         }
                     }
-                    .font(.custom("DMMono-Regular", size: 24))
+                    .font(.custom("DMMono-Medium", size: 32))
+
+                    Text(channel.name)
+                        .font(.custom("DMMono-Regular", size: 24))
+                        .foregroundStyle(.white.opacity(0.9))
 
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(playbackTimeLabel(at: context.date))
