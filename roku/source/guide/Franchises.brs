@@ -92,7 +92,7 @@ function NxFranchiseStep(opts as Object) as Object
     NxFranchiseUnionStockPools(kept, found, opts.manifest, opts.exclusiveRules)
 
     ' Rows count the kept pools, switched off or not.
-    rows = NxFranchiseListRows(opts.bundleChannelIDs, kept, found, opts.defs, opts.choices)
+    rows = NxFranchiseListRows(opts.bundleChannelIDs, kept, opts.channels, found, opts.defs, opts.choices)
     off = NxSwitchedOffStockFranchises(opts.defs, opts.choices)
     for each ch in opts.channels
         if off.DoesExist(ch.id.ToStr()) then ch.enabled = false
@@ -350,9 +350,12 @@ end function
 ' counts its channel's pool, less the films a non-stock dictionary franchise
 ' owns (Spider-Man's MCU films also pass MARVEL's studio rule). `channels`
 ' are the channels kept after the minItems cut; `bundleChannelIDs` the
-' package's channel ids.
+' package's channel ids; `allChannels` every channel channels.json lists,
+' kept or not, which a row's number comes from: a classic cut for too few
+' films has no kept channel, and its number is still its channel's, not its
+' id (STAR WARS is id 100 and CH 103), as the Apple TV reads allChannels.
 ' Rows: { id, name, countLabel, stockChannelID, channelNumber, enabled }.
-function NxFranchiseListRows(bundleChannelIDs as Object, channels as Object, found as Object, defs as Object, choices as Object) as Object
+function NxFranchiseListRows(bundleChannelIDs as Object, channels as Object, allChannels as Object, found as Object, defs as Object, choices as Object) as Object
     claimed = {}
     claimed.SetModeCaseSensitive()
     for each f in found
@@ -383,8 +386,10 @@ function NxFranchiseListRows(bundleChannelIDs as Object, channels as Object, fou
             movies = 0
             tv = []
             number = channelId
+            for each c in allChannels
+                if c.id = channelId then number = NxChNum(c)
+            end for
             if ch <> invalid then
-                number = NxChNum(ch)
                 for each it in ch.pool
                     if not claimed.DoesExist(NxFranchiseItemKey(it)) then
                         if it.type = "movie" then movies = movies + 1

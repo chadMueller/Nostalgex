@@ -3,6 +3,57 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Roku: the 80s-channels +3 shift, tests that read live numbers and one real number bug)
+
+**Shipped.** Nothing yet. Branch `roku/renumber-80s-fixtures`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. Trello numJBa3V.
+
+**Why.** The 80s channels took CH 20 to 22 on 2026-10-29 and every channel from 20 up moved
+by 3 (only `number` changed, every `id` stayed). Swift's `SeasonalBundleTests` were fixed in
+`ba34e25`. The Roku suites were red on main and the card guessed the shift was the cause.
+A full `tests/run.sh` on `0fe27e9` (`NX_TEST_JOBS=2`) says it is only part of it.
+
+**Measured on `0fe27e9`.**
+
+- Caused by the shift: `collections` 2669 passed, 2 failed (`CH 100 STAR WARS` is `CH 103`),
+  `franchise-guide` 58 passed, 1 failed (`list: star wars number`, 100 is 103).
+- Not the shift: `filter` shards 0 to 6 (18 FAIL lines, channels 58, 60 and 90 to 96, each
+  under two clocks) and `filter-golden` (276 passed, 16 failed: stand-up, anime, the 7
+  Carl Barron and Arj Barker titles, and the two Emby zero-rating cases). Those are the
+  engine commits `4fa4cb5` (`manifestOnlyGenreFallback`) and `d56729f` (`ratingMin` falls
+  back to the OMDb rating) that never got their Roku port. `ChannelFilter.brs` has neither.
+  The filter vectors and golden cases key on channel id, so no number is involved. Left for
+  its own change.
+- Everything else in the run passed, including `subtitle` and `mediabrowser`.
+
+**Changed.**
+
+- `tests/CollectionTests.brs` and `tests/FranchiseGuideTests.brs`: the three stale
+  expectations now read the channel's number from the live `channels.json`. The Swift cases
+  they transcribe make their own `Channel(id: 100, number: 100)`; here the stock channels are
+  built from the real file, so a hard-coded 103 would break at the next renumber too.
+- A real on-device bug, `NxFranchiseListRows` in `source/guide/Franchises.brs`. It took a
+  stock classic's number from the kept channels and fell back to the channel's id when the
+  classic was cut for too few films. Before the shift id and number matched, so nobody saw
+  it. Now Settings shows `CH 102` for HARRY POTTER where the channel is CH 105. It reads the
+  number from every channel in the lineup, as the Apple TV's `allChannels` does. A new check
+  makes every stock row's number its channel's: on the old code 5 of the 7 failed (102 for
+  105, 106 for 109, 103 for 106, 104 for 107, 105 for 108).
+- Production code has no other channel-number literal. Every `CH n` on screen, the deep-link
+  number fallback and the guide read `ch.number` from `channels.json`; the 300, 450 and 500
+  blocks for found franchises and collections sit clear of the stock numbers (top one 216).
+
+**Verified.** Off-device, same suites after the change: `collections` 2671 passed, 0 failed;
+`franchise-guide` 66 passed, 0 failed; `franchise` unchanged. On the Streaming Stick Plus
+(`deploy.sh --test`, one suite per build): `franchise-guide` 66 passed, 0 failed;
+`collections` 2671 passed, 0 failed. The stick's own Plex library has all seven classics
+in it, so Settings already showed CH 103 to 109 correctly before the fix and still does;
+the bug needs a library short of a classic, which is what the new test builds.
+
+**Next.** Port `manifestOnlyGenreFallback` and the `ratingMin` OMDb fallback to
+`ChannelFilter.brs`: until then `filter` and `filter-golden` stay red and the `roku` CI job
+with them. `scripts/deploy.sh --test` needs GNU `stat -c` and `timeout`, which macOS lacks.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
