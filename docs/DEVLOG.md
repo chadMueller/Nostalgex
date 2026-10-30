@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
+
+**Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
+rounds in LongInteger instead of plain Integer.
+
+**Why.** tydude001 measured on a real TV (43" TCL, Roku OS 16.0.4) that
+`(Int(bps) + 500) \ 1000` silently goes through a Float on device: 19269499 rounds to
+19270 instead of 19269. The off-device `brs` interpreter (`tests/run.sh`) does not
+reproduce this at all, so CI never saw it and the existing test (`MediaBrowserTests.brs`,
+"kbps: 19269499 rounds down") already asserted the right answer and already passed
+there, both before and after this fix. He measured two candidate fixes on the same TV:
+LongInteger math gave the right answer; a Float-based rewrite also looked right at that
+one value but gave the wrong answer once the input came through a `for each` over an
+array literal, so only the LongInteger form is used here.
+
+**Changed.** `NxMbBitrateKbps`'s rounding line assigns `Int(bps)` into a LongInteger
+(`whole&`) before the `+ 500& \ 1000&`, so the whole sum stays in LongInteger. The
+`>= 2000000000` overflow guard above it is untouched (different magnitude, not the
+reported bug).
+
+**Verified.** `tests/run.sh` (`NX_TEST_JOBS=1`, one process at a time): mediabrowser
+cases 5653 passed, 0 failed. Every other failure in the full run is byte-for-byte
+identical to the known pre-existing baseline (stale decade/anime channel numbers from
+the 80s-channels shift, and Roku parity gaps already tracked separately), confirmed by
+diffing this run's FAIL lines against a clean baseline run of the same unmodified main.
+Not independently re-verified on a real Roku TV; the fix follows tydude001's own
+on-device measurement for the LongInteger approach, not a fresh one.
+
+**Next.** None. Worth a reply on PR #130 pointing at this commit so tydude001 knows it
+landed, since his own comment there was never answered.
+
 ## 2026-10-30 (Docker post: full-size header.webp as the page hero)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys the uncropped header on `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
