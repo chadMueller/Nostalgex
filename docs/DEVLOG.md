@@ -3,6 +3,41 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (three 80s channels, additive)
+
+**Shipped.** Nothing yet. Branch `feature/80s-channels`, cut from `main` at
+`56ee192`, not merged, not pushed.
+
+**Changed.** Added 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV to the
+NOSTALGEX bundle. Each one is an existing channel's exact rule with its
+`yearRange` narrowed to 1980-1989: 80S SITCOMS mirrors 90S SITCOMS, 80S LOL
+mirrors NOSTALGEX LOL, 80S AFTER SCHOOL TV mirrors AFTER SCHOOL TV. Additive
+only: NOSTALGEX LOL and AFTER SCHOOL TV keep their existing 1980-1999 range
+unsplit, so 1980s titles legitimately air on both the old channel and its
+new sibling. That overlap is intentional, the same way Y2K SITCOMS and 90S
+SITCOMS already sit side by side without splitting anything.
+
+Channel numbers 1-19 (NOSTALGEX's own packed range) and the 400s id pool up
+to 407 are already taken, so the new channels took the next free static ids
+(423-425) and the nearest free, unclaimed number block (35-37, the gap
+between KIDZ ZONE and PRIME TIME). `channels.json` version 46 to 47.
+CHANNELS.md, llms.txt and sitemap.xml regenerated.
+
+`scripts/filter-golden.json` gets 9 new cases, run by both
+`nostalgex-filter-golden-smoke.mjs` (140 cases passed) and Swift's
+`FilterGoldenTests` (not run yet, see below): the 80s and 90s sitcom
+siblings don't cross-claim each other's decade, the two unsplit-parent
+siblings correctly overlap for 1980s titles but exclude 1990s ones, and the
+Animation/Anime exclusions plus the GB-15 non-US rating normalization carry
+over to the new channels exactly like their mirrors.
+
+**Half-done.** `npm test` is green (142 channels, filter-golden 140/140,
+`xcodebuild build` for tvOS Simulator succeeds). `NostalgexTests` itself has
+not run on this branch; that needs Chad's go for a simulator run, per the
+standing rule this session. Nothing else pending.
+
+**Next.** Chad's go to run NostalgexTests, then merge/push when he's ready.
+
 ## 2026-10-29 (SLIME TV: matching who made a show let two adult NBC shows through)
 
 **Shipped.** Nothing. Branch `fix/slime-tv-adult-leak`, cut from `main` at
