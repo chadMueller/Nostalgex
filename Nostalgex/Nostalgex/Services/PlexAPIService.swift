@@ -1285,19 +1285,39 @@ struct PlexAPIService: MediaBackend {
             + server.connections.filter { $0.relay }
         guard !ordered.isEmpty else { return nil }
 
-        let reachableIndices = await withTaskGroup(of: Int?.self) { group -> [Int] in
+        // Found live, 2026-10-30: sign-in over Plex measured ~45s even when the local
+        // connection answers in a second or two. Cause: this used to drain every
+        // candidate's task before returning, so a fast local hit still sat waiting on
+        // the slow ones, chiefly relay (25s timeout, one retry, so up to 50s when relay
+        // isn't actually needed), and Plex's resources API always offers a relay
+        // candidate (includeRelay=1) even when local or remote already works, so this
+        // cost hit nearly every sign-in, not just ones that truly needed relay.
+        //
+        // Fix: once every candidate ranked ahead of the current best hit has reported
+        // (success or failure), nothing still in flight can outrank it, so stop waiting
+        // and use it now. `ordered`'s priority is local, then remote HTTPS, then remote
+        // plain, then relay, so a fast local success (index 0) returns immediately with
+        // the remote/relay probes cancelled mid-flight, instead of waiting on them.
+        let reachableIndices = await withTaskGroup(of: (idx: Int, ok: Bool).self) { group -> [Int] in
             for (idx, candidate) in ordered.enumerated() {
                 group.addTask {
                     // Local connections answer fast or not at all; remote/relay paths
                     // (the only paths a shared-library-only user has) are slow to
                     // establish cold, so they get a longer budget and one retry.
                     let patient = !candidate.local || candidate.relay
-                    return await testReachable(uri: candidate.uri, token: token, patient: patient) ? idx : nil
+                    let ok = await testReachable(uri: candidate.uri, token: token, patient: patient)
+                    return (idx, ok)
                 }
             }
+            var reported = Set<Int>()
             var hits: [Int] = []
-            for await result in group {
-                if let result { hits.append(result) }
+            for await (idx, ok) in group {
+                reported.insert(idx)
+                if ok { hits.append(idx) }
+                if let best = hits.min(), (0..<best).allSatisfy({ reported.contains($0) }) {
+                    group.cancelAll()
+                    break
+                }
             }
             return hits
         }
@@ -1408,6 +1428,9 @@ struct PlexAPIService: MediaBackend {
         let timeout: TimeInterval = patient ? 25 : 12
         let attempts = patient ? 2 : 1
         for attempt in 0..<attempts {
+            // A cancelled probe (bestReachableURI already has its answer from a
+            // higher-priority candidate) fails fast rather than retrying once more.
+            if Task.isCancelled { return false }
             // Step 1: identity probe — server is reachable at all
             guard await probe(uri: "\(uri)/identity", token: token, requireAuth: false, timeout: timeout) else {
                 if attempt < attempts - 1 { continue }

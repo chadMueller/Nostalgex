@@ -3,6 +3,46 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Plex sign-in waited on a slow relay probe even after a fast local hit)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad measured 45 seconds from QR scan to found-the-server over Plex, timed
+with a stopwatch. Plex is the primary backend, so this mattered more than the same
+delay would on Jellyfin or Emby.
+
+**Found, not guessed.** `PlexAPIService.bestReachableURI` races every connection
+candidate for a server (local, remote HTTPS, remote plain, relay, in that priority
+order) with `withTaskGroup`, but drained every task before returning, even once the
+winner was already decided. Relay candidates get a 25s timeout with one retry (up to
+50s), and Plex's `/api/v2/resources` always offers a relay candidate when
+`includeRelay=1` is requested, whether or not the account actually needs it. So a
+local connection that answered in a second or two still sat blocked behind a relay
+probe that was always going to fail or time out, on nearly every sign-in, not only
+ones that genuinely needed relay. 45 seconds lines up closely with one relay probe
+attempt timing out, plus overhead.
+
+**Changed.** `bestReachableURI` now tracks which candidates have reported (success or
+failure) as results stream in, and stops once every candidate ranked ahead of the
+current best hit has reported, cancelling whatever is still in flight. A fast local
+success now returns immediately instead of waiting on remote and relay. `testReachable`
+also bails out on `Task.isCancelled` between its retry attempts rather than retrying a
+probe whose result is already moot.
+
+**Verified.** Swift's async `URLSession.data(for:)` already respects structured-concurrency
+cancellation, so `group.cancelAll()` genuinely aborts in-flight probes rather than
+leaving them to idle out their timeout in the background. `bestReachableURI` itself is
+private and does real networking, so it isn't directly unit-testable; added
+`ConnectionDiscoveryEarlyExitTests.swift`, which reproduces the exact same TaskGroup
+shape with synthetic timed outcomes instead of HTTP calls. The key case (a 50ms local
+hit racing a 2000ms doomed relay candidate) completed in 54ms, not ~2000ms, proving the
+early exit actually returns fast rather than trusting the logic by reading it. Full
+`NostalgexTests` suite green.
+
+**Half-done.** Not independently re-verified against a real Plex account's relay path
+(no relay-only test account set up); the timed synthetic test is the closest proof
+available without one. Needs Chad's live re-measurement of the QR sign-in time.
+
 ## 2026-10-30 (Apple TV: three fixes from a living room test of yesterday's work)
 
 **Shipped.** Nothing until this lands on main.
