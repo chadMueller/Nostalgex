@@ -304,6 +304,100 @@ struct ChannelRules {
     var manifestOnlyGenreFallback: Bool = false // opt-in, per channel: on a manifestOnly channel, also run the normal genre/keyword content-matching block below as a second, additive claim path. Only set this when the channel's own genres/keywords/keywordGatedGenres are reviewed to be tight, this flag does not itself guard against a catch-all; the channel's rules do. STAND-UP opts in (Comedy/Documentary stay keyword-gated via keywordGatedGenres; the narrower "Stand-Up" server genre tag is specific enough to stand alone). See AppState+Channels.swift.
 }
 
+extension ChannelRules {
+    /// What this channel asks of the library, as short plain-English lines for the
+    /// Settings "why is this channel off the air" explainer (I-004). Not a full dump of
+    /// every field: only the ones a non-technical viewer can read without knowing what
+    /// Plex, TMDB or OMDb are. A channel with none of these set (title-list or
+    /// manifest-only channels) falls back to one line so the explainer never shows nothing.
+    var plainLanguageRequirements: [String] {
+        var lines: [String] = []
+
+        if let type {
+            switch type {
+            case .movie: lines.append("Movies only")
+            case .episode: lines.append("TV episodes only")
+            }
+        }
+
+        if source == .musicVideo {
+            lines.append("Music videos only")
+        }
+
+        if let genres {
+            if !genres.include.isEmpty {
+                lines.append("Genre: \(genres.include.joined(separator: " or "))")
+            }
+            if !genres.requireAll.isEmpty {
+                lines.append("Needs every one of these genres: \(genres.requireAll.joined(separator: ", "))")
+            }
+            if !genres.exclude.isEmpty {
+                lines.append("Not genre: \(genres.exclude.joined(separator: ", "))")
+            }
+        }
+
+        if let studios, !studios.isEmpty {
+            lines.append("Studio: \(studios.joined(separator: " or "))")
+        }
+
+        if let networks, !networks.isEmpty {
+            lines.append("Network: \(networks.joined(separator: " or "))")
+        }
+
+        if let yearRange {
+            switch (yearRange.min, yearRange.max) {
+            case let (lo?, hi?): lines.append("Released \(lo) to \(hi)")
+            case let (lo?, nil): lines.append("Released \(lo) or later")
+            case let (nil, hi?): lines.append("Released before \(hi)")
+            case (nil, nil): break
+            }
+        }
+
+        if let contentRatings, !contentRatings.isEmpty {
+            lines.append("Rated: \(contentRatings.joined(separator: ", "))")
+        }
+
+        if let ratingMin {
+            lines.append("Plex star rating \(String(format: "%.1f", ratingMin)) or higher")
+        }
+        if let imdbRatingMin {
+            lines.append("IMDb rating \(String(format: "%.1f", imdbRatingMin)) or higher")
+        }
+        if let rtScoreMin {
+            lines.append("Rotten Tomatoes score \(rtScoreMin) or higher")
+        }
+        if let metacriticMin {
+            lines.append("Metacritic score \(metacriticMin) or higher")
+        }
+        if wonOscar {
+            lines.append("Won an Oscar")
+        }
+
+        if watchedOnly { lines.append("Already watched titles only") }
+        if unwatchedOnly { lines.append("Unwatched titles only") }
+        if rewatched { lines.append("Watched three times or more") }
+
+        if let keywords, !keywords.isEmpty {
+            lines.append("About: \(keywords.prefix(4).joined(separator: ", "))")
+        }
+
+        if let durationRange {
+            switch (durationRange.min, durationRange.max) {
+            case let (lo?, hi?): lines.append("Runs \(lo) to \(hi) minutes")
+            case let (lo?, nil): lines.append("Runs \(lo) minutes or longer")
+            case let (nil, hi?): lines.append("Runs \(hi) minutes or shorter")
+            case (nil, nil): break
+            }
+        }
+
+        if lines.isEmpty {
+            lines.append("A specific, curated list of titles rather than a general rule")
+        }
+
+        return lines
+    }
+}
+
 // MARK: - Channel
 
 struct Channel: Identifiable {

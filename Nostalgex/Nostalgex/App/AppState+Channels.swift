@@ -1110,6 +1110,26 @@ extension AppState {
         }
     }
 
+    /// How many library items match a channel's own rules right now, ignoring
+    /// `minItems`. For Settings' "why is this channel off the air" explainer (I-004)
+    /// only: a plain re-run of the same `filterItems` the real pool build uses, on
+    /// demand for one channel, so the count the viewer reads can never drift from what
+    /// actually decides the channel's pool. Does not touch `itemPool` or `allChannels`.
+    /// Dynamic and franchise channels have no `rules`, so the explainer never calls this
+    /// for them; it falls back to the stored pool size rather than claim a count.
+    func currentMatchCount(for channel: Channel) -> Int {
+        guard let rules = channel.rules else { return channel.itemPool.count }
+        let cached = makeFilterCache(allItems)
+        return Self.filterItems(
+            cached,
+            rules: rules,
+            forChannelID: channel.id,
+            category: channel.category,
+            memberships: channelMemberships,
+            exclusiveRules: exclusiveRules
+        ).count
+    }
+
     /// Build a snapshot cache for a set of items. Called once per filter pass —
     /// per `loadLibrary`, per `rebuildPoolsForBundle`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later

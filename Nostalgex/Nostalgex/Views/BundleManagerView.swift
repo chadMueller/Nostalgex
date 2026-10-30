@@ -164,7 +164,8 @@ struct SettingsPageView: View {
                                     let inSeason = bundle.isInSeason
                                     let availability = appState.bundleChannelAvailability(for: bundle)
                                     let availableNames = availability.filter { $0.hasContent }.map(\.name)
-                                    let missingNames = availability.filter { !$0.hasContent }.map(\.name)
+                                    let missing = availability.filter { !$0.hasContent }
+                                    let missingNames = missing.map(\.name)
                                     let available = availableNames.count
                                     let total = bundle.channelIDs.count
 
@@ -207,6 +208,18 @@ struct SettingsPageView: View {
                                     .focused($focusedItem, equals: "bundle_\(bundle.id)")
                                     .id("bundle_\(bundle.id)")
                                     .opacity(bundle.enabled && available == 0 && !building ? 0.5 : 1.0)
+
+                                    // I-004: why a channel never came on air, in plain language,
+                                    // next to the count the library actually matched. Only while
+                                    // the package is on and still building, so an OFF package
+                                    // (an invitation, not a problem to explain) never shows it.
+                                    if bundle.enabled && !building && !missing.isEmpty {
+                                        missingChannelsExplainer(
+                                            headerID: "missing_\(bundle.id)",
+                                            missingIDs: missing.map(\.id)
+                                        )
+                                        .padding(.leading, 24)
+                                    }
 
                                     // The classics above are the stock half of FRANCHISES.
                                     // Everything the library itself turned out to hold
@@ -714,6 +727,53 @@ struct SettingsPageView: View {
         }
     }
 
+    /// I-004: the accordion that explains why one or more of a package's channels have
+    /// not come on air. Each row is a channel's own rules in plain language next to how
+    /// many library items currently match them, so a viewer can go fix their metadata
+    /// instead of wondering. Read-only: nothing here changes a setting or rescans.
+    ///
+    /// Scoped to static, rule-based channels only (`channel.rules != nil`). Dynamic and
+    /// franchise-built channels have no `rules` to translate and are left out rather than
+    /// guessed at; if every missing channel in this package is one of those, the
+    /// accordion has nothing to show and renders nothing.
+    @ViewBuilder
+    private func missingChannelsExplainer(headerID: String, missingIDs: [Int]) -> some View {
+        let rows: [(channel: Channel, matched: Int)] = missingIDs.compactMap { id in
+            guard let channel = appState.channelDefinition(for: id), channel.rules != nil else { return nil }
+            return (channel, appState.currentMatchCount(for: channel))
+        }
+
+        if !rows.isEmpty {
+            let expanded = expandedCategories.contains(headerID)
+            VStack(alignment: .leading, spacing: 6) {
+                CollectionAccordionHeaderRow(
+                    title: "WHY AREN'T THESE ON AIR?",
+                    subtitle: "See what each channel needs from your library",
+                    detail: "\(rows.count) CHANNEL\(rows.count == 1 ? "" : "S")",
+                    isExpanded: expanded,
+                    isFocused: focusedItem == "explain_\(headerID)"
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if expanded {
+                            expandedCategories.remove(headerID)
+                        } else {
+                            expandedCategories.insert(headerID)
+                        }
+                    }
+                }
+                .focused($focusedItem, equals: "explain_\(headerID)")
+                .id("explain_\(headerID)")
+
+                if expanded {
+                    ForEach(rows, id: \.channel.id) { row in
+                        ChannelRequirementCard(channel: row.channel, matchedCount: row.matched)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+
     /// Subtitle text when a discovered Plex collection looks like a duplicate of
     /// an existing channel. Content overlap (from the TMDB membership manifest)
     /// is the strongest signal; name match is the fallback. Returns nil when
@@ -964,6 +1024,48 @@ private struct CollectionAccordionHeaderRow: View {
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused, accentColor: Color("BrandCyan")))
         .animation(.easeInOut(duration: 0.18), value: isExpanded)
         .animation(.easeInOut(duration: 0.12), value: isFocused)
+    }
+}
+
+/// I-004: one channel's plain-language explainer, inside the missing-channels
+/// accordion. Read-only, not focusable; nothing on this card changes anything.
+private struct ChannelRequirementCard: View {
+    let channel: Channel
+    let matchedCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Rectangle()
+                    .fill(channel.color)
+                    .frame(width: 4, height: 18)
+                Text(channel.name.uppercased())
+                    .font(.custom("DMMono-Medium", size: 20))
+                    .foregroundStyle(.white)
+            }
+
+            Text("Needs at least \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). Your library has \(matchedCount) right now.")
+                .font(.custom("DMMono-Regular", size: 18))
+                .foregroundStyle(Color(hex: "#FFB020"))
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array((channel.rules?.plainLanguageRequirements ?? []).enumerated()), id: \.offset) { _, line in
+                    Text("\u{2022} \(line)")
+                        .font(.custom("DMMono-Regular", size: 18))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.white.opacity(0.03))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
