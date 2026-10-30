@@ -38,7 +38,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     /// Sits above the divider at the top of the rail.
     var isPinned: Bool { self == .support }
 
-    /// Phase 1 hero art. Phase 3 swaps these for one illustration per category.
+    /// Hero fallback while a category has no heroImageName asset yet.
     var sfSymbolPlaceholder: String {
         switch self {
         case .support: return "star.fill"
@@ -62,8 +62,18 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Phase 1 only: true for the two categories with real rows.
-    var hasPhase1Content: Bool { self == .support || self == .playback }
+    /// Asset name of the 16:9 hero illustration in Assets.xcassets/SettingsHero.
+    /// The hero falls back to sfSymbolPlaceholder while an asset is missing.
+    var heroImageName: String {
+        switch self {
+        case .support: return "SettingsHeroSupport"
+        case .playback: return "SettingsHeroPlayback"
+        case .channels: return "SettingsHeroChannels"
+        case .servers: return "SettingsHeroServers"
+        case .pro: return "SettingsHeroPro"
+        case .about: return "SettingsHeroAbout"
+        }
+    }
 
     static var pinned: [SettingsCategory] { allCases.filter(\.isPinned) }
     static var unpinned: [SettingsCategory] { allCases.filter { !$0.isPinned } }
@@ -75,4 +85,14 @@ enum SettingsFocus: Hashable {
     case rail(SettingsCategory)
     /// A row in the detail pane, keyed by the same ids the old flat page used.
     case row(String)
+}
+
+extension View {
+    /// Makes a detail-pane row focusable under `.row(id)` and gives it the same id for
+    /// ScrollViewReader, the pairing every Settings row needs.
+    func settingsRow(_ id: String, focus: FocusState<SettingsFocus?>.Binding) -> some View {
+        self
+            .focused(focus, equals: .row(id))
+            .id(id)
+    }
 }

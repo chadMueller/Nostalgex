@@ -3,6 +3,58 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Settings rail, Phase 2, every row moved into its tab)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.
+
+**Why.** Phase 1's rail and detail pane passed a hands-on check with the Siri Remote,
+so the rest of the old flat Settings page moves into the six tabs, with no setting lost.
+
+**Changed.**
+- Every row now lives in a tab. SUPPORT NOSTALGEX: rate and tips. PLAYBACK & PICTURE:
+  retro mode, stream quality, subtitles, subtitle and audio language, and a WATCH
+  HISTORY section with SHOW NOW PLAYING and MARK WATCHED (moved out of CONNECTION,
+  because both are about what happens while you watch). CHANNELS & BUNDLES: channel
+  packages with the FRANCHISES list and the I-004 "why aren't these on air" explainer,
+  SCHEDULE (WATERSHED) as a section, and MY COLLECTIONS with its accordions. SERVERS &
+  ACCOUNTS: servers, libraries, rescan, iCloud sync, the enrichment progress bar, and
+  DISCONNECT (still one press, as before). ABOUT: the version line.
+- Same AppState bindings, same Analytics calls and the same row focus ids as the old
+  page. Open accordions are kept while you visit other tabs.
+- The hero and title stay pinned at the top of the pane and only the rows scroll, which
+  also stops the hero from shifting when you move into the rows. A hairline marks where
+  rows slide under it. STREAM QUALITY's value is upper case like every other row's.
+- The hero reads `SettingsCategory.heroImageName` (SettingsHeroSupport and so on) from
+  `Assets.xcassets/SettingsHero` and falls back to the SF Symbol while an image is
+  missing. The tile is 16:9 to match the art.
+- Pro scaffolding: `SettingsToggleRow` takes `proLocked` and `onLockedTap` (both off by
+  default, so no existing row changes). A locked row shows a lock and an amber PRO pill,
+  and select opens a placeholder Pro sheet instead of switching. One example locked row
+  sits in the NOSTALGEX PRO tab only. No StoreKit or entitlement code.
+- NOSTALGEX PRO and ABOUT carry clearly marked placeholder rows (Pro status; Discord,
+  GitHub and rate links) with no destinations. Their copy is still to be written.
+- `BundleManagerView.swift` is gone. `SettingsPageView` is deleted; the shared pieces
+  are in `Views/Settings/SettingsSharedComponents.swift` and each tab has its own file.
+  `-uiTestForceSettingsPage` now opens the new screen.
+
+**Checked against Roku.** Every row kind in `roku/components/SettingsView.brs` (support,
+servers, rescan, the two reporting switches, sign out, retro, quality, subtitles,
+languages, packages, franchises, collections, version) has a home. None is left out.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. A throwaway UI
+test on the tvOS simulator visited all six tabs, walked every row, opened and closed the
+stream quality, subtitle language, audio language and both Pro sheets, opened and
+closed the missing-channels explainer and the OTHER COLLECTIONS accordion (demo mode
+with the franchise fixture), checked Menu from every tab's rows returns to the rail,
+left from a deep row returns to the selected tab, and Menu on the rail leaves Settings.
+`-uiTestForceSettingsPage` opens the new screen with its canned libraries. Not tried on
+a real Apple TV. The explainer's channel cards still can't take focus here; that fix is
+on another branch and has to be carried into `SettingsSharedComponents.swift` when the
+two meet, since the file it changed no longer exists.
+
+**Next.** Phase 3 drops the six hero illustrations into `Assets.xcassets/SettingsHero`.
+Pro and About copy waits on Chad.
+
 ## 2026-10-30 (Apple TV: Settings rail, Phase 1 prototype)
 
 **Shipped.** Nothing. Branch `settings/rail-redesign` only, not pushed, for a hands-on

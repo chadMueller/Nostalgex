@@ -28,7 +28,7 @@ struct RootView: View {
                 } else if appState.needsLibrarySelection {
                     LibrarySelectionView()
                 } else if forceSettingsPage {
-                    SettingsPageView()
+                    SettingsContainerView()
                 } else if forceSettings {
                     SettingsView()
                 } else if !appState.didAttemptCredentialHydration {
