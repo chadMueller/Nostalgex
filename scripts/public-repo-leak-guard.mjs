@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * This repo is public. Its tests and docs used to carry the maintainer's home network
- * (a 192.168.4.x subnet) and the real names and ids of his own servers. This guard fails
- * when any of that comes back, in any tracked file.
+ * This repo is public. Its tests and docs used to carry addresses from the maintainer's
+ * home subnet and the real names and ids of his own servers. This guard fails when any of
+ * that comes back, in any tracked file.
  *
  * What it looks for:
  *   1. The home subnet, written either way: dotted, or dash-encoded as Plex's plex.direct
@@ -28,11 +28,13 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// Built from parts so this file does not match itself.
-const subnet = ["192", "168", "4"];
+// Built from parts so this file does not match itself. The home network is a /22, so the
+// third octet covers 4 to 7.
+const prefix = ["192", "168"];
+const thirdOctet = "[4-7]";
 const ADDRESS_PATTERNS = [
-  new RegExp(subnet.join("\\.") + "\\.\\d"),
-  new RegExp(subnet.join("-") + "-\\d"),
+  new RegExp(prefix.join("\\.") + "\\." + thirdOctet + "\\.\\d"),
+  new RegExp(prefix.join("-") + "-" + thirdOctet + "-\\d"),
 ];
 
 // sha256(lowercase token) -> what it was, in words.
@@ -89,11 +91,14 @@ function readText(path) {
 }
 
 function selfTest() {
-  const dotted = subnet.join(".") + ".7";
-  const dashed = subnet.join("-") + "-7";
   const check = (cond, msg) => { if (!cond) throw new Error(`self-test: ${msg}`); };
-  check(findingsIn(`http://${dotted}:8096`).length === 1, "missed a dotted home address");
-  check(findingsIn(`https://${dashed}.abc.plex.direct`).length === 1, "missed a dash-encoded home address");
+  for (const octet of ["4", "7"]) {
+    const dotted = [...prefix, octet].join(".") + ".7";
+    const dashed = [...prefix, octet].join("-") + "-7";
+    check(findingsIn(`http://${dotted}:8096`).length === 1, "missed a dotted home address");
+    check(findingsIn(`https://${dashed}.abc.plex.direct`).length === 1, "missed a dash-encoded home address");
+  }
+  check(findingsIn("http://" + [...prefix, "8", "7"].join(".")).length === 0, "flagged an address outside the home range");
   check(findingsIn("http://192.0.2.7:8096 192.168.1.10 192-0-2-79").length === 0, "flagged an example address");
   check(findingsIn("Attic-Server 0123456789abcdef0123456789abcdef").length === 0, "flagged a made-up name");
 }

@@ -8,7 +8,7 @@ Commits carry the detail of *what*; this carries the *why*.
 **Shipped.** Nothing yet. Branch `chore/n006-scrub-home-network`, cut from `origin/main` at
 `0fe27e9`, not merged, not pushed.
 
-**Why.** Six Swift test files and one doc comment carried addresses from the
+**Why.** Five Swift test files and one doc comment carried addresses from the
 maintainer's home subnet, and three test files carried the real name and ids of his
 own servers (an Emby host name and id, a Plex machine identifier, a plex.direct
 certificate hash), copied in from captured responses.
