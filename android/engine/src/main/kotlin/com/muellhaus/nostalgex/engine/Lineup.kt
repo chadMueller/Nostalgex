@@ -24,6 +24,8 @@ class Lineup(
     private val memberships: JsonObject?,
     private val engine: DailyManifest,
     private val serverKey: String,
+    /** "plex", "jellyfin" or "emby": Emby leaves Dolby Vision profile 5 off channels (isLeftOffChannels). */
+    private val backend: String = "plex",
 ) {
     /** The pools built at the last library load: the chosen packages' channels, or every channel if those filled nothing. */
     private val pools = ConcurrentHashMap<Int, List<MediaItem>>()
@@ -54,7 +56,7 @@ class Lineup(
      */
     fun build(items: List<MediaItem>, enabledBundles: Set<String>, onProgress: (Int, Int) -> Unit = { _, _ -> }): Set<String> {
         val t0 = System.nanoTime()
-        val opts = ChannelFilter.Options(memberships, config.exclusiveRules, "plex").also { it.prepare(items) }
+        val opts = ChannelFilter.Options(memberships, config.exclusiveRules, backend).also { it.prepare(items) }
         prepareMs = (System.nanoTime() - t0) / 1_000_000
         this.items = items
         this.opts = opts
