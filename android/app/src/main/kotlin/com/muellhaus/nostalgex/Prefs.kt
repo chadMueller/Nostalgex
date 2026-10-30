@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex
 
 import android.content.Context
+import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
@@ -62,6 +63,11 @@ class Prefs(context: Context) {
     var audioLanguage: String
         get() = prefs.getString("audioLanguage", null) ?: LanguageChoice.SYSTEM
         set(value) = prefs.edit().putString("audioLanguage", value).apply()
+
+    /** WATERSHED (Settings > SCHEDULE), off unless switched on, under the Apple TV's key. */
+    var watershed: Boolean
+        get() = prefs.getBoolean(ChannelConfig.WATERSHED_STORAGE_KEY, false)
+        set(value) = prefs.edit().putBoolean(ChannelConfig.WATERSHED_STORAGE_KEY, value).apply()
 
     /** STREAM QUALITY's level id, under the Apple TV's key. */
     var streamQuality: String
