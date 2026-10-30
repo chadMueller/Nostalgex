@@ -3,6 +3,35 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Repo: tests no longer carry a home network, and a guard keeps it that way, N-006)
+
+**Shipped.** Nothing yet. Branch `chore/n006-scrub-home-network`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed.
+
+**Why.** Six Swift test files and one doc comment carried addresses from the
+maintainer's home subnet, and three test files carried the real name and ids of his
+own servers (an Emby host name and id, a Plex machine identifier, a plex.direct
+certificate hash), copied in from captured responses.
+
+**Changed.** Those values are now RFC 5737 addresses (192.0.2.x, and 192-0-2-x in
+plex.direct form) and made-up names and ids, in `DuplicateServerTests`,
+`LANServerDiscoveryTests`, `PlaybackDecisionTests`, `SignInFlowTests`,
+`StarvationLadderCoverageTests` and the `LANServerDiscovery.directedBroadcast` doc
+comment. New `scripts/public-repo-leak-guard.mjs` reads every file `git ls-files` lists
+and fails on that subnet (dotted or dash-encoded) or on any of the real names and ids,
+which it holds only as SHA-256 hashes. It is a Node script rather than a Swift test
+because only git knows which files are tracked; a test walking the folder would also read
+gitignored secrets and build output. It runs first in `npm test` and as its own CI job,
+`public-repo-hygiene`, on every pull request: the other jobs only run when their paths
+change. One file still matches, `roku/docs/PORTING.md` (the Roku stick's address in a test
+note); it is on the guard's pending list for the Roku maintainer, and the guard fails once
+that file is clean so the exception gets removed.
+
+**Verified.** On unchanged main the guard reports all 19 findings; on the branch it
+passes (698 files, 0.3 s). `npm test` passes. NostalgexTests on the tvOS simulator: 981
+tests, 967 passed, 0 failed, 14 skipped. The old values remain in git history; this does
+not rewrite it.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now

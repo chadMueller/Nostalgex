@@ -79,8 +79,8 @@ enum LANServerDiscovery {
         return out
     }
 
-    /// The subnet-directed broadcast address for an interface, e.g. 192.168.4.29 with
-    /// mask 255.255.252.0 is 192.168.7.255. Needed because the limited broadcast
+    /// The subnet-directed broadcast address for an interface, e.g. 192.0.2.29 with
+    /// mask 255.255.252.0 is 192.0.3.255. Needed because the limited broadcast
     /// 255.255.255.255 went unanswered by a real Emby on a /22 while the directed
     /// address got a reply every time.
     static func directedBroadcast(address: String, netmask: String) -> String? {
