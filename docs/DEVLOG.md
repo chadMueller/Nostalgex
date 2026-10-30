@@ -3,6 +3,56 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Now Playing hierarchy, and why a channel is off the air)
+
+**Shipped.** Nothing yet. Branch `task/now-playing-hierarchy`, cut from `origin/main` at
+`520076d`, not merged, not pushed. Three separate pieces of feedback, each its own commit.
+
+**Changed.**
+
+- I-### (Discord, jussaren, Oct 29): the Now Playing display showed the channel name
+  bigger than the title, so a viewer had to read the small line to see what was actually
+  playing. Swapped the hierarchy in both displays that showed it: the brief Channel OSD
+  (`PlayerView.swift`) and the Now Playing panel's info header (`NowPlayingPanel.swift`).
+  Title now leads as the big headline, channel name follows smaller below it. Checked the
+  guide's on-now detail panel (`InfoPanelView.swift`) and the mini channel strip
+  (`PlayerView.swift`); both already show the title bigger than the channel name, so left
+  unchanged.
+- I-019 (Reddit, June 11: reach Settings by moving left, with a clearer focus color) was
+  checked against current behaviour rather than changed. Up out of the guide's top row
+  already reaches SETTINGS reliably, a deliberate decision from 2026-10-08 with its own
+  UI tests (`ChannelGuideWrapFocusTests`) enforcing no wrap to the bottom. The SETTINGS
+  nav item already turns bright yellow (`#FFE500`, the app's brand accent) against a dim
+  white when focused, a strong, consistent cue. Left is a separate, deliberate control
+  (the bundle/package sidebar), not a product decision this session should make
+  unilaterally. Judgment: the original complaint looks resolved by work already done; no
+  code change made.
+- I-004: Settings now explains why a channel never came on air. Channel Packages shows a
+  WHY AREN'T THESE ON AIR accordion per package with missing channels: each channel's own
+  rules in plain language (genre, year range, rating, studio, network, keywords, watched
+  state) next to how many library items currently match them against how many it needs.
+  The match count (`AppState.currentMatchCount`) is a live re-run of the same
+  `filterItems` the real pool build uses, not an estimate, so it cannot drift from what
+  actually decides the channel's pool. `channelDefinition(for:)` resolves a channel's full
+  rules even when `AppState` already dropped it from `allChannels` for having too little
+  content. Scoped to static, rule-based channels; dynamic and franchise channels have no
+  `rules` to translate and are left out of the accordion. Read-only: nothing here edits a
+  setting or rescans.
+
+**Validation.** `npm test` green (69 JS suites, channel docs and changelog checks, bundle
+and self-host/Roku render checks all current). `NostalgexTests`: 966 passed, 0 failed, 14
+opt-in live/hardware harnesses skipped, including 11 new tests for the plain-language
+rules translation and the live match count.
+
+**Half-done.** Not reviewed or pushed. The missing-channel explainer has not been looked
+at on a real Apple TV; the accordion and card are plain SwiftUI following the file's
+existing CollectionAccordionHeaderRow pattern, but focus behaviour on real hardware is
+unverified.
+
+**Next.** Chad's go to merge. If a real device look turns up a problem with the
+accordion's focus order inside the Channel Packages list, fix before merge rather than
+after.
+
 ## 2026-10-30 (Web tuner: a storage-quota exception no longer looks like an unreachable server)
 
 **Shipped.** Nothing yet. Branch `fix/web-tuner-quota-crash`, cut from `origin/main` at
