@@ -54,7 +54,7 @@ The [Nostalgex for Emby](https://www.nostalgex.app/emby?utm_source=blog&utm_medi
 
 The free [web tuner](https://www.nostalgex.app/web-tuner?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_to_jellyfin_emby&utm_content=web_tuner) works with all three servers. One thing changes when you leave Plex, though. Plex hands out real certificates for local addresses, so the hosted tuner can reach it as is. Jellyfin and Emby usually don't, and browsers won't let a secure page talk to a plain http server.
 
-So on nostalgex.app, your Jellyfin or Emby server needs an https address. If it's plain http on your home network, run the web tuner as a Docker container on a machine at home instead. It serves the tuner over plain http on your network, so that wall goes away. The [Docker container guide](https://www.nostalgex.app/self-host?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_to_jellyfin_emby&utm_content=docker_guide) walks through it in one command. Or skip the browser and use the Apple TV app, which connects to plain http servers on your network just fine.
+So on nostalgex.app, your Jellyfin or Emby server needs an https address. If it's plain http on your home network, run the web tuner as a Docker container on a machine at home instead. It serves the tuner over plain http on your network, so that wall goes away. The [Docker container guide](https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_to_jellyfin_emby&utm_content=docker_guide) walks through it in one command. Or skip the browser and use the Apple TV app, which connects to plain http servers on your network just fine.
 
 ## What should I know before I switch?
 

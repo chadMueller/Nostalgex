@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (publish Docker web tuner 1.0.1 how-to)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
+
+**Why.** Today's post: how to run the Nostalgex web tuner as a Docker container, plus what tuner 1.0.1 added (sleep timer, playback info, Connect with Emby, eight SCREAM channels, MYSTERY BOX TV / CRINGE TV / A24). The copy was already approved (`draft: false`, date 2026-10-30); this session only put the file in `content/blog`, recorded the image sizes, and pointed the Plex-to-Jellyfin/Emby post's "Docker container guide" link at the new URL.
+
+**Changed.**
+- `content/blog/docker-web-tuner-1-0-1-how-to.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/docker-web-tuner-1-0-1-how-to/cover.jpg` is 1200x630. Inline stills `sleep-timer.webp` 1600x1219 and `playback-info.webp` 1600x1216. All three R2 URLs returned 200. Cover 111,448 bytes; sleep timer 68,484 bytes; playback info 83,006 bytes. Images stay on R2; none committed.
+- `content/blog/plex-to-jellyfin-emby-cable-guide.md`: the "Docker container guide" link now points at `/blog/docker-web-tuner-1-0-1-how-to` instead of `/self-host`. The existing UTM (`utm_source=blog`, `utm_medium=internal`, `utm_campaign=launch_oct26_blog_plex_to_jellyfin_emby`, `utm_content=docker_guide`) is unchanged. Nothing else in that file changed. Date stays 2026-10-29.
+- Copy check on the new and edited files: no em or en dashes, no "no ads" / "no upsell" / "no paid tier" / "no in app purchases".
+- `npm run blog:render` wrote fourteen live posts into `public/sitemap.xml`, including `/blog/docker-web-tuner-1-0-1-how-to` with lastmod 2026-10-30. `/blog` lastmod is 2026-10-30. `npm run build` emitted the post to `dist/blog/docker-web-tuner-1-0-1-how-to.html` with width/height on all three images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 335 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-10-30 (publish NostalgiaTV for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgiatv-alternative-apple-tv`.
