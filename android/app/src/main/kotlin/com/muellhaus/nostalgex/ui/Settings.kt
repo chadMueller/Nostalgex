@@ -41,7 +41,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.tv.material3.Text
 import com.muellhaus.nostalgex.AppModel
+import com.muellhaus.nostalgex.engine.ChannelRequirements
 import com.muellhaus.nostalgex.engine.LanguageChoice
+import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.Season
 import com.muellhaus.nostalgex.engine.StreamQuality
 import java.time.LocalDateTime
@@ -204,6 +206,8 @@ private fun MainPage(model: AppModel) {
         Divider()
 
         // ── CHANNEL PACKAGES ──
+        // The packages whose WHY AREN'T THESE ON AIR? is open.
+        var explained by remember { mutableStateOf(emptySet<String>()) }
         Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
             SectionHeader("CHANNEL PACKAGES", "Toggle packages to customize your lineup")
             val lineup = model.lineup
@@ -241,6 +245,21 @@ private fun MainPage(model: AppModel) {
                         loading = if (building) "BUILDING" else null,
                         modifier = Modifier.alpha(if (enabled && availableNames.isEmpty() && !building) 0.5f else 1f),
                     ) { model.toggleBundle(bundle.id) }
+                    // I-004: why a channel never came on air, in plain words, next to what the
+                    // library matched. Only for a package that is on: an OFF package is an invitation.
+                    if (enabled && !building && lineup != null) {
+                        val offAir = lineup.offAir(bundle)
+                        if (offAir.isNotEmpty()) {
+                            val open = bundle.id in explained
+                            Column(Modifier.padding(start = u(24), top = u(4), bottom = u(4)), verticalArrangement = Arrangement.spacedBy(u(6))) {
+                                AccordionHeader(
+                                    "WHY AREN'T THESE ON AIR?", "See what each channel needs from your library",
+                                    "${offAir.size} CHANNEL${if (offAir.size == 1) "" else "S"}", open,
+                                ) { explained = if (open) explained - bundle.id else explained + bundle.id }
+                                if (open) for (o in offAir) RequirementCard(o)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -325,6 +344,64 @@ private fun ToggleRow(
             detail != null -> Text(detail, style = font(VT323, 20, Color.White.copy(alpha = 0.2f)))
         }
         if (loading == null && showToggle) ToggleSwitch(on)
+    }
+}
+
+/** CollectionAccordionHeaderRow: a title, its line, a count, and SHOW or HIDE. */
+@Composable
+private fun AccordionHeader(title: String, subtitle: String, detail: String, open: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(u(10))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .onKeyEvent { e ->
+                if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_ENTER) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyUp) onClick()
+                true
+            }
+            .clip(shape)
+            .background(Color.White.copy(alpha = if (focused) 0.07f else 0.035f))
+            .border(u(if (focused) 1.5 else 1), if (focused) Cyan.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.08f), shape)
+            .padding(horizontal = u(22), vertical = u(14)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(u(12)),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(4))) {
+            Text(title, style = font(DMMonoMedium, 20, Color.White))
+            Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = 0.75f)), maxLines = 3)
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(u(4))) {
+            Text(detail, style = font(DMMono, 20, Color.White.copy(alpha = 0.75f)))
+            Text(if (open) "HIDE" else "SHOW", style = font(VT323, 22, Cyan.copy(alpha = if (focused) 1f else 0.75f)))
+        }
+    }
+}
+
+/** ChannelRequirementCard: the channel, how many titles it needs against how many match, and its rules. */
+@Composable
+private fun RequirementCard(o: Lineup.OffAir) {
+    val need = o.def.minItems
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(u(8)))
+            .background(Color.White.copy(alpha = 0.03f))
+            .padding(horizontal = u(20), vertical = u(14)),
+        verticalArrangement = Arrangement.spacedBy(u(8)),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10))) {
+            Box(Modifier.size(u(4), u(18)).background(hex(o.def.colorHex)))
+            Text(o.def.name.uppercase(), style = font(DMMonoMedium, 20, Color.White))
+        }
+        Text("Needs at least $need matching title${if (need == 1) "" else "s"}. Your library has ${o.matched} right now.", style = font(DMMono, 18, Amber))
+        Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+            for (line in ChannelRequirements.plainLanguage(o.def.rules)) {
+                Text("\u2022 $line", style = font(DMMono, 18, Color.White.copy(alpha = 0.65f)))
+            }
+        }
     }
 }
 
