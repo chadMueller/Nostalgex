@@ -547,11 +547,34 @@ private struct EPGRow: View {
                         )
                     }
                 }
+            } else if channel.isWatershedHold(watershedEnabled: appState.watershedEnabled) {
+                watershedRowPlaceholder
             }
             Spacer(minLength: 0)
         }
         .frame(width: programsWidth, alignment: .leading)
         .clipped()
+    }
+
+    /// Stands in for a row with no schedule because Watershed emptied it, rather than
+    /// leaving the "empty slot" blank. A channel with any legitimate content left never
+    /// reaches this branch, `schedule` would not be nil for it.
+    private var watershedRowPlaceholder: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(width: 1)
+
+            Text("BROADCASTS RESUME AT 9 PM")
+                .font(.custom("DMMono-Medium", size: 18))
+                .foregroundStyle(.white.opacity(0.4))
+                .lineLimit(1)
+                .padding(.leading, 14)
+
+            Spacer(minLength: 0)
+        }
+        .frame(width: programsWidth, height: rowHeight, alignment: .leading)
+        .background(Color.white.opacity(0.02))
     }
 
     // MARK: - Helpers

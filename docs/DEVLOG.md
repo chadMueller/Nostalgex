@@ -3,6 +3,48 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (Watershed: an opt-in 9 PM hold for 18/R-rated content, every channel)
+
+**Shipped.** Nothing yet. Branch `feature/watershed`, cut from `main` at `56ee192`, not
+merged, not pushed.
+
+**Changed.** Added a global Watershed setting (Settings > SCHEDULE > WATERSHED, off by
+default): when on, every channel's own 18/R-rated and TV-MA titles wait for 9 PM local
+time, the same window VHS VAULT's own permanent `blockRatings` already holds. Generalised
+`Channel.filteredPool()` (`Nostalgex/Nostalgex/Models/Channel.swift`) to take optional
+`now` and `watershedEnabled` parameters, both defaulting to the real clock and the real
+Settings value, so every existing call site needed zero changes. A channel that already
+defines its own `blockRatings` (VHS VAULT today) is exempt from the new global pass, so
+the toggle never changes its behaviour either way, and it keeps its own "at least two
+items" fallback that the global pass deliberately does not have: a channel that is
+nothing but adult content right now is allowed to go empty. `Channel.isWatershedHold()`
+tells the UI when that emptiness is Watershed's doing rather than a genuinely empty
+channel.
+
+Mirrored the same logic in `plex-tuner.html`'s `getTimeFilteredPool()` plus a sibling
+`isWatershedHold()`. The web tuner has no Settings UI for the toggle yet (a web-tuner
+follow-up), but the engine already reads the same `nostalgex_watershed` storage-key
+convention other shared settings use, so wiring up a control there is additive.
+
+New `WatershedCard` (echoes `PlaybackFailureCard`'s retro slate, cyan instead of
+amber/red since nothing is broken) behind a new `PlaybackState.watershedHold` case, shown
+by the windowed tuner and the full-screen player. The EPG row shows a muted "BROADCASTS
+RESUME AT 9 PM" label instead of a blank slot for the same situation.
+
+New shared golden file `scripts/watershed-golden.json` (13 cases: on/off, before/after
+9 PM, NC-17 and TV-MA alongside R, GB-15/GB-18 normalising to R, an all-adult channel
+correctly holding, a mixed channel never holding, VHS VAULT's own shape identical with
+the toggle either way including its own fallback), checked by
+`scripts/nostalgex-watershed-smoke.mjs` (13/13 passed) and
+`Nostalgex/NostalgexTests/WatershedGoldenTests.swift`.
+
+**Half-done.** `npm test` is green. `xcodebuild build` and `build-for-testing` both
+succeed (compiled only, not executed). `NostalgexTests` itself has not run on this
+branch; that needs Chad's go for a simulator run. The web tuner's own Settings UI for
+the toggle is not built; Roku is out of scope for this pass.
+
+**Next.** Chad's go to run NostalgexTests, then merge/push when he's ready. Web tuner:
+add the Settings control. Roku: a later parity pass.
 ## 2026-10-29 (three 80s channels, additive)
 
 **Shipped.** Nothing yet. Branch `feature/80s-channels`, cut from `main` at

@@ -220,6 +220,25 @@ struct SettingsPageView: View {
 
                         settingsDivider
 
+                        // Schedule, broadcast-realism settings, not a lineup toggle and
+                        // not part of any kid-mode concept.
+                        VStack(alignment: .leading, spacing: 20) {
+                            sectionHeader("SCHEDULE", subtitle: "How and when your library gets placed on the air")
+
+                            SettingsToggleRow(
+                                title: "WATERSHED",
+                                subtitle: "Hold 18 and R-rated titles until 9 PM on every channel, like broadcast TV. VHS VAULT already holds its own this way; this applies it everywhere else.",
+                                isOn: appState.watershedEnabled,
+                                isFocused: focusedItem == "watershed"
+                            ) {
+                                appState.watershedEnabled.toggle()
+                            }
+                            .focused($focusedItem, equals: "watershed")
+                            .id("watershed")
+                        }
+
+                        settingsDivider
+
                         // My Collections — scan once, then browse by category accordion (no bundle toggles)
                         VStack(alignment: .leading, spacing: 20) {
                             sectionHeader("MY COLLECTIONS", subtitle: "Scan your server's collections, then turn the ones you want into channels")

@@ -326,35 +326,78 @@ struct Channel: Identifiable {
     var itemPool: [PlexMediaItem] = []
     var enabled: Bool = true
 
-    /// Returns itemPool filtered for current time restrictions
-    func filteredPool() -> [PlexMediaItem] {
-        guard let tr = timeRestrictions else { return itemPool }
-        let hour = Calendar.current.component(.hour, from: Date())
+    /// The local hour the global Watershed gate holds `watershedRatings` until, same
+    /// window VHS VAULT's own permanent `blockRatings` already uses.
+    static let watershedHour = 21 // 9 PM
+    /// 18/R-rated films (NC-17 for the rare stricter case) and their TV-MA equivalent.
+    /// GB-15 and GB-18 already normalise to "R" (films) or "TV-MA" (episodes) through
+    /// `ContentRating.usLabel`, so they are covered without being listed here.
+    static let watershedRatings: Set<String> = ["R", "NC-17", "TV-MA"]
+    static let watershedDefaultsKey = "nostalgex_watershed"
+
+    /// Returns itemPool filtered for current time restrictions, including the global
+    /// Watershed setting.
+    ///
+    /// `now` defaults to the real clock; tests pass a fixed date so the result does not
+    /// depend on when they happen to run. `watershedEnabled` defaults to the Settings
+    /// toggle's stored value; tests pass an explicit value for the same reason.
+    func filteredPool(
+        now: Date = Date(),
+        watershedEnabled: Bool = UserDefaults.standard.bool(forKey: Channel.watershedDefaultsKey)
+    ) -> [PlexMediaItem] {
+        let hour = Calendar.current.component(.hour, from: now)
         var pool = itemPool
 
-        // Block ratings (e.g. Late Night R-rated content before 8pm)
-        if let br = tr.blockRatings {
-            let isBlocked = (br.blockBefore.map { hour < $0 } ?? false)
-                         || (br.blockAfter.map { hour >= $0 } ?? false)
-            if isBlocked {
-                // A rating from another country counts as its US label: GB-18 waits for 9 PM like R.
-                let filtered = pool.filter { !br.ratings.contains(ContentRating.usLabel($0.contentRating, type: $0.type) ?? "") }
-                if filtered.count >= 2 { pool = filtered }
+        if let tr = timeRestrictions {
+            // Block ratings (e.g. Late Night R-rated content before 8pm)
+            if let br = tr.blockRatings {
+                let isBlocked = (br.blockBefore.map { hour < $0 } ?? false)
+                             || (br.blockAfter.map { hour >= $0 } ?? false)
+                if isBlocked {
+                    // A rating from another country counts as its US label: GB-18 waits for 9 PM like R.
+                    let filtered = pool.filter { !br.ratings.contains(ContentRating.usLabel($0.contentRating, type: $0.type) ?? "") }
+                    if filtered.count >= 2 { pool = filtered }
+                }
+            }
+
+            // TV-only before hour (e.g. only episodes before 11 AM)
+            if let tvBefore = tr.tvOnlyBefore, hour < tvBefore {
+                let episodesOnly = pool.filter { $0.type == .episode }
+                if episodesOnly.count >= 2 { pool = episodesOnly }
+            }
+
+            // Prime time gate: channel is unavailable before this hour
+            if let afterHour = tr.onlyAfterHour, hour < afterHour {
+                return []
             }
         }
 
-        // TV-only before hour (e.g. only episodes before 11 AM)
-        if let tvBefore = tr.tvOnlyBefore, hour < tvBefore {
-            let episodesOnly = pool.filter { $0.type == .episode }
-            if episodesOnly.count >= 2 { pool = episodesOnly }
-        }
-
-        // Prime time gate: channel is unavailable before this hour
-        if let afterHour = tr.onlyAfterHour, hour < afterHour {
-            return []
+        // Watershed: an opt-in broadcast-realism setting (Settings > WATERSHED), off by
+        // default. While on, every channel's own 18/R-rated (and TV-MA) content waits
+        // for 9 PM, the same window VHS VAULT already holds permanently. A channel that
+        // already defines its own `blockRatings` (VHS VAULT today) is exempt from this
+        // global pass: its hold stays independent of this toggle either way, and keeps
+        // its own "at least two items" fallback. This gate has no such fallback, a
+        // channel that is nothing but adult content during the day is allowed to go
+        // empty, so the guide shows the "broadcasts resume at 9 PM" card (see
+        // `WatershedCard`, `isWatershedHold`) instead of serving it anyway.
+        if watershedEnabled, timeRestrictions?.blockRatings == nil, hour < Channel.watershedHour {
+            pool = pool.filter { !Channel.watershedRatings.contains(ContentRating.usLabel($0.contentRating, type: $0.type) ?? "") }
         }
 
         return pool
+    }
+
+    /// Whether this channel's pool is empty right now *only* because the global Watershed
+    /// gate removed every item in it, as opposed to a channel that has no content at all.
+    /// Drives whether the player and the guide show `WatershedCard` instead of a plain
+    /// empty state: a channel with some legitimate (non-adult, or already past 9 PM)
+    /// content never reaches here, because `filteredPool` would not be empty for it.
+    func isWatershedHold(now: Date = Date(), watershedEnabled: Bool) -> Bool {
+        guard watershedEnabled, !itemPool.isEmpty, timeRestrictions?.blockRatings == nil else { return false }
+        let hour = Calendar.current.component(.hour, from: now)
+        guard hour < Channel.watershedHour else { return false }
+        return filteredPool(now: now, watershedEnabled: watershedEnabled).isEmpty
     }
 }
 

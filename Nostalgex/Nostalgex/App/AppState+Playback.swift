@@ -696,8 +696,15 @@ extension AppState {
         playbackInformation = nil
         playbackRequiresOriginalVideo = false
         guard var item = currentItem else {
-            print("[Plex90] gen=\(generation) | No item, going idle")
-            playbackState = .idle
+            // Watershed can empty a channel's pool without the channel being genuinely
+            // empty: say so with its own card rather than the plain idle screen.
+            if let channel = currentChannel, channel.isWatershedHold(watershedEnabled: watershedEnabled) {
+                print("[Plex90] gen=\(generation) | No item, watershed hold on CH \(channel.number)")
+                playbackState = .watershedHold
+            } else {
+                print("[Plex90] gen=\(generation) | No item, going idle")
+                playbackState = .idle
+            }
             return
         }
 

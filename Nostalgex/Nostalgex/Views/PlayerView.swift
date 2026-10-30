@@ -47,6 +47,10 @@ struct PlayerView: View {
                 PlaybackFailureCard(failure: failure, compact: false)
             }
 
+            if appState.playbackState == .watershedHold {
+                WatershedCard(compact: false)
+            }
+
             // Tuning overlay — layered here (not inside a switch) so it crossfades over the
             // video as playback resolves instead of hard-cutting.
             if showStatic {
