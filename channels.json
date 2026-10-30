@@ -1,5 +1,5 @@
 {
-  "version": 43,
+  "version": 44,
   "exclusiveRules": [
     {
       "channelIDs": [
@@ -1375,14 +1375,9 @@
       "minItems": 3,
       "rules": {
         "type": "episode",
-        "studios": [
+        "networks": [
           "Nickelodeon",
-          "Nickelodeon Animation Studio",
-          "Nickelodeon Productions",
-          "Nick at Nite",
-          "Paramount",
-          "Paramount+",
-          "Paramount Television"
+          "Nick at Nite"
         ],
         "contentRatings": [
           "TV-Y",

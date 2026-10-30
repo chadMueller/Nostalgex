@@ -44,7 +44,7 @@ only name the channel's own defining genre.
 
 **`rewatched` means `viewCount >= 3`** in both implementations.
 
-**Config version:** 43 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
+**Config version:** 44 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
 
 ---
 
@@ -136,7 +136,7 @@ _Disney, Nickelodeon, Pixar, and more_
 | 23 | `23` | DIZ JUNIOR | `#7B68EE` | Episodes | 3 | studios Disney Junior/Disney Television Animation/Ludo Studio +3 more, title allowlist (19), 2010-…, rated TV-Y/TV-Y7/TV-G/G/unrated |
 | 24 | `24` | DIZ TV | `#AB47BC` | Episodes | 3 | studios Disney/Disney Channel/Disney Television Animation +2 more, networks Disney Channel/Disney XD/Disney+, rated TV-Y/TV-Y7/TV-G/TV-PG/TV-14/G/PG/unrated |
 | 25 | `25` | ANIMATION | `#FF5722` | Movies | 5 | incl Animation, prodCo DreamWorks Animation/Sony Pictures Animation/Warner Bros. Animation +9 more, rated G/PG/PG-13/TV-G/TV-PG/unrated |
-| 26 | `26` | SLIME TV | `#FF6600` | Episodes | 3 | studios Nickelodeon/Nickelodeon Animation Studio/Nickelodeon Productions +4 more, rated TV-Y/TV-Y7/TV-G/TV-PG/TV-14/G/PG/unrated |
+| 26 | `26` | SLIME TV | `#FF6600` | Episodes | 3 | networks Nickelodeon/Nick at Nite, rated TV-Y/TV-Y7/TV-G/TV-PG/TV-14/G/PG/unrated |
 | 27 | `27` | PIXAR MOVIES | `#00B894` | Movies | 3 | studios Pixar/Pixar Animation Studios, prodCo Pixar Animation Studios/Pixar, rated G/PG/PG-13/TV-Y/TV-Y7/TV-G/TV-PG/unrated |
 | 28 | `28` | MINION HQ | `#FDCB6E` | Movies | 3 | studios Illumination/Illumination Entertainment, prodCo Illumination Entertainment/Illumination |
 | 29 | `29` | TWEEN TV | `#FF69B4` | Episodes | 5 | no Animation/Anime/Cartoon, studios Disney Channel/Nickelodeon/Nickelodeon Productions +7 more, title allowlist (26), 1989-…, rated TV-G/TV-PG/TV-Y7/unrated |
@@ -440,4 +440,4 @@ _Music videos by genre_
 
 ---
 
-_Generated from `channels.json` v43 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
+_Generated from `channels.json` v44 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
