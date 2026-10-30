@@ -291,6 +291,62 @@ function NxFilterPool(items as Object, channel as Object, manifest as Dynamic, e
     return out
 end function
 
+' Every channel in `defs` filtered one server's items at a time, instead of
+' NxFilterPool's one pass over every enabled server's combined items. `defs`
+' is [{ id (String), compiled (NxFilterChannel's result) }]; returns
+' { <id>: [item] }, an empty list for an id with no matches.
+'
+' NxFilterItem (above) memoizes an item's lowercased, derived fields on
+' item.nxFilter the first time any channel reads it, and nothing after the
+' filter pass reads that cache (franchise and collection classification
+' don't). With several large servers on at once, running every channel
+' against the combined array keeps every server's cache alive for the rest
+' of the build; with a Roku Streaming Stick 4K and a few large libraries,
+' that is enough to crash partway through (I-065). NxFilterPool is a plain
+' per-item scan with no state carried between items, so slicing the combined
+' array by serverIndex, filtering a slice against every channel, then
+' deleting its items' nxFilter before moving to the next slice, gives the
+' same pools NxFilterPool would from one pass over everything, in the same
+' order (items arrive server-contiguous; a server's slice keeps that order),
+' while only ever holding one server's filter cache at a time.
+' `progress`, when given, is a duck-typed { report: sub(done, total) },
+' called once a server's slice is filtered against every def.
+function NxFilterPoolsByServer(items as Object, defs as Object, manifest as Dynamic, exclusiveRules as Object, clock as Object, backend = "plex" as String, progress = invalid as Dynamic) as Object
+    pools = {}
+    for each d in defs
+        pools[d.id] = []
+    end for
+    if defs.Count() = 0 then return pools
+    slices = []
+    bySlice = {}
+    for each it in items
+        sk = NxToStr(it.serverIndex)
+        slice = bySlice[sk]
+        if slice = invalid then
+            slice = []
+            bySlice[sk] = slice
+            slices.Push(slice)
+        end if
+        slice.Push(it)
+    end for
+    done = 0
+    for each slice in slices
+        for each d in defs
+            for each row in NxFilterPool(slice, d.compiled, manifest, exclusiveRules, clock, backend)
+                pools[d.id].Push(row.item)
+            end for
+        end for
+        ' This slice is done with every channel; nothing past this point
+        ' reads item.nxFilter, so it only ever cost memory from here.
+        for each it in slice
+            it.Delete("nxFilter")
+        end for
+        done = done + 1
+        if progress <> invalid then progress.report(done, slices.Count())
+    end for
+    return pools
+end function
+
 ' The matching rule ("rules", "manifest", "editorial", "episode", "title",
 ' "keyword", "network", "prodco"), or "" when the item doesn't belong.
 ' Mirrors itemPasses.

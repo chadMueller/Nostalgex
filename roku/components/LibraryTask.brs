@@ -68,6 +68,13 @@ end function
 ' Besides the guide's pools, every built channel's filter result (built:
 ' buildGuide's channels, those too small for the guide included), so a
 ' launch with an unchanged library reuses them (NxSavedFiltered).
+'
+' The channel summaries and the filtered map are one FormatJson each here
+' too (I-065), on top of a library large enough to need the per-server
+' filter split above: with several large servers' worth of channels and
+' their filter results, that was a second place a single call formatted
+' everything at once. Each channel (and each filtered entry) is its own
+' small FormatJson call instead, in the same pieces-of-500 as the items.
 sub NxSavePools(ordered as Object, guide as Object, now as Object, built as Object)
     path = NxPoolCachePath()
     WriteAsciiFile(path, "{""key"":" + FormatJson(NxPoolCacheKey(NxSeasonKey(guide.bundles, now), guide.enabledBundles)) + ",""items"":[")
@@ -85,12 +92,29 @@ sub NxSavePools(ordered as Object, guide as Object, now as Object, built as Obje
         saved.poolIdx = NxPoolItemIndexes(ch.pool, st)
         chans.Push(saved)
     end for
-    filtered = {}
+    filtered = []
     for each ch in built
-        if ch.filtered <> invalid then filtered[ch.id.ToStr()] = NxPoolItemIndexes(ch.filtered, st)
+        if ch.filtered <> invalid then filtered.Push({ id: ch.id.ToStr(), idx: NxPoolItemIndexes(ch.filtered, st) })
     end for
-    st.parts.Push("],""channels"":" + FormatJson(chans))
-    st.parts.Push(",""filtered"":" + FormatJson(filtered))
+    ' The items array above is only safe to close once both loops are done
+    ' reading pools into it (a filtered set can hold an item no channel's
+    ' own pool does), so the channels and filtered pieces come after.
+    st.parts.Push("],""channels"":[")
+    for i = 0 to chans.Count() - 1
+        text = FormatJson(chans[i])
+        if i > 0 then text = "," + text
+        st.parts.Push(text)
+        if st.parts.Count() >= 500 then NxAppendText(st.path, st.parts)
+    end for
+    st.parts.Push("],""filtered"":{")
+    for i = 0 to filtered.Count() - 1
+        f = filtered[i]
+        text = FormatJson(f.id) + ":" + FormatJson(f.idx)
+        if i > 0 then text = "," + text
+        st.parts.Push(text)
+        if st.parts.Count() >= 500 then NxAppendText(st.path, st.parts)
+    end for
+    st.parts.Push("}")
     st.parts.Push(",""libraryItems"":" + FormatJson(guide.items))
     st.parts.Push(",""bundles"":" + FormatJson(guide.bundles))
     st.parts.Push(",""franchises"":" + FormatJson(guide.franchises))
@@ -575,6 +599,27 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
 
     timer.Mark()
     setPhase("channels")
+    ' Which pool channels still need a fresh filter pass: a reuse miss, or
+    ' every pool channel when there is no saved build to reuse at all. Each
+    ' gets its channel compiled once; NxFilterPoolsByServer then filters them
+    ' one server's items at a time (I-065: several large servers combined
+    ' into one array and filtered as one crashed a Streaming Stick 4K about
+    ' 30 minutes in; one server of about 1,000 files worked), so no more of
+    ' the filter's per-item cache is ever resident than the largest enabled
+    ' server needs, instead of the sum of every enabled server's.
+    fresh = []
+    for each def in config.channels
+        if poolIds.DoesExist(def.id.ToStr()) then
+            matched = invalid
+            if reuse <> invalid then matched = reuse[def.id.ToStr()]
+            if matched = invalid then
+                if reuse <> invalid then print "library: filtering channel "; def.id; " (no earlier result to reuse)"
+                fresh.Push({ id: def.id.ToStr(), compiled: NxFilterChannel(def) })
+            end if
+        end if
+    end for
+    m.top.progress = "Building channels…"
+    pools = NxFilterPoolsByServer(items, fresh, manifest, exclusive, clock, backend, NxFilterTopProgress(m.top))
     channels = []
     built = 0
     reused = 0
@@ -588,17 +633,11 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         if type(def.enabled) = "Boolean" or type(def.enabled) = "roBoolean" then ch.enabled = def.enabled
         if poolIds.DoesExist(def.id.ToStr()) then
             built = built + 1
-            m.top.progress = "Building channels: " + built.ToStr() + " of " + poolIds.Count().ToStr()
-            m.top.bar = (built - 1) / poolIds.Count()
-            m.top.barCaption = "Channel " + built.ToStr() + " of " + poolIds.Count().ToStr()
             matched = invalid
             if reuse <> invalid then matched = reuse[def.id.ToStr()]
             if matched = invalid then
-                if reuse <> invalid then print "library: filtering channel "; def.id; " (no earlier result to reuse)"
-                matched = []
-                for each row in NxFilterPool(items, NxFilterChannel(def), manifest, exclusive, clock, backend)
-                    matched.Push(row.item)
-                end for
+                matched = pools[def.id.ToStr()]
+                if matched = invalid then matched = []
             else
                 reused = reused + 1
             end if
@@ -615,6 +654,8 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         end if
         channels.Push(ch)
     end for
+    m.top.bar = -1
+    m.top.barCaption = ""
     print "library: built "; built; " channels ("; reused; " kept from the last build) in "; timer.TotalMilliseconds(); " ms"
     setPhase("finishing")
     m.top.progress = ""
@@ -1019,6 +1060,22 @@ function scanUnderWatch(server as Object, index as Integer, info as Object) as D
     m.top.scanning = false
     m.top.stopWaiting = ""
     return got
+end function
+
+' Progress on the loading screen while NxFilterPoolsByServer works through
+' the enabled servers: one tick per server done, since I-065's fix moved the
+' heavy per-item work there instead of once per channel.
+function NxFilterTopProgress(top as Object) as Object
+    return {
+        top: top,
+        report: sub(done as Integer, total as Integer)
+            m.top.progress = "Building channels: server " + done.ToStr() + " of " + total.ToStr()
+            if total > 0 then
+                m.top.bar = done / total
+                m.top.barCaption = "Server " + done.ToStr() + " of " + total.ToStr()
+            end if
+        end sub
+    }
 end function
 
 ' A new step on the loading screen's rail; the last step's bar goes with it.
