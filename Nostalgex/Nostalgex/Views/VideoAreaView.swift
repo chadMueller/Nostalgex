@@ -12,7 +12,7 @@ enum PlaybackState: Equatable {
     /// and whose problem it is. See `PlaybackFailure`.
     case error(PlaybackFailure)
     /// Watershed is on and this channel has nothing left to show until 9 PM: it has real
-    /// content, every bit of it is 18/R-rated (or TV-MA) right now. Not a failure — the
+    /// content, every bit of it is 18/R-rated (or TV-MA) right now. Not a failure, the
     /// channel is simply off the air until the gate lifts. See `Channel.isWatershedHold`.
     case watershedHold
 }

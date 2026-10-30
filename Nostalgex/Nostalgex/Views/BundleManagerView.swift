@@ -220,7 +220,7 @@ struct SettingsPageView: View {
 
                         settingsDivider
 
-                        // Schedule — broadcast-realism settings, not a lineup toggle and
+                        // Schedule, broadcast-realism settings, not a lineup toggle and
                         // not part of any kid-mode concept.
                         VStack(alignment: .leading, spacing: 20) {
                             sectionHeader("SCHEDULE", subtitle: "How and when your library gets placed on the air")

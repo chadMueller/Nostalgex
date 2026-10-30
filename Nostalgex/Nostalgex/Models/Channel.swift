@@ -377,7 +377,7 @@ struct Channel: Identifiable {
         // for 9 PM, the same window VHS VAULT already holds permanently. A channel that
         // already defines its own `blockRatings` (VHS VAULT today) is exempt from this
         // global pass: its hold stays independent of this toggle either way, and keeps
-        // its own "at least two items" fallback. This gate has no such fallback — a
+        // its own "at least two items" fallback. This gate has no such fallback, a
         // channel that is nothing but adult content during the day is allowed to go
         // empty, so the guide shows the "broadcasts resume at 9 PM" card (see
         // `WatershedCard`, `isWatershedHold`) instead of serving it anyway.

@@ -558,7 +558,7 @@ private struct EPGRow: View {
 
     /// Stands in for a row with no schedule because Watershed emptied it, rather than
     /// leaving the "empty slot" blank. A channel with any legitimate content left never
-    /// reaches this branch — `schedule` would not be nil for it.
+    /// reaches this branch, `schedule` would not be nil for it.
     private var watershedRowPlaceholder: some View {
         HStack(spacing: 0) {
             Rectangle()

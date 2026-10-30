@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The slate a station puts up during the watershed: this channel has real content, every
 /// bit of it is 18/R-rated (or stronger) right now, and the Watershed setting is holding it
-/// until 9 PM. See `PlaybackFailureCard`, which this deliberately echoes — same card, same
+/// until 9 PM. See `PlaybackFailureCard`, which this deliberately echoes, same card, same
 /// type, different tone: this is not a failure, nothing is broken, and there is nothing to
 /// go and look at. It clears itself the moment the gate lifts or the viewer turns the
 /// setting off.

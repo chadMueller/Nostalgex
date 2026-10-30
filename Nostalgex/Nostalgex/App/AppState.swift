@@ -491,7 +491,7 @@ class AppState {
     }
 
     /// Watershed: an opt-in broadcast-realism setting, off by default because it changes
-    /// what airs when — that should be a deliberate choice, not a surprise after an
+    /// what airs when, that should be a deliberate choice, not a surprise after an
     /// update. While on, 18/R-rated content on every channel waits for 9 PM the way VHS
     /// VAULT's own permanent hold already does; see `Channel.filteredPool`. Per-TV, like
     /// `iCloudSyncEnabled` itself: not synced through iCloud, so turning it on or off is
