@@ -3,6 +3,55 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Web tuner and Docker: audio and subtitle language codes match exactly, N-014)
+
+**Shipped.** Nothing yet. Branch `fix/web-n014-iso639-language-match`, cut from `origin/main`
+at `0fe27e9`, not merged, not pushed.
+
+**Why.** `langMatches` in `plex-tuner.html` decided two language tags were the same when one
+started with the other, and kept a 50-entry map from a two-letter code to one three-letter
+code. Measured with the new smoke against the page from main: all 67 codes whose first two
+letters spell another language's code matched that language ("est" as Spanish, "arm" as
+Arabic, "jav" as Japanese, "slo" as Slovenian, "rum" as Russian, "swe" as Swahili), and 81 of
+the 203 codes in the ISO 639-2 table missed their own viewer ("ces" for Czech, "slk" for
+Slovak, "jav" for Javanese, "ben" for Bengali, "baq" for Basque, and more). The effects were
+on Jellyfin and Emby only: a Spanish viewer got the Estonian audio track listed first, a
+Czech viewer's "ces" track was passed over for the file's default, and an Estonian-only file
+did not turn subtitles on. The same compare picks the subtitle track and decides which forced
+subtitle is burned in. Plex has no language pick in the web tuner. Same bug, and same fix, as
+the Apple TV's `preferredAudioIndex` (branch `fix/n014-iso639-language-match`).
+
+**Changed.** New `scripts/nostalgex-language.js` (`NostalgexLanguage`): one ISO 639-2 to
+ISO 639-1 table, both the terminology and bibliographic forms, and `sameLanguage`, which
+reduces both tags through it and compares them exactly. The table string is the Roku app's
+`NxIso639Table` (issue #119), character for character, the same string the Apple TV carries.
+`langMatches` now calls it; the old map and the first-letters compare are gone. Behaviour
+matches `SubtitleSelectionLogic.primaryLanguage` on Apple TV: a code the table lacks ("yue")
+stays itself and still matches itself, and "und", "mul", "zxx" and "mis" match nothing.
+`scripts/nostalgex-jellyfin-subtitles-smoke.mjs` now hands its test pages the module, as the
+page's script tag does.
+
+**Verified.** New `npm run test:language-match` (26 checks, in `npm test`). It reads the Roku
+`.brs` and fails if the module's table is not that string character for character, if any pair
+reduces differently, or if the page grows its own table or a first-letters compare again. It
+runs the page's own `langMatches`, `pickAudioStream`, `pickSubtitle` and
+`shouldAutoEnableSubs`. Against the tree from main plus the new smoke: 20 failed, 6 passed.
+Against main's `plex-tuner.html` with the new module present (so only behaviour can fail):
+17 failed, 9 passed. After the fix: 26 passed. Across every table code against every
+two-letter language, the only pairs the old compare matched and the new one does not are the
+67 look-alikes. `npm test` passes. `build:tuner` and `build:selfhost` both ship the new script
+and its tag, and the self-host copy is byte for byte the source. Not checked in a browser
+against a real multi-language Jellyfin or Emby file.
+
+**Half-done.** One of the 67 look-alikes is a true match: "nob" (Norwegian Bokmål) starts
+with "no", and a viewer who picks Norwegian ("no" in Settings) got it by accident. Exact
+compare reads "nob" as "nb", so it no longer matches a "no" setting ("nor" does, and a
+browser set to "nb-NO" matches "nob"). The Apple TV and Roku compare the same way, so whether
+"no", "nb" and "nn" should count as one language is a decision for all three apps, not the
+web tuner alone.
+
+**Next.** Nothing needed on Roku: it already has the table and the exact compare.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now

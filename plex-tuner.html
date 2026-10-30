@@ -29,6 +29,7 @@
 <script src="scripts/nostalgex-stream-quality.js"></script>
 <script src="scripts/nostalgex-sleep-timer.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
+<script src="scripts/nostalgex-language.js"></script>
 <style>
   :root {
     --bg: #080810;
@@ -7037,29 +7038,12 @@
   }
 
   // ── Language utilities ─────────────────────────────────────────────────
-  // Jellyfin MediaStream Language uses ISO 639-2/B 3-letter codes (spa, eng, fra).
-  // Browser navigator.language and user prefs use ISO 639-1 2-letter codes (es, en, fr).
-  // This map lets us match across both systems.
-  const ISO6391_TO_6392 = {
-    'af':'afr','sq':'alb','ar':'ara','hy':'arm','az':'aze',
-    'bs':'bos','bg':'bul','ca':'cat','zh':'chi','hr':'hrv',
-    'cs':'cze','da':'dan','nl':'dut','en':'eng','et':'est',
-    'fi':'fin','fr':'fra','de':'ger','el':'gre','he':'heb',
-    'hi':'hin','hu':'hun','id':'ind','it':'ita','ja':'jpn',
-    'ko':'kor','lv':'lav','lt':'lit','mk':'mac','ms':'may',
-    'no':'nor','fa':'per','pl':'pol','pt':'por','ro':'rum',
-    'ru':'rus','sr':'srp','sk':'slo','sl':'slv','es':'spa',
-    'sw':'swa','sv':'swe','tl':'tgl','th':'tha','tr':'tur',
-    'uk':'ukr','ur':'urd','vi':'vie',
-  };
+  // A Jellyfin or Emby track carries a three-letter ISO 639-2 code (spa, ger, ces); the setting
+  // and the browser give a two-letter ISO 639-1 one (es, de, cs). scripts/nostalgex-language.js
+  // reduces both through the table the Apple TV and Roku apps share, and the compare is exact.
+  // Never compare first letters: est is Estonian, not Spanish, and ces is Czech.
   function langMatches(trackLang, pref) {
-    if (!trackLang || !pref) return false;
-    const t = trackLang.toLowerCase().replace(/-.*$/, '');
-    const p = pref.toLowerCase().replace(/-.*$/, '');
-    if (t === p || t.startsWith(p) || p.startsWith(t)) return true;
-    // Convert ISO 639-1 pref to ISO 639-2 and compare
-    const p2 = ISO6391_TO_6392[p];
-    return p2 ? (t === p2 || t.startsWith(p2)) : false;
+    return NostalgexLanguage.sameLanguage(trackLang, pref);
   }
 
   // ── Subtitles (Jellyfin, fullscreen-only) ──────────────────────────────

@@ -25,7 +25,9 @@ const urlsPath = process.env.URLS || path.join(root, "scripts/nostalgex-jellyfin
 const tuner = fs.readFileSync(tunerPath, "utf8");
 await import(pathToFileURL(urlsPath).href);
 await import(pathToFileURL(path.join(root, "scripts/nostalgex-stream-quality.js")).href);
+await import(pathToFileURL(path.join(root, "scripts/nostalgex-language.js")).href);
 const JU = globalThis.NostalgexJellyfinUrls;
+const NL = globalThis.NostalgexLanguage;
 
 let passed = 0;
 const failures = [];
@@ -74,10 +76,10 @@ function extractFunction(src, name) {
   throw new Error(`${name}: unbalanced braces`);
 }
 
-// The page's own language matching: its tables and langMatches.
+// The page's own language matching: langMatches, which calls NostalgexLanguage (the contexts
+// below get it, as the page does from its script tag).
 function pageLanguageCode() {
-  const table = (/const ISO6391_TO_6392 = \{[\s\S]*?\};/.exec(tuner) || [""])[0];
-  return `${table}\n${extractFunction(tuner, "langMatches")}`;
+  return extractFunction(tuner, "langMatches");
 }
 
 // ---- the module ----
@@ -123,6 +125,7 @@ async function pageBody(backend, retry, subtitles, pref = "en") {
   const ctx = {
     NostalgexJellyfinUrls: JU,
     NostalgexStreamQuality: globalThis.NostalgexStreamQuality,
+    NostalgexLanguage: NL,
     URL,
     console: { warn() {}, log() {} },
     pickAudioStream: () => null,
@@ -214,7 +217,7 @@ await check("the tuner's own subtitles skip a track already burned in", () => {
   assert(/request\.burnedSubtitleIndex === sub\.index\) return/.test(fn), "no check against the burned track");
 });
 await check("langMatches takes both ISO 639-2 codes for the burn rule (ger and deu, fre and fra)", () => {
-  const ctx = {};
+  const ctx = { NostalgexLanguage: NL };
   vm.createContext(ctx);
   vm.runInContext(`${pageLanguageCode()}; this.m = langMatches;`, ctx);
   for (const [t, p] of [["eng", "en"], ["ger", "de"], ["deu", "de"], ["fre", "fr"], ["fra", "fr"], ["dut", "nl"], ["nld", "nl"], ["chi", "zh"], ["zho", "zh"]]) {
@@ -226,7 +229,7 @@ await check("langMatches takes both ISO 639-2 codes for the burn rule (ger and d
 // ---- the page's subtitle pick ----
 
 function pagePick(subs, preferred = "en") {
-  const ctx = { NostalgexJellyfinUrls: JU, resolveSubtitleLanguage: () => preferred };
+  const ctx = { NostalgexJellyfinUrls: JU, NostalgexLanguage: NL, resolveSubtitleLanguage: () => preferred };
   vm.createContext(ctx);
   vm.runInContext(`${pageLanguageCode()}\n${extractFunction(tuner, "pickSubtitle")}; this.pick = pickSubtitle;`, ctx);
   return ctx.pick(subs);

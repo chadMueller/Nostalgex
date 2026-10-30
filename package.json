@@ -48,7 +48,7 @@
     "test:emby-dolby-vision": "node scripts/nostalgex-emby-dolby-vision-smoke.mjs",
     "test:tuner-version": "node scripts/tuner-version-smoke.mjs",
     "test:tuner-version:builds": "node scripts/tuner-version-smoke.mjs --builds",
-    "test": "npm run test:filter && npm run test:filter-golden && npm run test:ratings && npm run test:watershed && npm run test:library-load && npm run test:utf8-repair && npm run test:stream-quality && npm run test:season && npm run test:schedule && npm run test:schedule-dst && npm run test:schedule-parity && npm run test:start-over && npm run test:franchises && npm run test:watch-state && npm run test:reporting-controls && npm run test:jellyfin-urls && npm run test:jellyfin-quick-connect && npm run test:signin && npm run test:tuner-isolation && npm run test:jellyfin-subtitles && npm run test:subscribe && npm run test:tmdb && npm run test:enrichment && npm run test:collections && npm run test:tuner-gate && npm run test:web-player && npm run test:web-tune-ownership && npm run test:sleep-timer && npm run test:playback-info && npm run test:emby-dolby-vision && npm run test:tuner-version && npm run channels:doc:check && npm run changelog:check && npm run bundles:render:strict && npm run selfhost:render:check && npm run roku:render:check",
+    "test": "npm run test:filter && npm run test:filter-golden && npm run test:ratings && npm run test:watershed && npm run test:library-load && npm run test:utf8-repair && npm run test:stream-quality && npm run test:season && npm run test:schedule && npm run test:schedule-dst && npm run test:schedule-parity && npm run test:start-over && npm run test:franchises && npm run test:watch-state && npm run test:reporting-controls && npm run test:jellyfin-urls && npm run test:jellyfin-quick-connect && npm run test:signin && npm run test:tuner-isolation && npm run test:jellyfin-subtitles && npm run test:language-match && npm run test:subscribe && npm run test:tmdb && npm run test:enrichment && npm run test:collections && npm run test:tuner-gate && npm run test:web-player && npm run test:web-tune-ownership && npm run test:sleep-timer && npm run test:playback-info && npm run test:emby-dolby-vision && npm run test:tuner-version && npm run channels:doc:check && npm run changelog:check && npm run bundles:render:strict && npm run selfhost:render:check && npm run roku:render:check",
     "build": "npm run selfhost:render && npm run roku:render && npm run changelog:render && npm run blog:render && npm run bundles:render && vite build && vite build --mode tuner && node scripts/dist-asset-check.mjs",
     "dist:check": "node scripts/dist-asset-check.mjs",
     "build:tuner": "vite build --mode tuner",
@@ -67,6 +67,7 @@
     "test:tuner-isolation": "node scripts/tuner-isolation-check.mjs",
     "test:tuner-isolation:builds": "node scripts/tuner-isolation-check.mjs --builds",
     "test:jellyfin-subtitles": "node scripts/nostalgex-jellyfin-subtitles-smoke.mjs",
+    "test:language-match": "node scripts/nostalgex-language-match-smoke.mjs",
     "media:measure": "node scripts/measure-media.mjs",
     "test:reporting-controls": "node scripts/playback-reporting-controls-smoke.mjs"
   },
