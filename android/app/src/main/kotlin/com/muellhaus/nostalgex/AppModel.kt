@@ -30,6 +30,7 @@ import com.muellhaus.nostalgex.engine.ChannelFailureRun
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.Pick
+import com.muellhaus.nostalgex.engine.ScanProgress
 import com.muellhaus.nostalgex.mediabrowser.CheckedServer
 import com.muellhaus.nostalgex.mediabrowser.DiscoveredServer
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
@@ -65,7 +66,22 @@ sealed interface Screen {
     data class ChooseLibraries(val sections: List<LibrarySection>) : Screen
     /** The connect screens: the backend picker, then Jellyfin or Emby: find, check and sign in. */
     data class Connect(val step: ConnectStep, val message: String? = null, val error: String? = null) : Screen
+    /** A short wait: the headline and detail, or the logo alone when there is nothing to say. */
     data class Loading(val headline: String, val detail: String = "") : Screen
+    /**
+     * A library read in front of the guide (LoadingView): the step rail, what it is doing now,
+     * a progress bar where there is a count, and START OVER.
+     */
+    data class LibraryLoad(
+        val phase: LoadPhase,
+        val headline: String,
+        val detail: String = "",
+        val progress: Float? = null,
+        val caption: String = "",
+        val firstRun: Boolean = false,
+    ) : Screen
+    /** The last two loads never finished (LaunchGuard): TRY AGAIN or START OVER. */
+    data object UnfinishedLoads : Screen
     data class Failed(val message: String) : Screen
     data object NoChannels : Screen
     data object Watching : Screen
@@ -110,7 +126,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** "Plex", "Jellyfin" or "Emby": the Apple TV's backendDisplayName, in its copy. */
     val backendName: String get() = mbServer?.let { MediaBrowserClient.displayName(it.kind) } ?: "Plex"
 
-    var screen: Screen by mutableStateOf(Screen.Loading("NOSTALGEX"))
+    var screen: Screen by mutableStateOf(Screen.Loading(""))
         private set
     var lineup: Lineup? by mutableStateOf(null)
         private set
@@ -434,8 +450,40 @@ class AppModel(private val context: Context) : Playback.Listener {
         applySubtitles()
     }
 
+    private val launchGuard = LaunchGuard(context)
+
     fun start() {
-        if (mbServer != null || (prefs.plexToken != null && prefs.servers.isNotEmpty())) loadLibrary() else showPicker()
+        // Once per process: an activity recreated mid-load must not count that load as unfinished.
+        if (!launchRecorded) {
+            launchRecorded = true
+            launchGuard.recordLaunch()
+        }
+        val signedIn = mbServer != null || (prefs.plexToken != null && prefs.servers.isNotEmpty())
+        when {
+            !signedIn -> showPicker()
+            launchGuard.shouldAskBeforeLoading() -> screen = Screen.UnfinishedLoads
+            else -> loadLibrary()
+        }
+    }
+
+    /** TRY AGAIN after two unfinished loads: the next load gets the full allowance again. */
+    fun tryLoadingAgain() {
+        launchGuard.resetUnfinishedLoads()
+        loadLibrary()
+    }
+
+    /** The server named in START OVER's question. */
+    val serverName: String get() = selectedServers.firstOrNull()?.name ?: ""
+
+    /**
+     * START OVER (AppState.startOver): stops the load, then signs out, so a library that won't
+     * finish loading is never the only way forward.
+     */
+    fun startOver() {
+        loadJob?.cancel()
+        launchGuard.loadEnded()
+        Log.i(TAG, "START OVER")
+        signOut()
     }
 
     // ── Sign-in ──────────────────────────────────────────────────────────
@@ -872,34 +920,75 @@ class AppModel(private val context: Context) : Playback.Listener {
      * library changed: the Roku port's start-up. With nothing saved, the first read happens
      * in front of a loading screen.
      */
+    private var loadJob: Job? = null
+
     private fun loadLibrary() {
         loadingLibrary = true
-        scope.launch {
+        loadJob = scope.launch {
+            // Set until the load ends any way the process lives to see (LaunchGuard).
+            launchGuard.loadStarted()
+            var fullLoad = false
             try {
                 val servers = selectedServers
                 val t0 = SystemClock.elapsedRealtime()
                 val saved = withContext(Dispatchers.IO) { libraryStore.load(servers) }
                 if (saved != null) {
                     Log.i(TAG, "SAVED LIBRARY ${saved.size} items read in ${SystemClock.elapsedRealtime() - t0} ms")
+                    prefs.initialLoadComplete = true
                     libraryItems = saved
                     libraryUpdatedMs = libraryStore.savedAtMs()
                     if (!show(buildLineup(saved, "saved"))) return@launch
                     refreshInBackground(servers, saved)
                 } else {
-                    val headline = "READING YOUR ${backendName.uppercase()} LIBRARY"
-                    screen = Screen.Loading(headline)
-                    val items = scan(servers) { detail -> screen = Screen.Loading(headline, detail) }
+                    fullLoad = true
+                    val firstRun = !prefs.initialLoadComplete
+                    fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
+                        screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
+                    }
+                    step(LoadPhase.PREPARING, LoadPhase.PREPARING.headline(if (firstRun) "First setup" else "Updating lineup"), LoadPhase.PREPARING.hint.uppercase())
+                    step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("Connecting to $backendName"), LoadPhase.SCANNING.hint.uppercase())
+                    val items = scan(servers) { p, serverName ->
+                        // Posted from the scan's threads: one arriving after the scan moved on is dropped.
+                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.SCANNING) return@scan
+                        // AppState+Library's scan events: the kind of library as the headline, the section under it.
+                        val label = when (p.type) {
+                            "show" -> "TV shows"
+                            "movie" -> if ("music" in p.title.lowercase()) "Music" else "Movies"
+                            "artist" -> "Music"
+                            "photo" -> "Photos"
+                            else -> "Library"
+                        }
+                        val prefix = if (servers.size > 1) "$serverName · " else ""
+                        val section = "Section ${p.section + 1}/${maxOf(p.sections, 1)}"
+                        if (p.showsDone != null && p.showsTotal != null) {
+                            step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("$label ${p.showsDone}/${p.showsTotal}"),
+                                "$prefix$section · ${p.showsDone}/${p.showsTotal} shows".uppercase(),
+                                (p.section + 1f) / maxOf(p.sections, 1), "Section ${p.section + 1} of ${p.sections} · ${p.itemsSoFar} items")
+                        } else {
+                            step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline(label), "$prefix$section · ${p.itemsSoFar} items".uppercase(),
+                                (p.section + 1f) / maxOf(p.sections, 1), "Section ${p.section + 1} of ${p.sections} · ${p.itemsSoFar} items")
+                        }
+                    }
                     Log.i(TAG, "LIBRARY ${items.size} items from ${servers.size} server(s) read in ${SystemClock.elapsedRealtime() - t0} ms")
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
                     libraryItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
-                    screen = Screen.Loading("BUILDING CHANNELS")
-                    show(buildLineup(items, "read"))
+                    step(LoadPhase.BUILDING)
+                    val built = buildLineup(items, "read") { done, total ->
+                        if ((screen as? Screen.LibraryLoad)?.phase == LoadPhase.BUILDING) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
+                    }
+                    step(LoadPhase.FINISHING)
+                    prefs.initialLoadComplete = true
+                    show(built)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Library load failed", e)
                 screen = Screen.Failed(connectionFailure(e))
             } finally {
+                // Reading the saved library proves nothing about whether a full load can finish.
+                launchGuard.loadEnded(resetCount = fullLoad)
                 loadingLibrary = false
             }
         }
@@ -918,17 +1007,17 @@ class AppModel(private val context: Context) : Playback.Listener {
         else -> "Signed in, but no Plex server was reachable. Confirm Plex is running and Remote Access is enabled, then try again."
     }
 
-    private suspend fun scan(servers: List<PlexServer>, onProgress: (String) -> Unit): List<MediaItem> {
+    /** Every library but those switched off, with where the scan has got to (on the main thread) and the server's name. */
+    private suspend fun scan(servers: List<PlexServer>, onProgress: (ScanProgress, String) -> Unit): List<MediaItem> {
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
-            return mediaBrowser.scan(mb, { text, count -> scope.launch { onProgress("${mb.name} · $text · $count ITEMS") } }, excluded)
+            return mediaBrowser.scan(mb, { p -> scope.launch { onProgress(p, mb.name) } }, excluded)
         }
         val library = PlexLibrary(plex)
         val items = ArrayList<MediaItem>()
         for (server in servers) {
-            items += library.scan(server, { text, count ->
-                scope.launch { onProgress("${server.name} · $text · $count ITEMS") }
-            }, items.size, LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier))
+            items += library.scan(server, { p -> scope.launch { onProgress(p, server.name) } },
+                items.size, LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier))
         }
         return items
     }
@@ -939,7 +1028,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             refreshing = true
             try {
                 val t0 = SystemClock.elapsedRealtime()
-                val items = scan(servers) {}
+                val items = scan(servers) { _, _ -> }
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
                 if (items == saved) {
@@ -964,7 +1053,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    private suspend fun buildLineup(items: List<MediaItem>, source: String): Lineup = withContext(Dispatchers.Default) {
+    private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
         val (config, memberships) = channelData.await()
         withContext(Dispatchers.Main) { bundles = config.bundles }
@@ -975,7 +1064,10 @@ class AppModel(private val context: Context) : Playback.Listener {
         val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex")
         lineup.watershed = prefs.watershed
         var built = 0
-        val switchedOn = lineup.build(items, prefs.enabledBundles) { done, _ -> built = maxOf(built, done) }
+        val switchedOn = lineup.build(items, prefs.enabledBundles) { done, total ->
+            built = maxOf(built, done)
+            scope.launch { onBuild(done, total) }
+        }
         if (switchedOn.isNotEmpty()) {
             prefs.enabledBundles = prefs.enabledBundles + switchedOn
             withContext(Dispatchers.Main) { enabledBundles = prefs.enabledBundles }
@@ -1111,5 +1203,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     companion object {
         private const val TAG = "Nostalgex"
+        /** LaunchGuard reads the last launch's marker once per process. */
+        private var launchRecorded = false
     }
 }

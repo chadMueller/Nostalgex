@@ -3,7 +3,9 @@ package com.muellhaus.nostalgex
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.muellhaus.nostalgex.ui.LibraryLoadScreen
 import com.muellhaus.nostalgex.ui.LoadingScreen
+import com.muellhaus.nostalgex.ui.UnfinishedLoadsScreen
 import com.muellhaus.nostalgex.ui.ConnectionFailedScreen
 import com.muellhaus.nostalgex.ui.NoChannelsScreen
 import com.muellhaus.nostalgex.ui.ConnectScreen
@@ -19,6 +21,8 @@ class MainActivity : ComponentActivity() {
             when (val s = model.screen) {
                 is Screen.SignIn, is Screen.Connect, is Screen.ChooseLibraries -> ConnectScreen(model)
                 is Screen.Loading -> LoadingScreen(s)
+                is Screen.LibraryLoad -> LibraryLoadScreen(model, s)
+                Screen.UnfinishedLoads -> UnfinishedLoadsScreen(model)
                 is Screen.Failed -> ConnectionFailedScreen(model, s.message)
                 Screen.NoChannels -> NoChannelsScreen(model)
                 Screen.Watching -> WatchScreen(model)

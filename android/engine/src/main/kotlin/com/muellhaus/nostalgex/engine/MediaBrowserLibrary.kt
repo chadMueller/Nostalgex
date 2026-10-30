@@ -28,7 +28,7 @@ class MediaBrowserLibrary(
     }
 
     fun interface Progress {
-        fun update(text: String, itemsSoFar: Int)
+        fun update(progress: ScanProgress)
     }
 
     /** Set when a server saved as Jellyfin answered as Emby (adoptMediaBrowserKind). */
@@ -58,17 +58,18 @@ class MediaBrowserLibrary(
      * Every item in every library but those in `excluded` (view ids), which are skipped before
      * any request for their items goes out.
      */
-    fun scan(progress: Progress = Progress { _, _ -> }, excluded: Set<String> = emptySet()): List<MediaItem> {
+    fun scan(progress: Progress = Progress { }, excluded: Set<String> = emptySet()): List<MediaItem> {
         val viewList = views().filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
-        for (view in viewList) {
+        for ((index, view) in viewList.withIndex()) {
             val type = sectionType(view.str("CollectionType"))
             val isMusicVideoSection = type == "musicvideo"
             val name = view.str("Name") ?: "Library"
-            progress.update(name, out.size)
+            progress.update(ScanProgress(index, viewList.size, name, type, out.size))
             try {
                 if (type == "show") {
-                    for (show in fetchItems(view.str("Id") ?: "", "Series")) {
+                    val shows = fetchItems(view.str("Id") ?: "", "Series")
+                    for ((done, show) in shows.withIndex()) {
                         val showGenres = show.strings("Genres")
                         val showTmdb = tmdbFromProviderIds(show.obj("ProviderIds"))
                         val episodes = try { fetchItems(show.str("Id") ?: "", "Episode") } catch (e: Exception) { emptyList() }
@@ -104,7 +105,7 @@ class MediaBrowserLibrary(
                                 bitrate = mi.bitrate,
                             )
                         }
-                        progress.update("$name · ${out.size}", out.size)
+                        progress.update(ScanProgress(index, viewList.size, name, type, out.size, done + 1, shows.size))
                     }
                 } else {
                     for (jf in fetchItems(view.str("Id") ?: "", "Movie")) {
@@ -146,7 +147,7 @@ class MediaBrowserLibrary(
                             bitrate = mi.bitrate,
                         )
                     }
-                    progress.update(name, out.size)
+                    progress.update(ScanProgress(index, viewList.size, name, type, out.size))
                 }
             } catch (e: Exception) {
                 // One library that fails leaves the others, as the web tuner's per-view catch.

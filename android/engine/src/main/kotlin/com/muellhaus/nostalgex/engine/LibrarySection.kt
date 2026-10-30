@@ -41,3 +41,17 @@ data class LibrarySection(
         private val MUSIC_VIDEO_TITLE = Regex("music.?video|^music$|^mvs?$", RegexOption.IGNORE_CASE)
     }
 }
+
+/**
+ * Where a library scan has got to, for the loading screen (AppState+Library's scan events):
+ * which library of how many, and the items read so far, with shows done for a TV library.
+ */
+data class ScanProgress(
+    val section: Int,
+    val sections: Int,
+    val title: String,
+    val type: String,
+    val itemsSoFar: Int,
+    val showsDone: Int? = null,
+    val showsTotal: Int? = null,
+)

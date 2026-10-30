@@ -44,6 +44,10 @@ listing; it installs over `adb`.
 - Library selection: after sign-in, a server with more than one library offers
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned.
+- The loading screen's step rail, with what the scan is reading and a progress
+  bar, and START OVER (it asks first) for the whole load. After two loads in a
+  row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY
+  AGAIN or START OVER.
 - WATERSHED (off by default): R, NC-17 and TV-MA titles wait for 9 PM on every
   channel but VHS VAULT, which holds its own. A channel with nothing else to
   show says BROADCASTS WILL RESUME AT 9 PM, and comes on at 9.
@@ -55,13 +59,18 @@ listed here.
 
 Not ported yet: server collections, found franchises and MY COLLECTIONS;
 TMDB enrichment; SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
-above channel one; the loading screen's step rail; demo mode; the Apple TV's
-playback recovery ladder (watchdog, stalls, compatibility retry); the
+above channel one; demo mode; the Apple TV's playback recovery ladder
+(watchdog, stalls, compatibility retry) and the loading screen's STOP WAITING
+when a scan goes quiet; the
 PlaybackInfo handshake on Jellyfin and Emby (this app asks for the stored
 file, then the hand-built HLS stream, which is the Apple TV's fallback path).
 
 Different on purpose, because the Apple TV's version has no counterpart here:
 - No SUPPORT NOSTALGEX (App Store ratings and tips) and no iCloud sync.
+- The loading screen's rail is LINEUP, LIBRARY, CHANNELS, READY: the Apple TV's
+  COLLECTIONS, METADATA and MUSIC steps have no work behind them here yet.
+- No reinstall check: Android deletes an app's data with the app (and backup is
+  off), so a reinstall can't find an old sign-in the way tvOS's keychain can.
 - MATCH TV LANGUAGE where the Apple TV says MATCH APPLE TV LANGUAGE.
 - The wordmark in the nav bar, as the Roku port uses at the maintainer's
   request; the Apple TV still shows its earlier logo.
