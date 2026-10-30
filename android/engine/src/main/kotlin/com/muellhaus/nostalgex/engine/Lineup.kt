@@ -133,7 +133,14 @@ class Lineup(
             .map { GuideChannel(it, pools.getValue(it.id).filter { item -> item.duration > 0 }) }
     }
 
-    private fun poolNow(ch: GuideChannel, now: ZonedDateTime) = config.timeFilteredPool(ch.def, ch.pool, now.hour)
+    /** Watershed (Settings > SCHEDULE): read at every schedule, tune and next programme. */
+    @Volatile var watershed = false
+
+    private fun poolNow(ch: GuideChannel, now: ZonedDateTime) = config.timeFilteredPool(ch.def, ch.pool, now.hour, watershed)
+
+    /** Off the air until 9 PM because Watershed emptied it, not because it has nothing. */
+    fun isWatershedHold(ch: GuideChannel, now: ZonedDateTime = ZonedDateTime.now()) =
+        config.isWatershedHold(ch.def, ch.pool, now.hour, watershed)
 
     private fun lineupNow(now: ZonedDateTime) = channels.map { it.ref to poolNow(it, now) }
 

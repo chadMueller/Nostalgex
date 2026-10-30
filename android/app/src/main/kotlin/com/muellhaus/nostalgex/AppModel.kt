@@ -137,6 +137,30 @@ class AppModel(private val context: Context) : Playback.Listener {
         prefs.retroMode = retroMode
     }
 
+    /**
+     * WATERSHED: 18, R and TV-MA titles wait for 9 PM on every channel but VHS VAULT, which
+     * holds its own. A change reaches the schedules at once; what is on keeps playing, as on
+     * the Apple TV, except that a channel held off the air comes back on when it's switched off.
+     */
+    var watershed by mutableStateOf(prefs.watershed)
+        private set
+
+    /** The channel on has nothing to show until 9 PM because of Watershed: its card is up. */
+    var watershedHold by mutableStateOf(false)
+        private set
+
+    fun toggleWatershed() {
+        watershed = !watershed
+        prefs.watershed = watershed
+        val l = lineup ?: return
+        l.watershed = watershed
+        scope.launch {
+            withContext(Dispatchers.Default) { l.rebuildSchedules() }
+            scheduleTick++
+            if (watershedHold) channel?.let(::tune)
+        }
+    }
+
     /** STREAM QUALITY: read as each programme starts, so a change reaches the next one. */
     var streamQuality by mutableStateOf(StreamQuality.fromId(prefs.streamQuality))
         private set
@@ -880,6 +904,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val serverKey = (mbServer?.let { "${it.kind}_${it.serverId}" } ?: ("plex_" + prefs.servers.joinToString("_") { it.machineIdentifier }))
             .replace(Regex("[^A-Za-z0-9]"), "_").take(60)
         val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey)
+        lineup.watershed = prefs.watershed
         var built = 0
         val switchedOn = lineup.build(items, prefs.enabledBundles) { done, _ -> built = maxOf(built, done) }
         if (switchedOn.isNotEmpty()) {
@@ -917,6 +942,8 @@ class AppModel(private val context: Context) : Playback.Listener {
                 delay(60_000 - System.currentTimeMillis() % 60_000)
                 lineup?.let { l -> withContext(Dispatchers.Default) { l.rebuildSchedules() } }
                 scheduleTick++
+                // 9 PM lifts a Watershed hold: the channel comes on the air.
+                if (watershedHold) channel?.let { ch -> if (lineup?.isWatershedHold(ch) == false) tune(ch) }
             }
         }
     }
@@ -940,11 +967,18 @@ class AppModel(private val context: Context) : Playback.Listener {
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
         skipJob?.cancel()
         failure = null
+        watershedHold = false
         item = pick?.item
         delivery = null
         if (pick == null) {
             playback.stop()
-            failure = PlaybackFailure.NoPlayableSource(backendName)
+            val ch = channel
+            if (ch != null && lineup?.isWatershedHold(ch) == true) {
+                Log.i(TAG, "WATERSHED HOLD on CH ${ch.number}")
+                watershedHold = true
+            } else {
+                failure = PlaybackFailure.NoPlayableSource(backendName)
+            }
             return
         }
         playback.play(pick.item, pick.seekSeconds)
