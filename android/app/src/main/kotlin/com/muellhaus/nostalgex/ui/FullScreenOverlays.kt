@@ -353,13 +353,15 @@ private fun InfoZone(model: AppModel, ch: GuideChannel, item: MediaItem, color: 
         Column(Modifier.widthIn(max = u(640)), verticalArrangement = Arrangement.spacedBy(u(8))) {
             Box(Modifier.size(u(48), u(4)).background(color))
             Text("CH ${ch.number}", style = font(DMMonoMedium, 23, color))
-            Text(ch.name, style = font(DMMonoMedium, 30, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.title + (item.year?.let { "  $it" } ?: ""), style = font(DMMono, 25, Color.White.copy(alpha = 0.9f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // The title leads and the channel name follows smaller (NowPlayingPanel, 02ac78f).
+            val line = if (item.isMusicVideo) item.musicDisplayLine else item.title + (item.year?.let { "  $it" } ?: "")
+            Text(line, style = font(DMMonoMedium, 30, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(ch.name, style = font(DMMono, 25, Color.White.copy(alpha = 0.9f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
             item.contentRating?.takeIf { it.isNotEmpty() }?.let {
                 Text(it.uppercase(), style = font(DMMono, 18, Color.White.copy(alpha = 0.7f)))
             }
             model.lineup?.schedules?.get(ch.id)?.upNext?.item?.let { next ->
-                Text("UP NEXT: ${next.title}", style = font(DMMono, 18, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = u(4)))
+                Text("UP NEXT: ${if (next.isMusicVideo) next.musicDisplayLine else next.title}", style = font(DMMono, 18, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = u(4)))
             }
         }
     }
@@ -467,3 +469,19 @@ internal fun SleepGracePrompt(model: AppModel) {
         }
     }
 }
+
+// ── Music videos on screen (PlexMediaItem+MusicDisplay.swift) ─────────────
+
+internal val MediaItem.isMusicVideo get() = type != "episode" && librarySource == "musicVideo"
+
+/** "Artist · Title", the web tuner's now-playing label. */
+internal val MediaItem.musicDisplayLine: String
+    get() = if (isMusicVideo && !artist.isNullOrEmpty()) "$artist \u00B7 $title" else title
+
+/** Up to four genres, without the generic music-video tags. */
+internal val MediaItem.musicGenreDisplay: String?
+    get() {
+        if (!isMusicVideo) return null
+        val useful = genres.filter { g -> g.lowercase().let { !it.contains("music video") && it != "music" && it != "musical" } }
+        return useful.take(4).joinToString(" \u00B7 ").ifEmpty { null }
+    }

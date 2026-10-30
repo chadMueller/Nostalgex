@@ -40,7 +40,9 @@ listing; it installs over `adb`.
 - Settings (SETTINGS above the guide, or the top of the package sidebar that
   Left opens at the guide's first half hour): servers, libraries, RESCAN
   LIBRARY, DISCONNECT, the playback settings, the channel packages with their
-  availability, and WATERSHED. The sidebar jumps to a package's first channel.
+  availability and WHY AREN'T THESE ON AIR? (each missing channel's rules in
+  plain words, and how many titles match against how many it needs), and
+  WATERSHED. The sidebar jumps to a package's first channel.
 - Library selection: after sign-in, a server with more than one library offers
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned. A Plex music library adds nothing on either app (Plex lists
@@ -72,6 +74,10 @@ Different on purpose, because the Apple TV's version has no counterpart here:
   COLLECTIONS, METADATA and MUSIC steps have no work behind them here yet.
 - No reinstall check: Android deletes an app's data with the app (and backup is
   off), so a reinstall can't find an old sign-in the way tvOS's keychain can.
+- The Apple TV's fixes for its own player don't apply: getting 4K Dolby Vision
+  MKVs and their EAC3 audio through Plex's HLS repackaging, ORIGINAL (LOCAL
+  PLEX) quality, and the channel overlay stuck after a stall. This app plays
+  the stored file directly first, MKV included.
 - MATCH TV LANGUAGE where the Apple TV says MATCH APPLE TV LANGUAGE.
 - The wordmark in the nav bar, as the Roku port uses at the maintainer's
   request; the Apple TV still shows its earlier logo.
