@@ -270,6 +270,7 @@ fun WatchScreen(model: AppModel) {
                     )
                     // Smaller in the guide's box than in full screen, as the Apple TV's.
                     model.failure?.let { FailureCard(it, compact = !model.fullScreen) }
+                    if (model.watershedHold) WatershedCard(compact = !model.fullScreen)
                 }
 
                 if (model.fullScreen) {
@@ -393,7 +394,10 @@ private fun Tuner(
                     .background(Brush.linearGradient(listOf(PanelTop, GuideBackground))),
             ) {
                 Spacer(Modifier.height(u(140)))
-                // The focused channel, or the one on (TunerView.previewChannel).
+                // The focused channel, or the one on (TunerView.previewChannel). Schedules aren't
+                // state, so the tick is read to redraw when they change: a channel off the air
+                // for Watershed had none, and 9 PM gives it one with nothing else changing here.
+                model.scheduleTick
                 val lineup = model.lineup
                 val ch = lineup?.channels?.firstOrNull { it.id == previewId } ?: model.channel
                 val schedule = ch?.let { lineup?.schedules?.get(it.id) }
@@ -586,6 +590,7 @@ private fun Guide(
                     EpgRow(
                         ch = ch,
                         schedule = lineup.schedules[ch.id],
+                        watershedHold = model.watershed && lineup.schedules[ch.id] == null && lineup.isWatershedHold(ch),
                         isLive = ch.id == model.channel?.id,
                         isEvenRow = index % 2 == 0,
                         programsWidth = programsWidth,
@@ -661,6 +666,8 @@ private fun GridHeader(visibleStart: Long, programsWidth: Float) {
 private fun EpgRow(
     ch: GuideChannel,
     schedule: Schedule?,
+    /** No schedule because Watershed emptied the channel: the row says so rather than nothing. */
+    watershedHold: Boolean,
     isLive: Boolean,
     isEvenRow: Boolean,
     programsWidth: Float,
@@ -722,7 +729,7 @@ private fun EpgRow(
                     )
                 }
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.15f)))
-                ProgramBlocks(schedule, color, focused, programsWidth, visibleStart, now)
+                ProgramBlocks(schedule, watershedHold, color, focused, programsWidth, visibleStart, now)
             }
             if (focused) {
                 Box(Modifier.matchParentSize().padding(u(2)).border(u(3), color, RoundedCornerShape(u(6))))
@@ -780,9 +787,16 @@ private fun entryTitle(e: ScheduleEntry): String =
     if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
 
 @Composable
-private fun ProgramBlocks(schedule: Schedule?, color: Color, focused: Boolean, programsWidth: Float, visibleStart: Long, now: Double) {
+private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, programsWidth: Float, visibleStart: Long, now: Double) {
     Row(Modifier.width(u(programsWidth)).fillMaxHeight().clipToBounds()) {
-        if (schedule == null) return@Row
+        if (schedule == null) {
+            // ChannelGuideView's watershedRowPlaceholder.
+            if (watershedHold) Row(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.02f)), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.12f)))
+                Text("BROADCASTS RESUME AT 9 PM", style = font(DMMonoMedium, 18, Color.White.copy(alpha = 0.4f)), maxLines = 1, modifier = Modifier.padding(start = u(14)))
+            }
+            return@Row
+        }
         for (segment in segments(schedule.entries, visibleStart, VISIBLE_SECONDS)) {
             val width = u(maxOf(segment.fraction * programsWidth, 1.0))
             when (segment) {
@@ -1007,6 +1021,38 @@ internal fun OnboardingButton(
             .padding(horizontal = u(36), vertical = u(if (primary) 24 else 20)),
     )
     if (focusFirst) LaunchedEffect(Unit) { runCatching { requester.requestFocus() } }
+}
+
+// ── Watershed's slate (WatershedCard.swift) ─────────────────────────────
+
+/**
+ * The channel has content, but all of it is 18, R or TV-MA and Watershed holds it until 9 PM.
+ * The failure card's shape in cyan: nothing is broken. It clears itself at 9 PM, or when
+ * Watershed is switched off.
+ */
+@Composable
+private fun WatershedCard(compact: Boolean) {
+    val shape = RoundedCornerShape(u(if (compact) 10 else 14))
+    Box(Modifier.fillMaxSize().padding(u(if (compact) 24 else 60)), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .clip(shape)
+                .background(Color.Black.copy(alpha = 0.82f))
+                .border(u(1), BrandCyan.copy(alpha = 0.35f), shape)
+                .padding(horizontal = u(if (compact) 32 else 72), vertical = u(if (compact) 28 else 48)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(u(if (compact) 12 else 18)),
+        ) {
+            Text("BROADCASTS WILL RESUME AT 9 PM", style = font(DMMonoMedium, if (compact) 26 else 38, BrandCyan), textAlign = TextAlign.Center)
+            Text(
+                "This channel's 18 and R-rated titles wait for 9 PM, like broadcast TV. Everything in its pool right now falls in that window.",
+                style = font(DMMono, if (compact) 16 else 22, Color.White.copy(alpha = 0.75f)).copy(lineHeight = sp(if (compact) 20 else 26)),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = u(if (compact) 520 else 900)),
+            )
+            Text("Turn off Watershed in Settings to watch now.", style = font(DMMono, if (compact) 13 else 17, Color.White.copy(alpha = 0.4f)))
+        }
+    }
 }
 
 // ── When a programme won't play (PlaybackFailureCard.swift) ───────────────

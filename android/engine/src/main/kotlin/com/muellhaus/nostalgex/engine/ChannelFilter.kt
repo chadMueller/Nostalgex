@@ -655,13 +655,13 @@ class ChannelConfig(root: JsonObject) {
     /**
      * The pool a channel airs from at `hour` (local), as plex-tuner.html getTimeFilteredPool and
      * Channel.filteredPool() in Channel.swift: three branches, in this order, each keeping at
-     * least two items.
+     * least two items, then the global Watershed gate.
      */
-    fun timeFilteredPool(channel: StockChannel, pool: List<MediaItem>, hour: Int): List<MediaItem> {
-        val tr = channel.timeRestrictions ?: return pool
+    fun timeFilteredPool(channel: StockChannel, pool: List<MediaItem>, hour: Int, watershed: Boolean = false): List<MediaItem> {
+        val tr = channel.timeRestrictions
         var out = pool
         with(ChannelFilter) {
-            tr.obj("blockRatings")?.let { br ->
+            tr?.obj("blockRatings")?.let { br ->
                 val before = br.num("blockBefore")
                 val after = br.num("blockAfter")
                 val blocked = (before != null && hour < before) || (after != null && hour >= after)
@@ -671,14 +671,41 @@ class ChannelConfig(root: JsonObject) {
                     if (filtered.size >= 2) out = filtered
                 }
             }
-            tr.num("tvOnlyBefore")?.let { h ->
+            tr?.num("tvOnlyBefore")?.let { h ->
                 if (hour < h) {
                     val episodes = out.filter { it.type == "episode" }
                     if (episodes.size >= 2) out = episodes
                 }
             }
-            tr.num("onlyAfterHour")?.let { h -> if (hour < h) return emptyList() }
+            tr?.num("onlyAfterHour")?.let { h -> if (hour < h) return emptyList() }
+
+            // Watershed (Settings > SCHEDULE), off unless switched on: every channel's own 18,
+            // R and TV-MA titles wait for 9 PM. A channel with its own blockRatings (VHS VAULT)
+            // is left to them either way. No two-item fallback: a channel of nothing but
+            // adult titles goes empty, and the card says why (isWatershedHold).
+            if (watershed && tr?.obj("blockRatings") == null && hour < WATERSHED_HOUR) {
+                out = out.filter { usContentRating(it.contentRating, it.type) !in WATERSHED_RATINGS }
+            }
         }
         return out
+    }
+
+    /**
+     * Channel.isWatershedHold: the channel has content but Watershed alone emptied it right now,
+     * so the player and the guide say BROADCASTS WILL RESUME AT 9 PM rather than nothing.
+     */
+    fun isWatershedHold(channel: StockChannel, pool: List<MediaItem>, hour: Int, watershed: Boolean): Boolean {
+        val ownHold = with(ChannelFilter) { channel.timeRestrictions?.obj("blockRatings") != null }
+        if (!watershed || pool.isEmpty() || ownHold || hour >= WATERSHED_HOUR) return false
+        return timeFilteredPool(channel, pool, hour, watershed).isEmpty()
+    }
+
+    companion object {
+        /** The hour Watershed holds adult titles until: 9 PM, VHS VAULT's own window. */
+        const val WATERSHED_HOUR = 21
+        /** GB-15 and GB-18 reach these through usContentRating, so they need no entry. */
+        val WATERSHED_RATINGS = setOf("R", "NC-17", "TV-MA")
+        /** The Apple TV's UserDefaults key, and the web tuner's. */
+        const val WATERSHED_STORAGE_KEY = "nostalgex_watershed"
     }
 }

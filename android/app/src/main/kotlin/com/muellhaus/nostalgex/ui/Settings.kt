@@ -224,6 +224,18 @@ private fun MainPage(model: AppModel) {
             }
         }
 
+        Divider()
+
+        // ── SCHEDULE ──
+        Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+            SectionHeader("SCHEDULE", "How and when your library gets placed on the air")
+            ToggleRow(
+                title = "WATERSHED",
+                subtitle = "Hold 18 and R-rated titles until 9 PM on every channel, like broadcast TV. VHS VAULT already holds its own this way; this applies it everywhere else.",
+                on = model.watershed,
+            ) { model.toggleWatershed() }
+        }
+
         Text(
             model.versionLabel,
             style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)),

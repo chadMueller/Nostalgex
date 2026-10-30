@@ -165,6 +165,7 @@ jobs:
               - 'scripts/filter-golden.json'
               - 'scripts/stream-quality-golden.json'
               - 'scripts/season-golden.json'
+              - 'scripts/watershed-golden.json'
               - 'scripts/nostalgex-daily-manifest.js'
               - 'scripts/nostalgex-music-brainz.js'
               - 'scripts/nostalgex-jellyfin-urls.js'
