@@ -189,7 +189,8 @@ sub NxClSwiftCases(r as Object, config as Object, defs as Object)
     s = NxFgStep(t, items, NxFranchiseChoices([], []))
     NxCheck(r, "swift fold: star wars is covered by CH 100", NxFgFoundNames(s), "JOHN WICK")
     cs = NxClStep(t, s, items, raw, on)
-    NxCheck(r, "swift fold: star wars folds into the classic", NxClFoldedInto(cs, "STAR WARS COLLECTION"), "CH 100 STAR WARS")
+    starWars = "CH " + NxClLiveNumber(config, 100) + " STAR WARS"
+    NxCheck(r, "swift fold: star wars folds into the classic", NxClFoldedInto(cs, "STAR WARS COLLECTION"), starWars)
     NxCheck(r, "swift fold: john wick folds into the found franchise", NxClFoldedInto(cs, "JOHN WICK COLLECTION"), "JOHN WICK")
     NxCheck(r, "swift fold: the actor set stays listed", NxClRowIDs(cs), "0:c-hanks")
     NxCheck(r, "swift fold: only the actor set becomes a channel", NxClChannelNames(cs), "TOM HANKS")
@@ -209,7 +210,7 @@ sub NxClSwiftCases(r as Object, config as Object, defs as Object)
     cs = NxCollectionsStep({ channels: NxClStockChannels(t, items), raw: raw, items: items, serverKeys: {}, manifest: invalid, enabledKeys: on })
     NxCheck(r, "package off: no folds", NxClRowIDs(cs), "0:c-wick,0:c-sw,0:c-hanks")
     NxCheck(r, "package off: three channels", NxClChannelNames(cs) + "|" + NxClChannelNumbers(cs), "JOHN WICK COLLECTION,STAR WARS COLLECTION,TOM HANKS|450,451,500")
-    NxCheck(r, "package off: name match warns", cs.rows[1].detail, "Exists: CH 100 STAR WARS")
+    NxCheck(r, "package off: name match warns", cs.rows[1].detail, "Exists: " + starWars)
 
     ' testFranchiseCollectionsDoNotMoveWhenFoundFranchisesChange, through the
     ' steps as the library load runs them: PADDINGTON TRILOGY (a movie series
@@ -692,6 +693,18 @@ function NxClStubFetcher(docs as Object) as Object
             return invalid
         end function
     }
+end function
+
+' The number channels.json gives the channel with this id, as text. The Swift
+' cases make their own channels (Channel(id: 100, number: 100)); these build
+' the stock channels from the real channels.json, whose numbers are not its ids
+' (the three 80s channels took CH 20 to 22 on 2026-10-29 and every later
+' channel moved up by 3), so the label a case expects is read from it too.
+function NxClLiveNumber(config as Object, id as Integer) as String
+    for each c in config.channels
+        if c.id = id then return NxToStr(c.number)
+    end for
+    return "no channel " + id.ToStr()
 end function
 
 function NxClByID(channels as Object) as Object
