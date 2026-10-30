@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "about": [
+    "The global Watershed setting (Settings > WATERSHED), checked against both engines.",
+    "Read by Nostalgex/NostalgexTests/WatershedGoldenTests.swift (Channel.filteredPool,",
+    "Channel.isWatershedHold) and scripts/nostalgex-watershed-smoke.mjs (plex-tuner.html's",
+    "getTimeFilteredPool and isWatershedHold). Both must agree on which items remain in a",
+    "channel's pool at a given local hour with the toggle on or off, and on whether a",
+    "channel counts as a Watershed hold (pool emptied by the gate alone, not a genuinely",
+    "empty channel).",
+    "pool entries: {ratingKey, contentRating, type}. hour is the local hour the test runs",
+    "at (0-23). hasOwnBlockRatings marks a VHS-VAULT-shaped channel, with the same",
+    "permanent blockRatings(['R','NC-17'], blockBefore: 21) VHS VAULT itself carries, to",
+    "prove the global toggle never changes its behaviour either way."
+  ],
+  "cases": [
+    {
+      "name": "watershed-on-strips-r-before-9pm",
+      "watershedEnabled": true,
+      "hour": 14,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["pg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-off-keeps-everything",
+      "watershedEnabled": false,
+      "hour": 14,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["r", "pg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-after-9pm-keeps-everything",
+      "watershedEnabled": true,
+      "hour": 21,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["r", "pg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-late-night-keeps-everything",
+      "watershedEnabled": true,
+      "hour": 23,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["r", "pg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-nc17-also-stripped",
+      "watershedEnabled": true,
+      "hour": 10,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "nc17", "contentRating": "NC-17", "type": "movie" },
+        { "ratingKey": "pg13", "contentRating": "PG-13", "type": "movie" }
+      ],
+      "expectPool": ["pg13"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-tv-ma-episodes-also-stripped",
+      "watershedEnabled": true,
+      "hour": 12,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "tvma", "contentRating": "TV-MA", "type": "episode" },
+        { "ratingKey": "tvpg", "contentRating": "TV-PG", "type": "episode" }
+      ],
+      "expectPool": ["tvpg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-gb15-and-gb18-normalize-to-r",
+      "watershedEnabled": true,
+      "hour": 9,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "gb15", "contentRating": "GB-15", "type": "movie" },
+        { "ratingKey": "gb18", "contentRating": "GB-18", "type": "movie" },
+        { "ratingKey": "pg", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["pg"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-on-empties-an-all-adult-channel",
+      "watershedEnabled": true,
+      "hour": 14,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r1", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "r2", "contentRating": "R", "type": "movie" }
+      ],
+      "expectPool": [],
+      "expectHold": true
+    },
+    {
+      "name": "watershed-on-mixed-content-channel-never-holds",
+      "watershedEnabled": true,
+      "hour": 14,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r1", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg1", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["pg1"],
+      "expectHold": false
+    },
+    {
+      "name": "watershed-off-never-holds-even-with-all-adult-pool",
+      "watershedEnabled": false,
+      "hour": 14,
+      "hasOwnBlockRatings": false,
+      "pool": [
+        { "ratingKey": "r1", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "r2", "contentRating": "R", "type": "movie" }
+      ],
+      "expectPool": ["r1", "r2"],
+      "expectHold": false
+    },
+    {
+      "name": "vhs-vault-shaped-channel-exempt-with-toggle-on",
+      "about": "A channel with its own permanent blockRatings (VHS VAULT's shape) is exempt from the global pass: its own rule already governs it, the same with the toggle on or off.",
+      "watershedEnabled": true,
+      "hour": 14,
+      "hasOwnBlockRatings": true,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg1", "contentRating": "PG", "type": "movie" },
+        { "ratingKey": "pg2", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["pg1", "pg2"],
+      "expectHold": false
+    },
+    {
+      "name": "vhs-vault-shaped-channel-exempt-with-toggle-off",
+      "about": "Same channel and pool as above, toggle off: identical result, proving the toggle changes nothing for it.",
+      "watershedEnabled": false,
+      "hour": 14,
+      "hasOwnBlockRatings": true,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" },
+        { "ratingKey": "pg1", "contentRating": "PG", "type": "movie" },
+        { "ratingKey": "pg2", "contentRating": "PG", "type": "movie" }
+      ],
+      "expectPool": ["pg1", "pg2"],
+      "expectHold": false
+    },
+    {
+      "name": "vhs-vault-shaped-channel-keeps-its-own-fallback-with-toggle-on",
+      "about": "VHS VAULT's own blockRatings falls back to keeping its content when filtering would leave fewer than two items. The global toggle being on must not override that fallback or empty the channel.",
+      "watershedEnabled": true,
+      "hour": 14,
+      "hasOwnBlockRatings": true,
+      "pool": [
+        { "ratingKey": "r", "contentRating": "R", "type": "movie" }
+      ],
+      "expectPool": ["r"],
+      "expectHold": false
+    }
+  ]
+}

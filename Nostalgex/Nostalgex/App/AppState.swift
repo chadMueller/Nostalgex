@@ -490,6 +490,21 @@ class AppState {
         }
     }
 
+    /// Watershed: an opt-in broadcast-realism setting, off by default because it changes
+    /// what airs when — that should be a deliberate choice, not a surprise after an
+    /// update. While on, 18/R-rated content on every channel waits for 9 PM the way VHS
+    /// VAULT's own permanent hold already does; see `Channel.filteredPool`. Per-TV, like
+    /// `iCloudSyncEnabled` itself: not synced through iCloud, so turning it on or off is
+    /// never silently inherited from another Apple TV.
+    var watershedEnabled: Bool = UserDefaults.standard.object(forKey: Channel.watershedDefaultsKey) as? Bool ?? false {
+        didSet {
+            UserDefaults.standard.set(watershedEnabled, forKey: Channel.watershedDefaultsKey)
+            if oldValue != watershedEnabled {
+                Analytics.track(.settingChanged(key: "watershed", value: watershedEnabled ? "true" : "false"))
+            }
+        }
+    }
+
     static let syncPlexActivityDefaultsKey = PlaybackReportingPreferences.legacyKey
     static let showNowPlayingDefaultsKey = PlaybackReportingPreferences.nowPlayingKey
     static let markWatchedDefaultsKey = PlaybackReportingPreferences.markWatchedKey

@@ -11,6 +11,10 @@ enum PlaybackState: Equatable {
     /// Carries the reason rather than a sentence, so the screen can say both what happened
     /// and whose problem it is. See `PlaybackFailure`.
     case error(PlaybackFailure)
+    /// Watershed is on and this channel has nothing left to show until 9 PM: it has real
+    /// content, every bit of it is 18/R-rated (or TV-MA) right now. Not a failure — the
+    /// channel is simply off the air until the gate lifts. See `Channel.isWatershedHold`.
+    case watershedHold
 }
 
 // MARK: - AVPlayerLayer container (proper layout sizing)
@@ -85,6 +89,8 @@ struct VideoAreaView: View {
                         idleOverlay
                     case .error(let message):
                         errorOverlay(message)
+                    case .watershedHold:
+                        watershedOverlay
                     case .loading:
                         // Black for the first ~0.75s; the tuning overlay below crossfades
                         // in only on a genuinely-slow start (transcode spin-up).
@@ -174,6 +180,10 @@ struct VideoAreaView: View {
 
     private func errorOverlay(_ failure: PlaybackFailure) -> some View {
         PlaybackFailureCard(failure: failure, compact: true)
+    }
+
+    private var watershedOverlay: some View {
+        WatershedCard(compact: true)
     }
 
     // MARK: - Channel bug (bottom-left info)

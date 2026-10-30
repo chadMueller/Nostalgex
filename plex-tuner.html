@@ -4116,37 +4116,69 @@
   // were silently ignored here and the two surfaces built their schedules from
   // different pools. Keep the three branches, their order, and the "keep at least
   // two items" guards identical to Swift.
-  function getTimeFilteredPool(channel) {
+  //
+  // `watershedEnabled` defaults to the same localStorage key the Settings toggle writes
+  // on the Apple TV's shared conventions (nostalgex_watershed); pass an explicit boolean
+  // in tests so the result never depends on the real clock or a stray stored value. A
+  // channel that already defines its own `blockRatings` (VHS VAULT today) is exempt from
+  // the global pass below: its hold stays independent of this toggle either way, and it
+  // keeps its own "at least two items" fallback. The global pass has none — a channel
+  // that is nothing but 18/R-rated (or TV-MA) content during the day is allowed to go
+  // empty, so the guide can show the "broadcasts resume at 9 PM" card instead of serving
+  // it anyway.
+  function getTimeFilteredPool(channel, watershedEnabled) {
     const tr = channel.timeRestrictions;
-    if (!tr) return channel.itemPool;
     const hour = new Date().getHours();
     let pool = channel.itemPool;
 
-    // Block ratings (e.g. R-rated content before 8pm).
-    if (tr.blockRatings) {
-      const { ratings, blockBefore, blockAfter } = tr.blockRatings;
-      const isBlocked = (blockBefore != null && hour < blockBefore)
-                     || (blockAfter != null && hour >= blockAfter);
-      if (isBlocked) {
-        // A rating from another country counts as its US label: GB-18 waits for 9 PM like R.
-        // A cached older filter script has no usContentRating; read the raw label then,
-        // rather than throw and leave the channel without a schedule.
-        const usRating = globalThis.NostalgexChannelFilter?.usContentRating || ((rating) => rating);
-        const filtered = pool.filter(item => !ratings.includes(usRating(item.contentRating, item.type)));
-        if (filtered.length >= 2) pool = filtered;
+    if (tr) {
+      // Block ratings (e.g. R-rated content before 8pm).
+      if (tr.blockRatings) {
+        const { ratings, blockBefore, blockAfter } = tr.blockRatings;
+        const isBlocked = (blockBefore != null && hour < blockBefore)
+                       || (blockAfter != null && hour >= blockAfter);
+        if (isBlocked) {
+          // A rating from another country counts as its US label: GB-18 waits for 9 PM like R.
+          // A cached older filter script has no usContentRating; read the raw label then,
+          // rather than throw and leave the channel without a schedule.
+          const usRating = globalThis.NostalgexChannelFilter?.usContentRating || ((rating) => rating);
+          const filtered = pool.filter(item => !ratings.includes(usRating(item.contentRating, item.type)));
+          if (filtered.length >= 2) pool = filtered;
+        }
       }
+
+      // TV-only before hour (e.g. only episodes before 11 AM).
+      if (tr.tvOnlyBefore != null && hour < tr.tvOnlyBefore) {
+        const episodesOnly = pool.filter(item => item.type === 'episode');
+        if (episodesOnly.length >= 2) pool = episodesOnly;
+      }
+
+      // Prime time gate: the channel is unavailable before this hour.
+      if (tr.onlyAfterHour != null && hour < tr.onlyAfterHour) return [];
     }
 
-    // TV-only before hour (e.g. only episodes before 11 AM).
-    if (tr.tvOnlyBefore != null && hour < tr.tvOnlyBefore) {
-      const episodesOnly = pool.filter(item => item.type === 'episode');
-      if (episodesOnly.length >= 2) pool = episodesOnly;
+    const watershedOn = watershedEnabled != null
+      ? watershedEnabled
+      : (typeof localStorage !== 'undefined' && localStorage.getItem('nostalgex_watershed') === '1');
+    if (watershedOn && !(tr && tr.blockRatings) && hour < 21) {
+      const usRating = globalThis.NostalgexChannelFilter?.usContentRating || ((rating) => rating);
+      pool = pool.filter(item => !['R', 'NC-17', 'TV-MA'].includes(usRating(item.contentRating, item.type)));
     }
-
-    // Prime time gate: the channel is unavailable before this hour.
-    if (tr.onlyAfterHour != null && hour < tr.onlyAfterHour) return [];
 
     return pool;
+  }
+
+  // Whether `channel`'s pool is empty right now only because the global Watershed gate
+  // removed everything in it, not because the channel has no content at all. Mirrors
+  // Channel.isWatershedHold in Channel.swift.
+  function isWatershedHold(channel, watershedEnabled) {
+    if (!channel.itemPool || !channel.itemPool.length) return false;
+    if (channel.timeRestrictions && channel.timeRestrictions.blockRatings) return false;
+    const watershedOn = watershedEnabled != null
+      ? watershedEnabled
+      : (typeof localStorage !== 'undefined' && localStorage.getItem('nostalgex_watershed') === '1');
+    if (!watershedOn || new Date().getHours() >= 21) return false;
+    return getTimeFilteredPool(channel, watershedEnabled).length === 0;
   }
 
   let currentChannel = null;
