@@ -2581,9 +2581,9 @@
     },
     {
       "name": "pokemon-editorial-override-unaffected-by-the-new-fallback",
-      "about": "Pokémon is one of ANIME's editorialOverrides (exact-title match, checked before any manifest/manifestOnly/genre logic runs). It reaches ANIME on the title match alone, with no anime TMDB keyword present, confirming the new fallback path is purely additive and never contradicts an editorial decision.",
+      "about": "Pok\u00e9mon is one of ANIME's editorialOverrides (exact-title match, checked before any manifest/manifestOnly/genre logic runs). It reaches ANIME on the title match alone, with no anime TMDB keyword present, confirming the new fallback path is purely additive and never contradicts an editorial decision.",
       "item": {
-        "title": "Pokémon",
+        "title": "Pok\u00e9mon",
         "year": 1998,
         "type": "episode",
         "genres": [
@@ -2598,6 +2598,166 @@
       },
       "in": [
         60
+      ]
+    },
+    {
+      "name": "frasier-airs-on-nbc-not-nickelodeon",
+      "about": "SLIME TV matches on TMDB networks (where a show aired), not studios (who made it). Frasier's production company is 'Paramount Television', which used to leak it onto the channel through the old broad studios match against productionCompanies; its real TMDB network is NBC only, so the networks rule correctly keeps it off.",
+      "item": {
+        "title": "Frasier",
+        "year": 1993,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Family"
+        ],
+        "contentRating": "TV-PG",
+        "studio": "Paramount Television",
+        "enrichment": {
+          "productionCompanies": [
+            "Paramount Television",
+            "CBS Studios",
+            "Grub Street Productions"
+          ],
+          "networks": [
+            "NBC"
+          ],
+          "keywords": [
+            "sibling relationship",
+            "family",
+            "sitcom"
+          ]
+        }
+      },
+      "out": [
+        26
+      ]
+    },
+    {
+      "name": "dark-skies-airs-on-nbc-not-nickelodeon",
+      "about": "Dark Skies is also credited to Paramount Television and used to leak onto SLIME TV through the same broad studios match as Frasier. Its real TMDB network is NBC only, so the networks rule keeps it off.",
+      "item": {
+        "title": "Dark Skies",
+        "year": 1996,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Sci-Fi & Fantasy",
+          "Drama",
+          "Action & Adventure"
+        ],
+        "contentRating": "TV-14",
+        "studio": "Paramount Television",
+        "enrichment": {
+          "networks": [
+            "NBC"
+          ]
+        }
+      },
+      "out": [
+        26
+      ]
+    },
+    {
+      "name": "tmnt-2012-airs-on-nickelodeon-stays-on-slime-tv",
+      "about": "A real SLIME TV title: Nickelodeon's 2012 Teenage Mutant Ninja Turtles. Its real TMDB networks are Nickelodeon and Nicktoons, so it still clears the networks rule.",
+      "item": {
+        "title": "Teenage Mutant Ninja Turtles",
+        "year": 2012,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Animation",
+          "Action & Adventure",
+          "Comedy",
+          "Sci-Fi & Fantasy"
+        ],
+        "contentRating": "TV-Y7",
+        "studio": "Nickelodeon Animation Studio",
+        "enrichment": {
+          "networks": [
+            "Nickelodeon",
+            "Nicktoons"
+          ]
+        }
+      },
+      "in": [
+        26
+      ]
+    },
+    {
+      "name": "rugrats-1991-airs-on-nickelodeon-stays-on-slime-tv",
+      "about": "A real SLIME TV title: the 1991 Rugrats. Its real TMDB network is Nickelodeon, so it still clears the networks rule.",
+      "item": {
+        "title": "Rugrats",
+        "year": 1991,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Family",
+          "Animation",
+          "Kids",
+          "Comedy"
+        ],
+        "contentRating": "TV-Y7",
+        "studio": "Nickelodeon Animation Studio",
+        "enrichment": {
+          "networks": [
+            "Nickelodeon"
+          ]
+        }
+      },
+      "in": [
+        26
+      ]
+    },
+    {
+      "name": "icarly-live-action-nickelodeon-stays-on-slime-tv",
+      "about": "iCarly is live-action, not animated, and carries no Animation or Kids genre tag; the genre-gated version of this rule would have wrongly excluded it. Its real TMDB network is Nickelodeon, so the networks rule keeps it on SLIME TV.",
+      "item": {
+        "title": "iCarly",
+        "year": 2007,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Family"
+        ],
+        "contentRating": "TV-Y7",
+        "studio": "Nickelodeon Productions",
+        "enrichment": {
+          "networks": [
+            "Nickelodeon"
+          ]
+        }
+      },
+      "in": [
+        26
+      ]
+    },
+    {
+      "name": "drake-and-josh-live-action-nickelodeon-stays-on-slime-tv",
+      "about": "Drake & Josh is live-action like iCarly, with no Animation or Kids genre tag. Its real TMDB network is Nickelodeon, so the networks rule keeps it on SLIME TV.",
+      "item": {
+        "title": "Drake & Josh",
+        "year": 2004,
+        "type": "episode",
+        "librarySource": "tv",
+        "genres": [
+          "Comedy",
+          "Family"
+        ],
+        "contentRating": "TV-Y7",
+        "studio": "Nickelodeon Productions",
+        "enrichment": {
+          "networks": [
+            "Nickelodeon"
+          ]
+        }
+      },
+      "in": [
+        26
       ]
     }
   ]

@@ -3,6 +3,73 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (SLIME TV: matching who made a show let two adult NBC shows through)
+
+**Shipped.** Nothing. Branch `fix/slime-tv-adult-leak`, cut from `main` at
+`ee2f5d9`, not merged, not pushed.
+
+**Changed.** SLIME TV (channel 26) matched on a broad `studios` rule: a
+plain substring test checked against Plex's studio field, TMDB production
+companies and TMDB networks all at once. Its list carried the Nickelodeon
+names plus bare "Paramount", "Paramount+" and "Paramount Television", meant
+to catch Paramount+-era Nickelodeon credits. Those same strings match any
+show Paramount's TV arm ever made. Measured on live TMDB: Frasier's
+production company is literally "Paramount Television" (Comedy, Family,
+TV-PG, inside the channel's own rating list), and Dark Skies carries the
+same "Paramount Television" production credit, which is how both NBC shows
+reached the channel.
+
+A first pass at a fix added a genre gate requiring Animation or Kids
+alongside the studio list. That would have correctly kept Frasier and Dark
+Skies out, but it would also have kept out live-action Nickelodeon shows
+with no cartoon tag, like iCarly and Drake & Josh, which is the actual
+point of a Nickelodeon-themed channel, not just its cartoons. Replaced
+rather than kept: switched SLIME TV from `studios` to the engine's existing
+`networks` rule, which matches only against TMDB's networks field, where a
+show actually aired, not who made it. Dropped the Paramount studio variants
+entirely: once the rule keys on where a show aired, Nickelodeon itself is
+the network, and the Paramount corporate-parent names are not needed.
+Dropped "Nickelodeon Animation Studio" and "Nickelodeon Productions" too,
+since those are production-company names, not TMDB network names. No engine
+change in any of the three ports: `networks` is already a rule type the
+filter understands and uses elsewhere (9 other rule blocks in
+`channels.json`).
+
+Checked on live TMDB:
+
+- Frasier: production company "Paramount Television" (the old leak),
+  network NBC only. Excluded.
+- Dark Skies: production company "Paramount Television" (the same leak),
+  network NBC only. Excluded.
+- Teenage Mutant Ninja Turtles (2012): networks Nickelodeon, Nicktoons.
+  Still included.
+- Rugrats (1991): network Nickelodeon. Still included.
+- iCarly: network Nickelodeon, live-action, no Animation or Kids genre tag.
+  Included, where the genre-gated version would have wrongly excluded it.
+- Drake & Josh: network Nickelodeon, live-action, same shape as iCarly.
+  Included.
+
+`channels.json` stays at v44 (this replaces the earlier commit on this
+branch that also moved it from v43 to v44, rather than stacking another
+bump on top). `CHANNELS.md`, `public/sitemap.xml` and
+`scripts/bundle-lastmod.json` regenerated. `scripts/filter-golden.json`: the
+4 genre-era cases are replaced with 6 cases built from the TMDB lookups
+above (Frasier and Dark Skies excluded, TMNT 2012 and Rugrats 1991 still
+included, iCarly and Drake & Josh newly included), each carrying the real
+`enrichment.networks` TMDB returned.
+
+`npm test`: all green (filter golden 108 cases, full suite clean). Also ran
+the Roku off-device `brs` interpreter directly against the filter golden
+suite (`roku/tests/run.sh`, not part of `npm test`): all passed, confirming
+the Roku port's existing network-matching code needs no change for this
+data-only fix.
+
+**Half-done.** Nothing left on this branch; ready for review.
+
+**Next.** Needs Chad's go to push the branch and open a PR. Open product
+question, not decided here: should SLIME TV carry a year range (roughly
+90s/00s, matching its nostalgic identity) or stay any-era like it is today?
+Not added either way in this fix.
 ## 2026-10-29 (ANIME: the same second claim path, with its own guard, branch only)
 
 **Shipped.** Nothing. Branch `fix/standup-missing-specials`, on top of the
