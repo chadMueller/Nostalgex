@@ -26,11 +26,11 @@ Nostalgex is made by Chad Mueller (Muell Haus Inc.). It is not affiliated with P
 
 ## Channels
 
-- [Channel Guide](https://www.nostalgex.app/channels): all 139 channels in 14 bundles
+- [Channel Guide](https://www.nostalgex.app/channels): all 142 channels in 14 bundles
 
 ### Bundles
 
-- [Nostalgex](https://www.nostalgex.app/channels/nostalgex): The 80s and 90s. All retro, all the time (19 channels)
+- [Nostalgex](https://www.nostalgex.app/channels/nostalgex): The 80s and 90s. All retro, all the time (22 channels)
 - [Kidz Zone](https://www.nostalgex.app/channels/kids): Disney, Nickelodeon, Pixar, and more (15 channels)
 - [Prime Time](https://www.nostalgex.app/channels/essentials): Everyday favorites and feel good viewing (16 channels)
 - [Marquee](https://www.nostalgex.app/channels/premium): Premium channels (11 channels)

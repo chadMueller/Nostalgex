@@ -44,7 +44,7 @@ only name the channel's own defining genre.
 
 **`rewatched` means `viewCount >= 3`** in both implementations.
 
-**Config version:** 46 · **139 channels** across **14 bundles** · 90 channels whose `id` differs from their `number`.
+**Config version:** 47 · **142 channels** across **14 bundles** · 93 channels whose `id` differs from their `number`.
 
 ---
 
@@ -52,7 +52,7 @@ only name the channel's own defining genre.
 
 | Bundle | Bundle ID | Channels | Range | Description |
 |---|---|---|---|---|
-| NOSTALGEX | `nostalgex` | 19 | CH 1–19 | The 80s and 90s. All retro, all the time |
+| NOSTALGEX | `nostalgex` | 22 | CH 1–19, 35–37 | The 80s and 90s. All retro, all the time |
 | KIDZ ZONE | `kids` | 15 | CH 20–34 | Disney, Nickelodeon, Pixar, and more |
 | PRIME TIME | `essentials` | 16 | CH 40–55 | Everyday favorites and feel-good viewing |
 | MARQUEE | `premium` | 11 | CH 59–69 | Premium channels |
@@ -67,7 +67,7 @@ only name the channel's own defining genre.
 | TIS THE SEASON | `tis-the-season` | 8 | CH 145–152 | Christmas, Thanksgiving and holiday channels. Spotlighted from 7 days before US Thanksgiving (the fourth Thursday of November) through Dec. Off until switched on, then on in any month. |
 | HIGH ROTATION | `high-rotation` | 14 | CH 200–213 | Music videos by genre |
 
-Bundled channels: 139 of 139.
+Bundled channels: 142 of 142.
 
 ---
 
@@ -98,7 +98,7 @@ web filter) and `scripts/filter-golden.json` pins the cases.
 
 ## Channels by bundle
 
-### NOSTALGEX · CH 1–19
+### NOSTALGEX · CH 1–19, 35–37
 
 _The 80s and 90s. All retro, all the time_
 
@@ -123,6 +123,9 @@ _The 80s and 90s. All retro, all the time_
 | 17 | **`406`** ⚠︎ | Y2K COMEDY | `#E67E22` | Movies | 3 | incl Comedy, no Animation/Animated, kw excl (3), 2000-2009 |
 | 18 | **`407`** ⚠︎ | Y2K SITCOMS | `#F1C40F` | Episodes | 10 | incl Comedy, no Anime/Animation, 2000-2009 |
 | 19 | **`216`** ⚠︎ | Y2K TOONS | `#1ABC9C` | Episodes | 5 | incl Animation/Kids/Children/Cartoon/Animated, 2000-2009, rated TV-Y/TV-Y7/TV-G/G/TV-PG/unrated |
+| 35 | **`423`** ⚠︎ | 80S SITCOMS | `#8E44AD` | Episodes | 10 | incl Comedy, no Anime/Animation, 1980-1989 |
+| 36 | **`424`** ⚠︎ | 80S LOL | `#D4AC0D` | Movies | 3 | incl Comedy, no Animation/Animated, kw excl (3), 1980-1989 |
+| 37 | **`425`** ⚠︎ | 80S AFTER SCHOOL TV | `#D35400` | Episodes | 5 | incl Comedy/Drama/Family, no Animation/Anime/Cartoon, 1980-1989, rated TV-G/TV-PG/TV-14/unrated |
 
 ### KIDZ ZONE · CH 20–34
 
@@ -343,7 +346,7 @@ _Music videos by genre_
 
 ## `id` ≠ `number`
 
-90 channels whose manifest/exclusivity key (`id`) is not their on-screen number. Marked ⚠︎ in the tables above.
+93 channels whose manifest/exclusivity key (`id`) is not their on-screen number. Marked ⚠︎ in the tables above.
 
 | `id` | Airs as | Name |
 |---|---|---|
@@ -356,6 +359,9 @@ _Music videos by genre_
 | `34` | CH32 | NETFLIX KIDS |
 | `218` | CH33 | DREAMWORKS |
 | `400` | CH34 | TOON TOWN |
+| `423` | CH35 | 80S SITCOMS |
+| `424` | CH36 | 80S LOL |
+| `425` | CH37 | 80S AFTER SCHOOL TV |
 | `50` | CH40 | SITCOMS |
 | `51` | CH41 | FLICKS |
 | `52` | CH42 | ROM COMS |
@@ -440,4 +446,4 @@ _Music videos by genre_
 
 ---
 
-_Generated from `channels.json` v46 by `scripts/render-channels-doc.mjs`. Do not edit by hand._
+_Generated from `channels.json` v47 by `scripts/render-channels-doc.mjs`. Do not edit by hand._

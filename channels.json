@@ -1,5 +1,5 @@
 {
-  "version": 46,
+  "version": 47,
   "exclusiveRules": [
     {
       "channelIDs": [
@@ -150,7 +150,10 @@
         405,
         406,
         407,
-        216
+        216,
+        423,
+        424,
+        425
       ]
     },
     {
@@ -508,6 +511,92 @@
         "yearRange": {
           "min": 1980,
           "max": 1999
+        },
+        "contentRatings": [
+          "TV-G",
+          "TV-PG",
+          "TV-14"
+        ],
+        "allowUnrated": true
+      }
+    },
+    {
+      "id": 423,
+      "number": 35,
+      "name": "80S SITCOMS",
+      "colorHex": "#8E44AD",
+      "category": "nostalgex",
+      "minItems": 10,
+      "rules": {
+        "type": "episode",
+        "genres": {
+          "include": [
+            "Comedy"
+          ],
+          "exclude": [
+            "Anime",
+            "Animation"
+          ]
+        },
+        "yearRange": {
+          "min": 1980,
+          "max": 1989
+        }
+      }
+    },
+    {
+      "id": 424,
+      "number": 36,
+      "name": "80S LOL",
+      "colorHex": "#D4AC0D",
+      "category": "nostalgex",
+      "minItems": 3,
+      "rules": {
+        "type": "movie",
+        "genres": {
+          "include": [
+            "Comedy"
+          ],
+          "exclude": [
+            "Animation",
+            "Animated"
+          ]
+        },
+        "keywordsExclude": [
+          "dark comedy",
+          "black comedy",
+          "satire"
+        ],
+        "yearRange": {
+          "min": 1980,
+          "max": 1989
+        }
+      }
+    },
+    {
+      "id": 425,
+      "number": 37,
+      "name": "80S AFTER SCHOOL TV",
+      "colorHex": "#D35400",
+      "category": "nostalgex",
+      "minItems": 5,
+      "rules": {
+        "type": "episode",
+        "genres": {
+          "include": [
+            "Comedy",
+            "Drama",
+            "Family"
+          ],
+          "exclude": [
+            "Animation",
+            "Anime",
+            "Cartoon"
+          ]
+        },
+        "yearRange": {
+          "min": 1980,
+          "max": 1989
         },
         "contentRatings": [
           "TV-G",
