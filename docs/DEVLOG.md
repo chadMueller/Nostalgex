@@ -117,6 +117,44 @@ follows `#uniq:` on a real name is unverified; the label keeps it whatever it is
 **Next.** On an Emby sign-in, open the panel on a film with two audio tracks and look at the
 rows.
 
+## 2026-10-30 (Roku: GUIDE TEXT SIZE, NORMAL or LARGE, I-060)
+
+**Shipped.** Nothing yet. Branch `roku/guide-text-size`, cut from `origin/main` at `0fe27e9`,
+not merged, not pushed. Trello 0wYkPMrV, asked for by a Roku beta tester on Discord.
+
+**Why.** "An adjustable or larger font in the guide": 20 px program titles and 18 px channel
+names are small from a couch. Free core as two built-in sizes; a choice of fonts would be a
+look change and Plus, so there is none.
+
+**Changed.**
+
+- Settings, PLAYBACK, under RETRO MODE: GUIDE TEXT SIZE, OK toggles NORMAL and LARGE. NORMAL
+  is the guide as it was (a TV that never chose reads NORMAL). Saved under the guide's
+  registry section as `textSize`; it applies when Settings closes and survives a relaunch.
+- `source/guide/GuideText.brs` holds the two size tables; `GuideView.brs` draws the grid from
+  them. LARGE: program titles 26 px (from 20), time labels 26 (20), CHANNEL heading 22 (18),
+  channel numbers 24 (20), channel names 20 (18), each re-centred in the 80 px row. The channel
+  column stays 220 px wide, so numbers and names grow less than titles and the name gets
+  fewer characters (about 13 where NORMAL shows 15, 10 on the tuned row's bolt chip).
+- Not changed: the panel above the grid. Its title, summary and UP NEXT already fill 555 px
+  with a two-line title and summary, so they have no room to grow.
+- 24 cases in `tests/GuideNavTests.brs`: NORMAL is the old numbers, only "large" reads LARGE,
+  LARGE is bigger, every line sits inside its 80 px row (header 60), three digits fit the
+  number box.
+
+**Measured on the Streaming Stick Plus, 1080p.** NORMAL is pixel for pixel the old guide. In
+LARGE a 42 character title, "Star Wars: Episode VI - Return of the Jedi", spans x 238 to 863
+inside its block (221 to 872), its glyphs y 891 to 914 in a row of 859 to 939. Three digit
+numbers (103, 104, 105) and names up to HARRY POTTER fit the column (x 14 to 168 of 219). Longer
+titles end in an ellipsis (`Marshals: Road to Nowhe…`). Time header glyphs y 577 to 594 in a
+60 px header. LARGE read back after a relaunch, and NORMAL again after switching back, both
+by measuring the header. The `guide-nav` suite passed on the stick, 36 of 36. Screenshots are
+in the workspace's `.shots/roku/`.
+
+**Half-done.** A name that fits in NORMAL can now end in an ellipsis: REWATCHABLES TV reads
+REWATCHABLES…. Widening the column would move the time scale off the Apple TV's 425 px a
+half hour, so it was left.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now

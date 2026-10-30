@@ -45,6 +45,7 @@
   <script type="text/brightscript" uri="pkg:/source/subtitles/SubtitleSettings.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/PlaybackReport.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/FranchiseChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/collections/CollectionChoices.brs" />
   <script type="text/brightscript" uri="pkg:/components/SettingsView.brs" />
