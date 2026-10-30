@@ -1,21 +1,30 @@
 # Nostalgex for Android TV
 
 A native Android TV app (Kotlin, Compose for TV, Media3 ExoPlayer), built for
-the NVIDIA SHIELD first. It is an early spike: Plex only, no Settings, no
-store listing. It installs over `adb`.
+the NVIDIA SHIELD first, for Plex, Jellyfin and Emby. There is no store
+listing; it installs over `adb`.
 
 ## What it does today
 
-- Plex sign-in with the code and a QR for plex.tv/link, as on the Apple TV.
-- Reads every owned server (every server if none is owned) into programmes,
-  in library order.
+- The Apple TV's connect screens: CONNECT TO PLEX, or JELLYFIN or EMBY.
+  Plex signs in with the code and a QR for plex.tv/link. Jellyfin and Emby
+  find the server on the network (UDP 7359) or take a typed address, then
+  sign in the shortest way the server allows: Quick Connect when Jellyfin
+  has it on, WHO'S WATCHING? tiles when the server lists its users, else a
+  name and password.
+- Plex reads every owned server (every server if none is owned) into
+  programmes, in library order; Jellyfin and Emby read the one server signed
+  in to, as the web tuner's `fetchJellyfinLibraryFromServer`. The library is
+  saved, so a launch opens on it and reads the servers again behind the guide.
 - Builds the channels from the root's `channels.json` and
   `channels-memberships.json` (symlinked into `app/src/main/assets/`), with
   the package you had on, or the packages with content if that one fills
   nothing.
 - Airs the Apple TV's schedule: the same programme at the same minute.
-- Plays through ExoPlayer: the file as stored (direct play) first, a Plex HLS
-  transcode if that fails or a track has no decoder on the device.
+- Plays through ExoPlayer: the file as stored (direct play) first, the
+  server's HLS transcode if that fails or a track has no decoder on the
+  device. On Jellyfin and Emby the transcode carries no start time and the
+  player seeks, as on the Apple TV.
 - Opens on the Apple TV's tuner, at its measurements: the info panel for the
   focused channel, the picture in a 4:3 box, and the timeline guide below
   (two hours, a half hour at a time with Left and Right, the now line, the
@@ -33,21 +42,17 @@ store listing. It installs over `adb`.
   DISCONNECT, the playback settings, and the channel packages with their
   availability. The sidebar jumps to a package's first channel.
 
-Not yet: the package sidebar, Jellyfin and Emby, Settings and packages, collections and
-franchises, TMDB enrichment, subtitles and audio language, retro mode, watch
-state, stream quality, the seasonal lead, the Plex title byte repair and the
-music-video artist split.
-
 ## Differences from the Apple TV app
 
 The aim is the Apple TV app, screen for screen. Where this app differs, it is
 listed here.
 
-Not ported yet: Jellyfin and Emby; server collections, found franchises and
-MY COLLECTIONS; TMDB enrichment; SHOW NOW PLAYING and MARK WATCHED; the
-seasonal invite row above channel one; the loading screen's step rail; the
-sign-in flow's look (this one is Plex only, with the code and QR); the
-Apple TV's playback recovery ladder (watchdog, stalls, compatibility retry).
+Not ported yet: server collections, found franchises and MY COLLECTIONS;
+TMDB enrichment; SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
+above channel one; the loading screen's step rail; demo mode; the Apple TV's
+playback recovery ladder (watchdog, stalls, compatibility retry); the
+PlaybackInfo handshake on Jellyfin and Emby (this app asks for the stored
+file, then the hand-built HLS stream, which is the Apple TV's fallback path).
 
 Different on purpose, because the Apple TV's version has no counterpart here:
 - No SUPPORT NOSTALGEX (App Store ratings and tips) and no iCloud sync.
@@ -67,14 +72,18 @@ Different in the detail:
   points wide (as the Roku port also chose).
 - An episode's summary gets one line in the info panel, where SwiftUI shrinks
   the stack to fit two.
-- Plex titles with a byte that isn't UTF-8 are not repaired yet, and music
-  videos don't split "Artist - Title".
+- Plex titles with a byte that isn't UTF-8 are not repaired yet.
+- LAN discovery uses the address the server reports. A server in Docker
+  reports the container's own address, which the TV can't reach; type the
+  host's address instead.
 
 ## Parity
 
 `engine/` is plain Kotlin with no Android in it: the schedule
-(`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`) and the
-channel filter (`ChannelFilter.kt`, from `scripts/nostalgex-channel-filter.cjs`).
+(`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`), the
+channel filter (`ChannelFilter.kt`, from `scripts/nostalgex-channel-filter.cjs`)
+and the Jellyfin and Emby library scan (`MediaBrowserLibrary.kt`, from
+`plex-tuner.html`'s `fetchJellyfinLibraryFromServer`).
 Its tests read the Apple TV's golden files from `scripts/` and run on the JVM:
 
 ```sh
@@ -83,7 +92,10 @@ Its tests read the Apple TV's golden files from `scripts/` and run on the JVM:
 
 `scripts/schedule-parity-golden.json` is compared field for field with the
 Apple TV's answers, and `scripts/filter-golden.json` case for case against the
-shipped `channels.json`. Change the JS engines and these have to follow.
+shipped `channels.json`. The scan is compared item for item with the web
+tuner's, run by `engine/scripts/gen-mediabrowser-vectors.mjs` over the Roku
+port's fixture server (`roku/tests/fixtures/mediabrowser-server.json`), so the
+engine tests need Node. Change the JS engines and these have to follow.
 
 ## Build and install on a SHIELD
 
