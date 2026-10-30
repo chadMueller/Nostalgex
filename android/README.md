@@ -38,9 +38,15 @@ listing; it installs over `adb`.
 - RETRO MODE's look: scanlines, flicker, vignette and the tracking line over
   the picture, and tuning snow when a start takes longer than 0.75 s.
 - Settings (SETTINGS above the guide, or the top of the package sidebar that
-  Left opens at the guide's first half hour): servers, RESCAN LIBRARY,
-  DISCONNECT, the playback settings, and the channel packages with their
-  availability. The sidebar jumps to a package's first channel.
+  Left opens at the guide's first half hour): servers, libraries, RESCAN
+  LIBRARY, DISCONNECT, the playback settings, the channel packages with their
+  availability, and WATERSHED. The sidebar jumps to a package's first channel.
+- Library selection: after sign-in, a server with more than one library offers
+  CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
+  never scanned.
+- WATERSHED (off by default): R, NC-17 and TV-MA titles wait for 9 PM on every
+  channel but VHS VAULT, which holds its own. A channel with nothing else to
+  show says BROADCASTS WILL RESUME AT 9 PM, and comes on at 9.
 
 ## Differences from the Apple TV app
 
