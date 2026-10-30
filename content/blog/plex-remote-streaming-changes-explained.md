@@ -74,7 +74,7 @@ The workaround people mention most is getting back onto your home network first,
 
 One honest caution: Plex lists VPNs as something that can *cause* a remote detection, so how this behaves depends on how your network is set up. Test it before you promise it to your family.
 
-The other path people talk about is moving the server to Jellyfin or Emby. That's a bigger decision than a blog post, and I'm writing a separate post about what happens to your channel guide if you switch.
+The other path people talk about is moving the server to Jellyfin or Emby. That's a bigger decision than a blog post, and I wrote up [what happens to your channel guide if you switch](https://www.nostalgex.app/blog/plex-to-jellyfin-emby-cable-guide?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_plex_remote&utm_content=switch_post).
 
 ## Where does Nostalgex fit?
 

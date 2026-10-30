@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (publish NostalgiaTV for Apple TV)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgiatv-alternative-apple-tv`.
+
+**Why.** Today's post: NostalgiaTV is a separate Android/Fire TV app with no tvOS build as of October 2026, and people searching for a nostalgia TV app on Apple TV land here. The copy was already approved (`draft: false`, date 2026-10-30); this session only put the file in `content/blog`, recorded the image sizes, and pointed the Plex remote post at the switch guide that went live yesterday.
+
+**Changed.**
+- `content/blog/nostalgiatv-alternative-apple-tv.md`: added exactly as approved. Copy was not rewritten. Front matter matches the Oct 29 post (`keyword`, not a different field name).
+- `scripts/media-sizes.json`: cover at `site/blog/nostalgiatv-alternative-apple-tv/cover.jpg` is 1200x630. The inline retro-mode still `retro-mode-retro-toons.webp` is 1280x720. Both R2 URLs returned 200. Cover 89,863 bytes; the still 40,230 bytes. Images stay on R2; none committed.
+- `content/blog/plex-remote-streaming-changes-explained.md`: the "I'm writing a separate post" sentence now links to the live `/blog/plex-to-jellyfin-emby-cable-guide` post. Nothing else in that file changed. Date stays 2026-10-21.
+- `content/blog/jellyfin-tv-guide-own-library.md`: verified only. The M3U/XMLTV section already links to `/blog/apple-tv-channel-surfing-apps` and ends with the `/blog/make-plex-feel-like-cable-tv` line. Left untouched.
+- Copy check on the new and edited files: no em or en dashes, no "no ads" / "no upsell" / "no paid tier" / "no in app purchases".
+- `npm run blog:render` wrote thirteen live posts into `public/sitemap.xml`, including `/blog/nostalgiatv-alternative-apple-tv` with lastmod 2026-10-30. `/blog` lastmod is 2026-10-30. `npm run build` emitted the post to `dist/blog/nostalgiatv-alternative-apple-tv.html` with width/height on both images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 328 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-10-30 (Web tuner: a storage-quota exception no longer looks like an unreachable server)
 
 **Shipped.** Nothing yet. Branch `fix/web-tuner-quota-crash`, cut from `origin/main` at
