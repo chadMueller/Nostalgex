@@ -35,9 +35,9 @@ class MediaBrowserLibrary(
     var adoptedEmby = false
         private set
 
-    fun scan(progress: Progress = Progress { _, _ -> }): List<MediaItem> {
+    /** The user's libraries (views). An Emby server still saved as Jellyfin answers /UserViews with a 404. */
+    private fun views(): List<JsonObject> {
         var (status, views) = fetch.get(userViewsPath(backend, userId))
-        // An Emby server still saved as Jellyfin: Emby answers /UserViews with a 404.
         if (status == 404 && backend == "jellyfin") {
             val emby = fetch.get(userViewsPath("emby", userId))
             if (emby.first in 200..299) {
@@ -46,15 +46,23 @@ class MediaBrowserLibrary(
                 views = emby.second
             }
         }
-        val viewList = (views as? JsonObject)?.arr("Items") ?: emptyList()
+        return (views as? JsonObject)?.arr("Items") ?: emptyList()
+    }
+
+    /** Every library, for the library-selection screen and Settings (JellyfinAPIService.loadSections). */
+    fun sections(serverId: String, serverName: String): List<LibrarySection> = views().map { view ->
+        LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")))
+    }
+
+    /**
+     * Every item in every library but those in `excluded` (view ids), which are skipped before
+     * any request for their items goes out.
+     */
+    fun scan(progress: Progress = Progress { _, _ -> }, excluded: Set<String> = emptySet()): List<MediaItem> {
+        val viewList = views().filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
         for (view in viewList) {
-            val ct = view.str("CollectionType")?.lowercase() ?: ""
-            val type = when (ct) {
-                "tvshows" -> "show"
-                "musicvideos" -> "musicvideo"
-                else -> "movie"
-            }
+            val type = sectionType(view.str("CollectionType"))
             val isMusicVideoSection = type == "musicvideo"
             val name = view.str("Name") ?: "Library"
             progress.update(name, out.size)
@@ -194,6 +202,13 @@ class MediaBrowserLibrary(
         private val DOVI = Regex("doviprofile(\\d{2,})", RegexOption.IGNORE_CASE)
 
         /** /UserViews on Jellyfin, /Users/{id}/Views on Emby (nostalgex-jellyfin-urls.js userViewsPath). */
+        /** A view's CollectionType as the section type the scan branches on; anything else is a flat list. */
+        fun sectionType(collectionType: String?) = when (collectionType?.lowercase()) {
+            "tvshows" -> "show"
+            "musicvideos" -> "musicvideo"
+            else -> "movie"
+        }
+
         fun userViewsPath(backend: String, userId: String) =
             if (backend == "emby") "/Users/${enc(userId)}/Views" else "/UserViews?userId=${enc(userId)}"
 

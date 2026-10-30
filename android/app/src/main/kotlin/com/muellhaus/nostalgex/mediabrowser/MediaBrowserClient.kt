@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex.mediabrowser
 
 import android.os.Build
 import android.util.Log
+import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaBrowserLibrary
 import com.muellhaus.nostalgex.engine.MediaItem
 import kotlinx.coroutines.Dispatchers
@@ -235,15 +236,22 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
      * The engine's scan over this server, as the web tuner's fetchJellyfinLibraryFromServer,
      * with the server stamped on each item for playback. Throws on a refused or failed read.
      */
-    suspend fun scan(server: MediaBrowserServer, progress: MediaBrowserLibrary.Progress): List<MediaItem> = withContext(Dispatchers.IO) {
-        val library = MediaBrowserLibrary({ path ->
-            http.newCall(request(server.url + path, server.token).build()).execute().use { res ->
-                if (res.code == 401 || res.code >= 500) throw MediaBrowserHttpException(res.code, server.url + path.substringBefore('?'))
-                res.code to (if (res.isSuccessful) json.parseToJsonElement(res.body.string()) else null)
-            }
-        }, server.userId, server.kind)
-        library.scan(progress).map { it.copy(serverUrl = server.url, serverToken = server.token) }
+    suspend fun scan(server: MediaBrowserServer, progress: MediaBrowserLibrary.Progress, excluded: Set<String> = emptySet()): List<MediaItem> = withContext(Dispatchers.IO) {
+        library(server).scan(progress, excluded).map { it.copy(serverUrl = server.url, serverToken = server.token) }
     }
+
+    /** Every library the user can see, for the library-selection screen and Settings. */
+    suspend fun sections(server: MediaBrowserServer, serverId: String): List<LibrarySection> = withContext(Dispatchers.IO) {
+        library(server).sections(serverId, server.name)
+    }
+
+    /** The engine's scan over this server. A refused or failed read throws. */
+    private fun library(server: MediaBrowserServer) = MediaBrowserLibrary({ path ->
+        http.newCall(request(server.url + path, server.token).build()).execute().use { res ->
+            if (res.code == 401 || res.code >= 500) throw MediaBrowserHttpException(res.code, server.url + path.substringBefore('?'))
+            res.code to (if (res.isSuccessful) json.parseToJsonElement(res.body.string()) else null)
+        }
+    }, server.userId, server.kind)
 
     /**
      * DELETE /Videos/ActiveEncodings: ends this app's encode, by its own session only. Emby is

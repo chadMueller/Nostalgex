@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         model = AppModel(applicationContext)
         setContent {
             when (val s = model.screen) {
-                is Screen.SignIn, is Screen.Connect -> ConnectScreen(model)
+                is Screen.SignIn, is Screen.Connect, is Screen.ChooseLibraries -> ConnectScreen(model)
                 is Screen.Loading -> LoadingScreen(s)
                 is Screen.Failed -> ConnectionFailedScreen(model, s.message)
                 Screen.NoChannels -> NoChannelsScreen(model)

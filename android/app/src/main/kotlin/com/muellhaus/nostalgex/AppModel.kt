@@ -12,6 +12,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.LanguageChoice
+import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.playback.PlaybackInfo
 import okhttp3.Request
@@ -60,6 +61,8 @@ import java.time.ZoneId
 sealed interface Screen {
     /** Plex's code, after CONNECT TO PLEX. */
     data class SignIn(val pin: PlexPin?, val error: String? = null) : Screen
+    /** After sign-in, when the servers have more than one library: which to build channels from. */
+    data class ChooseLibraries(val sections: List<LibrarySection>) : Screen
     /** The connect screens: the backend picker, then Jellyfin or Emby: find, check and sign in. */
     data class Connect(val step: ConnectStep, val message: String? = null, val error: String? = null) : Screen
     data class Loading(val headline: String, val detail: String = "") : Screen
@@ -476,7 +479,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                             return@launch
                         }
                         prefs.servers = servers
-                        loadLibrary()
+                        chooseLibrariesOrScan()
                         return@launch
                     }
                 }
@@ -643,7 +646,71 @@ class AppModel(private val context: Context) : Playback.Listener {
         prefs.signOut()
         libraryStore.clear()
         mbServer = server
+        chooseLibrariesOrScan()
+    }
+
+    // ── Libraries (library selection: AppState+Auth.swift, I-054) ────────
+
+    /** The libraries switched off, as LibrarySection ids. A library never seen before is on. */
+    var deselectedSections by mutableStateOf(prefs.deselectedSections)
+        private set
+
+    /** Every library on the servers in use, for Settings' LIBRARIES list. */
+    var availableSections: List<LibrarySection> by mutableStateOf(emptyList())
+        private set
+
+    private suspend fun loadAllSections(): List<LibrarySection> {
+        mbServer?.let { mb ->
+            return runCatching { mediaBrowser.sections(mb, selectedServers.first().machineIdentifier) }.getOrDefault(emptyList())
+        }
+        val library = PlexLibrary(plex)
+        return prefs.servers.flatMap { server -> runCatching { library.sections(server) }.getOrDefault(emptyList()) }
+    }
+
+    /**
+     * presentLibrarySelectionOrScan: the step after sign-in. Every library starts on again for
+     * this sign-in; with more than one, the viewer can leave some out before the first scan
+     * touches them. One library (or none readable: the scan reports its own error) scans at once.
+     */
+    private fun chooseLibrariesOrScan() {
+        deselectedSections = emptySet()
+        prefs.deselectedSections = emptySet()
+        screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
+        scope.launch {
+            val sections = loadAllSections()
+            availableSections = sections
+            Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
+            if (sections.size > 1) screen = Screen.ChooseLibraries(sections) else loadLibrary()
+        }
+    }
+
+    /** CONTINUE on the library-selection screen: the ones left off are never scanned. */
+    fun confirmLibraries(included: Set<String>) {
+        val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
+        if (included.isEmpty()) return
+        deselectedSections = sections.map { it.id }.filter { it !in included }.toSet()
+        prefs.deselectedSections = deselectedSections
+        Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
+    }
+
+    val enabledSectionCount get() = availableSections.count { it.id !in deselectedSections }
+
+    /** A LIBRARIES row in Settings, as toggleServer: never the last one on; the library is then read again. */
+    fun toggleLibrarySection(section: LibrarySection) {
+        if (loadingLibrary || refreshing) return
+        val on = section.id !in deselectedSections
+        if (on && enabledSectionCount <= 1) return
+        deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
+        prefs.deselectedSections = deselectedSections
+        libraryStore.clear()
+        closeSettings()
+        playback.stop()
+        loadLibrary()
+    }
+
+    private fun refreshSections() {
+        scope.launch { loadAllSections().takeIf { it.isNotEmpty() }?.let { availableSections = it } }
     }
 
     /** AppState.serverUnreachableMessage, for the errors the JVM gives. */
@@ -677,6 +744,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         settingsPicker = null
         playback.player.volume = 0f
         refreshServers()
+        refreshSections()
     }
 
     fun closeSettings() {
@@ -852,14 +920,15 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     private suspend fun scan(servers: List<PlexServer>, onProgress: (String) -> Unit): List<MediaItem> {
         mbServer?.let { mb ->
-            return mediaBrowser.scan(mb) { text, count -> scope.launch { onProgress("${mb.name} · $text · $count ITEMS") } }
+            val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
+            return mediaBrowser.scan(mb, { text, count -> scope.launch { onProgress("${mb.name} · $text · $count ITEMS") } }, excluded)
         }
         val library = PlexLibrary(plex)
         val items = ArrayList<MediaItem>()
         for (server in servers) {
             items += library.scan(server, { text, count ->
                 scope.launch { onProgress("${server.name} · $text · $count ITEMS") }
-            }, items.size)
+            }, items.size, LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier))
         }
         return items
     }
