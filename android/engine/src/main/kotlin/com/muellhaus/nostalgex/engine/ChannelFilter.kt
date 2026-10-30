@@ -280,6 +280,7 @@ object ChannelFilter {
         val hasType = truthy(r["type"])
         val type = r.string("type")
         val manifestOnly = truthy(r["manifestOnly"])
+        val manifestOnlyGenreFallback = truthy(r["manifestOnlyGenreFallback"])
         private val yearRange = r.obj("yearRange")?.takeIf { truthy(r["yearRange"]) }
         val yearMin = yearRange?.num("min")
         val yearMax = yearRange?.num("max")
@@ -430,8 +431,9 @@ object ChannelFilter {
             return "manifest"
         }
 
-        // manifestOnly: membership comes solely from the manifest.
-        if (c.manifestOnly) return null
+        // manifestOnly: membership comes solely from the manifest, unless the channel opts in
+        // to the content rules below as well (manifestOnlyGenreFallback: STAND-UP, ANIME).
+        if (c.manifestOnly && !c.manifestOnlyGenreFallback) return null
 
         if (c.titleExcludes.any { JsText.containsWord(titleLower, it) }) return null
 
@@ -487,8 +489,13 @@ object ChannelFilter {
             }
         }
 
-        // ratingMin: the Plex star rating or the user's rating clears the bar.
-        if (c.ratingMin != null && item.rating < c.ratingMin && item.userRating < c.ratingMin) return null
+        // ratingMin: the star rating or the user's rating clears the bar, else the OMDb rating
+        // at the same threshold. Emby sends no CommunityRating on most titles, which emptied
+        // every plain ratingMin channel there.
+        if (c.ratingMin != null && item.rating < c.ratingMin && item.userRating < c.ratingMin) {
+            val omdb = e?.imdbRating
+            if (omdb == null || omdb < c.ratingMin) return null
+        }
 
         val matchesGenre = c.hasGenreInclude && itemGenres.any { g -> c.includeLower.any { g.contains(it) } }
         if (c.genreRequireAll.isNotEmpty() && !c.genreRequireAll.all { m -> itemGenres.any { it.contains(m) } }) return null

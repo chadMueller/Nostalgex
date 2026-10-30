@@ -5,7 +5,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-10-30 (Android TV: the README catches up)
 
-**Changed.** `android/README.md` described the first Plex-only spike: it said Jellyfin, Emby, Settings, the package sidebar, subtitles, retro mode, stream quality and the music-video split were missing, all of which are now built. It now lists what the app does and keeps only the real gaps against the Apple TV, adding two found since: demo mode, and the PlaybackInfo handshake on Jellyfin and Emby. `feature/android` was rebased onto `main` at `ee2f5d9`; only this log conflicted, and both sides' entries were kept.
+**Changed.** `android/README.md` described the first Plex-only spike: it said Jellyfin, Emby, Settings, the package sidebar, subtitles, retro mode, stream quality and the music-video split were missing, all of which are now built. It now lists what the app does and keeps only the real gaps against the Apple TV, adding two found since: demo mode, and the PlaybackInfo handshake on Jellyfin and Emby. `feature/android` was rebased onto `main` at `ee2f5d9`; only this log conflicted, and both sides' entries were kept. Rebased again onto `c4d936f`, which changed the shared channel filter: 16 of the Apple TV's filter cases then failed on Android (STAND-UP, ANIME, CERTIFIED GOLD, THE 60S). `ChannelFilter.kt` now has `manifestOnlyGenreFallback` and the OMDb fallback for `ratingMin`, and `FilterGoldenTest` now reads a case's OMDb values, which it had been dropping, so the OMDb gates are tested for the first time. All 24 engine tests pass.
 
 ## 2026-10-29 (Android TV: a native spike)
 

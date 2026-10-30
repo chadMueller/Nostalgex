@@ -54,7 +54,12 @@ class FilterGoldenTest {
             tmdbID = (g["tmdbID"] as? JsonPrimitive)?.longOrNull,
             doviProfile = (g["doviProfile"] as? JsonPrimitive)?.intOrNull,
             enrichment = (g["enrichment"] as? JsonObject)?.let { e ->
-                Enrichment(e.list("keywords"), e.list("productionCompanies"), e.list("networks"), e.list("tmdbGenres"))
+                fun num(k: String) = (e[k] as? JsonPrimitive)?.doubleOrNull
+                Enrichment(
+                    e.list("keywords"), e.list("productionCompanies"), e.list("networks"), e.list("tmdbGenres"),
+                    imdbRating = num("imdbRating"), imdbVotes = num("imdbVotes"), rtScore = num("rtScore"),
+                    metacriticScore = num("metacriticScore"), awards = e.str("awards"),
+                )
             },
         )
     }
