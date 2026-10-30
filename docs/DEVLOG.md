@@ -3,6 +3,48 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: three fixes from a living room test of yesterday's work)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad tested the overlay, Settings access and I-004 explainer live on the
+living room Apple TV and found three follow-up issues, all in code from the same
+work.
+
+**Changed.**
+- Start Over on the loading screen (`Plex90App.swift`) switched from `.secondary`
+  to the existing `.quiet` button role, smaller and dimmed until focused. It sits
+  under every normal load, not just a stuck one, so it needs to read as a rare-use
+  escape hatch rather than a primary action someone could tap by accident. The
+  separate Start Over on the dedicated "LOADING DIDN'T FINISH" screen (a real,
+  deliberate two-option choice) is untouched.
+- Library and server selection rows (`LibrarySelectionView`, `ServerPickerView`)
+  had a focused row whose corners read as square instead of rounded, losing the
+  blue glow. Measured with a real screenshot harness (an XCUITest screenshotting
+  the focused row, exported from the xcresult bundle and inspected pixel by
+  pixel) rather than guessed at: the row's `scaleEffect(1.04)` on focus bulges
+  past its own frame, and the ScrollView's own clipping was flattening that bulge
+  at the left and right edges, which is what made the corner read as square. Fix:
+  8pt of horizontal padding on the ScrollView's content so the scale-up has room,
+  plus the corner radius bumped from 14 to 22 and the shadow radius down from 28
+  to 18, so the rounding reads clearly as a filled shape and not only as a thin
+  stroke (confirmed with the same screenshot harness before and after).
+- The I-004 explainer's `ChannelRequirementCard` (`BundleManagerView.swift`) was
+  built deliberately non-focusable ("read-only, nothing changes") but that broke
+  remote navigation: with no focus target inside the accordion, up/down had
+  nothing to land on and skipped the whole expanded list. Added `.focusable(true)`
+  and a focus highlight matching `CollectionAccordionHeaderRow`'s language.
+
+**Half-done.** The library/server row fix is verified by pixel measurement in the
+simulator, not yet confirmed live by Chad. The accordion focus fix is standard
+SwiftUI `.focusable(true)` usage, not independently re-verified live (the earlier
+corner-radius bug was a genuine rendering edge case worth measuring; this one
+isn't ambiguous in the same way).
+
+**Next.** Chad's go to merge once he's looked at the row corners live. Plex QR
+discovery timing (~45s, separately reported) still needs investigating, not
+fixed in this entry.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now

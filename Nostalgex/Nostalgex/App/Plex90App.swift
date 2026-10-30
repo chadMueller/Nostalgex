@@ -276,13 +276,16 @@ struct LoadingView: View {
     @State private var confirmingStartOver = false
 
     /// Always there while a load runs, so a load that never finishes (or keeps taking the
-    /// app down) is never the only thing on screen. Asks first: it is often the focused
-    /// control, and a stray press must not sign anyone out.
+    /// app down) is never the only thing on screen. Quiet-styled on purpose: this sits
+    /// under every normal load, not just a stuck one, so it must read as a rare-use
+    /// escape hatch rather than a primary action someone could tap by accident. Still
+    /// asks first: it is often the focused control, and a stray press must not sign
+    /// anyone out.
     private var startOverButton: some View {
         Button("START OVER") {
             confirmingStartOver = true
         }
-        .buttonStyle(OnboardingButtonStyle(role: .secondary, fullWidth: false, fontSize: 20))
+        .buttonStyle(OnboardingButtonStyle(role: .quiet, fullWidth: false, fontSize: 16))
         .padding(.top, 8)
         .accessibilityIdentifier("loading.startOver")
         .alert("Start over?", isPresented: $confirmingStartOver) {
@@ -521,6 +524,11 @@ struct ServerPickerView: View {
                                 serverRow(server)
                             }
                         }
+                        // The focused row's scaleEffect bulges slightly past its own
+                        // frame; without slack here the ScrollView's own clip flattens
+                        // that bulge at the left/right edges, which is what was making a
+                        // focused row's corners read as square instead of rounded.
+                        .padding(.horizontal, 8)
                     }
                     .frame(maxHeight: 560)
 
@@ -580,12 +588,13 @@ struct ServerPickerView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(
                 isFocused ? OnboardingPalette.cyan : .white.opacity(0.03)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(
                 isFocused ? .clear : .white.opacity(0.18), lineWidth: 1.5))
-            .shadow(color: OnboardingPalette.cyan.opacity(isFocused ? 0.6 : 0), radius: 28)
+            .shadow(color: OnboardingPalette.cyan.opacity(isFocused ? 0.5 : 0), radius: 18)
             .scaleEffect(isFocused ? 1.04 : 1.0)
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(PickerRowButtonStyle())
@@ -649,6 +658,11 @@ struct LibrarySelectionView: View {
                                 sectionRow(section)
                             }
                         }
+                        // The focused row's scaleEffect bulges slightly past its own
+                        // frame; without slack here the ScrollView's own clip flattens
+                        // that bulge at the left/right edges, which is what was making a
+                        // focused row's corners read as square instead of rounded.
+                        .padding(.horizontal, 8)
                     }
                     .frame(maxHeight: 560)
 
@@ -706,12 +720,13 @@ struct LibrarySelectionView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(
                 isFocused ? OnboardingPalette.cyan : .white.opacity(0.03)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(
                 isFocused ? .clear : .white.opacity(0.18), lineWidth: 1.5))
-            .shadow(color: OnboardingPalette.cyan.opacity(isFocused ? 0.6 : 0), radius: 28)
+            .shadow(color: OnboardingPalette.cyan.opacity(isFocused ? 0.5 : 0), radius: 18)
             .scaleEffect(isFocused ? 1.04 : 1.0)
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .animation(.easeOut(duration: 0.14), value: isFocused)
         }
         .buttonStyle(PickerRowButtonStyle())

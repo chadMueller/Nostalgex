@@ -1035,10 +1035,14 @@ private struct CollectionAccordionHeaderRow: View {
 }
 
 /// I-004: one channel's plain-language explainer, inside the missing-channels
-/// accordion. Read-only, not focusable; nothing on this card changes anything.
+/// accordion. Read-only (nothing on this card changes anything), but still
+/// focusable: without a focus target here the remote's up/down had nothing to
+/// land on inside the accordion and skipped the whole list (found live,
+/// 2026-10-30). Highlighted on focus the same way CollectionAccordionHeaderRow is.
 private struct ChannelRequirementCard: View {
     let channel: Channel
     let matchedCount: Int
+    @Environment(\.isFocused) private var isFocused
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1070,9 +1074,19 @@ private struct ChannelRequirementCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.white.opacity(0.03))
+                .fill(isFocused ? Color.white.opacity(0.07) : Color.white.opacity(0.03))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    isFocused ? Color("BrandCyan").opacity(0.5) : Color.clear,
+                    lineWidth: 1.5
+                )
+        )
+        .focusable(true)
+        .animation(.easeInOut(duration: 0.12), value: isFocused)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("channelRequirementCard_\(channel.id)")
     }
 }
 
