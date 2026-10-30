@@ -110,6 +110,27 @@ private fun MainPage(model: AppModel) {
                     modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
                 ) { model.toggleServer(server) }
             }
+            // One row per library on the servers in use; one switched off is never scanned.
+            // The last one on has no switch, as the last server.
+            if (model.availableSections.isNotEmpty()) {
+                Text("LIBRARIES", style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(top = u(4)))
+                val multiServer = model.availableSections.map { it.serverId }.toSet().size > 1
+                for (section in model.availableSections) {
+                    val on = section.id !in model.deselectedSections
+                    val isLast = on && model.enabledSectionCount <= 1
+                    ToggleRow(
+                        title = section.title.uppercase(),
+                        subtitle = when {
+                            isLast -> "${section.typeLabel} · only enabled library"
+                            multiServer -> "${section.serverName} · ${section.typeLabel}"
+                            else -> section.typeLabel
+                        },
+                        detail = if (on) "INCLUDED" else "OFF",
+                        on = on,
+                        showToggle = !isLast,
+                    ) { model.toggleLibrarySection(section) }
+                }
+            }
             val updated = model.libraryUpdatedMs?.let {
                 DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString().lowercase()
             } ?: "never"

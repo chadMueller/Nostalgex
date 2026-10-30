@@ -2,6 +2,11 @@ package com.muellhaus.nostalgex.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
+import com.muellhaus.nostalgex.engine.LibrarySection
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -90,18 +95,28 @@ fun ConnectScreen(model: AppModel) {
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(28))) {
                     Image(painterResource(R.drawable.wordmark), contentDescription = "Nostalgex", modifier = Modifier.widthIn(max = u(440)))
-                    Text("CONNECT YOUR SERVER", style = font(DMMonoMedium, 40, Color.White.copy(alpha = 0.9f)))
-                    Text(
-                        "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get started.",
-                        style = font(DMMono, 22, Color.White.copy(alpha = 0.45f)),
-                        modifier = Modifier.widthIn(max = u(560)),
-                    )
-                    Text(model.versionLabel, style = font(DMMono, 15, Color.White.copy(alpha = 0.25f)))
+                    if (model.screen is Screen.ChooseLibraries) {
+                        Text("CHOOSE YOUR LIBRARIES", style = font(DMMonoMedium, 40, Color.White.copy(alpha = 0.9f)))
+                        Text(
+                            "Pick which of your ${model.backendName} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.",
+                            style = font(DMMono, 22, Color.White.copy(alpha = 0.45f)),
+                            modifier = Modifier.widthIn(max = u(560)),
+                        )
+                    } else {
+                        Text("CONNECT YOUR SERVER", style = font(DMMonoMedium, 40, Color.White.copy(alpha = 0.9f)))
+                        Text(
+                            "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get started.",
+                            style = font(DMMono, 22, Color.White.copy(alpha = 0.45f)),
+                            modifier = Modifier.widthIn(max = u(560)),
+                        )
+                        Text(model.versionLabel, style = font(DMMono, 15, Color.White.copy(alpha = 0.25f)))
+                    }
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     when (val s = model.screen) {
                         is Screen.SignIn -> key("plex") { PlexCode(model, s) }
                         is Screen.Connect -> key(s.step::class, (s.step as? ConnectStep.Find)?.discovery?.let { it::class }) { Step(model, s) }
+                        is Screen.ChooseLibraries -> key("libraries") { ChooseLibraries(model, s.sections) }
                         else -> {}
                     }
                 }
@@ -290,6 +305,64 @@ private fun QuickConnect(model: AppModel, server: CheckedServer, code: String?) 
             model.usePassword(server)
         }
         QuietButton("BACK", quietFocus = true, modifier = Modifier.padding(top = u(6))) { model.backToFind(server.kind) }
+    }
+}
+
+/**
+ * LibrarySelectionView: one row per library, every one on to start, so the remote starts on
+ * CONTINUE and one press builds the full guide. The server's name shows only when there are
+ * libraries from more than one.
+ */
+@Composable
+private fun ChooseLibraries(model: AppModel, sections: List<LibrarySection>) {
+    var included by remember { mutableStateOf(sections.map { it.id }.toSet()) }
+    val multiServer = sections.map { it.serverId }.toSet().size > 1
+    Column(Modifier.widthIn(max = u(760)), verticalArrangement = Arrangement.spacedBy(u(24))) {
+        Column(
+            Modifier.heightIn(max = u(560)).verticalScroll(rememberScrollState()).padding(vertical = u(12)),
+            verticalArrangement = Arrangement.spacedBy(u(12)),
+        ) {
+            for (section in sections) {
+                val on = section.id in included
+                LibraryRow(section.title, if (multiServer) "${section.serverName} · ${section.typeLabel}" else section.typeLabel, on) {
+                    included = if (on) included - section.id else included + section.id
+                }
+            }
+        }
+        Box(Modifier.graphicsLayer { alpha = if (included.isEmpty()) 0.35f else 1f }) {
+            OnboardingButton("CONTINUE", primary = true, focusFirst = true, fontSize = 34, fullWidth = true) { model.confirmLibraries(included) }
+        }
+    }
+}
+
+/** A library-selection row: the picker rows' cyan slab when focused, INCLUDED or OFF on the right. */
+@Composable
+private fun LibraryRow(title: String, subtitle: String, on: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(u(14))
+    val onFocus = Color(0f, 0.06f, 0.09f)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .onKeyEvent { e ->
+                if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_ENTER) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyUp) onClick()
+                true
+            }
+            .graphicsLayer { scaleX = if (focused) 1.04f else 1f; scaleY = scaleX }
+            .clip(shape)
+            .background(if (focused) BrandCyan else Color.White.copy(alpha = 0.03f))
+            .then(if (focused) Modifier else Modifier.border(u(1.5), Color.White.copy(alpha = 0.18f), shape))
+            .padding(horizontal = u(32), vertical = u(24)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(6))) {
+            Text(title, style = font(DMMonoMedium, 28, if (focused) onFocus else if (on) Color.White else Color.White.copy(alpha = 0.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = font(DMMono, 18, if (focused) onFocus.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.4f)), maxLines = 1)
+        }
+        Text(if (on) "INCLUDED" else "OFF", style = font(DMMonoMedium, 22, if (focused) onFocus else if (on) BrandCyan else Color.White.copy(alpha = 0.35f)))
     }
 }
 

@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex.plex
 
 import com.muellhaus.nostalgex.engine.DailyManifest
+import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.MusicTitle
 import com.muellhaus.nostalgex.plex.PlexClient.Companion.long
@@ -29,8 +30,17 @@ class PlexLibrary(private val client: PlexClient) {
         fun update(text: String, itemsSoFar: Int)
     }
 
-    suspend fun scan(server: PlexServer, progress: Progress, baseCount: Int = 0): List<MediaItem> {
-        val sections = client.get(server, "/library/sections")["MediaContainer"]?.jsonObject?.array("Directory") ?: emptyList()
+    private suspend fun directories(server: PlexServer) =
+        client.get(server, "/library/sections")["MediaContainer"]?.jsonObject?.array("Directory") ?: emptyList()
+
+    /** Every library on the server, for the library-selection screen and Settings (loadSections). */
+    suspend fun sections(server: PlexServer): List<LibrarySection> = directories(server).map {
+        LibrarySection(server.machineIdentifier, server.name, it.str("key") ?: "", it.str("title") ?: "", it.str("type") ?: "")
+    }
+
+    /** Every library but those in `excluded` (section keys), which are skipped before any request for their items. */
+    suspend fun scan(server: PlexServer, progress: Progress, baseCount: Int = 0, excluded: Set<String> = emptySet()): List<MediaItem> {
+        val sections = directories(server).filter { (it.str("key") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
         for (section in sections) {
             val title = section.str("title") ?: ""
