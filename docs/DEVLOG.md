@@ -1232,6 +1232,10 @@ already live on nostalgex.app since `0795e19` (the merge of `web/franchise-parit
 
 **Next.** Nothing for this release. The cross-channel duplicate fix reaches the web tuner and Docker
 with the Roku 1.0.9 merge, after this tag, so Docker 1.0.12 does not carry it.
+## 2026-10-30 (Android TV: the README catches up)
+
+**Changed.** `android/README.md` described the first Plex-only spike: it said Jellyfin, Emby, Settings, the package sidebar, subtitles, retro mode, stream quality and the music-video split were missing, all of which are now built. It now lists what the app does and keeps only the real gaps against the Apple TV, adding two found since: demo mode, and the PlaybackInfo handshake on Jellyfin and Emby. `feature/android` was rebased onto `main` at `ee2f5d9`; only this log conflicted, and both sides' entries were kept.
+
 ## 2026-10-29 (Android TV: a native spike)
 
 **Shipped.** Nothing. Branch `android/spike`, off main `46abf29`, not pushed.
