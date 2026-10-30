@@ -6,8 +6,10 @@ slug: docker-web-tuner-1-0-1-how-to
 date: 2026-10-30
 draft: false
 keyword: "jellyfin tv guide docker"
-cover: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/docker-web-tuner-1-0-1-how-to/cover.jpg"
+cover: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/docker-web-tuner-1-0-1-how-to/header.webp"
 cover_alt: "The Nostalgex web tuner running from a Docker container in a desktop browser, with the SCREAM horror channels in the guide"
+og_image: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/docker-web-tuner-1-0-1-how-to/cover.jpg"
+og_image_alt: "The Nostalgex web tuner running from a Docker container in a desktop browser, with the SCREAM horror channels in the guide"
 author: "Chad Mueller"
 excerpt: "One docker run and the Nostalgex web tuner is on your home network, plain http Jellyfin and Emby included. Here's how, plus everything new in tuner 1.0.1."
 ---
