@@ -171,7 +171,7 @@ final class BigLibraryHarness: XCTestCase {
         init(serverID: String, items: [PlexMediaItem]) { self.serverID = serverID; self.items = items }
 
         func testConnection() async throws -> String { serverID }
-        func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] {
+        func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress?) async throws -> [PlexMediaItem] {
             lock.lock(); let out = items ?? []; items = nil; lock.unlock()
             return out
         }

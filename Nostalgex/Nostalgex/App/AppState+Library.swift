@@ -209,6 +209,10 @@ extension AppState {
             for (serverIndex, scanAPI) in apisToScan.enumerated() {
                 let serverLabel = serverIndex < serverNames.count ? serverNames[serverIndex] : "Plex"
                 let baseCount = merged.count
+                // Computed outside the `@Sendable operation:` closure below (a `Set<String>`
+                // local capture is trivially Sendable; `self` is not), see each backend's
+                // `loadLibrary`: a key in here is skipped before any item request for it.
+                let excludedKeys = excludedSectionKeys(forServerID: scanAPI.serverID)
                 do {
                     let items = try await withLibraryLoadStallWatch(
                         sample: { [weak self] in self?.libraryScanProgressSample() ?? LibraryLoadProgressSample() },
@@ -230,7 +234,7 @@ extension AppState {
                             return self.consumeLoadCancelRequest() || self.librarySessionGeneration != session
                         },
                         operation: {
-                            try await scanAPI.loadLibrary { [weak self] event in
+                            try await scanAPI.loadLibrary(excludedSectionKeys: excludedKeys) { [weak self] event in
                                 Task { @MainActor [weak self] in
                                     guard let self else { return }
                                     self.scanSectionIndex = event.sectionIndex

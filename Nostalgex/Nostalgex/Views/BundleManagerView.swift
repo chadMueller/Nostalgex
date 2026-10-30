@@ -288,6 +288,11 @@ struct SettingsPageView: View {
             await appState.refreshAvailableServers()
         }
         .task {
+            // Refresh the library-section list so one picked off in onboarding (or on
+            // a prior Settings visit) still shows up to be turned back on.
+            await appState.refreshAvailableLibrarySections()
+        }
+        .task {
             // Tip rows stay hidden until (and unless) StoreKit returns the products.
             guard !appState.isDemoMode else { return }
             await tipJar.loadProductsIfNeeded()
@@ -766,6 +771,36 @@ struct SettingsPageView: View {
                 }
                 .focused($focusedItem, equals: "server_\(server.machineIdentifier)")
                 .id("server_\(server.machineIdentifier)")
+            }
+
+            Text("LIBRARIES")
+                .font(.custom("DMMono-Regular", size: 20))
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(.top, 4)
+
+            // One row per library section on every connected server (I-054). Toggle to
+            // include/exclude it from the scan; the last remaining section can't be
+            // turned off, same guard the server row above already has.
+            ForEach(appState.librarySectionsForSettings) { section in
+                let isOn = !appState.isLibrarySectionDeselected(section)
+                let isLast = isOn && appState.enabledLibrarySectionCount <= 1
+                let multiServer = Set(appState.librarySectionsForSettings.map(\.serverID)).count > 1
+                SettingsToggleRow(
+                    title: section.title.uppercased(),
+                    subtitle: isLast
+                        ? "\(section.typeLabel) · only enabled library"
+                        : (multiServer ? "\(section.serverName) · \(section.typeLabel)" : section.typeLabel),
+                    detail: isOn ? "INCLUDED" : "OFF",
+                    isOn: isOn,
+                    isFocused: focusedItem == "section_\(section.id)",
+                    // No toggle when it's the only section left on, it can't be removed.
+                    showToggle: !isLast
+                ) {
+                    guard !isLast, !appState.isLoading, !appState.isBackgroundRefreshing else { return }
+                    appState.toggleLibrarySection(section)
+                }
+                .focused($focusedItem, equals: "section_\(section.id)")
+                .id("section_\(section.id)")
             }
 
             SettingsToggleRow(

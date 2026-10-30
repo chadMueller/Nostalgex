@@ -204,15 +204,19 @@ struct PlexAPIService: MediaBackend {
     // MARK: - Library loading
     // `LoadProgressEvent` / `LoadProgress` now live in MediaBackend.swift (shared by all backends).
 
-    func loadLibrary(progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+    func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
         // handful of rows, so its duration is essentially pure round-trip latency.
         let probeStart = Date()
         let (sectionsData, response) = try await dataWithRetry(req)
         let probeSeconds = Date().timeIntervalSince(probeStart)
-        let sections = try Self.decodePlexJSONResponse(SectionsResponse.self, data: sectionsData, response: response)
+        let allSections = try Self.decodePlexJSONResponse(SectionsResponse.self, data: sectionsData, response: response)
             .MediaContainer.Directory ?? []
+        // A section the viewer turned off in library selection (I-054) is dropped here,
+        // before a single item request for it is made, never fetched, not fetched
+        // and discarded.
+        let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
 
         let isSlowLink = probeSeconds > Self.slowLinkThresholdSeconds
         let pageSize = isSlowLink ? Self.slowLinkPageSize : Self.sectionPageSize

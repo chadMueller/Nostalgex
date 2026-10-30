@@ -140,6 +140,11 @@ enum AnalyticsEvent: Sendable {
     /// The user confirmed which servers to include on the multi-server picker (Plex).
     case connectServerPickerConfirmed(backend: AnalyticsBackend, serverCount: Int)
 
+    /// The user confirmed which library sections to include on the onboarding
+    /// library-selection screen (I-054). `sectionCount` is how many sections the
+    /// screen showed; `excludedCount` is how many were left off.
+    case connectLibrarySelectionConfirmed(backend: AnalyticsBackend, sectionCount: Int, excludedCount: Int)
+
     // MARK: Library
 
     /// A library scan is starting. `background = true` means it's a silent 6h refresh
@@ -198,9 +203,10 @@ enum AnalyticsEvent: Sendable {
     // MARK: Settings & UX
 
     /// A settings toggle or picker changed. `key` is a short, fixed identifier
-    /// (`retro_mode`, `sync_plex_activity`, `bundle:essentials`, `server`, `rescan`,
-    /// `disconnect`, `stream_quality`, `subtitle_language`, `audio_language`,
-    /// `subtitles_fullscreen`, `auto_subtitles_foreign_audio`, `sleep_timer_minutes`).
+    /// (`retro_mode`, `sync_plex_activity`, `bundle:essentials`, `server`,
+    /// `library_section`, `rescan`, `disconnect`, `stream_quality`, `subtitle_language`,
+    /// `audio_language`, `subtitles_fullscreen`, `auto_subtitles_foreign_audio`,
+    /// `sleep_timer_minutes`).
     /// `value` is a short serialized value (`true`/`false`, a language code, a numeric
     /// bucket, or `tapped` for one-shot actions).
     case settingChanged(key: String, value: String)
@@ -248,6 +254,7 @@ enum AnalyticsEvent: Sendable {
         case .connectCancelled: return "connect.cancelled"
         case .connectCodeExpired: return "connect.code_expired"
         case .connectServerPickerConfirmed: return "connect.server_picker.confirmed"
+        case .connectLibrarySelectionConfirmed: return "connect.library_selection.confirmed"
 
         case .libraryLoadStarted: return "library.load.started"
         case .libraryLoadCompleted: return "library.load.completed"
@@ -302,6 +309,9 @@ enum AnalyticsEvent: Sendable {
 
         case .connectServerPickerConfirmed(let backend, let serverCount):
             return ["backend": backend.rawValue, "serverCount": String(serverCount)]
+
+        case .connectLibrarySelectionConfirmed(let backend, let sectionCount, let excludedCount):
+            return ["backend": backend.rawValue, "sectionCount": String(sectionCount), "excludedCount": String(excludedCount)]
 
         case .libraryLoadStarted(let background, let firstLoad):
             return [

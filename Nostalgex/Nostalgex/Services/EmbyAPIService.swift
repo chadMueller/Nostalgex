@@ -131,8 +131,12 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         return Int(digits.dropLast())
     }
 
-    func loadLibrary(progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
-        let sections = try await loadSections()
+    func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        let allSections = try await loadSections()
+        // A section the viewer turned off in library selection (I-054) is dropped here,
+        // before a single item request for it is made, never fetched, not fetched
+        // and discarded.
+        let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
         var allItems: [PlexMediaItem] = []
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
