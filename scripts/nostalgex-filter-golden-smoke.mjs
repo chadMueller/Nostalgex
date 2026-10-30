@@ -61,6 +61,7 @@ function toItem(g) {
       productionCompanies: g.enrichment.productionCompanies || [],
       networks: g.enrichment.networks || [],
       tmdbGenres: g.enrichment.tmdbGenres || [],
+      imdbRating: g.enrichment.imdbRating ?? null,
     };
   }
   return item;

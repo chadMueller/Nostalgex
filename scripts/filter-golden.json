@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Golden vectors for the channel pool filter. Read by BOTH Nostalgex/NostalgexTests/FilterGoldenTests.swift (AppState.filterItems, tvOS) and scripts/nostalgex-filter-golden-smoke.mjs (scripts/nostalgex-channel-filter.cjs, web tuner and Docker; npm run test:filter-golden). Each case is one item run against the SHIPPED channels.json, its exclusiveRules and channels-memberships.json. `in` lists channel ids (not numbers) the item must reach, `out` the ids it must not. Item fields: title, artist (music videos), episodeTitle, summary, originallyAvailableAt (YYYY-MM-DD, first aired), year, type (movie|episode), librarySource (movie|tv|musicVideo), genres, contentRating (as the server sends it, so GB-15 or FSK-16 for a Jellyfin library outside the US), duration (minutes, default 100), rating, studio, tmdbID (string; only when the case is about a manifest claim), and enrichment ({ keywords, productionCompanies, networks, tmdbGenres }; absent means not enriched), backend (plex|jellyfin|emby, default plex; the server the item came from) and doviProfile (Dolby Vision profile; absent means unknown). When a rule changes, change both engines, then update or add a case here.",
+  "about": "Golden vectors for the channel pool filter. Read by BOTH Nostalgex/NostalgexTests/FilterGoldenTests.swift (AppState.filterItems, tvOS) and scripts/nostalgex-filter-golden-smoke.mjs (scripts/nostalgex-channel-filter.cjs, web tuner and Docker; npm run test:filter-golden). Each case is one item run against the SHIPPED channels.json, its exclusiveRules and channels-memberships.json. `in` lists channel ids (not numbers) the item must reach, `out` the ids it must not. Item fields: title, artist (music videos), episodeTitle, summary, originallyAvailableAt (YYYY-MM-DD, first aired), year, type (movie|episode), librarySource (movie|tv|musicVideo), genres, contentRating (as the server sends it, so GB-15 or FSK-16 for a Jellyfin library outside the US), duration (minutes, default 100), rating, studio, tmdbID (string; only when the case is about a manifest claim), and enrichment ({ keywords, productionCompanies, networks, tmdbGenres, imdbRating }; absent means not enriched), backend (plex|jellyfin|emby, default plex; the server the item came from) and doviProfile (Dolby Vision profile; absent means unknown). enrichment.imdbRating is the OMDb rating a plain ratingMin gate falls back to when rating and userRating both miss the bar (added for the Emby CommunityRating-is-always-null fix; see the ratingMin cases near the end). When a rule changes, change both engines, then update or add a case here.",
   "cases": [
     {
       "name": "kicking-and-screaming-is-not-a-scream-film",
@@ -2758,6 +2758,162 @@
       },
       "in": [
         26
+      ]
+    },
+    {
+      "name": "certified-gold-native-rating-still-gates",
+      "about": "Regression: a real, populated native rating (Plex critic score or Emby/Jellyfin CommunityRating) above ratingMin still clears the bar on its own, no OMDb fallback needed.",
+      "item": {
+        "title": "Native Rating Classic",
+        "year": 1972,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 110,
+        "rating": 8.5
+      },
+      "in": [
+        68
+      ]
+    },
+    {
+      "name": "certified-gold-native-rating-too-low-stays-out",
+      "about": "Regression: a real native rating that misses ratingMin, and no OMDb enrichment to fall back on, is rejected exactly as before.",
+      "item": {
+        "title": "Mediocre Native Rating Film",
+        "year": 1975,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 6
+      },
+      "out": [
+        68
+      ]
+    },
+    {
+      "name": "certified-gold-emby-zero-rating-falls-back-to-omdb",
+      "about": "The fix: CommunityRating comes back null on Emby (item.rating 0, measured 100% of a 500-title sample), so a title that would have been silently rejected now clears ratingMin via the tvOS-enriched OMDb rating.",
+      "item": {
+        "title": "Emby Missing Rating Masterpiece",
+        "year": 1968,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 120,
+        "rating": 0,
+        "enrichment": {
+          "imdbRating": 8.4
+        }
+      },
+      "in": [
+        68
+      ]
+    },
+    {
+      "name": "certified-gold-emby-zero-rating-and-low-omdb-stays-out",
+      "about": "The fallback is still a gate: a missing native rating plus an OMDb rating that itself misses ratingMin is rejected.",
+      "item": {
+        "title": "Emby Missing Rating Average Film",
+        "year": 1969,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 0,
+        "enrichment": {
+          "imdbRating": 7
+        }
+      },
+      "out": [
+        68
+      ]
+    },
+    {
+      "name": "certified-gold-emby-zero-rating-no-enrichment-stays-out",
+      "about": "Web/Docker and Roku have no OMDb enrichment (tvOS-only, written to the shared cache). A missing native rating with nothing to fall back on behaves exactly as it did before the fix.",
+      "item": {
+        "title": "Emby Missing Rating No Enrichment Film",
+        "year": 1970,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 0
+      },
+      "out": [
+        68
+      ]
+    },
+    {
+      "name": "the-60s-native-rating-still-gates",
+      "about": "Regression check on a decade channel (plain ratingMin, no imdbRatingMin field): a real native rating above the bar still passes on its own.",
+      "item": {
+        "title": "Sixties Native Rating Film",
+        "year": 1965,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 6.5
+      },
+      "in": [
+        90
+      ]
+    },
+    {
+      "name": "the-60s-emby-zero-rating-falls-back-to-omdb",
+      "about": "Decade channels are 6 of the 13 affected. A missing native rating with a qualifying OMDb rating now reaches THE 60S, where before it was silently dropped.",
+      "item": {
+        "title": "Sixties Emby Missing Rating Film",
+        "year": 1966,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 0,
+        "enrichment": {
+          "imdbRating": 6.8
+        }
+      },
+      "in": [
+        90
+      ]
+    },
+    {
+      "name": "the-60s-emby-zero-rating-low-omdb-stays-out",
+      "about": "A missing native rating with an OMDb rating that still misses ratingMin keeps the item off THE 60S.",
+      "item": {
+        "title": "Sixties Emby Missing Rating Weak Film",
+        "year": 1967,
+        "type": "movie",
+        "genres": [
+          "Drama"
+        ],
+        "contentRating": "PG",
+        "duration": 100,
+        "rating": 0,
+        "enrichment": {
+          "imdbRating": 4
+        }
+      },
+      "out": [
+        90
       ]
     }
   ]

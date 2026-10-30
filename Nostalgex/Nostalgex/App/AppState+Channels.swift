@@ -1575,9 +1575,19 @@ extension AppState {
                 else if !ratings.contains(rating) { return nil }
             }
 
-            // Minimum star rating
+            // Minimum star rating. On Emby, CommunityRating (the field item.rating
+            // is built from) came back null for 100% of a 500-title sample measured
+            // against Chad's own server, so treating a missing native rating as an
+            // automatic fail silently emptied the 13 channels that use a plain
+            // ratingMin gate. When neither native rating clears the bar, fall back
+            // to the same OMDb-enriched rating used by the imdbRatingMin gate above,
+            // at the same threshold, before rejecting.
             if let ratingMin = rules.ratingMin {
-                if item.rating < ratingMin && item.userRating < ratingMin { return nil }
+                let nativeOk = item.rating >= ratingMin || item.userRating >= ratingMin
+                if !nativeOk {
+                    let omdbOk = (enrichment?.imdbRating).map { $0 >= ratingMin } ?? false
+                    if !omdbOk { return nil }
+                }
             }
 
             // Duration

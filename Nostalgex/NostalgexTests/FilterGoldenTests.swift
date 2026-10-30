@@ -20,6 +20,9 @@ final class FilterGoldenTests: XCTestCase {
         let productionCompanies: [String]?
         let networks: [String]?
         let tmdbGenres: [String]?
+        /// OMDb rating a plain ratingMin gate falls back to when rating and
+        /// userRating both miss the bar (the Emby CommunityRating-is-always-null fix).
+        let imdbRating: Double?
     }
 
     private struct Item: Decodable {
@@ -88,7 +91,7 @@ final class FilterGoldenTests: XCTestCase {
                 tmdbID: g.tmdbID ?? "0", imdbID: nil, mediaType: item.type == .episode ? "tv" : "movie",
                 keywords: ($0.keywords ?? []).map { $0.lowercased() }, networks: $0.networks ?? [],
                 productionCompanies: $0.productionCompanies ?? [], tmdbGenres: $0.tmdbGenres ?? [],
-                imdbRating: nil, imdbVotes: nil, rottenTomatoesScore: nil, metacriticScore: nil,
+                imdbRating: $0.imdbRating, imdbVotes: nil, rottenTomatoesScore: nil, metacriticScore: nil,
                 awards: nil, fetchedAt: Date()
             )
         }

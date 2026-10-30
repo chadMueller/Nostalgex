@@ -3,6 +3,63 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-29 (ratingMin falls back to OMDb when Emby's CommunityRating is null)
+
+**Shipped.** Nothing. Branch `fix/emby-rating-fallback`, cut from `main` at
+`56ee192`, not merged, not pushed.
+
+**Changed.** A real check against Chad's own Emby server (500 real movies
+sampled) found `CommunityRating` null or zero for 100% of titles. Thirteen
+channels gate purely on a plain `ratingMin` rule that reads that field
+(via `item.rating`, `EmbyAPIService.swift` and `JellyfinAPIService.swift`
+both map `CommunityRating ?? 0`): LOL, BLOCKBUSTER, ALL TIME GREATS,
+CERTIFIED GOLD, RUSH, HOLIDAZE, and all seven decade channels (THE 60S
+through THE 20S). On Emby every one of those channels was quietly empty,
+not because of a code bug, but because the server genuinely has nothing in
+that field.
+
+The fix reuses the existing OMDb enrichment path rather than inventing a
+second one: when neither `item.rating` nor `item.userRating` clears
+`ratingMin`, the gate now falls back to the same OMDb-enriched rating the
+`imdbRatingMin` gate already reads, at the same numeric threshold, before
+rejecting. Chose this shape (fallback behaviour on `ratingMin` itself) over
+giving all 13 channels a second `imdbRatingMin` field, because the
+`ratingMin` values already sit on IMDb's 0-10 scale and the enrichment data
+was already flowing through the exact same cache `imdbRatingMin` reads; a
+second field per channel would have duplicated the threshold for no
+behavioural difference. `scripts/nostalgex-channel-filter.cjs` and
+`AppState+Channels.swift` both changed, in the same spot the OMDb gates
+already live.
+
+OMDb enrichment is tvOS-only (written to the shared cache the web reads,
+per the file's own comment). On web, Docker and Roku, with no enrichment
+record, the fallback has nothing to read and falls straight through to the
+native-only check: unchanged from before the fix. A content rating of
+exactly 0.0 is still indistinguishable from a missing one on any backend;
+that ambiguity predates this change and is not solved by it.
+
+Verified with golden cases (`scripts/filter-golden.json`, read by both
+`FilterGoldenTests.swift` and `nostalgex-filter-golden-smoke.mjs`, which
+needed `enrichment.imdbRating` added to both harnesses since neither
+previously passed OMDb fields through the golden fixture at all): one
+decade channel (THE 60S, id 90) and one non-decade channel (CERTIFIED
+GOLD, id 68), each checked for (1) a real native rating above the bar
+still passing with no enrichment at all, no regression; (2) a real native
+rating below the bar with no enrichment still rejected, no regression; (3)
+a missing native rating (0, as on Emby) with a qualifying OMDb rating now
+reaching the channel, which is the fix; (4) a missing native rating with a
+non-qualifying OMDb rating still rejected; (5) a missing native rating with
+no enrichment at all (web/Docker/Roku today) still rejected, unchanged.
+`npm test`: 139 filter-golden cases passed (up from 131). Xcode build and
+build-for-testing both green on the tvOS simulator destination; the actual
+`NostalgexTests` run was not done (needs the orchestrator's go to use the
+simulator).
+
+**Next.** Needs Chad's go to merge. Once merged, the 13 channels should
+stop coming back empty on Chad's and other Emby libraries without anyone
+touching channels.json. Roku is untouched (out of scope this pass; the
+official Roku app does not yet carry OMDb-based gates at all).
+
 ## 2026-10-29 (SLIME TV: matching who made a show let two adult NBC shows through)
 
 **Shipped.** Nothing. Branch `fix/slime-tv-adult-leak`, cut from `main` at

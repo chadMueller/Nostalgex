@@ -648,8 +648,23 @@ function itemPasses(item, channel, opts = {}) {
   }
 
   // ratingMin — Plex star rating (item.rating) OR user rating clears the bar.
+  // On Emby, CommunityRating (the field item.rating is built from) came back
+  // null for 100% of a 500-title sample measured against Chad's own server, so
+  // treating a missing native rating as an automatic fail silently emptied the
+  // 13 channels that use a plain ratingMin gate. When neither native rating
+  // clears the bar, fall back to the same OMDb-enriched rating used by the
+  // imdbRatingMin gate above, at the same threshold, before rejecting. OMDb
+  // enrichment is tvOS-only (written to the shared cache the web reads); on
+  // web/Docker or Roku with no enrichment this just falls through to the
+  // native-only check, unchanged from before.
   if (typeof r.ratingMin === "number") {
-    if ((item.rating || 0) < r.ratingMin && (item.userRating || 0) < r.ratingMin) return false;
+    const nativeOk =
+      (item.rating || 0) >= r.ratingMin || (item.userRating || 0) >= r.ratingMin;
+    if (!nativeOk) {
+      const omdbRating = enrichedValue(item, "imdbRating");
+      const omdbOk = typeof omdbRating === "number" && omdbRating >= r.ratingMin;
+      if (!omdbOk) return false;
+    }
   }
 
   let matchesGenre = false;
