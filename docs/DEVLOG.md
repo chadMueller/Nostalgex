@@ -68,8 +68,16 @@ the franchise/schedule goldens all reference channel `id`.
 `bundle-lastmod.json` regenerated via `npm run channels:doc` and
 `npm run bundles:render` rather than hand-edited. `npm test` green,
 including `channels:doc:check` and `bundles:render:strict`.
-`ChannelNumberingTests` itself still needs a device run, same as the rest
-of `NostalgexTests` on this branch.
+
+Full `NostalgexTests` run on the simulator caught one more fallout from the
+shift: `SeasonalBundleTests.testShippedScreamLineupAndLock()` and
+`testShippedHolidayLineupAndLock()` hardcoded SCREAM's and TIS THE SEASON's
+pre-shift number ranges (`137...144` and `145...152`). Checked the live
+`channels.json` directly rather than trusting the DEVLOG math, confirmed the
+real numbers are now `140...147` and `148...155`, and updated both
+assertions to match. No other test file hardcodes a static channel number;
+the franchise/collection numbering tests read `channels.json` live for their
+disjointness check. Full `NostalgexTests` suite now green.
 
 ## 2026-10-29 (SLIME TV: matching who made a show let two adult NBC shows through)
 
