@@ -3,6 +3,43 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Roku: port the two filter engine changes of 2026-10-29, so the `roku` job goes green)
+
+**Shipped.** Nothing yet. Branch `roku/filter-port-manifest-fallback-ratingmin`, cut from
+`origin/main` at `0fe27e9`, not merged, not pushed. Found by the 80s +3 renumber card
+(numJBa3V), which guessed the red `filter` tests came from the renumbering; they do not.
+
+**Why.** Two engine commits of 2026-10-29 reached `scripts/nostalgex-channel-filter.cjs`, the
+shared filter golden file and the Swift app, and not `roku/source/filter/ChannelFilter.brs`.
+`roku/` says an engine change lands with its Roku port; this is the port, late. Until it
+lands, `filter` shards 0 to 6 and `filter-golden` fail on main and so does the `roku` CI job.
+On the Roku the effect is real: STAND-UP and ANIME miss titles the Apple TV and web tuner
+put on them, and a library whose server sends no star rating (Emby's `CommunityRating`) can
+leave the 13 channels on a plain `ratingMin` empty when OMDb enrichment is on.
+
+**Changed.**
+
+- `4fa4cb5`, `manifestOnlyGenreFallback`: a `manifestOnly` channel that sets the flag now also
+  runs the normal genre and keyword matching, so a title the manifest never claimed can still
+  reach it (STAND-UP and, since `6dc02db`, ANIME opt in). The flag is read once per channel in
+  `NxFilterChannel`.
+- `d56729f`, `ratingMin`: when neither the Plex rating nor the user rating clears the bar, the
+  OMDb rating from enrichment (the value `imdbRatingMin` reads) at the same threshold does. With
+  no enrichment there is none and the item is rejected as before.
+- `tests/FilterGoldenTests.brs` passes `enrichment.imdbRating` through, as upstream's
+  `nostalgex-filter-golden-smoke.mjs` did in `d56729f`: the two Emby zero-rating cases need it.
+
+**Measured.** Before, on `0fe27e9`: `filter` 9 channels (58, 60, 90 to 96) failing under both
+clocks, `filter-golden` 276 passed, 16 failed. After: every `filter` shard passes and
+`filter-golden` is 292 passed, 0 failed. The rest of the run is unchanged. The two renumber
+fixes in `roku/renumber-80s-fixtures` clear the other three failures: with both branches
+together the whole `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Half-done.** Not run on the stick: the filter vectors take about 55 s a shard off-device and
+longer on a Streaming Stick, so `scripts/deploy.sh --test` was left to the next session.
+Enrichment is off in the test stick's build, so the `ratingMin` fallback is proved by the
+golden cases only.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
