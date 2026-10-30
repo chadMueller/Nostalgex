@@ -37,6 +37,12 @@ struct RootView: View {
                     LoadingView()
                 } else if !appState.hasCredentials {
                     SettingsView()
+                } else if appState.isHoldingAfterUnfinishedLoads {
+                    UnfinishedLoadsView {
+                        appState.isHoldingAfterUnfinishedLoads = false
+                        LaunchGuard.resetUnfinishedLoads()
+                        Task { await launchLoad() }
+                    }
                 } else if appState.isLoading {
                     LoadingView()
                 } else if appState.channels.isEmpty {
@@ -84,6 +90,13 @@ struct RootView: View {
             }
             if forceSettings { appState.didAttemptCredentialHydration = true; return }
             if reproAppReviewFlow { appState.didAttemptCredentialHydration = true; return }
+            // Before anything below writes its first-launch keys: a fresh install must not
+            // pick up the sign-in a deleted install left in the keychain.
+            LaunchGuard.clearCredentialsLeftByDeletedInstall(
+                store: appState.credentialStore,
+                installStampExists: InstallDiagnostics.installStampExists
+            )
+            LaunchGuard.recordLaunch()
             emitLaunchAnalyticsIfNeeded()
             if uiTestInstantAuth {
                 appState.didAttemptCredentialHydration = true
@@ -92,22 +105,37 @@ struct RootView: View {
             }
             InstallDiagnostics.recordLaunch()
             await appState.hydrateCredentialsWithRetry()
-            if appState.hasCredentials && appState.channels.isEmpty {
-                let restored = await appState.restoreLibraryFromSnapshotIfNeeded()
-                if !restored {
-                    await appState.loadLibrary()
-                }
-                if PlaybackSoak.isRequested {
-                    // A background refresh rebuilding 90 channels on the main actor would
-                    // starve the player and the soak's own clock; measure playback alone.
-                    await PlaybackSoak.run(appState: appState)
-                    return
-                }
-                if restored, appState.isLibraryStale {
-                    Task { await appState.refreshLibraryIfChanged() }
-                }
-                appState.startDailyRefresh()
+            if appState.hasCredentials && appState.channels.isEmpty && LaunchGuard.shouldAskBeforeLoading() {
+                appState.isHoldingAfterUnfinishedLoads = true
+                return
             }
+            await launchLoad()
+        }
+    }
+
+    /// The launch load: today's snapshot if there is one, otherwise a full library load.
+    /// Also what TRY AGAIN runs after two unfinished loads.
+    private func launchLoad() async {
+        if appState.hasCredentials && appState.channels.isEmpty {
+            // A snapshot restore can die on a huge library too, so it carries the same marker.
+            // It does not reset the count: only a finished foreground load proves the library
+            // loads.
+            LaunchGuard.loadStarted()
+            let restored = await appState.restoreLibraryFromSnapshotIfNeeded()
+            LaunchGuard.loadEnded(resetCount: false)
+            if !restored {
+                await appState.loadLibrary()
+            }
+            if PlaybackSoak.isRequested {
+                // A background refresh rebuilding 90 channels on the main actor would
+                // starve the player and the soak's own clock; measure playback alone.
+                await PlaybackSoak.run(appState: appState)
+                return
+            }
+            if restored, appState.isLibraryStale {
+                Task { await appState.refreshLibraryIfChanged() }
+            }
+            appState.startDailyRefresh()
         }
     }
 
@@ -239,8 +267,30 @@ struct LoadingView: View {
             if appState.isLoadStalling {
                 stallBlock
             }
+
+            startOverButton
         }
         .padding(.vertical, 40)
+    }
+
+    @State private var confirmingStartOver = false
+
+    /// Always there while a load runs, so a load that never finishes (or keeps taking the
+    /// app down) is never the only thing on screen. Asks first: it is often the focused
+    /// control, and a stray press must not sign anyone out.
+    private var startOverButton: some View {
+        Button("START OVER") {
+            confirmingStartOver = true
+        }
+        .buttonStyle(OnboardingButtonStyle(role: .secondary, fullWidth: false, fontSize: 20))
+        .padding(.top, 8)
+        .accessibilityIdentifier("loading.startOver")
+        .alert("Start over?", isPresented: $confirmingStartOver) {
+            Button("START OVER", role: .destructive) { appState.startOver() }
+            Button("KEEP LOADING", role: .cancel) {}
+        } message: {
+            Text("Stops loading and signs out of \(appState.serverName.isEmpty ? "your server" : appState.serverName). You can sign in again right away.")
+        }
     }
 
     /// Shown once the scan has gone quiet for a while. The watchdog will resolve this on
@@ -671,6 +721,45 @@ struct LibrarySelectionView: View {
 }
 
 // MARK: - Empty channels screen
+
+/// Shown instead of a third attempt when the last two library loads ended with the app
+/// being closed before they finished (LaunchGuard).
+struct UnfinishedLoadsView: View {
+    @Environment(AppState.self) var appState
+    let tryAgain: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 32) {
+                Image("NostalgexLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 540)
+
+                Text("LOADING DIDN'T FINISH")
+                    .font(.custom("DMMono-Medium", size: 28))
+                    .foregroundStyle(.white.opacity(0.8))
+
+                Text("The last two times, Nostalgex closed before your library finished loading.\nTry again, or start over to sign in again or pick a different server.")
+                    .font(.custom("DMMono-Regular", size: 18))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 1100)
+
+                HStack(spacing: 24) {
+                    Button("TRY AGAIN", action: tryAgain)
+                        .buttonStyle(OnboardingButtonStyle(role: .primary, fullWidth: false, fontSize: 24))
+                        .accessibilityIdentifier("unfinished.tryAgain")
+                    Button("START OVER") { appState.startOver() }
+                        .buttonStyle(OnboardingButtonStyle(role: .secondary, fullWidth: false, fontSize: 24))
+                        .accessibilityIdentifier("unfinished.startOver")
+                }
+            }
+            .padding(48)
+        }
+    }
+}
 
 struct EmptyChannelsView: View {
     @Environment(AppState.self) var appState
