@@ -96,6 +96,22 @@ class Lineup(
         return bundle.channelIDs.mapNotNull { id -> defs[id]?.let { it.name to (id in available) } }
     }
 
+    /** A channel the library doesn't fill: its definition, and how many titles match its rules now. */
+    data class OffAir(val def: ChannelConfig.StockChannel, val matched: Int)
+
+    /**
+     * WHY AREN'T THESE ON AIR? (I-004): a package's channels that didn't fill, rule-based ones
+     * only (a channel with no rules has nothing to explain). The count is the pool the last
+     * build filtered, the same pass that decided the channel, so it can't drift from it.
+     */
+    fun offAir(bundle: ChannelConfig.Bundle): List<OffAir> {
+        val available = availableIds()
+        val defs = config.channels.associateBy { it.id }
+        return bundle.channelIDs.filter { it !in available }.mapNotNull { id ->
+            defs[id]?.takeIf { it.rules != null }?.let { OffAir(it, pools[id]?.size ?: 0) }
+        }
+    }
+
     /** The package sidebar's rows: each package on, and the first of its channels in the guide (bundleJumpTargets). */
     fun jumpTargets(enabledBundles: Set<String>): List<Pair<ChannelConfig.Bundle, GuideChannel>> {
         val byId = channels.associateBy { it.id }

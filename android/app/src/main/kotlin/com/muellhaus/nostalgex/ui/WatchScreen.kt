@@ -354,13 +354,23 @@ private fun ChannelOsd(ch: GuideChannel, item: MediaItem, schedule: Schedule?, n
         ) {
             Box(Modifier.size(u(48), u(4)).background(color))
             Text("CH ${ch.number}", style = font(DMMonoMedium, 20, color))
-            Text(ch.name, style = font(DMMonoMedium, 32, Color.White))
-            val line = if (item.type == "episode" && item.episodeTitle != null) {
-                "${item.title}  ${item.seTag ?: ""}  \"${item.episodeTitle}\""
-            } else {
-                item.title + (item.year?.let { "  $it" } ?: "")
+            // The title leads and the channel name follows smaller: viewers read this as
+            // "what's playing" (PlayerView's ChannelOSD, 02ac78f).
+            val headline = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.95f))
+            when {
+                item.type == "episode" && item.episodeTitle != null ->
+                    Text("${item.title}  ${item.seTag ?: ""}  \"${item.episodeTitle}\"", style = headline)
+                item.isMusicVideo -> Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+                    Text(item.title, style = headline)
+                    item.artist?.takeIf { it.isNotEmpty() }?.let { Text(it, style = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.7f))) }
+                    val facts = listOfNotNull(item.year?.toString(), item.musicGenreDisplay)
+                    if (facts.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(u(12))) {
+                        for (f in facts) Text(f, style = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.55f)))
+                    }
+                }
+                else -> Text(item.title + (item.year?.let { "  $it" } ?: ""), style = headline)
             }
-            Text(line, style = font(DMMono, 24, Color.White.copy(alpha = if (item.type == "episode") 0.8f else 0.9f)))
+            Text(ch.name, style = font(DMMono, 24, Color.White.copy(alpha = 0.9f)))
             val np = schedule?.nowPlaying?.takeIf { it.item.ratingKey == item.ratingKey }
             val label = if (np != null) {
                 "${formatTime(DailyManifest.liveElapsedSeconds(schedule, now) ?: 0)} / ${formatTime(maxOf(1L, item.duration * 60L))}"

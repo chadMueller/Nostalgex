@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Android TV: rebased again; Now Playing order, WHY AREN'T THESE ON AIR?)
+
+**Changed.** `feature/android` rebased onto `main` at `0fe27e9` (12 new commits); only this log conflicted, and both sides were kept. The Android 2026-10-29 entry was moved below `main`'s 2026-10-30 ones to keep the log newest first. The engine's golden tests passed against the new `main` unchanged; no shared channel data had moved.
+
+- The channel banner and the Now Playing panel lead with the title, the channel name smaller under it, as `02ac78f`. The banner also gains the Apple TV's music-video lines (title, artist, year and genres), and Now Playing shows "Artist · Title" for a music video, as `PlexMediaItem+MusicDisplay.swift`.
+- WHY AREN'T THESE ON AIR? under each package that is on, as `ef872f7`: for each rule-based channel that didn't fill, its rules in plain words (`ChannelRequirements`, with `ChannelEmptyExplainerTests.swift`'s cases ported) and "needs at least N, your library has M". M is the size of the pool the last build filtered for that channel, the same pass that left it off, so unlike the Apple TV (`9d3762b`) there is no re-filter and nothing to slow Settings. Checked on the emulator against Jellyfin: 22 off-air channels under NOSTALGEX and 15 under PRIME TIME, with counts such as FLICKS 7 of 10.
+
+**Looked at and not ported.** Roku `f506510` (filter pools one server at a time): a memory workaround for Roku sticks that gives the same pools; the SHIELD builds 11,436 items in about 1.5 s. Roku `08ffb80` (kbps rounding): a BrightScript integer bug; Android rounds in doubles and `scripts/stream-quality-golden.json`'s 19,269,499 case already passes. Roku `0bc748d` (on-device Plex password sign-in): a Roku certification requirement the Apple TV doesn't have. Apple TV `5aa2ea2`, `571b8b0`, `d809098` (Dolby Vision MKV audio, ORIGINAL (LOCAL PLEX), recovery) and `9fdd123` (overlay stuck after a stall) are fixes to AVPlayer's path; this app direct plays the stored file first. Noted in `android/README.md`.
+
+**Next.** Install on the SHIELD. Not pushed: the owner asked to hold pushes.
+
 ## 2026-10-30 (Android TV: the README catches up)
 
 **Changed.** `android/README.md` described the first Plex-only spike: it said Jellyfin, Emby, Settings, the package sidebar, subtitles, retro mode, stream quality and the music-video split were missing, all of which are now built. It now lists what the app does and keeps only the real gaps against the Apple TV, adding two found since: demo mode, and the PlaybackInfo handshake on Jellyfin and Emby. `feature/android` was rebased onto `main` at `ee2f5d9`; only this log conflicted, and both sides' entries were kept. Rebased again onto `c4d936f`, which changed the shared channel filter: 16 of the Apple TV's filter cases then failed on Android (STAND-UP, ANIME, CERTIFIED GOLD, THE 60S). `ChannelFilter.kt` now has `manifestOnlyGenreFallback` and the OMDb fallback for `ratingMin`, and `FilterGoldenTest` now reads a case's OMDb values, which it had been dropping, so the OMDb gates are tested for the first time. All 24 engine tests pass.
