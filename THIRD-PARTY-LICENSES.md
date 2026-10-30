@@ -39,6 +39,25 @@ Its sign-in QR code is drawn on the TV by `roku/source/util/QrCode.brs`, which
 follows the design of Project Nayuki's QR Code generator library (MIT License),
 credited in `roku/THIRD-PARTY-LICENSES.md`.
 
+## Android TV app (`android/`)
+
+The Android TV app bundles the same two fonts, with their license texts in
+`android/`:
+
+| Font | License |
+|---|---|
+| DM Mono | SIL Open Font License 1.1, `android/OFL-DMMono.txt` |
+| VT323 | SIL Open Font License 1.1, `android/OFL-VT323.txt` |
+
+Its libraries, fetched by Gradle and compiled into the APK:
+
+| Library | License |
+|---|---|
+| AndroidX (Media3, Compose, Compose for TV, Activity) | Apache License 2.0 |
+| Kotlin standard library, kotlinx.coroutines, kotlinx.serialization | Apache License 2.0 |
+| OkHttp | Apache License 2.0 |
+| ZXing core (the sign-in QR code) | Apache License 2.0 |
+
 ## Swift packages
 
 | Package | License |
