@@ -2,8 +2,11 @@ import SwiftUI
 
 /// ABOUT: the version line, plus slots for the community and rating links.
 ///
-/// PLACEHOLDER (N-028): the DISCORD, GITHUB and RATE rows have no destination yet.
-/// Their copy and links come from Chad; nothing here opens anything.
+/// GITHUB shows the public repo's address. tvOS has no web browser, so it is a line to
+/// read and open on a phone or computer, not a link.
+///
+/// PLACEHOLDER (N-028): the DISCORD and RATE rows have no destination yet. Their copy
+/// and links come from Chad; nothing here opens anything.
 struct SettingsAboutView: View {
     let focus: FocusState<SettingsFocus?>.Binding
 
@@ -28,7 +31,17 @@ struct SettingsAboutView: View {
                 .padding(.top, 24)
 
             placeholderRow(id: "about_discord", title: "DISCORD")
-            placeholderRow(id: "about_github", title: "GITHUB")
+            SettingsToggleRow(
+                title: "GITHUB",
+                subtitle: "Source code and issues. Open it on a phone or computer.",
+                detail: "github.com/chadMueller/Nostalgex",
+                detailIsProminent: true,
+                isOn: true,
+                isFocused: isFocused("about_github"),
+                showToggle: false
+            ) {}
+            .settingsRow("about_github", focus: focus)
+            .accessibilityLabel("GitHub, github.com/chadMueller/Nostalgex")
             placeholderRow(id: "about_rate", title: "RATE NOSTALGEX")
         }
     }

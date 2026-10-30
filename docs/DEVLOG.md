@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Settings rail, explainer cards take focus, GitHub in About)
+
+**Changed.** On `settings/rail-redesign`, not pushed. The I-004 explainer cards under
+"Why aren't these on air?" can take focus now, so up and down walk through them instead
+of skipping the list. This is the same change as on `fix/livingroom-test-findings`,
+applied to `ChannelRequirementCard` in `SettingsSharedComponents.swift` because the
+file it was made in no longer exists here, so the later merge is mechanical. One
+difference: the card reads its own `@FocusState` instead of `@Environment(\.isFocused)`.
+The environment value comes from an ancestor, so with it the card took focus but never
+showed the cyan highlight (seen on a simulator capture); the other branch has the same
+gap. A UI walk with the franchise fixture moved focus through all 5 cards and on to
+ADD ALL, with the highlight on each. ABOUT's
+GITHUB row shows github.com/chadMueller/Nostalgex as text to open on a phone or
+computer (tvOS has no browser). DISCORD and RATE stay placeholders.
+
 ## 2026-10-30 (Apple TV: Settings rail, Phase 3, hero illustrations)
 
 **Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.
