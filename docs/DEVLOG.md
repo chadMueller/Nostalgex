@@ -20,7 +20,7 @@ SITCOMS already sit side by side without splitting anything.
 Channel numbers 1-19 (NOSTALGEX's own packed range) and the 400s id pool up
 to 407 are already taken, so the new channels took the next free static ids
 (423-425). They first landed on numbers 35-37, a block picked because it
-was the nearest free, unclaimed range between KIDZ ZONE and PRIME TIME —
+was the nearest free, unclaimed range between KIDZ ZONE and PRIME TIME,
 but that left the NOSTALGEX bundle itself as two disconnected spans (1-19,
 then 35-37) with KIDZ ZONE's 20-34 sitting unbroken in between. A device
 run of `ChannelNumberingTests.testEveryBundleIsOneUnbrokenRunOfNumbers()`
@@ -59,7 +59,7 @@ bundle (PRIME TIME, MARQUEE, ADVENTURELAND, OVERTIME, CASE FILES, DECADES,
 FRANCHISES, ARTHOUSE, NETWORKS, SCREAM, TIS THE SEASON, HIGH ROTATION)
 shifts the same +3. Only the `number` field moved; every `id` is untouched,
 so TopShelf's `nostalgex://channel/<id>` deep links (the only deep link in
-the app) are unaffected — confirmed by reading `ContentProvider.swift`
+the app) are unaffected, confirmed by reading `ContentProvider.swift`
 rather than assuming the earlier decision still held. No other file keys
 playback, docs or golden tests off channel number; `filter-golden.json` and
 the franchise/schedule goldens all reference channel `id`.
