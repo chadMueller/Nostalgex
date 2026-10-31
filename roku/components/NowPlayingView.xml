@@ -25,7 +25,9 @@
   <script type="text/brightscript" uri="pkg:/source/guide/NowPlayingLayout.brs" />
   <script type="text/brightscript" uri="pkg:/components/NowPlayingView.brs" />
   <children>
-    <Rectangle id="shade" width="1920" height="600" color="0x000000EB" />
+    <!-- About 15%, so the video reads behind the panel (issue #148); the
+         labels carry a drop shadow instead (shadowLabels). -->
+    <Rectangle id="shade" width="1920" height="600" color="0x00000026" />
     <!-- Upstream's poster, 150 by 225, left of the info zone (Plex only):
          a 14% white placeholder until the file comes. -->
     <Rectangle id="posterBack" translation="[48, 40]" width="150" height="225" color="0xFFFFFF24" visible="false" />

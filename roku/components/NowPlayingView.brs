@@ -8,7 +8,8 @@
 ' LANGUAGE open in place of the columns; Back closes them, then the panel.
 '
 ' Left out, for what the Roku has: OPEN IN PLEX. Rounded corners are
-' square; the shade is flat where upstream's fades.
+' square; the shade is flat where upstream's fades, and light, with shadowed
+' text.
 
 sub init()
     m.fonts = {}
@@ -202,6 +203,33 @@ sub render()
     infoBottom = 40 + 340
     if bottom < infoBottom then bottom = infoBottom
     m.top.FindNode("shade").height = bottom + 32
+    shadowLabels(m.top.FindNode("info"))
+    shadowLabels(g)
+end sub
+
+' The shade is light (about 15%, issue #148), so the video shows through it
+' and white text can sit on a bright frame. Each label gets a dark copy 2px
+' down and right, drawn under it: a drop shadow, which Label has no field for.
+sub shadowLabels(g as Object)
+    i = 0
+    while i < g.GetChildCount()
+        lbl = g.GetChild(i)
+        if lbl.Subtype() = "Label" then
+            sh = CreateObject("roSGNode", "Label")
+            sh.text = lbl.text
+            sh.font = lbl.font
+            sh.color = "0x000000CC"
+            sh.translation = [lbl.translation[0] + 2, lbl.translation[1] + 2]
+            sh.width = lbl.width
+            sh.horizAlign = lbl.horizAlign
+            sh.ellipsizeOnBoundary = lbl.ellipsizeOnBoundary
+            sh.wrap = lbl.wrap
+            sh.maxLines = lbl.maxLines
+            g.InsertChild(sh, i)
+            i = i + 1
+        end if
+        i = i + 1
+    end while
 end sub
 
 ' Draws a row and returns its height: 48, taller for a note, which goes
