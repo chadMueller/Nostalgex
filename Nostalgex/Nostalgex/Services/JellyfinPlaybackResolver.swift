@@ -419,13 +419,13 @@ enum JellyfinPlaybackResolver {
         let audio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
         guard audio.count > 1 else { return nil }
 
-        // "en-GB" and "eng" both have to match a track tagged "eng" or "en".
-        let wanted = Set(preferredLanguages.compactMap {
-            Locale(identifier: $0).language.languageCode?.identifier.lowercased()
-        } + ["en"])
+        // "en-GB" and "eng" both have to match a track tagged "eng" or "en". Each side is
+        // reduced to one code through the ISO 639-2 table and compared exactly; comparing
+        // first letters made "est" Spanish and never matched "spa", "ger" or "cze".
+        let wanted = Set(preferredLanguages.compactMap(SubtitleSelectionLogic.primaryLanguage) + ["en"])
         func matches(_ language: String?) -> Bool {
-            guard let l = language?.lowercased(), !l.isEmpty else { return false }
-            return wanted.contains(String(l.prefix(2)))
+            guard let l = SubtitleSelectionLogic.primaryLanguage(language) else { return false }
+            return wanted.contains(l)
         }
 
         let inLanguage = audio.filter { matches($0.Language) }
