@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Apple TV and web tuner: Norwegian, Bokmal and Nynorsk are one language)
+
+**Why.** Norwegian has three ISO 639-1 codes, "no" (Norwegian), "nb" (Bokmal) and "nn"
+(Nynorsk), and three ISO 639-2 ones, "nor", "nob" and "nno". Servers tag the same track
+with any of them, and a TV set to Norwegian reports "nb-NO". Since N-014 compared codes
+exactly, a Bokmal viewer never got a track tagged "nor", and the other way round.
+
+**Changed.** On `fix/norwegian-one-language` (off `release/1.0.29-rc`), not pushed.
+The ISO 639 table is unchanged (still identical to the Roku app's); the six codes are
+folded to "no" when two codes are compared. Every other language keeps the exact compare.
+- Apple TV: `SubtitleSelectionLogic.norwegianCodes` and `languageKey` (table reduction,
+  then the fold), used by `sameLanguage` and the Jellyfin and Emby audio pick;
+  `tagMatchesPreferred` adds the same rule to the prefix compare the player's own tracks
+  use (Plex audio and subtitles, foreign-audio subtitles, forced tracks).
+- Web tuner: `scripts/nostalgex-language.js` gains `NORWEGIAN` and `languageKey`, and
+  `sameLanguage` compares keys, so the page's `langMatches` follows with no change there.
+- Tests: `LanguageCodeMatchingTests` covers all 36 Norwegian pairs, regions, the TV locale
+  nb_NO, the audio and forced-subtitle picks and the player-track compare, and Danish,
+  Swedish, Dutch, Nepali and Icelandic staying apart. The look-alike test skips "nob" for
+  "no" (now deliberate). The web smoke has the same cases; run against the old module it
+  fails six of them.
+- The Roku side is on `roku/norwegian-one-language` (NxLanguageKey), from main.
+- NostalgexTests: 1,037 run, 1,022 passed, 0 failed, 15 skipped. npm test green
+  (language-match 33 passed). Not tried against a real Norwegian-tagged library.
+
 ## 2026-10-31 (Apple TV: all franchises on one page, an amber count for short packages)
 
 **Why.** Franchises lived in three places: a FRANCHISES package under CHANNEL PACKAGES,

@@ -422,9 +422,9 @@ enum JellyfinPlaybackResolver {
         // "en-GB" and "eng" both have to match a track tagged "eng" or "en". Each side is
         // reduced to one code through the ISO 639-2 table and compared exactly; comparing
         // first letters made "est" Spanish and never matched "spa", "ger" or "cze".
-        let wanted = Set(preferredLanguages.compactMap(SubtitleSelectionLogic.primaryLanguage) + ["en"])
+        let wanted = Set(preferredLanguages.compactMap(SubtitleSelectionLogic.languageKey) + ["en"])
         func matches(_ language: String?) -> Bool {
-            guard let l = SubtitleSelectionLogic.primaryLanguage(language) else { return false }
+            guard let l = SubtitleSelectionLogic.languageKey(language) else { return false }
             return wanted.contains(l)
         }
 

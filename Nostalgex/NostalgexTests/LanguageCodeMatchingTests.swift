@@ -148,6 +148,9 @@ final class LanguageCodeMatchingTests: XCTestCase {
         for (three, two) in pairs {
             let lookalike = String(three.prefix(2))
             guard lookalike != two, lookalike != "en", twoLetter.contains(lookalike) else { continue }
+            // "nob" spells "no": both Norwegian, the one deliberate equivalence.
+            if SubtitleSelectionLogic.norwegianCodes.contains(three),
+               SubtitleSelectionLogic.norwegianCodes.contains(lookalike) { continue }
             let streams = [
                 stream(1, "Audio", lang: three, channels: 6),
                 stream(2, "Audio", lang: "eng", channels: 2),
@@ -223,5 +226,91 @@ final class LanguageCodeMatchingTests: XCTestCase {
             XCTAssertEqual(JellyfinPlaybackResolver.forcedSubtitleToBurn(in: streams, preferredLanguage: viewer), 3,
                            "\(track) not burned for \(viewer)")
         }
+    }
+
+    // MARK: - Norwegian: Bokmål and Nynorsk are one language
+
+    private let norwegian = ["no", "nb", "nn", "nor", "nob", "nno"]
+
+    /// Any Norwegian code matches any other: a preference for Bokmål takes a track tagged
+    /// "nor" or "nno", and the other way round.
+    func testEveryNorwegianCodeMatchesEveryOther() {
+        for a in norwegian {
+            for b in norwegian {
+                XCTAssertTrue(SubtitleSelectionLogic.sameLanguage(a, b), "\(a) vs \(b)")
+            }
+            XCTAssertTrue(SubtitleSelectionLogic.sameLanguage(a, "nb-NO"), "\(a) vs nb-NO")
+            XCTAssertTrue(SubtitleSelectionLogic.sameLanguage(a.uppercased(), "nn_NO"), "\(a) vs nn_NO")
+        }
+    }
+
+    /// Only Norwegian: its neighbours, and codes that merely start with n, stay apart.
+    func testNorwegianStaysApartFromItsNeighbours() {
+        for other in ["da", "dan", "sv", "swe", "nl", "dut", "nld", "ne", "nep", "is", "isl", "fo", "se"] {
+            for code in norwegian {
+                XCTAssertFalse(SubtitleSelectionLogic.sameLanguage(code, other), "\(code) vs \(other)")
+            }
+        }
+    }
+
+    /// The table itself is unchanged: "nob" is still "nb" and "nno" still "nn"; the fold is
+    /// applied when two codes are compared.
+    func testTheTableStillReducesNorwegianToItsOwnCodes() {
+        XCTAssertEqual(SubtitleSelectionLogic.primaryLanguage("nob"), "nb")
+        XCTAssertEqual(SubtitleSelectionLogic.primaryLanguage("nno"), "nn")
+        XCTAssertEqual(SubtitleSelectionLogic.primaryLanguage("nor"), "no")
+        XCTAssertEqual(SubtitleSelectionLogic.languageKey("nob"), "no")
+        XCTAssertEqual(SubtitleSelectionLogic.languageKey("nn-NO"), "no")
+        XCTAssertEqual(SubtitleSelectionLogic.languageKey("swe"), "sv")
+    }
+
+    /// Jellyfin and Emby audio: a Bokmål viewer (the TV set to nb-NO) gets the track tagged
+    /// "nor", not the Swedish one, and a Nynorsk setting takes "nob".
+    func testJellyfinAudioPicksNorwegianInAnySpelling() {
+        let streams = [
+            stream(1, "Audio", lang: "swe", channels: 6),
+            stream(2, "Audio", lang: "nor", channels: 2),
+        ]
+        XCTAssertEqual(audioPick(streams, viewer: "nb-NO"), 2)
+        XCTAssertEqual(audioPick(streams, viewer: "nn"), 2)
+        let bokmal = [
+            stream(1, "Audio", lang: "dan", isDefault: true, channels: 6),
+            stream(2, "Audio", lang: "nob", channels: 2),
+        ]
+        XCTAssertEqual(audioPick(bokmal, viewer: "nn-NO"), 2)
+        XCTAssertEqual(audioPick(bokmal, viewer: "da"), 1, "a Danish viewer still gets Danish")
+    }
+
+    func testForcedNorwegianSubtitleIsBurnedForAnyNorwegianSetting() {
+        for track in norwegian {
+            let streams = [stream(3, "Subtitle", lang: track, isForced: true)]
+            for viewer in ["no", "nb", "nn"] {
+                XCTAssertEqual(JellyfinPlaybackResolver.forcedSubtitleToBurn(in: streams, preferredLanguage: viewer), 3,
+                               "\(track) not burned for \(viewer)")
+            }
+        }
+    }
+
+    /// Plex and the player's own tracks (AVFoundation's extended tags): the same fold.
+    func testPlayerTracksMatchNorwegianInAnySpelling() {
+        XCTAssertEqual(SubtitleSelectionLogic.preferredTrackIndex(tags: ["sv", "nb-no"], preferredLowercased: "no"), 1)
+        XCTAssertEqual(SubtitleSelectionLogic.preferredTrackIndex(tags: ["da", "nn"], preferredLowercased: "nb"), 1)
+        XCTAssertEqual(SubtitleSelectionLogic.preferredTrackIndex(tags: ["da", "no"], preferredLowercased: "nn"), 1)
+        XCTAssertEqual(SubtitleSelectionLogic.preferredTrackIndex(tags: ["sv", "da"], preferredLowercased: "nb"), 0,
+                       "no Norwegian track: the first, as before")
+        XCTAssertFalse(SubtitleSelectionLogic.shouldAutoEnableSubtitles(audioTags: ["nb"], preferredAudioLowercased: "no"),
+                       "Bokmål audio is not foreign to a Norwegian viewer")
+        XCTAssertTrue(SubtitleSelectionLogic.shouldAutoEnableSubtitles(audioTags: ["sv"], preferredAudioLowercased: "nb"))
+        // Everything else keeps the old rule.
+        XCTAssertTrue(SubtitleSelectionLogic.tagMatchesPreferred("en-us", "en"))
+        XCTAssertFalse(SubtitleSelectionLogic.tagMatchesPreferred("nl", "no"))
+        XCTAssertFalse(SubtitleSelectionLogic.tagMatchesPreferred("da", "nb"))
+    }
+
+    /// The TV's own locale: "nb-NO" resolves to "nb", which matches a "nor" track.
+    func testANorwegianTVLocaleMatchesANorTrack() {
+        let resolved = SubtitleSelectionLogic.resolvedLanguageCode(storedCode: "__system__", locale: Locale(identifier: "nb_NO"))
+        XCTAssertTrue(SubtitleSelectionLogic.sameLanguage("nor", resolved), "resolved \(resolved)")
+        XCTAssertTrue(SubtitleSelectionLogic.tagMatchesPreferred("no", resolved.lowercased()), "resolved \(resolved)")
     }
 }
