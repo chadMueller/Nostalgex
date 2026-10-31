@@ -19,7 +19,7 @@
         "STOP WAITING only stops the server you pressed it on. Before, a press could carry over to the next server and cut its scan short, leaving part of your library out. Thanks to @androbwebb for the report.",
         "Every franchise channel is in the 300s: the FRANCHISES classics from 300, then the franchises found in your library and your server's franchise collections together, A to Z, from 310. Your other collections start at 400, and up to 100 of them fit in the guide. Settings says when more are switched on.",
         "The package list you get by pressing left in the guide follows the guide from top to bottom, with one FRANCHISES for all of them and HIGH ROTATION last. A seasonal package that leads the guide leads the list too.",
-        "On Emby, channels that pick films by rating, like BLOCKBUSTER, ALL TIME GREATS and the decade channels, could come up empty because Emby had no rating for the film. They use the IMDb rating instead now.",
+        "On Emby, channels that pick films by rating, like BLOCKBUSTER, ALL TIME GREATS and the decade channels, could come up empty because Emby had no rating for the film. They now use the film's IMDb rating (from OMDb) when one is available.",
         "On Jellyfin and Emby, the audio track matches your language exactly. Spanish, German, Japanese and other viewers get their own language instead of the file's default, and Estonian no longer passes for Spanish.",
         "Rescanning a Jellyfin or Emby library that hasn't changed no longer changes the lineups for the days ahead.",
         "STAND-UP and ANIME pick up titles they used to miss.",
