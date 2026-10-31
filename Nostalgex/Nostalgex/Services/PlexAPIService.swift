@@ -1289,10 +1289,8 @@ struct PlexAPIService: MediaBackend {
             + server.connections.filter { $0.relay }
         guard !ordered.isEmpty else { return nil }
 
-        // Temporary, 2026-10-30: diagnosing a second live report of slow discovery
-        // (~49s) after the early-exit fix below. Names which tier actually won and how
-        // long it took, since the URI alone (often plex.direct for both local and
-        // remote) doesn't say which. Remove once the real bottleneck is confirmed.
+        // Which tier won and how long it took, for the debug timing below: the URI alone
+        // (often plex.direct for both local and remote) doesn't say which.
         let tierStart = Date()
         func tierName(_ c: PlexConnection) -> String {
             if c.local && !c.relay { return "local" }
@@ -1313,11 +1311,9 @@ struct PlexAPIService: MediaBackend {
         //
         // Fix: once there is at least one success, give anything still-ranked-higher a
         // grace window to beat it rather than its full patient budget, instead of
-        // waiting out the full 50s worst case for every server. Chad, 2026-10-30: lost/
-        // no-connection rate is a tracked metric with real work behind the 90%+ it's
-        // at, so this must not trade a slow-but-real connection for a faster-but-worse
-        // one. The grace window is sized by what is actually still pending, not one
-        // flat number:
+        // waiting out the full 50s worst case for every server. This must not trade a
+        // slow-but-real connection for a faster-but-worse one, so the grace window is
+        // sized by what is actually still pending, not one flat number:
         //   - A pending LOCAL candidate answers fast or not at all (existing design,
         //     see `patient` below), so a short grace is genuinely safe; it is not
         //     going to succeed slowly.
