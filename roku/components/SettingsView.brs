@@ -6,6 +6,8 @@ sub init()
     ' The list's height on the page, under the SETTINGS title.
     m.listTop = 100
     m.listH = 800
+    ' The site, as upstream's user agents give it; SUPPORT NOSTALGEX's QR code.
+    m.supportUrl = "https://www.nostalgex.app"
     m.fonts = {}
     m.franchisesChanged = false
     ' The first OK on SIGN OUT only arms it; a second one signs out.
@@ -167,6 +169,7 @@ end sub
 sub buildRows()
     m.rows = []
     m.rows.Push({ kind: "header", title: "SUPPORT NOSTALGEX", subtitle: "News, help and the Apple TV app are on its site" })
+    ' Text and a QR code, never focused: scanning it is the action (#147).
     m.rows.Push({ kind: "support" })
 
     m.rows.Push({ kind: "header", title: "CONNECTION", subtitle: "" })
@@ -284,6 +287,7 @@ function rowHeight(row as Object) as Integer
     end if
     if row.kind = "subheader" or row.kind = "info" then return 44
     if row.kind = "version" then return 56
+    if row.kind = "support" then return 184
     if row.kind = "rescan" then return 126
     ' Upstream's subtitle in two lines.
     if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" then return 100
@@ -445,9 +449,15 @@ sub render()
             else if row.kind = "subheader" or row.kind = "info" then
                 page.AppendChild(newLabel(row.text, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 8))
             else if row.kind = "support" then
-                page.AppendChild(newLabel("NOSTALGEX.APP", "DMMono-Medium", 24, "0xFFFFFFBF", 30, y + 10))
-                page.AppendChild(newLabel("Open it on a phone or computer", "VT323-Regular", 24, "0xFFFFFF80", 30, y + 40))
-                page.AppendChild(newRect(0, y, 4, 72, "0xFFE50066"))
+                ' A QR code to the site, drawn as the sign-in's (NxQrDraw):
+                ' the one thing a remote can't open, a phone camera can.
+                qr = CreateObject("roSGNode", "Group")
+                qr.translation = [30, y + 8]
+                NxQrDraw(qr, NxQrMatrix(m.supportUrl), 160)
+                page.AppendChild(qr)
+                page.AppendChild(newLabel("NOSTALGEX.APP", "DMMono-Medium", 24, "0xFFFFFFBF", 220, y + 58))
+                page.AppendChild(newLabel("Scan with a phone camera to open it", "VT323-Regular", 24, "0xFFFFFF80", 220, y + 88))
+                page.AppendChild(newRect(0, y, 4, 176, "0xFFE50066"))
             else if row.kind = "version" then
                 version = newLabel(row.text, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 20)
                 version.width = 1680

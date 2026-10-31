@@ -1,8 +1,8 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
-' A QR code for a short text, for the plex.tv/link sign-in, as the Apple TV
-' app's QRCodeView draws with Core Image (CIQRCodeGenerator, correction
-' level M). A Roku has no generator, and sending the sign-in code to a QR
+' A QR code for a short text, for the plex.tv/link sign-in and Settings'
+' SUPPORT NOSTALGEX row, as the Apple TV app's QRCodeView draws with Core
+' Image (CIQRCodeGenerator, correction level M). A Roku has no generator, and sending the sign-in code to a QR
 ' service would hand it to a third party, so this encodes it here.
 '
 ' Byte mode at level M, versions 1 to 10 (up to 213 bytes); the link with its
@@ -10,6 +10,42 @@
 ' Reed-Solomon blocks, the function patterns, the zigzag placement and the
 ' mask chosen by the standard's penalty rules. Checked against a reference
 ' encoder and decoder in tests/QrTests.brs (tests/gen-qr.mjs).
+
+' Draws `modules` (NxQrMatrix's, or invalid for a white square only) into the
+' Group `g`: a white square `side` px across, two light modules of quiet zone
+' each side inside it, and one dark rectangle per run. For the sign-in's QR
+' code and Settings' SUPPORT NOSTALGEX row; a component calls it.
+sub NxQrDraw(g as Object, modules as Dynamic, side as Integer)
+    bg = CreateObject("roSGNode", "Rectangle")
+    bg.width = side
+    bg.height = side
+    bg.color = "0xFFFFFFFF"
+    g.AppendChild(bg)
+    if modules = invalid then return
+    size = modules.Count()
+    cell = side \ (size + 4)
+    origin = (side - cell * size) \ 2
+    for row = 0 to size - 1
+        line = modules[row]
+        cx = 0
+        while cx < size
+            if line[cx] then
+                start = cx
+                while cx < size and line[cx]
+                    cx = cx + 1
+                end while
+                r = CreateObject("roSGNode", "Rectangle")
+                r.translation = [origin + start * cell, origin + row * cell]
+                r.width = (cx - start) * cell
+                r.height = cell
+                r.color = "0x000000FF"
+                g.AppendChild(r)
+            else
+                cx = cx + 1
+            end if
+        end while
+    end for
+end sub
 
 ' The modules as rows of Booleans (true is dark), with no quiet zone, or
 ' invalid when the text doesn't fit version 10. `mask` 0 to 7 forces one;
