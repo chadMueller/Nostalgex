@@ -15,8 +15,8 @@
 // - A collection becomes a candidate when it resolves to 3+ playable items. A
 //   films-only collection is held to the old "3+ movies" exactly.
 // - Candidates are sorted by upper-cased title (Swift `<` on String, so code-unit
-//   order), and the switched-on ones get CH 450 upward, capped at 50 channels
-//   (CH 450-499), ids from 1,020,000. Anything enabled past the cap is not built.
+//   order), and the switched-on ones get CH 400 upward, capped at 100 channels
+//   (CH 400-499), ids from 1,020,000. Anything enabled past the cap is not built.
 //   Until 1.0.29 this block was CH 500-699 with room for 200; HIGH ROTATION took 500.
 //
 // Duplicates of a stock channel are flagged the way the app's collections list
@@ -28,12 +28,13 @@
 //
 // Not ported: the app's FRANCHISES / OTHER COLLECTIONS split (CollectionClassifier)
 // and found franchises. Every web collection channel sits in the OTHER COLLECTIONS
-// range, CH 450-499.
+// range, CH 400-499; on the Apple TV a franchise collection joins the franchise
+// block at 310-399 instead.
 (function (global) {
   'use strict';
 
   const ID_BASE = 1000000 + 2 * 10000;
-  const NUMBER_BASE = 450;
+  const NUMBER_BASE = 400;
   const NUMBER_END = 499;
   const CAPACITY = NUMBER_END - NUMBER_BASE + 1;
   const MIN_MOVIES = 3;
