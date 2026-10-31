@@ -3,6 +3,65 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku: one franchise block, the FRANCHISES switch, the sidebar in guide order)
+
+**Changed.** Branch `roku/renumber-franchise-block`, on `roku/renumber-channel-blocks` rebased
+onto `origin/main` (c834e66), not pushed. Follows the Apple TV's `renumber/franchise-block`
+(full reasons in its entry):
+- Found franchises and franchise collections share CH 310-399 as one pool, numbered A to
+  Z then by a stable id with the kind in it (f: or c:), most films kept when over 90.
+  `NxCollectionsMaterialize` numbers both, so the library load adds the found franchise
+  channels after the collections step now. Ids stay per kind. Other collections CH
+  400-499, the first 100.
+- The FRANCHISES switch gates franchise collections too: they join the package's channels
+  in the guide instead of the always-on collections package.
+- The packages sidebar (`NxGuideJumpTargets`) sorts by each entry's first channel in the
+  guide, has one FRANCHISES (classics, found franchises, franchise collections) and adds
+  OTHER COLLECTIONS, which the Roku didn't list before.
+
+The branch carries the web collections commit (CH 400-499) cherry-picked from
+`renumber/franchise-block`, because the collection vectors come from the root's JS.
+
+Tests: `tests/run.sh` (NX_TEST_JOBS=3) all passed: collections 1673, guide nav 40 (4 new
+sidebar cases), franchise guide 67.
+
+**Next.** Roku Settings still shows the franchise collections under MY COLLECTIONS with
+their own cap note; merging them into the FRANCHISES list as the Apple TV did is a UI
+change for tydude001.
+
+## 2026-10-31 (Roku: runtime channels move to the new channel blocks)
+
+**Changed.** Branch `roku/renumber-channel-blocks`, cut from `roku/batch-2026-10-30`, not
+pushed. The channel lineup was renumbered so every package has its own block (full table
+and reasons in the Apple TV entry of the same day on `renumber/channel-blocks`): NOSTALGEX
+1-29, KIDZ ZONE 30-49, PRIME TIME 50-69, MARQUEE 70-89, ADVENTURELAND 90-109, OVERTIME
+110-119, CASE FILES 120-129, DECADES 130-149, ARTHOUSE 150-159, NETWORKS 160-179, SCREAM
+180-189, TIS THE SEASON 190-199, FRANCHISES 300-309, HIGH ROTATION 500-519. The Roku's
+runtime blocks follow the Apple TV's `DynamicChannelBlock`:
+- Found franchises: CH 310-399, 90 slots (was 300-449, 150). `Franchises.brs`.
+- Franchise collections: CH 400-449, 50 slots (was 450-499). `Collections.brs`.
+- Other collections: CH 450-499, 50 slots (was 500-699, 200), still the first 50 switched
+  on in list order, as on the web.
+Ids are unchanged, so saved switches (franchisesOn, collectionsOn, bundles) carry over.
+Nothing the Roku saves holds a channel number: the registry keeps ids and keys, the saved
+library keeps items, and the guide is rebuilt from channels.json on every load. Deep links
+try the id first, so a dashboard deep link by id still opens the same channel.
+
+The branch carries the shared data commit (`channels.json` version 49 and the web
+collections block) cherry-picked from `renumber/channel-blocks`, because `tests/run.sh`
+generates the vectors from the root's JS engine and data: without it the root still says
+500-699 and the collection vectors disagree with the port. The two copies are the same
+change, so whichever branch merges second meets an identical hunk.
+
+Tests: the block expectations in `CollectionTests.brs` and `FranchiseGuideTests.brs` follow
+the new Swift `FranchiseNumberingTests` (86 found franchises number 310-395; 100 switched on
+keep 90; 53 franchise collections keep 50 at 400-449; 53 other collections keep 50 at
+450-499). Stock channel numbers were already read from the live channels.json (6ca1f28).
+
+**Next.** Review and on-device check by the tester (Settings franchise and collection rows
+show 300s and 400s, a full found-franchise block shows "Up to 90"). Merge after
+`roku/batch-2026-10-30` (PR #162).
+
 ## 2026-10-31 (Web tuner and Docker: a library of any size loads, #152)
 
 **Shipped.** Nothing yet. Branch `fix/web-152-storage-quota`, cut from `origin/main` at

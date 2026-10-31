@@ -352,7 +352,7 @@ function collectionsFullNote(category as String) as String
     return "Up to " + capacity.ToStr() + " of these fit in the guide. " + over.ToStr() + " more are switched on but not shown."
 end function
 
-' Under the franchise list when CH 300-449 is full, as upstream's.
+' Under the franchise list when CH 310-399 is full, as upstream's.
 function franchisesFullNote() as String
     over = NxNumberOr0(m.top.franchiseOverCap)
     capacity = NxNumberOr0(m.top.franchiseCapacity)
@@ -763,7 +763,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.franchisesChanged = true
             render()
         else if row.kind = "collection" then
-            ' toggleCollection: switch one on and it airs from CH 450 or 500.
+            ' toggleCollection: switch one on and it airs from CH 400 or 450.
             id = row.collection.id
             if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true
             m.collectionsChanged = true

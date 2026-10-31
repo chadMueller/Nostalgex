@@ -52,7 +52,7 @@ function NxRunFranchiseGuideTests(configPath as String, dictionaryPath as String
         nums.Push(ch.number.ToStr())
         ids.Push(ch.id.ToStr())
     end for
-    NxCheck(r, "add all: numbers from 300", nums.Join(","), "300,301,302")
+    NxCheck(r, "add all: numbers from 310", nums.Join(","), "310,311,312")
     NxCheck(r, "add all: runtime ids", ids.Join(","), "1000000,1000001,1000002")
     for each f in s.found
         NxFranchiseRecordChoice(choices, f.id, false)
@@ -201,7 +201,7 @@ function NxRunFranchiseGuideTests(configPath as String, dictionaryPath as String
     NxCheck(r, "merged: id", s.found[0].id, "tmdb:2806")
     NxCheck(r, "merged: count", NxFgRow(s, "AMERICAN PIE").countLabel, "4 movies")
 
-    ' FranchiseNumberingTests: the default-on pair, and the 300-449 block.
+    ' FranchiseNumberingTests: the default-on pair, and the 310-399 block.
     items = []
     for each title in ["Star Trek: The Motion Picture", "Star Trek II: The Wrath of Khan", "Star Trek III: The Search for Spock", "The Fast and the Furious", "2 Fast 2 Furious", "Fast Five"]
         it = NxFgMovie("d" + items.Count().ToStr(), title)
@@ -227,8 +227,9 @@ function NxRunFranchiseGuideTests(configPath as String, dictionaryPath as String
         many.Push({ id: "tmdb:" + i.ToStr(), name: "F" + i.ToStr(), movies: [], tvItems: [], coveredByChannelID: invalid, fromDictionary: false, enabled: true })
     end for
     built = NxFranchiseChannels(many)
-    NxCheck(r, "range capped at 150 channels", built.Count().ToStr(), "150")
-    NxCheck(r, "range ends at 449", built.Peek().number.ToStr(), "449")
+    NxCheck(r, "range capped at 90 channels", built.Count().ToStr(), "90")
+    NxCheck(r, "range starts at 310", built[0].number.ToStr(), "310")
+    NxCheck(r, "range ends at 399", built.Peek().number.ToStr(), "399")
     NxCheck(r, "range colors cycle", built[10].colorHex, built[0].colorHex)
 
     NxCheck(r, "natural sort: digits as numbers", NxFgBool(NxFranchiseNaturalCompare("SAW 2", "SAW 10") < 0), "true")
