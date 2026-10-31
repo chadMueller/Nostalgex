@@ -422,13 +422,17 @@ struct PlexAPIService: MediaBackend {
         let batchSize = 5
         for batchStart in stride(from: 0, to: shows.count, by: batchSize) {
             let batch = Array(shows[batchStart ..< min(batchStart + batchSize, shows.count)])
-            let batchResults = try await withThrowingTaskGroup(of: [PlexMediaItem].self) { group in
-                for show in batch {
-                    group.addTask { try await fetchShowEpisodes(show) }
+            // Shows are fetched together but kept in the order they were listed, not
+            // the order their requests finish: the schedule reads the library in order,
+            // so arrival order made every rescan build a different guide. Measured in
+            // EpisodeBatchOrderHarnessTests.
+            let batchResults = try await withThrowingTaskGroup(of: (Int, [PlexMediaItem]).self) { group in
+                for (offset, show) in batch.enumerated() {
+                    group.addTask { (offset, try await fetchShowEpisodes(show)) }
                 }
-                var merged: [PlexMediaItem] = []
-                for try await eps in group { merged.append(contentsOf: eps) }
-                return merged
+                var byOffset = Array(repeating: [PlexMediaItem](), count: batch.count)
+                for try await (offset, eps) in group { byOffset[offset] = eps }
+                return byOffset.flatMap { $0 }
             }
             results.append(contentsOf: batchResults)
             onBatch?(min(batchStart + batchSize, shows.count), shows.count, results.count)
@@ -1285,19 +1289,99 @@ struct PlexAPIService: MediaBackend {
             + server.connections.filter { $0.relay }
         guard !ordered.isEmpty else { return nil }
 
-        let reachableIndices = await withTaskGroup(of: Int?.self) { group -> [Int] in
+        // Which tier won and how long it took, for the debug timing below: the URI alone
+        // (often plex.direct for both local and remote) doesn't say which.
+        let tierStart = Date()
+        func tierName(_ c: PlexConnection) -> String {
+            if c.local && !c.relay { return "local" }
+            if c.relay { return "relay" }
+            return c.uri.hasPrefix("https://") ? "remote-https" : "remote-plain"
+        }
+
+        // Found live, 2026-10-30: sign-in over Plex measured ~45-49s even with the fix
+        // below. Second root cause, found with real timing logs from a live trace: a
+        // shared server with only relay reachability had its relay candidate succeed in
+        // 0.5s, but relay is the lowest-priority tier, so the first version of this fix
+        // (below) correctly waited for the higher-priority remote-HTTPS candidate to
+        // also report before accepting it, since that candidate COULD still outrank
+        // relay if it succeeded. It never succeeds for this server, but still takes its
+        // full patient budget (25s, one retry, up to 50s) to finish failing. One slow
+        // server blocks the whole sign-in: `discoverServers` needs every server's result
+        // to decide whether to show a picker, so the slowest server sets the pace.
+        //
+        // Fix: once there is at least one success, give anything still-ranked-higher a
+        // grace window to beat it rather than its full patient budget, instead of
+        // waiting out the full 50s worst case for every server. This must not trade a
+        // slow-but-real connection for a faster-but-worse one, so the grace window is
+        // sized by what is actually still pending, not one flat number:
+        //   - A pending LOCAL candidate answers fast or not at all (existing design,
+        //     see `patient` below), so a short grace is genuinely safe; it is not
+        //     going to succeed slowly.
+        //   - A pending remote-HTTPS/plain/relay candidate is `patient` and can
+        //     legitimately take 10-20s to cold-establish and still succeed, so it gets
+        //     most of its own budget, not a token few seconds, before a faster lower
+        //     tier is allowed to win instead.
+        // Connection timing, for measuring discovery on a real TV (qS8n7gQi). Debug
+        // builds only: a release build never prints server names or addresses.
+        func discoveryTiming(_ message: @autoclosure () -> String) {
+            #if DEBUG
+            print("[Plex90] DISCOVERY TIMING: " + message())
+            #endif
+        }
+        let graceWhilePatientCandidatesStillPending: TimeInterval = 15
+        let graceWhileOnlyLocalCandidatesStillPending: TimeInterval = 3
+        let reachableIndices = await withTaskGroup(of: (idx: Int, ok: Bool).self) { group -> [Int] in
             for (idx, candidate) in ordered.enumerated() {
                 group.addTask {
                     // Local connections answer fast or not at all; remote/relay paths
                     // (the only paths a shared-library-only user has) are slow to
                     // establish cold, so they get a longer budget and one retry.
                     let patient = !candidate.local || candidate.relay
-                    return await testReachable(uri: candidate.uri, token: token, patient: patient) ? idx : nil
+                    let ok = await testReachable(uri: candidate.uri, token: token, patient: patient)
+                    return (idx, ok)
                 }
             }
+            // -1 is a sentinel for the grace timer below, never a real candidate index.
+            var reported = Set<Int>()
             var hits: [Int] = []
-            for await result in group {
-                if let result { hits.append(result) }
+            var graceDeadline: Date? = nil
+            for await (idx, ok) in group {
+                if idx >= 0 {
+                    let elapsed = String(format: "%.1f", Date().timeIntervalSince(tierStart))
+                    discoveryTiming("'\(server.name ?? "?")' \(tierName(ordered[idx])) (\(ordered[idx].uri)) \(ok ? "OK" : "FAILED") at \(elapsed)s")
+                    reported.insert(idx)
+                    if ok { hits.append(idx) }
+                }
+                guard let best = hits.min() else { continue }
+                if (0..<best).allSatisfy({ reported.contains($0) }) {
+                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (all earlier reported), cancelling the rest")
+                    group.cancelAll()
+                    break
+                }
+                if idx == -1 {
+                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (grace window elapsed), cancelling the rest")
+                    group.cancelAll()
+                    break
+                }
+                // There is a hit but something higher-priority is still outstanding.
+                // Size the one-time grace window by what actually outranks the current
+                // best hit, not a flat number: if any of it is a patient (remote/relay)
+                // tier, it gets real time to legitimately succeed slowly; only when
+                // everything outranking the hit is local-only is a short grace safe,
+                // since local answers fast or not at all. Scheduled as a real timer
+                // task in this same group: a passive time check here would never fire
+                // on its own, since this loop only wakes up when a task reports.
+                if graceDeadline == nil {
+                    let higherPriorityIncludesPatient = ordered[0..<best].contains { !$0.local || $0.relay }
+                    let grace = higherPriorityIncludesPatient
+                        ? graceWhilePatientCandidatesStillPending
+                        : graceWhileOnlyLocalCandidatesStillPending
+                    graceDeadline = Date().addingTimeInterval(grace)
+                    group.addTask {
+                        try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000))
+                        return (-1, false)
+                    }
+                }
             }
             return hits
         }
@@ -1408,6 +1492,9 @@ struct PlexAPIService: MediaBackend {
         let timeout: TimeInterval = patient ? 25 : 12
         let attempts = patient ? 2 : 1
         for attempt in 0..<attempts {
+            // A cancelled probe (bestReachableURI already has its answer from a
+            // higher-priority candidate) fails fast rather than retrying once more.
+            if Task.isCancelled { return false }
             // Step 1: identity probe — server is reachable at all
             guard await probe(uri: "\(uri)/identity", token: token, requireAuth: false, timeout: timeout) else {
                 if attempt < attempts - 1 { continue }

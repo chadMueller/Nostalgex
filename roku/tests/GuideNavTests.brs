@@ -49,6 +49,35 @@ function NxRunGuideNavTests() as Integer
         NxCheck(r, "text: the name starts past the number box, large " + FormatJson(big), NxGuideTextBigger(z.nameGap, z.numW).ToStr(), "true")
     end for
 
+    ' ── The packages sidebar (bundleJumpTargets): guide order, one FRANCHISES ──
+    ' The packages in channels.json's order, as the guide config lists them,
+    ' with the collections as LibraryTask hands them over.
+    bundles = [
+        { id: "nostalgex", name: "NOSTALGEX", channelIDs: [1] },
+        { id: "truecrime", name: "CASE FILES", channelIDs: [40] },
+        { id: "essentials", name: "PRIME TIME", channelIDs: [50] },
+        { id: "franchises", name: "FRANCHISES", channelIDs: [100], jumpIDs: [100, 1000000, 1010000] },
+        { id: "seasonal", name: "SCREAM", channelIDs: [131] },
+        { id: "high-rotation", name: "HIGH ROTATION", channelIDs: [150] },
+        { id: "decades", name: "DECADES", channelIDs: [90] }
+    ]
+    on = ["nostalgex", "truecrime", "essentials", "franchises", "seasonal", "high-rotation"]
+    jumps = [{ name: "OTHER COLLECTIONS", ids: [1020000] }]
+    ' The guide in number order: 1, 50, 120 (id 40), 180 (id 131), 300, 310, 311, 400, 500.
+    guide = [
+        { id: 1, color: "#1" }, { id: 50, color: "#2" }, { id: 40, color: "#3" }, { id: 131, color: "#4" },
+        { id: 100, color: "#5" }, { id: 1010000, color: "#6" }, { id: 1000000, color: "#7" },
+        { id: 1020000, color: "#8" }, { id: 150, color: "#9" }
+    ]
+    NxCheck(r, "jump list: guide order, one FRANCHISES, HIGH ROTATION last", NxGnJumpNames(NxGuideJumpTargets(bundles, on, jumps, guide)), "NOSTALGEX@0,PRIME TIME@1,CASE FILES@2,SCREAM@3,FRANCHISES@4,OTHER COLLECTIONS@7,HIGH ROTATION@8")
+    ' SCREAM leading the guide in October leads the list.
+    lead = [guide[3], guide[0], guide[1], guide[2], guide[4], guide[5], guide[6], guide[7], guide[8]]
+    NxCheck(r, "jump list: a seasonal lead leads", NxGnJumpNames(NxGuideJumpTargets(bundles, on, jumps, lead)), "SCREAM@0,NOSTALGEX@1,PRIME TIME@2,CASE FILES@3,FRANCHISES@4,OTHER COLLECTIONS@7,HIGH ROTATION@8")
+    ' No classic shown: FRANCHISES jumps to the first franchise channel there is.
+    noClassic = [guide[0], guide[5], guide[6]]
+    NxCheck(r, "jump list: FRANCHISES without a classic", NxGnJumpNames(NxGuideJumpTargets(bundles, on, invalid, noClassic)), "NOSTALGEX@0,FRANCHISES@1")
+    NxCheck(r, "jump list: a package off, or nothing shown", NxGnJumpNames(NxGuideJumpTargets(bundles, ["decades"], jumps, guide)), "OTHER COLLECTIONS@7")
+
     print "guide nav cases (upstream ChannelGuideView wrap): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
@@ -66,4 +95,12 @@ end function
 ' A line `size` tall (about 1.3 times) from `top` ends inside `height`.
 function NxGuideTextFits(size as Integer, top as Integer, height as Integer) as Boolean
     return top >= 0 and top + Int(size * 1.3 + 0.5) <= height
+end function
+
+function NxGnJumpNames(targets as Object) as String
+    out = []
+    for each t in targets
+        out.Push(t.name + "@" + t.channel.ToStr())
+    end for
+    return out.Join(",")
 end function

@@ -32,9 +32,9 @@ final class StarvationLadderCoverageTests: XCTestCase {
 
     private var backends: [(name: String, backend: MediaBackend)] {
         [
-            ("Jellyfin", JellyfinAPIService(serverURL: "http://192.168.4.79:8096",
+            ("Jellyfin", JellyfinAPIService(serverURL: "http://192.0.2.79:8096",
                                             accessToken: "tok", userId: "u1")),
-            ("Emby", EmbyAPIService(serverURL: "http://192.168.4.79:8096",
+            ("Emby", EmbyAPIService(serverURL: "http://192.0.2.79:8096",
                                     accessToken: "tok", userId: "u1")),
         ]
     }
@@ -87,7 +87,7 @@ final class StarvationLadderCoverageTests: XCTestCase {
     /// Plex is the other half of the contract: it builds the offset into the request, so the
     /// caller must not seek on top of it.
     func testPlexStillReportsThatItsCappedStreamStartsAtTheOffset() {
-        let plex = PlexAPIService(serverURL: "http://192.168.4.79:32400", token: "t")
+        let plex = PlexAPIService(serverURL: "http://192.0.2.79:32400", token: "t")
         XCTAssertTrue(plex.cappedStreamStartsAtOffset)
     }
 }

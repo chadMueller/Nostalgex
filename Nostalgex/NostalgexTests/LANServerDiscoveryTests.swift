@@ -7,7 +7,7 @@ import XCTest
 final class LANServerDiscoveryTests: XCTestCase {
 
     // Captured verbatim from an Emby 4.10.1.0 reply. Jellyfin adds EndpointAddress.
-    private let embyReply = #"{"Address":"http://192.168.1.10:8096","Id":"fb66e05eaa284eb48076f8e1e550a7dc","Name":"Medias-Mac-mini"}"#
+    private let embyReply = #"{"Address":"http://192.168.1.10:8096","Id":"0a1b2c3d4e5f60718293a4b5c6d7e8f9","Name":"Attic-Server"}"#
     private let jellyfinReply = #"{"Address":"http://192.168.1.20:8096","Id":"3d1f0a9e8c7b4a5d9e2f1c0b8a7d6e5f","Name":"Living Room Jellyfin","EndpointAddress":null}"#
 
     func testParsesAJellyfinReply() {
@@ -21,9 +21,9 @@ final class LANServerDiscoveryTests: XCTestCase {
     func testParsesAnEmbyReply() {
         let server = LANServerDiscovery.parse(reply: Data(embyReply.utf8), kind: .emby)
         XCTAssertEqual(server, DiscoveredServer(kind: .emby,
-                                                name: "Medias-Mac-mini",
+                                                name: "Attic-Server",
                                                 address: "http://192.168.1.10:8096",
-                                                id: "fb66e05eaa284eb48076f8e1e550a7dc"))
+                                                id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9"))
     }
 
     func testRejectsMalformedReplies() {
@@ -65,7 +65,7 @@ final class LANServerDiscoveryTests: XCTestCase {
     /// The real Emby ignored 255.255.255.255 on a /22 and answered the directed
     /// broadcast, so this arithmetic is load-bearing.
     func testDirectedBroadcastFromAddressAndMask() {
-        XCTAssertEqual(LANServerDiscovery.directedBroadcast(address: "192.168.4.29", netmask: "255.255.252.0"), "192.168.7.255")
+        XCTAssertEqual(LANServerDiscovery.directedBroadcast(address: "192.0.2.29", netmask: "255.255.252.0"), "192.0.3.255")
         XCTAssertEqual(LANServerDiscovery.directedBroadcast(address: "192.168.1.10", netmask: "255.255.255.0"), "192.168.1.255")
         XCTAssertEqual(LANServerDiscovery.directedBroadcast(address: "10.0.0.5", netmask: "255.0.0.0"), "10.255.255.255")
         XCTAssertNil(LANServerDiscovery.directedBroadcast(address: "not an ip", netmask: "255.255.255.0"))

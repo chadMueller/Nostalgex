@@ -185,7 +185,7 @@ struct NowPlayingPanel: View {
                 .foregroundStyle(channel.color)
 
             // Title leads as the big headline, channel name follows smaller below it
-            // (Discord feedback, jussaren, 2026-10-29: viewers read this as "what's
+            // (Discord feedback, 2026-10-29: viewers read this as "what's
             // playing", so the title should dominate and the channel is secondary).
             Text(nowPlayingLine)
                 .font(.custom("DMMono-Medium", size: 30))

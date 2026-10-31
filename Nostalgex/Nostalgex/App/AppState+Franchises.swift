@@ -19,7 +19,7 @@ struct FoundFranchise: Identifiable, Equatable {
     let movies: [PlexMediaItem]
     /// Episodes of the shows that joined (the show title is `PlexMediaItem.title`).
     let tvItems: [PlexMediaItem]
-    /// The stock channel (CH100-106) this franchise folds into, when one exists. Such a
+    /// The stock channel (ids 100-106, CH 300-306) this franchise folds into, when one exists. Such a
     /// franchise is listed (and switched) as that classic's row, see `franchiseListRows`.
     let coveredByChannelID: Int?
     let fromDictionary: Bool
@@ -56,7 +56,7 @@ struct FoundFranchise: Identifiable, Equatable {
     }
 }
 
-/// One row of the single franchise list in Settings: a stock classic (CH100-106,
+/// One row of the single franchise list in Settings: a stock classic (ids 100-106, CH 300-306,
 /// channels.json) or a franchise found in the library. Both have a switch and share one
 /// on/off store (`enabledFranchiseIDs` / `disabledFranchiseIDs`), keyed by stable id.
 struct FranchiseListRow: Identifiable, Equatable {
@@ -86,7 +86,7 @@ extension AppState {
 
     static let enabledFranchisesKey = PreferenceSync.enabledFranchisesKey
     static let disabledFranchisesKey = PreferenceSync.disabledFranchisesKey
-    /// The stock FRANCHISES bundle in channels.json (CH100-106). Found franchise channels
+    /// The stock FRANCHISES bundle in channels.json (ids 100-106, CH 300-306). Found franchise channels
     /// ride on this switch.
     static let franchisesBundleID = "franchises"
 
@@ -515,9 +515,15 @@ extension AppState {
         let config = ChannelConfigLoader.loadBundled()
         channelConfigChannels = config.channels
         exclusiveRules = config.exclusiveRules
+        // `-uiTestShortPackage` only: one ARTHOUSE channel the sample library cannot fill,
+        // so the DEMO row has a channel short of content and its amber count shows. Never
+        // in plain demo mode, which App Review sees.
+        let shortChannel = DemoData.shortPackageFixtureRequested
+            ? config.bundles.first(where: { $0.id == "arthouse" })?.channelIDs.first
+            : nil
         let demoBundle = ChannelBundle(
             id: "demo", name: "DEMO", description: "Sample channels",
-            channelIDs: demoChannelIDs, activeMonths: nil, enabled: true
+            channelIDs: demoChannelIDs + (shortChannel.map { [$0] } ?? []), activeMonths: nil, enabled: true
         )
         let franchisesBundle = config.bundles
             .first(where: { $0.id == Self.franchisesBundleID })?

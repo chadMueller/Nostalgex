@@ -19,8 +19,8 @@ final class SignInFlowTests: XCTestCase {
     /// The same server heard on two interfaces (Wi-Fi and Ethernet) is still one server,
     /// so it must not turn into a pick.
     func testTheSameServerTwiceIsStillOne() {
-        let wifi = server("a", "http://192.168.4.45:8096")
-        let ethernet = server("a", "http://192.168.4.49:8096")
+        let wifi = server("a", "http://192.0.2.45:8096")
+        let ethernet = server("a", "http://192.0.2.49:8096")
         XCTAssertEqual(SignInFlow.outcome(of: [wifi, ethernet]), .single(wifi))
     }
 
@@ -82,12 +82,12 @@ final class SignInFlowTests: XCTestCase {
 
     /// Captured from Jellyfin 12.2.0 and Emby 4.10.1.0 (Ids shortened).
     func testPublicInfoNamesTheKind() {
-        let jellyfin = #"{"LocalAddress":"http://127.0.0.1:8096","ServerName":"Living Room","Version":"12.2.0","ProductName":"Jellyfin Server","OperatingSystem":"","Id":"c573338c","StartupWizardCompleted":true}"#
-        let emby = #"{"LocalAddresses":[],"RemoteAddresses":[],"ServerName":"Medias-Mac-mini","Version":"4.10.1.0","Id":"8844f187"}"#
+        let jellyfin = #"{"LocalAddress":"http://127.0.0.1:8096","ServerName":"Living Room","Version":"12.2.0","ProductName":"Jellyfin Server","OperatingSystem":"","Id":"d1d2d3d4","StartupWizardCompleted":true}"#
+        let emby = #"{"LocalAddresses":[],"RemoteAddresses":[],"ServerName":"Attic-Server","Version":"4.10.1.0","Id":"e5e6e7e8"}"#
         XCTAssertEqual(SignInFlow.parsePublicInfo(Data(jellyfin.utf8)),
-                       .init(id: "c573338c", name: "Living Room", kind: .jellyfin))
+                       .init(id: "d1d2d3d4", name: "Living Room", kind: .jellyfin))
         XCTAssertEqual(SignInFlow.parsePublicInfo(Data(emby.utf8)),
-                       .init(id: "8844f187", name: "Medias-Mac-mini", kind: .emby))
+                       .init(id: "e5e6e7e8", name: "Attic-Server", kind: .emby))
         XCTAssertNil(SignInFlow.parsePublicInfo(Data(#"{"ServerName":"router"}"#.utf8)), "no Id is not a server")
         XCTAssertNil(SignInFlow.parsePublicInfo(Data("<!doctype html>".utf8)))
     }

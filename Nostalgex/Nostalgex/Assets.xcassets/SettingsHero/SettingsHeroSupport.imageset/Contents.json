@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "settings-hero-support.png",
+      "idiom": "tv",
+      "scale": "1x"
+    },
+    {
+      "filename": "settings-hero-support@2x.png",
+      "idiom": "tv",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

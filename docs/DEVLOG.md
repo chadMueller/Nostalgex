@@ -3,6 +3,77 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
+
+**Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones
+("nor", "nob", "nno"). Servers tag the same track with any of them and a TV set to
+Norwegian reports nb_NO, so the exact compare from issue #119 never matched across them.
+
+**Changed.** On `roku/norwegian-one-language` (off main), not pushed. `NxLanguageKey`
+folds the six to "no" where codes are compared: the setting (`NxPreferredLanguageFrom`),
+a track (`NxSubComparableTag`) and the prefix compare (`NxSubMatches`). `NxIso639Table` is
+unchanged. Every other language keeps the exact compare. The Apple TV and web tuner do the
+same on `fix/norwegian-one-language`. Cases in `tests/SubtitleTests.brs`.
+
+## 2026-10-31 (Roku: one franchise block, the FRANCHISES switch, the sidebar in guide order)
+
+**Changed.** Branch `roku/renumber-franchise-block`, on `roku/renumber-channel-blocks` rebased
+onto `origin/main` (c834e66), not pushed. Follows the Apple TV's `renumber/franchise-block`
+(full reasons in its entry):
+- Found franchises and franchise collections share CH 310-399 as one pool, numbered A to
+  Z then by a stable id with the kind in it (f: or c:), most films kept when over 90.
+  `NxCollectionsMaterialize` numbers both, so the library load adds the found franchise
+  channels after the collections step now. Ids stay per kind. Other collections CH
+  400-499, the first 100.
+- The FRANCHISES switch gates franchise collections too: they join the package's channels
+  in the guide instead of the always-on collections package.
+- The packages sidebar (`NxGuideJumpTargets`) sorts by each entry's first channel in the
+  guide, has one FRANCHISES (classics, found franchises, franchise collections) and adds
+  OTHER COLLECTIONS, which the Roku didn't list before.
+
+The branch carries the web collections commit (CH 400-499) cherry-picked from
+`renumber/franchise-block`, because the collection vectors come from the root's JS.
+
+Tests: `tests/run.sh` (NX_TEST_JOBS=3) all passed: collections 1673, guide nav 40 (4 new
+sidebar cases), franchise guide 67.
+
+**Next.** Roku Settings still shows the franchise collections under MY COLLECTIONS with
+their own cap note; merging them into the FRANCHISES list as the Apple TV did is a UI
+change for tydude001.
+
+## 2026-10-31 (Roku: runtime channels move to the new channel blocks)
+
+**Changed.** Branch `roku/renumber-channel-blocks`, cut from `roku/batch-2026-10-30`, not
+pushed. The channel lineup was renumbered so every package has its own block (full table
+and reasons in the Apple TV entry of the same day on `renumber/channel-blocks`): NOSTALGEX
+1-29, KIDZ ZONE 30-49, PRIME TIME 50-69, MARQUEE 70-89, ADVENTURELAND 90-109, OVERTIME
+110-119, CASE FILES 120-129, DECADES 130-149, ARTHOUSE 150-159, NETWORKS 160-179, SCREAM
+180-189, TIS THE SEASON 190-199, FRANCHISES 300-309, HIGH ROTATION 500-519. The Roku's
+runtime blocks follow the Apple TV's `DynamicChannelBlock`:
+- Found franchises: CH 310-399, 90 slots (was 300-449, 150). `Franchises.brs`.
+- Franchise collections: CH 400-449, 50 slots (was 450-499). `Collections.brs`.
+- Other collections: CH 450-499, 50 slots (was 500-699, 200), still the first 50 switched
+  on in list order, as on the web.
+Ids are unchanged, so saved switches (franchisesOn, collectionsOn, bundles) carry over.
+Nothing the Roku saves holds a channel number: the registry keeps ids and keys, the saved
+library keeps items, and the guide is rebuilt from channels.json on every load. Deep links
+try the id first, so a dashboard deep link by id still opens the same channel.
+
+The branch carries the shared data commit (`channels.json` version 49 and the web
+collections block) cherry-picked from `renumber/channel-blocks`, because `tests/run.sh`
+generates the vectors from the root's JS engine and data: without it the root still says
+500-699 and the collection vectors disagree with the port. The two copies are the same
+change, so whichever branch merges second meets an identical hunk.
+
+Tests: the block expectations in `CollectionTests.brs` and `FranchiseGuideTests.brs` follow
+the new Swift `FranchiseNumberingTests` (86 found franchises number 310-395; 100 switched on
+keep 90; 53 franchise collections keep 50 at 400-449; 53 other collections keep 50 at
+450-499). Stock channel numbers were already read from the live channels.json (6ca1f28).
+
+**Next.** Review and on-device check by the tester (Settings franchise and collection rows
+show 300s and 400s, a full found-franchise block shows "Up to 90"). Merge after
+`roku/batch-2026-10-30` (PR #162).
+
 ## 2026-10-31 (Web tuner and Docker: a library of any size loads, #152)
 
 **Shipped.** Nothing yet. Branch `fix/web-152-storage-quota`, cut from `origin/main` at
@@ -80,6 +151,263 @@ and not looked at further.
 **Next.** Needs review and a push decision from Chad. Cross-product: localStorage and IndexedDB
 are browser-only, so nothing to port to Apple TV or Roku; the Roku CI job watches
 `plex-tuner.html` and the engine files, and none of the shared engine files changed.
+
+## 2026-10-31 (Apple TV: Settings headers use Chad's pixel icons)
+
+**Changed.** On `release/1.0.29-rc`. The six painted Settings illustrations (2.8 MB) are
+replaced by Chad's own 16x16 pixel icons (`e6814f3`, `de63db7`): each PNG is the icon at
+exactly 6x and 12x, drawn at 96 points with nearest-neighbour sampling so every pixel stays
+square, beside a 34-point title. The dark 16:9 tile the painted art needed is gone. The
+twelve PNGs (1x and 2x) come to about 7 KB.
+
+## 2026-10-31 (Apple TV and web tuner: Norwegian, Bokmal and Nynorsk are one language)
+
+**Why.** Norwegian has three ISO 639-1 codes, "no" (Norwegian), "nb" (Bokmal) and "nn"
+(Nynorsk), and three ISO 639-2 ones, "nor", "nob" and "nno". Servers tag the same track
+with any of them, and a TV set to Norwegian reports "nb-NO". Since N-014 compared codes
+exactly, a Bokmal viewer never got a track tagged "nor", and the other way round.
+
+**Changed.** On `fix/norwegian-one-language` (off `release/1.0.29-rc`), not pushed.
+The ISO 639 table is unchanged (still identical to the Roku app's); the six codes are
+folded to "no" when two codes are compared. Every other language keeps the exact compare.
+- Apple TV: `SubtitleSelectionLogic.norwegianCodes` and `languageKey` (table reduction,
+  then the fold), used by `sameLanguage` and the Jellyfin and Emby audio pick;
+  `tagMatchesPreferred` adds the same rule to the prefix compare the player's own tracks
+  use (Plex audio and subtitles, foreign-audio subtitles, forced tracks).
+- Web tuner: `scripts/nostalgex-language.js` gains `NORWEGIAN` and `languageKey`, and
+  `sameLanguage` compares keys, so the page's `langMatches` follows with no change there.
+- Tests: `LanguageCodeMatchingTests` covers all 36 Norwegian pairs, regions, the TV locale
+  nb_NO, the audio and forced-subtitle picks and the player-track compare, and Danish,
+  Swedish, Dutch, Nepali and Icelandic staying apart. The look-alike test skips "nob" for
+  "no" (now deliberate). The web smoke has the same cases; run against the old module it
+  fails six of them.
+- The Roku side is on `roku/norwegian-one-language` (NxLanguageKey), from main.
+- NostalgexTests: 1,037 run, 1,022 passed, 0 failed, 15 skipped. npm test green
+  (language-match 33 passed). Not tried against a real Norwegian-tagged library.
+
+## 2026-10-31 (one franchise block, and a package list in guide order)
+
+**Why.** After the channel blocks, the guide still had franchises in two places: found
+franchises at 310-399 and the server's franchise collections at 400-449, and the package
+list (Left in the guide) showed FRANCHISES twice with HIGH ROTATION in the middle. Chad:
+"Franchises should all be put together, even though we have stock franchises and custom
+franchises." Branch `renumber/franchise-block`, on `release/1.0.29-rc` at 675e36c, not
+pushed.
+
+**Changed.**
+- Every franchise channel is in the 300s: the stock FRANCHISES package at 300-306, then
+  found franchises and franchise collections in one pool from 310 to 399 (90). Other
+  collections own 400-499 (100, was 50). HIGH ROTATION stays at 500 and last.
+- Order of the shared pool: A to Z by name, then a stable id that carries the kind (f: or
+  c:), with the existing overflow rule (most films stay). By name moves only the channels
+  after a change and treats both kinds the same; found franchises first would renumber
+  every collection whenever a found one is switched. Ids stay per kind (1,000,000+ and
+  1,010,000+), so nothing that holds an id moves.
+- The FRANCHISES switch is every franchise channel's: off, no classic, found franchise or
+  franchise collection airs; on, each follows its own switch, as found franchises already
+  did. Found franchises take a number only while the package is on (Roku only finds them
+  then), so with it off the collections close up instead of leaving gaps; switching it
+  off rebuilds the runtime channels. Settings' FRANCHISES page shows one "Up to 90" note
+  for the shared block.
+- The package list follows the guide: entries sort by their first channel's place in the
+  guide, so a seasonal package leading the guide leads the list, and FRANCHISES is one
+  entry for the classics, the found franchises and the franchise collections. Measured on
+  a tvOS simulator with the full lineup, every package on, one found franchise, one
+  franchise collection and one other collection, before: NOSTALGEX, KIDZ ZONE, CASE FILES,
+  PRIME TIME, MARQUEE, ARTHOUSE, ADVENTURELAND, OVERTIME, DECADES, FRANCHISES (300),
+  NETWORKS, SCREAM, TIS THE SEASON, HIGH ROTATION, FRANCHISES (400), OTHER COLLECTIONS.
+  After, in number order: NOSTALGEX, KIDZ ZONE, PRIME TIME, MARQUEE, ADVENTURELAND,
+  OVERTIME, CASE FILES, DECADES, ARTHOUSE, NETWORKS, SCREAM, TIS THE SEASON, FRANCHISES,
+  OTHER COLLECTIONS, HIGH ROTATION; with SCREAM leading the guide in October, SCREAM first.
+  Pinned by `BundleJumpOrderTests`.
+- Web tuner: it has no franchise classifier, so every web collection is an other
+  collection, CH 400-499, 100 slots ("airs from CH 400"). It has no package list to sort.
+- Duplicates: a franchise collection that is the same franchise as a found one folds into
+  it (`FranchiseCollectionFold`: the dictionary by title, or 60% of its films already in
+  the found franchise, found ones switched on or not) and never gets a channel. Not
+  covered: a collection under 60% overlap with an auto-found franchise of another name,
+  or one with shows the found franchise doesn't air (kept on purpose so the shows don't
+  vanish). Unchanged.
+
+**Measured.** NostalgexTests on the 1080p Apple TV simulator: 1,034 tests, 1,019 passed,
+15 skipped, 0 failed. `npm test` passes.
+
+**Half-done.** Roku on `roku/renumber-franchise-block` (see its entry). Nothing ran on an
+Apple TV.
+
+## 2026-10-31 (Apple TV: all franchises on one page, an amber count for short packages)
+
+**Why.** Franchises lived in three places: a FRANCHISES package under CHANNEL PACKAGES,
+the FRANCHISES page it unlocked, and franchise collections under MY COLLECTIONS. And
+the amber "N need more content" line under a package was more text on a screen that
+already had too much.
+
+**Changed.** On `settings/bundle-toggle-instant`, Settings UI only; no data, numbering
+or channel change.
+- FRANCHISES is gone from CHANNEL PACKAGES. The FRANCHISES page opens on its switch
+  (the same package flag, built in the background like any package), then ADD ALL /
+  REMOVE ALL, then one alphabetical list: the stock classics with their CH numbers (each
+  already had its own switch), the franchises found in the library, and the server's
+  franchise collections, tagged COLLECTION. ADD ALL and REMOVE ALL cover all three.
+- Franchise collections air through their own switches, not the package flag, so they
+  stay listed and switchable while FRANCHISES is off. Folding them under the flag would
+  change the data underneath; left for the renumbering work if wanted.
+- MY COLLECTIONS lists only the non-franchise collections; the scan line counts the
+  rest as UNDER FRANCHISES.
+- A package with channels short of content shows a small amber circle with the count
+  next to its channel count. VoiceOver reads "NAME. 2 channels need more content". WHY
+  ARE SOME CHANNELS MISSING? still explains, and still covers the franchise classics.
+- The franchise fixture gains a franchise collection nothing else claims, and its DEMO
+  package one channel the sample library can't fill, so both show on a simulator.
+  `SettingsChannelsDrilldownTests` walks the new FRANCHISES page and checks MY
+  COLLECTIONS holds only the custom collection. NostalgexTests: 1,028 run, 1,013 passed,
+  0 failed, 15 skipped. Not tried on a real Apple TV.
+
+## 2026-10-31 (Apple TV: a package switch flips at once and builds in the background)
+
+**Why.** On a real Apple TV, switching a package on stalled before the switch flipped
+and BUILDING showed. Measured on a tvOS 26.1 simulator with the franchise fixture padded
+to an 11,863-item library and every package offered: the press itself took 0 ms, but the
+build that followed filtered each channel on the main actor, yielding only every third
+channel, so the main actor was held 350 to 580 ms at a time for about 3 s (NOSTALGEX:
+seven blocks). The switch drew 1.2 to 2.1 s after the press. Three packages switched on
+in a row were three builds, one after another (3.0 s, 2.7 s, 0.7 s), each holding the
+main actor the same way.
+
+**Changed.** On `settings/bundle-toggle-instant` (off `release/1.0.29-rc`), not pushed.
+Same shape as the Roku app's package switch: the switch flips and saves on the press,
+BUILDING shows at once, the build runs behind it, and switches made while one waits or
+builds become one build.
+- `scheduleBundleBuild` waits 0.5 s after the last switch, then builds every package
+  waiting. A new switch restarts the wait and drops a build already running, so a run of
+  quick switches reaches the guide once: one filter pass, one guide swap, one snapshot.
+- `buildPendingBundles` filters off the main actor (as the launch build already did)
+  and merges into the lineup as it stands when the build ends, so a collection scan or
+  franchise change made meanwhile is kept. A package switched off before its build starts
+  is left out of it. Signing out drops a waiting build.
+- The guide takes the new lineup when the build lands; nothing changes what is playing.
+- After, same library: the switch draws in about 270 ms (the UI test's polling floor),
+  the main actor was never held over 65 ms while builds ran, and three quick switches
+  were one build (NOSTALGEX, KIDZ ZONE and CASE FILES together, 6.0 s off the main
+  actor). Switching off is unchanged (about 270 ms, no build).
+- Tests in `BundleBuildTests`: three quick switches commit one build; a package switched
+  off while waiting is left out; the press filters nothing and the main actor's longest
+  gap during a 30-channel build over 60,000 items is under 150 ms (9 ms measured); four
+  real packages from channels.json built together give the same channels and pools as
+  the launch's full build. NostalgexTests: 1,028 run, 1,013 passed, 0 failed, 15 skipped.
+
+**Half-done.** Not tried on a real Apple TV. The filter cache (one pass over the
+library) is still built on the main actor when a build starts: 22 ms for 11,863 items on
+the simulator, more on an Apple TV.
+
+## 2026-10-31 (Apple TV: CHANNELS & BUNDLES becomes a short list with sub-pages)
+
+**Why.** On a real Apple TV the CHANNELS & BUNDLES accordions opened but were laggy and
+jumpy, and the page carried a lot of text. Measured on a tvOS 26.1 simulator with the
+franchise fixture padded to an 11,863-item library: once WHY AREN'T THESE ON AIR? was
+open, every focus move anywhere on the page (not just inside the explainer) took about
+1.2 s, against 0.3 s with it closed. Cause: every row reads the shared focus binding, so
+the whole page's body runs again on each move, and with the explainer open that body
+re-ran `currentMatchCounts` over the full library (1.11 to 1.13 s each time, 31 runs in
+one walk). The scroll then caught up in one jump (571 to 882 points) after each stall.
+An Apple TV is slower than a Mac, so it was worse there. Smaller things on the way: the
+explainer cards took focus through their own `@FocusState`, so the pane's scroll-to-row
+never saw them, and select on a card did nothing, so closing meant walking back up.
+
+**Changed.** On `settings/channels-drilldown` (off `release/1.0.29-rc`), not pushed.
+- The tab opens on four rows: CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS, each
+  with its count on the right and a chevron, then the WATERSHED switch. Select opens a
+  sub-page in the same detail pane; Menu steps back one page and lands on the row that
+  opened it, then to the rail. Moving to another tab resets to the list.
+- CHANNEL PACKAGES: one switch per package with its short description (or its season
+  when out of season), the channel count, and one amber line when some channels need
+  more content. The long channel-name lists are gone. WHY ARE SOME CHANNELS MISSING?
+  sits under the packages and opens the I-004 cards; their match counts are worked out
+  once when that page opens, never in `body`.
+- FRANCHISES and MY COLLECTIONS keep every switch, ADD ALL / REMOVE ALL, the scan button
+  and the over-capacity notes. Collections are listed flat under each category's name;
+  no accordions remain. Same `AppState` calls and row focus ids as before.
+- With the same 11,863-item library, each press now moves focus in about 245 ms (the UI
+  test's polling floor), on the missing-channels page included.
+- `SettingsChannelsDrilldownTests` (UI) walks the list, every sub-page and Menu back.
+  NostalgexTests: 1,024 run, 1,009 passed, 0 failed, 15 skipped.
+
+**Half-done.** Not tried on a real Apple TV yet.
+
+## 2026-10-31 (channel blocks: every package in its own block)
+
+**Changed.** Branch `renumber/channel-blocks`, cut from `release/1.0.29-rc`, not pushed.
+Three 80s channels joined NOSTALGEX on 2026-10-29 and every channel from 20 up moved by
+three, because the packages sat back to back. Each package now starts its own block, in
+its old order, with room to grow, so the next new channel moves nothing else. Users are
+renumbered once, in 1.0.29.
+
+| Package | Block | Now |
+|---|---|---|
+| NOSTALGEX | 1-29 | 1-22 |
+| KIDZ ZONE | 30-49 | 30-44 |
+| PRIME TIME | 50-69 | 50-65 |
+| MARQUEE | 70-89 | 70-80 |
+| ADVENTURELAND | 90-109 | 90-98 |
+| OVERTIME | 110-119 | 110-112 |
+| CASE FILES | 120-129 | 120-125 |
+| DECADES | 130-149 | 130-136 |
+| ARTHOUSE | 150-159 | 150-153 |
+| NETWORKS | 160-179 | 160-171 |
+| SCREAM | 180-189 | 180-187 |
+| TIS THE SEASON | 190-199 | 190-197 |
+| (free for new packages) | 200-299 | |
+| FRANCHISES (stock) | 300-309 | 300-306 |
+| found franchises (runtime) | 310-399 | |
+| franchise collections (runtime) | 400-449 | |
+| other collections (runtime) | 450-499 | |
+| HIGH ROTATION | 500-519 | 500-513 |
+
+- `channels.json` version 49. Only `number` changed. FRIGHT NIGHT (id 141) carries the
+  category "adventureland" but is in the SCREAM package, so it sits with SCREAM at 181;
+  the category only feeds the kids filter and the analytics label. SCREAM and TIS THE
+  SEASON are two packages, so each got half of 180-199.
+- Runtime blocks (`DynamicChannelBlock` in Swift, `nostalgex-collections.js` on the web,
+  `Franchises.brs` and `Collections.brs` on Roku): found franchises 310-399 (90 slots,
+  was 300-449 and 150), franchise collections 400-449 (50, unchanged size), other
+  collections 450-499 (50, was 500-699 and 200). Split rather than one shared 400-499
+  block, so switching a franchise collection never moves an other collection's number
+  and the change is constants only. Overflow is unchanged: past the cap a channel is
+  skipped and counted, and Settings says so. Libraries seen so far found 64 and 86
+  franchises, both under 90.
+- Nothing persisted keys off a channel number: bundles, collections and franchises are
+  saved by id or key (UserDefaults, iCloud, Roku registry, web localStorage), the Top
+  Shelf deep link is `nostalgex://channel/<id>`, and Roku deep links try the id first.
+  One thing did carry numbers: the Apple TV library snapshot. A launch restores the guide
+  from its rows, not from channels.json, so the old numbers would have stayed until the
+  next library refresh (up to a day), and the collection labels it keeps ("CH 103 STAR
+  WARS") feed the franchise fold, which compares them with labels built from the live
+  number. `LibrarySnapshotV1.renumberChannels` now gives the rows this build's numbers by
+  id on restore and rewrites those labels; `ChannelNumberingTests` covers it.
+- Tests that pinned the old blocks follow the new ones (`FranchiseNumberingTests`,
+  `CollectionShowsTests`, `FranchiseSettingsTests`, the collections smoke). The music
+  test that said "everything else stays below 200" became a block table:
+  `testEveryBundleStartsItsOwnBlock` and `testRuntimeChannelsStayOutOfEveryPackageBlock`.
+- Web tuner copy: "Switch one on and it airs from CH 450", "SWITCHED ON PAST CH 499".
+- `CHANNELS.md` computes its "id is not number" example now, so it can't go stale.
+- The unreleased 1.0.29 changelog says the numbers change once, where each package
+  starts, and where franchises and collections land.
+
+**Measured.** NostalgexTests on a tvOS simulator (Apple TV 4K at 1080p): 1,025 tests, 1,008 passed, 15 skipped (opt-in live harnesses), 2 failed on the first run: `SeasonalBundleTests` pins the SCREAM and TIS THE SEASON numbers, now 180-187 and 190-197; after that fix all 11 of its tests pass.
+`npm test` passes (39 steps).
+
+**Half-done.** The Roku side is on `roku/renumber-channel-blocks` (on top of
+`roku/batch-2026-10-30`), with the shared data commit cherry-picked so its vectors agree.
+Published blog posts that name old numbers were left alone: the SCREAM numbers in
+`90s-slasher-movies-halloween-marathon.md` and `docker-web-tuner-1-0-1-how-to.md` (which
+also gives MYSTERY BOX TV, CRINGE TV and A24 numbers), and MARVEL "on 101" in
+`franchise-channels-your-collections.md`. They were already off by the 80s shift.
+
+**Next.** Update those posts when 1.0.29 is in the App Store. Nothing ran on an Apple TV.
+
+## 2026-10-31
+
+**Changed.** On `release/1.0.29-rc`, not pushed. Demo mode's Now Playing panel now names the programme the guide shows: the one 600 s demo clip used to be seeked past its end (87% of tune-ins land 600 s or more into a block), finish at once and hand the panel the schedule's upNext. The clip now seeks to the elapsed time modulo 600, a clip end stays on the live block, and a once-a-second demo tick moves to the next programme when the block ends; real libraries are untouched. `DemoNowPlayingAgreementTests` walks five demo channels across ten programme boundaries on a simulated clock: 797 of 2,764 samples mismatched before, 0 after. Not yet watched on a real Apple TV.
 
 ## 2026-10-30 (Roku: port the two filter engine changes of 2026-10-29, so the `roku` job goes green)
 
@@ -233,6 +561,517 @@ in the workspace's `.shots/roku/`.
 REWATCHABLES…. Widening the column would move the time scale off the Apple TV's 425 px a
 half hour, so it was left.
 
+## 2026-10-30 (Apple TV 1.0.29 release candidate: Settings polish, GUIDE TEXT SIZE)
+
+**Changed.** On `release/1.0.29-rc`, not pushed.
+- A sixth tab and ABOUT's DISCORD and RATE NOSTALGEX rows are hidden behind
+  `SettingsFeatures` (two flags, both false), because they read "Placeholder" on screen.
+  Setting either to true brings its part back as built; the hidden tab's views still
+  compile and nothing reaches them. The rail has five tabs: up and down walk SUPPORT, PLAYBACK, CHANNELS, SERVERS, ABOUT
+  and stop at ABOUT (UI walk on a tvOS 26.1 simulator). ABOUT shows VERSION and GITHUB.
+  Rating is still SUPPORT NOSTALGEX's first row.
+- Settings rows fade out over 32 points as they scroll under the pinned hero, instead of
+  being cut mid-line at its divider. The first row now rests 48 points below the divider
+  (was 16), so it is never in the fade; a focused row is scrolled to the middle of the
+  pane, so it never is either. Checked on simulator captures: RETRO MODE focused rests at
+  full brightness, and a row half under the divider is dimmed at its top edge.
+- GUIDE TEXT SIZE, under RETRO MODE in PLAYBACK & PICTURE: NORMAL or LARGE, the Apple TV
+  side of Roku's I-060. LARGE uses Roku's sizes: program titles and header times 26
+  (from 20), CHANNEL heading 22 (18), channel numbers 24 in a 44 point box (20 in 36),
+  names 20 (18), and BROADCASTS RESUME AT 9 PM 22 (18). Saved like RETRO MODE and synced
+  through iCloud with it, since both are how the guide looks. Nothing saved, or any
+  value but "large", is NORMAL. Rows stay 80 points, the header 60 and the channel
+  column 220; ProgramRowLayout works from times only, so blocks do not move.
+  Measured on a tvOS 26.1 simulator at 1080p with a test fixture (`-uiTestGuideTextFixture`:
+  channels 100, 216, 452, 888, 999 and 42 to 53 character titles):
+  - NORMAL against the build before this change: 0 of 967,304 guide pixels differ, at
+    three focus positions (the moving now-line masked out).
+  - LARGE against NORMAL: row edges, block dividers, fills and the focus outline are
+    identical (279,652 pixels compared); only the header's tick rules differ, because
+    each is as tall as its time label, as on Roku.
+  - LARGE title glyphs run 30 to 54 points down an 80 point row (NORMAL 33 to 51), clear
+    of the focus outline. A 53 character title ends at x 1098 in a block ending at 1108.
+  - DM Mono measured in the test host: three digits are 43.2 points wide at 24 (box 44)
+    and 36.0 at 20 (box 36); the tallest LARGE line is 33.9 of the 70 points inside the
+    outline; "12:30 AM" at 26 is 124.8 of a 411 point slot.
+  - The choice survives a relaunch (UI test and unit test). Long channel names lose more
+    characters to the ellipsis at LARGE, since the column cannot widen.
+
+## 2026-10-30 (Apple TV 1.0.29 release candidate: seven branches merged and tested together)
+
+**Shipped.** Nothing. Local branch `release/1.0.29-rc`, cut from `origin/main` at `0fe27e9`,
+not pushed. Real merge commits, in order: `chore/n006-scrub-home-network`,
+`fix/n014-iso639-language-match`, `fix/web-n014-iso639-language-match`,
+`fix/n011-episode-batch-order`, `fix/146-stop-waiting-crash`, `fix/livingroom-test-findings`,
+`settings/rail-redesign`.
+
+**Conflicts.** `docs/DEVLOG.md` at the top on every merge after the first: both entries kept,
+the later merge on top, checked line by line against both parents. `package.json`'s `test`
+chain: the leak guard first plus `test:language-match` after `test:jellyfin-subtitles`.
+`BundleManagerView.swift`: the rail branch deletes it and `fix/livingroom-test-findings`
+edited its `ChannelRequirementCard`; kept the deletion, since `SettingsSharedComponents.swift`
+already holds that card with the same focus fix.
+
+**Verified.** The leak guard passed after every merge (721 tracked files at the end). `npm
+test` passes. NostalgexTests on a tvOS 26.1 simulator: 1007 tests, 992 passed, 0 failed, 15
+skipped. The 1.0.29 changelog entry covers this branch and what landed on main since 1.0.28,
+still `released: false`.
+
+**Left at the time.** Settings > ABOUT (DISCORD, RATE NOSTALGEX) and one tab showed rows
+that read "Placeholder"; later the same day both were hidden behind `SettingsFeatures`.
+`fix/livingroom-test-findings` printed DISCOVERY TIMING lines; since `419258f` (2026-10-31)
+they print in debug builds only. None of the merged work had a run on a real Apple TV as
+one build.
+
+## 2026-10-30 (Apple TV: Settings rail, explainer cards take focus, GitHub in About)
+
+**Changed.** On `settings/rail-redesign`, not pushed. The I-004 explainer cards under
+"Why aren't these on air?" can take focus now, so up and down walk through them instead
+of skipping the list. This is the same change as on `fix/livingroom-test-findings`,
+applied to `ChannelRequirementCard` in `SettingsSharedComponents.swift` because the
+file it was made in no longer exists here, so the later merge is mechanical. One
+difference: the card reads its own `@FocusState` instead of `@Environment(\.isFocused)`.
+The environment value comes from an ancestor, so with it the card took focus but never
+showed the cyan highlight (seen on a simulator capture); the other branch has the same
+gap. A UI walk with the franchise fixture moved focus through all 5 cards and on to
+ADD ALL, with the highlight on each. ABOUT's
+GITHUB row shows github.com/chadMueller/Nostalgex as text to open on a phone or
+computer (tvOS has no browser). DISCORD and RATE stay placeholders.
+
+## 2026-10-30 (Apple TV: Settings rail, Phase 3, hero illustrations)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.
+
+**Changed.** (Replaced on 2026-10-31: Chad's own 16x16 pixel icons took these
+illustrations' place and the painted art is gone from the app; see that day's entry.)
+- Six painted hero illustrations in `Assets.xcassets/SettingsHero`, one per tab, 16:9,
+  640x360 at 1x and 1280x720 at 2x, 256-colour PNGs, 2.8 MB for all six.
+- The picture fills the hero tile edge to edge, clipped to its rounded corners, on a
+  #050718 tile (the art's own background) so no box edge shows at the corners or while
+  it loads. The faint border stays: without it the dark tile read as a smudge on the
+  pane. The SF Symbol is still the fallback if an asset goes missing. The per-category
+  placeholder tints are gone.
+- Smooth sampling, not nearest-neighbour: the art is drawn at about 0.6x here, and on a
+  4K simulator capture the two looked the same.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. The same
+throwaway UI walk as Phase 2 passed again, with a screenshot of every tab. Colour on a
+real Apple TV and TV panel not checked yet.
+
+## 2026-10-30 (Apple TV: Settings rail, Phase 2, every row moved into its tab)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign`, not pushed.
+
+**Why.** Phase 1's rail and detail pane passed a hands-on check with the Siri Remote,
+so the rest of the old flat Settings page moves into the six tabs, with no setting lost.
+
+**Changed.**
+- Every row now lives in a tab. SUPPORT NOSTALGEX: rate and tips. PLAYBACK & PICTURE:
+  retro mode, stream quality, subtitles, subtitle and audio language, and a WATCH
+  HISTORY section with SHOW NOW PLAYING and MARK WATCHED (moved out of CONNECTION,
+  because both are about what happens while you watch). CHANNELS & BUNDLES: channel
+  packages with the FRANCHISES list and the I-004 "why aren't these on air" explainer,
+  SCHEDULE (WATERSHED) as a section, and MY COLLECTIONS with its accordions. SERVERS &
+  ACCOUNTS: servers, libraries, rescan, iCloud sync, the enrichment progress bar, and
+  DISCONNECT (still one press, as before). ABOUT: the version line.
+- Same AppState bindings, same Analytics calls and the same row focus ids as the old
+  page. Open accordions are kept while you visit other tabs.
+- The hero and title stay pinned at the top of the pane and only the rows scroll, which
+  also stops the hero from shifting when you move into the rows. A hairline marks where
+  rows slide under it. STREAM QUALITY's value is upper case like every other row's.
+- The hero reads `SettingsCategory.heroImageName` (SettingsHeroSupport and so on) from
+  `Assets.xcassets/SettingsHero` and falls back to the SF Symbol while an image is
+  missing. The tile is 16:9 to match the art.
+- A sixth tab and ABOUT carry clearly marked placeholder rows (Discord, GitHub and rate
+  links in ABOUT) with no destinations. Their copy is still to be written.
+- `BundleManagerView.swift` is gone. `SettingsPageView` is deleted; the shared pieces
+  are in `Views/Settings/SettingsSharedComponents.swift` and each tab has its own file.
+  `-uiTestForceSettingsPage` now opens the new screen.
+
+**Checked against Roku.** Every row kind in `roku/components/SettingsView.brs` (support,
+servers, rescan, the two reporting switches, sign out, retro, quality, subtitles,
+languages, packages, franchises, collections, version) has a home. None is left out.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. A throwaway UI
+test on the tvOS simulator visited all six tabs, walked every row, opened and closed the
+stream quality, subtitle language and audio language sheets, opened and
+closed the missing-channels explainer and the OTHER COLLECTIONS accordion (demo mode
+with the franchise fixture), checked Menu from every tab's rows returns to the rail,
+left from a deep row returns to the selected tab, and Menu on the rail leaves Settings.
+`-uiTestForceSettingsPage` opens the new screen with its canned libraries. Not tried on
+a real Apple TV. The explainer's channel cards still can't take focus here; that fix is
+on another branch and has to be carried into `SettingsSharedComponents.swift` when the
+two meet, since the file it changed no longer exists.
+
+**Next.** Phase 3 drops the six hero illustrations into `Assets.xcassets/SettingsHero`.
+ABOUT's copy waits on Chad.
+
+## 2026-10-30 (Apple TV: Settings rail, Phase 1 prototype)
+
+**Shipped.** Nothing. Branch `settings/rail-redesign` only, not pushed, for a hands-on
+review with the Siri Remote before any more of the redesign is built.
+
+**Why.** Settings is one long scrolling list (support, connection, playback, packages,
+schedule, collections). It does not scale to more rows, and SUPPORT NOSTALGEX is just one more section in the scroll. The plan is the tvOS
+System Settings shape: a fixed left rail of six categories and a detail pane on the
+right with a large picture per category. Phase 1 proves the remote mechanics before
+any content moves or any art is made.
+
+**Changed.**
+- `Views/Settings/SettingsCategory.swift`: the six tabs (SUPPORT NOSTALGEX pinned,
+  then PLAYBACK & PICTURE, CHANNELS & BUNDLES, SERVERS & ACCOUNTS, a sixth tab now
+  hidden, ABOUT) and one focus enum for the whole screen.
+- `Views/Settings/SettingsRailView.swift`: the rail. Same focus grammar as the guide's
+  package sidebar (accent bar that thickens on focus, rounded glow border), in cyan.
+  The selected tab stays marked while you are in its rows. Very faint scanlines on the
+  rail background only. No ScrollView: six rows fit, and a ScrollView clips the glow.
+- `Views/Settings/SettingsContainerView.swift`: rail plus detail pane. Up and down on
+  the rail swap the hero and title with no press. Right or select goes into the rows.
+  Menu from a row goes back to the rail; Menu on the rail leaves Settings as before.
+  Left from any row lands on the selected tab, so the pane never swaps on the way out.
+  The detail pane scrolls on its own; the rail never moves.
+- `AppDestination.settings` now pushes `SettingsContainerView`. `SettingsPageView` is
+  still in `BundleManagerView.swift` (and still what `-uiTestForceSettingsPage` shows).
+- `SettingsToggleRow`, `ToggleSwitch`, `SettingsButtonStyle`, `SupportTile` and the
+  three picker sheets went from `private` to internal so the new screen reuses them.
+
+**Placeholder.** Only SUPPORT NOSTALGEX (rate plus tip tiles) and PLAYBACK & PICTURE
+(retro mode, stream quality, subtitles, subtitle and audio language) have real rows,
+wired to the same AppState fields and Analytics calls as the old page. The other four
+tabs show one focusable "COMING IN PHASE 2" row, so right and Menu can be tried on
+every tab. On this branch their settings (servers, packages, collections, schedule,
+disconnect) are not reachable from the guide. Hero art is an SF Symbol in a 16:9 tile.
+
+**Verified.** NostalgexTests: 981 run, 967 passed, 0 failed, 14 skipped. A throwaway
+UI test on the tvOS simulator drove the real focus engine through: initial focus on
+SUPPORT, down to PLAYBACK swaps the hero, right lands on RETRO MODE, left from SUBTITLE
+LANGUAGE returns to PLAYBACK, select on the rail enters the rows, Menu from rows returns
+to the rail, CHANNELS placeholder right and Menu, the stream quality sheet opens and
+closes, Menu on the rail returns to the guide. All passed. Not tried on a real Apple TV.
+
+**Next.** Chad clicks through it in Xcode. Phase 2 (moving every remaining row into its
+tab, then deleting `SettingsPageView`) waits on his sign-off on the mechanics.
+
+## 2026-10-30 (Apple TV: Plex sign-in, a grace window sized by what is still pending)
+
+**Shipped.** Nothing. Branch `fix/livingroom-test-findings`, local, on top of the early-exit
+fix below. Not yet confirmed on a real Apple TV.
+
+**Why.** After the early-exit fix, a live retest still took about 48 seconds. Timing logs
+from a real device trace showed the second cause: a shared server whose only working path
+was relay had its relay candidate succeed in about 0.5s, but relay is the lowest priority,
+so the early exit correctly waited for the remote-HTTPS candidate ranked above it. That
+candidate never succeeds for this server, yet takes its full patient budget (25s, one
+retry, up to 50s) to fail. `discoverServers` waits for every server before deciding whether
+to show a picker, so one slow server set the pace for the whole sign-in.
+
+**Changed.** Once any candidate succeeds, whatever still outranks it gets one grace window
+instead of its full budget, scheduled as a timer task in the same task group (a time check
+inside the loop alone would never fire, since the loop only wakes when a task reports).
+The window is sized by what is pending, because lost and no-connection rates are tracked
+and this must not trade a slow but real connection for a faster, worse one:
+
+- Anything patient still outranks the hit (remote or relay, which can take 10 to 20s to
+  cold-establish and still succeed): 15s.
+- Only local candidates outrank the hit (local answers fast or not at all): 3s.
+
+A flat 4s window measured 5 seconds on the same multi-server account; this version trades
+some of that back for safety, so the relay-only case should now settle at about 15s.
+
+**Verified.** `ConnectionDiscoveryEarlyExitTests`: 7 tests reproducing the task-group shape
+with timed synthetic candidates (fast local hit, second candidate winning, nothing
+reachable, earlier-ranked hit inside the grace window, patient vs local-only grace, a
+higher-priority hit inside the window still winning), all passing; full `NostalgexTests`
+green.
+
+**Half-done.** Temporary `DISCOVERY TIMING` prints are still in `bestReachableURI` for the
+one on-device confirmation run. Remove them after that run.
+
+**Next.** One sign-in on a real Apple TV with a multi-server Plex account, console
+captured, to confirm which tier wins and the total time. Then drop the prints and merge.
+
+## 2026-10-30 (Apple TV: Plex sign-in waited on a slow relay probe even after a fast local hit)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad measured 45 seconds from QR scan to found-the-server over Plex, timed
+with a stopwatch. Plex is the primary backend, so this mattered more than the same
+delay would on Jellyfin or Emby.
+
+**Found, not guessed.** `PlexAPIService.bestReachableURI` races every connection
+candidate for a server (local, remote HTTPS, remote plain, relay, in that priority
+order) with `withTaskGroup`, but drained every task before returning, even once the
+winner was already decided. Relay candidates get a 25s timeout with one retry (up to
+50s), and Plex's `/api/v2/resources` always offers a relay candidate when
+`includeRelay=1` is requested, whether or not the account actually needs it. So a
+local connection that answered in a second or two still sat blocked behind a relay
+probe that was always going to fail or time out, on nearly every sign-in, not only
+ones that genuinely needed relay. 45 seconds lines up closely with one relay probe
+attempt timing out, plus overhead.
+
+**Changed.** `bestReachableURI` now tracks which candidates have reported (success or
+failure) as results stream in, and stops once every candidate ranked ahead of the
+current best hit has reported, cancelling whatever is still in flight. A fast local
+success now returns immediately instead of waiting on remote and relay. `testReachable`
+also bails out on `Task.isCancelled` between its retry attempts rather than retrying a
+probe whose result is already moot.
+
+**Verified.** Swift's async `URLSession.data(for:)` already respects structured-concurrency
+cancellation, so `group.cancelAll()` genuinely aborts in-flight probes rather than
+leaving them to idle out their timeout in the background. `bestReachableURI` itself is
+private and does real networking, so it isn't directly unit-testable; added
+`ConnectionDiscoveryEarlyExitTests.swift`, which reproduces the exact same TaskGroup
+shape with synthetic timed outcomes instead of HTTP calls. The key case (a 50ms local
+hit racing a 2000ms doomed relay candidate) completed in 54ms, not ~2000ms, proving the
+early exit actually returns fast rather than trusting the logic by reading it. Full
+`NostalgexTests` suite green.
+
+**Half-done.** Not independently re-verified against a real Plex account's relay path
+(no relay-only test account set up); the timed synthetic test is the closest proof
+available without one. Needs Chad's live re-measurement of the QR sign-in time.
+
+## 2026-10-30 (Apple TV: three fixes from a living room test of yesterday's work)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad tested the overlay, Settings access and I-004 explainer live on the
+living room Apple TV and found three follow-up issues, all in code from the same
+work.
+
+**Changed.**
+- Start Over on the loading screen (`Plex90App.swift`) switched from `.secondary`
+  to the existing `.quiet` button role, smaller and dimmed until focused. It sits
+  under every normal load, not just a stuck one, so it needs to read as a rare-use
+  escape hatch rather than a primary action someone could tap by accident. The
+  separate Start Over on the dedicated "LOADING DIDN'T FINISH" screen (a real,
+  deliberate two-option choice) is untouched.
+- Library and server selection rows (`LibrarySelectionView`, `ServerPickerView`)
+  had a focused row whose corners read as square instead of rounded, losing the
+  blue glow. Measured with a real screenshot harness (an XCUITest screenshotting
+  the focused row, exported from the xcresult bundle and inspected pixel by
+  pixel) rather than guessed at: the row's `scaleEffect(1.04)` on focus bulges
+  past its own frame, and the ScrollView's own clipping was flattening that bulge
+  at the left and right edges, which is what made the corner read as square. Fix:
+  8pt of horizontal padding on the ScrollView's content so the scale-up has room,
+  plus the corner radius bumped from 14 to 22 and the shadow radius down from 28
+  to 18, so the rounding reads clearly as a filled shape and not only as a thin
+  stroke (confirmed with the same screenshot harness before and after).
+- The I-004 explainer's `ChannelRequirementCard` (`BundleManagerView.swift`) was
+  built deliberately non-focusable ("read-only, nothing changes") but that broke
+  remote navigation: with no focus target inside the accordion, up/down had
+  nothing to land on and skipped the whole expanded list. Added `.focusable(true)`
+  and a focus highlight matching `CollectionAccordionHeaderRow`'s language.
+
+**Half-done.** The library/server row fix is verified by pixel measurement in the
+simulator, not yet confirmed live by Chad. The accordion focus fix is standard
+SwiftUI `.focusable(true)` usage, not independently re-verified live (the earlier
+corner-radius bug was a genuine rendering edge case worth measuring; this one
+isn't ambiguous in the same way).
+
+**Next.** Chad's go to merge once he's looked at the row corners live. Plex QR
+discovery timing (~45s, separately reported) still needs investigating, not
+fixed in this entry.
+
+## 2026-10-30 (Apple TV: STOP WAITING belongs to the server it was pressed on, #146)
+
+**Shipped.** Nothing. Branch `fix/146-stop-waiting-crash`, local only, not pushed.
+
+**The report.** #146: on Plex with several large libraries, a few stop answering
+during the first scan, and pressing STOP WAITING either moves on or crashes the app,
+about half the time each. The reporter has to press it once per stuck library, which on
+a single server is impossible (one press ends that server's whole scan), so the setup is
+most likely several servers.
+
+**No crash log.** App Store Connect had 0 TestFlight crash submissions for the app, and
+its diagnostics API holds no crash data (it covers hangs, disk writes and launches only,
+and returned nothing for builds 45 to 52). The issue asks the reporter for the build
+number, library sizes and a crash log.
+
+**Harness.** New `StopWaitingHarnessTests`: a loopback fake Plex where chosen sections
+never answer (connection held open, nothing sent), driven through the real first load
+(`AppState.loadLibrary`, the real `PlexAPIService`, the real stall watch and partial-guide
+path), pressing STOP WAITING the way the button does at varied moments, then building the
+guide the way TunerView does and waiting for the snapshot write. The soak is off by
+default (`TEST_RUNNER_NOSTALGEX_STOPWAIT_N`, `_SERVERS`, `_MODE`, `_SEED`, `_OUT`; each
+iteration is written to the host file before it runs, so a crash names its iteration).
+
+**Measured.**
+
+- Crash: not reproduced. Before the fix, 50 first loads (20 on one server, 30 on one to
+  four servers pressing on every stall), 100 presses acted on: 0 crashes, 0 hangs, every
+  load ended in a guide. After the fix, 30 first loads on one to four servers across all
+  five press patterns, 81 presses acted on: 0 crashes, 0 hangs, 0 error screens.
+- Found instead: a press that lands as one server's scan finishes is never read (the
+  stall watch polls every 2s and that server is already done), so it stays set and the
+  next server's watch abandons that server, a healthy scan, at its first poll. Measured
+  with a deterministic test (server A finishes as the press lands, server B takes 4.4s
+  and reports progress throughout): before, B kept 0 of 40 items and the library was
+  marked partial; after, 40 of 40, not partial. The soak shows it from the other side:
+  in the first after-fix run, a double press on server 1 of 2 no longer reached server
+  2, which then sat on its own stuck section waiting for a press of its own, as it
+  should. The harness's scripted modes now press again on every later stall.
+
+**Changed.** `AppState.loadLibrary` clears the pending press and the "still waiting" flag
+at the start of each server's scan. A press now only stops the server it was made on, and
+the STOP WAITING block leaves the screen once the server it was about has answered. START
+OVER is unaffected: it also ends the sign-in, which the stall watch checks on its own. Also (review follow-up): signing out between
+servers now stops the scan before the next server, which before the fix still received 18
+requests with the old token in the 2s until the stall watch noticed; now 0.
+
+**Verified.** NostalgexTests on the tvOS simulator: 984 tests, 969 passed, 0 failed, 15
+skipped (the soak among them).
+
+**Not verified.** The crash itself. Things the harness cannot see: memory on a real Apple
+TV (a partial guide from several large libraries is still large, and the earlier 400k-item
+work showed tvOS ending the app on memory right as the guide appeared; that leaves a
+JetsamEvent report, not a crash log), and the real STOP WAITING button and the RootView
+switch to the guide.
+The fix has not been on a physical Apple TV.
+
+**Next.** The reporter's build number, library sizes and a crash log decide where to look.
+With a log: name the frame. Without one: reproduce on the living room Apple TV with
+several stuck sections across two servers and watch for a jetsam event.
+
+## 2026-10-30 (Apple TV: a rescan keeps episodes in show order, N-011)
+
+**Shipped.** Nothing yet. Branch `fix/n011-episode-batch-order`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed.
+
+**Why.** Jellyfin and Emby fetch a TV section's episodes ten shows at a time and appended
+each show's episodes in the order the requests finished. The schedule reads the library
+in order (`interleaveByShow` groups shows by first appearance before its seeded shuffle),
+so two scans of an unchanged library could build two different guides. Today's guide
+survives a rescan (the day's manifest is keyed by the sorted pool), but every later day
+was built from whichever order the last scan happened to get.
+
+**Measured.** New `EpisodeBatchOrderHarnessTests` serves one fixed library (40 shows, 3 to
+11 episodes each) from a local HTTP server inside the test, holds each show's episode
+request back by a delay, and loads it through each backend's real `loadLibrary` twice:
+delays in show order, then shuffled. It builds three days of four channels from each load
+with the real `DailyManifestScheduler` and counts the minutes that differ. Before the fix:
+Jellyfin 16,434 of 17,280 channel-minutes differed (95.1%), Emby 16,458 (95.2%), Plex's
+per-show fallback 15,780 (91.3%). Plex's normal path, one paged `type=4` sweep, was already
+stable: 0. These are worst-case numbers (every batch fully reordered, episode-only
+channels); the field figure on card N-011 was 7 to 9% of channel-minutes. After: 0 on all
+four.
+
+**Changed.** Jellyfin, Emby and the Plex per-show fallback keep each batch's results by
+the show's place in the list, not by arrival. Requests still run in parallel. The web
+tuner already did this (`Promise.all` keeps input order).
+
+**Verified.** NostalgexTests on the tvOS simulator: 982 tests, 968 passed, 0 failed, 14
+skipped. Not checked against a real Jellyfin or Emby server.
+
+## 2026-10-30 (Web tuner and Docker: audio and subtitle language codes match exactly, N-014)
+
+**Shipped.** Nothing yet. Branch `fix/web-n014-iso639-language-match`, cut from `origin/main`
+at `0fe27e9`, not merged, not pushed.
+
+**Why.** `langMatches` in `plex-tuner.html` decided two language tags were the same when one
+started with the other, and kept a 50-entry map from a two-letter code to one three-letter
+code. Measured with the new smoke against the page from main: all 67 codes whose first two
+letters spell another language's code matched that language ("est" as Spanish, "arm" as
+Arabic, "jav" as Japanese, "slo" as Slovenian, "rum" as Russian, "swe" as Swahili), and 81 of
+the 203 codes in the ISO 639-2 table missed their own viewer ("ces" for Czech, "slk" for
+Slovak, "jav" for Javanese, "ben" for Bengali, "baq" for Basque, and more). The effects were
+on Jellyfin and Emby only: a Spanish viewer got the Estonian audio track listed first, a
+Czech viewer's "ces" track was passed over for the file's default, and an Estonian-only file
+did not turn subtitles on. The same compare picks the subtitle track and decides which forced
+subtitle is burned in. Plex has no language pick in the web tuner. Same bug, and same fix, as
+the Apple TV's `preferredAudioIndex` (branch `fix/n014-iso639-language-match`).
+
+**Changed.** New `scripts/nostalgex-language.js` (`NostalgexLanguage`): one ISO 639-2 to
+ISO 639-1 table, both the terminology and bibliographic forms, and `sameLanguage`, which
+reduces both tags through it and compares them exactly. The table string is the Roku app's
+`NxIso639Table` (issue #119), character for character, the same string the Apple TV carries.
+`langMatches` now calls it; the old map and the first-letters compare are gone. Behaviour
+matches `SubtitleSelectionLogic.primaryLanguage` on Apple TV: a code the table lacks ("yue")
+stays itself and still matches itself, and "und", "mul", "zxx" and "mis" match nothing.
+`scripts/nostalgex-jellyfin-subtitles-smoke.mjs` now hands its test pages the module, as the
+page's script tag does.
+
+**Verified.** New `npm run test:language-match` (26 checks, in `npm test`). It reads the Roku
+`.brs` and fails if the module's table is not that string character for character, if any pair
+reduces differently, or if the page grows its own table or a first-letters compare again. It
+runs the page's own `langMatches`, `pickAudioStream`, `pickSubtitle` and
+`shouldAutoEnableSubs`. Against the tree from main plus the new smoke: 20 failed, 6 passed.
+Against main's `plex-tuner.html` with the new module present (so only behaviour can fail):
+17 failed, 9 passed. After the fix: 26 passed. Across every table code against every
+two-letter language, the only pairs the old compare matched and the new one does not are the
+67 look-alikes. `npm test` passes. `build:tuner` and `build:selfhost` both ship the new script
+and its tag, and the self-host copy is byte for byte the source. Not checked in a browser
+against a real multi-language Jellyfin or Emby file.
+
+**Half-done.** One of the 67 look-alikes is a true match: "nob" (Norwegian Bokmål) starts
+with "no", and a viewer who picks Norwegian ("no" in Settings) got it by accident. Exact
+compare reads "nob" as "nb", so it no longer matches a "no" setting ("nor" does, and a
+browser set to "nb-NO" matches "nob"). The Apple TV and Roku compare the same way, so whether
+"no", "nb" and "nn" should count as one language is a decision for all three apps, not the
+web tuner alone.
+
+**Next.** Nothing needed on Roku: it already has the table and the exact compare.
+
+## 2026-10-30 (Apple TV: Jellyfin/Emby audio language codes match exactly, N-014)
+
+**Shipped.** Nothing yet. Branch `fix/n014-iso639-language-match`, cut from `origin/main`
+at `0fe27e9`, not merged, not pushed.
+
+**Why.** `JellyfinPlaybackResolver.preferredAudioIndex` compared the first two letters of
+a track's three-letter code with the viewer's two-letter language. Measured with the new
+tests against the old code: "est" (Estonian) passed as Spanish, "arm" (Armenian) as
+Arabic, "jav" (Javanese) as Japanese, and 66 codes in all matched the language their first
+two letters happen to spell ("swe" as Swahili, "rum" as Russian, "slo" as Slovenian). The
+other way round was worse: "spa", "ger", "por", "jpn", "chi", "dut", "pol", "swe", "tur",
+"gre", "cze" and "ces" never matched a Spanish, German, Portuguese, Japanese, Chinese,
+Dutch, Polish, Swedish, Turkish, Greek or Czech viewer, so the file's default track won.
+English viewers were not affected ("eng" starts with "en").
+
+**Changed.** `SubtitleSelectionLogic.primaryLanguage` now reduces a tag through one ISO
+639-2 to 639-1 table, both the terminology and bibliographic forms, and the audio pick
+compares those codes exactly. The table string is the Roku app's `NxIso639Table` from issue
+#119, character for character, so both apps agree; `LanguageCodeMatchingTests` reads the
+Roku file and fails if the two drift. Codes the table does not hold stay as themselves
+(like Roku), and Foundation's own code lookup is no longer used: it disagreed with the
+table on "tgl" (Tagalog). The forced-subtitle burn-in check already went through
+`sameLanguage` and passed every look-alike before the change; it now uses the same table. A
+track whose language is a full name ("English") no longer matches by its first letters;
+Jellyfin and Emby send ISO codes, so this is low risk.
+
+**Verified.** NostalgexTests on the tvOS simulator: 995 tests, 981 passed, 0 failed, 14
+skipped. Not checked on a real Apple TV against a real multi-language file.
+
+**Next.** The web tuner's `langMatches` in `plex-tuner.html` has the same class of bug
+(measured: "est" matches "es", "arm" "ar", "jav" "ja", "slo" "sl", and "ces" misses "cs")
+and needs the same table. Not changed here: that file belongs to the web tuner work.
+
+## 2026-10-30 (Repo: tests no longer carry a home network, and a guard keeps it that way, N-006)
+
+**Shipped.** Nothing yet. Branch `chore/n006-scrub-home-network`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed.
+
+**Why.** Five Swift test files and one doc comment carried addresses from the
+maintainer's home subnet, and three test files carried the real name and ids of his
+own servers (an Emby host name and id, a Plex machine identifier, a plex.direct
+certificate hash), copied in from captured responses.
+
+**Changed.** Those values are now RFC 5737 addresses (192.0.2.x, and 192-0-2-x in
+plex.direct form) and made-up names and ids, in `DuplicateServerTests`,
+`LANServerDiscoveryTests`, `PlaybackDecisionTests`, `SignInFlowTests`,
+`StarvationLadderCoverageTests` and the `LANServerDiscovery.directedBroadcast` doc
+comment. New `scripts/public-repo-leak-guard.mjs` reads every file `git ls-files` lists
+and fails on that subnet (dotted or dash-encoded) or on any of the real names and ids,
+which it holds only as SHA-256 hashes. It is a Node script rather than a Swift test
+because only git knows which files are tracked; a test walking the folder would also read
+gitignored secrets and build output. It runs first in `npm test` and as its own CI job,
+`public-repo-hygiene`, on every pull request: the other jobs only run when their paths
+change. `roku/docs/PORTING.md` also had the test stick's address and a library size in a
+note added the same day; that note now names neither, so the guard's pending list is empty.
+
+**Verified.** On unchanged main the guard reports all 19 findings; on the branch it
+passes (698 files, 0.3 s). `npm test` passes. NostalgexTests on the tvOS simulator: 981
+tests, 967 passed, 0 failed, 14 skipped. The old values remain in git history; this does
+not rewrite it.
+
 ## 2026-10-30 (Roku: fix an on-device kbps rounding bug found by tydude001, PR #130)
 
 **Shipped.** `NxMbBitrateKbps` in `roku/source/mediabrowser/MediaBrowserLibrary.brs` now
@@ -271,7 +1110,7 @@ landed, since his own comment there was never answered.
 
 **Changed.**
 
-- I-### (Discord, jussaren, Oct 29): the Now Playing display showed the channel name
+- I-### (a Discord report, Oct 29): the Now Playing display showed the channel name
   bigger than the title, so a viewer had to read the small line to see what was actually
   playing. Swapped the hierarchy in both displays that showed it: the brief Channel OSD
   (`PlayerView.swift`) and the Now Playing panel's info header (`NowPlayingPanel.swift`).

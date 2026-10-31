@@ -7,6 +7,9 @@ extension AppState: PreferenceSyncApplying {
         if let v = values[PreferenceSync.retroModeKey] as? Bool, v != retroMode {
             retroMode = v
         }
+        if let v = values[PreferenceSync.guideTextSizeKey] as? String, GuideTextSize(stored: v) != guideTextSize {
+            guideTextSize = GuideTextSize(stored: v)
+        }
         if let v = values[PreferenceSync.subtitlesFullscreenKey] as? Bool, v != subtitlesInFullscreenEnabled {
             subtitlesInFullscreenEnabled = v
         }

@@ -194,8 +194,8 @@ sub NxClSwiftCases(r as Object, config as Object, defs as Object)
     NxCheck(r, "swift fold: john wick folds into the found franchise", NxClFoldedInto(cs, "JOHN WICK COLLECTION"), "JOHN WICK")
     NxCheck(r, "swift fold: the actor set stays listed", NxClRowIDs(cs), "0:c-hanks")
     NxCheck(r, "swift fold: only the actor set becomes a channel", NxClChannelNames(cs), "TOM HANKS")
-    NxCheck(r, "swift fold: from CH 500", NxClChannelNumbers(cs), "500")
-    NxCheck(r, "swift fold: row shows its channel", NxToStr(cs.rows[0].channelNumber), "500")
+    NxCheck(r, "swift fold: from CH 400", NxClChannelNumbers(cs), "400")
+    NxCheck(r, "swift fold: row shows its channel", NxToStr(cs.rows[0].channelNumber), "400")
     NxCheck(r, "swift fold: row detail", cs.rows[0].detail, "3 movies")
     ' Turning the found franchise on gives exactly one JOHN WICK channel.
     s = NxFgStep(t, items, NxFranchiseChoices(["dict:JOHN WICK"], []))
@@ -206,17 +206,16 @@ sub NxClSwiftCases(r as Object, config as Object, defs as Object)
     ' With the FRANCHISES package off nothing folds here (upstream folds into
     ' found franchises even then; docs/PORTING.md), so every collection is
     ' listed and the switched-on ones air: the two movie series in their own
-    ' block from CH 450, the actor set from CH 500.
+    ' franchise block from CH 310, the actor set from CH 400.
     cs = NxCollectionsStep({ channels: NxClStockChannels(t, items), raw: raw, items: items, serverKeys: {}, manifest: invalid, enabledKeys: on })
     NxCheck(r, "package off: no folds", NxClRowIDs(cs), "0:c-wick,0:c-sw,0:c-hanks")
-    NxCheck(r, "package off: three channels", NxClChannelNames(cs) + "|" + NxClChannelNumbers(cs), "JOHN WICK COLLECTION,STAR WARS COLLECTION,TOM HANKS|450,451,500")
+    NxCheck(r, "package off: three channels", NxClChannelNames(cs) + "|" + NxClChannelNumbers(cs), "JOHN WICK COLLECTION,STAR WARS COLLECTION,TOM HANKS|310,311,400")
     NxCheck(r, "package off: name match warns", cs.rows[1].detail, "Exists: " + starWars)
 
-    ' testFranchiseCollectionsDoNotMoveWhenFoundFranchisesChange, through the
+    ' testFranchiseCollectionsAndFoundFranchisesInterleaveByName, through the
     ' steps as the library load runs them: PADDINGTON TRILOGY (a movie series
-    ' no franchise holds) and TOM HANKS keep their numbers and ids with the
-    ' package off, with it on and two found franchises on, and with one of
-    ' those switched off.
+    ' no franchise holds) keeps its id and sorts among the found franchises by
+    ' name; TOM HANKS never moves.
     lib = NxFgFilms(NxFgWick())
     lib.Append(NxFgFilms(NxFgHunger()))
     paddington = NxClFilms(["Paddington", "Paddington 2", "Paddington in Peru"])
@@ -230,16 +229,16 @@ sub NxClSwiftCases(r as Object, config as Object, defs as Object)
         NxClRaw0("c-hanks", "TOM HANKS", ["t1", "t2", "t3"])
     ]
     onSplit = NxCollectionKeySet(["0:c-pad", "0:c-hanks"])
-    want = "PADDINGTON TRILOGY=franchises CH 450 id 1010000;TOM HANKS=custom CH 500 id 1020000"
     pkgOff = NxCollectionsStep({ channels: [], raw: rawSplit, items: lib, serverKeys: {}, manifest: invalid, enabledKeys: onSplit })
-    NxCheck(r, "switch: package off", NxClNumbersAndIDs(pkgOff), want)
+    NxCheck(r, "switch: package off, the collection starts the block", NxClNumbersAndIDs(pkgOff), "PADDINGTON TRILOGY=franchises CH 310 id 1010000;TOM HANKS=custom CH 400 id 1020000")
     s = NxFgStep(t, lib, NxFranchiseChoices(["dict:JOHN WICK", "dict:THE HUNGER GAMES"], []))
     NxCheck(r, "switch: two found franchises on", NxFgChannelNames(s), "JOHN WICK,THE HUNGER GAMES")
     pkgOn = NxClStep(t, s, lib, rawSplit, onSplit)
-    NxCheck(r, "switch: package on, two found on", NxClNumbersAndIDs(pkgOn), want)
-    NxCheck(r, "switch: rows show the same numbers", NxClRowNumbers(pkgOn), NxClRowNumbers(pkgOff))
+    NxCheck(r, "switch: package on, two found on", NxClNumbersAndIDs(pkgOn), "PADDINGTON TRILOGY=franchises CH 311 id 1010000;TOM HANKS=custom CH 400 id 1020000")
+    NxCheck(r, "switch: the found ones around it", NxClFoundNumbers(pkgOn), "JOHN WICK@310;THE HUNGER GAMES@312")
+    NxCheck(r, "switch: rows show the numbers", NxClRowNumbers(pkgOn), "PADDINGTON TRILOGY@311;TOM HANKS@400")
     pkgOn = NxClStep(t, NxFgStep(t, lib, NxFranchiseChoices(["dict:JOHN WICK"], [])), lib, rawSplit, onSplit)
-    NxCheck(r, "switch: one found switched off", NxClNumbersAndIDs(pkgOn), want)
+    NxCheck(r, "switch: one found switched off", NxClNumbersAndIDs(pkgOn) + "|" + NxClFoundNumbers(pkgOn), "PADDINGTON TRILOGY=franchises CH 311 id 1010000;TOM HANKS=custom CH 400 id 1020000|JOHN WICK@310")
 
     ' FranchiseCollectionFold step 4: a collection whose name says nothing
     ' folds into a found franchise that already airs most of it.
@@ -348,72 +347,80 @@ function NxClFilms(titles as Object) as Object
     return out
 end function
 
-' ── FranchiseNumberingTests.swift: fixed blocks ─────────────────────────────
-' Found franchises CH 300-449 (ids from 1,000,000), franchise collections CH
-' 450-499 (ids from 1,010,000), other collections CH 500-699 (ids from
-' 1,020,000). Transcribed from the Apple TV's FranchiseNumberingTests at
-' fix/franchise-numbering 8ab0bc6; XCTest cases, so there is no JS vector.
+' ── FranchiseNumberingTests.swift: the franchise block ──────────────────────
+' Every franchise channel is in the 300s since 1.0.29: found franchises (ids
+' from 1,000,000) and franchise collections (ids from 1,010,000) share CH
+' 310-399 as one pool, numbered A to Z; other collections own CH 400-499 (ids
+' from 1,020,000). Before: 300-449, 450-499, 500-699, then for a while
+' 310-399, 400-449, 450-499. Transcribed from the Apple TV's
+' FranchiseNumberingTests at renumber/franchise-block; XCTest cases, so there
+' is no JS vector.
 
 sub NxClSplitCases(r as Object)
     ' testRangesSitClearOfEveryShippedNumber / testEachKindHasItsOwnFixedIDBase
-    NxCheck(r, "blocks: found franchises", NxFranchiseNumberBase().ToStr() + "-" + (NxFranchiseNumberBase() + NxFranchiseCapacity() - 1).ToStr() + " from " + NxFranchiseIDBase().ToStr(), "300-449 from 1000000")
-    NxCheck(r, "blocks: franchise collections", NxCollectionFranchiseNumberBase().ToStr() + "-" + (NxCollectionFranchiseNumberBase() + NxCollectionFranchiseCapacity() - 1).ToStr() + " from " + NxCollectionFranchiseIDBase().ToStr(), "450-499 from 1010000")
-    NxCheck(r, "blocks: other collections", NxCollectionsNumberBase().ToStr() + "-" + (NxCollectionsNumberBase() + NxCollectionsCapacity() - 1).ToStr() + " from " + NxCollectionsIDBase().ToStr(), "500-699 from 1020000")
+    NxCheck(r, "blocks: found franchises", NxFranchiseNumberBase().ToStr() + "-" + (NxFranchiseNumberBase() + NxFranchiseCapacity() - 1).ToStr() + " from " + NxFranchiseIDBase().ToStr(), "310-399 from 1000000")
+    NxCheck(r, "blocks: franchise collections share it", NxCollectionFranchiseNumberBase().ToStr() + "-" + (NxCollectionFranchiseNumberBase() + NxCollectionFranchiseCapacity() - 1).ToStr() + " from " + NxCollectionFranchiseIDBase().ToStr(), "310-399 from 1010000")
+    NxCheck(r, "blocks: other collections", NxCollectionsNumberBase().ToStr() + "-" + (NxCollectionsNumberBase() + NxCollectionsCapacity() - 1).ToStr() + " from " + NxCollectionsIDBase().ToStr(), "400-499 from 1020000")
 
-    ' testEightySixFranchisesNumber300Through385AndCollectionsKeepTheirOwnBlocks
+    ' testEightySixFranchisesAndTwoFranchiseCollectionsShareCH310Through397
     found = []
     for i = 0 to 85
         found.Push(NxClFoundN(i, true, 3))
     end for
     fb = NxFranchiseBlock(found)
-    NxCheck(r, "86 found: 300-385", NxClNumberRange(fb.channels) + " " + fb.skipped.ToStr(), "300-385 0")
     cands = [
         NxClCandidate("saga-a", "franchises", true), NxClCandidate("saga-b", "franchises", true),
         NxClCandidate("hanks", "custom", true), NxClCandidate("nolan", "custom", true),
         NxClCandidate("off", "custom", false)
     ]
-    mz = NxCollectionsMaterialize(cands)
-    NxCheck(r, "86 found: franchise collections", NxClNumbersOf(mz.channels, "franchises") + " ids " + NxClIDsOf(mz.channels, "franchises"), "450,451 ids 1010000,1010001")
-    NxCheck(r, "86 found: other collections", NxClNumbersOf(mz.channels, "custom") + " ids " + NxClIDsOf(mz.channels, "custom"), "500,501 ids 1020000,1020001")
+    mz = NxCollectionsMaterialize(cands, fb)
+    NxCheck(r, "86 found: 310-395", NxClNumberRange(mz.found) + " " + fb.skipped.ToStr() + " " + mz.overCapFound.ToStr(), "310-395 0 0")
+    NxCheck(r, "86 found: franchise collections after them by name", NxClNumbersOf(mz.channels, "franchises") + " ids " + NxClIDsOf(mz.channels, "franchises"), "396,397 ids 1010000,1010001")
+    NxCheck(r, "86 found: other collections", NxClNumbersOf(mz.channels, "custom") + " ids " + NxClIDsOf(mz.channels, "custom"), "400,401 ids 1020000,1020001")
     NxCheck(r, "86 found: nothing over", NxToStr(mz.overCap), "0")
 
     ' testFoundFranchisesKeepTheirIDs
     fb = NxFranchiseBlock([NxClFoundN(0, true, 3), NxClFoundN(1, true, 3), NxClFoundN(2, true, 3)])
+    mz = NxCollectionsMaterialize([], fb)
     ids = []
-    for each ch in fb.channels
+    for each ch in mz.found
         ids.Push(ch.id.ToStr())
     end for
     NxCheck(r, "found franchises keep their ids", ids.Join(","), "1000000,1000001,1000002")
 
-    ' testFoundFranchiseRangeIsCappedAt449AndKeepsTheBiggest: 160 on, the ten
-    ' with 3 films wait, numbering A to Z.
+    ' testFranchiseBlockIsCappedAt399AndKeepsTheBiggestOfBothKinds: 94 found
+    ' (five with 3 films) and two franchise collections (5 and 3 films); the
+    ' six 3-film ones wait, whatever their kind.
     found = []
-    for i = 0 to 159
+    for i = 0 to 93
         films = 4
-        if i mod 16 = 0 then films = 3
+        if i < 5 then films = 3
         found.Push(NxClFoundN(i, true, films))
     end for
     fb = NxFranchiseBlock(found)
+    cands = [NxClCandidateN("saga-a", "franchises", true, 5), NxClCandidateN("saga-b", "franchises", true, 3), NxClCandidate("hanks", "custom", true)]
+    mz = NxCollectionsMaterialize(cands, fb)
     names = []
-    for each ch in fb.channels
+    for each ch in mz.found
         names.Push(ch.name)
     end for
-    NxCheck(r, "found block full: 150 kept, 300-449", fb.channels.Count().ToStr() + " " + NxClNumberRange(fb.channels), "150 300-449")
-    NxCheck(r, "found block full: ten skipped", fb.skipped.ToStr(), "10")
-    NxCheck(r, "found block full: A to Z", NxClBool(NxClSortedSwift(names)), "true")
-    NxCheck(r, "found block full: the 3-film ones wait", NxClBool(NxHasValue(names, "FRANCHISE 000") or NxHasValue(names, "FRANCHISE 144")), "false")
-    mz = NxCollectionsMaterialize([NxClCandidate("saga-a", "franchises", true), NxClCandidate("hanks", "custom", true)])
-    NxCheck(r, "found block full: collections keep their numbers", NxClNumbersOf(mz.channels, "franchises") + "|" + NxClNumbersOf(mz.channels, "custom") + "|" + NxToStr(mz.overCap), "450|500|0")
-    for i = 0 to 14
+    NxCheck(r, "franchise block full: 89 found, 310-398", mz.found.Count().ToStr() + " " + NxClNumberRange(mz.found), "89 310-398")
+    NxCheck(r, "franchise block full: A to Z", NxClBool(NxClSortedSwift(names)), "true")
+    NxCheck(r, "franchise block full: the 3-film ones wait", NxClBool(NxHasValue(names, "FRANCHISE 000") or NxHasValue(names, "FRANCHISE 004")), "false")
+    NxCheck(r, "franchise block full: the 5-film collection stays", NxClChannelNamesOf(mz.channels, "franchises") + "@" + NxClNumbersOf(mz.channels, "franchises"), "SAGA-A@399")
+    NxCheck(r, "franchise block full: counted per kind", (fb.skipped + mz.overCapFound).ToStr() + "/" + NxToStr(mz.overCapFranchises), "5/1")
+    NxCheck(r, "franchise block full: other collections keep their numbers", NxClNumbersOf(mz.channels, "custom"), "400")
+    for i = 5 to 10
         found[i].enabled = false
     end for
     fb = NxFranchiseBlock(found)
-    NxCheck(r, "found block: switching some off frees it", fb.skipped.ToStr() + " " + NxToStr(fb.channels.Peek().number), "0 444")
+    mz = NxCollectionsMaterialize(cands, fb)
+    NxCheck(r, "franchise block: switching some off frees it", NxToStr(fb.skipped + mz.overCapFound + mz.overCapFranchises) + " " + NxToStr(mz.found.Count() + 2) + " " + NxClNumbersOf(mz.channels, "franchises"), "0 90 398,399")
 
-    ' testFranchiseCollectionRangeIsCappedAt499AndKeepsTheBiggest: 53 on,
+    ' testFranchiseCollectionsAloneFillTheBlockAndKeepTheBiggest: 93 on,
     ' three with 3 films, the rest 5; ties on films go by name, then id.
     cands = []
-    for i = 0 to 52
+    for i = 0 to 92
         films = 5
         if i = 7 or i = 20 or i = 41 then films = 3
         cands.Push(NxClCandidateN("saga-" + Right("0" + i.ToStr(), 2), "franchises", true, films))
@@ -423,11 +430,11 @@ sub NxClSplitCases(r as Object)
     for each ch in mz.channels
         if ch.category = "franchises" then kept.Push(ch.name)
     end for
-    NxCheck(r, "collection block full: 450-499", NxClNumbersOf(mz.channels, "franchises"), NxClSeq(450, 499))
-    NxCheck(r, "collection block full: ids", NxClIDsOf(mz.channels, "franchises"), NxClSeq(1010000, 1010049))
-    NxCheck(r, "collection block full: the 3-film ones wait", NxClBool(NxHasValue(kept, "SAGA-07") or NxHasValue(kept, "SAGA-20") or NxHasValue(kept, "SAGA-41")), "false")
-    NxCheck(r, "collection block full: A to Z", NxClBool(NxClSortedSwift(kept)), "true")
-    NxCheck(r, "collection block full: three over, nothing spills", NxToStr(mz.overCapFranchises) + "/" + NxToStr(mz.overCapCustom) + " " + NxClNumbersOf(mz.channels, "custom"), "3/0 ")
+    NxCheck(r, "collections alone: 310-399", NxClNumbersOf(mz.channels, "franchises"), NxClSeq(310, 399))
+    NxCheck(r, "collections alone: ids", NxClIDsOf(mz.channels, "franchises"), NxClSeq(1010000, 1010089))
+    NxCheck(r, "collections alone: the 3-film ones wait", NxClBool(NxHasValue(kept, "SAGA-07") or NxHasValue(kept, "SAGA-20") or NxHasValue(kept, "SAGA-41")), "false")
+    NxCheck(r, "collections alone: A to Z", NxClBool(NxClSortedSwift(kept)), "true")
+    NxCheck(r, "collections alone: three over, nothing spills", NxToStr(mz.overCapFranchises) + "/" + NxToStr(mz.overCapCustom) + " " + NxClNumbersOf(mz.channels, "custom"), "3/0 ")
 
     ' testOverflowOrderIsFilmsThenNameThenStableID
     entries = [
@@ -475,17 +482,17 @@ sub NxClSplitCases(r as Object)
     cs = NxCollectionsStep({ channels: [], raw: [NxClRaw0("am", "am" + Chr(233) + "lie", ["Am" + Chr(233) + "lie 1", "Am" + Chr(233) + "lie 2", "Am" + Chr(233) + "lie 3"])], items: films, serverKeys: {}, manifest: invalid, enabledKeys: NxCollectionKeySet(["0:am"]) })
     NxCheck(r, "unicode: collection title upper-cased", cs.rows[0].title, "AM" + Chr(201) + "LIE")
 
-    ' testCollectionRangeIsCappedAt699: unchanged, the first 200 A to Z.
+    ' testCollectionRangeIsCappedAt499: unchanged rule, the first 100 A to Z.
     cands = []
-    for i = 0 to 202
+    for i = 0 to 102
         cands.Push(NxClCandidate("set-" + Right("00" + i.ToStr(), 3), "custom", true))
     end for
     mz = NxCollectionsMaterialize(cands)
-    NxCheck(r, "other block: 200, the last on 699", mz.channels.Count().ToStr() + "|" + NxToStr(mz.channels[199].number) + "|" + mz.channels[199].name, "200|699|SET-199")
-    NxCheck(r, "other block: three past 699", NxToStr(mz.overCapCustom), "3")
+    NxCheck(r, "other block: 100, from 400, the last on 499", mz.channels.Count().ToStr() + "|" + NxToStr(mz.channels[0].number) + "|" + NxToStr(mz.channels[99].number) + "|" + mz.channels[99].name, "100|400|499|SET-099")
+    NxCheck(r, "other block: three past 499", NxToStr(mz.overCapCustom), "3")
 
-    ' The step: a movie series in CH 450-499, an actor set from 500, each row
-    ' carrying its category; the found franchises don't move them.
+    ' The step: a movie series numbered with the found franchises, A to Z, an
+    ' actor set from 400, each row carrying its category.
     wick = NxClFilms(["John Wick", "John Wick: Chapter 2", "Parabellum"])
     hanks = NxClFilms(["Big", "Cast Away", "Forrest Gump"])
     lib = []
@@ -500,14 +507,15 @@ sub NxClSplitCases(r as Object)
         NxClRaw0("spare", "Tom Hanks Too", ["Big", "Cast Away", "Forrest Gump"])
     ]
     found = [NxClFound(0, true), NxClFound(1, true), NxClFound(2, false)]
-    fr = { channels: NxFranchiseChannels(found), found: [] }
+    fb = NxFranchiseBlock(found)
+    fr = { channels: fb.channels, kept: fb.kept, found: [] }
     cs = NxCollectionsStep({ channels: [], raw: raw, items: lib, serverKeys: {}, manifest: invalid, enabledKeys: NxCollectionKeySet(["0:wick", "0:hanks"]), franchise: fr, franchiseBundleIDs: [], defs: [] })
-    NxCheck(r, "split step: channels", NxClChannelNames(cs) + "|" + NxClChannelNumbers(cs), "JOHN WICK,TOM HANKS|450,500")
+    NxCheck(r, "split step: channels", NxClChannelNames(cs) + "|" + NxClChannelNumbers(cs), "JOHN WICK,TOM HANKS|312,400")
     rows = []
     for each row in cs.rows
         rows.Push(row.title + "=" + NxToStr(row.category) + "@" + NxClOrNull(row.channelNumber))
     end for
-    NxCheck(r, "split step: rows", rows.Join(";"), "JOHN WICK=franchises@450;TOM HANKS=custom@500;TOM HANKS TOO=custom@null")
+    NxCheck(r, "split step: rows", rows.Join(";"), "JOHN WICK=franchises@312;TOM HANKS=custom@400;TOM HANKS TOO=custom@null")
     NxCheck(r, "split step: overCap by block", NxToStr(cs.overCapFranchises) + "/" + NxToStr(cs.overCapCustom), "0/0")
 end sub
 
@@ -517,6 +525,22 @@ function NxClNumbersAndIDs(cs as Object) as String
         out.Push(ch.name + "=" + NxToStr(ch.category) + " CH " + NxToStr(ch.number) + " id " + NxToStr(ch.id))
     end for
     return out.Join(";")
+end function
+
+function NxClFoundNumbers(cs as Object) as String
+    out = []
+    for each ch in cs.found
+        out.Push(ch.name + "@" + NxToStr(ch.number))
+    end for
+    return out.Join(";")
+end function
+
+function NxClChannelNamesOf(channels as Object, category as String) as String
+    out = []
+    for each ch in channels
+        if NxToStr(ch.category) = category then out.Push(ch.name)
+    end for
+    return out.Join(",")
 end function
 
 function NxClRowNumbers(cs as Object) as String

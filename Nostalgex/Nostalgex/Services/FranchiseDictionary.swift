@@ -196,7 +196,7 @@ enum FranchiseDictionary {
         isOn(id, enabledIDs: enabledIDs, disabledIDs: disabledIDs, defaultOn: defaultOnIDs.contains(id))
     }
 
-    /// Same rule with an explicit default. A stock classic (CH100-106) defaults ON: it
+    /// Same rule with an explicit default. A stock classic (ids 100-106, CH 300-306) defaults ON: it
     /// is off only when the viewer switched it off (`nostalgex_disabled_franchises`).
     static func isOn(_ id: String, enabledIDs: Set<String>, disabledIDs: Set<String>, defaultOn: Bool) -> Bool {
         if enabledIDs.contains(id) { return true }

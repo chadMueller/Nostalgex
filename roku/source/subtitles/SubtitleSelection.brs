@@ -63,5 +63,15 @@ function NxSubPickIndex(tags as Object, forced as Object, preferred as String) a
 end function
 
 function NxSubMatches(tag as String, want as String) as Boolean
-    return tag = want or Left(tag, Len(want) + 1) = want + "-"
+    if tag = want or Left(tag, Len(want) + 1) = want + "-" then return true
+    ' Norwegian in any spelling (NxLanguageKey): "nb-no" for "no", "nn" for "nb".
+    n = NxNorwegianCodes()
+    return n.DoesExist(NxSubPrimaryOf(tag)) and n.DoesExist(NxSubPrimaryOf(want))
+end function
+
+' The language part of a tag, before any "-": "nb-no" to "nb".
+function NxSubPrimaryOf(tag as String) as String
+    dash = Instr(1, tag, "-")
+    if dash > 0 then return Left(tag, dash - 1)
+    return tag
 end function

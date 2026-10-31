@@ -132,9 +132,9 @@ enum PreferenceSyncMerge {
     }
 }
 
-/// Mirrors every Settings choice (lineup, Retro Mode, stream quality, subtitles, audio,
-/// Report Playback) to iCloud key-value storage so every Apple TV on the same Apple ID
-/// is set up the same way.
+/// Mirrors every Settings choice (lineup, Retro Mode, guide text size, stream quality,
+/// subtitles, audio, Report Playback) to iCloud key-value storage so every Apple TV on
+/// the same Apple ID is set up the same way.
 ///
 /// Sync is off until the viewer turns it on in Settings (`syncEnabledKey`, a per-TV
 /// flag that is never itself synced). While it is off nothing is read from or written
@@ -161,6 +161,7 @@ final class PreferenceSync {
     /// removed on every TV. See `FranchiseDictionary.isOn`.
     nonisolated static let disabledFranchisesKey = "nostalgex_disabled_franchises"
     nonisolated static let retroModeKey = "nostalgex_retro_mode"
+    nonisolated static let guideTextSizeKey = GuideTextSize.storageKey
     nonisolated static let subtitlesFullscreenKey = "nostalgex_subtitles_fullscreen"
     nonisolated static let autoSubsForeignAudioKey = "nostalgex_auto_subs_foreign_audio"
     nonisolated static let subtitleLanguageKey = "nostalgex_subtitle_language"
@@ -176,6 +177,7 @@ final class PreferenceSync {
         enabledFranchisesKey,
         disabledFranchisesKey,
         retroModeKey,
+        guideTextSizeKey,
         subtitlesFullscreenKey,
         autoSubsForeignAudioKey,
         subtitleLanguageKey,
@@ -191,7 +193,7 @@ final class PreferenceSync {
         case enabledBundlesKey: return .stringSet(allowEmpty: false)   // never an empty lineup
         case enabledCollectionsKey, enabledFranchisesKey, disabledFranchisesKey: return .stringSet(allowEmpty: true)
         case retroModeKey, subtitlesFullscreenKey, autoSubsForeignAudioKey, reportPlaybackKey, nowPlayingKey, markWatchedKey: return .bool
-        case subtitleLanguageKey, audioLanguageKey, streamQualityKey: return .string
+        case subtitleLanguageKey, audioLanguageKey, streamQualityKey, guideTextSizeKey: return .string
         default: return nil
         }
     }
