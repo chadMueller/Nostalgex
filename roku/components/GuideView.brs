@@ -2065,19 +2065,7 @@ end sub
 
 sub openSidebar()
     m.sideTargets = [{ name: "SETTINGS", channel: -1, color: "#FFE500" }]
-    for each b in m.top.guide.bundles
-        if NxHasValue(m.top.guide.enabledBundles, b.id) then
-            ' FRANCHISES jumps to a found franchise when no classic is shown.
-            ids = b.channelIDs
-            if b.jumpIDs <> invalid then ids = b.jumpIDs
-            for i = 0 to m.channels.Count() - 1
-                if NxHasValue(ids, m.channels[i].id) then
-                    m.sideTargets.Push({ name: b.name, channel: i, color: m.channels[i].color })
-                    exit for
-                end if
-            end for
-        end if
-    end for
+    m.sideTargets.Append(NxGuideJumpTargets(m.top.guide.bundles, m.top.guide.enabledBundles, m.top.guide.jumps, m.channels))
     m.sideFocus = 1
     if m.sideTargets.Count() = 1 then m.sideFocus = 0
     m.sidebarOpen = true
