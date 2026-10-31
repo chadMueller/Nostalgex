@@ -522,7 +522,7 @@ landed, since his own comment there was never answered.
 
 **Changed.**
 
-- I-### (Discord, jussaren, Oct 29): the Now Playing display showed the channel name
+- I-### (a Discord report, Oct 29): the Now Playing display showed the channel name
   bigger than the title, so a viewer had to read the small line to see what was actually
   playing. Swapped the hierarchy in both displays that showed it: the brief Channel OSD
   (`PlayerView.swift`) and the Now Playing panel's info header (`NowPlayingPanel.swift`).
