@@ -2,7 +2,7 @@
 
 ## Current Settings
 
-Apple TV: Settings > CONNECTION > **SHOW NOW PLAYING ON <SERVER>** and
+Apple TV: Settings > PLAYBACK & PICTURE > WATCH HISTORY > **SHOW NOW PLAYING ON <SERVER>** and
 **MARK WATCHED ON <SERVER>**. The server name is Plex, Jellyfin or Emby.
 Web tuner: Settings > PLAYBACK > **Show Now Playing** and **Mark Watched**.
 The controls are hidden in the native demo and never report demo playback.
@@ -110,7 +110,7 @@ current sections above for this version's controls and policy.
 
 Timeline reporting and scrobbling ship in the tvOS app, implemented in `Services/PlaybackTracker.swift`. Plex uses its timeline and scrobble endpoints. Jellyfin and Emby use their session reports, and the app reads `PlayCount` back when it loads the library. Rewatchables filters on `viewCount >= 3` for all three.
 
-**Activity sync defaults to OFF.** The user turns it on in Settings under CONNECTION (REPORT PLAYBACK). Nothing is reported until they do. Plays they already made in Plex, Jellyfin, or Emby still count toward Rewatchables, because those counts live on the server.
+**Activity sync defaults to OFF.** The user turns it on in Settings under PLAYBACK & PICTURE (WATCH HISTORY). Nothing is reported until they do. Plays they already made in Plex, Jellyfin, or Emby still count toward Rewatchables, because those counts live on the server.
 
 **Reporting never fills Continue Watching (2026-10-11).** Turning it on means "my server sees what's playing and a real watch counts", not "every channel I surf past lands in Continue Watching". Settings copy, both surfaces: *"Off by default. When on, your server sees what's playing and a film you watch most of counts as watched. Channel surfing never fills your Continue Watching."*
 
