@@ -5,8 +5,10 @@
  * that comes back, in any tracked file.
  *
  * What it looks for:
- *   1. The home subnet, written either way: dotted, or dash-encoded as Plex's plex.direct
- *      hostnames write it. Use RFC 5737 addresses (192.0.2.x, 198.51.100.x, 203.0.113.x)
+ *   1. Home-network addresses, written either way: dotted, or dash-encoded as Plex's
+ *      plex.direct hostnames write it. Held here only as SHA-256 hashes of their first
+ *      three octets ("a.b.c"); every a.b.c.d in a line, in either form, is reduced to
+ *      a.b.c and hashed. Use RFC 5737 addresses (192.0.2.x, 198.51.100.x, 203.0.113.x)
  *      or a generic 192.168.1.x in examples instead.
  *   2. Real server names and ids, held here only as SHA-256 hashes of the lowercase
  *      token, so this file does not publish them either. Every word-like token of a
@@ -28,14 +30,17 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// Built from parts so this file does not match itself. The home network is a /22, so the
-// third octet covers 4 to 7.
-const prefix = ["192", "168"];
-const thirdOctet = "[4-7]";
-const ADDRESS_PATTERNS = [
-  new RegExp(prefix.join("\\.") + "\\." + thirdOctet + "\\.\\d"),
-  new RegExp(prefix.join("-") + "-" + thirdOctet + "-\\d"),
-];
+// sha256("a.b.c") of each home-network /24.
+const HASHED_PREFIXES = new Set([
+  "605c8dd8f8651179c590020dd44049691b9f601aa29557ee9715c22dea9e2a3e",
+  "22aede7927e7c47252dee440239deca84cf9ccc2ac59978686d81357ebe22d9a",
+  "5c94778b32e67b79bb89d4cc2f2ca19a33db3260f0020b3474b4f2f258a8c624",
+  "c0ad23c09e4e78aabe9bf6eadd2952006a0e5e50356ddbd5047a26e8cb53b981",
+]);
+
+// An address in a line, dotted (a.b.c.d) or dash-encoded (a-b-c-d), one separator
+// throughout. A lookahead, so overlapping runs of numbers are all tried.
+const ADDRESS_RE = /(?=(?<!\d)(\d{1,3})([.-])(\d{1,3})\2(\d{1,3})\2\d)/g;
 
 // sha256(lowercase token) -> what it was, in words.
 const HASHED_TOKENS = new Map([
@@ -51,14 +56,23 @@ const PENDING = new Map([]);
 
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 
-/** Every finding in one file's text, as short descriptions (never the matched text). */
-export function findingsIn(text) {
+/** Whether a line holds an address whose a.b.c hashes into `prefixes`. */
+function hasAddressIn(line, prefixes) {
+  for (const m of line.matchAll(ADDRESS_RE)) {
+    if (prefixes.has(sha256(`${m[1]}.${m[3]}.${m[4]}`))) return true;
+  }
+  return false;
+}
+
+/**
+ * Every finding in one file's text, as short descriptions (never the matched text).
+ * `prefixes` is for the self-test, which checks the matching with a made-up network.
+ */
+export function findingsIn(text, prefixes = HASHED_PREFIXES) {
   const found = [];
   const lines = text.split("\n");
   lines.forEach((line, i) => {
-    for (const re of ADDRESS_PATTERNS) {
-      if (re.test(line)) found.push(`line ${i + 1}: the home subnet`);
-    }
+    if (hasAddressIn(line, prefixes)) found.push(`line ${i + 1}: a home-network address`);
     for (const token of line.match(/[A-Za-z0-9][A-Za-z0-9-]*/g) || []) {
       // Hyphenated tokens are checked whole and in parts: a hostname is one token, a
       // hex id can sit inside a dash-joined plex.direct label.
@@ -92,15 +106,22 @@ function readText(path) {
 
 function selfTest() {
   const check = (cond, msg) => { if (!cond) throw new Error(`self-test: ${msg}`); };
-  for (const octet of ["4", "7"]) {
-    const dotted = [...prefix, octet].join(".") + ".7";
-    const dashed = [...prefix, octet].join("-") + "-7";
-    check(findingsIn(`http://${dotted}:8096`).length === 1, "missed a dotted home address");
-    check(findingsIn(`https://${dashed}.abc.plex.direct`).length === 1, "missed a dash-encoded home address");
-  }
-  check(findingsIn("http://" + [...prefix, "8", "7"].join(".")).length === 0, "flagged an address outside the home range");
-  check(findingsIn("http://192.0.2.7:8096 192.168.1.10 192-0-2-79").length === 0, "flagged an example address");
+  // The matching itself, against a made-up network (10.20.30.x) hashed the same way.
+  const madeUp = new Set([sha256("10.20.30")]);
+  check(findingsIn("http://10.20.30.7:8096", madeUp).length === 1, "missed a dotted address");
+  check(findingsIn("https://10-20-30-79.abc.plex.direct", madeUp).length === 1, "missed a dash-encoded address");
+  check(findingsIn("see 1.10.20.30.7 and x10.20.30.9", madeUp).length === 1, "missed an address inside a longer run");
+  check(findingsIn("http://10.20.31.7 10-20-30 10.20.30", madeUp).length === 0, "flagged a near miss or a bare prefix");
+  check(findingsIn("10.20-30.7", madeUp).length === 0, "flagged mixed separators");
+  // The real list: examples and a common home range are not flagged.
+  check(findingsIn("http://192.0.2.7:8096 192.168.1.10 192-168-1-79 192-0-2-79").length === 0, "flagged an example address");
   check(findingsIn("Attic-Server 0123456789abcdef0123456789abcdef").length === 0, "flagged a made-up name");
+  // One real address, when the maintainer provides it (never stored in the repo).
+  const sample = process.env.NOSTALGEX_LEAK_GUARD_SAMPLE;
+  if (sample) {
+    check(findingsIn(`http://${sample}:8096`).length === 1, "missed NOSTALGEX_LEAK_GUARD_SAMPLE, dotted");
+    check(findingsIn(`https://${sample.replaceAll(".", "-")}.abc.plex.direct`).length === 1, "missed NOSTALGEX_LEAK_GUARD_SAMPLE, dash-encoded");
+  }
 }
 
 function main() {
