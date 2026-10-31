@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV 1.0.29 release candidate: seven branches merged and tested together)
+
+**Shipped.** Nothing. Local branch `release/1.0.29-rc`, cut from `origin/main` at `0fe27e9`,
+not pushed. Real merge commits, in order: `chore/n006-scrub-home-network`,
+`fix/n014-iso639-language-match`, `fix/web-n014-iso639-language-match`,
+`fix/n011-episode-batch-order`, `fix/146-stop-waiting-crash`, `fix/livingroom-test-findings`,
+`settings/rail-redesign`.
+
+**Conflicts.** `docs/DEVLOG.md` at the top on every merge after the first: both entries kept,
+the later merge on top, checked line by line against both parents. `package.json`'s `test`
+chain: the leak guard first plus `test:language-match` after `test:jellyfin-subtitles`.
+`BundleManagerView.swift`: the rail branch deletes it and `fix/livingroom-test-findings`
+edited its `ChannelRequirementCard`; kept the deletion, since `SettingsSharedComponents.swift`
+already holds that card with the same focus fix.
+
+**Verified.** The leak guard passed after every merge (721 tracked files at the end). `npm
+test` passes. NostalgexTests on a tvOS 26.1 simulator: 1007 tests, 992 passed, 0 failed, 15
+skipped. The 1.0.29 changelog entry covers this branch and what landed on main since 1.0.28,
+still `released: false`.
+
+**Not ready to ship as is.** Settings > ABOUT (DISCORD, RATE NOSTALGEX) and the NOSTALGEX PRO
+tab show rows that read "Placeholder" on screen. `fix/livingroom-test-findings` still prints
+DISCOVERY TIMING lines for a pending device run. None of the merged work has had a run on a
+real Apple TV as one build.
+
 ## 2026-10-30 (Apple TV: Settings rail, explainer cards take focus, GitHub in About)
 
 **Changed.** On `settings/rail-redesign`, not pushed. The I-004 explainer cards under
