@@ -4,7 +4,8 @@ import SwiftUI
 /// live in their own categories as locked rows (SettingsToggleRow.proLocked).
 ///
 /// PLACEHOLDER (N-028): no StoreKit or entitlement code. Every line of copy here is a
-/// stand-in until the real Pro copy exists. Do not ship this tab as it reads now.
+/// stand-in until the real Pro copy exists. Do not ship this tab as it reads now: it
+/// stays off the rail while `SettingsFeatures.showProTab` is off.
 struct SettingsProView: View {
     let focus: FocusState<SettingsFocus?>.Binding
     @State private var showUpsell = false

@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The six tabs of the Settings rail (N-028). SUPPORT NOSTALGEX is pinned above a
-/// divider so it is never buried; the other five follow in this order.
+/// divider so it is never buried; the others follow in this order. NOSTALGEX PRO only
+/// shows while `SettingsFeatures.showProTab` is on (see `visible`).
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     case support
     case playback
@@ -63,8 +64,15 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    static var pinned: [SettingsCategory] { allCases.filter(\.isPinned) }
-    static var unpinned: [SettingsCategory] { allCases.filter { !$0.isPinned } }
+    /// The tabs the rail shows, in rail order. NOSTALGEX PRO is left out while
+    /// `SettingsFeatures.showProTab` is off; every case still exists, so the switches
+    /// over categories and the Pro screen keep compiling.
+    static func visible(showPro: Bool = SettingsFeatures.showProTab) -> [SettingsCategory] {
+        allCases.filter { showPro || $0 != .pro }
+    }
+
+    static var pinned: [SettingsCategory] { visible().filter(\.isPinned) }
+    static var unpinned: [SettingsCategory] { visible().filter { !$0.isPinned } }
 }
 
 /// One focus value for the whole Settings screen, so the container can move focus

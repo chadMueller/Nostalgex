@@ -6,7 +6,8 @@ import SwiftUI
 /// read and open on a phone or computer, not a link.
 ///
 /// PLACEHOLDER (N-028): the DISCORD and RATE rows have no destination yet. Their copy
-/// and links come from Chad; nothing here opens anything.
+/// and links come from Chad; nothing here opens anything. They are hidden while
+/// `SettingsFeatures.showAboutCommunityLinks` is off.
 struct SettingsAboutView: View {
     let focus: FocusState<SettingsFocus?>.Binding
 
@@ -30,7 +31,9 @@ struct SettingsAboutView: View {
             SettingsSectionHeader(title: "LINKS")
                 .padding(.top, 24)
 
-            placeholderRow(id: "about_discord", title: "DISCORD")
+            if SettingsFeatures.showAboutCommunityLinks {
+                placeholderRow(id: "about_discord", title: "DISCORD")
+            }
             SettingsToggleRow(
                 title: "GITHUB",
                 subtitle: "Source code and issues. Open it on a phone or computer.",
@@ -42,7 +45,9 @@ struct SettingsAboutView: View {
             ) {}
             .settingsRow("about_github", focus: focus)
             .accessibilityLabel("GitHub, github.com/chadMueller/Nostalgex")
-            placeholderRow(id: "about_rate", title: "RATE NOSTALGEX")
+            if SettingsFeatures.showAboutCommunityLinks {
+                placeholderRow(id: "about_rate", title: "RATE NOSTALGEX")
+            }
         }
     }
 

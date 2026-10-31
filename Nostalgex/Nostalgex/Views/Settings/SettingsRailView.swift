@@ -4,7 +4,7 @@ import SwiftUI
 /// guide's BundleJumpSidebar (accent bar that thickens on focus, rounded glow
 /// border, NoHighlightButtonStyle), in Settings' cyan instead of the guide's yellow.
 ///
-/// No ScrollView: six rows fit on screen, and a ScrollView would clip the glow at
+/// No ScrollView: six rows fit on screen (five while the Pro tab is hidden), and a ScrollView would clip the glow at
 /// its edges. Pro adds rows inside categories, not categories, so this stays short.
 struct SettingsRailView: View {
     /// The category the detail pane is showing. Stays marked while focus is in the

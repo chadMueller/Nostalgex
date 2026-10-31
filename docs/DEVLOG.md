@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV 1.0.29 release candidate: unfinished Settings hidden)
+
+**Changed.** On `release/1.0.29-rc`, not pushed.
+- The NOSTALGEX PRO tab and ABOUT's DISCORD and RATE NOSTALGEX rows are hidden behind
+  `SettingsFeatures` (`showProTab`, `showAboutCommunityLinks`, both false), because they
+  read "Placeholder" on screen and the Pro tab describes something that does not exist.
+  Setting either to true brings its part back as built; `SettingsProView`,
+  `ProUpsellSheet` and the `proLocked` row style still compile and nothing reaches them.
+  The rail has five tabs: up and down walk SUPPORT, PLAYBACK, CHANNELS, SERVERS, ABOUT
+  and stop at ABOUT (UI walk on a tvOS 26.1 simulator). ABOUT shows VERSION and GITHUB.
+  Rating is still SUPPORT NOSTALGEX's first row.
+
 ## 2026-10-30 (Apple TV 1.0.29 release candidate: seven branches merged and tested together)
 
 **Shipped.** Nothing. Local branch `release/1.0.29-rc`, cut from `origin/main` at `0fe27e9`,
