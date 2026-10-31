@@ -3,6 +3,66 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: STOP WAITING belongs to the server it was pressed on, #146)
+
+**Shipped.** Nothing. Branch `fix/146-stop-waiting-crash`, local only, not pushed.
+
+**The report.** #146: on Plex with several large libraries, a few stop answering
+during the first scan, and pressing STOP WAITING either moves on or crashes the app,
+about half the time each. The reporter has to press it once per stuck library, which on
+a single server is impossible (one press ends that server's whole scan), so the setup is
+most likely several servers.
+
+**No crash log.** App Store Connect had 0 TestFlight crash submissions for the app, and
+its diagnostics API holds no crash data (it covers hangs, disk writes and launches only,
+and returned nothing for builds 45 to 52). The issue asks the reporter for the build
+number, library sizes and a crash log.
+
+**Harness.** New `StopWaitingHarnessTests`: a loopback fake Plex where chosen sections
+never answer (connection held open, nothing sent), driven through the real first load
+(`AppState.loadLibrary`, the real `PlexAPIService`, the real stall watch and partial-guide
+path), pressing STOP WAITING the way the button does at varied moments, then building the
+guide the way TunerView does and waiting for the snapshot write. The soak is off by
+default (`TEST_RUNNER_NOSTALGEX_STOPWAIT_N`, `_SERVERS`, `_MODE`, `_SEED`, `_OUT`; each
+iteration is written to the host file before it runs, so a crash names its iteration).
+
+**Measured.**
+
+- Crash: not reproduced. Before the fix, 50 first loads (20 on one server, 30 on one to
+  four servers pressing on every stall), 100 presses acted on: 0 crashes, 0 hangs, every
+  load ended in a guide. After the fix, 30 first loads on one to four servers across all
+  five press patterns, 81 presses acted on: 0 crashes, 0 hangs, 0 error screens.
+- Found instead: a press that lands as one server's scan finishes is never read (the
+  stall watch polls every 2s and that server is already done), so it stays set and the
+  next server's watch abandons that server, a healthy scan, at its first poll. Measured
+  with a deterministic test (server A finishes as the press lands, server B takes 4.4s
+  and reports progress throughout): before, B kept 0 of 40 items and the library was
+  marked partial; after, 40 of 40, not partial. The soak shows it from the other side:
+  in the first after-fix run, a double press on server 1 of 2 no longer reached server
+  2, which then sat on its own stuck section waiting for a press of its own, as it
+  should. The harness's scripted modes now press again on every later stall.
+
+**Changed.** `AppState.loadLibrary` clears the pending press and the "still waiting" flag
+at the start of each server's scan. A press now only stops the server it was made on, and
+the STOP WAITING block leaves the screen once the server it was about has answered. START
+OVER is unaffected: it also ends the sign-in, which the stall watch checks on its own. Also (review follow-up): signing out between
+servers now stops the scan before the next server, which before the fix still received 18
+requests with the old token in the 2s until the stall watch noticed; now 0.
+
+**Verified.** NostalgexTests on the tvOS simulator: 984 tests, 969 passed, 0 failed, 15
+skipped (the soak among them).
+
+**Not verified.** The crash itself. Things the harness cannot see: memory on a real Apple
+TV (a partial guide from several large libraries is still large, and the earlier 400k-item
+work showed tvOS ending the app on memory right as the guide appeared; that leaves a
+JetsamEvent report, not a crash log), and the real STOP WAITING button and the RootView
+switch to the guide.
+The fix has not been on a physical Apple TV.
+
+**Next.** The reporter's build number, library sizes and a crash log decide where to look.
+With a log: name the frame. Without one: reproduce on the living room Apple TV with
+several stuck sections across two servers and watch for a jetsam event.
+
 ## 2026-10-30 (Apple TV: a rescan keeps episodes in show order, N-011)
 
 **Shipped.** Nothing yet. Branch `fix/n011-episode-batch-order`, cut from `origin/main` at

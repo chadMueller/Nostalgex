@@ -214,12 +214,27 @@ extension AppState {
             var scanWasAbandoned = false
 
             for (serverIndex, scanAPI) in apisToScan.enumerated() {
+                // Signed out (Disconnect, START OVER) while the previous server was being
+                // read: this scan is for a sign-in that has ended, so the next server is
+                // not asked for anything with the old token. `superseded()` below then
+                // drops what was fetched. The stall watch used to be the only thing to
+                // notice, at its first poll, after up to 2s of requests.
+                if librarySessionGeneration != session { break }
                 let serverLabel = serverIndex < serverNames.count ? serverNames[serverIndex] : "Plex"
                 let baseCount = merged.count
                 // Computed outside the `@Sendable operation:` closure below (a `Set<String>`
                 // local capture is trivially Sendable; `self` is not), see each backend's
                 // `loadLibrary`: a key in here is skipped before any item request for it.
                 let excludedKeys = excludedSectionKeys(forServerID: scanAPI.serverID)
+                // A STOP WAITING press belongs to the server it was made on. One that lands
+                // as the previous server finishes (after its last stall poll) was never
+                // consumed, and used to abandon this server, a healthy scan, at its first
+                // poll (issue #146). The "still waiting" block goes too: that server
+                // answered, so the button must not stay up offering to stop this one.
+                // START OVER is unaffected: it also ends the sign-in, which the abort
+                // check below reads on its own.
+                loadCancelRequested = false
+                isLoadStalling = false
                 do {
                     let items = try await withLibraryLoadStallWatch(
                         sample: { [weak self] in self?.libraryScanProgressSample() ?? LibraryLoadProgressSample() },
