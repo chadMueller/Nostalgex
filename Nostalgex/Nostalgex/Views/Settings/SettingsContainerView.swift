@@ -118,9 +118,10 @@ struct SettingsContainerView: View {
                             .transition(.opacity)
                     }
                     // Room for the focused row's stroke and the Support tiles' lift,
-                    // so neither is clipped at the scroll edges.
+                    // so neither is clipped at the scroll edges. At the top that room
+                    // sits below the fade, so the first row is never dimmed.
                     .padding(.horizontal, 80)
-                    .padding(.top, 16)
+                    .padding(.top, Self.rowsTopInset)
                     .padding(.bottom, 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -132,6 +133,21 @@ struct SettingsContainerView: View {
                 }
                 .onChange(of: selected) { _, _ in
                     proxy.scrollTo("rows_top", anchor: .top)
+                }
+            }
+            // Rows dissolve as they slide under the pinned hero instead of being cut
+            // mid-line at the divider. A focused row never sits in the fade: it is
+            // scrolled to the centre of the pane, and the first row rests at
+            // rowsTopInset, below the fade.
+            .mask {
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [.black.opacity(0), .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: Self.rowsTopFade)
+                    Color.black
                 }
             }
             .overlay(alignment: .top) {
@@ -199,6 +215,13 @@ struct SettingsContainerView: View {
             .accessibilityIdentifier("settingsHeroTitle")
         }
     }
+
+    /// Height of the fade at the top of the scrolling rows, under the hero's divider.
+    static let rowsTopFade: CGFloat = 32
+
+    /// Where the first row rests: below the fade, plus the 16 points the focused row's
+    /// stroke and glow and the Support tiles' lift have always had.
+    static let rowsTopInset: CGFloat = rowsTopFade + 16
 
     /// The near-black navy every hero PNG is painted on.
     static let heroBackground = Color(hex: "#050718")

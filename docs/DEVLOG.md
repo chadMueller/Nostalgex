@@ -3,7 +3,7 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-## 2026-10-30 (Apple TV 1.0.29 release candidate: unfinished Settings hidden)
+## 2026-10-30 (Apple TV 1.0.29 release candidate: Settings polish, GUIDE TEXT SIZE)
 
 **Changed.** On `release/1.0.29-rc`, not pushed.
 - The NOSTALGEX PRO tab and ABOUT's DISCORD and RATE NOSTALGEX rows are hidden behind
@@ -14,6 +14,11 @@ Commits carry the detail of *what*; this carries the *why*.
   The rail has five tabs: up and down walk SUPPORT, PLAYBACK, CHANNELS, SERVERS, ABOUT
   and stop at ABOUT (UI walk on a tvOS 26.1 simulator). ABOUT shows VERSION and GITHUB.
   Rating is still SUPPORT NOSTALGEX's first row.
+- Settings rows fade out over 32 points as they scroll under the pinned hero, instead of
+  being cut mid-line at its divider. The first row now rests 48 points below the divider
+  (was 16), so it is never in the fade; a focused row is scrolled to the middle of the
+  pane, so it never is either. Checked on simulator captures: RETRO MODE focused rests at
+  full brightness, and a row half under the divider is dimmed at its top edge.
 
 ## 2026-10-30 (Apple TV 1.0.29 release candidate: seven branches merged and tested together)
 
