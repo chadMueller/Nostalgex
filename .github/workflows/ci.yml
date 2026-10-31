@@ -154,6 +154,16 @@ jobs:
               - 'scripts/rating-golden.json'
               - 'scripts/nostalgex-rating-smoke.mjs'
 
+  # Every pull request, whatever it touches: the repo is public, and this keeps the
+  # maintainer's home network and real server names out of it. No npm install needed.
+  public-repo-hygiene:
+    name: No home-network details in tracked files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Leak guard
+        run: node scripts/public-repo-leak-guard.mjs
+
   channel-engine:
     name: Channel engine (rule parity, schedule order, docs)
     needs: changes
