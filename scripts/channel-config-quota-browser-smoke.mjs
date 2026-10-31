@@ -51,6 +51,9 @@ const plex = http.createServer((req, res) => {
 // control. Reverting to this text on the served page proves the test exercises the fix: the
 // same thrown exception, against the old code, must surface as the error screen.
 const OLD_LINE = `    localStorage.setItem('plex90_channel_config', JSON.stringify(config));\n  }`;
+// The fix at the time of this test was a try/catch here; it is lsSet() now, which does the same
+// and makes room by giving up caches first (scripts/nostalgex-storage.js). The negative control
+// puts the bare write back, so the thrown exception is uncaught again.
 
 const types = { ".html": "text/html", ".js": "text/javascript", ".cjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".woff2": "font/woff2" };
 const files = http.createServer((req, res) => {
@@ -62,7 +65,7 @@ const files = http.createServer((req, res) => {
     // ?preFix: saveChannelConfig with the try/catch taken out, for the negative control.
     if (req.url.includes("preFix")) {
       const reverted = text.replace(
-        /\n(\s*)\/\/ On a large library this runs right after saveLibraryCache\(\)[\s\S]*?console\.error\('\[Nostalgex\] Could not save channel config \(storage full or unavailable\):', e\);\n(\s*)\}\n(\s*)\}/,
+        /\n(\s*)\/\/ Channel toggles outrank every cache\.[\s\S]*?lsSet\('plex90_channel_config', JSON\.stringify\(config\)\);\n(\s*)\}/,
         `\n${OLD_LINE}`,
       );
       if (reverted === text) { res.writeHead(500); return res.end("pre-fix anchor not found"); }
@@ -115,7 +118,11 @@ async function run({ query = "" } = {}) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 200)));
   const consoleErrors = [];
-  page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200)); });
+  const consoleWarnings = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
+    if (m.type() === "warning") consoleWarnings.push(m.text().slice(0, 200));
+  });
 
   await page.goto(`${base}/plex-tuner.html${query}`);
   // loading-library starts hidden (inline style in the markup) and LL.show() only sets it to
@@ -133,7 +140,7 @@ async function run({ query = "" } = {}) {
     15000,
   );
   // The console.error from the catch in saveChannelConfig() arrives as a separate CDP event;
-  // give it a beat to land before reading consoleErrors below.
+  // give it a beat to land before reading the console below.
   await page.waitForTimeout(250);
   const state = await page.evaluate(() => ({
     loadingDone: document.getElementById("loading-library").style.display === "none",
@@ -144,7 +151,7 @@ async function run({ query = "" } = {}) {
     someChannelEnabled: typeof CHANNELS !== "undefined" && CHANNELS.some((ch) => ch.enabled),
   }));
   await ctx.close();
-  return { timedOut: result.timedOut, state, errors, consoleErrors };
+  return { timedOut: result.timedOut, state, errors, consoleErrors, consoleWarnings };
 }
 
 const fixed = await run();
@@ -154,11 +161,11 @@ check("fixed: the error screen never shows", fixed.state.errorShown === false, J
 check("fixed: a channel built and enabled despite the quota error", fixed.state.someChannelEnabled === true, JSON.stringify(fixed.state));
 check("fixed: the channel config write did fail (the test actually hit the exception)", fixed.state.channelConfigSaved === false, JSON.stringify(fixed.state));
 check("fixed: no uncaught page error", fixed.errors.length === 0, fixed.errors.join(" | "));
-check("fixed: the console names the save that failed", fixed.consoleErrors.some((m) => m.includes("channel config")), fixed.consoleErrors.join(" | "));
+check("fixed: the console names the save that failed", fixed.consoleWarnings.some((m) => m.includes("plex90_channel_config")), fixed.consoleWarnings.join(" | "));
 
 const preFix = await run({ query: "?preFix" });
 check("negative control (pre-fix code): the quota error surfaces as the error screen", preFix.state.errorShown === true, JSON.stringify(preFix.state));
-check("negative control (pre-fix code): the message blames the server, not storage", preFix.state.errorText.includes("YOUR SERVER MAY BE UNREACHABLE"), preFix.state.errorText);
+check("negative control (pre-fix code): the uncaught exception still shows the error screen (now saying it is storage, not the server)", preFix.state.errorText.includes("RAN OUT OF STORAGE"), preFix.state.errorText);
 check("negative control (pre-fix code): the connect screen comes back instead of the guide", preFix.state.connectShown === true, JSON.stringify(preFix.state));
 
 await browser.close();

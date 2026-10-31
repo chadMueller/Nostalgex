@@ -138,6 +138,7 @@ function NxFilterChannel(channel as Object) as Object
     c.hasSource = NxTruthy(r.source)
     c.hasType = NxTruthy(r.type)
     c.manifestOnly = NxTruthy(r.manifestOnly)
+    c.manifestOnlyGenreFallback = NxTruthy(r.manifestOnlyGenreFallback)
     c.hasYearRange = type(r.yearRange) = "roAssociativeArray"
     c.allowUnrated = NxTruthy(r.allowUnrated)
     c.watchedOnly = NxTruthy(r.watchedOnly)
@@ -416,8 +417,11 @@ function NxItemPasses(item as Object, c as Object, manifest as Dynamic, exclusiv
         return "manifest"
     end if
 
-    ' manifestOnly: membership comes solely from the manifest.
-    if c.manifestOnly then return ""
+    ' manifestOnly: membership comes solely from the manifest, unless the
+    ' channel opts in to a second, additive claim path with
+    ' manifestOnlyGenreFallback (upstream 4fa4cb5: STAND-UP and ANIME): the
+    ' content matching below then runs too, with the channel's own rules.
+    if c.manifestOnly and not c.manifestOnlyGenreFallback then return ""
 
     if NxAnyWord(titleLower, c.titleExcludesRx) then return ""
 
@@ -541,9 +545,17 @@ function NxItemPasses(item as Object, c as Object, manifest as Dynamic, exclusiv
         end if
     end if
 
-    ' ratingMin: the Plex rating or the user rating clears the bar.
+    ' ratingMin: the Plex rating or the user rating clears the bar. Failing that,
+    ' the OMDb rating the enrichment read (the one imdbRatingMin reads) at the
+    ' same threshold does (upstream d56729f): Emby sends no CommunityRating, which
+    ' left the 13 channels on a plain ratingMin empty. Without enrichment there
+    ' is none, and the channel is rejected as before.
     if c.hasRatingMin then
-        if NxNumberOr0(item.rating) < r.ratingMin and NxNumberOr0(item.userRating) < r.ratingMin then return ""
+        if NxNumberOr0(item.rating) < r.ratingMin and NxNumberOr0(item.userRating) < r.ratingMin then
+            omdb = NxEnriched(item, "imdbRating")
+            if not NxIsNumber(omdb) then return ""
+            if omdb < r.ratingMin then return ""
+        end if
     end if
 
     matchesGenre = c.hasGenreInclude and NxAnySubstring(itemGenres, c.includeLower)

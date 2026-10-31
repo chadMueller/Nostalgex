@@ -156,7 +156,8 @@ end sub
 ' category folded closed behind a SHOW/HIDE row, as upstream's
 ' CollectionAccordionHeaderRow. Kinds:
 '   header, subheader, info: text only, never focused
-'   support, server, signOut, retro, quality (STREAM QUALITY),
+'   support, server, signOut, retro, guideText (GUIDE TEXT SIZE), quality
+'   (STREAM QUALITY),
 '   qualityChoice, subtitles, language (SUBTITLE or AUDIO LANGUAGE),
 '   languageChoice, bundle, franchiseAll, franchise,
 '   collectionsToggle, collection: rows
@@ -183,6 +184,7 @@ sub buildRows()
 
     m.rows.Push({ kind: "header", title: "PLAYBACK", subtitle: "Picture and subtitles" })
     m.rows.Push({ kind: "retro" })
+    m.rows.Push({ kind: "guideText" })
     pushQuality()
     m.rows.Push({ kind: "subtitles" })
     ' SUBTITLE LANGUAGE only while subtitles can show, as upstream's.
@@ -606,6 +608,16 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = "0xFFE500FF"
         end if
+    else if row.kind = "guideText" then
+        ' Roku only (I-060): the guide's text, built-in sizes.
+        label = "GUIDE TEXT SIZE"
+        detail = "Bigger program titles and channel names in the guide"
+        state = "NORMAL"
+        stateColor = "0xFFFFFF59"
+        if NxGuideTextLarge() then
+            state = "LARGE"
+            stateColor = "0xFFE500FF"
+        end if
     else if row.kind = "quality" then
         label = "STREAM QUALITY"
         detail = "Lower this when your connection is slow or shared"
@@ -781,6 +793,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             render()
         else if row.kind = "retro" then
             NxSaveRetroMode(not NxRetroMode())
+            render()
+        else if row.kind = "guideText" then
+            NxSaveGuideTextLarge(not NxGuideTextLarge())
+            print "settings: guide text size "; NxGuideTextLarge()
             render()
         else if row.kind = "subtitles" then
             cycleSubtitleMode()

@@ -121,6 +121,8 @@ function pageSeason(bundles = shippedBundles()) {
     },
     renderActiveGuide() {},
   };
+  // The page writes through lsSet() (scripts/nostalgex-storage.js, #152); here it is the same store.
+  ctx.lsSet = (k, v) => { store.set(k, String(v)); return true; };
   ctx.toggleBundle = (id) => {
     if (ctx.enabledBundleIDs.has(id)) ctx.enabledBundleIDs.delete(id);
     else ctx.enabledBundleIDs.add(id);

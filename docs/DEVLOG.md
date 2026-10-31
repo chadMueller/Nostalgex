@@ -3,6 +3,236 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Web tuner and Docker: a library of any size loads, #152)
+
+**Shipped.** Nothing yet. Branch `fix/web-152-storage-quota`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. A Docker release needs its own `tuner-v` tag and a
+`tunerVersion` bump in the tagged commit.
+
+**Why the first fix was not enough.** `363a888` wrapped the one write the report named
+(`saveChannelConfig()`), and that is on `main`. Measured against a fake 6,738-item Plex
+library (519 movies, 6,219 episodes) padded so the old trimmed cache lands at 5,236,139 of
+Chrome's 5,242,880-character localStorage quota, the way the report describes it:
+
+- 1.0.9: `QuotaExceededError` at `saveChannelConfig`, error screen "COULD NOT LOAD LIBRARY.
+  YOUR SERVER MAY BE UNREACHABLE", channel config not saved.
+- `main` with the try/catch: the library loads, but the channel config is still not saved
+  (the cache leaves 6 KB and the config needs 7.5 KB). With 6.5 KB of other settings saved
+  in that browser the error screen is back: the next write after the cache,
+  `markInitialLibraryLoadComplete()` in `nostalgex-library-load.js`, was unguarded and threw
+  the same error. A try/catch on one write only moves the throw to the next one.
+
+So the cause in the report is right, and the cure is not guarding one write. The cache has
+no business taking the whole quota.
+
+**Changed.**
+
+- The library cache moved from localStorage to IndexedDB (`scripts/nostalgex-storage.js`,
+  web only, new file). IndexedDB has no 5 MB ceiling and the enrichment cache already uses
+  it. The cache is now stored whole, summaries included; localStorage used to drop them
+  to fit. The page deletes the old localStorage copy at start-up, so a browser a 1.0.9
+  tuner left full is freed on its first visit. It is not migrated: that costs one rescan.
+- Sign-out still has to forget the library at once (the items carry the Plex token). The
+  record in IndexedDB only counts while a short id in localStorage matches it, so
+  `clearLibraryCache()` is one synchronous `removeItem` and a page that navigates away
+  before IndexedDB finishes deleting cannot leave a cache that loads.
+- Every `localStorage` and `sessionStorage` write in `plex-tuner.html` goes through
+  `lsSet`/`ssSet`, which never throw. On a full quota a small setting gives up rebuildable
+  data and retries: the old library cache, then the collection scan, the MusicBrainz cache
+  and the daily manifests, stopping as soon as it fits. A cache write never evicts
+  another cache. If nothing can be freed the setting stays in memory and the console says so.
+- `markInitialLibraryLoadComplete()` goes through the same path. The Plex client id is held in
+  memory too, so a failed save does not mean a new device id on every request. In
+  `web-tuner.html`, `getClientId()` was the one unguarded localStorage write (its sign-in
+  saves already had a try).
+- The error screen says what failed. A storage error now reads "THIS BROWSER RAN OUT OF
+  STORAGE. YOUR SERVER IS FINE...", and a failure while building the guide (including the
+  cache-restore path, where no server was asked) reads "THE LIBRARY LOADED, BUT THE GUIDE
+  COULD NOT BE BUILT...". A scan that got no answer still says the server may be unreachable.
+  Both backends use it. Checked at 390x844, 820x1180, 1440x900 and 960x540: no overflow.
+
+**Measured, same library, fixed code.** Guide up in 3.3 s, 66.6 KB of localStorage (1.3% of
+the quota), 7.0 MB cached in IndexedDB, channel config and first-load flag saved. A reload
+restores the guide in 0.7 s with zero requests to the server. With the padded library and
+6.5 KB of extra settings: same result. The built Docker output (`dist-selfhost`) passes the
+same checks.
+
+**Tests.** New `scripts/nostalgex-storage-smoke.mjs` (33 checks, in `npm test`): quota error
+shapes, eviction order, a cache write not evicting a cache, the cache id, a failed write, a
+stuck database, and that the evictable key names still match what the tuner writes. New
+`scripts/storage-quota-browser-smoke.mjs` (`npm run test:storage-quota`, Playwright, not in
+`npm test`): 55 checks over the 6,738-item library at the real quota, the full-browser
+state, a quota full of rebuildable data, one full of data the page cannot rebuild, the error
+messages, sign-out, and no or stuck IndexedDB. `TUNER_ROOT=<checkout>` runs it against any
+other build: against 1.0.9 it fails 23 of its first-load checks. Taking eviction out of
+the module makes the rebuildable-data case fail. `nostalgex-season-smoke.mjs` got an `lsSet`
+stand-in; `cache-restore-crash`, `channel-config-quota` and `stream-quality` browser smokes
+now read the cache from IndexedDB. All of those, plus `empty-guide`, `empty-lineup`,
+`start-over:browser` and `plex-bad-byte`, pass.
+
+**Half-done.** Not verified on a real Docker host, a TV browser, Safari or Firefox: the
+checks ran in headless Chromium 156. A browser with no IndexedDB keeps working and rescans
+every visit (tested by removing it). If IndexedDB hangs, a visit waits 5 s for the cache
+before scanning (tested with a stub). `repopulateChannelsFromLibrary` rewrites the cache on
+every load, restored or not, so the 24 hour TTL counts from the last visit; unchanged,
+and not looked at further.
+
+**Next.** Needs review and a push decision from Chad. Cross-product: localStorage and IndexedDB
+are browser-only, so nothing to port to Apple TV or Roku; the Roku CI job watches
+`plex-tuner.html` and the engine files, and none of the shared engine files changed.
+
+## 2026-10-30 (Roku: port the two filter engine changes of 2026-10-29, so the `roku` job goes green)
+
+**Shipped.** Nothing yet. Branch `roku/filter-port-manifest-fallback-ratingmin`, cut from
+`origin/main` at `0fe27e9`, not merged, not pushed. Found by the 80s +3 renumber card
+(numJBa3V), which guessed the red `filter` tests came from the renumbering; they do not.
+
+**Why.** Two engine commits of 2026-10-29 reached `scripts/nostalgex-channel-filter.cjs`, the
+shared filter golden file and the Swift app, and not `roku/source/filter/ChannelFilter.brs`.
+`roku/` says an engine change lands with its Roku port; this is the port, late. Until it
+lands, `filter` shards 0 to 6 and `filter-golden` fail on main and so does the `roku` CI job.
+On the Roku the effect is real: STAND-UP and ANIME miss titles the Apple TV and web tuner
+put on them, and a library whose server sends no star rating (Emby's `CommunityRating`) can
+leave the 13 channels on a plain `ratingMin` empty when OMDb enrichment is on.
+
+**Changed.**
+
+- `4fa4cb5`, `manifestOnlyGenreFallback`: a `manifestOnly` channel that sets the flag now also
+  runs the normal genre and keyword matching, so a title the manifest never claimed can still
+  reach it (STAND-UP and, since `6dc02db`, ANIME opt in). The flag is read once per channel in
+  `NxFilterChannel`.
+- `d56729f`, `ratingMin`: when neither the Plex rating nor the user rating clears the bar, the
+  OMDb rating from enrichment (the value `imdbRatingMin` reads) at the same threshold does. With
+  no enrichment there is none and the item is rejected as before.
+- `tests/FilterGoldenTests.brs` passes `enrichment.imdbRating` through, as upstream's
+  `nostalgex-filter-golden-smoke.mjs` did in `d56729f`: the two Emby zero-rating cases need it.
+
+**Measured.** Before, on `0fe27e9`: `filter` 9 channels (58, 60, 90 to 96) failing under both
+clocks, `filter-golden` 276 passed, 16 failed. After: every `filter` shard passes and
+`filter-golden` is 292 passed, 0 failed. The rest of the run is unchanged. The two renumber
+fixes in `roku/renumber-80s-fixtures` clear the other three failures: with both branches
+together the whole `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Half-done.** Not run on the stick: the filter vectors take about 55 s a shard off-device and
+longer on a Streaming Stick, so `scripts/deploy.sh --test` was left to the next session.
+Enrichment is off in the test stick's build, so the `ratingMin` fallback is proved by the
+golden cases only.
+
+## 2026-10-30 (Roku: the 80s-channels +3 shift, tests that read live numbers and one real number bug)
+
+**Shipped.** Nothing yet. Branch `roku/renumber-80s-fixtures`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. Trello numJBa3V.
+
+**Why.** The 80s channels took CH 20 to 22 on 2026-10-29 and every channel from 20 up moved
+by 3 (only `number` changed, every `id` stayed). Swift's `SeasonalBundleTests` were fixed in
+`ba34e25`. The Roku suites were red on main and the card guessed the shift was the cause.
+A full `tests/run.sh` on `0fe27e9` (`NX_TEST_JOBS=2`) says it is only part of it.
+
+**Measured on `0fe27e9`.**
+
+- Caused by the shift: `collections` 2669 passed, 2 failed (`CH 100 STAR WARS` is `CH 103`),
+  `franchise-guide` 58 passed, 1 failed (`list: star wars number`, 100 is 103).
+- Not the shift: `filter` shards 0 to 6 (18 FAIL lines, channels 58, 60 and 90 to 96, each
+  under two clocks) and `filter-golden` (276 passed, 16 failed: stand-up, anime, the 7
+  Carl Barron and Arj Barker titles, and the two Emby zero-rating cases). Those are the
+  engine commits `4fa4cb5` (`manifestOnlyGenreFallback`) and `d56729f` (`ratingMin` falls
+  back to the OMDb rating) that never got their Roku port. `ChannelFilter.brs` has neither.
+  The filter vectors and golden cases key on channel id, so no number is involved. Left for
+  its own change.
+- Everything else in the run passed, including `subtitle` and `mediabrowser`.
+
+**Changed.**
+
+- `tests/CollectionTests.brs` and `tests/FranchiseGuideTests.brs`: the three stale
+  expectations now read the channel's number from the live `channels.json`. The Swift cases
+  they transcribe make their own `Channel(id: 100, number: 100)`; here the stock channels are
+  built from the real file, so a hard-coded 103 would break at the next renumber too.
+- A real on-device bug, `NxFranchiseListRows` in `source/guide/Franchises.brs`. It took a
+  stock classic's number from the kept channels and fell back to the channel's id when the
+  classic was cut for too few films. Before the shift id and number matched, so nobody saw
+  it. Now Settings shows `CH 102` for HARRY POTTER where the channel is CH 105. It reads the
+  number from every channel in the lineup, as the Apple TV's `allChannels` does. A new check
+  makes every stock row's number its channel's: on the old code 5 of the 7 failed (102 for
+  105, 106 for 109, 103 for 106, 104 for 107, 105 for 108).
+- Production code has no other channel-number literal. Every `CH n` on screen, the deep-link
+  number fallback and the guide read `ch.number` from `channels.json`; the 300, 450 and 500
+  blocks for found franchises and collections sit clear of the stock numbers (top one 216).
+
+**Verified.** Off-device, same suites after the change: `collections` 2671 passed, 0 failed;
+`franchise-guide` 66 passed, 0 failed; `franchise` unchanged. On the Streaming Stick Plus
+(`deploy.sh --test`, one suite per build): `franchise-guide` 66 passed, 0 failed;
+`collections` 2671 passed, 0 failed. The stick's own Plex library has all seven classics
+in it, so Settings already showed CH 103 to 109 correctly before the fix and still does;
+the bug needs a library short of a classic, which is what the new test builds.
+
+**Next.** Port `manifestOnlyGenreFallback` and the `ratingMin` OMDb fallback to
+`ChannelFilter.brs`: until then `filter` and `filter-golden` stay red and the `roku` CI job
+with them. `scripts/deploy.sh --test` needs GNU `stat -c` and `timeout`, which macOS lacks.
+
+## 2026-10-30 (Roku: the Now Playing panel's audio rows no longer show Roku's "#uniq:" marker)
+
+**Shipped.** Nothing yet. Branch `roku/audio-track-uniq-prefix`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. Trello E3zRnEIL.
+
+**Why.** On 2026-10-28, testing a batch of tydude001's PRs on a stick signed in to Emby, the
+panel's audio rows read `#uniq:Italiano ...` and `#uniq:English ...`: Roku's own track names,
+shown as they come. The marker is for the player, not the viewer. The row builder
+(`npState` in `components/GuideView.brs`) was already on main before that batch.
+
+**Changed.** `NxAudioTrackLabel` in `source/subtitles/SubtitleSettings.brs` makes the row
+label: the track's name with a leading `#uniq:` taken off (any case, spaces trimmed), else
+the language in capitals, else `Track n`, as before. `npState` calls it. Only a leading
+marker goes; the same text inside a name stays. 9 new cases in `tests/SubtitleTests.brs`:
+the marker alone, with the rest of the name, in capitals, a plain name, mid-name, nothing
+after it, no name, no name and no language.
+
+**Verified.** `subtitle` suite, off-device and on the Streaming Stick Plus: 72 passed, 0
+failed (63 before). Not seen on the stick itself: it is signed in to Plex now, the marker was
+only ever seen on Emby, and a temporary log of the raw track list printed nothing across 10
+Plex channels stepped through (the panel on a direct-play film read SINGLE TRACK). So what
+follows `#uniq:` on a real name is unverified; the label keeps it whatever it is.
+
+**Next.** On an Emby sign-in, open the panel on a film with two audio tracks and look at the
+rows.
+
+## 2026-10-30 (Roku: GUIDE TEXT SIZE, NORMAL or LARGE, I-060)
+
+**Shipped.** Nothing yet. Branch `roku/guide-text-size`, cut from `origin/main` at `0fe27e9`,
+not merged, not pushed. Trello 0wYkPMrV, asked for by a Roku beta tester on Discord.
+
+**Why.** "An adjustable or larger font in the guide": 20 px program titles and 18 px channel
+names are small from a couch. Free core as two built-in sizes; a choice of fonts would be a
+look change and Plus, so there is none.
+
+**Changed.**
+
+- Settings, PLAYBACK, under RETRO MODE: GUIDE TEXT SIZE, OK toggles NORMAL and LARGE. NORMAL
+  is the guide as it was (a TV that never chose reads NORMAL). Saved under the guide's
+  registry section as `textSize`; it applies when Settings closes and survives a relaunch.
+- `source/guide/GuideText.brs` holds the two size tables; `GuideView.brs` draws the grid from
+  them. LARGE: program titles 26 px (from 20), time labels 26 (20), CHANNEL heading 22 (18),
+  channel numbers 24 (20), channel names 20 (18), each re-centred in the 80 px row. The channel
+  column stays 220 px wide, so numbers and names grow less than titles and the name gets
+  fewer characters (about 13 where NORMAL shows 15, 10 on the tuned row's bolt chip).
+- Not changed: the panel above the grid. Its title, summary and UP NEXT already fill 555 px
+  with a two-line title and summary, so they have no room to grow.
+- 24 cases in `tests/GuideNavTests.brs`: NORMAL is the old numbers, only "large" reads LARGE,
+  LARGE is bigger, every line sits inside its 80 px row (header 60), three digits fit the
+  number box.
+
+**Measured on the Streaming Stick Plus, 1080p.** NORMAL is pixel for pixel the old guide. In
+LARGE a 42 character title, "Star Wars: Episode VI - Return of the Jedi", spans x 238 to 863
+inside its block (221 to 872), its glyphs y 891 to 914 in a row of 859 to 939. Three digit
+numbers (103, 104, 105) and names up to HARRY POTTER fit the column (x 14 to 168 of 219). Longer
+titles end in an ellipsis (`Marshals: Road to Nowhe…`). Time header glyphs y 577 to 594 in a
+60 px header. LARGE read back after a relaunch, and NORMAL again after switching back, both
+by measuring the header. The `guide-nav` suite passed on the stick, 36 of 36. Screenshots are
+in the workspace's `.shots/roku/`.
+
+**Half-done.** A name that fits in NORMAL can now end in an ellipsis: REWATCHABLES TV reads
+REWATCHABLES…. Widening the column would move the time scale off the Apple TV's 425 px a
+half hour, so it was left.
+
 ## 2026-10-31 (Apple TV and web tuner: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes, "no" (Norwegian), "nb" (Bokmal) and "nn"
