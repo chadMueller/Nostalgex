@@ -684,6 +684,12 @@ class AppState {
     // Moved here from the channel-control section during the AppState split:
     // @Observable requires stored properties to live in the main class body.
     var seekOffset: Int = 0
+    /// The clock tuning and advancing read the schedule at. Always `Date()` in the app;
+    /// tests move it to walk a channel across a programme boundary without waiting.
+    @ObservationIgnored var scheduleClock: () -> Date = { Date() }
+    /// Demo mode only: when the block the demo clip is standing in for ends. See
+    /// `demoScheduleTick()`.
+    @ObservationIgnored var demoBlockEnd: Date?
     /// Offset the server was asked to start an HLS transcode at (0 = none). See hlsBaseOffset.
     var hlsRequestedOffset: Int = 0
     /// Added to the player's clock for every position report. An HLS transcode started at an

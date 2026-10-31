@@ -53,10 +53,11 @@ extension AppState {
         // on. Schedules are rebuilt off the main thread now, so the guide's copy can lag,
         // and an out-of-date one sends the player to the wrong offset or to the programme
         // queued next. Rebuilding one channel inline costs a few milliseconds.
-        let now = Date()
+        let now = scheduleClock()
         let usable = precomputedSchedule.flatMap { $0.isCurrent(at: now) ? $0 : nil }
         let schedule = usable ?? ChannelScheduleBuilder.buildSchedule(
             for: channel,
+            at: now,
             credentialFingerprint: scheduleCredentialFingerprint
         )
         if let schedule {

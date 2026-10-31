@@ -3,6 +3,10 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31
+
+**Changed.** On `release/1.0.29-rc`, not pushed. Demo mode's Now Playing panel now names the programme the guide shows: the one 600 s demo clip used to be seeked past its end (87% of tune-ins land 600 s or more into a block), finish at once and hand the panel the schedule's upNext. The clip now seeks to the elapsed time modulo 600, a clip end stays on the live block, and a once-a-second demo tick moves to the next programme when the block ends; real libraries are untouched. `DemoNowPlayingAgreementTests` walks five demo channels across ten programme boundaries on a simulated clock: 797 of 2,764 samples mismatched before, 0 after. Not yet watched on a real Apple TV.
+
 ## 2026-10-30 (Apple TV 1.0.29 release candidate: Settings polish, GUIDE TEXT SIZE)
 
 **Changed.** On `release/1.0.29-rc`, not pushed.
