@@ -19,6 +19,27 @@ Commits carry the detail of *what*; this carries the *why*.
   (was 16), so it is never in the fade; a focused row is scrolled to the middle of the
   pane, so it never is either. Checked on simulator captures: RETRO MODE focused rests at
   full brightness, and a row half under the divider is dimmed at its top edge.
+- GUIDE TEXT SIZE, under RETRO MODE in PLAYBACK & PICTURE: NORMAL or LARGE, the Apple TV
+  side of Roku's I-060. LARGE uses Roku's sizes: program titles and header times 26
+  (from 20), CHANNEL heading 22 (18), channel numbers 24 in a 44 point box (20 in 36),
+  names 20 (18), and BROADCASTS RESUME AT 9 PM 22 (18). Saved like RETRO MODE and synced
+  through iCloud with it, since both are how the guide looks. Nothing saved, or any
+  value but "large", is NORMAL. Rows stay 80 points, the header 60 and the channel
+  column 220; ProgramRowLayout works from times only, so blocks do not move.
+  Measured on a tvOS 26.1 simulator at 1080p with a test fixture (`-uiTestGuideTextFixture`:
+  channels 100, 216, 452, 888, 999 and 42 to 53 character titles):
+  - NORMAL against the build before this change: 0 of 967,304 guide pixels differ, at
+    three focus positions (the moving now-line masked out).
+  - LARGE against NORMAL: row edges, block dividers, fills and the focus outline are
+    identical (279,652 pixels compared); only the header's tick rules differ, because
+    each is as tall as its time label, as on Roku.
+  - LARGE title glyphs run 30 to 54 points down an 80 point row (NORMAL 33 to 51), clear
+    of the focus outline. A 53 character title ends at x 1098 in a block ending at 1108.
+  - DM Mono measured in the test host: three digits are 43.2 points wide at 24 (box 44)
+    and 36.0 at 20 (box 36); the tallest LARGE line is 33.9 of the 70 points inside the
+    outline; "12:30 AM" at 26 is 124.8 of a 411 point slot.
+  - The choice survives a relaunch (UI test and unit test). Long channel names lose more
+    characters to the ellipsis at LARGE, since the column cannot widen.
 
 ## 2026-10-30 (Apple TV 1.0.29 release candidate: seven branches merged and tested together)
 

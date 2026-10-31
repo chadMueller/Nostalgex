@@ -23,7 +23,46 @@ enum DemoData {
     static let uiTestChannelCount = 20
 
     static func channels() -> [Channel] {
-        manyChannelsForUITest ? paddedChannels() : baseChannels()
+        if guideTextFixtureRequested { return guideTextFixtureChannels() }
+        return manyChannelsForUITest ? paddedChannels() : baseChannels()
+    }
+
+    /// Test-only: `-uiTestGuideTextFixture` gives demo mode three-digit channel numbers
+    /// and titles of 40+ characters, the widest text the guide has to fit, for GUIDE
+    /// TEXT SIZE screenshots. Never set in a shipping run.
+    static var guideTextFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestGuideTextFixture")
+    }
+
+    private static func guideTextFixtureChannels() -> [Channel] {
+        let long = [
+            "The Extraordinary Midnight Adventures of Cassette Kid",   // 53
+            "Revenge of the Neon Ninjas from Outer Space",             // 43
+            "A Very Long Weekend at the Roller Disco Palace",          // 46
+            "Attack of the Fifty Foot Video Store Clerk",              // 42
+            "Return to the Haunted Drive-In on Route Sixty-Six",       // 49
+        ]
+        let rows: [(id: Int, number: Int, name: String, hex: String)] = [
+            (9001, 100, "DEMO ACTION", "#FF2244"),
+            (9002, 216, "DEMO COMEDY", "#FFD400"),
+            (9003, 452, "DEMO SCI-FI", "#00C4FF"),
+            (9004, 888, "DEMO 80s TV", "#FF66CC"),
+            (9005, 999, "DEMO LATE NIGHT THEATRE", "#7C3AED"),
+        ]
+        return rows.enumerated().map { index, row in
+            channel(
+                id: row.id, number: row.number, name: row.name, colorHex: row.hex,
+                items: (0..<5).map { n in
+                    item(
+                        id: "d-gt-\(row.number)-\(n)",
+                        title: n % 2 == 0 ? long[(index + n) % long.count] : "Short One \(n)",
+                        year: 1985 + n,
+                        genres: ["Action"],
+                        duration: [96, 34, 118, 52, 101][n]
+                    )
+                }
+            )
+        }
     }
 
     /// The five bundled channels, then filler rows numbered 6...n so the list scrolls.

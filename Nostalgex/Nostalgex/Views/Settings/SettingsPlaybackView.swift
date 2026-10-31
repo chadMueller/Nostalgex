@@ -26,6 +26,20 @@ struct SettingsPlaybackView: View {
             }
             .settingsRow("retro", focus: focus)
 
+            // Two built-in sizes, NORMAL and LARGE; select switches between them.
+            SettingsToggleRow(
+                title: "GUIDE TEXT SIZE",
+                subtitle: "Bigger program titles, times and channel names in the guide",
+                detail: appState.guideTextSize.label,
+                isOn: true,
+                isFocused: isFocused("guide_text_size"),
+                showToggle: false
+            ) {
+                appState.guideTextSize = appState.guideTextSize == .large ? .normal : .large
+            }
+            .settingsRow("guide_text_size", focus: focus)
+            .accessibilityValue(appState.guideTextSize.label)
+
             SettingsToggleRow(
                 title: "STREAM QUALITY",
                 subtitle: "Lower this when your connection is slow or shared",

@@ -490,6 +490,20 @@ class AppState {
         }
     }
 
+    /// GUIDE TEXT SIZE. Synced through iCloud like RETRO MODE: both are how the guide
+    /// looks, not anything about this TV's servers.
+    var guideTextSize: GuideTextSize = GuideTextSize(
+        stored: UserDefaults.standard.string(forKey: GuideTextSize.storageKey)
+    ) {
+        didSet {
+            UserDefaults.standard.set(guideTextSize.rawValue, forKey: GuideTextSize.storageKey)
+            preferenceSync.record(PreferenceSync.guideTextSizeKey, value: guideTextSize.rawValue)
+            if oldValue != guideTextSize {
+                Analytics.track(.settingChanged(key: "guide_text_size", value: guideTextSize.rawValue))
+            }
+        }
+    }
+
     /// Watershed: an opt-in broadcast-realism setting, off by default because it changes
     /// what airs when, that should be a deliberate choice, not a surprise after an
     /// update. While on, 18/R-rated content on every channel waits for 9 PM the way VHS

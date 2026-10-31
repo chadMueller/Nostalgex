@@ -10,6 +10,7 @@
         "Settings has a new layout. Pick a category on the left and its settings open on the right.",
         "If your server has more than one library, you choose which ones Nostalgex loads when you set it up, and you can change it later in Settings. A library you leave off is never scanned, which helps a lot with very big libraries.",
         "WATERSHED, a new switch in Settings, holds R, 18 and TV-MA titles until 9 PM on every channel, the way VHS VAULT already does. It's off unless you turn it on. A channel with nothing else to show says BROADCASTS RESUME AT 9 PM.",
+        "GUIDE TEXT SIZE, in Settings under PLAYBACK & PICTURE, makes the guide's program titles, times and channel numbers and names bigger. Pick LARGE if the TV is across the room. NORMAL keeps the guide as it was.",
         "Settings tells you why a channel isn't on the air: what it looks for, in plain words, and how many titles in your library match next to how many it needs.",
         "In Now Playing, the title of what's on is the big line and the channel name sits under it.",
         "STREAM QUALITY has an Original choice for a Plex server on your home network. It keeps 4K video exactly as it is and only converts the sound when it has to. Some 4K Dolby Vision streams that played with no sound have sound again. Thanks to @w6trp.",
