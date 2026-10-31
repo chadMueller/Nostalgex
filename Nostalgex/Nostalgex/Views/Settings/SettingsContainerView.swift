@@ -6,6 +6,8 @@ import AVFoundation
 /// - Up/down on the rail swaps the detail pane's hero and rows live, no press.
 /// - Right or select moves focus into the category's rows.
 /// - Menu from the rows returns focus to the rail; Menu from the rail leaves Settings.
+///   Inside a CHANNELS & BUNDLES sub-page, Menu first steps back one page, landing on
+///   the row that opened it.
 /// - Left from the rows lands back on the selected tab, not whichever tab is level with
 ///   the row, so the pane never swaps under you on the way out.
 /// - The hero and title stay pinned at the top of the pane; only the rows scroll.
@@ -14,8 +16,9 @@ struct SettingsContainerView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focus: SettingsFocus?
     @State private var selected: SettingsCategory = .support
-    /// Open accordions in CHANNELS & BUNDLES, kept while you visit other tabs.
-    @State private var expandedCategories: Set<String> = []
+    /// The CHANNELS & BUNDLES sub-page on show; nil is its list. Back to the list
+    /// whenever another tab is selected.
+    @State private var channelsPage: ChannelsPage?
 
     var body: some View {
         ZStack {
@@ -42,7 +45,11 @@ struct SettingsContainerView: View {
                     .onExitCommand {
                         // Only reached while a row has focus; Menu on the rail is not
                         // handled here, so the NavigationStack pops as before.
-                        focus = .rail(selected)
+                        if selected == .channels, let page = channelsPage {
+                            showChannelsPage(page.parent, focusing: page.linkRowID)
+                        } else {
+                            focus = .rail(selected)
+                        }
                     }
             }
         }
@@ -52,6 +59,7 @@ struct SettingsContainerView: View {
             guard case .rail(let category)? = newFocus, category != selected else { return }
             withAnimation(.easeInOut(duration: 0.15)) {
                 selected = category
+                channelsPage = nil
             }
         }
         .onAppear {
@@ -87,11 +95,22 @@ struct SettingsContainerView: View {
         focus = .row(firstRowID(for: category))
     }
 
+    /// Swaps the CHANNELS & BUNDLES sub-page in place, then moves focus once the new
+    /// page's rows exist (setting it in the same update would target a row that is not
+    /// there yet, and the focus engine would pick its own).
+    private func showChannelsPage(_ page: ChannelsPage?, focusing rowID: String? = nil) {
+        channelsPage = page
+        let target = rowID ?? SettingsChannelsView.firstRowID(page: page, appState: appState)
+        DispatchQueue.main.async {
+            focus = .row(target)
+        }
+    }
+
     private func firstRowID(for category: SettingsCategory) -> String {
         switch category {
         case .support: return SettingsSupportView.firstRowID
         case .playback: return SettingsPlaybackView.firstRowID
-        case .channels: return SettingsChannelsView.firstRowID(appState: appState)
+        case .channels: return SettingsChannelsView.firstRowID(page: channelsPage, appState: appState)
         case .servers: return SettingsServersView.firstRowID(appState: appState)
         case .pro: return SettingsProView.firstRowID
         case .about: return SettingsAboutView.firstRowID
@@ -114,7 +133,7 @@ struct SettingsContainerView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Color.clear.frame(height: 1).id("rows_top")
                         categoryRows
-                            .id(selected)
+                            .id(rowsIdentity)
                             .transition(.opacity)
                     }
                     // Room for the focused row's stroke and the Support tiles' lift,
@@ -132,6 +151,11 @@ struct SettingsContainerView: View {
                     }
                 }
                 .onChange(of: selected) { _, _ in
+                    proxy.scrollTo("rows_top", anchor: .top)
+                }
+                .onChange(of: channelsPage) { _, _ in
+                    // A new page starts at its top. Stepping back, the focus change
+                    // that follows scrolls to the row that opened the page.
                     proxy.scrollTo("rows_top", anchor: .top)
                 }
             }
@@ -159,6 +183,11 @@ struct SettingsContainerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
+    /// Identity of the rows block, so a tab or sub-page swap cross-fades as a whole.
+    private var rowsIdentity: String {
+        selected == .channels ? "channels-\(channelsPage?.rawValue ?? "list")" : selected.rawValue
+    }
+
     @ViewBuilder
     private var categoryRows: some View {
         switch selected {
@@ -167,7 +196,9 @@ struct SettingsContainerView: View {
         case .playback:
             SettingsPlaybackView(focus: $focus)
         case .channels:
-            SettingsChannelsView(focus: $focus, expandedCategories: $expandedCategories)
+            SettingsChannelsView(focus: $focus, page: channelsPage) { page in
+                showChannelsPage(page)
+            }
         case .servers:
             SettingsServersView(focus: $focus)
         case .pro:

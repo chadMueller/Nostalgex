@@ -3,6 +3,40 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Apple TV: CHANNELS & BUNDLES becomes a short list with sub-pages)
+
+**Why.** On a real Apple TV the CHANNELS & BUNDLES accordions opened but were laggy and
+jumpy, and the page carried a lot of text. Measured on a tvOS 26.1 simulator with the
+franchise fixture padded to an 11,863-item library: once WHY AREN'T THESE ON AIR? was
+open, every focus move anywhere on the page (not just inside the explainer) took about
+1.2 s, against 0.3 s with it closed. Cause: every row reads the shared focus binding, so
+the whole page's body runs again on each move, and with the explainer open that body
+re-ran `currentMatchCounts` over the full library (1.11 to 1.13 s each time, 31 runs in
+one walk). The scroll then caught up in one jump (571 to 882 points) after each stall.
+An Apple TV is slower than a Mac, so it was worse there. Smaller things on the way: the
+explainer cards took focus through their own `@FocusState`, so the pane's scroll-to-row
+never saw them, and select on a card did nothing, so closing meant walking back up.
+
+**Changed.** On `settings/channels-drilldown` (off `release/1.0.29-rc`), not pushed.
+- The tab opens on four rows: CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS, each
+  with its count on the right and a chevron, then the WATERSHED switch. Select opens a
+  sub-page in the same detail pane; Menu steps back one page and lands on the row that
+  opened it, then to the rail. Moving to another tab resets to the list.
+- CHANNEL PACKAGES: one switch per package with its short description (or its season
+  when out of season), the channel count, and one amber line when some channels need
+  more content. The long channel-name lists are gone. WHY ARE SOME CHANNELS MISSING?
+  sits under the packages and opens the I-004 cards; their match counts are worked out
+  once when that page opens, never in `body`.
+- FRANCHISES and MY COLLECTIONS keep every switch, ADD ALL / REMOVE ALL, the scan button
+  and the over-capacity notes. Collections are listed flat under each category's name;
+  no accordions remain. Same `AppState` calls and row focus ids as before.
+- With the same 11,863-item library, each press now moves focus in about 245 ms (the UI
+  test's polling floor), on the missing-channels page included.
+- `SettingsChannelsDrilldownTests` (UI) walks the list, every sub-page and Menu back.
+  NostalgexTests: 1,024 run, 1,009 passed, 0 failed, 15 skipped.
+
+**Half-done.** Not tried on a real Apple TV yet.
+
 ## 2026-10-31
 
 **Changed.** On `release/1.0.29-rc`, not pushed. Demo mode's Now Playing panel now names the programme the guide shows: the one 600 s demo clip used to be seeked past its end (87% of tune-ins land 600 s or more into a block), finish at once and hand the panel the schedule's upNext. The clip now seeks to the elapsed time modulo 600, a clip end stays on the live block, and a once-a-second demo tick moves to the next programme when the block ends; real libraries are untouched. `DemoNowPlayingAgreementTests` walks five demo channels across ten programme boundaries on a simulated clock: 797 of 2,764 samples mismatched before, 0 after. Not yet watched on a real Apple TV.

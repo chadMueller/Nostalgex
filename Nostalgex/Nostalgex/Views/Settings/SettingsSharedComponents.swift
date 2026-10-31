@@ -3,76 +3,71 @@ import SwiftUI
 // Shared building blocks for the Settings screen (N-028). Moved here from the old
 // BundleManagerView.swift, which held the flat SettingsPageView; that page is gone.
 
-// MARK: - Collection category accordion (show / hide only, not a lineup toggle)
+// MARK: - Link row (drills into a sub-page)
 
-struct CollectionAccordionHeaderRow: View {
+/// A row that opens a sub-page inside the detail pane: title on the left, its current
+/// value and a chevron on the right, e.g. CHANNEL PACKAGES   15 ON  >. Same chrome as
+/// SettingsToggleRow.
+struct SettingsLinkRow: View {
     let title: String
-    let subtitle: String
-    let detail: String
-    let isExpanded: Bool
+    var subtitle: String? = nil
+    let value: String
     let isFocused: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .center, spacing: 16) {
+            HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.custom("DMMono-Medium", size: 20))
+                        .font(.custom("DMMono-Medium", size: 22))
                         .foregroundStyle(.white)
-                        .multilineTextAlignment(.leading)
-
-                    Text(subtitle)
-                        .font(.custom("DMMono-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.custom("DMMono-Regular", size: 20))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
                 }
 
-                Spacer(minLength: 12)
+                Spacer()
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(detail)
-                        .font(.custom("DMMono-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text(isExpanded ? "HIDE" : "SHOW")
-                        .font(.custom("VT323-Regular", size: 22))
-                        .foregroundStyle(Color("BrandCyan").opacity(isFocused ? 1.0 : 0.75))
-                }
+                Text(value)
+                    .font(.custom("DMMono-Medium", size: 22))
+                    .foregroundStyle(isFocused ? Color("BrandCyan") : .white.opacity(0.6))
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isFocused ? Color("BrandCyan") : .white.opacity(0.35))
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 22)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isFocused ? Color.white.opacity(0.07) : Color.white.opacity(0.035))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isFocused ? .white.opacity(0.07) : .white.opacity(0.02))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(
-                        isFocused ? Color("BrandCyan").opacity(0.5) : Color.white.opacity(0.08),
-                        lineWidth: isFocused ? 1.5 : 1
-                    )
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : .clear, lineWidth: 1.5)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(SettingsButtonStyle(isFocused: isFocused, accentColor: Color("BrandCyan")))
-        .animation(.easeInOut(duration: 0.18), value: isExpanded)
-        .animation(.easeInOut(duration: 0.12), value: isFocused)
+        .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 }
 
-/// I-004: one channel's plain-language explainer, inside the missing-channels
-/// accordion. Read-only (nothing on this card changes anything), but still
-/// focusable: without a focus target here the remote's up/down had nothing to
-/// land on inside the accordion and skipped the whole list (found live,
-/// 2026-10-30). Highlighted on focus the same way CollectionAccordionHeaderRow is.
+/// I-004: one channel's plain-language explainer on the MISSING CHANNELS page.
+/// Read-only, but focusable so up and down walk through the cards. Focus comes from
+/// the page's shared focus binding (`settingsRow`), like every other Settings row, so
+/// the pane scrolls to it and Menu steps back from it the same way.
 struct ChannelRequirementCard: View {
     let channel: Channel
-    let matchedCount: Int
-    /// Its own focus, not @Environment(\.isFocused): that one reads an ancestor's focus
-    /// and never lights up for a view that is itself the focusable, so the card took
-    /// focus with no visible highlight.
-    @FocusState private var isFocused: Bool
+    /// nil while the page is still counting.
+    let matchedCount: Int?
+    let isFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -85,18 +80,17 @@ struct ChannelRequirementCard: View {
                     .foregroundStyle(.white)
             }
 
-            Text("Needs at least \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). Your library has \(matchedCount) right now.")
+            Text(matchedCount.map { "Needs \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). You have \($0)." }
+                 ?? "Needs \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). Counting yours…")
                 .font(.custom("DMMono-Regular", size: 18))
                 .foregroundStyle(Color(hex: "#FFB020"))
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array((channel.rules?.plainLanguageRequirements ?? []).enumerated()), id: \.offset) { _, line in
-                    Text("\u{2022} \(line)")
-                        .font(.custom("DMMono-Regular", size: 18))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            ForEach(Array((channel.rules?.plainLanguageRequirements ?? []).enumerated()), id: \.offset) { _, line in
+                Text("\u{2022} \(line)")
+                    .font(.custom("DMMono-Regular", size: 18))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 20)
@@ -108,13 +102,9 @@ struct ChannelRequirementCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(
-                    isFocused ? Color("BrandCyan").opacity(0.5) : Color.clear,
-                    lineWidth: 1.5
-                )
+                .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : Color.clear, lineWidth: 1.5)
         )
         .focusable(true)
-        .focused($isFocused)
         .animation(.easeInOut(duration: 0.12), value: isFocused)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("channelRequirementCard_\(channel.id)")
