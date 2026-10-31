@@ -51,7 +51,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Asset name of the 16:9 hero illustration in Assets.xcassets/SettingsHero.
+    /// Asset name of the 16x16 pixel icon in Assets.xcassets/SettingsHero.
     /// The hero falls back to sfSymbolPlaceholder while an asset is missing.
     var heroImageName: String {
         switch self {

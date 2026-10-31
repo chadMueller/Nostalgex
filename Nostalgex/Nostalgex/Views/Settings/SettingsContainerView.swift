@@ -177,26 +177,15 @@ struct SettingsContainerView: View {
         }
     }
 
-    /// The category's 16:9 illustration beside its title. Falls back to the SF Symbol
+    /// The category's pixel icon beside its title. Falls back to the SF Symbol
     /// placeholder until the asset is in Assets.xcassets/SettingsHero.
     private var hero: some View {
         HStack(alignment: .center, spacing: 44) {
-            ZStack {
-                // The art's own background, so no box edge shows at the rounded
-                // corners or while an image loads.
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Self.heroBackground)
-                heroArt
-                    .id(selected)
-                    .transition(.opacity)
-                // Kept: without it the dark tile reads as a smudge on the pane, and the
-                // Support tiles below carry the same edge.
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-            }
-            .frame(width: Self.heroSize.width, height: Self.heroSize.height)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityHidden(true)
+            heroArt
+                .id(selected)
+                .transition(.opacity)
+                .frame(width: Self.heroSize, height: Self.heroSize)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(selected.title)
@@ -223,21 +212,20 @@ struct SettingsContainerView: View {
     /// stroke and glow and the Support tiles' lift have always had.
     static let rowsTopInset: CGFloat = rowsTopFade + 16
 
-    /// The near-black navy every hero PNG is painted on.
-    static let heroBackground = Color(hex: "#050718")
-
-    /// 16:9, to match the hero PNGs.
-    static let heroSize = CGSize(width: 384, height: 216)
+    /// The icons are 16x16 pixel art. 192 points is 12 points per pixel, and the assets
+    /// are rendered at exactly 12x and 24x, so every pixel lands on whole points.
+    static let heroSize: CGFloat = 192
 
     @ViewBuilder
     private var heroArt: some View {
         if UIImage(named: selected.heroImageName) != nil {
             Image(selected.heroImageName)
                 .resizable()
-                // Default (smooth) sampling. At this size the art is drawn at about 0.6x
-                // and nearest-neighbour looked no sharper on a 4K capture.
-                .scaledToFill()
-                .frame(width: Self.heroSize.width, height: Self.heroSize.height)
+                // Nearest-neighbour, so the pixel edges stay hard if the art is ever
+                // drawn at a size other than its own.
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: Self.heroSize, height: Self.heroSize)
         } else {
             Image(systemName: selected.sfSymbolPlaceholder)
                 .resizable()
