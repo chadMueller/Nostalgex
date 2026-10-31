@@ -9,9 +9,9 @@ import XCTest
 /// server's franchise collections shared 300-499 on one id base, collections numbered after
 /// the found ones, so the FRANCHISES package moved them. Then each kind got a fixed block:
 /// found franchises 300-449, franchise collections 450-499, other collections 500-699.
-/// Since 1.0.29 each sits in its own hundred beside the channels.json blocks: found
-/// franchises 310-399 (after the stock FRANCHISES package at 300-309), franchise
-/// collections 400-449, other collections 450-499, and HIGH ROTATION alone from 500.
+/// Since 1.0.29 every franchise channel is in the 300s: the stock FRANCHISES package at
+/// 300-306, then found franchises and franchise collections in one pool from 310 to 399,
+/// numbered by name. Other collections own 400-499 and HIGH ROTATION 500 up.
 @MainActor
 final class FranchiseNumberingTests: XCTestCase {
 
@@ -108,17 +108,16 @@ final class FranchiseNumberingTests: XCTestCase {
             let inside = staticNumbers.filter { (block.displayNumberBase...block.displayNumberEnd).contains($0) }
             XCTAssertTrue(inside.isEmpty, "channels.json now reaches the \(block) range: \(inside.sorted())")
         }
-        XCTAssertEqual(DynamicChannelBlock.foundFranchises.displayNumberBase, 310)
-        XCTAssertEqual(DynamicChannelBlock.foundFranchises.displayNumberEnd, 399)
-        XCTAssertEqual(DynamicChannelBlock.collectionFranchises.displayNumberBase, 400)
-        XCTAssertEqual(DynamicChannelBlock.collectionFranchises.displayNumberEnd, 449)
-        XCTAssertEqual(DynamicChannelBlock.otherCollections.displayNumberBase, 450)
-        XCTAssertEqual(DynamicChannelBlock.otherCollections.displayNumberEnd, 499)
-        XCTAssertEqual(DynamicChannelBlock.allCases.map(\.capacity), [90, 50, 50])
-        let ordered = DynamicChannelBlock.allCases.sorted { $0.displayNumberBase < $1.displayNumberBase }
-        for (a, b) in zip(ordered, ordered.dropFirst()) {
-            XCTAssertLessThan(a.displayNumberEnd, b.displayNumberBase, "\(a) and \(b) overlap")
+        // Found franchises and franchise collections share one franchise block.
+        for kind in [DynamicChannelBlock.foundFranchises, .collectionFranchises] {
+            XCTAssertEqual(kind.displayNumberBase, 310)
+            XCTAssertEqual(kind.displayNumberEnd, 399)
         }
+        XCTAssertEqual(DynamicChannelBlock.otherCollections.displayNumberBase, 400)
+        XCTAssertEqual(DynamicChannelBlock.otherCollections.displayNumberEnd, 499)
+        XCTAssertEqual(DynamicChannelBlock.allCases.map(\.capacity), [90, 90, 100])
+        XCTAssertLessThan(DynamicChannelBlock.foundFranchises.displayNumberEnd,
+                          DynamicChannelBlock.otherCollections.displayNumberBase)
     }
 
     func testEachKindHasItsOwnFixedIDBase() {
@@ -129,7 +128,7 @@ final class FranchiseNumberingTests: XCTestCase {
         XCTAssertEqual(CollectionCategory.custom.block, .otherCollections)
     }
 
-    func testEightySixFranchisesNumber310Through395AndCollectionsKeepTheirOwnBlocks() throws {
+    func testEightySixFranchisesAndTwoFranchiseCollectionsShareCH310Through397() throws {
         let state = makeState()
         state.foundFranchises = (0..<86).map { franchise($0) }
         state.discoveredCollections = [
@@ -143,10 +142,11 @@ final class FranchiseNumberingTests: XCTestCase {
         let found = state.allChannels.filter { state.foundFranchiseChannelIDs.contains($0.id) }.map(\.number)
         XCTAssertEqual(found, Array(310...395))
         XCTAssertEqual(numbers(state, .foundFranchises), Array(310...395))
+        // One pool, A to Z: FRANCHISE 000-085, then SAGA-A and SAGA-B.
         XCTAssertEqual(inBlock(state, .collectionFranchises).map(\.name), ["SAGA-A", "SAGA-B"])
-        XCTAssertEqual(numbers(state, .collectionFranchises), [400, 401])
+        XCTAssertEqual(numbers(state, .collectionFranchises), [396, 397])
         XCTAssertEqual(inBlock(state, .collectionFranchises).map(\.id), [1_010_000, 1_010_001])
-        XCTAssertEqual(numbers(state, .otherCollections), [450, 451])
+        XCTAssertEqual(numbers(state, .otherCollections), [400, 401])
 
         // No duplicate number anywhere: runtime numbers are unique and none lands on a
         // number channels.json uses.
@@ -159,47 +159,66 @@ final class FranchiseNumberingTests: XCTestCase {
         XCTAssertEqual(state.allChannels.map(\.number), state.allChannels.map(\.number).sorted())
     }
 
-    // MARK: - Numbers that don't move with packages
+    // MARK: - One franchise pool, numbered by name
 
     private func collectionChannels(_ state: AppState) -> [String: [Int]] {
         Dictionary(uniqueKeysWithValues: (inBlock(state, .collectionFranchises) + inBlock(state, .otherCollections))
             .map { ($0.name, [$0.id, $0.number]) })
     }
 
-    func testFranchiseCollectionsDoNotMoveWhenFoundFranchisesChange() {
+    func testFranchiseCollectionsAndFoundFranchisesInterleaveByName() {
         let state = makeState()
         state.enabledBundleIDs.formUnion([CollectionCategory.franchises.bundleID, CollectionCategory.custom.bundleID])
         state.discoveredCollections = [
             collection("alien saga", category: .franchises), collection("mad max", category: .franchises),
             collection("hanks", category: .custom)
         ]
-        // FRANCHISES package off: nothing found is built.
+        // Nothing found: the collections start the block.
         state.foundFranchises = []
         state.materializeDynamicChannels()
         let baseline = collectionChannels(state)
-        XCTAssertEqual(baseline["ALIEN SAGA"], [1_010_000, 400])
-        XCTAssertEqual(baseline["MAD MAX"], [1_010_001, 401])
-        XCTAssertEqual(baseline["HANKS"], [1_020_000, 450])
+        XCTAssertEqual(baseline["ALIEN SAGA"], [1_010_000, 310])
+        XCTAssertEqual(baseline["MAD MAX"], [1_010_001, 311])
+        XCTAssertEqual(baseline["HANKS"], [1_020_000, 400])
 
-        // Package on, 64 found (Chad's library).
+        // 64 found (FRANCHISE 000-063) sort between ALIEN SAGA and MAD MAX. Ids don't move;
+        // only the channels after them by name do.
         state.foundFranchises = (0..<64).map { franchise($0) }
         state.materializeDynamicChannels()
-        XCTAssertEqual(collectionChannels(state), baseline)
+        XCTAssertEqual(collectionChannels(state)["ALIEN SAGA"], [1_010_000, 310])
+        XCTAssertEqual(collectionChannels(state)["MAD MAX"], [1_010_001, 375])
+        XCTAssertEqual(numbers(state, .foundFranchises), Array(311...374))
+        XCTAssertEqual(collectionChannels(state)["HANKS"], [1_020_000, 400], "other collections never move")
 
-        // One found franchise switched off through the real toggle.
+        // One found franchise switched off through the real toggle: MAD MAX moves up one.
         state.toggleFranchise(state.foundFranchises[10])
-        XCTAssertEqual(collectionChannels(state), baseline)
-        XCTAssertEqual(numbers(state, .foundFranchises), Array(310...372))
+        XCTAssertEqual(collectionChannels(state)["MAD MAX"], [1_010_001, 374])
+        XCTAssertEqual(numbers(state, .foundFranchises), Array(311...373))
+        XCTAssertEqual(collectionChannels(state)["HANKS"], [1_020_000, 400])
 
-        // Stock channels arrive (package on with its classics), covering some found ones.
-        state.foundFranchises = (0..<64).map { franchise($0, coveredBy: $0 < 5 ? 100 + $0 : nil) }
-        state.materializeDynamicChannels()
-        XCTAssertEqual(collectionChannels(state), baseline)
-
-        // A full found block still leaves them alone.
+        // A full block still leaves the other collections alone.
         state.foundFranchises = (0..<170).map { franchise($0) }
         state.materializeDynamicChannels()
-        XCTAssertEqual(collectionChannels(state), baseline)
+        XCTAssertEqual(collectionChannels(state)["HANKS"], [1_020_000, 400])
+    }
+
+    /// Found franchises belong to the stock FRANCHISES package, so with it off they hold
+    /// no number and the franchise collections close up from CH 310.
+    func testWithTheFranchisesPackageOffCollectionsCloseUp() {
+        let state = makeState()
+        state.enabledBundleIDs.formUnion([CollectionCategory.franchises.bundleID])
+        state.discoveredCollections = [
+            collection("alien saga", category: .franchises), collection("mad max", category: .franchises)
+        ]
+        state.foundFranchises = (0..<3).map { franchise($0) }
+        state.materializeDynamicChannels()
+        XCTAssertEqual(numbers(state, .collectionFranchises), [310, 314])
+
+        state.enabledBundleIDs.remove(AppState.franchisesBundleID)
+        state.rebuildLineupAfterBundleChange(newlyEnabled: [], byViewer: false)
+        XCTAssertEqual(numbers(state, .collectionFranchises), [310, 311])
+        XCTAssertEqual(numbers(state, .foundFranchises), [])
+        XCTAssertEqual(state.foundFranchiseChannelIDs, [])
     }
 
     func testFoundFranchisesKeepTheirIDs() {
@@ -211,54 +230,60 @@ final class FranchiseNumberingTests: XCTestCase {
 
     // MARK: - Full blocks
 
-    func testFoundFranchiseRangeIsCappedAt399AndKeepsTheBiggest() {
+    func testFranchiseBlockIsCappedAt399AndKeepsTheBiggestOfBothKinds() {
         let state = makeState()
-        // 100 on: 10 too many. The ten smallest (3 films) wait; numbering stays A to Z.
-        state.foundFranchises = (0..<100).map { franchise($0, films: $0 % 10 == 0 ? 3 : 4) }
+        state.enabledBundleIDs.insert(CollectionCategory.franchises.bundleID)
+        // 94 found (five with 3 films) and two franchise collections (5 and 3 films): 96 on,
+        // six too many. The six 3-film ones wait, whatever their kind.
+        state.foundFranchises = (0..<94).map { franchise($0, films: $0 < 5 ? 3 : 4) }
         state.discoveredCollections = [
-            collection("saga-a", category: .franchises), collection("hanks", category: .custom)
+            collection("saga-a", category: .franchises, films: 5),
+            collection("saga-b", category: .franchises, films: 3),
+            collection("hanks", category: .custom)
         ]
 
         state.materializeDynamicChannels()
 
-        let kept = inBlock(state, .foundFranchises)
-        XCTAssertEqual(kept.count, 90)
-        XCTAssertEqual(kept.first?.number, 310)
-        XCTAssertEqual(kept.last?.number, 399)
-        XCTAssertEqual(kept.map(\.name), kept.map(\.name).sorted(), "A to Z")
-        XCTAssertFalse(kept.contains { $0.name == "FRANCHISE 000" || $0.name == "FRANCHISE 090" },
+        let found = inBlock(state, .foundFranchises)
+        XCTAssertEqual(found.count, 89)
+        XCTAssertEqual(found.first?.number, 310)
+        XCTAssertEqual(found.last?.number, 398)
+        XCTAssertEqual(found.map(\.name), found.map(\.name).sorted(), "A to Z")
+        XCTAssertFalse(found.contains { $0.name == "FRANCHISE 000" || $0.name == "FRANCHISE 004" },
                        "the 3-film ones are the ones left out")
-        XCTAssertEqual(state.dynamicChannelsOverCap[.foundFranchises], 10)
-        XCTAssertNil(state.dynamicChannelsOverCap[.collectionFranchises])
-        XCTAssertEqual(numbers(state, .collectionFranchises), [400], "franchise collections keep their numbers")
-        XCTAssertEqual(numbers(state, .otherCollections), [450], "collections keep their own numbers")
+        XCTAssertEqual(inBlock(state, .collectionFranchises).map(\.name), ["SAGA-A"])
+        XCTAssertEqual(numbers(state, .collectionFranchises), [399])
+        XCTAssertEqual(state.dynamicChannelsOverCap[.foundFranchises], 5, "counted in the found list")
+        XCTAssertEqual(state.dynamicChannelsOverCap[.collectionFranchises], 1, "and in the collections list")
+        XCTAssertEqual(numbers(state, .otherCollections), [400], "other collections keep their numbers")
 
-        // Switching some off frees the range and the counter clears.
-        for i in 0..<15 { state.foundFranchises[i].enabled = false }
+        // Switching some off frees the block and the counters clear.
+        for i in 5..<11 { state.foundFranchises[i].enabled = false }
         state.materializeDynamicChannels()
         XCTAssertEqual(state.dynamicChannelsOverCap, [:])
-        XCTAssertEqual(numbers(state, .foundFranchises).last, 394)
+        let all = state.allChannels.filter { $0.number >= 310 && $0.number <= 399 }
+        XCTAssertEqual(all.map(\.number), Array(310...399))
     }
 
-    func testFranchiseCollectionRangeIsCappedAt449AndKeepsTheBiggest() {
+    func testFranchiseCollectionsAloneFillTheBlockAndKeepTheBiggest() {
         let state = makeState()
         state.enabledBundleIDs.insert(CollectionCategory.franchises.bundleID)
-        // 53 on; three have 3 films, the rest 5. Ties on films go by name, then id.
-        state.discoveredCollections = (0..<53).map { i in
+        // 93 on; three have 3 films, the rest 5. Ties on films go by name, then id.
+        state.discoveredCollections = (0..<93).map { i in
             collection(String(format: "saga-%02d", i), category: .franchises, films: [7, 20, 41].contains(i) ? 3 : 5)
         }
 
         state.materializeDynamicChannels()
 
         let kept = inBlock(state, .collectionFranchises)
-        XCTAssertEqual(kept.count, 50)
-        XCTAssertEqual(kept.map(\.number), Array(400...449))
-        XCTAssertEqual(kept.map(\.id), Array(1_010_000...1_010_049))
+        XCTAssertEqual(kept.count, 90)
+        XCTAssertEqual(kept.map(\.number), Array(310...399))
+        XCTAssertEqual(kept.map(\.id), Array(1_010_000...1_010_089))
         XCTAssertFalse(kept.contains { ["SAGA-07", "SAGA-20", "SAGA-41"].contains($0.name) })
         XCTAssertEqual(kept.map(\.name), kept.map(\.name).sorted())
         XCTAssertEqual(state.dynamicChannelsOverCap[.collectionFranchises], 3)
-        XCTAssertEqual(numbers(state, .foundFranchises), [], "nothing spills into 310-399")
-        XCTAssertEqual(numbers(state, .otherCollections), [], "or into 450")
+        XCTAssertNil(state.dynamicChannelsOverCap[.foundFranchises])
+        XCTAssertEqual(numbers(state, .otherCollections), [], "nothing spills into 400")
     }
 
     func testOverflowOrderIsFilmsThenNameThenStableID() {
@@ -288,17 +313,17 @@ final class FranchiseNumberingTests: XCTestCase {
     func testCollectionRangeIsCappedAt499() {
         let state = makeState()
         state.enabledBundleIDs.insert(CollectionCategory.custom.bundleID)
-        state.discoveredCollections = (0..<53).map { collection(String(format: "set-%03d", $0), category: .custom) }
+        state.discoveredCollections = (0..<103).map { collection(String(format: "set-%03d", $0), category: .custom) }
 
         state.materializeDynamicChannels()
 
         let custom = numbers(state, .custom)
-        XCTAssertEqual(custom.count, 50)
-        XCTAssertEqual(custom.first, 450)
+        XCTAssertEqual(custom.count, 100)
+        XCTAssertEqual(custom.first, 400)
         XCTAssertEqual(custom.last, 499)
         XCTAssertEqual(state.dynamicChannelsOverCap[.otherCollections], 3)
-        // Unchanged rule, the one the web tuner mirrors: the first 50 A to Z.
-        XCTAssertEqual(inBlock(state, .otherCollections).last?.name, "SET-049")
+        // Unchanged rule, the one the web tuner mirrors: the first 100 A to Z.
+        XCTAssertEqual(inBlock(state, .otherCollections).last?.name, "SET-099")
     }
 
     // MARK: - Saved choices survive the renumber
@@ -329,7 +354,7 @@ final class FranchiseNumberingTests: XCTestCase {
 
         let dynamic = state.allChannels.filter { ChannelIDSpace.isDynamic($0.id) }
         XCTAssertEqual(dynamic.map(\.name), ["FRANCHISE 001", "FRANCHISE 003", "HANKS"])
-        XCTAssertEqual(dynamic.map(\.number), [310, 311, 450])
+        XCTAssertEqual(dynamic.map(\.number), [310, 311, 400])
         XCTAssertFalse(state.allChannels.contains { $0.number == 221 }, "the stale row is gone")
 
         // The snapshot row path agrees.

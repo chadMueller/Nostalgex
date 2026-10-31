@@ -387,14 +387,14 @@ private struct ChannelsFranchisesPage: View {
 
     @ViewBuilder
     private func overCapNotes(on: Bool) -> some View {
-        // Only when a range is actually full; otherwise nothing.
-        let foundOver = on ? appState.dynamicChannelsOverCap[.foundFranchises, default: 0] : 0
-        let collectionsOver = appState.dynamicChannelsOverCap[CollectionCategory.franchises.block, default: 0]
-        if foundOver > 0 {
-            capNote("Up to \(DynamicChannelBlock.foundFranchises.capacity) franchise channels fit in the guide. \(foundOver) more are on but not shown.")
-        }
-        if collectionsOver > 0 {
-            capNote("Up to \(CollectionCategory.franchises.displayCapacity) franchise collections fit in the guide. \(collectionsOver) more are on but not shown.")
+        // Only when the franchise block (CH 310-399) is actually full; otherwise nothing.
+        // Found franchises and franchise collections share it, so one note counts both.
+        let over = on
+            ? appState.dynamicChannelsOverCap[.foundFranchises, default: 0]
+                + appState.dynamicChannelsOverCap[.collectionFranchises, default: 0]
+            : 0
+        if over > 0 {
+            capNote("Up to \(DynamicChannelBlock.foundFranchises.capacity) franchise channels fit in the guide. \(over) more are on but not shown.")
         }
     }
 

@@ -63,26 +63,28 @@ enum CollectionCategory: String, CaseIterable {
 
 // MARK: - Runtime channel blocks
 
-/// Ids and display numbers for every runtime-created channel. Each kind owns a fixed block,
-/// so switching one kind on or off never moves another kind's numbers or ids. They used to
-/// share: found franchises and server franchise collections both numbered from CH 300 on one
-/// id base, collections straight after the found ones, so toggling the FRANCHISES package or
-/// any found franchise renumbered (and re-id'd) every franchise collection.
+/// Ids and display numbers for every runtime-created channel. Each kind keeps its own id
+/// base, so a channel's id never depends on another kind.
 ///
-/// The two franchise blocks fill by `keptInDisplayOrder`. OTHER COLLECTIONS keeps the rule
-/// the web tuner already mirrors (A to Z, the first `capacity` switched on).
+/// Numbers, since 1.0.29, sit beside the channels.json blocks (`ChannelNumberingTests`):
+/// every franchise channel is in the 300s. The stock FRANCHISES package is CH 300-306, and
+/// found franchises and the server's franchise collections share one pool from 310 to 399,
+/// numbered together A to Z, so the guide shows one run of franchises however each was
+/// found (Chad, 2026-10-31: "franchises should all be put together"). Other collections own
+/// 400-499 and HIGH ROTATION 500 up. The order of the shared pool is the one rule each
+/// block already used: when more are on than fit, the ones with the most films stay, then
+/// the kept ones are numbered by name, then stable id (`keptInDisplayOrder`). A by-name
+/// order moves only the channels after a change, and treats both kinds alike; found
+/// franchises first would renumber every collection whenever a found one is switched.
 ///
-/// Since 1.0.29 every kind sits in its own hundred, next to the channels.json blocks
-/// (`ChannelNumberingTests`): the stock FRANCHISES package is CH 300-309 and found
-/// franchises follow it at 310-399; server collections share 400-499, franchise
-/// collections in the lower half and everything else in the upper; HIGH ROTATION owns
-/// 500-519. Before that, found franchises ran 300-449, franchise collections 450-499 and
-/// other collections 500-699.
+/// History: 300-449 / 450-499 / 500-699 before 1.0.29, and 310-399 / 400-449 / 450-499 on
+/// the 1.0.29 release branch before the franchise pools were merged. Before all that,
+/// found franchises and franchise collections shared 300+ on one id base, collections
+/// after the found ones, which re-id'd every collection when a found one was switched.
 enum DynamicChannelBlock: String, CaseIterable, Hashable {
-    /// Franchises found from TMDB data (FRANCHISES package). Libraries seen so far: 64 and 86,
-    /// both inside the 90 this block holds.
+    /// Franchises found from TMDB data (FRANCHISES package). Libraries seen so far: 64 and 86.
     case foundFranchises
-    /// The server's own franchise collections. No real library has come near 50.
+    /// The server's own franchise collections. Share the found franchises' numbers.
     case collectionFranchises
     /// Every other server collection (actors, directors, themed sets).
     case otherCollections
@@ -101,26 +103,17 @@ enum DynamicChannelBlock: String, CaseIterable, Hashable {
 
     var idBase: Int { ChannelIDSpace.dynamicBase + ordinal * ChannelIDSpace.categoryStride }
 
+    /// Whether this kind numbers from the shared franchise pool.
+    var isFranchise: Bool { self != .otherCollections }
+
     /// Clear of everything channels.json numbers: packages 1-199, the stock FRANCHISES
-    /// package 300-309, HIGH ROTATION 500-519.
-    var displayNumberBase: Int {
-        switch self {
-        case .foundFranchises:      return 310
-        case .collectionFranchises: return 400
-        case .otherCollections:     return 450
-        }
-    }
+    /// package 300-309, HIGH ROTATION 500-519. The two franchise kinds share theirs.
+    var displayNumberBase: Int { isFranchise ? 310 : 400 }
 
     /// Hard cap: entries past it are not built rather than spilling into the next block.
-    var displayNumberEnd: Int {
-        switch self {
-        case .foundFranchises:      return 399
-        case .collectionFranchises: return 449
-        case .otherCollections:     return 499
-        }
-    }
+    var displayNumberEnd: Int { isFranchise ? 399 : 499 }
 
-    /// 90, 50 and 50.
+    /// 90 franchise channels of both kinds together, 100 other collections.
     var capacity: Int { displayNumberEnd - displayNumberBase + 1 }
 
     /// The switched-on entries a block keeps, in the order they are numbered.
