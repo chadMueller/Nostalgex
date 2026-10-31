@@ -124,7 +124,7 @@ struct SettingsContainerView: View {
             hero
                 .padding(.horizontal, 80)
                 .padding(.top, 60)
-                .padding(.bottom, 28)
+                .padding(.bottom, 20)
 
             // Only the rows scroll. Pro will add 10 to 15 rows across categories, so
             // nothing here assumes a category fits on screen.
@@ -211,21 +211,21 @@ struct SettingsContainerView: View {
     /// The category's pixel icon beside its title. Falls back to the SF Symbol
     /// placeholder until the asset is in Assets.xcassets/SettingsHero.
     private var hero: some View {
-        HStack(alignment: .center, spacing: 44) {
+        HStack(alignment: .center, spacing: 28) {
             heroArt
                 .id(selected)
                 .transition(.opacity)
                 .frame(width: Self.heroSize, height: Self.heroSize)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(selected.title)
-                    .font(.custom("DMMono-Medium", size: 44))
+                    .font(.custom("DMMono-Medium", size: 34))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(selected.subtitle)
-                    .font(.custom("DMMono-Regular", size: 22))
+                    .font(.custom("DMMono-Regular", size: 20))
                     .foregroundStyle(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -243,9 +243,9 @@ struct SettingsContainerView: View {
     /// stroke and glow and the Support tiles' lift have always had.
     static let rowsTopInset: CGFloat = rowsTopFade + 16
 
-    /// The icons are 16x16 pixel art. 192 points is 12 points per pixel, and the assets
-    /// are rendered at exactly 12x and 24x, so every pixel lands on whole points.
-    static let heroSize: CGFloat = 192
+    /// The icons are 16x16 pixel art. 96 points is 6 points per pixel, and the assets
+    /// are rendered at exactly 6x and 12x, so every pixel lands on whole points.
+    static let heroSize: CGFloat = 96
 
     @ViewBuilder
     private var heroArt: some View {
