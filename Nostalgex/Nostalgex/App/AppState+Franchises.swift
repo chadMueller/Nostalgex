@@ -515,9 +515,12 @@ extension AppState {
         let config = ChannelConfigLoader.loadBundled()
         channelConfigChannels = config.channels
         exclusiveRules = config.exclusiveRules
-        // Plus one ARTHOUSE channel the sample library cannot fill, so the DEMO row has a
-        // channel short of content, as a real package often does.
-        let shortChannel = config.bundles.first(where: { $0.id == "arthouse" })?.channelIDs.first
+        // `-uiTestShortPackage` only: one ARTHOUSE channel the sample library cannot fill,
+        // so the DEMO row has a channel short of content and its amber count shows. Never
+        // in plain demo mode, which App Review sees.
+        let shortChannel = DemoData.shortPackageFixtureRequested
+            ? config.bundles.first(where: { $0.id == "arthouse" })?.channelIDs.first
+            : nil
         let demoBundle = ChannelBundle(
             id: "demo", name: "DEMO", description: "Sample channels",
             channelIDs: demoChannelIDs + (shortChannel.map { [$0] } ?? []), activeMonths: nil, enabled: true

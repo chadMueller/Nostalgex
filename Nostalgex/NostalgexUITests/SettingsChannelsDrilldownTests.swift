@@ -55,7 +55,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
 
     private func openChannelsTab() {
         app = XCUIApplication()
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestFranchiseFixture"]
+        app.launchArguments = ["-uiTestResetCredentials", "-uiTestFranchiseFixture", "-uiTestShortPackage"]
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
@@ -103,6 +103,9 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
         for _ in 0..<3 { press(.up, 0.6) }
 
         visit("CHANNEL PACKAGES", shotName: "after-2-packages", expectFirst: "DEMO") {
+            // The amber count on a package short of content, read out in full.
+            XCTAssertTrue(focusedLabel().contains("1 channel needs more content"),
+                          "DEMO should carry the short-of-content count: \(focusedLabel())")
             // Down to the missing-channels link, into that page and back.
             for _ in 0..<6 where !focusedLabel().hasPrefix("WHY ARE SOME CHANNELS MISSING") { press(.down, 0.6) }
             XCTAssertTrue(focusedLabel().hasPrefix("WHY ARE SOME CHANNELS MISSING"), focusedLabel())

@@ -208,6 +208,12 @@ enum DemoData {
         ProcessInfo.processInfo.arguments.contains("-uiTestFranchiseFixture")
     }
 
+    /// `-uiTestShortPackage`, with the franchise fixture: the DEMO package also lists a
+    /// channel the sample library can't fill, so a UI test sees the amber count on its row.
+    static var shortPackageFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestShortPackage")
+    }
+
     struct FranchiseFixture {
         let items: [PlexMediaItem]
         let enrichment: [MediaEnrichment]
