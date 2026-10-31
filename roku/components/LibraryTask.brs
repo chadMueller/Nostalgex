@@ -663,7 +663,8 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' FRANCHISES, as the Apple TV app has it (the web tuner doesn't call the
     ' builder): covered franchises join their classic's pool, and each found
     ' franchise switched on gets a channel from CH 310 that rides on the
-    ' package's switch.
+    ' package's switch. The collections step below numbers them together with
+    ' the franchise collections, so they join the lineup after it.
     franchiseRows = []
     franchiseOverCap = 0
     foundIDs = []
@@ -682,19 +683,15 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
             choices: NxSavedFranchiseChoices(), bundleChannelIDs: franchiseBundleIDs,
             manifest: manifest, exclusiveRules: exclusive
         })
-        for each ch in fr.channels
-            channels.Push(ch)
-            foundIDs.Push(ch.id)
-        end for
         franchiseRows = fr.rows
         franchiseOverCap = fr.overCap
-        print "library: franchises: "; fr.found.Count(); " found, "; foundIDs.Count(); " channels, "; fr.overCap; " past CH 399, in "; timer.TotalMilliseconds(); " ms"
+        print "library: franchises: "; fr.found.Count(); " found, "; fr.channels.Count(); " switched on, in "; timer.TotalMilliseconds(); " ms"
     end if
 
     ' MY COLLECTIONS, read as the web tuner reads them and split as the Apple
     ' TV app splits them: a collection switched on airs outside every package,
-    ' a movie series under FRANCHISES (CH 400-449) and the rest under OTHER
-    ' COLLECTIONS (CH 450-499), whatever the found franchises do. One that is a
+    ' a movie series under FRANCHISES (CH 310-399, one pool with the found
+    ' franchises, A to Z) and the rest under OTHER COLLECTIONS (CH 400-499). One that is a
     ' franchise the package already carries folds into it instead.
     timer.Mark()
     cl = NxCollectionsStep({
@@ -702,25 +699,36 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         manifest: manifest, enabledKeys: NxSavedCollectionKeys(),
         franchise: fr, franchiseBundleIDs: franchiseBundleIDs, defs: defs
     })
+    for each ch in cl.found
+        channels.Push(ch)
+        foundIDs.Push(ch.id)
+    end for
+    franchiseOverCap = franchiseOverCap + cl.overCapFound
     collectionIDs = []
+    franchiseCollectionIDs = []
+    customCollectionIDs = []
     for each ch in cl.channels
         channels.Push(ch)
         collectionIDs.Push(ch.id)
+        if NxToStr(ch.category) = "franchises" then franchiseCollectionIDs.Push(ch.id) else customCollectionIDs.Push(ch.id)
     end for
-    print "library: collections: "; cl.rows.Count(); " listed, "; cl.folded.Count(); " folded into franchises, "; collectionIDs.Count(); " channels, "; cl.overCapFranchises; " past CH 499, "; cl.overCapCustom; " past CH 699, in "; timer.TotalMilliseconds(); " ms"
+    print "library: collections: "; cl.rows.Count(); " listed, "; cl.folded.Count(); " folded into franchises, "; collectionIDs.Count(); " channels, "; cl.overCapFranchises; " franchise collections past CH 399, "; cl.overCapCustom; " others past CH 499, in "; timer.TotalMilliseconds(); " ms"
     for each f in cl.folded
         print "library: collection "; f.title; " ("; f.items; " items) folds into "; f.into; " by "; f.why
     end for
     timer.Mark()
 
-    ' Found franchise channels show while the package is on; its own channel
-    ' list stays the seven classics, as upstream's Settings row reads.
+    ' Found franchises and franchise collections show while the package is
+    ' on, each by its own switch, and go with it when it is off, as on the
+    ' Apple TV; its own channel list stays the seven classics, as upstream's
+    ' Settings row reads.
     guideConfig = { bundles: [] }
     for each bdl in NxList(config.bundles)
-        if bdl.id = NxFranchisesBundleID() and foundIDs.Count() > 0 then
+        if bdl.id = NxFranchisesBundleID() and foundIDs.Count() + franchiseCollectionIDs.Count() > 0 then
             ids = []
             ids.Append(NxList(bdl.channelIDs))
             ids.Append(foundIDs)
+            ids.Append(franchiseCollectionIDs)
             guideConfig.bundles.Push({ id: bdl.id, channelIDs: ids, activeMonths: bdl.activeMonths, seasonStart: bdl.seasonStart })
         else
             guideConfig.bundles.Push(bdl)
@@ -730,8 +738,8 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' whenever they are built. Here they ride on a package that is always on.
     guideBundles = []
     guideBundles.Append(bundles)
-    if collectionIDs.Count() > 0 then
-        guideConfig.bundles.Push({ id: "nx-collections", channelIDs: collectionIDs })
+    if customCollectionIDs.Count() > 0 then
+        guideConfig.bundles.Push({ id: "nx-collections", channelIDs: customCollectionIDs })
         guideBundles.Push("nx-collections")
     end if
     ordered = NxGuideOrder(guideConfig, channels, guideBundles, clock)
@@ -761,20 +769,26 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         out = NxScheduleGuide(ordered, nowSec&)
         print "library: scheduled in "; timer.TotalMilliseconds(); " ms"
     end if
+    ' The sidebar (NxGuideJumpTargets) jumps to the first channel shown of each
+    ' package. FRANCHISES covers the classics, the found franchises and the
+    ' franchise collections; the other collections get an entry of their own.
     bundleList = []
     for each bdl in NxList(config.bundles)
         entry = { id: bdl.id, name: NxToStr(bdl.name), channelIDs: NxList(bdl.channelIDs), activeMonths: bdl.activeMonths, seasonStart: bdl.seasonStart }
-        ' The sidebar jumps to the first channel shown, found franchises included.
         if bdl.id = NxFranchisesBundleID() then
             jump = []
             jump.Append(entry.channelIDs)
             jump.Append(foundIDs)
+            jump.Append(franchiseCollectionIDs)
             entry.jumpIDs = jump
         end if
         bundleList.Push(entry)
     end for
+    ' Entries no package switch owns: collection channels ride on no package.
+    jumps = []
+    if customCollectionIDs.Count() > 0 then jumps.Push({ name: "OTHER COLLECTIONS", ids: customCollectionIDs })
     guide = {
-        channels: out, builtAt: builtAt&, poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles,
+        channels: out, builtAt: builtAt&, poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles, jumps: jumps,
         franchises: franchiseRows, franchiseOverCap: franchiseOverCap, franchiseCapacity: NxFranchiseCapacity(),
         collections: { rows: cl.rows, overCap: cl.overCap, overCapFranchises: cl.overCapFranchises, overCapCustom: cl.overCapCustom,
             capacityFranchises: NxCollectionFranchiseCapacity(), capacityCustom: NxCollectionsCapacity(), scanned: collections.raw.Count(), failed: collections.failed }

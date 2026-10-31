@@ -172,7 +172,7 @@ check, and fails on any error it reports.
 | `source/schedule/` | The daily schedule builder, ported from upstream |
 | `source/filter/` | The channel filter, ported from upstream |
 | `source/franchise/` | The franchise builder, ported from upstream |
-| `source/collections/` | Server collections as channels (movie series CH 400-449, the rest CH 450-499), and their fold into franchises, ported from upstream |
+| `source/collections/` | Server collections as channels (movie series in the franchise block, CH 310-399, the rest CH 400-499), and their fold into franchises, ported from upstream |
 | `source/guide/` | Lineup: bundles, time restrictions, day schedules, the guide's window and the next pick; franchise channels and their switches |
 | `source/plex/` | Plex sign-in, library loader, playback |
 | `source/mediabrowser/` | Jellyfin and Emby: sign-in, LAN discovery, library loader, playback |

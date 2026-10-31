@@ -3,6 +3,32 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku: one franchise block, the FRANCHISES switch, the sidebar in guide order)
+
+**Changed.** Branch `roku/renumber-franchise-block`, on `roku/renumber-channel-blocks` rebased
+onto `origin/main` (c834e66), not pushed. Follows the Apple TV's `renumber/franchise-block`
+(full reasons in its entry):
+- Found franchises and franchise collections share CH 310-399 as one pool, numbered A to
+  Z then by a stable id with the kind in it (f: or c:), most films kept when over 90.
+  `NxCollectionsMaterialize` numbers both, so the library load adds the found franchise
+  channels after the collections step now. Ids stay per kind. Other collections CH
+  400-499, the first 100.
+- The FRANCHISES switch gates franchise collections too: they join the package's channels
+  in the guide instead of the always-on collections package.
+- The packages sidebar (`NxGuideJumpTargets`) sorts by each entry's first channel in the
+  guide, has one FRANCHISES (classics, found franchises, franchise collections) and adds
+  OTHER COLLECTIONS, which the Roku didn't list before.
+
+The branch carries the web collections commit (CH 400-499) cherry-picked from
+`renumber/franchise-block`, because the collection vectors come from the root's JS.
+
+Tests: `tests/run.sh` (NX_TEST_JOBS=3) all passed: collections 1673, guide nav 40 (4 new
+sidebar cases), franchise guide 67.
+
+**Next.** Roku Settings still shows the franchise collections under MY COLLECTIONS with
+their own cap note; merging them into the FRANCHISES list as the Apple TV did is a UI
+change for tydude001.
+
 ## 2026-10-31 (Roku: runtime channels move to the new channel blocks)
 
 **Changed.** Branch `roku/renumber-channel-blocks`, cut from `roku/batch-2026-10-30`, not

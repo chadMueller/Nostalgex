@@ -163,7 +163,7 @@ export async function collectionsVectors(upstream) {
     { franchiseChannels: [{ id: 101, number: 101, name: "MARVEL", pool: smokeItems.slice(0, 3) }] });
   {
     const big = [0, 1, 2].map((i) => mv(i, null, "s"));
-    const many = Array.from({ length: 55 }, (_, i) => ({
+    const many = Array.from({ length: 105 }, (_, i) => ({
       id: `s:${i}`, title: `Set ${String(i).padStart(3, "0")}`, childKeys: ["0", "1", "2"], serverKey: "s",
     }));
     run("smoke: cap at CH 499", big, many, { enabledKeys: many.map((m) => m.id) });
