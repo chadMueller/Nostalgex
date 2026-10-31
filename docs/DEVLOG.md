@@ -3,6 +3,126 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: Plex sign-in, a grace window sized by what is still pending)
+
+**Shipped.** Nothing. Branch `fix/livingroom-test-findings`, local, on top of the early-exit
+fix below. Not yet confirmed on a real Apple TV.
+
+**Why.** After the early-exit fix, a live retest still took about 48 seconds. Timing logs
+from a real device trace showed the second cause: a shared server whose only working path
+was relay had its relay candidate succeed in about 0.5s, but relay is the lowest priority,
+so the early exit correctly waited for the remote-HTTPS candidate ranked above it. That
+candidate never succeeds for this server, yet takes its full patient budget (25s, one
+retry, up to 50s) to fail. `discoverServers` waits for every server before deciding whether
+to show a picker, so one slow server set the pace for the whole sign-in.
+
+**Changed.** Once any candidate succeeds, whatever still outranks it gets one grace window
+instead of its full budget, scheduled as a timer task in the same task group (a time check
+inside the loop alone would never fire, since the loop only wakes when a task reports).
+The window is sized by what is pending, because lost and no-connection rates are tracked
+and this must not trade a slow but real connection for a faster, worse one:
+
+- Anything patient still outranks the hit (remote or relay, which can take 10 to 20s to
+  cold-establish and still succeed): 15s.
+- Only local candidates outrank the hit (local answers fast or not at all): 3s.
+
+A flat 4s window measured 5 seconds on the same multi-server account; this version trades
+some of that back for safety, so the relay-only case should now settle at about 15s.
+
+**Verified.** `ConnectionDiscoveryEarlyExitTests`: 7 tests reproducing the task-group shape
+with timed synthetic candidates (fast local hit, second candidate winning, nothing
+reachable, earlier-ranked hit inside the grace window, patient vs local-only grace, a
+higher-priority hit inside the window still winning), all passing; full `NostalgexTests`
+green.
+
+**Half-done.** Temporary `DISCOVERY TIMING` prints are still in `bestReachableURI` for the
+one on-device confirmation run. Remove them after that run.
+
+**Next.** One sign-in on a real Apple TV with a multi-server Plex account, console
+captured, to confirm which tier wins and the total time. Then drop the prints and merge.
+
+## 2026-10-30 (Apple TV: Plex sign-in waited on a slow relay probe even after a fast local hit)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad measured 45 seconds from QR scan to found-the-server over Plex, timed
+with a stopwatch. Plex is the primary backend, so this mattered more than the same
+delay would on Jellyfin or Emby.
+
+**Found, not guessed.** `PlexAPIService.bestReachableURI` races every connection
+candidate for a server (local, remote HTTPS, remote plain, relay, in that priority
+order) with `withTaskGroup`, but drained every task before returning, even once the
+winner was already decided. Relay candidates get a 25s timeout with one retry (up to
+50s), and Plex's `/api/v2/resources` always offers a relay candidate when
+`includeRelay=1` is requested, whether or not the account actually needs it. So a
+local connection that answered in a second or two still sat blocked behind a relay
+probe that was always going to fail or time out, on nearly every sign-in, not only
+ones that genuinely needed relay. 45 seconds lines up closely with one relay probe
+attempt timing out, plus overhead.
+
+**Changed.** `bestReachableURI` now tracks which candidates have reported (success or
+failure) as results stream in, and stops once every candidate ranked ahead of the
+current best hit has reported, cancelling whatever is still in flight. A fast local
+success now returns immediately instead of waiting on remote and relay. `testReachable`
+also bails out on `Task.isCancelled` between its retry attempts rather than retrying a
+probe whose result is already moot.
+
+**Verified.** Swift's async `URLSession.data(for:)` already respects structured-concurrency
+cancellation, so `group.cancelAll()` genuinely aborts in-flight probes rather than
+leaving them to idle out their timeout in the background. `bestReachableURI` itself is
+private and does real networking, so it isn't directly unit-testable; added
+`ConnectionDiscoveryEarlyExitTests.swift`, which reproduces the exact same TaskGroup
+shape with synthetic timed outcomes instead of HTTP calls. The key case (a 50ms local
+hit racing a 2000ms doomed relay candidate) completed in 54ms, not ~2000ms, proving the
+early exit actually returns fast rather than trusting the logic by reading it. Full
+`NostalgexTests` suite green.
+
+**Half-done.** Not independently re-verified against a real Plex account's relay path
+(no relay-only test account set up); the timed synthetic test is the closest proof
+available without one. Needs Chad's live re-measurement of the QR sign-in time.
+
+## 2026-10-30 (Apple TV: three fixes from a living room test of yesterday's work)
+
+**Shipped.** Nothing until this lands on main.
+
+**Why.** Chad tested the overlay, Settings access and I-004 explainer live on the
+living room Apple TV and found three follow-up issues, all in code from the same
+work.
+
+**Changed.**
+- Start Over on the loading screen (`Plex90App.swift`) switched from `.secondary`
+  to the existing `.quiet` button role, smaller and dimmed until focused. It sits
+  under every normal load, not just a stuck one, so it needs to read as a rare-use
+  escape hatch rather than a primary action someone could tap by accident. The
+  separate Start Over on the dedicated "LOADING DIDN'T FINISH" screen (a real,
+  deliberate two-option choice) is untouched.
+- Library and server selection rows (`LibrarySelectionView`, `ServerPickerView`)
+  had a focused row whose corners read as square instead of rounded, losing the
+  blue glow. Measured with a real screenshot harness (an XCUITest screenshotting
+  the focused row, exported from the xcresult bundle and inspected pixel by
+  pixel) rather than guessed at: the row's `scaleEffect(1.04)` on focus bulges
+  past its own frame, and the ScrollView's own clipping was flattening that bulge
+  at the left and right edges, which is what made the corner read as square. Fix:
+  8pt of horizontal padding on the ScrollView's content so the scale-up has room,
+  plus the corner radius bumped from 14 to 22 and the shadow radius down from 28
+  to 18, so the rounding reads clearly as a filled shape and not only as a thin
+  stroke (confirmed with the same screenshot harness before and after).
+- The I-004 explainer's `ChannelRequirementCard` (`BundleManagerView.swift`) was
+  built deliberately non-focusable ("read-only, nothing changes") but that broke
+  remote navigation: with no focus target inside the accordion, up/down had
+  nothing to land on and skipped the whole expanded list. Added `.focusable(true)`
+  and a focus highlight matching `CollectionAccordionHeaderRow`'s language.
+
+**Half-done.** The library/server row fix is verified by pixel measurement in the
+simulator, not yet confirmed live by Chad. The accordion focus fix is standard
+SwiftUI `.focusable(true)` usage, not independently re-verified live (the earlier
+corner-radius bug was a genuine rendering edge case worth measuring; this one
+isn't ambiguous in the same way).
+
+**Next.** Chad's go to merge once he's looked at the row corners live. Plex QR
+discovery timing (~45s, separately reported) still needs investigating, not
+fixed in this entry.
+
 ## 2026-10-30 (Apple TV: STOP WAITING belongs to the server it was pressed on, #146)
 
 **Shipped.** Nothing. Branch `fix/146-stop-waiting-crash`, local only, not pushed.
