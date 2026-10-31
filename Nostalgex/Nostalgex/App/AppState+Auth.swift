@@ -828,6 +828,10 @@ extension AppState {
         // would put them straight back into the guide.
         collectionScanTask?.cancel()
         collectionScanTask = nil
+        bundleBuildTask?.cancel()
+        bundleBuildTask = nil
+        pendingBundleBuildIDs = []
+        buildingBundleIDs = []
         discoveredCollections = []
         isLibraryStale = false
         // Today's schedules for the outgoing sign-in go with it. Computed before

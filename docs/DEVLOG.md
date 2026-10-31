@@ -3,6 +3,43 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Apple TV: a package switch flips at once and builds in the background)
+
+**Why.** On a real Apple TV, switching a package on stalled before the switch flipped
+and BUILDING showed. Measured on a tvOS 26.1 simulator with the franchise fixture padded
+to an 11,863-item library and every package offered: the press itself took 0 ms, but the
+build that followed filtered each channel on the main actor, yielding only every third
+channel, so the main actor was held 350 to 580 ms at a time for about 3 s (NOSTALGEX:
+seven blocks). The switch drew 1.2 to 2.1 s after the press. Three packages switched on
+in a row were three builds, one after another (3.0 s, 2.7 s, 0.7 s), each holding the
+main actor the same way.
+
+**Changed.** On `settings/bundle-toggle-instant` (off `release/1.0.29-rc`), not pushed.
+Same shape as the Roku app's package switch: the switch flips and saves on the press,
+BUILDING shows at once, the build runs behind it, and switches made while one waits or
+builds become one build.
+- `scheduleBundleBuild` waits 0.5 s after the last switch, then builds every package
+  waiting. A new switch restarts the wait and drops a build already running, so a run of
+  quick switches reaches the guide once: one filter pass, one guide swap, one snapshot.
+- `buildPendingBundles` filters off the main actor (as the launch build already did)
+  and merges into the lineup as it stands when the build ends, so a collection scan or
+  franchise change made meanwhile is kept. A package switched off before its build starts
+  is left out of it. Signing out drops a waiting build.
+- The guide takes the new lineup when the build lands; nothing changes what is playing.
+- After, same library: the switch draws in about 270 ms (the UI test's polling floor),
+  the main actor was never held over 65 ms while builds ran, and three quick switches
+  were one build (NOSTALGEX, KIDZ ZONE and CASE FILES together, 6.0 s off the main
+  actor). Switching off is unchanged (about 270 ms, no build).
+- Tests in `BundleBuildTests`: three quick switches commit one build; a package switched
+  off while waiting is left out; the press filters nothing and the main actor's longest
+  gap during a 30-channel build over 60,000 items is under 150 ms (9 ms measured); four
+  real packages from channels.json built together give the same channels and pools as
+  the launch's full build. NostalgexTests: 1,028 run, 1,013 passed, 0 failed, 15 skipped.
+
+**Half-done.** Not tried on a real Apple TV. The filter cache (one pass over the
+library) is still built on the main actor when a build starts: 22 ms for 11,863 items on
+the simulator, more on an Apple TV.
+
 ## 2026-10-31 (Apple TV: CHANNELS & BUNDLES becomes a short list with sub-pages)
 
 **Why.** On a real Apple TV the CHANNELS & BUNDLES accordions opened but were laggy and

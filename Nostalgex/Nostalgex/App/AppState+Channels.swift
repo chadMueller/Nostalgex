@@ -93,25 +93,20 @@ extension AppState {
             && newlyEnabled.contains { $0.id.hasPrefix("collections-") }
         let staticBundles = newlyEnabled.filter { !$0.id.hasPrefix("collections-") }
 
-        if needsCollectionScan || !staticBundles.isEmpty {
+        // A package switched off needs no build, and stops waiting for one.
+        let switchedOff = Set(bundles.filter { !$0.enabled }.map(\.id))
+        pendingBundleBuildIDs.subtract(switchedOff)
+        buildingBundleIDs.subtract(switchedOff)
+
+        if !staticBundles.isEmpty {
             buildingBundleIDs.formUnion(staticBundles.map(\.id))
-            // One build at a time. Each build starts from the channels already built, so
-            // two running at once (two quick toggles) let the second overwrite the first
-            // package's channels with its stale copy.
+            scheduleBundleBuild(staticBundles.map(\.id))
+        }
+        if needsCollectionScan {
             let previous = collectionScanTask
             collectionScanTask = Task {
                 await previous?.value
-                for b in staticBundles {
-                    if !Task.isCancelled {
-                        let started = Date()
-                        await self.rebuildPoolsForBundle(b)
-                        // Keep the spinner up long enough to read as "working", not a flicker.
-                        let shown = Date().timeIntervalSince(started)
-                        if shown < 0.6 { try? await Task.sleep(nanoseconds: UInt64((0.6 - shown) * 1_000_000_000)) }
-                    }
-                    self.buildingBundleIDs.remove(b.id)
-                }
-                if needsCollectionScan && !Task.isCancelled { await self.scanCollections() }
+                if !Task.isCancelled { await self.scanCollections() }
             }
         }
         // The scan applies the bundle filter itself when it finishes.
@@ -817,30 +812,95 @@ extension AppState {
         return built.sorted { $0.number < $1.number }
     }
 
-    /// Build pools for one bundle after the user turns it on (library already in memory).
-    func rebuildPoolsForBundle(_ bundle: ChannelBundle) async {
-        guard !channelConfigChannels.isEmpty, !allItems.isEmpty else { return }
-        let ids = Set(bundle.channelIDs)
-        guard !ids.isEmpty else { return }
+    /// How long a package build waits after the last switch before it starts, so a few
+    /// quick switches are built together: one filter pass, one guide swap, one snapshot.
+    static let bundleBuildSettle: Duration = .milliseconds(500)
+
+    /// Queues a build for packages just switched on. The switch itself has already flipped
+    /// and saved; this only makes the channels. Matches the Roku app: the press never
+    /// waits for the build, the row shows BUILDING, the guide takes the new lineup when
+    /// it is ready, and switches made while one waits or builds are folded into one build.
+    ///
+    /// A new switch restarts the wait (and drops a build already running, whose result
+    /// would be one package short), so a run of quick switches reaches the guide once.
+    func scheduleBundleBuild(_ ids: [String]) {
+        pendingBundleBuildIDs.formUnion(ids)
+        let previous = bundleBuildTask
+        previous?.cancel()
+        bundleBuildTask = Task { [weak self] in
+            await previous?.value
+            try? await Task.sleep(for: Self.bundleBuildSettle)
+            guard !Task.isCancelled, let self else { return }
+            await self.buildPendingBundles()
+        }
+    }
+
+    /// Builds every package waiting in `pendingBundleBuildIDs`. The filtering, the slow
+    /// part, runs off the main actor; only the merge into the lineup runs on it. Before
+    /// this, each package was filtered on the main actor (yielding every third channel),
+    /// which held it for 350 to 580 ms at a time for about 3 s on an 11,863-item library
+    /// on a simulator: the switch drew late and the remote stopped answering.
+    func buildPendingBundles() async {
+        let ids = pendingBundleBuildIDs
+        let toBuild = bundles.filter { ids.contains($0.id) && enabledBundleIDs.contains($0.id) }
+        let channelIDs = Set(toBuild.flatMap(\.channelIDs))
+        guard !toBuild.isEmpty, !channelIDs.isEmpty,
+              !channelConfigChannels.isEmpty, !allItems.isEmpty else {
+            pendingBundleBuildIDs.subtract(ids)
+            buildingBundleIDs.subtract(ids)
+            return
+        }
 
         let buildStarted = Date()
-        channelBuildTotal = ids.count
-        channelBuildIndex = 0
-        setLibraryPhase(.buildingChannels, detail: bundle.name)
-
+        let session = librarySessionGeneration
         let cached = makeFilterCache(allItems)
+        let memberships = channelMemberships
+        let rules = exclusiveRules
+        let templates = channelConfigChannels.filter { channelIDs.contains($0.id) }
 
+        let work = Task.detached(priority: .userInitiated) { () -> [Channel]? in
+            var out: [Channel] = []
+            for var template in templates {
+                if Task.isCancelled { return nil }
+                template.itemPool = AppState.filterItems(
+                    cached, rules: template.rules, forChannelID: template.id,
+                    category: template.category, memberships: memberships, exclusiveRules: rules)
+                out.append(template)
+            }
+            return out
+        }
+        let filtered = await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
+        // A newer switch took over, or the sign-in changed while this ran.
+        guard let filtered, !Task.isCancelled, session == librarySessionGeneration else { return }
+
+        mergeBuiltPackageChannels(filtered)
+        if toBuild.contains(where: { $0.id == Self.franchisesBundleID }) {
+            // The classics were not in the lineup while the package was off, so nothing
+            // could fold into them. Now that CH100-106 exist, re-decide which found
+            // franchises are covered and which collections fold.
+            rebuildFoundFranchises()
+            materializeDynamicChannels()
+        }
+        applyBundleFilter()
+        saveLibrarySnapshotIfNeeded()
+        bundleBuildCommits += 1
+        pendingBundleBuildIDs.subtract(ids)
+        buildingBundleIDs.subtract(ids)
+        let made = filtered.filter { $0.itemPool.count >= $0.minItems }.count
+        print("[Plex90] BUNDLE BUILD: \(toBuild.map(\.id).sorted()) -> \(made) channels with pools in \(String(format: "%.2f", Date().timeIntervalSince(buildStarted)))s")
+    }
+
+    /// Puts freshly filtered package channels into `allChannels`, as one change: a channel
+    /// with enough items replaces or joins its old copy, one without drops out. Read
+    /// against the lineup as it is now, not as it was when the build began, so anything
+    /// that changed it meanwhile (a collection scan, a franchise switch) is kept.
+    func mergeBuiltPackageChannels(_ filtered: [Channel]) {
         var builtStatic = allChannels.filter { $0.rules != nil }
-        for var template in channelConfigChannels where ids.contains(template.id) {
-            channelBuildIndex += 1
-            template.itemPool = Self.filterItems(
-                cached,
-                rules: template.rules,
-                forChannelID: template.id,
-                category: template.category,
-                memberships: channelMemberships,
-                exclusiveRules: exclusiveRules
-            )
+        for template in filtered {
             if template.itemPool.count >= template.minItems {
                 if let idx = builtStatic.firstIndex(where: { $0.id == template.id }) {
                     builtStatic[idx] = template
@@ -850,21 +910,9 @@ extension AppState {
             } else {
                 builtStatic.removeAll { $0.id == template.id }
             }
-            if channelBuildIndex % 3 == 0 { await Task.yield() }
         }
-
         let dynamic = allChannels.filter { $0.rules == nil }
         allChannels = (builtStatic + dynamic).sorted { $0.number < $1.number }
-        if bundle.id == Self.franchisesBundleID {
-            // The classics were not in the lineup while the package was off, so nothing
-            // could fold into them. Now that CH100-106 exist, re-decide which found
-            // franchises are covered and which collections fold.
-            rebuildFoundFranchises()
-            materializeDynamicChannels()
-        }
-        applyBundleFilter()
-        saveLibrarySnapshotIfNeeded()
-        print("[Plex90] BUNDLE BUILD: '\(bundle.id)' -> \(builtStatic.filter { ids.contains($0.id) }.count) channels with pools in \(String(format: "%.2f", Date().timeIntervalSince(buildStarted)))s")
     }
 
     // MARK: - Filtering (keep in sync with scripts/nostalgex-channel-filter.cjs + plex-tuner)
@@ -1156,7 +1204,7 @@ extension AppState {
     }
 
     /// Build a snapshot cache for a set of items. Called once per filter pass —
-    /// per `loadLibrary`, per `rebuildPoolsForBundle`, and per
+    /// per `loadLibrary`, per `buildPendingBundles`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later
     /// asynchronous enrichment landings don't make the cache inconsistent
     /// mid-build (build loop is single-threaded on MainActor; rebuild is the
@@ -1651,3 +1699,4 @@ extension AppState {
         }
     }
 }
+
