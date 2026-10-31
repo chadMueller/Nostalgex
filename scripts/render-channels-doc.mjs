@@ -33,8 +33,8 @@ Quick reference for every channel and bundle. Source of truth: \`channels.json\`
 **\`id\` and \`number\` are NOT the same thing.** A channel's \`number\` is what
 viewers tune to; its \`id\` is the stable key everything else references. They
 drifted apart as channels were renumbered, and today they differ for many
-channels — for example \`id\` 40 is **CH85 TRUE CRIME**, and \`id\` 211 is
-**CH107 CRITERION**. Get it wrong and you edit a different channel than the one
+channels — for example \`id\` 40 is **CH{{40}} TRUE CRIME**, and \`id\` 211 is
+**CH{{211}} CRITERION**. Get it wrong and you edit a different channel than the one
 you meant.
 
 Which key does what:
@@ -265,7 +265,8 @@ const orphans = channels.filter((c) => !bundled.has(c.id)).sort((a, z) => a.numb
 const bundledCount = bundles.reduce((n, b) => n + b.chans.length, 0);
 
 const out = [];
-out.push(PREAMBLE.trimEnd(), "");
+// {{id}} in the preamble is that channel's current number, so the examples never go stale.
+out.push(PREAMBLE.trimEnd().replace(/\{\{(\d+)\}\}/g, (_, id) => String(byId.get(Number(id))?.number ?? "?")), "");
 out.push(
   `**Config version:** ${data.version} · **${channels.length} channels** across ` +
     `**${bundles.length} bundles** · ${channels.filter((c) => c.id !== c.number).length} channels ` +
