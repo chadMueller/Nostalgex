@@ -3,6 +3,56 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (one franchise block, and a package list in guide order)
+
+**Why.** After the channel blocks, the guide still had franchises in two places: found
+franchises at 310-399 and the server's franchise collections at 400-449, and the package
+list (Left in the guide) showed FRANCHISES twice with HIGH ROTATION in the middle. Chad:
+"Franchises should all be put together, even though we have stock franchises and custom
+franchises." Branch `renumber/franchise-block`, on `release/1.0.29-rc` at 675e36c, not
+pushed.
+
+**Changed.**
+- Every franchise channel is in the 300s: the stock FRANCHISES package at 300-306, then
+  found franchises and franchise collections in one pool from 310 to 399 (90). Other
+  collections own 400-499 (100, was 50). HIGH ROTATION stays at 500 and last.
+- Order of the shared pool: A to Z by name, then a stable id that carries the kind (f: or
+  c:), with the existing overflow rule (most films stay). By name moves only the channels
+  after a change and treats both kinds the same; found franchises first would renumber
+  every collection whenever a found one is switched. Ids stay per kind (1,000,000+ and
+  1,010,000+), so nothing that holds an id moves.
+- The FRANCHISES switch is every franchise channel's: off, no classic, found franchise or
+  franchise collection airs; on, each follows its own switch, as found franchises already
+  did. Found franchises take a number only while the package is on (Roku only finds them
+  then), so with it off the collections close up instead of leaving gaps; switching it
+  off rebuilds the runtime channels. Settings' FRANCHISES page shows one "Up to 90" note
+  for the shared block.
+- The package list follows the guide: entries sort by their first channel's place in the
+  guide, so a seasonal package leading the guide leads the list, and FRANCHISES is one
+  entry for the classics, the found franchises and the franchise collections. Measured on
+  a tvOS simulator with the full lineup, every package on, one found franchise, one
+  franchise collection and one other collection, before: NOSTALGEX, KIDZ ZONE, CASE FILES,
+  PRIME TIME, MARQUEE, ARTHOUSE, ADVENTURELAND, OVERTIME, DECADES, FRANCHISES (300),
+  NETWORKS, SCREAM, TIS THE SEASON, HIGH ROTATION, FRANCHISES (400), OTHER COLLECTIONS.
+  After, in number order: NOSTALGEX, KIDZ ZONE, PRIME TIME, MARQUEE, ADVENTURELAND,
+  OVERTIME, CASE FILES, DECADES, ARTHOUSE, NETWORKS, SCREAM, TIS THE SEASON, FRANCHISES,
+  OTHER COLLECTIONS, HIGH ROTATION; with SCREAM leading the guide in October, SCREAM first.
+  Pinned by `BundleJumpOrderTests`.
+- Web tuner: it has no franchise classifier, so every web collection is an other
+  collection, CH 400-499, 100 slots ("airs from CH 400"). It has no package list to sort.
+- Duplicates: a franchise collection that is the same franchise as a found one folds into
+  it (`FranchiseCollectionFold`: the dictionary by title, or 60% of its films already in
+  the found franchise, found ones switched on or not) and never gets a channel. Not
+  covered: a collection under 60% overlap with an auto-found franchise of another name,
+  or one with shows the found franchise doesn't air (kept on purpose so the shows don't
+  vanish). Unchanged.
+
+**Measured.** NostalgexTests on the 1080p Apple TV simulator: 1,034 tests, 1,019 passed,
+15 skipped, 0 failed. `npm test` passes.
+
+**Half-done.** Roku on `roku/renumber-franchise-block` (see its entry). Nothing ran on an
+Apple TV.
+
 ## 2026-10-31 (Apple TV: all franchises on one page, an amber count for short packages)
 
 **Why.** Franchises lived in three places: a FRANCHISES package under CHANNEL PACKAGES,
