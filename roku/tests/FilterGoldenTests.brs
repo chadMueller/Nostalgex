@@ -69,7 +69,8 @@ function NxGoldenItem(g as Object) as Object
             keywords: NxList(g.enrichment.keywords),
             productionCompanies: NxList(g.enrichment.productionCompanies),
             networks: NxList(g.enrichment.networks),
-            tmdbGenres: NxList(g.enrichment.tmdbGenres)
+            tmdbGenres: NxList(g.enrichment.tmdbGenres),
+            imdbRating: g.enrichment.imdbRating
         }
     end if
     return item

@@ -59,7 +59,7 @@ sub init()
     styleLabel("summary", "DMMono-Regular", 20, "0xFFFFFFA6")
     styleLabel("clock", "VT323-Regular", 24, "0xFFFFFF8C")
     styleLabel("upNext", "DMMono-Regular", 18, "0xFFFFFFBF")
-    styleLabel("channelHead", "DMMono-Medium", 18, "0xFFFFFFB3")
+    applyGuideText()
     styleLabel("hazeText", "DMMono-Medium", 26, "0xFFFFFF6B")
     styleLabel("notice", "DMMono-Regular", 20, "0xFF6B6BFF")
     styleLabel("ccToast", "VT323-Regular", 48, "0xFFFFFFFF")
@@ -133,6 +133,22 @@ sub styleLabel(id as String, font as String, size as Integer, color as String)
     lbl.font = fontOf(font, size)
     lbl.color = color
 end sub
+
+' GUIDE TEXT SIZE (source/guide/GuideText.brs): the grid's sizes for the saved
+' choice, and the CHANNEL heading set to match. True when the sizes changed,
+' so the grid wants drawing again.
+function applyGuideText() as Boolean
+    large = NxGuideTextLarge()
+    ' Never compare invalid to a Boolean: the first call has no choice yet.
+    if m.guideText <> invalid then
+        if m.guideTextLarge = large then return false
+    end if
+    m.guideTextLarge = large
+    m.guideText = NxGuideTextSizes(large)
+    styleLabel("channelHead", "DMMono-Medium", m.guideText.head, "0xFFFFFFB3")
+    m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
+    return true
+end function
 
 function newLabel(text as String, font as String, size as Integer, color as String, x as Float, y as Float, width as Float) as Object
     lbl = CreateObject("roSGNode", "Label")
@@ -344,8 +360,8 @@ sub renderGrid()
     for i = 0 to 3
         x = m.colX + i * m.slotWidth
         ' Only as tall as the time text: ChannelGuideView draws them as its overlay.
-        slots.AppendChild(newRect(x, 17, 1, 26, "0xFFFFFF33"))
-        slots.AppendChild(newLabel(localTimeLabel(wStart& + i * 1800), "DMMono-Medium", 20, "0xFFFFFFF2", x + 14, 17, 0))
+        slots.AppendChild(newRect(x, m.guideText.slotY, 1, m.guideText.slotH, "0xFFFFFF33"))
+        slots.AppendChild(newLabel(localTimeLabel(wStart& + i * 1800), "DMMono-Medium", m.guideText.slot, "0xFFFFFFF2", x + 14, m.guideText.slotY, 0))
     end for
 
     ' Only the rows in or touching the viewport, which clips them.
@@ -445,7 +461,7 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
                 else if past then
                     tc = "0xFFFFFF80"
                 end if
-                row.AppendChild(newLabel(b.line, "DMMono-Medium", 20, tc, x + 15, 27, w - 15))
+                row.AppendChild(newLabel(b.line, "DMMono-Medium", m.guideText.title, tc, x + 15, m.guideText.titleY, w - 15))
             end if
         end if
     end for
@@ -481,10 +497,11 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
         row.AppendChild(bolt)
         x = x + 17 + 6
     end if
-    num = newLabel(ch.number.ToStr(), "DMMono-Medium", 20, numColor, x, 27, 36)
+    gt = m.guideText
+    num = newLabel(ch.number.ToStr(), "DMMono-Medium", gt.num, numColor, x, gt.numY, gt.numW)
     num.horizAlign = "right"
     row.AppendChild(num)
-    row.AppendChild(newLabel(UCase(ch.name), "DMMono-Medium", 18, nameColor, x + 44, 29, m.colX - x - 44))
+    row.AppendChild(newLabel(UCase(ch.name), "DMMono-Medium", gt.name, nameColor, x + gt.nameGap, gt.nameY, m.colX - x - gt.nameGap))
     return row
 end function
 
@@ -1762,9 +1779,7 @@ function npState() as Object
     tracks = NxList(m.video.availableAudioTracks)
     for i = 0 to tracks.Count() - 1
         t = tracks[i]
-        name = NxToStr(t.Name)
-        if name = "" then name = UCase(NxToStr(t.Language))
-        if name = "" then name = "Track " + (i + 1).ToStr()
+        name = NxAudioTrackLabel(t.Name, t.Language, i)
         st.audio.Push({ name: name, active: NxToStr(t.Track) = NxToStr(m.video.currentAudioTrack) })
     end for
     if m.sleepEnd <> invalid then
@@ -2255,6 +2270,7 @@ sub onSettingsResult()
     applySubtitles()
     applyRetro()
     applyReportPrefs()
+    if applyGuideText() and m.channels <> invalid then renderGrid()
     if result = "rebuild" or result = "signOut" then
         NxTuneDrop(m.tuneQueue)
         stopTracker()

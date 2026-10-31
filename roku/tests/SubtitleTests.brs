@@ -80,6 +80,17 @@ function NxRunSubtitleTests() as Integer
     NxCheck(r, "auto: cantonese audio is foreign", NxSubShouldAutoEnable([NxSubComparableTag("yue")], "en").ToStr(), "true")
     NxCheck(r, "auto: estonian audio is foreign to spanish", NxSubShouldAutoEnable([NxSubComparableTag("est")], "es").ToStr(), "true")
 
+    ' The panel's audio track names: Roku's "#uniq:" marker isn't shown.
+    NxCheck(r, "track name: #uniq: dropped", NxAudioTrackLabel("#uniq:Italiano", "ita", 0), "Italiano")
+    NxCheck(r, "track name: #uniq: with the rest of the name", NxAudioTrackLabel("#uniq:English (Dolby Digital 5.1)", "eng", 1), "English (Dolby Digital 5.1)")
+    NxCheck(r, "track name: #uniq: in any case, spaces trimmed", NxAudioTrackLabel(" #UNIQ: English ", "eng", 0), "English")
+    NxCheck(r, "track name: a plain name is untouched", NxAudioTrackLabel("English", "eng", 0), "English")
+    NxCheck(r, "track name: #uniq: only at the front", NxAudioTrackLabel("Director #uniq:Commentary", "eng", 0), "Director #uniq:Commentary")
+    NxCheck(r, "track name: nothing after #uniq: is its language", NxAudioTrackLabel("#uniq:", "ita", 0), "ITA")
+    NxCheck(r, "track name: no name is its language", NxAudioTrackLabel("", "spa", 0), "SPA")
+    NxCheck(r, "track name: invalid name is its language", NxAudioTrackLabel(invalid, "spa", 2), "SPA")
+    NxCheck(r, "track name: no name or language is its place", NxAudioTrackLabel(invalid, invalid, 2), "Track 3")
+
     ' pickLegibleOption (#63): a full track before a forced one.
     NxCheck(r, "pick: the full track over a forced one", NxSubPickIndex(["en", "en"], [true, false], "en").ToStr(), "1")
     NxCheck(r, "pick: a forced one when it's all there is", NxSubPickIndex(["en"], [true], "en").ToStr(), "0")
