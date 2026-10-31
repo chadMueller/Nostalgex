@@ -1,4 +1,4 @@
-' Server collections as channels (CH 450-499 for movie series, CH 500-699
+' Server collections as channels (CH 400-449 for movie series, CH 450-499
 ' for the rest), and the fold that keeps a collection which is really a
 ' franchise from airing twice.
 '
@@ -13,7 +13,7 @@
 ' The fold follows Services/FranchiseCollectionFold.swift, not the web
 ' tuner's foldTarget, because franchises here follow the Apple TV app
 ' (docs/PORTING.md): its targets are the stock franchise channels and the
-' found franchises (CH 300 up), and it adds the dictionary signals the web
+' found franchises (CH 310 up), and it adds the dictionary signals the web
 ' tuner leaves out. Given only stock channels and no dictionary it answers as
 ' foldTarget, which the vectors check; the rest is checked by cases from
 ' CollectionShowsTests.swift and FranchiseSettingsTests.swift
@@ -24,7 +24,7 @@
 '     Plex only.
 '   - The Apple TV app's FRANCHISES / OTHER COLLECTIONS split
 '     (CollectionClassifier). The web tuner doesn't have it either; every
-'     collection channel is in CH 500-699.
+'     collection channel is in CH 450-499.
 '
 ' Differences that don't change which channels air:
 '   - Requests run one at a time; upstream asks for four collections'
@@ -42,24 +42,24 @@ function NxCollectionsIDBase() as Integer
 end function
 
 function NxCollectionsNumberBase() as Integer
-    return 500
+    return 450
 end function
 
-' CH 500-699: anything switched on past the 200th is not built.
+' CH 450-499: anything switched on past the 50th is not built.
 function NxCollectionsCapacity() as Integer
-    return 200
+    return 50
 end function
 
 ' DynamicChannelBlock.collectionFranchises: the Apple TV's FRANCHISES
 ' collections, ids from 1,010,000 (ChannelIDSpace.dynamicBase + 1 *
-' categoryStride, once NOTABLE STARS'), CH 450-499. Their own block: the
+' categoryStride, once NOTABLE STARS'), CH 400-449. Their own block: the
 ' found franchises and the FRANCHISES package never move them.
 function NxCollectionFranchiseIDBase() as Integer
     return 1010000
 end function
 
 function NxCollectionFranchiseNumberBase() as Integer
-    return 450
+    return 400
 end function
 
 function NxCollectionFranchiseCapacity() as Integer
@@ -372,13 +372,13 @@ end function
 
 ' materialize: switched-on, unfolded candidates, each category in its own
 ' block (materializeDynamicChannels). FRANCHISES ("franchises") take CH
-' 450-499, filled by NxBlockKept: when more are on than fit, the ones with
+' 400-449, filled by NxBlockKept: when more are on than fit, the ones with
 ' the most films stay, numbered by name. OTHER COLLECTIONS ("custom", and any
 ' candidate the classifier hasn't seen, as the web tuner's all are) take CH
-' 500-699, the first 200 in list order, as on the web. Neither depends on the
+' 450-499, the first 50 in list order, as on the web. Neither depends on the
 ' found franchises. Anything switched on past its block is not built.
-' Returns { channels, overCap (both blocks), overCapFranchises (past CH 499),
-' overCapCustom (past CH 699) }. The channels have the shape the library
+' Returns { channels, overCap (both blocks), overCapFranchises (past CH 449),
+' overCapCustom (past CH 499) }. The channels have the shape the library
 ' load builds; their pool is the collection, unshuffled, as the web tuner
 ' airs it.
 function NxCollectionsMaterialize(candidates as Object) as Object
@@ -792,7 +792,7 @@ function NxCollectionsStep(opts as Object) as Object
         enabledKeys: opts.enabledKeys, foldTargets: targets, defs: defs
     })
     ' The Apple TV app's split (CollectionClassifier.swift), which the web
-    ' tuner doesn't have: FRANCHISES in their own block, CH 450-499.
+    ' tuner doesn't have: FRANCHISES in their own block, CH 400-449.
     for each c in candidates
         c.category = NxCollectionClassify(c.serverTitle, c.items)
     end for

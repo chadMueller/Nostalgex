@@ -5,8 +5,8 @@
 '
 ' Source: the Apple TV app's Services/CollectionClassifier.swift, at the
 ' commit in data/UPSTREAM. FRANCHISES ("franchises") is movie series and
-' sequels, airing from CH 450 to 499; OTHER COLLECTIONS ("custom") is
-' actors, directors and the viewer's own sets, from CH 500 to 699.
+' sequels, airing from CH 400 to 449; OTHER COLLECTIONS ("custom") is
+' actors, directors and the viewer's own sets, from CH 450 to 499.
 ' The web tuner has no classifier, so the cases in tests/CollectionTests.brs
 ' are transcribed from upstream's CollectionClassifierTests.swift and
 ' CollectionShowsTests.swift.

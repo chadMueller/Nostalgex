@@ -26,20 +26,22 @@
 '   Swift uses the item's id.
 
 ' DynamicChannelBlock.foundFranchises: ids from 1,000,000
-' (ChannelIDSpace.dynamicBase), display numbers 300 to 449. Each kind of
-' runtime channel has its own fixed block (found franchises 300-449,
-' franchise collections 450-499, other collections 500-699), so switching
-' one kind never moves another's numbers or ids.
+' (ChannelIDSpace.dynamicBase), display numbers 310 to 399, after the stock
+' FRANCHISES package's 300-309. Each kind of runtime channel has its own
+' fixed block (found franchises 310-399, franchise collections 400-449,
+' other collections 450-499; HIGH ROTATION owns 500 up), so switching one
+' kind never moves another's numbers or ids. Until 1.0.29 the blocks were
+' 300-449, 450-499 and 500-699.
 function NxFranchiseIDBase() as Integer
     return 1000000
 end function
 
 function NxFranchiseNumberBase() as Integer
-    return 300
+    return 310
 end function
 
 function NxFranchiseCapacity() as Integer
-    return 150
+    return 90
 end function
 
 ' AppState.collectionColors.
@@ -64,7 +66,7 @@ end function
 '
 ' Unions covered franchises into their stock pools, switches off the
 ' classics the viewer turned off, and returns { found, channels (the found
-' franchise channels to add), overCap (switched on past CH 449), rows
+' franchise channels to add), overCap (switched on past CH 399), rows
 ' (Settings) }. Call it only while the
 ' package is on: upstream unions and shows found channels only then.
 function NxFranchiseStep(opts as Object) as Object

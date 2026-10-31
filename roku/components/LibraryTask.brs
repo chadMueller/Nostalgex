@@ -662,7 +662,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
 
     ' FRANCHISES, as the Apple TV app has it (the web tuner doesn't call the
     ' builder): covered franchises join their classic's pool, and each found
-    ' franchise switched on gets a channel from CH 300 that rides on the
+    ' franchise switched on gets a channel from CH 310 that rides on the
     ' package's switch.
     franchiseRows = []
     franchiseOverCap = 0
@@ -688,13 +688,13 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         end for
         franchiseRows = fr.rows
         franchiseOverCap = fr.overCap
-        print "library: franchises: "; fr.found.Count(); " found, "; foundIDs.Count(); " channels, "; fr.overCap; " past CH 449, in "; timer.TotalMilliseconds(); " ms"
+        print "library: franchises: "; fr.found.Count(); " found, "; foundIDs.Count(); " channels, "; fr.overCap; " past CH 399, in "; timer.TotalMilliseconds(); " ms"
     end if
 
     ' MY COLLECTIONS, read as the web tuner reads them and split as the Apple
     ' TV app splits them: a collection switched on airs outside every package,
-    ' a movie series under FRANCHISES (CH 450-499) and the rest under OTHER
-    ' COLLECTIONS (CH 500-699), whatever the found franchises do. One that is a
+    ' a movie series under FRANCHISES (CH 400-449) and the rest under OTHER
+    ' COLLECTIONS (CH 450-499), whatever the found franchises do. One that is a
     ' franchise the package already carries folds into it instead.
     timer.Mark()
     cl = NxCollectionsStep({
