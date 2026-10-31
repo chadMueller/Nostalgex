@@ -763,7 +763,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.franchisesChanged = true
             render()
         else if row.kind = "collection" then
-            ' toggleCollection: switch one on and it airs from CH 400 or 450.
+            ' toggleCollection: switch one on and it airs from CH 310 (a franchise) or 400.
             id = row.collection.id
             if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true
             m.collectionsChanged = true

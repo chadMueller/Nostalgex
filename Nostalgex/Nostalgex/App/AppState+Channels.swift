@@ -949,7 +949,7 @@ extension AppState {
         mergeBuiltPackageChannels(filtered)
         if toBuild.contains(where: { $0.id == Self.franchisesBundleID }) {
             // The classics were not in the lineup while the package was off, so nothing
-            // could fold into them. Now that CH100-106 exist, re-decide which found
+            // could fold into them. Now that ids 100-106 (CH 300-306) exist, re-decide which found
             // franchises are covered and which collections fold.
             rebuildFoundFranchises()
             materializeDynamicChannels()

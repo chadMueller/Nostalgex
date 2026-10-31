@@ -12,7 +12,7 @@ import Foundation
 /// "already on CH N".
 enum FranchiseCollectionFold {
 
-    /// A franchise a collection can fold into: one stock channel (CH100-106) or one found
+    /// A franchise a collection can fold into: one stock channel (ids 100-106, CH 300-306) or one found
     /// franchise.
     struct Target: Equatable {
         /// What the collection row would have said: "CH 100 STAR WARS" or "JOHN WICK".
