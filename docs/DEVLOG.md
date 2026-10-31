@@ -3,6 +3,84 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Web tuner and Docker: a library of any size loads, #152)
+
+**Shipped.** Nothing yet. Branch `fix/web-152-storage-quota`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed. A Docker release needs its own `tuner-v` tag and a
+`tunerVersion` bump in the tagged commit.
+
+**Why the first fix was not enough.** `363a888` wrapped the one write the report named
+(`saveChannelConfig()`), and that is on `main`. Measured against a fake 6,738-item Plex
+library (519 movies, 6,219 episodes) padded so the old trimmed cache lands at 5,236,139 of
+Chrome's 5,242,880-character localStorage quota, the way the report describes it:
+
+- 1.0.9: `QuotaExceededError` at `saveChannelConfig`, error screen "COULD NOT LOAD LIBRARY.
+  YOUR SERVER MAY BE UNREACHABLE", channel config not saved.
+- `main` with the try/catch: the library loads, but the channel config is still not saved
+  (the cache leaves 6 KB and the config needs 7.5 KB). With 6.5 KB of other settings saved
+  in that browser the error screen is back: the next write after the cache,
+  `markInitialLibraryLoadComplete()` in `nostalgex-library-load.js`, was unguarded and threw
+  the same error. A try/catch on one write only moves the throw to the next one.
+
+So the cause in the report is right, and the cure is not guarding one write. The cache has
+no business taking the whole quota.
+
+**Changed.**
+
+- The library cache moved from localStorage to IndexedDB (`scripts/nostalgex-storage.js`,
+  web only, new file). IndexedDB has no 5 MB ceiling and the enrichment cache already uses
+  it. The cache is now stored whole, summaries included; localStorage used to drop them
+  to fit. The page deletes the old localStorage copy at start-up, so a browser a 1.0.9
+  tuner left full is freed on its first visit. It is not migrated: that costs one rescan.
+- Sign-out still has to forget the library at once (the items carry the Plex token). The
+  record in IndexedDB only counts while a short id in localStorage matches it, so
+  `clearLibraryCache()` is one synchronous `removeItem` and a page that navigates away
+  before IndexedDB finishes deleting cannot leave a cache that loads.
+- Every `localStorage` and `sessionStorage` write in `plex-tuner.html` goes through
+  `lsSet`/`ssSet`, which never throw. On a full quota a small setting gives up rebuildable
+  data and retries: the old library cache, then the collection scan, the MusicBrainz cache
+  and the daily manifests, stopping as soon as it fits. A cache write never evicts
+  another cache. If nothing can be freed the setting stays in memory and the console says so.
+- `markInitialLibraryLoadComplete()` goes through the same path. The Plex client id is held in
+  memory too, so a failed save does not mean a new device id on every request. In
+  `web-tuner.html`, `getClientId()` was the one unguarded localStorage write (its sign-in
+  saves already had a try).
+- The error screen says what failed. A storage error now reads "THIS BROWSER RAN OUT OF
+  STORAGE. YOUR SERVER IS FINE...", and a failure while building the guide (including the
+  cache-restore path, where no server was asked) reads "THE LIBRARY LOADED, BUT THE GUIDE
+  COULD NOT BE BUILT...". A scan that got no answer still says the server may be unreachable.
+  Both backends use it. Checked at 390x844, 820x1180, 1440x900 and 960x540: no overflow.
+
+**Measured, same library, fixed code.** Guide up in 3.3 s, 66.6 KB of localStorage (1.3% of
+the quota), 7.0 MB cached in IndexedDB, channel config and first-load flag saved. A reload
+restores the guide in 0.7 s with zero requests to the server. With the padded library and
+6.5 KB of extra settings: same result. The built Docker output (`dist-selfhost`) passes the
+same checks.
+
+**Tests.** New `scripts/nostalgex-storage-smoke.mjs` (33 checks, in `npm test`): quota error
+shapes, eviction order, a cache write not evicting a cache, the cache id, a failed write, a
+stuck database, and that the evictable key names still match what the tuner writes. New
+`scripts/storage-quota-browser-smoke.mjs` (`npm run test:storage-quota`, Playwright, not in
+`npm test`): 55 checks over the 6,738-item library at the real quota, the full-browser
+state, a quota full of rebuildable data, one full of data the page cannot rebuild, the error
+messages, sign-out, and no or stuck IndexedDB. `TUNER_ROOT=<checkout>` runs it against any
+other build: against 1.0.9 it fails 23 of its first-load checks. Taking eviction out of
+the module makes the rebuildable-data case fail. `nostalgex-season-smoke.mjs` got an `lsSet`
+stand-in; `cache-restore-crash`, `channel-config-quota` and `stream-quality` browser smokes
+now read the cache from IndexedDB. All of those, plus `empty-guide`, `empty-lineup`,
+`start-over:browser` and `plex-bad-byte`, pass.
+
+**Half-done.** Not verified on a real Docker host, a TV browser, Safari or Firefox: the
+checks ran in headless Chromium 156. A browser with no IndexedDB keeps working and rescans
+every visit (tested by removing it). If IndexedDB hangs, a visit waits 5 s for the cache
+before scanning (tested with a stub). `repopulateChannelsFromLibrary` rewrites the cache on
+every load, restored or not, so the 24 hour TTL counts from the last visit; unchanged,
+and not looked at further.
+
+**Next.** Needs review and a push decision from Chad. Cross-product: localStorage and IndexedDB
+are browser-only, so nothing to port to Apple TV or Roku; the Roku CI job watches
+`plex-tuner.html` and the engine files, and none of the shared engine files changed.
+
 ## 2026-10-30 (Roku: port the two filter engine changes of 2026-10-29, so the `roku` job goes green)
 
 **Shipped.** Nothing yet. Branch `roku/filter-port-manifest-fallback-ratingmin`, cut from

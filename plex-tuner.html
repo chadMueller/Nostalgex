@@ -19,6 +19,7 @@
 <script src="scripts/nostalgex-channel-filter.cjs"></script>
 <script src="scripts/nostalgex-music-brainz.js"></script>
 <script src="scripts/nostalgex-daily-manifest.js"></script>
+<script src="scripts/nostalgex-storage.js"></script>
 <script src="scripts/nostalgex-library-load.js"></script>
 <script src="scripts/nostalgex-utf8-repair.js"></script>
 <script src="scripts/nostalgex-season.js"></script>
@@ -3767,6 +3768,19 @@
 
 <script>
   // ══════════════════════════════════════
+  // BROWSER STORAGE (#152)
+  // Every write below goes through these two. A write that cannot be kept never throws
+  // into the code that asked: it returns false and the page carries on from memory. When
+  // a small setting meets a full quota, the library scan and other rebuildable data give
+  // way for it (scripts/nostalgex-storage.js). The library cache itself lives in
+  // IndexedDB now; the first line frees any copy an older page left in localStorage,
+  // which could hold the whole 5 MB.
+  // ══════════════════════════════════════
+  NostalgexStorage.purgeLegacy();
+  const lsSet = NostalgexStorage.setLocal;
+  const ssSet = NostalgexStorage.setSession;
+
+  // ══════════════════════════════════════
   // CHANNEL DATA
   // ══════════════════════════════════════
   const DEMO_SCHEDULES = {
@@ -3816,7 +3830,7 @@
   );
 
   function saveBundlePreferences() {
-    localStorage.setItem('nostalgex_enabled_bundles', JSON.stringify([...enabledBundleIDs]));
+    lsSet('nostalgex_enabled_bundles', JSON.stringify([...enabledBundleIDs]));
   }
 
   function toggleBundle(bundleId) {
@@ -3909,7 +3923,7 @@
       return;
     }
     const v = answer === 'never' ? { never: true } : { notNowYear: new Date().getFullYear() };
-    localStorage.setItem(seasonalPromptKey(bundleId), JSON.stringify(v));
+    lsSet(seasonalPromptKey(bundleId), JSON.stringify(v));
     renderActiveGuide();
   }
   function seasonalBundleOnOffer() {
@@ -4402,7 +4416,7 @@
     if (sessionStorage.getItem('plex90_pick_server') === '1' && sessionStorage.getItem('plex90_token')) {
       sessionStorage.removeItem('plex90_pick_server');
       plexToken = sessionStorage.getItem('plex90_token');
-      sessionStorage.setItem('plex90_user_token', plexToken);
+      ssSet('plex90_user_token', plexToken);
       document.getElementById('plex-connect').style.display = 'flex';
       document.getElementById('plex-actions').style.display = 'none';
       discoverServers();
@@ -6328,17 +6342,12 @@
       rules: ch.rules || {},
       timeRestrictions: ch.timeRestrictions || null,
     }));
-    // On a large library this runs right after saveLibraryCache(), which can land near
-    // the localStorage quota. This write is small on its own, but a full quota leaves no
-    // room for even a small write, and an uncaught QuotaExceededError here used to
-    // propagate out of fetchPlexLibrary() and get shown as "server unreachable" (#152).
-    // Losing this save just means the channel toggles don't persist; it should never
-    // block the user from seeing their library.
-    try {
-      localStorage.setItem('plex90_channel_config', JSON.stringify(config));
-    } catch (e) {
-      console.error('[Nostalgex] Could not save channel config (storage full or unavailable):', e);
-    }
+    // Channel toggles outrank every cache. If the quota is full, lsSet gives up rebuildable
+    // data (the scan, collection and music caches, daily manifests) to make room, and if
+    // even that fails it returns false and the toggles stay in memory for this visit. A
+    // storage failure must never reach fetchPlexLibrary(): this write used to throw
+    // QuotaExceededError out of it and the page called a healthy server "unreachable" (#152).
+    lsSet('plex90_channel_config', JSON.stringify(config));
   }
 
   const CONFIG_VERSION = 11;
@@ -6348,7 +6357,7 @@
     const savedVersion = parseInt(localStorage.getItem('plex90_config_version') || '0');
     if (savedVersion < CONFIG_VERSION) {
       localStorage.removeItem('plex90_channel_config');
-      localStorage.setItem('plex90_config_version', String(CONFIG_VERSION));
+      lsSet('plex90_config_version', String(CONFIG_VERSION));
       return;
     }
 
@@ -6408,7 +6417,7 @@
   // ══════════════════════════════════════
   function toggleGuideLayout() {
     guideLayout = guideLayout === 'side' ? 'full' : 'side';
-    localStorage.setItem('plex90_guide_layout', guideLayout);
+    lsSet('plex90_guide_layout', guideLayout);
     document.getElementById('player-screen').classList.toggle('layout-side', guideLayout === 'side');
     if (guideVisible) renderActiveGuide();
     // Show toast
@@ -6503,7 +6512,7 @@
   }
 
   function rememberSound() {
-    try { localStorage.setItem('plex90_sound_on', videoMuted ? 'false' : 'true'); } catch (e) {}
+    lsSet('plex90_sound_on', videoMuted ? 'false' : 'true');
   }
 
   function updateToolbarSound() {
@@ -7001,7 +7010,7 @@
 
   function toggleAutoSubsForeignAudio() {
     autoSubsForeignAudio = !autoSubsForeignAudio;
-    localStorage.setItem('plex90_auto_subs_foreign_audio', autoSubsForeignAudio);
+    lsSet('plex90_auto_subs_foreign_audio', autoSubsForeignAudio);
     updateAutoSubsControls();
     clearSubtitleTracks();
     loadSubtitleForCurrentItem(currentPlayingItem);
@@ -7026,7 +7035,7 @@
   function toggleRetroMode() {
     retroMode = !retroMode;
     document.body.classList.toggle('retro-mode', retroMode);
-    localStorage.setItem('plex90_retro_mode', retroMode);
+    lsSet('plex90_retro_mode', retroMode);
     if (retroMode) startVhsCycle(); else stopVhsCycle();
     updateRetroControls();
     // Show toast
@@ -7172,7 +7181,7 @@
 
   function setAudioLanguage(val) {
     audioLanguage = val;
-    localStorage.setItem('plex90_audio_language', val);
+    lsSet('plex90_audio_language', val);
     // Restart playback on current item so the new audio track takes effect
     if (currentPlayingItem && isMediaBrowserBackend(mediaBackend) && currentChannel) {
       const ch = CHANNELS.find(c => c.id === currentChannel);
@@ -7182,14 +7191,14 @@
 
   function setSubtitleLanguage(val) {
     subtitleLanguage = val;
-    localStorage.setItem('plex90_subtitle_language', val);
+    lsSet('plex90_subtitle_language', val);
     clearSubtitleTracks();
     loadSubtitleForCurrentItem(currentPlayingItem); // self-gates (toggle or foreign-audio auto)
   }
 
   function toggleSubtitles() {
     subtitlesEnabled = !subtitlesEnabled;
-    localStorage.setItem('plex90_subtitles_enabled', subtitlesEnabled);
+    lsSet('plex90_subtitles_enabled', subtitlesEnabled);
     const autoForeign = currentPlayingItem && shouldAutoEnableSubs(currentPlayingItem.audioStreams || []);
     const toast = document.getElementById('retro-toast');
     if (toast) {
@@ -7648,12 +7657,16 @@
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
   }
 
+  // Held for the visit too: if the save fails, a new id on every request would look to the
+  // server like a new device each time (#152).
+  let clientIdThisVisit = null;
   function getClientId() {
-    let id = localStorage.getItem('plex90_client_id');
+    let id = localStorage.getItem('plex90_client_id') || clientIdThisVisit;
     if (!id) {
       id = randomClientId();
-      localStorage.setItem('plex90_client_id', id);
+      lsSet('plex90_client_id', id);
     }
+    clientIdThisVisit = id;
     return id;
   }
 
@@ -7685,12 +7698,12 @@
     if (!isMediaBrowserBackend(kind) || !isMediaBrowserBackend(mediaBackend) || kind === mediaBackend) return false;
     console.log(`[Nostalgex] This server is ${BACKEND_NAMES[kind]}, not ${BACKEND_NAMES[mediaBackend]}. Switching the saved sign-in over.`);
     mediaBackend = kind;
-    try { sessionStorage.setItem('plex90_backend', kind); } catch (e) {}
+    ssSet('plex90_backend', kind);
     try {
       const saved = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null');
       if (saved && isMediaBrowserBackend(saved.backend) && saved.serverUrl === plexServerUrl) {
         saved.backend = kind;
-        localStorage.setItem('plex90_saved_auth', JSON.stringify(saved));
+        lsSet('plex90_saved_auth', JSON.stringify(saved));
       }
     } catch (e) {}
     updateConfigPlexStatus();
@@ -7749,7 +7762,7 @@
           if (checkData.authToken) {
             clearInterval(pollInterval);
             plexToken = checkData.authToken;
-            sessionStorage.setItem('plex90_token', plexToken);
+            ssSet('plex90_token', plexToken);
             // Hide the PIN/QR while we discover servers and (for 2+) show the picker.
             if (pinBlock) pinBlock.style.display = 'none';
             await discoverServers();
@@ -7972,13 +7985,13 @@
     // Persist user token (for plex.tv re-validation) separately from server token
     const serverTokenIsOwnToken = resolved[0].token === (sessionStorage.getItem('plex90_token') || plexToken);
     if (!serverTokenIsOwnToken) {
-      sessionStorage.setItem('plex90_user_token', sessionStorage.getItem('plex90_token') || '');
+      ssSet('plex90_user_token', sessionStorage.getItem('plex90_token') || '');
     }
-    sessionStorage.setItem('plex90_token', plexToken);
-    sessionStorage.setItem('plex90_server_url', plexServerUrl);
-    sessionStorage.setItem('plex90_server_name', plexServerName);
-    sessionStorage.setItem('plex90_selected_servers', JSON.stringify(selectedServers));
-    sessionStorage.setItem('plex90_discovered_servers', JSON.stringify(discoveredServers));
+    ssSet('plex90_token', plexToken);
+    ssSet('plex90_server_url', plexServerUrl);
+    ssSet('plex90_server_name', plexServerName);
+    ssSet('plex90_selected_servers', JSON.stringify(selectedServers));
+    ssSet('plex90_discovered_servers', JSON.stringify(discoveredServers));
 
     plexConnected = true;
     updateConfigPlexStatus();
@@ -8007,12 +8020,12 @@
       try {
         const saved = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null');
         if (saved && saved.token && saved.serverUrl) {
-          sessionStorage.setItem('plex90_token', saved.token);
-          sessionStorage.setItem('plex90_server_url', saved.serverUrl);
-          sessionStorage.setItem('plex90_server_name', saved.serverName || '');
-          if (saved.userToken) sessionStorage.setItem('plex90_user_token', saved.userToken);
-          if (saved.backend) sessionStorage.setItem('plex90_backend', saved.backend);
-          if (saved.jellyfinUserId) sessionStorage.setItem('plex90_jellyfin_user_id', saved.jellyfinUserId);
+          ssSet('plex90_token', saved.token);
+          ssSet('plex90_server_url', saved.serverUrl);
+          ssSet('plex90_server_name', saved.serverName || '');
+          if (saved.userToken) ssSet('plex90_user_token', saved.userToken);
+          if (saved.backend) ssSet('plex90_backend', saved.backend);
+          if (saved.jellyfinUserId) ssSet('plex90_jellyfin_user_id', saved.jellyfinUserId);
 
           // Hide the Plex connect screen immediately — we have saved credentials and are
           // restoring the session. Don't let it flash "CONNECT WITH PLEX" to Jellyfin users
@@ -8322,7 +8335,7 @@
       });
     }
 
-    sessionStorage.setItem('plex90_selected_servers', JSON.stringify(selectedServers));
+    ssSet('plex90_selected_servers', JSON.stringify(selectedServers));
     updateConfigPlexStatus();
 
     // Rebuild library from updated server set
@@ -8336,7 +8349,6 @@
   // ══════════════════════════════════════
   // PLEX LIBRARY FETCHING
   // ══════════════════════════════════════
-  const LIBRARY_CACHE_KEY = 'plex90_library_cache';
   const LIBRARY_CACHE_TTL = 86400000; // 24 hours
   // 2: Plex items carry a tmdbID now that the scan asks for includeGuids=1. A version-1
   // cache would serve a whole day of items with no ids, so it is refused once.
@@ -8344,47 +8356,35 @@
   // has none, and at LOW a 20 Mbps MP4 would direct play for up to a day, so it is refused once.
   const LIBRARY_CACHE_VERSION = 3;
 
-  // localStorage, not sessionStorage. The 24 hour TTL above only means something
-  // if the cache outlives the tab, and sessionStorage is cleared the moment the
-  // tab closes. Every fresh visit therefore rescanned the whole library and the
-  // TTL never once applied. Anything that ends a session has to clear this now
-  // that it persists: see signOut().
+  // IndexedDB (scripts/nostalgex-storage.js), not localStorage and not sessionStorage.
+  //
+  // It outlives the tab, so the 24 hour TTL above means something: sessionStorage is cleared
+  // the moment the tab closes, and every fresh visit used to rescan the whole library.
+  //
+  // It is not localStorage because that gives an origin about 5 MB for everything. A library
+  // of 6,700 items serialised to nearly all of it, the next small write (the channel
+  // config) threw, and the page blamed the server (#152). IndexedDB has no such ceiling, so
+  // a library of any size is cached whole, summaries included. Anything that ends a session
+  // has to clear this: see signOut().
   function saveLibraryCache(items) {
     // Enrichment has its own cache (IndexedDB, see nostalgex-enrichment.js); keep it
-    // out of this one so the library still fits in localStorage.
+    // out of this one so it is not stored twice.
     items = items.map(it => (it && it.enrichment ? { ...it, enrichment: undefined } : it));
     const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items };
-    try {
-      localStorage.setItem(LIBRARY_CACHE_KEY, JSON.stringify(payload));
-      return;
-    } catch (e) {
-      // Over quota. Summaries are by far the biggest field per item and the
-      // least load-bearing, so drop them and try once more rather than giving
-      // up on caching a large library entirely.
-    }
-    try {
-      localStorage.setItem(LIBRARY_CACHE_KEY, JSON.stringify({
-        ...payload,
-        trimmed: true,
-        items: items.map(it => (it.summary ? { ...it, summary: '' } : it)),
-      }));
-    } catch (e) {
-      // Still too big, or storage is unavailable. Fall back to rescanning, which
-      // is what happened on every single load before this cache persisted. Any
-      // earlier entry is deliberately left alone: serving it stale and
-      // refreshing in the background beats showing nothing.
-    }
+    // Not awaited: the guide builds while this writes. It never throws; when it cannot cache,
+    // the next visit reads the library from the server, which is what happened before the
+    // cache persisted at all.
+    NostalgexStorage.libraryCache.save(payload);
   }
 
   function clearLibraryCache() {
-    try { localStorage.removeItem(LIBRARY_CACHE_KEY); } catch (e) {}
+    NostalgexStorage.libraryCache.clear();
   }
 
-  function loadLibraryCache(allowStale = false) {
+  async function loadLibraryCache(allowStale = false) {
     try {
-      const raw = localStorage.getItem(LIBRARY_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
+      const parsed = await NostalgexStorage.libraryCache.load();
+      if (!parsed) return null;
       const { ts, url, items } = parsed;
       if (parsed.v !== LIBRARY_CACHE_VERSION) return null;
       if (url !== plexServerUrl) return null;
@@ -8503,12 +8503,19 @@
 
   async function finalizeLibraryWithMusicBrainz(allItems, options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
-    let working = applyMusicCacheToLibrary(allItems);
-    await repopulateChannelsFromLibrary(working, options);
-    if (!options.background) startDeferredMusicEnrichmentIfNeeded(working);
-    // Not awaited: the guide is built and tuned before any of this lands.
-    startLibraryExtras(working);
-    return working;
+    // Everything in here works on items already in the browser, so a failure is never the
+    // server's. The mark lets fetchPlexLibrary() say so (#152).
+    try {
+      let working = applyMusicCacheToLibrary(allItems);
+      await repopulateChannelsFromLibrary(working, options);
+      if (!options.background) startDeferredMusicEnrichmentIfNeeded(working);
+      // Not awaited: the guide is built and tuned before any of this lands.
+      startLibraryExtras(working);
+      return working;
+    } catch (err) {
+      if (err && typeof err === 'object') err.nxBuildFailed = true;
+      throw err;
+    }
   }
 
   // ══════════════════════════════════════
@@ -8636,7 +8643,7 @@
   }
 
   function saveEnabledCollectionKeys() {
-    try { localStorage.setItem(ENABLED_COLLECTIONS_KEY, JSON.stringify([...enabledCollectionKeys])); } catch (e) {}
+    lsSet(ENABLED_COLLECTIONS_KEY, JSON.stringify([...enabledCollectionKeys]));
   }
 
   // Collection ids are `${serverKey}:${ratingKey}`, saved as the viewer's switches, so the
@@ -8658,11 +8665,9 @@
   }
 
   function saveCollectionScan() {
-    try {
-      localStorage.setItem(COLLECTION_SCAN_KEY, JSON.stringify({
-        server: manifestServerKey(), ts: Date.now(), collections: rawCollections || [],
-      }));
-    } catch (e) {}
+    lsSet(COLLECTION_SCAN_KEY, JSON.stringify({
+      server: manifestServerKey(), ts: Date.now(), collections: rawCollections || [],
+    }));
   }
 
   function setCollectionScanState(state, detail = '') {
@@ -9115,7 +9120,7 @@
         if (uri !== plexServerUrl) {
           console.log(`[Nostalgex] Library fetch fell back to ${uri}`);
           plexServerUrl = uri;
-          sessionStorage.setItem('plex90_server_url', uri);
+          ssSet('plex90_server_url', uri);
         }
         return data;
       } catch (err) {
@@ -9502,6 +9507,27 @@
     }
   }
 
+  // What a failed library load was, so the screen never blames the server for something
+  // that went wrong in this browser (#152, where a full localStorage was shown as
+  // "your server may be unreachable" and the reporter went and debugged his network).
+  //   auth     the server answered and refused the sign-in (err.plexStatus)
+  //   storage  the browser would not save something
+  //   local    the guide could not be built from what the server (or the cache) gave us
+  //   server   anything else, which is a scan that got no answer
+  function libraryFailureKind(err, errorSource) {
+    if (err && err.plexStatus) return 'auth';
+    if (NostalgexStorage.isQuotaError(err)) return 'storage';
+    if (errorSource === 'cache-restore' || (err && err.nxBuildFailed)) return 'local';
+    return 'server';
+  }
+
+  /** The error line for a failure that is not the server's, or null when it is. */
+  function libraryFailureText(kind) {
+    if (kind === 'storage') return 'THIS BROWSER RAN OUT OF STORAGE. YOUR SERVER IS FINE. CLEAR THE SITE DATA FOR THIS PAGE AND RELOAD';
+    if (kind === 'local') return 'THE LIBRARY LOADED, BUT THE GUIDE COULD NOT BE BUILT. THE BROWSER CONSOLE HAS THE ERROR';
+    return null;
+  }
+
   async function fetchPlexLibrary() {
     const LL = globalThis.NostalgexLibraryLoad;
     document.getElementById('plex-connect').style.display = 'none';
@@ -9520,7 +9546,7 @@
     // unconfirmed. `errorSource` only changes what gets logged, never what is shown.
     let errorSource = 'fetch';
     try {
-      const cached = loadLibraryCache(true);
+      const cached = await loadLibraryCache(true);
       if (cached && cached.items && cached.items.length > 0) {
         errorSource = 'cache-restore';
         LL.show();
@@ -9538,12 +9564,16 @@
       console.error(`Library fetch error (${errorSource}):`, err);
       globalThis.NostalgexLibraryLoad?.hide();
       const errorEl = document.getElementById('plex-error-label');
+      const failureKind = libraryFailureKind(err, errorSource);
+      const notTheServer = libraryFailureText(failureKind);
       if (isMediaBrowserBackend(mediaBackend)) {
         // A self-hosted tuner on plain http: no mixed content, and no nostalgex.app.
         const selfHttp = location.protocol === 'http:';
         const NAME = backendDisplayName().toUpperCase();
         errorEl.textContent = err && err.plexStatus
           ? (selfHttp ? `${NAME} SESSION ENDED. RECONNECT TO SIGN IN AGAIN` : `${NAME} SESSION ENDED. RECONNECT AT NOSTALGEX.APP/WEB-TUNER`)
+          : notTheServer
+          ? notTheServer
           : mixedContentBlocked
           ? 'YOUR SERVER USES HTTP. BROWSERS BLOCK THAT ON A SECURE PAGE. USE AN HTTPS URL, OR THE APPLE TV APP FOR A LOCAL SERVER'
           : selfHttp
@@ -9569,7 +9599,7 @@
       } else {
         errorEl.textContent = err && err.plexStatus
           ? 'PLEX SESSION REJECTED. SIGN IN AGAIN'
-          : 'COULD NOT LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE';
+          : notTheServer || 'COULD NOT LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE';
         errorEl.style.display = 'block';
       }
       plexConnected = false;
@@ -9950,7 +9980,7 @@
         msg.textContent = "YOU'RE ON THE LIST. THANKS";
         msg.className = 'promo-modal__msg ok';
         emailInput.value = '';
-        try { localStorage.setItem(SUBSCRIBED_KEY, '1'); } catch {}
+        lsSet(SUBSCRIBED_KEY, '1');
         submitBtn.textContent = 'DONE';
       } else {
         msg.textContent = 'SOMETHING WENT WRONG. TRY AGAIN';
