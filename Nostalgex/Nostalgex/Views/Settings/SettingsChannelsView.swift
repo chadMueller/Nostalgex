@@ -47,8 +47,7 @@ struct SettingsChannelsView: View {
         case .packages:
             return ChannelsPackagesPage.rows(appState: appState).first.map { "bundle_\($0.id)" } ?? "channels_missing"
         case .franchises:
-            return appState.franchiseListRows.isEmpty || !ChannelsFranchisesPage.packageOn(appState)
-                ? "franchises_package_off" : "franchise_add_all"
+            return ChannelsFranchisesPage.masterRowID
         case .collections:
             return "scan_collections"
         case .missing:
@@ -83,10 +82,10 @@ private struct ChannelsHomePage: View {
     var body: some View {
         let packages = ChannelsPackagesPage.rows(appState: appState)
         let packagesOn = packages.filter(\.enabled).count
-        let franchises = appState.franchiseListRows
-        let franchisesValue = ChannelsFranchisesPage.packageOn(appState)
-            ? "\(franchises.filter(\.enabled).count) ON" : "OFF"
-        let collectionsOn = appState.visibleDiscoveredCollections.filter(\.enabled).count
+        let franchisesOn = ChannelsFranchisesPage.onCount(appState)
+        let franchisesValue = !ChannelsFranchisesPage.packageOn(appState) && franchisesOn == 0
+            ? "OFF" : "\(franchisesOn) ON"
+        let collectionsOn = ChannelsCollectionsPage.customCollections(appState).filter(\.enabled).count
 
         VStack(spacing: 4) {
             link(.packages, value: "\(packagesOn) ON")
@@ -122,9 +121,14 @@ private struct ChannelsPackagesPage: View {
     let focus: FocusState<SettingsFocus?>.Binding
     let open: (ChannelsPage) -> Void
 
-    /// The packages the page lists: every bundle but the per-category collection ones,
-    /// which MY COLLECTIONS manages.
+    /// The packages the page lists: every bundle but FRANCHISES, whose switch heads the
+    /// FRANCHISES page, and the per-category collection ones, which have no switch.
     static func rows(appState: AppState) -> [ChannelBundle] {
+        lineupPackages(appState: appState).filter { $0.id != AppState.franchisesBundleID }
+    }
+
+    /// Every package with a switch somewhere in Settings, FRANCHISES included.
+    static func lineupPackages(appState: AppState) -> [ChannelBundle] {
         appState.bundles.filter { !$0.id.hasPrefix("collections-") }
     }
 
@@ -176,16 +180,16 @@ private struct ChannelsPackagesPage: View {
             if bundle.activeMonths != nil, !inSeason { return bundle.spotlightLabel(now: Date()) }
             return bundle.description
         }()
-        let warning: String? = {
-            guard bundle.enabled, !building, available > 0, missing > 0 else { return nil }
-            return "\(missing) need\(missing == 1 ? "s" : "") more content"
-        }()
+        // Channels still short of content: a small amber count on the row, explained by
+        // WHY ARE SOME CHANNELS MISSING? below the packages.
+        let missingBadge: Int? = bundle.enabled && !building && available > 0 && missing > 0 ? missing : nil
 
         SettingsToggleRow(
             title: bundle.name,
             subtitle: subtitle,
             detail: bundle.enabled ? "\(available)/\(total) CH" : "\(total) CH",
-            warning: warning,
+            alertBadge: missingBadge,
+            alertBadgeLabel: missingBadge.map { "\($0) channel\($0 == 1 ? "" : "s") need\($0 == 1 ? "s" : "") more content" },
             isOn: bundle.enabled,
             isFocused: isFocused("bundle_\(bundle.id)"),
             isLoading: building,
@@ -222,7 +226,7 @@ private struct ChannelsMissingPage: View {
 
     /// Cheap: which missing channels have rules to explain. No library scan.
     static func groups(appState: AppState) -> [Group] {
-        ChannelsPackagesPage.rows(appState: appState).compactMap { bundle in
+        ChannelsPackagesPage.lineupPackages(appState: appState).compactMap { bundle in
             guard bundle.enabled, !appState.buildingBundleIDs.contains(bundle.id) else { return nil }
             let channels: [Channel] = appState.bundleChannelAvailability(for: bundle)
                 .filter { !$0.hasContent }
@@ -276,80 +280,194 @@ private struct ChannelsMissingPage: View {
 
 // MARK: - Franchises
 
+/// Every franchise in one place: the FRANCHISES switch on top (the package flag, as on
+/// CHANNEL PACKAGES before), then one alphabetical list of the stock classics, the
+/// franchises found in the library, and the server's franchise collections.
+///
+/// The switch carries the classics and the found franchises, as the package always has.
+/// Franchise collections air through their own collection switches, so they stay listed
+/// and switchable while it is off.
 private struct ChannelsFranchisesPage: View {
     @Environment(AppState.self) var appState
     let focus: FocusState<SettingsFocus?>.Binding
+
+    static let masterRowID = "franchises_master"
 
     static func packageOn(_ appState: AppState) -> Bool {
         appState.bundles.first(where: { $0.id == AppState.franchisesBundleID })?.enabled == true
     }
 
+    /// Server collections filed as franchises that no franchise row already covers.
+    static func franchiseCollections(_ appState: AppState) -> [DiscoveredCollection] {
+        appState.visibleDiscoveredCollections.filter { $0.category == .franchises }
+    }
+
+    /// What the Channels list shows for FRANCHISES: everything on that is on air.
+    static func onCount(_ appState: AppState) -> Int {
+        let rows = packageOn(appState) ? appState.franchiseListRows.filter(\.enabled).count : 0
+        return rows + franchiseCollections(appState).filter(\.enabled).count
+    }
+
+    /// One row of the merged list.
+    private enum Entry: Identifiable {
+        case franchise(FranchiseListRow)
+        case collection(DiscoveredCollection)
+
+        var id: String {
+            switch self {
+            case .franchise(let row): return "franchise_\(row.id)"
+            case .collection(let c): return "collection_\(c.id)"
+            }
+        }
+        var sortName: String {
+            switch self {
+            case .franchise(let row): return row.name
+            case .collection(let c): return c.title
+            }
+        }
+        var isOn: Bool {
+            switch self {
+            case .franchise(let row): return row.enabled
+            case .collection(let c): return c.enabled
+            }
+        }
+    }
+
     var body: some View {
-        let rows = appState.franchiseListRows
         let on = Self.packageOn(appState)
+        let collections = Self.franchiseCollections(appState)
+        let entries: [Entry] = ((on ? appState.franchiseListRows.map(Entry.franchise) : [])
+            + collections.map(Entry.collection))
+            .sorted { $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending }
 
+        // No page heading: the FRANCHISES switch heads the page.
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(
-                title: ChannelsPage.franchises.title,
-                subtitle: on && !rows.isEmpty ? "\(rows.filter(\.enabled).count) of \(rows.count) on" : nil
-            )
+            VStack(spacing: 4) {
+                masterRow
 
-            if !on || rows.isEmpty {
-                Text(on ? emptyHint : "Turn on the FRANCHISES package under CHANNEL PACKAGES to pick franchises.")
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focusable(true)
-                    .settingsRow("franchises_package_off", focus: focus)
-            } else {
-                // Only when the range is actually full (CH 310-399); otherwise nothing.
-                let overCap = appState.dynamicChannelsOverCap[.foundFranchises, default: 0]
-                if overCap > 0 {
-                    Text("Up to \(DynamicChannelBlock.foundFranchises.capacity) franchise channels fit in the guide. \(overCap) more are on but not shown.")
-                        .font(.custom("DMMono-Regular", size: 18))
-                        .foregroundStyle(.white.opacity(0.45))
+                if on && entries.isEmpty {
+                    Text(emptyHint)
+                        .font(.custom("DMMono-Regular", size: 20))
+                        .foregroundStyle(.white.opacity(0.7))
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
                 }
 
-                let allOn = rows.allSatisfy(\.enabled)
-                let allOff = !rows.contains(where: \.enabled)
-                VStack(spacing: 4) {
-                    HStack(spacing: 12) {
-                        FranchiseActionButton(
-                            title: "ADD ALL",
-                            subtitle: allOn ? "Every franchise is on" : "Turn on all \(rows.count)",
-                            isEnabled: !allOn,
-                            isFocused: isFocused("franchise_add_all")
-                        ) {
-                            appState.setAllFranchises(enabled: true)
-                        }
-                        .settingsRow("franchise_add_all", focus: focus)
-
-                        FranchiseActionButton(
-                            title: "REMOVE ALL",
-                            subtitle: allOff ? "None are on" : "Take them all out of the guide",
-                            isEnabled: !allOff,
-                            isFocused: isFocused("franchise_remove_all")
-                        ) {
-                            appState.setAllFranchises(enabled: false)
-                        }
-                        .settingsRow("franchise_remove_all", focus: focus)
-                    }
-
-                    ForEach(rows) { row in
-                        SettingsToggleRow(
-                            title: row.name,
-                            subtitle: row.countLabel,
-                            detail: row.channelNumber.map { "CH \($0)" },
-                            isOn: row.enabled,
-                            isFocused: isFocused("franchise_\(row.id)")
-                        ) {
-                            appState.toggleFranchiseRow(row)
-                        }
-                        .settingsRow("franchise_\(row.id)", focus: focus)
+                if !entries.isEmpty {
+                    overCapNotes(on: on)
+                    if on { addRemoveAll(entries: entries, collections: collections) }
+                    ForEach(entries) { entry in
+                        row(entry)
                     }
                 }
             }
+        }
+    }
+
+    /// The FRANCHISES package switch, built in the background like any package.
+    @ViewBuilder
+    private var masterRow: some View {
+        if let bundle = appState.bundles.first(where: { $0.id == AppState.franchisesBundleID }) {
+            let building = bundle.enabled && appState.buildingBundleIDs.contains(bundle.id)
+            SettingsToggleRow(
+                title: "FRANCHISES",
+                subtitle: building ? "Finding your franchises" : "The classics and the series in your library",
+                isOn: bundle.enabled,
+                isFocused: isFocused(Self.masterRowID),
+                isLoading: building,
+                loadingMessage: "BUILDING"
+            ) {
+                appState.toggleBundle(bundle)
+            }
+            .settingsRow(Self.masterRowID, focus: focus)
+            .padding(.bottom, 8)
+        }
+    }
+
+    @ViewBuilder
+    private func overCapNotes(on: Bool) -> some View {
+        // Only when a range is actually full; otherwise nothing.
+        let foundOver = on ? appState.dynamicChannelsOverCap[.foundFranchises, default: 0] : 0
+        let collectionsOver = appState.dynamicChannelsOverCap[CollectionCategory.franchises.block, default: 0]
+        if foundOver > 0 {
+            capNote("Up to \(DynamicChannelBlock.foundFranchises.capacity) franchise channels fit in the guide. \(foundOver) more are on but not shown.")
+        }
+        if collectionsOver > 0 {
+            capNote("Up to \(CollectionCategory.franchises.displayCapacity) franchise collections fit in the guide. \(collectionsOver) more are on but not shown.")
+        }
+    }
+
+    private func capNote(_ text: String) -> some View {
+        Text(text)
+            .font(.custom("DMMono-Regular", size: 18))
+            .foregroundStyle(.white.opacity(0.45))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// ADD ALL / REMOVE ALL over the whole list: every franchise row, and every franchise
+    /// collection that is not already the way asked.
+    private func addRemoveAll(entries: [Entry], collections: [DiscoveredCollection]) -> some View {
+        let allOn = entries.allSatisfy(\.isOn)
+        let allOff = !entries.contains(where: \.isOn)
+        return HStack(spacing: 12) {
+            FranchiseActionButton(
+                title: "ADD ALL",
+                subtitle: allOn ? "Every franchise is on" : "Turn on all \(entries.count)",
+                isEnabled: !allOn,
+                isFocused: isFocused("franchise_add_all")
+            ) {
+                setAll(true, collections: collections)
+            }
+            .settingsRow("franchise_add_all", focus: focus)
+
+            FranchiseActionButton(
+                title: "REMOVE ALL",
+                subtitle: allOff ? "None are on" : "Take them all out of the guide",
+                isEnabled: !allOff,
+                isFocused: isFocused("franchise_remove_all")
+            ) {
+                setAll(false, collections: collections)
+            }
+            .settingsRow("franchise_remove_all", focus: focus)
+        }
+    }
+
+    private func setAll(_ enabled: Bool, collections: [DiscoveredCollection]) {
+        appState.setAllFranchises(enabled: enabled)
+        for collection in collections where collection.enabled != enabled {
+            appState.toggleCollection(collection)
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ entry: Entry) -> some View {
+        switch entry {
+        case .franchise(let row):
+            SettingsToggleRow(
+                title: row.name,
+                subtitle: row.countLabel,
+                detail: row.channelNumber.map { "CH \($0)" },
+                isOn: row.enabled,
+                isFocused: isFocused(entry.id)
+            ) {
+                appState.toggleFranchiseRow(row)
+            }
+            .settingsRow(entry.id, focus: focus)
+        case .collection(let collection):
+            let warning = ChannelsCollectionsPage.duplicateWarning(for: collection)
+            SettingsToggleRow(
+                title: collection.title,
+                subtitle: warning ?? collection.memberSummary,
+                detail: "COLLECTION",
+                isOn: collection.enabled,
+                isFocused: isFocused(entry.id)
+            ) {
+                appState.toggleCollection(collection)
+            }
+            .settingsRow(entry.id, focus: focus)
+            .opacity(warning != nil && !collection.enabled ? 0.7 : 1.0)
         }
     }
 
@@ -369,6 +487,12 @@ private struct ChannelsCollectionsPage: View {
     @Environment(AppState.self) var appState
     let focus: FocusState<SettingsFocus?>.Binding
 
+    /// Collections this page lists: every one that is not a franchise. Franchise
+    /// collections are on the FRANCHISES page.
+    static func customCollections(_ appState: AppState) -> [DiscoveredCollection] {
+        appState.visibleDiscoveredCollections.filter { $0.category != .franchises }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSectionHeader(
@@ -380,12 +504,11 @@ private struct ChannelsCollectionsPage: View {
                 scanButton
 
                 if !appState.discoveredCollections.isEmpty {
-                    if appState.visibleDiscoveredCollections.isEmpty {
-                        // Every collection the scan found is a franchise the FRANCHISES
-                        // package already carries.
+                    if Self.customCollections(appState).isEmpty {
+                        // Every collection the scan found is a franchise.
                         hint(allFoldedHint)
                     }
-                    ForEach(Array(CollectionCategory.allCases), id: \.rawValue) { category in
+                    ForEach(Array(CollectionCategory.allCases.filter { $0 != .franchises }), id: \.rawValue) { category in
                         categoryGroup(category)
                     }
                 } else if !appState.isScanning {
@@ -430,7 +553,7 @@ private struct ChannelsCollectionsPage: View {
                 }
 
                 ForEach(rows) { collection in
-                    let warning = duplicateWarning(for: collection)
+                    let warning = Self.duplicateWarning(for: collection)
                     SettingsToggleRow(
                         title: collection.title,
                         subtitle: warning ?? collection.memberSummary,
@@ -510,10 +633,10 @@ private struct ChannelsCollectionsPage: View {
         if appState.isScanning { return nil }
         if appState.allItems.isEmpty { return "Library isn’t loaded yet. Try again shortly." }
         if appState.discoveredCollections.isEmpty { return "Collections with 3 or more films can become channels" }
-        let visible = appState.visibleDiscoveredCollections.count
-        let folded = appState.discoveredCollections.count - visible
-        let foldedNote = folded > 0 ? " · \(folded) UNDER FRANCHISES" : ""
-        return "\(visible) FOUND\(foldedNote) · TAP TO RESCAN"
+        let custom = Self.customCollections(appState).count
+        let franchises = appState.discoveredCollections.count - custom
+        let franchiseNote = franchises > 0 ? " · \(franchises) UNDER FRANCHISES" : ""
+        return "\(custom) FOUND\(franchiseNote) · TAP TO RESCAN"
     }
 
     private var scanDetail: String {
@@ -526,19 +649,19 @@ private struct ChannelsCollectionsPage: View {
 
     private var emptyHint: String {
         if appState.allItems.isEmpty { return "Wait for your library to finish loading, then scan here." }
-        return "Franchises go under FRANCHISES; other collections show up here after a scan."
+        return "Franchise collections go under FRANCHISES; the rest show up here after a scan."
     }
 
     private var allFoldedHint: String {
         let count = appState.discoveredCollections.count
-        let noun = count == 1 ? "collection is" : "collections are"
-        return "All \(count) of your \(noun) already covered by FRANCHISES."
+        let noun = count == 1 ? "collection is a franchise" : "collections are franchises"
+        return "All \(count) of your \(noun), under FRANCHISES."
     }
 
     /// Subtitle when a collection looks like a duplicate of an existing channel. Content
     /// overlap (from the TMDB membership manifest) is the strongest signal; name match
     /// is the fallback. nil means no warning, so the row shows its member summary.
-    private func duplicateWarning(for collection: DiscoveredCollection) -> String? {
+    static func duplicateWarning(for collection: DiscoveredCollection) -> String? {
         if let overlap = collection.contentOverlap {
             return "⚠ \(overlap.percent)% already on \(overlap.channelName)"
         }

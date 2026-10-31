@@ -404,6 +404,13 @@ class AppState {
     var jellyfinQuickConnectCode: String = ""
     var pinPollTask: Task<Void, Never>?
     var collectionScanTask: Task<Void, Never>?
+    /// The one build of package channels in flight or waiting out its settle time. See
+    /// `scheduleBundleBuild`.
+    @ObservationIgnored var bundleBuildTask: Task<Void, Never>?
+    /// Packages switched on since the last build began; the next build makes all of them.
+    @ObservationIgnored var pendingBundleBuildIDs: Set<String> = []
+    /// Package builds that reached the guide, for tests: three quick switches cost one.
+    @ObservationIgnored var bundleBuildCommits = 0
 
     // MARK: - Data
 

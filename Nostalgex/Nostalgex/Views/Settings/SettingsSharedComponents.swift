@@ -222,6 +222,10 @@ struct SettingsToggleRow: View {
     /// A price has to be readable; the default detail is a faint annotation.
     var detailIsProminent: Bool = false
     var warning: String? = nil
+    /// A small amber count beside the detail, e.g. channels still short of content. No
+    /// text on screen; `alertBadgeLabel` is what VoiceOver reads for it.
+    var alertBadge: Int? = nil
+    var alertBadgeLabel: String? = nil
     let isOn: Bool
     let isFocused: Bool
     var isLoading: Bool = false
@@ -277,10 +281,15 @@ struct SettingsToggleRow: View {
                 } else if isLoading {
                     ProgressView()
                         .tint(Color("BrandCyan"))
-                } else if let detail {
-                    Text(detail)
-                        .font(detailIsProminent ? .custom("DMMono-Medium", size: 22) : .custom("VT323-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(detailIsProminent ? 0.85 : 0.2))
+                } else {
+                    if let alertBadge {
+                        AlertCountBadge(count: alertBadge)
+                    }
+                    if let detail {
+                        Text(detail)
+                            .font(detailIsProminent ? .custom("DMMono-Medium", size: 22) : .custom("VT323-Regular", size: 20))
+                            .foregroundStyle(.white.opacity(detailIsProminent ? 0.85 : 0.2))
+                    }
                 }
 
                 // Toggle switch (hidden while loading or when showToggle is false)
@@ -306,10 +315,29 @@ struct SettingsToggleRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
-        .accessibilityLabel(title)
+        .accessibilityLabel(alertBadgeLabel.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
         .animation(.easeInOut(duration: 0.2), value: isOn)
         .animation(.easeInOut(duration: 0.15), value: isFocused)
+    }
+}
+
+// MARK: - Alert count badge
+
+/// An amber circle with a number in it, notification style: something on this row needs
+/// a look. Sized to read from the couch next to a row's detail text.
+struct AlertCountBadge: View {
+    let count: Int
+    private let amber = Color(hex: "#FFB020")
+
+    var body: some View {
+        Text(count > 99 ? "99+" : "\(count)")
+            .font(.custom("DMMono-Medium", size: 20))
+            .foregroundStyle(Color(hex: "#0A0A1A"))
+            .padding(.horizontal, count > 9 ? 9 : 0)
+            .frame(minWidth: 34, minHeight: 34)
+            .background(Capsule().fill(amber))
+            .accessibilityHidden(true)
     }
 }
 
