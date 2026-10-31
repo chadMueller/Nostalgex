@@ -1325,6 +1325,13 @@ struct PlexAPIService: MediaBackend {
         //     legitimately take 10-20s to cold-establish and still succeed, so it gets
         //     most of its own budget, not a token few seconds, before a faster lower
         //     tier is allowed to win instead.
+        // Connection timing, for measuring discovery on a real TV (qS8n7gQi). Debug
+        // builds only: a release build never prints server names or addresses.
+        func discoveryTiming(_ message: @autoclosure () -> String) {
+            #if DEBUG
+            print("[Plex90] DISCOVERY TIMING: " + message())
+            #endif
+        }
         let graceWhilePatientCandidatesStillPending: TimeInterval = 15
         let graceWhileOnlyLocalCandidatesStillPending: TimeInterval = 3
         let reachableIndices = await withTaskGroup(of: (idx: Int, ok: Bool).self) { group -> [Int] in
@@ -1345,18 +1352,18 @@ struct PlexAPIService: MediaBackend {
             for await (idx, ok) in group {
                 if idx >= 0 {
                     let elapsed = String(format: "%.1f", Date().timeIntervalSince(tierStart))
-                    print("[Plex90] DISCOVERY TIMING: '\(server.name ?? "?")' \(tierName(ordered[idx])) (\(ordered[idx].uri)) \(ok ? "OK" : "FAILED") at \(elapsed)s")
+                    discoveryTiming("'\(server.name ?? "?")' \(tierName(ordered[idx])) (\(ordered[idx].uri)) \(ok ? "OK" : "FAILED") at \(elapsed)s")
                     reported.insert(idx)
                     if ok { hits.append(idx) }
                 }
                 guard let best = hits.min() else { continue }
                 if (0..<best).allSatisfy({ reported.contains($0) }) {
-                    print("[Plex90] DISCOVERY TIMING: '\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (all earlier reported), cancelling the rest")
+                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (all earlier reported), cancelling the rest")
                     group.cancelAll()
                     break
                 }
                 if idx == -1 {
-                    print("[Plex90] DISCOVERY TIMING: '\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (grace window elapsed), cancelling the rest")
+                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (grace window elapsed), cancelling the rest")
                     group.cancelAll()
                     break
                 }
