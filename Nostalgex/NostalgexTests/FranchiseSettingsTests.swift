@@ -181,7 +181,7 @@ final class FranchiseSettingsTests: XCTestCase {
         let dynamic = state.channels.filter { $0.rules == nil }
         XCTAssertEqual(dynamic.map(\.name), ["JOHN WICK", "SPY KIDS", "THE HUNGER GAMES"])
         // Collection numbering convention: display numbers from the FRANCHISES range.
-        XCTAssertEqual(dynamic.map(\.number), [300, 301, 302])
+        XCTAssertEqual(dynamic.map(\.number), [310, 311, 312])
         XCTAssertEqual(dynamic.map(\.id), [1_000_000, 1_000_001, 1_000_002])
         XCTAssertEqual(Set(UserDefaults.standard.stringArray(forKey: franchisesKey) ?? []),
                        ["dict:JOHN WICK", "dict:THE HUNGER GAMES", "tmdb:99999"])

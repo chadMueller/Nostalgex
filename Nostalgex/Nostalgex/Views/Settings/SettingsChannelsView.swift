@@ -302,7 +302,7 @@ private struct ChannelsFranchisesPage: View {
                     .focusable(true)
                     .settingsRow("franchises_package_off", focus: focus)
             } else {
-                // Only when the range is actually full (CH 300-449); otherwise nothing.
+                // Only when the range is actually full (CH 310-399); otherwise nothing.
                 let overCap = appState.dynamicChannelsOverCap[.foundFranchises, default: 0]
                 if overCap > 0 {
                     Text("Up to \(DynamicChannelBlock.foundFranchises.capacity) franchise channels fit in the guide. \(overCap) more are on but not shown.")

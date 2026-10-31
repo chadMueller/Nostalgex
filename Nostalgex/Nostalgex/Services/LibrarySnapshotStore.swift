@@ -594,6 +594,51 @@ enum LibrarySnapshotStore {
     }
 }
 
+// MARK: - Renumbered lineup
+
+extension LibrarySnapshotV1 {
+    /// Gives the stored channels the numbers `numbers` (channel id to number, from the
+    /// channels.json this build carries) says, and rewrites the "CH <n> NAME" labels the
+    /// collection rows keep (`matchedChannel`, `foldedIntoFranchise`) to match.
+    ///
+    /// A restore builds the guide from these rows, not from channels.json, so without this
+    /// an update that renumbers the lineup (1.0.29 put every package in its own block) kept
+    /// the old numbers until the next library refresh, up to a day later. The labels matter
+    /// beyond Settings: the franchise fold compares `matchedChannel` with a label built from
+    /// the live number, so a stale one stops a collection folding. Ids never change, and a
+    /// row whose id `numbers` lacks keeps its number. Returns how many rows moved.
+    @discardableResult
+    mutating func renumberChannels(_ numbers: [Int: Int]) -> Int {
+        var labels: [String: String] = [:]
+        var moved = 0
+        func renumbered(_ rows: [StoredChannel], counting: Bool) -> [StoredChannel] {
+            rows.map { row in
+                guard let number = numbers[row.id], number != row.number else { return row }
+                labels["CH \(row.number) \(row.name)"] = "CH \(number) \(row.name)"
+                if counting { moved += 1 }
+                return StoredChannel(id: row.id, number: number, name: row.name, colorHex: row.colorHex,
+                                     category: row.category, minItems: row.minItems,
+                                     isPremiereChannel: row.isPremiereChannel, rules: row.rules,
+                                     timeRestrictions: row.timeRestrictions, enabled: row.enabled,
+                                     itemRatingKeys: row.itemRatingKeys)
+            }
+        }
+        channelConfigRows = renumbered(channelConfigRows, counting: false)
+        allChannelRows = renumbered(allChannelRows, counting: true)
+        guard !labels.isEmpty else { return moved }
+        discoveredCollectionRows = discoveredCollectionRows.map { row in
+            let matched = row.matchedChannel.map { labels[$0] ?? $0 }
+            let folded = row.foldedIntoFranchise.map { labels[$0] ?? $0 }
+            guard matched != row.matchedChannel || folded != row.foldedIntoFranchise else { return row }
+            return StoredDiscoveredCollection(id: row.id, title: row.title, movieCount: row.movieCount,
+                                              itemRatingKeys: row.itemRatingKeys, enabled: row.enabled,
+                                              matchedChannel: matched, categoryRaw: row.categoryRaw,
+                                              foldedIntoFranchise: folded)
+        }
+        return moved
+    }
+}
+
 // MARK: - Channel ↔ stored row
 
 extension StoredChannel {

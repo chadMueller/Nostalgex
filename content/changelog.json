@@ -6,7 +6,8 @@
       "released": false,
       "title": "Three 80s channels, a new Settings screen, and you pick which libraries load",
       "bullets": [
-        "Three new 80s channels in the NOSTALGEX package: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV. They sit at 20 to 22 so NOSTALGEX stays one run of numbers, which moves every channel from 20 up by three.",
+        "Three new 80s channels in the NOSTALGEX package: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV.",
+        "Channel numbers change once. Every package now has its own block with room to grow, so a new channel no longer moves the ones after it. NOSTALGEX starts at 1, KIDZ ZONE at 30, PRIME TIME at 50, MARQUEE at 70, ADVENTURELAND at 90, OVERTIME at 110, CASE FILES at 120, DECADES at 130, ARTHOUSE at 150, NETWORKS at 160, SCREAM at 180, TIS THE SEASON at 190, FRANCHISES at 300 and HIGH ROTATION at 500.",
         "Settings has a new layout. Pick a category on the left and its settings open on the right.",
         "If your server has more than one library, you choose which ones Nostalgex loads when you set it up, and you can change it later in Settings. A library you leave off is never scanned, which helps a lot with very big libraries.",
         "WATERSHED, a new switch in Settings, holds R, 18 and TV-MA titles until 9 PM on every channel, the way VHS VAULT already does. It's off unless you turn it on. A channel with nothing else to show says BROADCASTS RESUME AT 9 PM.",
@@ -16,7 +17,7 @@
         "STREAM QUALITY has an Original choice for a Plex server on your home network. It keeps 4K video exactly as it is and only converts the sound when it has to. Some 4K Dolby Vision streams that played with no sound have sound again. Thanks to @w6trp.",
         "Plex sign-in is much quicker. Once your server answers on your home network, Nostalgex stops waiting on slower routes it won't use. It could take 45 seconds before.",
         "STOP WAITING only stops the server you pressed it on. Before, a press could carry over to the next server and cut its scan short, leaving part of your library out. Thanks to @androbwebb for the report.",
-        "Franchise collections from your server move to CH 450 and up, and keep their numbers when you switch the FRANCHISES package or a found franchise on or off. Their lineup reshuffles once.",
+        "Franchises found in your library start at CH 310, franchise collections from your server at CH 400 and your other collections at CH 450. Each keeps its numbers when you switch the FRANCHISES package or a found franchise on or off. Up to 50 other collections fit in the guide, and Settings says when more are switched on.",
         "On Emby, channels that pick films by rating, like BLOCKBUSTER, ALL TIME GREATS and the decade channels, could come up empty because Emby had no rating for the film. They use the IMDb rating instead now.",
         "On Jellyfin and Emby, the audio track matches your language exactly. Spanish, German, Japanese and other viewers get their own language instead of the file's default, and Estonian no longer passes for Spanish.",
         "Rescanning a Jellyfin or Emby library that hasn't changed no longer changes the lineups for the days ahead.",

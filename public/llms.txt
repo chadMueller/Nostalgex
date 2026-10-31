@@ -38,11 +38,11 @@ Nostalgex is made by Chad Mueller (Muell Haus Inc.). It is not affiliated with P
 - [Overtime](https://www.nostalgex.app/channels/sports): Movies, shows, and docs (3 channels)
 - [Case Files](https://www.nostalgex.app/channels/truecrime): True crime, thrillers & mystery (6 channels)
 - [Decades](https://www.nostalgex.app/channels/decades): Movies and shows sorted by decade (7 channels)
-- [Franchises](https://www.nostalgex.app/channels/franchises): Movie franchise marathons (7 channels)
 - [Arthouse](https://www.nostalgex.app/channels/arthouse): Criterion, foreign films, midnight movies, and cult classics (4 channels)
 - [Networks](https://www.nostalgex.app/channels/streamers): Channels by streaming service and studio (12 channels)
 - [Scream](https://www.nostalgex.app/channels/seasonal): Horror, all year's worth, front and centre every October (8 channels)
 - [Tis the Season](https://www.nostalgex.app/channels/tis-the-season): Christmas, Thanksgiving and holiday channels (8 channels)
+- [Franchises](https://www.nostalgex.app/channels/franchises): Movie franchise marathons (7 channels)
 - [High Rotation](https://www.nostalgex.app/channels/high-rotation): Music videos by genre (14 channels)
 
 ## Blog
