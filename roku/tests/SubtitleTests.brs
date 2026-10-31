@@ -80,6 +80,28 @@ function NxRunSubtitleTests() as Integer
     NxCheck(r, "auto: cantonese audio is foreign", NxSubShouldAutoEnable([NxSubComparableTag("yue")], "en").ToStr(), "true")
     NxCheck(r, "auto: estonian audio is foreign to spanish", NxSubShouldAutoEnable([NxSubComparableTag("est")], "es").ToStr(), "true")
 
+    ' Norwegian in every spelling is one language: no, nb (Bokmal), nn
+    ' (Nynorsk), nor, nob, nno. Everything else keeps the exact compare.
+    nors = ["no", "nb", "nn", "nor", "nob", "nno"]
+    missed = ""
+    for each a in nors
+        for each b in nors
+            if NxSubComparableTag(a) <> NxPreferredLanguageFrom(b, "en_US") then missed = missed + a + "/" + b + " "
+        end for
+    end for
+    NxCheck(r, "norwegian: every spelling is one language", missed, "")
+    NxCheck(r, "norwegian: nob and nno compare as no", NxToStr(NxSubComparableTag("nob")) + " " + NxToStr(NxSubComparableTag("NNO")) + " " + NxToStr(NxSubComparableTag("nb-NO")), "no no no")
+    NxCheck(r, "norwegian: the TV set to nb_NO wants no", NxPreferredLanguageFrom("__system__", "nb_NO"), "no")
+    NxCheck(r, "norwegian: the table is unchanged", NxIso639Table()["nob"] + " " + NxIso639Table()["nno"] + " " + NxIso639Table()["nor"], "nb nn no")
+    NxCheck(r, "norwegian: bokmal viewer takes nor audio over swedish", NxToStr(NxAudioTrackForLanguage([{ Track: "x", Language: "swe" }, { Track: "y", Language: "nor" }], NxPreferredLanguageFrom("__system__", "nb_NO"))), "y")
+    NxCheck(r, "norwegian: nynorsk setting takes nob audio", NxToStr(NxAudioTrackForLanguage([{ Track: "x", Language: "dan" }, { Track: "y", Language: "nob" }], NxPreferredLanguageFrom("nn", "en_US"))), "y")
+    NxCheck(r, "norwegian: raw player tags match too", NxSubPreferredTrackIndex(["sv", "nb-no"], "no").ToStr() + NxSubPreferredTrackIndex(["da", "nn"], "nb").ToStr(), "11")
+    NxCheck(r, "norwegian: bokmal audio is not foreign", NxSubShouldAutoEnable([NxSubComparableTag("nob")], NxPreferredLanguageFrom("nn", "en_US")).ToStr(), "false")
+    NxCheck(r, "norwegian: danish swedish dutch stay apart", NxToStr(NxSubMatches("da", "no") or NxSubMatches("sv", "nb") or NxSubMatches("nl", "no") or NxSubComparableTag("dan") = "no" or NxSubComparableTag("nld") = "no"), "false")
+    jf = [{ index: 1, language: "swe", channels: 6 }, { index: 2, language: "nor", channels: 2 }]
+    NxCheck(r, "norwegian: jellyfin audio pick takes nor for nb", NxToStr(NxMbChosenAudioIndex(jf, [NxPreferredLanguageFrom("nb", "en_US")])), "2")
+    NxCheck(r, "norwegian: jellyfin forced sub in nno for nb", NxToStr(NxMbForcedSub({ forcedSubs: [{ language: "nno", index: 4 }] }, NxPreferredLanguageFrom("nb", "en_US")) <> invalid), "true")
+
     ' The panel's audio track names: Roku's "#uniq:" marker isn't shown.
     NxCheck(r, "track name: #uniq: dropped", NxAudioTrackLabel("#uniq:Italiano", "ita", 0), "Italiano")
     NxCheck(r, "track name: #uniq: with the rest of the name", NxAudioTrackLabel("#uniq:English (Dolby Digital 5.1)", "eng", 1), "English (Dolby Digital 5.1)")

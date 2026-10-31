@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
+
+**Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones
+("nor", "nob", "nno"). Servers tag the same track with any of them and a TV set to
+Norwegian reports nb_NO, so the exact compare from issue #119 never matched across them.
+
+**Changed.** On `roku/norwegian-one-language` (off main), not pushed. `NxLanguageKey`
+folds the six to "no" where codes are compared: the setting (`NxPreferredLanguageFrom`),
+a track (`NxSubComparableTag`) and the prefix compare (`NxSubMatches`). `NxIso639Table` is
+unchanged. Every other language keeps the exact compare. The Apple TV and web tuner do the
+same on `fix/norwegian-one-language`. Cases in `tests/SubtitleTests.brs`.
+
 ## 2026-10-31 (Roku: one franchise block, the FRANCHISES switch, the sidebar in guide order)
 
 **Changed.** Branch `roku/renumber-franchise-block`, on `roku/renumber-channel-blocks` rebased

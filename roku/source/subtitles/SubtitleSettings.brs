@@ -93,7 +93,26 @@ end sub
 function NxPreferredLanguageFrom(code as String, localeId as String) as String
     primary = NxSubPrimary(NxSubResolvedLanguage(code, localeId))
     if primary = invalid then return "en"
-    return primary
+    return NxLanguageKey(primary)
+end function
+
+' Norwegian in every spelling: "no", "nb" (Bokmal) and "nn" (Nynorsk), and
+' "nor", "nob" and "nno". Servers tag the same Norwegian track with any of
+' them, so they are one language here: the one exception to the exact
+' compare. Folded to "no" wherever two codes are compared (the setting in
+' NxPreferredLanguageFrom, a track in NxSubComparableTag, both in
+' NxSubMatches); NxIso639Table itself is unchanged. The same set and fold as
+' the Apple TV's SubtitleSelectionLogic.languageKey and the web tuner's
+' scripts/nostalgex-language.js.
+function NxNorwegianCodes() as Object
+    return { no: true, nb: true, nn: true, nor: true, nob: true, nno: true }
+end function
+
+' A comparable code with every Norwegian spelling folded to "no".
+function NxLanguageKey(code as Dynamic) as Dynamic
+    if code = invalid then return invalid
+    if NxNorwegianCodes().DoesExist(code) then return "no"
+    return code
 end function
 
 ' upstream's resolvedPreferredSubtitleLanguageCode. Plex still sends the
@@ -142,17 +161,18 @@ end function
 ' A three-letter code with no two-letter form ("yue", Cantonese) stays as
 ' it is, so it still counts as a language for FOREIGN AUDIO. invalid for
 ' none, and for "und", "mul", "zxx" and "mis", which match nothing.
+' Every Norwegian spelling comes back as "no" (NxLanguageKey).
 function NxSubComparableTag(lang as Dynamic) as Dynamic
     if lang = invalid then return invalid
     t = LCase(NxToStr(lang)).Trim().Replace("_", "-")
     dash = Instr(1, t, "-")
     if dash > 0 then t = Left(t, dash - 1)
     if t = "" or t = "und" or t = "mul" or t = "zxx" or t = "mis" then return invalid
-    if Len(t) <> 3 then return t
+    if Len(t) <> 3 then return NxLanguageKey(t)
     g = GetGlobalAA()
     if g.nxIso639 = invalid then g.nxIso639 = NxIso639Table()
-    if g.nxIso639.DoesExist(t) then return g.nxIso639[t]
-    return t
+    if g.nxIso639.DoesExist(t) then return NxLanguageKey(g.nxIso639[t])
+    return NxLanguageKey(t)
 end function
 
 ' ISO 639-2 to 639-1, the terminology and bibliographic forms: the
