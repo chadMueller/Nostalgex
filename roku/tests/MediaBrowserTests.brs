@@ -145,6 +145,12 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     ' 0 when it has none. 19,269,499 would round up through a Float (24 bits).
     NxCheck(r, "kbps: 19269041", NxMbBitrateKbps(19269041).ToStr(), "19269")
     NxCheck(r, "kbps: 19269499 rounds down", NxMbBitrateKbps(19269499).ToStr(), "19269")
+    ' On a TV, Int(19269499) is 19269500. These two reach the same value the
+    ' way a test table and a server's JSON would.
+    for each v in [19269499]
+        NxCheck(r, "kbps: 19269499 from an array literal", NxMbBitrateKbps(v).ToStr(), "19269")
+    end for
+    NxCheck(r, "kbps: 19269499 from ParseJson", NxMbBitrateKbps(ParseJson("{""b"": 19269499}").b).ToStr(), "19269")
     NxCheck(r, "kbps: 19269500 rounds up", NxMbBitrateKbps(19269500).ToStr(), "19270")
     NxCheck(r, "kbps: 500 rounds up", NxMbBitrateKbps(500).ToStr(), "1")
     NxCheck(r, "kbps: 499 rounds down", NxMbBitrateKbps(499).ToStr(), "0")
