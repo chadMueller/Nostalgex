@@ -42,7 +42,7 @@ enum SubtitleSelectionLogic {
         guard !audioTags.isEmpty else { return false }
         for tag in audioTags {
             guard let t = tag?.lowercased(), !t.isEmpty, t != "und" else { return false }
-            if t == preferredAudioLowercased || t.hasPrefix(preferredAudioLowercased + "-") { return false }
+            if tagMatchesPreferred(t, preferredAudioLowercased) { return false }
         }
         return true
     }
@@ -90,11 +90,36 @@ enum SubtitleSelectionLogic {
         return code
     }
 
+    /// Norwegian in every spelling: ISO 639-1 "no" (Norwegian), "nb" (Bokmål) and "nn"
+    /// (Nynorsk), and their ISO 639-2 forms "nor", "nob" and "nno". Servers and players tag
+    /// the same Norwegian track with any of them, so the apps treat them as one language.
+    /// The one exception to the exact compare. The web tuner (scripts/nostalgex-language.js)
+    /// and the Roku app (NxLanguageKey in SubtitleSettings.brs) hold the same set.
+    static let norwegianCodes: Set<String> = ["no", "nb", "nn", "nor", "nob", "nno"]
+
+    /// The code two tags are compared by: `primaryLanguage`, with every Norwegian code
+    /// folded to "no". Everything else is unchanged.
+    static func languageKey(_ tag: String?) -> String? {
+        guard let code = primaryLanguage(tag) else { return nil }
+        return norwegianCodes.contains(code) ? "no" : code
+    }
+
     /// Same language, whichever code each side uses. A server labels tracks "eng"; the
     /// setting says "en". Regions are ignored: a server track has none.
     static func sameLanguage(_ a: String?, _ b: String?) -> Bool {
-        guard let x = primaryLanguage(a), let y = primaryLanguage(b) else { return false }
+        guard let x = languageKey(a), let y = languageKey(b) else { return false }
         return x == y
+    }
+
+    /// The player's own track tags (AVFoundation's extended language tag, lowercased)
+    /// against the setting: the same tag, or the same language with a region ("en-us" for
+    /// "en"), as always; or both Norwegian in any spelling ("nb-no" for "no", "nn" for "nb").
+    static func tagMatchesPreferred(_ tag: String, _ preferred: String) -> Bool {
+        if tag == preferred || tag.hasPrefix(preferred + "-") { return true }
+        func primary(_ s: String) -> String {
+            String(s.split(whereSeparator: { $0 == "-" || $0 == "_" }).first ?? "")
+        }
+        return norwegianCodes.contains(primary(tag)) && norwegianCodes.contains(primary(preferred))
     }
 
     /// Index of the best option for `preferredLowercased` (BCP‑47 primary or full tag); falls back to `0`.
@@ -102,7 +127,7 @@ enum SubtitleSelectionLogic {
         let want = preferredLowercased
         if let idx = tags.firstIndex(where: { tag in
             guard let t = tag?.lowercased() else { return false }
-            return t == want || t.hasPrefix(want + "-")
+            return tagMatchesPreferred(t, want)
         }) {
             return idx
         }

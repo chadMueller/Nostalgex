@@ -18,6 +18,12 @@
 // A three-letter code the table does not hold ("yue", Cantonese) stays as it is, so it can
 // still match itself. "und", "mul", "zxx" and "mis" match nothing, not even each other.
 //
+// One exception to the exact compare: Norwegian. "no", "nb" (Bokmal) and "nn" (Nynorsk), and
+// "nor", "nob" and "nno", are one language, since servers tag the same track with any of
+// them. languageKey folds them to "no" when two codes are compared; the table is unchanged.
+// Same set and same fold as SubtitleSelectionLogic.languageKey (tvOS) and NxLanguageKey
+// (Roku).
+//
 // USAGE (browser: plain <script src="scripts/nostalgex-language.js">,
 // node: `import "./nostalgex-language.js"`, then globalThis):
 //
@@ -25,6 +31,7 @@
 //   L.primaryLanguage('ger');        // 'de'
 //   L.sameLanguage('ces', 'cs-CZ');  // true
 //   L.sameLanguage('est', 'es');     // false
+//   L.sameLanguage('nor', 'nb-NO');  // true (Norwegian, any spelling)
 
 (function (global) {
   'use strict';
@@ -52,14 +59,24 @@
     return code;
   }
 
+  /** Norwegian in every spelling, ISO 639-1 and 639-2: one language when comparing. */
+  const NORWEGIAN = ['no', 'nb', 'nn', 'nor', 'nob', 'nno'];
+
+  /** The code two tags are compared by: primaryLanguage, every Norwegian code folded to "no". */
+  function languageKey(tag) {
+    const code = primaryLanguage(tag);
+    if (code === null) return null;
+    return NORWEGIAN.includes(code) ? 'no' : code;
+  }
+
   /** Same language, whichever code each side uses. False when either side names none. */
   function sameLanguage(a, b) {
-    const x = primaryLanguage(a);
-    const y = primaryLanguage(b);
+    const x = languageKey(a);
+    const y = languageKey(b);
     return x !== null && y !== null && x === y;
   }
 
-  const api = { ISO639_PAIRS, THREE_TO_TWO, primaryLanguage, sameLanguage };
+  const api = { ISO639_PAIRS, THREE_TO_TWO, NORWEGIAN, primaryLanguage, languageKey, sameLanguage };
 
   global.NostalgexLanguage = api;
   if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {

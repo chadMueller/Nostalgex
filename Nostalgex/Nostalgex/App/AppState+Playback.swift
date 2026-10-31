@@ -181,7 +181,7 @@ extension AppState {
                     // language — wrong-language subs are worse than none. Fall back to the
                     // forced-narrative/off handling used when subtitles are disabled.
                     let tag = Self.languageTag(for: pick)?.lowercased()
-                    if let tag, tag == preferredLang || tag.hasPrefix(preferredLang + "-") {
+                    if let tag, SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLang) {
                         playerItem.select(pick, in: group)
                     } else if let forced = Self.pickForcedLegibleOption(in: group, preferredLanguage: preferredLang) {
                         playerItem.select(forced, in: group)
@@ -258,7 +258,7 @@ extension AppState {
         group.options.first { opt in
             guard isForcedOnly(opt) else { return false }
             guard let tag = languageTag(for: opt)?.lowercased() else { return false }
-            return tag == preferredLanguage || tag.hasPrefix(preferredLanguage + "-")
+            return SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLanguage)
         }
     }
 
@@ -276,7 +276,7 @@ extension AppState {
         if let full = candidates.first(where: { opt in
             guard !isForcedOnly(opt) else { return false }
             guard let tag = languageTag(for: opt)?.lowercased() else { return false }
-            return tag == preferredLanguage || tag.hasPrefix(preferredLanguage + "-")
+            return SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLanguage)
         }) {
             return full
         }

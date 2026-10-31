@@ -145,11 +145,14 @@ await check("the page keeps no table of its own and compares no first letters", 
 // ---- langMatches: the look-alikes ----
 
 // A code whose first two letters spell another language's two-letter code: "est" -> "es".
+// Not "nob" -> "no": both are Norwegian, the one deliberate equivalence (below).
+const NORWEGIAN_CODES = ["no", "nb", "nn", "nor", "nob", "nno"];
 const lookalikes = rokuPairs
   .map(([three, two]) => ({ three, two, like: three.slice(0, 2) }))
-  .filter(p => p.like !== p.two && twoLetters.has(p.like));
+  .filter(p => p.like !== p.two && twoLetters.has(p.like))
+  .filter(p => !(NORWEGIAN_CODES.includes(p.three) && NORWEGIAN_CODES.includes(p.like)));
 
-await check("the table has look-alikes to test (the Apple TV count is 66)", () => {
+await check("the table has look-alikes to test (66 without nob)", () => {
   assert(lookalikes.length >= 60, `only ${lookalikes.length}`);
 });
 await check("no three-letter code matches the language its first two letters spell", () => {
@@ -204,8 +207,8 @@ await check("und, mul, zxx, mis, empty and missing match nothing, not even each 
 
 // ---- the page's own picks ----
 
-function pageFlows(source, { audioLanguage = "__system__", autoSubs = true, subtitleLanguage = "__system__" } = {}) {
-  const ctx = pageContext({ navigator: { language: "en-US" } });
+function pageFlows(source, { audioLanguage = "__system__", autoSubs = true, subtitleLanguage = "__system__", browserLanguage = "en-US" } = {}) {
+  const ctx = pageContext({ navigator: { language: browserLanguage } });
   vm.runInContext(
     `var audioLanguage = ${JSON.stringify(audioLanguage)}; var subtitleLanguage = ${JSON.stringify(subtitleLanguage)}; var autoSubsForeignAudio = ${autoSubs};
 ${pageLanguageCode()}
@@ -257,6 +260,41 @@ await check("foreign audio: a Spanish track keeps subtitles off for a Spanish vi
 await check("the browser's own language (navigator.language) picks through the same compare", () => {
   const p = pageFlows(tuner, { subtitleLanguage: "__system__" }).pickSubtitle([sub("eng", 1), sub("spa", 2)]);
   assert(p && p.index === 1, `picked ${JSON.stringify(p)}`);
+});
+
+// ---- Norwegian: Bokmal and Nynorsk are one language ----
+
+const NORWEGIAN = NORWEGIAN_CODES;
+await check("the module's Norwegian set is the one this smoke expects", () => {
+  assert(JSON.stringify(Lang.NORWEGIAN) === JSON.stringify(NORWEGIAN), `module has ${JSON.stringify(Lang.NORWEGIAN)}`);
+});
+await check("every Norwegian code matches every other, with a region on either side", () => {
+  const missed = [];
+  for (const a of NORWEGIAN) for (const b of [...NORWEGIAN, "nb-NO", "nn_NO", "NO"]) if (!matcher(a, b)) missed.push(`${a} for ${b}`);
+  assert(missed.length === 0, `${missed.length} missed: ${list(missed)}`);
+});
+await check("Norwegian stays apart from Danish, Swedish, Dutch, Nepali and the rest", () => {
+  const matched = [];
+  for (const n of NORWEGIAN) for (const o of ["da", "dan", "sv", "swe", "nl", "dut", "nld", "ne", "nep", "is", "isl", "fo", "se"]) if (matcher(n, o) || matcher(o, n)) matched.push(`${n}/${o}`);
+  assert(matched.length === 0, `matched: ${list(matched)}`);
+});
+await check("the table is unchanged: nob is still nb and nno still nn; only the compare folds", () => {
+  assert(Lang.primaryLanguage("nob") === "nb" && Lang.primaryLanguage("nno") === "nn" && Lang.primaryLanguage("nor") === "no", "the table reduction changed");
+  assert(Lang.languageKey("nob") === "no" && Lang.languageKey("nn-NO") === "no" && Lang.languageKey("swe") === "sv", "languageKey");
+});
+await check("audio pick, Bokmal viewer: the nor track over a Swedish one listed first", () => {
+  const p = pageFlows(tuner, { audioLanguage: "nb" }).pickAudioStream([audio("swe", 1), audio("nor", 2)]);
+  assert(p && p.index === 2, `picked ${JSON.stringify(p)}`);
+});
+await check("subtitle pick, Nynorsk viewer: a nob track is found", () => {
+  const p = pageFlows(tuner, { subtitleLanguage: "nn" }).pickSubtitle([sub("dan", 1), sub("nob", 2)]);
+  assert(p && p.index === 2, `picked ${JSON.stringify(p)}`);
+});
+await check("a browser set to nb-NO picks a nor subtitle and counts nno audio as its own", () => {
+  const flows = pageFlows(tuner, { browserLanguage: "nb-NO" });
+  const p = flows.pickSubtitle([sub("swe", 1), sub("nor", 2)]);
+  assert(p && p.index === 2, `picked ${JSON.stringify(p)}`);
+  assert(flows.shouldAutoEnableSubs([audio("nno")]) === false, "nno audio counted as foreign to nb-NO");
 });
 
 if (failures.length) {
