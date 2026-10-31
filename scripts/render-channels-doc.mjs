@@ -23,7 +23,7 @@ const CHECK_ONLY = process.argv.includes("--check");
 
 const PREAMBLE = `# Nostalgex Channel Guide
 
-<!-- GENERATED FILE — do not edit by hand. Run \`npm run channels:doc\` after any
+<!-- GENERATED FILE. Do not edit by hand. Run \`npm run channels:doc\` after any
      channels.json change. Source: scripts/render-channels-doc.mjs -->
 
 Quick reference for every channel and bundle. Source of truth: \`channels.json\`.
@@ -33,7 +33,7 @@ Quick reference for every channel and bundle. Source of truth: \`channels.json\`
 **\`id\` and \`number\` are NOT the same thing.** A channel's \`number\` is what
 viewers tune to; its \`id\` is the stable key everything else references. They
 drifted apart as channels were renumbered, and today they differ for many
-channels — for example \`id\` 40 is **CH{{40}} TRUE CRIME**, and \`id\` 211 is
+channels. For example, \`id\` 40 is **CH{{40}} TRUE CRIME**, and \`id\` 211 is
 **CH{{211}} CRITERION**. Get it wrong and you edit a different channel than the one
 you meant.
 
@@ -61,7 +61,7 @@ drift. TMDB membership manifest: \`channels-memberships.json\`.
 web and Apple TV air the same program at the same time.
 
 **Keyword matches are ADDITIVE.** They broaden what a channel can pull in; they
-never gate it. Never gate keywords on a broad genre like Drama — it leaks
+never gate it. Never gate keywords on a broad genre like Drama: it leaks
 unrelated titles. \`keywordGatedGenres\` is the deliberate exception, and it must
 only name the channel's own defining genre.
 
@@ -70,7 +70,7 @@ only name the channel's own defining genre.
 
 const EXCLUSIVITY_INTRO = `Exclusive rules block a title from EVERY channel except the listed channel
 \`id\`s. **Only lock a title to a channel when you are 95%+ sure it belongs
-nowhere else — default to overlap.** Over-locking hides content: locking Die
+nowhere else. Default to overlap.** Over-locking hides content: locking Die
 Hard into the holiday channel made it vanish from action for eleven months of
 the year.
 
@@ -103,7 +103,7 @@ const EXCLUSIVITY_NOTES = {
   animation channels even when Plex only tags it "Animation". The manifest
   builder gates these channels with \`requireGenres: ["Animation"]\` +
   \`requireOriginalLanguage: ["ja"]\` + \`autoSweepCollections: false\` so TMDB
-  similar/collection noise cannot be claimed — that blocks live-action (Spy Kids)
+  similar/collection noise cannot be claimed. That blocks live-action (Spy Kids)
   AND Western animation (An American Tail, Avatar, Castlevania). Strict Japanese
   anime only. Re-run the keyword tuner to apply changes.`,
   "132,415": `The Scream and Halloween films, by exact title, so SCREAM ADULTS and
@@ -212,7 +212,7 @@ const data = JSON.parse(await readFile(CHANNELS_PATH, "utf8"));
 const channels = data.channels || [];
 const byId = new Map(channels.map((c) => [c.id, c]));
 
-/** "CH 130–136, 145": channel numbers as runs, so a bundle split across blocks reads right. */
+/** "CH 130-136, 145": channel numbers as runs, so a bundle split across blocks reads right. */
 function numberRanges(nums) {
   const sorted = [...nums].sort((a, z) => a - z);
   const runs = [];
@@ -221,7 +221,7 @@ function numberRanges(nums) {
     if (last && n === last[1] + 1) last[1] = n;
     else runs.push([n, n]);
   }
-  return `CH ${runs.map(([a, z]) => (a === z ? `${a}` : `${a}–${z}`)).join(", ")}`;
+  return `CH ${runs.map(([a, z]) => (a === z ? `${a}` : `${a}-${z}`)).join(", ")}`;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
