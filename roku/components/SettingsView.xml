@@ -33,6 +33,7 @@
     <function name="setBuilding" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/QrCode.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/StreamQuality.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/AppVersion.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
