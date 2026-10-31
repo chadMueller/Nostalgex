@@ -3,6 +3,77 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (channel blocks: every package in its own block)
+
+**Changed.** Branch `renumber/channel-blocks`, cut from `release/1.0.29-rc`, not pushed.
+Three 80s channels joined NOSTALGEX on 2026-10-29 and every channel from 20 up moved by
+three, because the packages sat back to back. Each package now starts its own block, in
+its old order, with room to grow, so the next new channel moves nothing else. Users are
+renumbered once, in 1.0.29.
+
+| Package | Block | Now |
+|---|---|---|
+| NOSTALGEX | 1-29 | 1-22 |
+| KIDZ ZONE | 30-49 | 30-44 |
+| PRIME TIME | 50-69 | 50-65 |
+| MARQUEE | 70-89 | 70-80 |
+| ADVENTURELAND | 90-109 | 90-98 |
+| OVERTIME | 110-119 | 110-112 |
+| CASE FILES | 120-129 | 120-125 |
+| DECADES | 130-149 | 130-136 |
+| ARTHOUSE | 150-159 | 150-153 |
+| NETWORKS | 160-179 | 160-171 |
+| SCREAM | 180-189 | 180-187 |
+| TIS THE SEASON | 190-199 | 190-197 |
+| (free for new packages) | 200-299 | |
+| FRANCHISES (stock) | 300-309 | 300-306 |
+| found franchises (runtime) | 310-399 | |
+| franchise collections (runtime) | 400-449 | |
+| other collections (runtime) | 450-499 | |
+| HIGH ROTATION | 500-519 | 500-513 |
+
+- `channels.json` version 49. Only `number` changed. FRIGHT NIGHT (id 141) carries the
+  category "adventureland" but is in the SCREAM package, so it sits with SCREAM at 181;
+  the category only feeds the kids filter and the analytics label. SCREAM and TIS THE
+  SEASON are two packages, so each got half of 180-199.
+- Runtime blocks (`DynamicChannelBlock` in Swift, `nostalgex-collections.js` on the web,
+  `Franchises.brs` and `Collections.brs` on Roku): found franchises 310-399 (90 slots,
+  was 300-449 and 150), franchise collections 400-449 (50, unchanged size), other
+  collections 450-499 (50, was 500-699 and 200). Split rather than one shared 400-499
+  block, so switching a franchise collection never moves an other collection's number
+  and the change is constants only. Overflow is unchanged: past the cap a channel is
+  skipped and counted, and Settings says so. Libraries seen so far found 64 and 86
+  franchises, both under 90.
+- Nothing persisted keys off a channel number: bundles, collections and franchises are
+  saved by id or key (UserDefaults, iCloud, Roku registry, web localStorage), the Top
+  Shelf deep link is `nostalgex://channel/<id>`, and Roku deep links try the id first.
+  One thing did carry numbers: the Apple TV library snapshot. A launch restores the guide
+  from its rows, not from channels.json, so the old numbers would have stayed until the
+  next library refresh (up to a day), and the collection labels it keeps ("CH 103 STAR
+  WARS") feed the franchise fold, which compares them with labels built from the live
+  number. `LibrarySnapshotV1.renumberChannels` now gives the rows this build's numbers by
+  id on restore and rewrites those labels; `ChannelNumberingTests` covers it.
+- Tests that pinned the old blocks follow the new ones (`FranchiseNumberingTests`,
+  `CollectionShowsTests`, `FranchiseSettingsTests`, the collections smoke). The music
+  test that said "everything else stays below 200" became a block table:
+  `testEveryBundleStartsItsOwnBlock` and `testRuntimeChannelsStayOutOfEveryPackageBlock`.
+- Web tuner copy: "Switch one on and it airs from CH 450", "SWITCHED ON PAST CH 499".
+- `CHANNELS.md` computes its "id is not number" example now, so it can't go stale.
+- The unreleased 1.0.29 changelog says the numbers change once, where each package
+  starts, and where franchises and collections land.
+
+**Measured.** NostalgexTests on a tvOS simulator (Apple TV 4K at 1080p): 1,025 tests, 1,008 passed, 15 skipped (opt-in live harnesses), 2 failed on the first run: `SeasonalBundleTests` pins the SCREAM and TIS THE SEASON numbers, now 180-187 and 190-197; after that fix all 11 of its tests pass.
+`npm test` passes (39 steps).
+
+**Half-done.** The Roku side is on `roku/renumber-channel-blocks` (on top of
+`roku/batch-2026-10-30`), with the shared data commit cherry-picked so its vectors agree.
+Published blog posts that name old numbers were left alone: the SCREAM numbers in
+`90s-slasher-movies-halloween-marathon.md` and `docker-web-tuner-1-0-1-how-to.md` (which
+also gives MYSTERY BOX TV, CRINGE TV and A24 numbers), and MARVEL "on 101" in
+`franchise-channels-your-collections.md`. They were already off by the 80s shift.
+
+**Next.** Update those posts when 1.0.29 is in the App Store. Nothing ran on an Apple TV.
+
 ## 2026-10-31
 
 **Changed.** On `release/1.0.29-rc`, not pushed. Demo mode's Now Playing panel now names the programme the guide shows: the one 600 s demo clip used to be seeked past its end (87% of tune-ins land 600 s or more into a block), finish at once and hand the panel the schedule's upNext. The clip now seeks to the elapsed time modulo 600, a clip end stays on the live block, and a once-a-second demo tick moves to the next programme when the block ends; real libraries are untouched. `DemoNowPlayingAgreementTests` walks five demo channels across ten programme boundaries on a simulated clock: 797 of 2,764 samples mismatched before, 0 after. Not yet watched on a real Apple TV.
