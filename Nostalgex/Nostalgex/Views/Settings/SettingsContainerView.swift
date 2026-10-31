@@ -126,8 +126,8 @@ struct SettingsContainerView: View {
                 .padding(.top, 60)
                 .padding(.bottom, 20)
 
-            // Only the rows scroll. Pro will add 10 to 15 rows across categories, so
-            // nothing here assumes a category fits on screen.
+            // Only the rows scroll. Future rows will land across categories, so nothing
+            // here assumes a category fits on screen.
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
