@@ -70,9 +70,17 @@ enum CollectionCategory: String, CaseIterable {
 /// any found franchise renumbered (and re-id'd) every franchise collection.
 ///
 /// The two franchise blocks fill by `keptInDisplayOrder`. OTHER COLLECTIONS keeps the rule
-/// the web tuner already mirrors (A to Z, the first 200 switched on), so it is unchanged.
+/// the web tuner already mirrors (A to Z, the first `capacity` switched on).
+///
+/// Since 1.0.29 every kind sits in its own hundred, next to the channels.json blocks
+/// (`ChannelNumberingTests`): the stock FRANCHISES package is CH 300-309 and found
+/// franchises follow it at 310-399; server collections share 400-499, franchise
+/// collections in the lower half and everything else in the upper; HIGH ROTATION owns
+/// 500-519. Before that, found franchises ran 300-449, franchise collections 450-499 and
+/// other collections 500-699.
 enum DynamicChannelBlock: String, CaseIterable, Hashable {
-    /// Franchises found from TMDB data (FRANCHISES package). Libraries seen so far: 64 and 86.
+    /// Franchises found from TMDB data (FRANCHISES package). Libraries seen so far: 64 and 86,
+    /// both inside the 90 this block holds.
     case foundFranchises
     /// The server's own franchise collections. No real library has come near 50.
     case collectionFranchises
@@ -93,25 +101,26 @@ enum DynamicChannelBlock: String, CaseIterable, Hashable {
 
     var idBase: Int { ChannelIDSpace.dynamicBase + ordinal * ChannelIDSpace.categoryStride }
 
-    /// Clear of everything channels.json numbers (1-140, music videos 200-213).
+    /// Clear of everything channels.json numbers: packages 1-199, the stock FRANCHISES
+    /// package 300-309, HIGH ROTATION 500-519.
     var displayNumberBase: Int {
         switch self {
-        case .foundFranchises:      return 300
-        case .collectionFranchises: return 450
-        case .otherCollections:     return 500
+        case .foundFranchises:      return 310
+        case .collectionFranchises: return 400
+        case .otherCollections:     return 450
         }
     }
 
     /// Hard cap: entries past it are not built rather than spilling into the next block.
     var displayNumberEnd: Int {
         switch self {
-        case .foundFranchises:      return 449
-        case .collectionFranchises: return 499
-        case .otherCollections:     return 699
+        case .foundFranchises:      return 399
+        case .collectionFranchises: return 449
+        case .otherCollections:     return 499
         }
     }
 
-    /// 150, 50 and 200.
+    /// 90, 50 and 50.
     var capacity: Int { displayNumberEnd - displayNumberBase + 1 }
 
     /// The switched-on entries a block keeps, in the order they are numbered.

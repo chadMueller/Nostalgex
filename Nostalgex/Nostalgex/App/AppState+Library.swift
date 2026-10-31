@@ -657,6 +657,14 @@ extension AppState {
     /// Takes the snapshot inout so its item array can be released as soon as the
     /// deduplicated copy exists, instead of both living until the restore returns.
     private func applyLibrarySnapshot(_ snap: inout LibrarySnapshotV1) {
+        // The rows carry the numbers of the build that saved them; this build's channels.json
+        // decides. Only differs after an update that renumbered the lineup.
+        let bundledNumbers = Dictionary(ChannelConfigLoader.loadBundled().channels.map { ($0.id, $0.number) },
+                                        uniquingKeysWith: { first, _ in first })
+        let renumbered = snap.renumberChannels(bundledNumbers)
+        if renumbered > 0 {
+            InstallDiagnostics.note("snapshot: \(renumbered) channels take this build's numbers")
+        }
         var restored = Self.dedupingItems(snap.allItems, servers: selectedServers)
         snap.allItems = []
         musicEnrichmentService.loadDiskCache()

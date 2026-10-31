@@ -567,7 +567,7 @@ extension AppState {
             return channel
         }
 
-        // Found franchises: CH 300-449. They are not a bundle of their own: applyBundleFilter
+        // Found franchises: CH 310-399, after the stock FRANCHISES package's 300-309. They are not a bundle of their own: applyBundleFilter
         // shows them whenever the stock FRANCHISES package is on.
         let foundBlock = DynamicChannelBlock.foundFranchises
         let found = DynamicChannelBlock.keptInDisplayOrder(
@@ -588,7 +588,7 @@ extension AppState {
         }
 
         // Server collections, each category in its own block: franchise collections CH
-        // 450-499, everything else CH 500-699. Neither depends on the found franchises, so
+        // 400-449, everything else CH 450-499. Neither depends on the found franchises, so
         // the FRANCHISES package and its switches never move them.
         // A folded collection is credited to a franchise and never materialised, even if
         // it was switched on before the fold existed.
