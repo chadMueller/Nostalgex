@@ -422,13 +422,17 @@ struct PlexAPIService: MediaBackend {
         let batchSize = 5
         for batchStart in stride(from: 0, to: shows.count, by: batchSize) {
             let batch = Array(shows[batchStart ..< min(batchStart + batchSize, shows.count)])
-            let batchResults = try await withThrowingTaskGroup(of: [PlexMediaItem].self) { group in
-                for show in batch {
-                    group.addTask { try await fetchShowEpisodes(show) }
+            // Shows are fetched together but kept in the order they were listed, not
+            // the order their requests finish: the schedule reads the library in order,
+            // so arrival order made every rescan build a different guide. Measured in
+            // EpisodeBatchOrderHarnessTests.
+            let batchResults = try await withThrowingTaskGroup(of: (Int, [PlexMediaItem]).self) { group in
+                for (offset, show) in batch.enumerated() {
+                    group.addTask { (offset, try await fetchShowEpisodes(show)) }
                 }
-                var merged: [PlexMediaItem] = []
-                for try await eps in group { merged.append(contentsOf: eps) }
-                return merged
+                var byOffset = Array(repeating: [PlexMediaItem](), count: batch.count)
+                for try await (offset, eps) in group { byOffset[offset] = eps }
+                return byOffset.flatMap { $0 }
             }
             results.append(contentsOf: batchResults)
             onBatch?(min(batchStart + batchSize, shows.count), shows.count, results.count)

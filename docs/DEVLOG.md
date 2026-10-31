@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-30 (Apple TV: a rescan keeps episodes in show order, N-011)
+
+**Shipped.** Nothing yet. Branch `fix/n011-episode-batch-order`, cut from `origin/main` at
+`0fe27e9`, not merged, not pushed.
+
+**Why.** Jellyfin and Emby fetch a TV section's episodes ten shows at a time and appended
+each show's episodes in the order the requests finished. The schedule reads the library
+in order (`interleaveByShow` groups shows by first appearance before its seeded shuffle),
+so two scans of an unchanged library could build two different guides. Today's guide
+survives a rescan (the day's manifest is keyed by the sorted pool), but every later day
+was built from whichever order the last scan happened to get.
+
+**Measured.** New `EpisodeBatchOrderHarnessTests` serves one fixed library (40 shows, 3 to
+11 episodes each) from a local HTTP server inside the test, holds each show's episode
+request back by a delay, and loads it through each backend's real `loadLibrary` twice:
+delays in show order, then shuffled. It builds three days of four channels from each load
+with the real `DailyManifestScheduler` and counts the minutes that differ. Before the fix:
+Jellyfin 16,434 of 17,280 channel-minutes differed (95.1%), Emby 16,458 (95.2%), Plex's
+per-show fallback 15,780 (91.3%). Plex's normal path, one paged `type=4` sweep, was already
+stable: 0. These are worst-case numbers (every batch fully reordered, episode-only
+channels); the field figure on card N-011 was 7 to 9% of channel-minutes. After: 0 on all
+four.
+
+**Changed.** Jellyfin, Emby and the Plex per-show fallback keep each batch's results by
+the show's place in the list, not by arrival. Requests still run in parallel. The web
+tuner already did this (`Promise.all` keeps input order).
+
+**Verified.** NostalgexTests on the tvOS simulator: 982 tests, 968 passed, 0 failed, 14
+skipped. Not checked against a real Jellyfin or Emby server.
+
 ## 2026-10-30 (Web tuner and Docker: audio and subtitle language codes match exactly, N-014)
 
 **Shipped.** Nothing yet. Branch `fix/web-n014-iso639-language-match`, cut from `origin/main`
