@@ -224,7 +224,8 @@ enum DemoData {
     ///   - SPIDER-MAN (two TMDB collections, dictionary) and AMERICAN PIE (two
     ///     collections, general name rule) each list as one franchise; Loki puts a show
     ///     on MARVEL CH101 next to three Marvel Studios films.
-    ///   - Two server collections: one that IS John Wick (folds away), one actor set that
+    ///   - Three server collections: one that IS John Wick (folds away), one franchise set
+    ///     nothing else claims (lists with the franchises), and one actor set that
     ///     stays under OTHER COLLECTIONS.
     static func franchiseFixture() -> FranchiseFixture {
         func film(_ id: String, _ title: String, _ year: Int, tmdb: String,
@@ -325,11 +326,27 @@ enum DemoData {
         items.append(contentsOf: hanks)
         for h in hanks { rows.append(row(tmdb: h.tmdbID ?? "", franchiseID: nil, franchiseName: nil)) }
 
+        // A server franchise collection nothing else claims: no shared title words, no
+        // franchise ids, so it neither folds nor becomes a found franchise. Lists with the
+        // franchises in Settings.
+        let cornetto = [
+            film("fx-cor-1", "Shaun of the Dead", 2004, tmdb: "900_090"),
+            film("fx-cor-2", "Hot Fuzz", 2007, tmdb: "900_091"),
+            film("fx-cor-3", "The World's End", 2013, tmdb: "900_092")
+        ]
+        items.append(contentsOf: cornetto)
+        for c in cornetto { rows.append(row(tmdb: c.tmdbID ?? "", franchiseID: nil, franchiseName: nil)) }
+
         let wick = items.filter { $0.id.hasPrefix("fx-jw-") }
         let collections = [
             DiscoveredCollection(
                 id: "fx-col-wick", title: "JOHN WICK COLLECTION", movieCount: wick.count,
                 items: wick, enabled: false, matchedChannel: nil, contentOverlap: nil,
+                category: .franchises
+            ),
+            DiscoveredCollection(
+                id: "fx-col-cornetto", title: "THREE FLAVOURS CORNETTO", movieCount: cornetto.count,
+                items: cornetto, enabled: false, matchedChannel: nil, contentOverlap: nil,
                 category: .franchises
             ),
             DiscoveredCollection(

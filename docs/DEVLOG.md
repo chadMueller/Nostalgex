@@ -3,6 +3,34 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Apple TV: all franchises on one page, an amber count for short packages)
+
+**Why.** Franchises lived in three places: a FRANCHISES package under CHANNEL PACKAGES,
+the FRANCHISES page it unlocked, and franchise collections under MY COLLECTIONS. And
+the amber "N need more content" line under a package was more text on a screen that
+already had too much.
+
+**Changed.** On `settings/bundle-toggle-instant`, Settings UI only; no data, numbering
+or channel change.
+- FRANCHISES is gone from CHANNEL PACKAGES. The FRANCHISES page opens on its switch
+  (the same package flag, built in the background like any package), then ADD ALL /
+  REMOVE ALL, then one alphabetical list: the stock classics with their CH numbers (each
+  already had its own switch), the franchises found in the library, and the server's
+  franchise collections, tagged COLLECTION. ADD ALL and REMOVE ALL cover all three.
+- Franchise collections air through their own switches, not the package flag, so they
+  stay listed and switchable while FRANCHISES is off. Folding them under the flag would
+  change the data underneath; left for the renumbering work if wanted.
+- MY COLLECTIONS lists only the non-franchise collections; the scan line counts the
+  rest as UNDER FRANCHISES.
+- A package with channels short of content shows a small amber circle with the count
+  next to its channel count. VoiceOver reads "NAME. 2 channels need more content". WHY
+  ARE SOME CHANNELS MISSING? still explains, and still covers the franchise classics.
+- The franchise fixture gains a franchise collection nothing else claims, and its DEMO
+  package one channel the sample library can't fill, so both show on a simulator.
+  `SettingsChannelsDrilldownTests` walks the new FRANCHISES page and checks MY
+  COLLECTIONS holds only the custom collection. NostalgexTests: 1,028 run, 1,013 passed,
+  0 failed, 15 skipped. Not tried on a real Apple TV.
+
 ## 2026-10-31 (Apple TV: a package switch flips at once and builds in the background)
 
 **Why.** On a real Apple TV, switching a package on stalled before the switch flipped

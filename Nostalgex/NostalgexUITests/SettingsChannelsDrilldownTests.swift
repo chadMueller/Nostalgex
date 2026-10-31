@@ -116,7 +116,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
                 XCTAssertLessThan(timedMove(.down), 1.0, "a press inside MISSING CHANNELS took over a second")
                 cards.insert(focused().identifier)
             }
-            XCTAssertEqual(cards.count, 5, "every card should take focus: \(cards)")
+            XCTAssertEqual(cards.count, 5, "focus should walk five cards: \(cards)")
             press(.menu, 1.2)
             XCTAssertTrue(focusedLabel().hasPrefix("WHY ARE SOME CHANNELS MISSING"),
                           "Menu from MISSING CHANNELS should land on its link: \(focusedLabel())")
@@ -124,16 +124,25 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
         }
 
         press(.down, 0.6)
-        visit("FRANCHISES", shotName: "after-4-franchises", expectFirst: "ADD ALL") {
+        visit("FRANCHISES", shotName: "after-4-franchises", expectFirst: "FRANCHISES") {
+            press(.down, 0.6)
+            XCTAssertTrue(focusedLabel().hasPrefix("ADD ALL"), "ADD ALL under the switch: \(focusedLabel())")
             for _ in 0..<4 {
                 XCTAssertLessThan(timedMove(.down), 1.0, "a press inside FRANCHISES took over a second")
             }
+            // The franchise collection lists with the franchises, not under MY COLLECTIONS.
+            for _ in 0..<20 where !focusedLabel().hasPrefix("THREE FLAVOURS CORNETTO") { press(.down, 0.5) }
+            XCTAssertTrue(focusedLabel().hasPrefix("THREE FLAVOURS CORNETTO"), focusedLabel())
+            shot("after-5-franchises-collection")
+            for _ in 0..<30 where !focusedLabel().hasPrefix("FRANCHISES") { press(.up, 0.4) }
         }
 
         press(.down, 0.6)
-        visit("MY COLLECTIONS", shotName: "after-5-collections", expectFirst: "SCAN MY COLLECTIONS") {
+        visit("MY COLLECTIONS", shotName: "after-6-collections", expectFirst: "SCAN MY COLLECTIONS") {
             press(.down, 0.6)
             XCTAssertTrue(focusedLabel().hasPrefix("TOM HANKS"), "collection row: \(focusedLabel())")
+            press(.down, 0.6)
+            XCTAssertTrue(focusedLabel().hasPrefix("TOM HANKS"), "only custom collections here: \(focusedLabel())")
         }
 
         // Menu from the list goes to the rail; Menu there leaves Settings.
