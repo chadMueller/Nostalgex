@@ -162,6 +162,11 @@ node tests/live/collections.mjs   # same server collections and folds? (no TV)
 `scripts/sca.sh` runs Roku's Static Channel Analysis, the Channel Store's own
 check, and fails on any error it reports.
 
+`scripts/deploy.sh --settings-tour` puts Settings alone on a TV over made-up
+franchises, collections and on-air counts (`tests/settings`), always in the test
+data space, to look at its channel rows with no library and no video. Relaunch
+with `?state=on|off|empty|folded|overcap` for the other states.
+
 ## Layout
 
 | Path | What |
