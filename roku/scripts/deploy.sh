@@ -15,6 +15,13 @@
 #                              (tests/signin), to walk with a remote and count
 #                              presses. Relaunch with ?discovery=none|several to
 #                              stand in for the network search.
+#   scripts/deploy.sh --settings-tour   Settings on its own over made-up
+#                              packages, franchises and collections
+#                              (tests/settings), to look at the channel rows
+#                              with no library and no video. Always in the test
+#                              data space (NX_TEST_DATA=1), so the TV's own
+#                              saved data stays as it was. Relaunch with
+#                              ?state=on|off|empty|folded|overcap.
 #
 # NX_TEST_DATA=1 scripts/deploy.sh: the build keeps its own registry sections
 # and cachefs: folder (scripts/stamp-manifest.sh --test-data), so it can sign
@@ -29,6 +36,7 @@ case "${1:-}" in
     --test) test_build=true; mode=test ;;
     --live) test_build=true; mode=live ;;
     --tour) mode=tour ;;
+    --settings-tour) mode=settings-tour; NX_TEST_DATA=1 ;;
 esac
 wait_s=${TEST_TIMEOUT:-600} # seconds to wait for a TV's test result
 [ -f .env ] || { echo "no .env — copy .env.example" >&2; exit 1; }
@@ -64,6 +72,9 @@ elif [ "$mode" = live ]; then
 elif [ "$mode" = tour ]; then
     cp tests/signin/SignInTourMain.brs "$stage"/source/main.brs
     cp tests/signin/SignInTourScene.xml tests/signin/SignInTourScene.brs "$stage"/components/
+elif [ "$mode" = settings-tour ]; then
+    cp tests/settings/SettingsTourMain.brs "$stage"/source/main.brs
+    cp tests/settings/SettingsTourScene.xml tests/settings/SettingsTourScene.brs "$stage"/components/
 fi
 # Which build this zip is (nx_build), and with NX_TEST_DATA=1 its own data
 # space (nx_data_ns): scripts/stamp-manifest.sh.
