@@ -9,6 +9,8 @@ sub init()
     ' The site, as upstream's user agents give it; SUPPORT NOSTALGEX's QR code.
     m.supportUrl = "https://www.nostalgex.app"
     m.fonts = {}
+    m.advance = {}
+    m.onAir = {}
     m.franchisesChanged = false
     ' The first OK on SIGN OUT only arms it; a second one signs out.
     m.signOutArmed = false
@@ -133,9 +135,9 @@ function newRect(x as Float, y as Float, w as Float, h as Float, color as String
     return r
 end function
 
-' Rows: every package, with the franchise list under FRANCHISES while it is
-' on (upstream's BundleManagerView), then RETRO MODE and subtitles (its
-' PLAYBACK section), then sign-out.
+' Rows: every package but FRANCHISES, then FRANCHISES on its own (upstream's
+' ChannelsFranchisesPage), then RETRO MODE and subtitles (its PLAYBACK
+' section), then sign-out.
 sub open(unused = invalid as Dynamic)
     ' The saved packages, not the guide's: with a build still queued behind
     ' the one that landed, the guide's would bring back a package just
@@ -165,20 +167,25 @@ end sub
 
 ' The row list, in the order of upstream's SettingsPageView
 ' (Views/BundleManagerView.swift): SUPPORT NOSTALGEX, CONNECTION (the servers,
-' then sign-out), PLAYBACK, CHANNEL PACKAGES, then MY COLLECTIONS, each
-' category folded closed behind a SHOW/HIDE row, as upstream's
+' then sign-out), PLAYBACK, CHANNEL PACKAGES, FRANCHISES, then MY COLLECTIONS,
+' its category folded closed behind a SHOW/HIDE row, as upstream's
 ' CollectionAccordionHeaderRow. Kinds:
 '   header, subheader, info: text only, never focused
 '   support, server, signOut, retro, guideText (GUIDE TEXT SIZE), quality
 '   (STREAM QUALITY),
 '   qualityChoice, subtitles, language (SUBTITLE or AUDIO LANGUAGE),
-'   languageChoice, bundle, franchiseAll, franchise,
+'   languageChoice, bundle, franchiseAll, franchise, franchiseCollection,
 '   collectionsToggle, collection: rows
-' The franchise rows are the last guide build's, so they show once the
-' package was on for a build. MY COLLECTIONS has upstream's two categories,
-' FRANCHISES then OTHER COLLECTIONS, each shown only when it has a row.
+' FRANCHISES is not among the packages: its switch heads its own section, as it
+' heads the Apple TV's FRANCHISES page (N-028), and below it comes one A to Z
+' list of the classics, the found franchises and the server's franchise
+' collections. The franchise rows are the last guide build's, so they show once
+' the package was on for a build. MY COLLECTIONS holds the viewer's own
+' collections only (OTHER COLLECTIONS), shown only when it has a row.
 sub buildRows()
     m.rows = []
+    ' Which channels are on air, for the count on a package short of content.
+    m.onAir = NxOnAirSet(m.top.onAirIds)
     m.rows.Push({ kind: "header", title: "SUPPORT NOSTALGEX", subtitle: "News, help and the Apple TV app are on its site" })
     ' Text and a QR code, never focused: scanning it is the action (#147).
     m.rows.Push({ kind: "support" })
@@ -206,36 +213,73 @@ sub buildRows()
     pushLanguage("audioLanguage")
 
     m.rows.Push({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" })
+    franchisesAt = -1
     for i = 0 to m.top.bundles.Count() - 1
-        b = m.top.bundles[i]
-        m.rows.Push({ kind: "bundle", index: i })
-        if b.id = NxFranchisesBundleID() and NxHasValue(m.enabled, b.id) and m.top.franchises.Count() > 0 then
-            full = franchisesFullNote()
-            if full <> "" then m.rows.Push({ kind: "info", text: full })
-            m.rows.Push({ kind: "franchiseAll" })
-            for each f in m.top.franchises
-                m.rows.Push({ kind: "franchise", franchise: f })
-            end for
+        if m.top.bundles[i].id = NxFranchisesBundleID() then
+            franchisesAt = i
+        else
+            pushPackage(i)
         end if
     end for
+    if franchisesAt >= 0 then pushFranchises(franchisesAt)
 
     m.rows.Push({ kind: "header", title: "MY COLLECTIONS", subtitle: "Turn the server collections you want into channels" })
-    note = collectionsNote()
+    note = NxCollectionsNote(m.top.collections)
     if note <> "" then m.rows.Push({ kind: "info", text: note })
-    for each category in ["franchises", "custom"]
-        rows = collectionRows(category)
-        if rows.Count() > 0 then
-            m.rows.Push({ kind: "collectionsToggle", category: category })
-            full = collectionsFullNote(category)
-            if full <> "" then m.rows.Push({ kind: "info", text: full })
-            if m.collectionsOpen[category] = true then
-                for each row in rows
-                    m.rows.Push({ kind: "collection", collection: row })
-                end for
-            end if
+    ' The franchise collections are on the FRANCHISES page; only OTHER
+    ' COLLECTIONS is left here.
+    category = "custom"
+    rows = collectionRows(category)
+    if rows.Count() > 0 then
+        m.rows.Push({ kind: "collectionsToggle", category: category })
+        full = collectionsFullNote(category)
+        if full <> "" then m.rows.Push({ kind: "info", text: full })
+        if m.collectionsOpen[category] = true then
+            for each row in rows
+                m.rows.Push({ kind: "collection", collection: row })
+            end for
+        end if
+    end if
+    m.rows.Push({ kind: "version", text: NxVersionLabel() })
+end sub
+
+' A package's row, with how many of its channels are on air counted once here,
+' not on every draw. `built` is whether the guide held the package when Settings
+' opened: one switched on during the visit has nothing on air to count yet.
+sub pushPackage(i as Integer)
+    b = m.top.bundles[i]
+    row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
+    m.rows.Push(row)
+    if row.built and NxHasValue(m.enabled, b.id) then print "settings: "; b.id; " has "; row.avail.available; " of "; row.avail.total; " channels on air"
+end sub
+
+' The FRANCHISES section (ChannelsFranchisesPage): the package's switch, then
+' while it is on the over-capacity note and ADD ALL / REMOVE ALL, then the one
+' A to Z list. The franchise collections stay listed while the switch is off,
+' as on the Apple TV, where the switch gates their channels (CH 310-399) and
+' each one keeps its own choice for when it is on again.
+sub pushFranchises(at as Integer)
+    id = m.top.bundles[at].id
+    on = NxHasValue(m.enabled, id)
+    m.rows.Push({ kind: "header", title: "FRANCHISES", subtitle: "" })
+    m.rows.Push({ kind: "bundle", index: at })
+    entries = NxFranchisePageEntries(m.top.franchises, collectionRows("franchises"), on)
+    if entries.Count() = 0 then
+        if on and not m.building.DoesExist(id) then m.rows.Push({ kind: "info", text: "Franchises you own show up here once your library has been enriched." })
+        return
+    end if
+    if on then
+        full = franchisesFullNote()
+        if full <> "" then m.rows.Push({ kind: "info", text: full })
+        m.rows.Push({ kind: "franchiseAll" })
+    end if
+    for each e in entries
+        if e.kind = "franchise" then
+            m.rows.Push({ kind: "franchise", franchise: e.franchise })
+        else
+            m.rows.Push({ kind: "franchiseCollection", collection: e.collection })
         end if
     end for
-    m.rows.Push({ kind: "version", text: NxVersionLabel() })
 end sub
 
 ' A language row, and the presets under it while it is open, as upstream's
@@ -334,23 +378,10 @@ function collectionRows(category as String) as Object
     return out
 end function
 
-' A line under MY COLLECTIONS when there is something to say beyond the
-' accordions' counts: none found, or a read that failed. A full block says
-' so under its own accordion (collectionsFullNote).
-function collectionsNote() as String
-    c = m.top.collections
-    if c = invalid then return ""
-    rows = NxList(c.rows)
-    if NxNumberOr0(c.failed) > 0 and rows.Count() = 0 then return "COULD NOT READ COLLECTIONS FROM YOUR SERVER"
-    if rows.Count() = 0 then
-        if NxNumberOr0(c.scanned) > 0 then return "NO COLLECTIONS WITH 3 OR MORE MOVIES OR EPISODES"
-        return "Your server's collections show here after the library is read"
-    end if
-    return ""
-end function
-
-' Under an accordion whose block is full, as upstream's: "Up to 50 of these
-' fit in the guide. 3 more are switched on but not shown." Empty otherwise.
+' Under the OTHER COLLECTIONS accordion when its block is full, as upstream's:
+' "Up to 100 of these fit in the guide. 3 more are switched on but not shown."
+' Empty otherwise. (The franchise collections' block is the FRANCHISES page's,
+' franchisesFullNote.)
 function collectionsFullNote(category as String) as String
     c = m.top.collections
     if c = invalid then return ""
@@ -359,20 +390,17 @@ function collectionsFullNote(category as String) as String
     capacity = NxNumberOr0(c.capacityCustom)
     ' A build before the split counted only CH 699.
     if c.overCapCustom = invalid then over = NxNumberOr0(c.overCap)
-    if category = "franchises" then
-        over = NxNumberOr0(c.overCapFranchises)
-        capacity = NxNumberOr0(c.capacityFranchises)
-    end if
     if over <= 0 or capacity <= 0 then return ""
     return "Up to " + capacity.ToStr() + " of these fit in the guide. " + over.ToStr() + " more are switched on but not shown."
 end function
 
-' Under the franchise list when CH 310-399 is full, as upstream's.
+' Under the franchise switch when CH 310-399 is full, as upstream's: the found
+' franchises and the franchise collections past it share the one note.
 function franchisesFullNote() as String
-    over = NxNumberOr0(m.top.franchiseOverCap)
-    capacity = NxNumberOr0(m.top.franchiseCapacity)
-    if over <= 0 or capacity <= 0 then return ""
-    return "Up to " + capacity.ToStr() + " franchise channels fit in the guide. " + over.ToStr() + " more are switched on but not shown."
+    c = m.top.collections
+    overCollections = 0
+    if c <> invalid then overCollections = c.overCapFranchises
+    return NxFranchiseBlockNote(m.top.franchiseOverCap, overCollections, m.top.franchiseCapacity)
 end function
 
 ' An accordion's "n/m ON AIR", counting this visit's switches.
@@ -385,9 +413,14 @@ function collectionsOnAir(category as String) as String
     return onAir.ToStr() + "/" + rows.Count().ToStr() + " ON AIR"
 end function
 
+' ADD ALL / REMOVE ALL covers the whole FRANCHISES list: every franchise row
+' and every franchise collection (upstream's setAllFranchises and setAll).
 function anyFranchiseOff() as Boolean
     for each f in m.top.franchises
         if not franchiseOn(f) then return true
+    end for
+    for each row in collectionRows("franchises")
+        if not collectionOn(row) then return true
     end for
     return false
 end function
@@ -496,11 +529,24 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     extra = []
     indent = 0
     faded = false
+    ' The amber count on a package short of content, or invalid.
+    badge = invalid
     if row.kind = "bundle" then
         b = m.top.bundles[row.index]
         on = NxHasValue(m.enabled, b.id)
         label = b.name
         detail = b.channelIDs.Count().ToStr() + " CHANNELS"
+        if b.id = NxFranchisesBundleID() then
+            ' The Apple TV's switch line: the package's seven classics are not
+            ' what it brings, the series in the library are.
+            detail = "The classics and the series in your library"
+        else if on and not m.building.DoesExist(b.id) then
+            ' How many of its channels are on air, and the count of those that
+            ' are not, as the Apple TV's "9/10 CH" and amber circle. Only for a
+            ' package the guide held when Settings opened.
+            badge = NxPackageBadge(on, false, row.built, row.avail)
+            if row.built and row.avail.available > 0 then detail = row.avail.available.ToStr() + "/" + row.avail.total.ToStr() + " CHANNELS"
+        end if
         ' A seasonal package works in every month; outside its season the row
         ' says when it's spotlighted, as upstream's rows do.
         if NxIsSeasonal(b) then
@@ -552,11 +598,14 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         state = "SHOW"
         if m.collectionsOpen[row.category] = true then state = "HIDE"
         stateColor = "0xFFE500FF"
-    else if row.kind = "collection" then
+    else if row.kind = "collection" or row.kind = "franchiseCollection" then
         indent = 40
         cr = row.collection
         label = cr.title
         detail = cr.detail
+        ' Among the franchises, a collection says so, as the Apple TV's
+        ' COLLECTION tag does.
+        if row.kind = "franchiseCollection" then detail = detail + " · COLLECTION"
         if cr.channelNumber <> invalid then detail = detail + " · CH " + cr.channelNumber.ToStr()
         state = "OFF"
         stateColor = "0xFFFFFF59"
@@ -718,13 +767,49 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             ly = ly + 26
         end for
     end if
+    stateWidth = 0
     if state <> "" then
         stateLabel = newLabel(state, "DMMono-Medium", 24, stateColor, 1260, y + 22)
         stateLabel.width = 380
         stateLabel.horizAlign = "right"
         page.AppendChild(stateLabel)
+        stateWidth = Len(state) * advanceOf("DMMono-Medium", 24)
     end if
+    ' The amber count sits left of the state, as the Apple TV's sits left of
+    ' the switch.
+    if badge <> invalid then drawBadge(page, badge, y, 1640 - stateWidth - 20)
 end sub
+
+' Upstream's AlertCountBadge: an amber capsule, at least a 34 px circle, with
+' the count in dark type (99+ past 99), its right edge at `edge`.
+sub drawBadge(page as Object, count as Integer, y as Float, edge as Float)
+    text = NxBadgeText(count)
+    w = NxBadgeWidth(count, Len(text) * advanceOf("DMMono-Medium", 20))
+    x = edge - w
+    capsule = CreateObject("roSGNode", "Poster")
+    capsule.uri = "pkg:/images/look/capsule.9.png"
+    capsule.translation = [x, y + 20]
+    capsule.width = w
+    capsule.height = 34
+    capsule.blendColor = "0xFFB020FF"
+    page.AppendChild(capsule)
+    number = newLabel(text, "DMMono-Medium", 20, "0x0A0A1AFF", x, y + 20)
+    number.width = w
+    number.height = 34
+    number.horizAlign = "center"
+    number.vertAlign = "center"
+    page.AppendChild(number)
+end sub
+
+' The width of one character of a monospace font, measured once.
+function advanceOf(font as String, size as Integer) as Float
+    key = font + size.ToStr()
+    if m.advance[key] = invalid then
+        probe = newLabel("0000000000", font, size, "0xFFFFFFFF", 0, 0)
+        m.advance[key] = probe.boundingRect().width / 10
+    end if
+    return m.advance[key]
+end function
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
@@ -772,18 +857,25 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             if not focusable(m.rows[m.focus]) then m.focus = nextFocusable(m.focus, -1)
             render()
         else if row.kind = "franchiseAll" then
-            ' setAllFranchises: one explicit choice for every row.
+            ' setAllFranchises: one explicit choice for every row, and every
+            ' franchise collection not already the way asked (setAll).
             turnOn = anyFranchiseOff()
             for each f in m.top.franchises
                 NxFranchiseRecordChoice(m.choices, f.id, turnOn)
             end for
-            m.franchisesChanged = true
+            if m.top.franchises.Count() > 0 then m.franchisesChanged = true
+            for each cr in collectionRows("franchises")
+                if collectionOn(cr) <> turnOn then
+                    if turnOn then m.collectionKeys[cr.id] = true else m.collectionKeys.Delete(cr.id)
+                    m.collectionsChanged = true
+                end if
+            end for
             render()
         else if row.kind = "franchise" then
             NxFranchiseRecordChoice(m.choices, row.franchise.id, not franchiseOn(row.franchise))
             m.franchisesChanged = true
             render()
-        else if row.kind = "collection" then
+        else if row.kind = "collection" or row.kind = "franchiseCollection" then
             ' toggleCollection: switch one on and it airs from CH 310 (a franchise) or 400.
             id = row.collection.id
             if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true

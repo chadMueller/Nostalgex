@@ -2154,9 +2154,23 @@ function sidebarKey(key as String) as Boolean
     return true
 end function
 
+' The channels on air and the packages the guide was built with: Settings counts
+' a package's channels still short of content from them.
+sub giveSettingsOnAir()
+    ids = []
+    for each ch in NxList(m.channels)
+        ids.Push(ch.id)
+    end for
+    m.settings.onAirIds = ids
+    built = m.top.guide.enabledBundles
+    if built = invalid then built = []
+    m.settings.builtBundles = built
+end sub
+
 sub openSettings()
     m.settings = CreateObject("roSGNode", "SettingsView")
     m.settings.bundles = m.top.guide.bundles
+    giveSettingsOnAir()
     franchises = m.top.guide.franchises
     if franchises = invalid then franchises = []
     m.settings.franchises = franchises
@@ -2228,6 +2242,7 @@ end sub
 ' go to Settings, so FRANCHISES switched on lists its franchises at once.
 sub refreshSettings()
     if m.settings = invalid then return
+    giveSettingsOnAir()
     if m.top.guide.franchises <> invalid then m.settings.franchises = m.top.guide.franchises
     m.settings.franchiseOverCap = NxNumberOr0(m.top.guide.franchiseOverCap)
     m.settings.franchiseCapacity = NxNumberOr0(m.top.guide.franchiseCapacity)
