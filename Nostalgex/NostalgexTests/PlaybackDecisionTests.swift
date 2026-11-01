@@ -112,7 +112,7 @@ final class PlaybackDecisionTests: XCTestCase {
             XCTAssertTrue(profile.contains("scope=videoAudioCodec&scopeName=eac3&type=upperBound&name=audio.channels&value=6"), profile)
             XCTAssertFalse(profile.contains("scope=audioCodec&scopeName=eac3"), "Plex ignores scope=audioCodec")
         }
-        let url = try XCTUnwrap(URL(string: "http://192.168.4.79:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/1&X-Plex-Client-Profile-Extra=old"))
+        let url = try XCTUnwrap(URL(string: "http://192.0.2.79:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/1&X-Plex-Client-Profile-Extra=old"))
         let remux = try XCTUnwrap(PlexAPIService.dolbyVisionRemuxURL(from: url))
         let q = Dictionary(uniqueKeysWithValues: URLComponents(url: remux, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
         XCTAssertTrue(try XCTUnwrap(q["X-Plex-Client-Profile-Extra"]).contains("scopeName=eac3&type=upperBound&name=audio.channels&value=6"))
@@ -249,7 +249,7 @@ final class PlaybackDecisionTests: XCTestCase {
 // be the start URL with only the path changed, so the server sees identical parameters.
 final class PlexDecisionHandshakeTests: XCTestCase {
     func testDecisionURLKeepsEveryQueryItemAndSwapsOnlyThePath() {
-        let start = URL(string: "https://192-168-4-79.abc.plex.direct:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/19475&session=S1&offset=1920&X-Plex-Client-Profile-Extra=add-transcode-target(type%3DvideoProfile%26replace%3Dtrue)&X-Plex-Token=t")!
+        let start = URL(string: "https://192-0-2-79.abc.plex.direct:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/19475&session=S1&offset=1920&X-Plex-Client-Profile-Extra=add-transcode-target(type%3DvideoProfile%26replace%3Dtrue)&X-Plex-Token=t")!
         let decision = PlexAPIService.decisionURL(from: start)
         XCTAssertEqual(decision?.path, "/video/:/transcode/universal/decision")
         XCTAssertEqual(decision?.query, start.query)
@@ -307,7 +307,7 @@ final class DolbyVisionRemuxTests: XCTestCase {
     }
 
     func testRemuxRequestKeepsTheSessionAndOffsetAndSwapsOnlyTheProfile() throws {
-        let url = try XCTUnwrap(URL(string: "http://192.168.4.79:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/55615&session=S1&offset=5449&copyts=0&X-Plex-Platform=tvOS&X-Plex-Client-Profile-Extra=old&X-Plex-Token=t"))
+        let url = try XCTUnwrap(URL(string: "http://192.0.2.79:32400/video/:/transcode/universal/start.m3u8?path=/library/metadata/55615&session=S1&offset=5449&copyts=0&X-Plex-Platform=tvOS&X-Plex-Client-Profile-Extra=old&X-Plex-Token=t"))
         let remux = try XCTUnwrap(PlexAPIService.dolbyVisionRemuxURL(from: url))
         let q = Dictionary(uniqueKeysWithValues: URLComponents(url: remux, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
         XCTAssertEqual(q["session"], "S1")

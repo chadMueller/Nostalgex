@@ -404,6 +404,13 @@ class AppState {
     var jellyfinQuickConnectCode: String = ""
     var pinPollTask: Task<Void, Never>?
     var collectionScanTask: Task<Void, Never>?
+    /// The one build of package channels in flight or waiting out its settle time. See
+    /// `scheduleBundleBuild`.
+    @ObservationIgnored var bundleBuildTask: Task<Void, Never>?
+    /// Packages switched on since the last build began; the next build makes all of them.
+    @ObservationIgnored var pendingBundleBuildIDs: Set<String> = []
+    /// Package builds that reached the guide, for tests: three quick switches cost one.
+    @ObservationIgnored var bundleBuildCommits = 0
 
     // MARK: - Data
 
@@ -486,6 +493,20 @@ class AppState {
             preferenceSync.record(PreferenceSync.retroModeKey, value: retroMode)
             if oldValue != retroMode {
                 Analytics.track(.settingChanged(key: "retro_mode", value: retroMode ? "true" : "false"))
+            }
+        }
+    }
+
+    /// GUIDE TEXT SIZE. Synced through iCloud like RETRO MODE: both are how the guide
+    /// looks, not anything about this TV's servers.
+    var guideTextSize: GuideTextSize = GuideTextSize(
+        stored: UserDefaults.standard.string(forKey: GuideTextSize.storageKey)
+    ) {
+        didSet {
+            UserDefaults.standard.set(guideTextSize.rawValue, forKey: GuideTextSize.storageKey)
+            preferenceSync.record(PreferenceSync.guideTextSizeKey, value: guideTextSize.rawValue)
+            if oldValue != guideTextSize {
+                Analytics.track(.settingChanged(key: "guide_text_size", value: guideTextSize.rawValue))
             }
         }
     }
@@ -670,6 +691,12 @@ class AppState {
     // Moved here from the channel-control section during the AppState split:
     // @Observable requires stored properties to live in the main class body.
     var seekOffset: Int = 0
+    /// The clock tuning and advancing read the schedule at. Always `Date()` in the app;
+    /// tests move it to walk a channel across a programme boundary without waiting.
+    @ObservationIgnored var scheduleClock: () -> Date = { Date() }
+    /// Demo mode only: when the block the demo clip is standing in for ends. See
+    /// `demoScheduleTick()`.
+    @ObservationIgnored var demoBlockEnd: Date?
     /// Offset the server was asked to start an HLS transcode at (0 = none). See hlsBaseOffset.
     var hlsRequestedOffset: Int = 0
     /// Added to the player's clock for every position report. An HLS transcode started at an

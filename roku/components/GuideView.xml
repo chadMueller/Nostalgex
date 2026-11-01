@@ -39,6 +39,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/SleepTimer.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/DirectPlay.brs" />

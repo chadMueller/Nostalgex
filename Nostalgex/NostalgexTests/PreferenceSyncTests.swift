@@ -505,6 +505,17 @@ final class PreferenceSyncAppStateTests: XCTestCase {
         XCTAssertEqual(store.values[PreferenceSync.audioLanguageKey] as? String, "ja")
     }
 
+    func testGuideTextSizeSyncsBothWaysLikeRetroMode() {
+        state.guideTextSize = .large
+        XCTAssertEqual(store.values[PreferenceSync.guideTextSizeKey] as? String, "large")
+        let writes = store.writes.count
+        store.values[PreferenceSync.guideTextSizeKey] = "normal"
+        sync.handleExternalChange(reason: NSUbiquitousKeyValueStoreServerChange,
+                                  changedKeys: [PreferenceSync.guideTextSizeKey])
+        XCTAssertEqual(state.guideTextSize, .normal)
+        XCTAssertEqual(store.writes.count, writes, "an incoming value was echoed back")
+    }
+
     func testNeverSyncedPreferencesStayLocal() {
         state.serverURL = "http://192.168.1.20:32400"
         state.token = "secret-token"

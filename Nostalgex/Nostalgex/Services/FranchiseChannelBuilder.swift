@@ -18,7 +18,7 @@ import Foundation
 ///      franchise name or by an explicit `FranchiseDictionary` entry.
 ///
 /// The dictionary also merges several collections into one franchise and folds found
-/// films/shows into a stock `channels.json` channel (CH100-106) instead of making a
+/// films/shows into a stock `channels.json` channel (ids 100-106, CH 300-306) instead of making a
 /// duplicate.
 ///
 /// The web tuner runs the same rules from `scripts/nostalgex-franchise-builder.js`.

@@ -50,7 +50,7 @@ const jellyfin = http.createServer((req, res) => {
 // own), for the negative control. Reverting to this text on the served page proves the new
 // test actually exercises the fix: the same crash, against the old code, must hang instead
 // of showing the error screen.
-const OLD_BLOCK = `    const cached = loadLibraryCache(true);
+const OLD_BLOCK = `    const cached = await loadLibraryCache(true);
     if (cached && cached.items && cached.items.length > 0) {
       LL.show();
       LL.refreshStepRail(false);
@@ -134,8 +134,21 @@ async function run({ query = "" } = {}) {
   await page.goto(`${base}/plex-tuner.html${query}`);
   await page.waitForFunction(() => {
     const LL = globalThis.NostalgexLibraryLoad;
-    return LL && LL.state.channelBuildTotal > 0 && LL.state.channelBuildIndex >= LL.state.channelBuildTotal && localStorage.getItem("plex90_library_cache");
+    return LL && LL.state.channelBuildTotal > 0 && LL.state.channelBuildIndex >= LL.state.channelBuildTotal;
   }, null, { timeout: 30000 });
+  // The library cache is an IndexedDB record now (#152), written after the guide is up. The reload
+  // below only takes the cache-restore branch once it has landed.
+  await page.waitForFunction(() => new Promise((resolve) => {
+    const open = indexedDB.open("nostalgex-library");
+    open.onerror = () => resolve(false);
+    open.onsuccess = () => {
+      const db = open.result;
+      if (!db.objectStoreNames.contains("cache")) { db.close(); resolve(false); return; }
+      const get = db.transaction("cache").objectStore("cache").get("library");
+      get.onsuccess = () => { db.close(); resolve(!!get.result); };
+      get.onerror = () => { db.close(); resolve(false); };
+    };
+  }), null, { timeout: 15000, polling: 250 });
   const loadingHiddenAfterFirst = await page.evaluate(() => document.getElementById("loading-library").style.display === "none");
 
   // Second load ("went back to it"): sets the crash flag, then reloads so the saved cache
@@ -161,6 +174,7 @@ check("fixed: the first load builds normally and hides the loading screen", fixe
 check("fixed: a crash during cache restore does not time out", fixed.timedOut === false, JSON.stringify(fixed.state));
 check("fixed: the error screen shows", fixed.state.errorShown === true, JSON.stringify(fixed.state));
 check("fixed: the error screen has text", fixed.state.errorText.length > 0, fixed.state.errorText);
+check("fixed: and it does not blame a server that was never asked", !/UNREACHABLE|COULD NOT REACH/.test(fixed.state.errorText), fixed.state.errorText);
 check("fixed: the connect screen comes back", fixed.state.connectShown === true, JSON.stringify(fixed.state));
 check("fixed: the loading screen is hidden, not left frozen", fixed.state.loadingHidden === true, JSON.stringify(fixed.state));
 check("fixed: the crash reaches the page as a caught error, not an uncaught one", fixed.errors.length === 0, fixed.errors.join(" | "));

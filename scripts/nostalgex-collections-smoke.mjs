@@ -77,7 +77,7 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
 
   const { channels, overCap } = C.materialize(list);
   check("materialize: folded and disabled skipped", channels.map((c) => c.name), ["ALPHA", "ZOMBIE SET"]);
-  check("materialize: numbers from 500", channels.map((c) => c.number), [500, 501]);
+  check("materialize: numbers from 400", channels.map((c) => c.number), [400, 401]);
   check("materialize: ids from 1,020,000", channels.map((c) => c.id), [1020000, 1020001]);
   check("materialize: no rules, pool is the collection", [channels[0].rules, channels[0].itemPool.length], [null, 4]);
   check("materialize: flags", [channels[0].collection, channels[0].stock, channels[0].minItems, channels[0].enabled], [true, false, 3, true]);
@@ -93,15 +93,15 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
   check("item overlap folds", list[0].foldedInto, "CH 101 MARVEL");
 }
 {
-  // Cap: 200 channels, CH 500-699, the rest counted, never built.
+  // Cap: 100 channels, CH 400-499, the rest counted, never built.
   const big = new Map([["s", new Map(Array.from({ length: 3 }, (_, i) => [String(i), mv(i, null)]))]]);
-  const many = Array.from({ length: 205 }, (_, i) => ({
+  const many = Array.from({ length: 105 }, (_, i) => ({
     id: `s:${i}`, title: `Set ${String(i).padStart(3, "0")}`, childKeys: ["0", "1", "2"], serverKey: "s",
   }));
   const list = C.buildCandidates(many, big, { enabledKeys: new Set(many.map((m) => m.id)) });
   const { channels, overCap } = C.materialize(list);
-  check("cap: 200 built", channels.length, 200);
-  check("cap: last number 699", channels[channels.length - 1].number, 699);
+  check("cap: 100 built", channels.length, 100);
+  check("cap: last number 499", channels[channels.length - 1].number, 499);
   check("cap: 5 over", overCap, 5);
 }
 
@@ -175,8 +175,8 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
     ["1 show · 3 episodes", "3 movies", "2 movies · 1 show", "2 shows · 9 episodes"]);
   check("shows: counts", list.map((c) => [c.movieCount, c.showCount, c.episodeCount]), [[0, 1, 3], [3, 0, 0], [2, 1, 2], [0, 2, 9]]);
   const { channels } = C.materialize(list);
-  check("shows: channels from 500", channels.map((c) => [c.number, c.name, c.itemPool.length]),
-    [[500, "COURTROOM", 3], [501, "FILM TRIO", 3], [502, "MIXED BAG", 4], [503, "REALITY TV", 9]]);
+  check("shows: channels from 400", channels.map((c) => [c.number, c.name, c.itemPool.length]),
+    [[400, "COURTROOM", 3], [401, "FILM TRIO", 3], [402, "MIXED BAG", 4], [403, "REALITY TV", 9]]);
   check("shows: pool is episodes", channels[3].itemPool.every((i) => i.type === "episode"), true);
   check("summary wording", [
     C.memberSummary({ movieCount: 12, showCount: 0, episodeCount: 0 }),

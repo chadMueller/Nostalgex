@@ -260,7 +260,7 @@ final class CollectionShowsTests: XCTestCase {
     }
 
     /// Plex shape: the show collection lives in the TV library and lists shows. It is found,
-    /// classified OTHER COLLECTIONS, built at CH 500 up with the films-only collection beside
+    /// classified OTHER COLLECTIONS, built at CH 400 up with the films-only collection beside
     /// it, and its day of schedule is episodes, shuffled the way TV channels shuffle them.
     func testScanBuildsAShowChannelAndSchedulesItsEpisodes() async throws {
         let alpha = episodes(of: "Alpha Island", showKey: "s1", count: 8)
@@ -295,7 +295,7 @@ final class CollectionShowsTests: XCTestCase {
         XCTAssertEqual(hanksRow.items.map(\.id), hanks.map(\.id))
 
         let channels = state.allChannels.filter { ChannelIDSpace.isDynamic($0.id) }.sorted { $0.number < $1.number }
-        XCTAssertEqual(channels.map(\.number), [500, 501])
+        XCTAssertEqual(channels.map(\.number), [400, 401])
         XCTAssertEqual(channels.map(\.name), ["REALITY TV", "TOM HANKS"])
         let channel = channels[0]
         XCTAssertEqual(channel.id, CollectionCategory.custom.idBase)

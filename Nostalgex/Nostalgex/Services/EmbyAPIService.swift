@@ -228,13 +228,17 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         let batchSize = 10
         for batchStart in stride(from: 0, to: series.count, by: batchSize) {
             let batch = Array(series[batchStart ..< min(batchStart + batchSize, series.count)])
-            let batchResults = try await withThrowingTaskGroup(of: [PlexMediaItem].self) { group in
-                for show in batch {
-                    group.addTask { try await self.fetchEpisodes(for: show) }
+            // Shows are fetched together but kept in the order they were listed, not
+            // the order their requests finish: the schedule reads the library in order,
+            // so arrival order made every rescan build a different guide. Measured in
+            // EpisodeBatchOrderHarnessTests.
+            let batchResults = try await withThrowingTaskGroup(of: (Int, [PlexMediaItem]).self) { group in
+                for (offset, show) in batch.enumerated() {
+                    group.addTask { (offset, try await self.fetchEpisodes(for: show)) }
                 }
-                var merged: [PlexMediaItem] = []
-                for try await eps in group { merged.append(contentsOf: eps) }
-                return merged
+                var byOffset = Array(repeating: [PlexMediaItem](), count: batch.count)
+                for try await (offset, eps) in group { byOffset[offset] = eps }
+                return byOffset.flatMap { $0 }
             }
             results.append(contentsOf: batchResults)
             onBatch?(min(batchStart + batchSize, series.count), series.count, results.count)

@@ -93,30 +93,31 @@ extension AppState {
             && newlyEnabled.contains { $0.id.hasPrefix("collections-") }
         let staticBundles = newlyEnabled.filter { !$0.id.hasPrefix("collections-") }
 
-        if needsCollectionScan || !staticBundles.isEmpty {
+        // A package switched off needs no build, and stops waiting for one.
+        let switchedOff = Set(bundles.filter { !$0.enabled }.map(\.id))
+        pendingBundleBuildIDs.subtract(switchedOff)
+        buildingBundleIDs.subtract(switchedOff)
+
+        if !staticBundles.isEmpty {
             buildingBundleIDs.formUnion(staticBundles.map(\.id))
-            // One build at a time. Each build starts from the channels already built, so
-            // two running at once (two quick toggles) let the second overwrite the first
-            // package's channels with its stale copy.
+            scheduleBundleBuild(staticBundles.map(\.id))
+        }
+        if needsCollectionScan {
             let previous = collectionScanTask
             collectionScanTask = Task {
                 await previous?.value
-                for b in staticBundles {
-                    if !Task.isCancelled {
-                        let started = Date()
-                        await self.rebuildPoolsForBundle(b)
-                        // Keep the spinner up long enough to read as "working", not a flicker.
-                        let shown = Date().timeIntervalSince(started)
-                        if shown < 0.6 { try? await Task.sleep(nanoseconds: UInt64((0.6 - shown) * 1_000_000_000)) }
-                    }
-                    self.buildingBundleIDs.remove(b.id)
-                }
-                if needsCollectionScan && !Task.isCancelled { await self.scanCollections() }
+                if !Task.isCancelled { await self.scanCollections() }
             }
         }
         // The scan applies the bundle filter itself when it finishes.
         if needsCollectionScan && staticBundles.isEmpty { return }
 
+        // FRANCHISES switched off: its found franchises leave the shared franchise block, so
+        // the franchise collections close up behind them. (Switching it on rebuilds through
+        // rebuildPoolsForBundle.)
+        if !isFranchisesBundleOn && !foundFranchiseChannelIDs.isEmpty {
+            materializeDynamicChannels()
+        }
         applyBundleFilter()
         reselectIfCurrentChannelFilteredOut()
     }
@@ -238,14 +239,20 @@ extension AppState {
             .reduce(into: Set<Int>()) { result, bundle in
                 bundle.channelIDs.forEach { result.insert($0) }
             }
-        // Found franchise channels are runtime channels that belong to the stock
-        // FRANCHISES package: they show when it is on and go with it when it is off. The
-        // bundle's own channelIDs stay the static list from channels.json so the Settings
-        // row keeps reading "7/7 CH" and naming the classics only.
+        // Found franchises and the server's franchise collections are runtime channels
+        // that belong to the stock FRANCHISES package: they show when it is on, each by its
+        // own switch, and all go with it when it is off, so the package's one switch in
+        // Settings is every franchise channel's (Chad, 2026-10-31). The bundle's own
+        // channelIDs stay the static list from channels.json so the Settings row keeps
+        // reading "7/7 CH" and naming the classics only.
+        let franchiseCollectionIDs = bundles.first { $0.id == CollectionCategory.franchises.bundleID }?.channelIDs ?? []
         if isFranchisesBundleOn {
             enabledChannelIDs.formUnion(foundFranchiseChannelIDs)
+            enabledChannelIDs.formUnion(franchiseCollectionIDs)
             // A classic switched off in the franchise list leaves the guide on its own.
             enabledChannelIDs.subtract(switchedOffStockFranchiseChannelIDs)
+        } else {
+            enabledChannelIDs.subtract(franchiseCollectionIDs)
         }
 
         // A seasonal package leads the guide while it runs — see GuideChannelOrder.
@@ -255,20 +262,52 @@ extension AppState {
             allChannels.filter { enabledChannelIDs.contains($0.id) },
             seasonalFirst: seasonalLead)
 
-        // Build bundle jump targets (first visible channel per enabled bundle)
-        let channelSet = Set(channels.map(\.id))
-        bundleJumpTargets = bundles
-            .filter { enabledBundleIDs.contains($0.id) }
-            .compactMap { bundle in
-                // A FRANCHISES package whose classics have no content can still hold
-                // found franchises; jump to the first of those instead of vanishing.
-                let candidates = bundle.id == Self.franchisesBundleID
-                    ? bundle.channelIDs + foundFranchiseChannelIDs
-                    : bundle.channelIDs
-                guard let firstID = candidates.first(where: { channelSet.contains($0) }),
-                      let channel = channels.first(where: { $0.id == firstID }) else { return nil }
-                return (bundleID: bundle.id, bundleName: bundle.name, firstChannelID: firstID, channelColor: channel.color)
+        bundleJumpTargets = Self.bundleJumpTargets(
+            bundles: bundles, enabledBundleIDs: enabledBundleIDs, channels: channels,
+            foundFranchiseChannelIDs: foundFranchiseChannelIDs)
+    }
+
+    /// The guide's package jump list (Left in the guide): one entry per package with a
+    /// channel on screen, jumping to its first channel, in the order the guide shows them.
+    ///
+    /// Guide order, not the order of `bundles`: that array is channels.json's order with the
+    /// collection categories appended, so CASE FILES (CH 120) used to sit third, HIGH
+    /// ROTATION came before the collections, and a seasonal package leading the guide
+    /// (`GuideChannelOrder.seasonalLeadIDs`) was still listed near the end. Sorting by the
+    /// first channel's place in `channels` follows the guide, seasonal lead included.
+    ///
+    /// FRANCHISES is one entry for every franchise channel: the stock classics, the found
+    /// franchises and the server's franchise collections (the `collections-franchises`
+    /// category, which also reads FRANCHISES and used to be listed twice).
+    static func bundleJumpTargets(
+        bundles: [ChannelBundle], enabledBundleIDs: Set<String>, channels: [Channel],
+        foundFranchiseChannelIDs: [Int]
+    ) -> [(bundleID: String, bundleName: String, firstChannelID: Int, channelColor: Color)] {
+        var position: [Int: Int] = [:]
+        for (i, channel) in channels.enumerated() where position[channel.id] == nil { position[channel.id] = i }
+        let franchiseIDs: Set<String> = [franchisesBundleID, CollectionCategory.franchises.bundleID]
+
+        var entries: [(bundleID: String, bundleName: String, ids: [Int])] = []
+        for bundle in bundles where enabledBundleIDs.contains(bundle.id) {
+            var ids = bundle.channelIDs
+            if bundle.id == franchisesBundleID { ids += foundFranchiseChannelIDs }
+            if franchiseIDs.contains(bundle.id),
+               let i = entries.firstIndex(where: { franchiseIDs.contains($0.bundleID) }) {
+                entries[i].ids += ids
+                // The stock package names the entry when it is on.
+                if bundle.id == franchisesBundleID { entries[i].bundleID = bundle.id; entries[i].bundleName = bundle.name }
+                continue
             }
+            entries.append((bundle.id, bundle.name, ids))
+        }
+        return entries
+            .compactMap { entry -> (bundleID: String, bundleName: String, firstChannelID: Int, channelColor: Color, at: Int)? in
+                guard let at = entry.ids.compactMap({ position[$0] }).min() else { return nil }
+                let first = channels[at]
+                return (entry.bundleID, entry.bundleName, first.id, first.color, at)
+            }
+            .sorted { $0.at < $1.at }
+            .map { ($0.bundleID, $0.bundleName, $0.firstChannelID, $0.channelColor) }
     }
 
     /// Saves the lineup on this TV. Only a change the viewer made (`byViewer`) goes to
@@ -533,10 +572,10 @@ extension AppState {
         }
     }
 
-    /// Rebuilds every runtime channel: the found franchises that are switched on, then
-    /// the enabled server collections per category. Both share the collection numbering
-    /// convention (`idBase + slot`, `displayNumberBase + slot`); found franchises take the
-    /// first slots of the FRANCHISES range and the category's own collections follow.
+    /// Rebuilds every runtime channel: the switched-on found franchises and franchise
+    /// collections in one pool (CH 310-399), then the other collections (CH 400-499). Ids
+    /// stay per kind (`idBase` + the channel's place among its own kind); numbers come from
+    /// the channel's place in its block (see `DynamicChannelBlock`).
     func materializeDynamicChannels() {
         // Clear runtime-created channels only. This used to be "id >= 220", which also
         // deleted everything channels.json defined from 220 up — see ChannelIDSpace.
@@ -551,13 +590,13 @@ extension AppState {
         // not built, so a big library can never reach the next block's numbers.
         var overCap: [DynamicChannelBlock: Int] = [:]
 
-        func makeChannel(_ block: DynamicChannelBlock, slot: Int, name: String,
+        func makeChannel(id: Int, number: Int, colorSlot: Int, name: String,
                          category: CollectionCategory, items: [PlexMediaItem]) -> Channel {
             var channel = Channel(
-                id: block.idBase + slot,
-                number: block.displayNumberBase + slot,
+                id: id,
+                number: number,
                 name: name,
-                color: Color(hex: Self.collectionColors[slot % Self.collectionColors.count]),
+                color: Color(hex: Self.collectionColors[colorSlot % Self.collectionColors.count]),
                 category: category.rawValue,
                 rules: nil,
                 timeRestrictions: nil,
@@ -567,60 +606,85 @@ extension AppState {
             return channel
         }
 
-        // Found franchises: CH 300-449. They are not a bundle of their own: applyBundleFilter
-        // shows them whenever the stock FRANCHISES package is on.
-        let foundBlock = DynamicChannelBlock.foundFranchises
-        let found = DynamicChannelBlock.keptInDisplayOrder(
-            foundFranchises.filter { $0.enabled && !$0.isCoveredByStock },
-            capacity: foundBlock.capacity,
-            name: \.name, stableID: \.id, films: \.movies.count)
-        if found.skipped > 0 { overCap[foundBlock] = found.skipped }
-        var franchiseIDs: [Int] = []
-        for (slot, franchise) in found.kept.enumerated() {
-            let channel = makeChannel(foundBlock, slot: slot, name: franchise.name,
-                                      category: .franchises, items: franchise.items)
-            allChannels.append(channel)
-            franchiseIDs.append(channel.id)
-        }
-        foundFranchiseChannelIDs = franchiseIDs
-        if !franchiseIDs.isEmpty {
-            print("[Plex90] FRANCHISES: \(franchiseIDs.count) found-franchise channel(s) from CH \(foundBlock.displayNumberBase)")
-        }
-
-        // Server collections, each category in its own block: franchise collections CH
-        // 450-499, everything else CH 500-699. Neither depends on the found franchises, so
-        // the FRANCHISES package and its switches never move them.
         // A folded collection is credited to a franchise and never materialised, even if
         // it was switched on before the fold existed.
         let visible = visibleDiscoveredCollections
+
+        // Franchises: found ones and the server's franchise collections, one pool from CH
+        // 310. Found ones are not a bundle of their own: they belong to the stock FRANCHISES
+        // package, so they take a number only while it is on (as on Roku, which only finds
+        // them then); a hidden one holding a slot left gaps among the collections. Franchise
+        // collections stay in their category bundle. The stable id carries the kind, so a
+        // found franchise and a collection with the same name always order the same way.
+        enum PoolEntry {
+            case found(FoundFranchise)
+            case collection(DiscoveredCollection)
+            var name: String { switch self { case .found(let f): return f.name; case .collection(let c): return c.title } }
+            var stableID: String { switch self { case .found(let f): return "f:" + f.id; case .collection(let c): return "c:" + c.id } }
+            var films: Int { switch self { case .found(let f): return f.movies.count; case .collection(let c): return c.movieCount } }
+        }
+        let franchiseBlock = DynamicChannelBlock.foundFranchises
+        let pool: [PoolEntry] =
+            foundFranchises.filter { isFranchisesBundleOn && $0.enabled && !$0.isCoveredByStock }.map { .found($0) }
+            + visible.filter { $0.category == .franchises && $0.enabled }.map { .collection($0) }
+        let franchisePool = DynamicChannelBlock.keptInDisplayOrder(
+            pool, capacity: franchiseBlock.capacity,
+            name: \.name, stableID: \.stableID, films: \.films)
+        var franchiseIDs: [Int] = []
+        var franchiseCollectionIDs: [Int] = []
+        for (slot, entry) in franchisePool.kept.enumerated() {
+            let number = franchiseBlock.displayNumberBase + slot
+            switch entry {
+            case .found(let franchise):
+                let channel = makeChannel(id: DynamicChannelBlock.foundFranchises.idBase + franchiseIDs.count,
+                                          number: number, colorSlot: slot, name: franchise.name,
+                                          category: .franchises, items: franchise.items)
+                allChannels.append(channel)
+                franchiseIDs.append(channel.id)
+            case .collection(let dc):
+                let channel = makeChannel(id: DynamicChannelBlock.collectionFranchises.idBase + franchiseCollectionIDs.count,
+                                          number: number, colorSlot: slot, name: dc.title,
+                                          category: .franchises, items: dc.items)
+                allChannels.append(channel)
+                franchiseCollectionIDs.append(channel.id)
+            }
+        }
+        if franchisePool.skipped > 0 {
+            // Counted per kind, so each Settings list says how many of its own wait.
+            let keptStable = Set(franchisePool.kept.map(\.stableID))
+            let waiting = pool.filter { !keptStable.contains($0.stableID) }
+            let found = waiting.filter { if case .found = $0 { return true } else { return false } }.count
+            if found > 0 { overCap[.foundFranchises] = found }
+            if waiting.count > found { overCap[.collectionFranchises] = waiting.count - found }
+        }
+        foundFranchiseChannelIDs = franchiseIDs
+        if !franchiseIDs.isEmpty || !franchiseCollectionIDs.isEmpty {
+            print("[Plex90] FRANCHISES: \(franchiseIDs.count) found and \(franchiseCollectionIDs.count) collection channel(s) from CH \(franchiseBlock.displayNumberBase)")
+        }
+
         for category in CollectionCategory.allCases {
             let categoryCollections = visible.filter { $0.category == category }
 
             // Only create bundle if this category has discovered collections
             guard !categoryCollections.isEmpty else { continue }
 
-            let block = category.block
             let enabledInCategory = categoryCollections.filter(\.enabled)
-            let kept: [DiscoveredCollection]
-            let skipped: Int
-            switch block {
-            case .otherCollections:
-                // Unchanged, and what the web tuner mirrors: scan order (A to Z), the first
-                // `capacity` switched on.
-                kept = Array(enabledInCategory.prefix(block.capacity))
-                skipped = enabledInCategory.count - kept.count
-            default:
-                (kept, skipped) = DynamicChannelBlock.keptInDisplayOrder(
-                    enabledInCategory, capacity: block.capacity,
-                    name: \.title, stableID: \.id, films: \.movieCount)
-            }
-            if skipped > 0 { overCap[block] = skipped }
-
             var channelIDs: [Int] = []
-            for (slot, dc) in kept.enumerated() {
-                let channel = makeChannel(block, slot: slot, name: dc.title, category: category, items: dc.items)
-                allChannels.append(channel)
-                channelIDs.append(channel.id)
+            switch category {
+            case .franchises:
+                channelIDs = franchiseCollectionIDs
+            case .custom:
+                // Unchanged, and what the web tuner mirrors: scan order (A to Z), the first
+                // `capacity` switched on, CH 400-499.
+                let block = DynamicChannelBlock.otherCollections
+                let kept = Array(enabledInCategory.prefix(block.capacity))
+                if enabledInCategory.count > kept.count { overCap[block] = enabledInCategory.count - kept.count }
+                for (slot, dc) in kept.enumerated() {
+                    let channel = makeChannel(id: block.idBase + slot, number: block.displayNumberBase + slot,
+                                              colorSlot: slot, name: dc.title, category: category, items: dc.items)
+                    allChannels.append(channel)
+                    channelIDs.append(channel.id)
+                }
             }
 
             let bundle = ChannelBundle(
@@ -817,30 +881,95 @@ extension AppState {
         return built.sorted { $0.number < $1.number }
     }
 
-    /// Build pools for one bundle after the user turns it on (library already in memory).
-    func rebuildPoolsForBundle(_ bundle: ChannelBundle) async {
-        guard !channelConfigChannels.isEmpty, !allItems.isEmpty else { return }
-        let ids = Set(bundle.channelIDs)
-        guard !ids.isEmpty else { return }
+    /// How long a package build waits after the last switch before it starts, so a few
+    /// quick switches are built together: one filter pass, one guide swap, one snapshot.
+    static let bundleBuildSettle: Duration = .milliseconds(500)
+
+    /// Queues a build for packages just switched on. The switch itself has already flipped
+    /// and saved; this only makes the channels. Matches the Roku app: the press never
+    /// waits for the build, the row shows BUILDING, the guide takes the new lineup when
+    /// it is ready, and switches made while one waits or builds are folded into one build.
+    ///
+    /// A new switch restarts the wait (and drops a build already running, whose result
+    /// would be one package short), so a run of quick switches reaches the guide once.
+    func scheduleBundleBuild(_ ids: [String]) {
+        pendingBundleBuildIDs.formUnion(ids)
+        let previous = bundleBuildTask
+        previous?.cancel()
+        bundleBuildTask = Task { [weak self] in
+            await previous?.value
+            try? await Task.sleep(for: Self.bundleBuildSettle)
+            guard !Task.isCancelled, let self else { return }
+            await self.buildPendingBundles()
+        }
+    }
+
+    /// Builds every package waiting in `pendingBundleBuildIDs`. The filtering, the slow
+    /// part, runs off the main actor; only the merge into the lineup runs on it. Before
+    /// this, each package was filtered on the main actor (yielding every third channel),
+    /// which held it for 350 to 580 ms at a time for about 3 s on an 11,863-item library
+    /// on a simulator: the switch drew late and the remote stopped answering.
+    func buildPendingBundles() async {
+        let ids = pendingBundleBuildIDs
+        let toBuild = bundles.filter { ids.contains($0.id) && enabledBundleIDs.contains($0.id) }
+        let channelIDs = Set(toBuild.flatMap(\.channelIDs))
+        guard !toBuild.isEmpty, !channelIDs.isEmpty,
+              !channelConfigChannels.isEmpty, !allItems.isEmpty else {
+            pendingBundleBuildIDs.subtract(ids)
+            buildingBundleIDs.subtract(ids)
+            return
+        }
 
         let buildStarted = Date()
-        channelBuildTotal = ids.count
-        channelBuildIndex = 0
-        setLibraryPhase(.buildingChannels, detail: bundle.name)
-
+        let session = librarySessionGeneration
         let cached = makeFilterCache(allItems)
+        let memberships = channelMemberships
+        let rules = exclusiveRules
+        let templates = channelConfigChannels.filter { channelIDs.contains($0.id) }
 
+        let work = Task.detached(priority: .userInitiated) { () -> [Channel]? in
+            var out: [Channel] = []
+            for var template in templates {
+                if Task.isCancelled { return nil }
+                template.itemPool = AppState.filterItems(
+                    cached, rules: template.rules, forChannelID: template.id,
+                    category: template.category, memberships: memberships, exclusiveRules: rules)
+                out.append(template)
+            }
+            return out
+        }
+        let filtered = await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
+        // A newer switch took over, or the sign-in changed while this ran.
+        guard let filtered, !Task.isCancelled, session == librarySessionGeneration else { return }
+
+        mergeBuiltPackageChannels(filtered)
+        if toBuild.contains(where: { $0.id == Self.franchisesBundleID }) {
+            // The classics were not in the lineup while the package was off, so nothing
+            // could fold into them. Now that ids 100-106 (CH 300-306) exist, re-decide which found
+            // franchises are covered and which collections fold.
+            rebuildFoundFranchises()
+            materializeDynamicChannels()
+        }
+        applyBundleFilter()
+        saveLibrarySnapshotIfNeeded()
+        bundleBuildCommits += 1
+        pendingBundleBuildIDs.subtract(ids)
+        buildingBundleIDs.subtract(ids)
+        let made = filtered.filter { $0.itemPool.count >= $0.minItems }.count
+        print("[Plex90] BUNDLE BUILD: \(toBuild.map(\.id).sorted()) -> \(made) channels with pools in \(String(format: "%.2f", Date().timeIntervalSince(buildStarted)))s")
+    }
+
+    /// Puts freshly filtered package channels into `allChannels`, as one change: a channel
+    /// with enough items replaces or joins its old copy, one without drops out. Read
+    /// against the lineup as it is now, not as it was when the build began, so anything
+    /// that changed it meanwhile (a collection scan, a franchise switch) is kept.
+    func mergeBuiltPackageChannels(_ filtered: [Channel]) {
         var builtStatic = allChannels.filter { $0.rules != nil }
-        for var template in channelConfigChannels where ids.contains(template.id) {
-            channelBuildIndex += 1
-            template.itemPool = Self.filterItems(
-                cached,
-                rules: template.rules,
-                forChannelID: template.id,
-                category: template.category,
-                memberships: channelMemberships,
-                exclusiveRules: exclusiveRules
-            )
+        for template in filtered {
             if template.itemPool.count >= template.minItems {
                 if let idx = builtStatic.firstIndex(where: { $0.id == template.id }) {
                     builtStatic[idx] = template
@@ -850,21 +979,9 @@ extension AppState {
             } else {
                 builtStatic.removeAll { $0.id == template.id }
             }
-            if channelBuildIndex % 3 == 0 { await Task.yield() }
         }
-
         let dynamic = allChannels.filter { $0.rules == nil }
         allChannels = (builtStatic + dynamic).sorted { $0.number < $1.number }
-        if bundle.id == Self.franchisesBundleID {
-            // The classics were not in the lineup while the package was off, so nothing
-            // could fold into them. Now that CH100-106 exist, re-decide which found
-            // franchises are covered and which collections fold.
-            rebuildFoundFranchises()
-            materializeDynamicChannels()
-        }
-        applyBundleFilter()
-        saveLibrarySnapshotIfNeeded()
-        print("[Plex90] BUNDLE BUILD: '\(bundle.id)' -> \(builtStatic.filter { ids.contains($0.id) }.count) channels with pools in \(String(format: "%.2f", Date().timeIntervalSince(buildStarted)))s")
     }
 
     // MARK: - Filtering (keep in sync with scripts/nostalgex-channel-filter.cjs + plex-tuner)
@@ -1156,7 +1273,7 @@ extension AppState {
     }
 
     /// Build a snapshot cache for a set of items. Called once per filter pass —
-    /// per `loadLibrary`, per `rebuildPoolsForBundle`, and per
+    /// per `loadLibrary`, per `buildPendingBundles`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later
     /// asynchronous enrichment landings don't make the cache inconsistent
     /// mid-build (build loop is single-threaded on MainActor; rebuild is the
@@ -1651,3 +1768,4 @@ extension AppState {
         }
     }
 }
+

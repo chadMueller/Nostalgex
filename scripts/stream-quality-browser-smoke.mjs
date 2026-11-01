@@ -206,11 +206,19 @@ await px.ctx.close();
 // way the previous page wrote it (version 2, no bitrate) and reloads.
 async function staleCache(backend, ratingKey, version) {
   const { ctx, page } = await open(backend);
-  await page.evaluate((v) => {
-    const cache = JSON.parse(localStorage.getItem("plex90_library_cache"));
+  // The library cache is an IndexedDB record ({ id, json }) next to an id in localStorage (#152).
+  await page.evaluate(async (v) => {
+    const db = await new Promise((resolve, reject) => { const r = indexedDB.open("nostalgex-library"); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+    const record = await new Promise((resolve) => { const g = db.transaction("cache").objectStore("cache").get("library"); g.onsuccess = () => resolve(g.result); });
+    const cache = JSON.parse(record.json);
     cache.v = v;
     cache.items = cache.items.map((i) => { const { bitrate, ...rest } = i; return rest; });
-    localStorage.setItem("plex90_library_cache", JSON.stringify(cache));
+    await new Promise((resolve) => {
+      const tx = db.transaction("cache", "readwrite");
+      tx.objectStore("cache").put({ id: record.id, json: JSON.stringify(cache) }, "library");
+      tx.oncomplete = resolve;
+    });
+    db.close();
   }, version);
   await page.reload();
   await page.waitForFunction(() => typeof appState !== "undefined" && appState === "player" && allItemsCache.length === 6, null, { timeout: 40000 }).catch(() => {});

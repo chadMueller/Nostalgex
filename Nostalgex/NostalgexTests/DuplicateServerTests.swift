@@ -6,15 +6,15 @@ import XCTest
 /// title twice, films aired back to back, and a ratingKey-keyed dictionary trapped.
 @MainActor
 final class DuplicateServerTests: XCTestCase {
-    private let url = "https://192-168-4-79.c3e917fc09454808a70f0239b82d0c6a.plex.direct:32400"
+    private let url = "https://192-0-2-79.examplemachine.plex.direct:32400"
     private var legacy: AppState.ServerRef { .init(machineIdentifier: url, name: "Plex Server", baseURL: url, owned: true, token: "t") }
-    private var real: AppState.ServerRef { .init(machineIdentifier: "4d19f9f3e85290a83d98f832d88f8f88360b7573", name: "Media Mini", baseURL: url, owned: true, token: "t") }
+    private var real: AppState.ServerRef { .init(machineIdentifier: "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b", name: "Media Box", baseURL: url, owned: true, token: "t") }
     private var other: AppState.ServerRef { .init(machineIdentifier: "ffff", name: "Loft", baseURL: "https://10-0-0-9.abc.plex.direct:32400", owned: true, token: "t") }
 
     func testLegacyAndRealEntriesForOneServerCollapseToTheRealOne() {
         let out = AppState.dedupingServers([legacy, real, other])
         XCTAssertEqual(out.map(\.machineIdentifier), [real.machineIdentifier, "ffff"])
-        XCTAssertEqual(out.first?.name, "Media Mini", "the real entry's name replaces the migration placeholder")
+        XCTAssertEqual(out.first?.name, "Media Box", "the real entry's name replaces the migration placeholder")
     }
 
     func testOrderIndependent() {

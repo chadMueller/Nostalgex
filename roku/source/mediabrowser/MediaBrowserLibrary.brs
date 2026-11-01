@@ -145,19 +145,24 @@ end function
 ' Apple TV do; 0 when it has none. Item bitrates are kbps on every surface
 ' (the web's mediaInfo, scripts/stream-quality-golden.json).
 '
-' The rounding sum is done in LongInteger, not plain Integer. tydude001 found
-' on a real TV (43" TCL, Roku OS 16.0.4, GitHub PR #130) that `(Int(bps) + 500)
-' \ 1000` silently goes through a Float on device, so 19269499 rounds to
-' 19270 instead of 19269: `tests/run.sh`'s off-device brs interpreter doesn't
-' reproduce it, so CI never saw it. LongInteger math gives the right answer at
-' that value, confirmed on the same TV; a Float-based rewrite was tried too
-' but gave the wrong answer when the input came through a `for each` over an
-' array literal, so LongInteger is the only one of the two that held up.
+' The rounding sum is done in LongInteger, and a whole number never goes
+' through Int(). On a real TV (55" TCL, Roku OS 15.3.4, GitHub PR #130)
+' Int() and Fix() go through a Float: Int(19269499) is 19269500, so
+' `(Int(bps) + 500) \ 1000` gave 19270 instead of 19269, with or without
+' LongInteger around it. `tests/run.sh`'s off-device brs interpreter doesn't
+' reproduce it, so only the on-TV run (`scripts/deploy.sh --test`) catches
+' it. A Float or Double Bitrate still goes through Int(); a Float can't hold
+' 19269499 anyway, and ParseJson reads a whole-number Bitrate as an Integer.
 function NxMbBitrateKbps(bps as Dynamic) as Integer
     if not NxIsNumber(bps) then return 0
     if bps <= 0 then return 0
     if bps >= 2000000000 then return Int(bps / 1000)
-    whole& = Int(bps)
+    t = type(bps)
+    if t = "Integer" or t = "roInteger" or t = "LongInteger" or t = "roLongInteger" then
+        whole& = bps
+    else
+        whole& = Int(bps)
+    end if
     return (whole& + 500&) \ 1000&
 end function
 

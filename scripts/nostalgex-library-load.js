@@ -75,7 +75,13 @@
   }
 
   function markInitialLibraryLoadComplete() {
-    localStorage.setItem(INITIAL_LOAD_KEY, '1');
+    // Runs inside the library build, so it must not throw: a full localStorage here used to
+    // end the load and show "server unreachable" (#152). NostalgexStorage makes room for it
+    // by giving up caches. Without that module, or if even that fails, the only cost is that
+    // the next load counts as a first load again.
+    const S = global.NostalgexStorage;
+    if (S) { S.setLocal(INITIAL_LOAD_KEY, '1'); return; }
+    try { localStorage.setItem(INITIAL_LOAD_KEY, '1'); } catch (_) { /* next load is a first load again */ }
   }
 
   function visibleSteps(includesMusic) {

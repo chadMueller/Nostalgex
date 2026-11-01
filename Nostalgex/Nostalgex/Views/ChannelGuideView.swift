@@ -351,16 +351,17 @@ struct ChannelGuideView: View {
     }
 
     private func gridHeader(labels: [String], programsWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
+        let text = appState.guideTextSize.metrics
+        return HStack(spacing: 0) {
             Text("CHANNEL")
-                .font(.custom("DMMono-Medium", size: 18))
+                .font(.custom("DMMono-Medium", size: text.channelHeading))
                 .foregroundStyle(Color.white.opacity(0.7))
                 .frame(width: channelColumnWidth, alignment: .leading)
                 .padding(.leading, 12)
 
             ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
                 Text(label)
-                    .font(.custom("DMMono-Medium", size: 20))
+                    .font(.custom("DMMono-Medium", size: text.timeLabel))
                     .foregroundStyle(Color.white.opacity(0.95))
                     .frame(width: programsWidth / 4, alignment: .leading)
                     .padding(.leading, 14)
@@ -391,6 +392,9 @@ private struct EPGRow: View {
 
     // 2-hour visible window
     private let visibleDuration: TimeInterval = 7200
+
+    /// GUIDE TEXT SIZE. NORMAL is the sizes this row always drew.
+    private var text: GuideTextMetrics { appState.guideTextSize.metrics }
     /// Background for alternating rows
     private var rowBackground: Color {
         if isFocused {
@@ -457,13 +461,13 @@ private struct EPGRow: View {
             }
 
             Text(String(format: "%d", channel.number))
-                .font(.custom("DMMono-Medium", size: 20))
+                .font(.custom("DMMono-Medium", size: text.number))
                 .foregroundStyle(isFocused ? Color.white : channel.color)
-                .frame(width: 36, alignment: .trailing)
+                .frame(width: text.numberWidth, alignment: .trailing)
                 .padding(.trailing, 8)
 
             Text(channel.name.uppercased())
-                .font(.custom("DMMono-Medium", size: 18))
+                .font(.custom("DMMono-Medium", size: text.name))
                 .foregroundStyle(isFocused ? Color.white : channel.color.opacity(0.95))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -522,7 +526,7 @@ private struct EPGRow: View {
                                 .frame(width: 1)
 
                             Text(entryTitle(entry))
-                                .font(.custom("DMMono-Medium", size: 20))
+                                .font(.custom("DMMono-Medium", size: text.title))
                                 .foregroundStyle(
                                     entry.isNowPlaying || isFocused
                                         ? Color.white
@@ -566,7 +570,7 @@ private struct EPGRow: View {
                 .frame(width: 1)
 
             Text("BROADCASTS RESUME AT 9 PM")
-                .font(.custom("DMMono-Medium", size: 18))
+                .font(.custom("DMMono-Medium", size: text.placeholder))
                 .foregroundStyle(.white.opacity(0.4))
                 .lineLimit(1)
                 .padding(.leading, 14)

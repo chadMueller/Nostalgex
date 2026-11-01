@@ -467,12 +467,16 @@
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
   }
 
+  // Held for the visit too: with a full localStorage the save below fails, and a new id on
+  // every request would look to the server like a new device each time (#152).
+  let clientIdThisVisit = null;
   function getClientId() {
-    let id = localStorage.getItem('plex90_client_id');
+    let id = localStorage.getItem('plex90_client_id') || clientIdThisVisit;
     if (!id) {
       id = randomClientId();
-      localStorage.setItem('plex90_client_id', id);
+      try { localStorage.setItem('plex90_client_id', id); } catch (e) { /* kept for this visit only */ }
     }
+    clientIdThisVisit = id;
     return id;
   }
 

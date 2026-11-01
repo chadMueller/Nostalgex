@@ -23,7 +23,46 @@ enum DemoData {
     static let uiTestChannelCount = 20
 
     static func channels() -> [Channel] {
-        manyChannelsForUITest ? paddedChannels() : baseChannels()
+        if guideTextFixtureRequested { return guideTextFixtureChannels() }
+        return manyChannelsForUITest ? paddedChannels() : baseChannels()
+    }
+
+    /// Test-only: `-uiTestGuideTextFixture` gives demo mode three-digit channel numbers
+    /// and titles of 40+ characters, the widest text the guide has to fit, for GUIDE
+    /// TEXT SIZE screenshots. Never set in a shipping run.
+    static var guideTextFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestGuideTextFixture")
+    }
+
+    private static func guideTextFixtureChannels() -> [Channel] {
+        let long = [
+            "The Extraordinary Midnight Adventures of Cassette Kid",   // 53
+            "Revenge of the Neon Ninjas from Outer Space",             // 43
+            "A Very Long Weekend at the Roller Disco Palace",          // 46
+            "Attack of the Fifty Foot Video Store Clerk",              // 42
+            "Return to the Haunted Drive-In on Route Sixty-Six",       // 49
+        ]
+        let rows: [(id: Int, number: Int, name: String, hex: String)] = [
+            (9001, 100, "DEMO ACTION", "#FF2244"),
+            (9002, 216, "DEMO COMEDY", "#FFD400"),
+            (9003, 452, "DEMO SCI-FI", "#00C4FF"),
+            (9004, 888, "DEMO 80s TV", "#FF66CC"),
+            (9005, 999, "DEMO LATE NIGHT THEATRE", "#7C3AED"),
+        ]
+        return rows.enumerated().map { index, row in
+            channel(
+                id: row.id, number: row.number, name: row.name, colorHex: row.hex,
+                items: (0..<5).map { n in
+                    item(
+                        id: "d-gt-\(row.number)-\(n)",
+                        title: n % 2 == 0 ? long[(index + n) % long.count] : "Short One \(n)",
+                        year: 1985 + n,
+                        genres: ["Action"],
+                        duration: [96, 34, 118, 52, 101][n]
+                    )
+                }
+            )
+        }
     }
 
     /// The five bundled channels, then filler rows numbered 6...n so the list scrolls.
@@ -169,6 +208,12 @@ enum DemoData {
         ProcessInfo.processInfo.arguments.contains("-uiTestFranchiseFixture")
     }
 
+    /// `-uiTestShortPackage`, with the franchise fixture: the DEMO package also lists a
+    /// channel the sample library can't fill, so a UI test sees the amber count on its row.
+    static var shortPackageFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestShortPackage")
+    }
+
     struct FranchiseFixture {
         let items: [PlexMediaItem]
         let enrichment: [MediaEnrichment]
@@ -177,7 +222,7 @@ enum DemoData {
 
     /// Real TMDB collection ids (the same ones FranchiseDictionary lists) over invented
     /// item ids. Covers every row kind Settings can show:
-    ///   - STAR WARS: titled so CH100's own `titleContains` rule builds the stock channel,
+    ///   - STAR WARS: titled so id 100's own `titleContains` rule builds the stock channel,
     ///     so the found franchise folds into it and lists as the CH 100 row.
     ///   - JOHN WICK, THE HUNGER GAMES, BACK TO THE FUTURE, STAR TREK: dictionary
     ///     franchises with no stock channel, listed with a switch. STAR TREK carries a show.
@@ -185,7 +230,8 @@ enum DemoData {
     ///   - SPIDER-MAN (two TMDB collections, dictionary) and AMERICAN PIE (two
     ///     collections, general name rule) each list as one franchise; Loki puts a show
     ///     on MARVEL CH101 next to three Marvel Studios films.
-    ///   - Two server collections: one that IS John Wick (folds away), one actor set that
+    ///   - Three server collections: one that IS John Wick (folds away), one franchise set
+    ///     nothing else claims (lists with the franchises), and one actor set that
     ///     stays under OTHER COLLECTIONS.
     static func franchiseFixture() -> FranchiseFixture {
         func film(_ id: String, _ title: String, _ year: Int, tmdb: String,
@@ -286,11 +332,27 @@ enum DemoData {
         items.append(contentsOf: hanks)
         for h in hanks { rows.append(row(tmdb: h.tmdbID ?? "", franchiseID: nil, franchiseName: nil)) }
 
+        // A server franchise collection nothing else claims: no shared title words, no
+        // franchise ids, so it neither folds nor becomes a found franchise. Lists with the
+        // franchises in Settings.
+        let cornetto = [
+            film("fx-cor-1", "Shaun of the Dead", 2004, tmdb: "900_090"),
+            film("fx-cor-2", "Hot Fuzz", 2007, tmdb: "900_091"),
+            film("fx-cor-3", "The World's End", 2013, tmdb: "900_092")
+        ]
+        items.append(contentsOf: cornetto)
+        for c in cornetto { rows.append(row(tmdb: c.tmdbID ?? "", franchiseID: nil, franchiseName: nil)) }
+
         let wick = items.filter { $0.id.hasPrefix("fx-jw-") }
         let collections = [
             DiscoveredCollection(
                 id: "fx-col-wick", title: "JOHN WICK COLLECTION", movieCount: wick.count,
                 items: wick, enabled: false, matchedChannel: nil, contentOverlap: nil,
+                category: .franchises
+            ),
+            DiscoveredCollection(
+                id: "fx-col-cornetto", title: "THREE FLAVOURS CORNETTO", movieCount: cornetto.count,
+                items: cornetto, enabled: false, matchedChannel: nil, contentOverlap: nil,
                 category: .franchises
             ),
             DiscoveredCollection(

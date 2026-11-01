@@ -181,7 +181,7 @@ extension AppState {
                     // language — wrong-language subs are worse than none. Fall back to the
                     // forced-narrative/off handling used when subtitles are disabled.
                     let tag = Self.languageTag(for: pick)?.lowercased()
-                    if let tag, tag == preferredLang || tag.hasPrefix(preferredLang + "-") {
+                    if let tag, SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLang) {
                         playerItem.select(pick, in: group)
                     } else if let forced = Self.pickForcedLegibleOption(in: group, preferredLanguage: preferredLang) {
                         playerItem.select(forced, in: group)
@@ -258,7 +258,7 @@ extension AppState {
         group.options.first { opt in
             guard isForcedOnly(opt) else { return false }
             guard let tag = languageTag(for: opt)?.lowercased() else { return false }
-            return tag == preferredLanguage || tag.hasPrefix(preferredLanguage + "-")
+            return SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLanguage)
         }
     }
 
@@ -276,7 +276,7 @@ extension AppState {
         if let full = candidates.first(where: { opt in
             guard !isForcedOnly(opt) else { return false }
             guard let tag = languageTag(for: opt)?.lowercased() else { return false }
-            return tag == preferredLanguage || tag.hasPrefix(preferredLanguage + "-")
+            return SubtitleSelectionLogic.tagMatchesPreferred(tag, preferredLanguage)
         }) {
             return full
         }
@@ -793,8 +793,18 @@ extension AppState {
         // Tear down old item before creating new one
         player?.replaceCurrentItem(with: nil)
 
+        // Demo mode: note when the block this clip stands in for ends, so the channel moves
+        // on when the guide does rather than when the clip happens to run out.
+        demoBlockEnd = isDemoMode
+            ? currentChannel.flatMap {
+                ChannelScheduleBuilder.buildSchedule(for: $0, at: scheduleClock(),
+                                                     credentialFingerprint: scheduleCredentialFingerprint)
+            }?.nowPlaying?.endTime
+            : nil
+
         // Small delay to let AVPlayer clean up the old item
-        var seekTo = seekOffset > 0 ? seekOffset : nil
+        let playerSeek = playerSeekSeconds
+        var seekTo = playerSeek > 0 ? playerSeek : nil
         hlsRequestedOffset = 0
         hlsBaseOffset = 0
         let itemServerID = item.serverID
@@ -1432,6 +1442,19 @@ extension AppState {
     /// retires this timer, so it cannot fire twice for the same item.
     private func installEndOfItemFallback(for playerItem: AVPlayerItem, generation: Int, title: String) {
         let attempt = playbackAttemptGeneration
+        if isDemoMode {
+            // Installed here because every path that builds a player item (first load,
+            // retry, transcode fallback) clears the cancellables and then calls this.
+            // Generation only, not the attempt: a retry of the clip still stands in for
+            // the same block and must still move on when it ends.
+            Timer.publish(every: 1.0, on: .main, in: .common)
+                .autoconnect()
+                .sink { [weak self] _ in
+                    guard let self, self.loadGeneration == generation else { return }
+                    self.demoScheduleTick()
+                }
+                .store(in: &self.cancellables)
+        }
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -1463,7 +1486,8 @@ extension AppState {
     // Called when AVPlayerItemDidPlayToEndTime fires. For multi-disc Plex movies (stored as
     // a single item with multiple Media.Part entries), plays the next disc before advancing
     // the schedule. For single-disc / single-file content, advances to the next item.
-    private func handlePartEnded() {
+    /// Internal, not private, so tests can stand in for the end-of-item notification.
+    func handlePartEnded() {
         playbackTracker?.onPlaybackPreparing()
         if let item = currentItem,
            let extra = item.additionalPartKeys,
@@ -1497,25 +1521,44 @@ extension AppState {
         guard let channel = currentChannel else { return }
         let prevRatingKey = currentItem?.ratingKey
         let prevTitle = currentItem?.title ?? "nil"
+        let now = scheduleClock()
 
         if let schedule = ChannelScheduleBuilder.buildSchedule(
             for: channel,
+            at: now,
             credentialFingerprint: scheduleCredentialFingerprint
         ) {
             let scheduleHasMoved = schedule.nowPlaying?.item.ratingKey != prevRatingKey
+
+            // Demo mode plays one 600 s clip in place of every programme, so the clip
+            // running out says nothing about the schedule. Taking upNext here put the next
+            // programme's name on the Now Playing panel while the guide still showed the
+            // current one (226 of 250 samples, 2026-10-30). Stay on the block that is on,
+            // at the clock's position; the move to the next programme comes from
+            // demoScheduleTick() when the block itself ends.
+            if isDemoMode, !scheduleHasMoved, let live = schedule.nowPlaying?.item {
+                currentItem = live
+                seekOffset = schedule.livePlayback(at: now)?.elapsedSeconds ?? schedule.elapsedSeconds
+                print("[Plex90] ADVANCE (demo): clip ended, staying on \"\(live.title)\" on CH \(channel.name) seek=\(seekOffset)s")
+                loadCurrentItem()
+                return
+            }
+
             var pick = scheduleHasMoved
                 ? schedule.nowPlaying?.item
                 : (schedule.upNext?.item ?? schedule.nowPlaying?.item)
             // Never seek on natural playback end: file duration ≠ scheduled duration,
             // so elapsedSeconds would skip into the next item. Only apply seek when
             // the schedule is being re-synced from outside (channel change, watchdog).
-            var newSeekOffset = (scheduleHasMoved && pick != nil && !fromNaturalEnd) ? schedule.elapsedSeconds : 0
+            // Demo mode has no file to overrun, so it always joins the block at the clock.
+            var newSeekOffset = (scheduleHasMoved && pick != nil && (!fromNaturalEnd || isDemoMode)) ? schedule.elapsedSeconds : 0
 
             if let item = pick,
                let conflictCH = ChannelScheduleBuilder.findConflict(
                    item: item,
                    excludingChannelID: channel.id,
                    in: channels,
+                   at: now,
                    credentialFingerprint: scheduleCredentialFingerprint
                ) {
                 print("[Plex90] ADVANCE CONFLICT: \"\(item.title)\" already on CH \(conflictCH), skipping")
@@ -1541,6 +1584,30 @@ extension AppState {
             print("[Plex90] ADVANCE: \"\(prevTitle)\" -> \"\(currentItem?.title ?? "nil")\" on CH \(channel.name) (random fallback)")
         }
         loadCurrentItem()
+    }
+
+    // MARK: - Demo clip
+
+    /// Length of the demo stream (Apple's bipbop sample), measured 600.0 s.
+    static let demoClipSeconds = 600
+
+    /// Where the player itself seeks for the current `seekOffset`. `seekOffset` stays the
+    /// schedule's elapsed time in every mode. Demo mode plays one 600 s clip for every
+    /// programme, and a seek past its end (87% of tune-ins land 600 s or more into a
+    /// block) finished the clip at once, so the clip seeks to the clock's position modulo
+    /// its length. Real libraries are untouched.
+    var playerSeekSeconds: Int {
+        isDemoMode ? seekOffset % Self.demoClipSeconds : seekOffset
+    }
+
+    /// Demo mode only, once a second while a clip plays: when the block the clip stands in
+    /// for has ended, move to the programme the guide now shows. In a real library the
+    /// file ending is that signal; the demo clip's length has nothing to do with the
+    /// schedule, so the clock has to be.
+    func demoScheduleTick() {
+        guard isDemoMode, let end = demoBlockEnd, scheduleClock() >= end else { return }
+        print("[Plex90] DEMO: block ended at the clock, moving to the next programme")
+        advanceToNextItem()
     }
 }
 

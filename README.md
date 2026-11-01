@@ -55,7 +55,7 @@ docker run -d --name nostalgex -p 8080:8080 --restart unless-stopped ghcr.io/cha
 
 Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker container guide](https://www.nostalgex.app/self-host).
 
-**Latest: `tuner-v1.0.9`.** A small library no longer opens on a blank screen: if nothing fits the first lineup, every package that has content is switched on. A Plex title with a stray non-UTF-8 byte keeps its accent. New STREAM QUALITY setting (Auto, Maximum, High, Medium, Low) on the rail and in Settings. The first load after the update reads your library once more. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.9). Already running it? `docker compose pull && docker compose up -d`.
+**Latest: `tuner-v1.0.11`.** Every package now has its own block of channel numbers with room to grow (KIDZ ZONE starts at 30, collections at 400, HIGH ROTATION at 500), and Norwegian, Bokmal and Nynorsk count as one language when picking audio and subtitles. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.11). Already running it? `docker compose pull && docker compose up -d`.
 
 <a id="whats-new-in-1028"></a>
 ## What's new in 1.0.28
@@ -134,7 +134,7 @@ services:
     restart: unless-stopped
 ```
 
-**Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.9 · DOCKER`.
+**Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.11 · DOCKER`.
 
 **Platforms:** amd64 and arm64 (Synology and Unraid on Intel or AMD, NUCs, Raspberry Pi 4 and 5 on a 64 bit OS). No armv7. Runs as a non root user (uid 101) and works with a read only root filesystem as long as `/tmp` is writable.
 
