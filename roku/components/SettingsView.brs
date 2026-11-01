@@ -78,20 +78,31 @@ end sub
 ' The guide was rebuilt while Settings is open: rows follow its franchise and
 ' collection lists, and focus stays on the same row.
 sub refreshRows(unused = invalid as Dynamic)
-    keep = m.rows[m.focus]
+    keep = rowKey(m.rows[m.focus])
     buildRows()
     for i = 0 to rowCount() - 1
-        r = m.rows[i]
-        if r.kind = keep.kind and NxToStr(r.index) = NxToStr(keep.index) and NxToStr(r.category) = NxToStr(keep.category) then
-            if r.kind <> "franchise" or r.franchise.id = keep.franchise.id then
-                m.focus = i
-                exit for
-            end if
+        if rowKey(m.rows[i]) = keep then
+            m.focus = i
+            exit for
         end if
     end for
     if m.focus > rowCount() - 1 or not focusable(m.rows[m.focus]) then m.focus = nextFocusable(-1, 1)
     render()
 end sub
+
+' What a row is, to put focus back on it after a rebuild: its kind and the one
+' thing that tells two of that kind apart. A collection row used to carry
+' neither, so focus went to the first collection row of the list.
+function rowKey(row as Object) as String
+    key = row.kind
+    if row.franchise <> invalid then key = key + "|" + NxToStr(row.franchise.id)
+    if row.collection <> invalid then key = key + "|" + NxToStr(row.collection.id)
+    if row.index <> invalid then key = key + "|" + NxToStr(row.index)
+    if row.category <> invalid then key = key + "|" + NxToStr(row.category)
+    if row.key <> invalid then key = key + "|" + NxToStr(row.key)
+    if row.code <> invalid then key = key + "|" + NxToStr(row.code)
+    return key
+end function
 
 function fontOf(name as String, size as Integer) as Object
     key = name + size.ToStr()
