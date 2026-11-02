@@ -113,6 +113,19 @@ final class ScheduleLineupTests: XCTestCase {
                        DailyManifestScheduler.blocks(for: target, at: day, credentialFingerprint: fp).map(\.item.id))
     }
 
+    /// ScheduleTiming's scratch lineup sits next to the app's own: registering and removing it
+    /// never leaves the guide's channels packing alone (review of faede9b).
+    func testAScratchLineupLeavesTheAppsOwnInPlace() {
+        let channels = lineup()
+        let scratch = "lineup-tests-scratch"
+        DailyManifestStore.clearAll(credentialFingerprint: scratch)
+        defer { DailyManifestStore.clearAll(credentialFingerprint: scratch) }
+        DailyManifestScheduler.setLineup(channels, credentialFingerprint: fp)
+        DailyManifestScheduler.setAdditionalLineup(channels, credentialFingerprint: scratch)
+        DailyManifestScheduler.setAdditionalLineup([], credentialFingerprint: scratch)
+        XCTAssertEqual(overlaps(channels, at: day), 0, "the app's lineup must survive a bench's scratch one")
+    }
+
     func testAnotherSignInsLineupIsNotUsed() {
         let channels = lineup()
         DailyManifestScheduler.setLineup(channels, credentialFingerprint: "someone-else")
