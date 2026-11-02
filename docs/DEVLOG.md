@@ -5,9 +5,8 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-01 (Web tuner 1.0.12: the Docker release that carries the franchise channels)
 
-**Shipped.** Nothing yet. Branch `web/tuner-1.0.12`, off `origin/main` at `0795e19` (the merge of
-`web/franchise-parity`, already live on nostalgex.app), not pushed and not tagged. Docker gets the
-franchise channels when `tuner-v1.0.12` is tagged on the bump.
+**Shipped.** `tuner-v1.0.12` on 2026-11-02: the Docker image that carries the franchise channels
+already live on nostalgex.app since `0795e19` (the merge of `web/franchise-parity`). Closes #122.
 
 **Changed.** `tunerVersion` 1.0.12 and README's latest-release lines. The release notes for
 `tuner-v1.0.12` are drafted and wait with the tag.
@@ -39,8 +38,8 @@ franchise channels when `tuner-v1.0.12` is tagged on the bump.
     runtime channel has a schedule. REMOVE ALL empties the 300s. A full rebuild took 128 to 135 ms.
   - Not checked on that library: playback, and what the viewer thinks of which series were found.
 
-**Next.** Chad's go: push the bump to `main`, then tag `tuner-v1.0.12` on it and write the release
-note. The release workflow stops if the tag and `tunerVersion` disagree.
+**Next.** Nothing for this release. The cross-channel duplicate fix reaches the web tuner and Docker
+with the Roku 1.0.9 merge, after this tag, so Docker 1.0.12 does not carry it.
 
 ## 2026-11-01 (Web tuner and Docker: franchise channels and the FRANCHISES / OTHER COLLECTIONS split, #122)
 
