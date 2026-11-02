@@ -61,7 +61,11 @@ end function
 ' Jellyfin and Emby always send one.
 function NxMbUnixSeconds(iso as Dynamic) as Integer
     if not NxIsString(iso) then return 0
-    hit = CreateObject("roRegex", "^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(Z|[+-]\d{2}:\d{2})?$", "").Match(iso)
+    ' One regex per thread, not one per call: a scan calls this for every
+    ' film and episode (#155).
+    g = GetGlobalAA()
+    if g.nxMbIsoRegex = invalid then g.nxMbIsoRegex = CreateObject("roRegex", "^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(Z|[+-]\d{2}:\d{2})?$", "")
+    hit = g.nxMbIsoRegex.Match(iso)
     if hit.Count() = 0 then return 0
     y = hit[1].ToInt()
     mo = hit[2].ToInt()
@@ -179,7 +183,17 @@ function NxMbMediaInfo(item as Object) as Object
     out.msid = src.Id
     if NxTruthy(src.Container) then out.container = src.Container
     out.bitrate = NxMbBitrateKbps(src.Bitrate)
-    v = NxMbStream(src, "Video")
+    ' The first video and the first audio stream in one walk, as NxMbStream
+    ' finds each.
+    v = invalid
+    a = invalid
+    for each st in NxList(src.MediaStreams)
+        if type(st) = "roAssociativeArray" then
+            if v = invalid and st.Type = "Video" then v = st
+            if a = invalid and st.Type = "Audio" then a = st
+            if v <> invalid and a <> invalid then exit for
+        end if
+    end for
     if v <> invalid then
         if NxTruthy(v.Codec) then out.videoCodec = LCase(NxToStr(v.Codec))
         if NxTruthy(v.Profile) then out.videoProfile = LCase(NxToStr(v.Profile))
@@ -192,7 +206,6 @@ function NxMbMediaInfo(item as Object) as Object
         out.doviProfile = NxMbDoviProfile(v.ExtendedVideoSubType)
         if out.doviProfile = invalid and NxIsNumber(v.DvProfile) then out.doviProfile = v.DvProfile
     end if
-    a = NxMbStream(src, "Audio")
     if a <> invalid then
         if NxTruthy(a.Codec) then out.audioCodec = LCase(NxToStr(a.Codec))
         if NxIsNumber(a.Channels) then out.audioChannels = a.Channels
@@ -249,9 +262,12 @@ function NxMbFullSubs(src as Object) as Dynamic
 end function
 
 ' Whether a subtitle stream is text (upstream's isTextSubtitle).
+' Compared in place rather than through a list made on every call: a scan
+' runs it for each subtitle track, twice per item, and a file can have dozens
+' (#155).
 function NxMbIsTextSub(s as Object) as Boolean
-    text = ["srt", "subrip", "ass", "ssa", "vtt", "webvtt", "mov_text", "ttml", "sub", "smi", "sami"]
-    return NxHasValue(text, LCase(NxToStr(s.Codec)))
+    c = LCase(NxToStr(s.Codec))
+    return c = "srt" or c = "subrip" or c = "ass" or c = "ssa" or c = "vtt" or c = "webvtt" or c = "mov_text" or c = "ttml" or c = "sub" or c = "smi" or c = "sami"
 end function
 
 ' A source's audio tracks as { index, language, channels, codec, isDefault },
@@ -280,6 +296,9 @@ end function
 ' compatibility id. Anything else is invalid, an unknown profile.
 function NxMbDoviProfile(subType as Dynamic) as Dynamic
     if not NxIsString(subType) then return invalid
+    ' Emby sends "None" for most files (5,530 of 5,559 on the test server):
+    ' only a DoviProfile name gets a regex.
+    if LCase(Left(subType, 11)) <> "doviprofile" then return invalid
     hit = CreateObject("roRegex", "^doviprofile(\d{2,})$", "i").Match(subType)
     if hit.Count() <> 2 then return invalid
     digits = hit[1]
