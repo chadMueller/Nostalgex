@@ -7,7 +7,10 @@ listing; it installs over `adb`.
 ## What it does today
 
 - The Apple TV's connect screens: CONNECT TO PLEX, or JELLYFIN or EMBY.
-  Plex signs in with the code and a QR for plex.tv/link. Jellyfin and Emby
+  Plex signs in with the code and a QR for plex.tv/link, then asks every
+  address of every server at once and takes the best that answers as soon as
+  nothing better can (home network, remote HTTPS, remote plain, relay), turning
+  down an address that answers as another Plex server. Jellyfin and Emby
   find the server on the network (UDP 7359) or take a typed address, then
   sign in the shortest way the server allows: Quick Connect when Jellyfin
   has it on, WHO'S WATCHING? tiles when the server lists its users, else a

@@ -90,8 +90,17 @@ val genWatchVectors = tasks.register<Exec>("genWatchVectors") {
     commandLine("node", "scripts/gen-watch-vectors.mjs", out.get().asFile.absolutePath)
 }
 
+val genResolveVectors = tasks.register<Exec>("genResolveVectors") {
+    val out = layout.buildDirectory.file("vectors/resolve.json")
+    inputs.file("scripts/gen-resolve-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("scripts/nostalgex-server-resolve.js"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-resolve-vectors.mjs", out.get().asFile.absolutePath)
+}
+
 tasks.test {
-    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors, genWatchVectors)
+    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors, genWatchVectors, genResolveVectors)
+    systemProperty("nostalgex.resolveVectors", layout.buildDirectory.file("vectors/resolve.json").get().asFile.absolutePath)
     systemProperty("nostalgex.watchVectors", layout.buildDirectory.file("vectors/watch.json").get().asFile.absolutePath)
     systemProperty("nostalgex.collectionsVectors", layout.buildDirectory.file("vectors/collections.json").get().asFile.absolutePath)
     systemProperty("nostalgex.franchiseVectors", layout.buildDirectory.file("vectors/franchise.json").get().asFile.absolutePath)
