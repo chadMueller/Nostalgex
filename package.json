@@ -64,6 +64,7 @@
     "changelog:check": "node scripts/changelog-check.mjs",
     "test:franchises": "node scripts/nostalgex-franchise-smoke.mjs",
     "test:franchise-lineup": "node scripts/nostalgex-franchise-lineup-smoke.mjs",
+    "test:franchise-channels:browser": "node scripts/franchise-channels-browser-smoke.mjs",
     "test:watch-state": "node scripts/nostalgex-watch-state-smoke.mjs",
     "test:jellyfin-urls": "node scripts/nostalgex-jellyfin-urls-smoke.mjs",
     "test:jellyfin-quick-connect": "node scripts/nostalgex-jellyfin-quick-connect-smoke.mjs",
