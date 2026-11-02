@@ -155,17 +155,22 @@ end function
 ' `(Int(bps) + 500) \ 1000` gave 19270 instead of 19269, with or without
 ' LongInteger around it. `tests/run.sh`'s off-device brs interpreter doesn't
 ' reproduce it, so only the on-TV run (`scripts/deploy.sh --test`) catches
-' it. A Float or Double Bitrate still goes through Int(); a Float can't hold
-' 19269499 anyway, and ParseJson reads a whole-number Bitrate as an Integer.
+' it. So only a Double or a Float is floored: a Double through NxFloorDouble
+' (source/util/Values.brs), which never calls Int() on the whole value, and a
+' Float through Int(), since a Float can't hold 19269499 anyway. Every other
+' number (Integer, LongInteger, roInt, boxed or not) is taken as it is.
+' ParseJson reads a whole-number Bitrate as an Integer.
 function NxMbBitrateKbps(bps as Dynamic) as Integer
     if not NxIsNumber(bps) then return 0
     if bps <= 0 then return 0
     if bps >= 2000000000 then return Int(bps / 1000)
     t = type(bps)
-    if t = "Integer" or t = "roInteger" or t = "LongInteger" or t = "roLongInteger" then
-        whole& = bps
-    else
+    if t = "Double" or t = "roDouble" then
+        whole& = NxFloorDouble(bps)
+    else if t = "Float" or t = "roFloat" then
         whole& = Int(bps)
+    else
+        whole& = bps
     end if
     return (whole& + 500&) \ 1000&
 end function
