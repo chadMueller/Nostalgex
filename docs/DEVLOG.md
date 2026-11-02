@@ -3939,7 +3939,11 @@ Roku for the account email and only fills a field with it (`privacy.html` and
 - `gen-resolve-vectors.mjs` runs the web module on the smoke's virtual clock: its 16 named cases (the Apple TV's `ConnectionDiscoveryEarlyExitTests`, Roku's `ServerResolveTests`) and its 400 seeded random servers. `ServerResolveTest` replays every run, and all 416 choose the same address at the same millisecond. Removing the "once something else has answered" condition made it fail. The CI path filter now includes the module.
 - The other changes on `main` (GUIDE TEXT SIZE, the WATERSHED switch, the failure card in the split view, and the site) were the web catching up with the Apple TV. Android already had all of them.
 
-**Not checked:** the app's probes against real Plex addresses. That needs Settings opened on the SHIELD, which lists the account's servers through this code.
+**Measured** on the SHIELD, on Settings' server list for a real account, twice:
+- An owned server with four addresses settled on its home HTTPS address in 22 to 26 ms, without waiting for the other three.
+- A shared server with three addresses settled on remote HTTPS at 3,008 to 3,015 ms: the 3 s grace, because its home-network address (on its owner's network) never answered. The old code waited out that address's 5 s timeout.
+- A shared server whose only address is plain HTTP failed in 27 to 41 ms with `ConnectException` (refused), as it would have before.
+The `SERVER ADDRESS` log line now says why each address failed: the exception, the HTTP status, or "another server". The different-server check has not been seen to turn anything down on a real network.
 
 ## 2026-11-02 (Android TV: the seasonal invite and demo mode)
 

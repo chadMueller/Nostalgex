@@ -143,6 +143,8 @@ class PlexClient(private val clientId: String, versionName: String) {
         // Every probe and timer reports here; the resolver is read on one coroutine only.
         val events = Channel<() -> ServerResolve.Outcome?>(Channel.UNLIMITED)
         val calls = java.util.concurrent.ConcurrentLinkedQueue<okhttp3.Call>()
+        // Why each address failed, for the log: refused, timed out, an HTTP status, or another server.
+        val why = java.util.concurrent.ConcurrentHashMap<String, String>()
         val name = resource["name"]?.jsonPrimitive?.content ?: "Plex"
         return coroutineScope {
             val graceJob = launch { delay(resolver.graceMs); events.send { resolver.graceFired(elapsed()) } }
@@ -152,6 +154,7 @@ class PlexClient(private val clientId: String, versionName: String) {
                 calls += call
                 call.enqueue(object : okhttp3.Callback {
                     override fun onFailure(call: okhttp3.Call, e: IOException) {
+                        if (!call.isCanceled()) why[c.kind] = (why[c.kind]?.let { "$it, " } ?: "") + (e::class.simpleName ?: "error")
                         events.trySend { resolver.report(c, false, elapsed()) }
                     }
                     override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
@@ -159,8 +162,9 @@ class PlexClient(private val clientId: String, versionName: String) {
                             res.isSuccessful && runCatching {
                                 val mc = json.parseToJsonElement(res.body.string()).jsonObject["MediaContainer"] as? JsonObject
                                 ServerResolve.identityMatches((mc?.get("machineIdentifier") as? JsonPrimitive)?.content, machineId)
-                            }.getOrDefault(true)
+                            }.getOrDefault(true).also { if (!it) why[c.kind] = (why[c.kind]?.let { w -> "$w, " } ?: "") + "another server" }
                         }
+                        if (!response.isSuccessful) why[c.kind] = (why[c.kind]?.let { "$it, " } ?: "") + "HTTP ${response.code}"
                         events.trySend { resolver.report(c, ok, elapsed()) }
                     }
                 })
@@ -170,7 +174,8 @@ class PlexClient(private val clientId: String, versionName: String) {
             graceJob.cancel()
             deadlineJob.cancel()
             calls.forEach { it.cancel() }
-            Log.i(TAG, "SERVER ADDRESS \"$name\": ${out.conn?.let { "${out.kind} ${it.uri.substringBefore("://")}" } ?: "none answered"} in ${elapsed()} ms of ${resolver.candidates.size} tried")
+            Log.i(TAG, "SERVER ADDRESS \"$name\": ${out.conn?.let { "${out.kind} ${it.uri.substringBefore("://")}" } ?: "none answered"} in ${elapsed()} ms of ${resolver.candidates.size} tried" +
+                (if (why.isEmpty()) "" else "; failed: " + why.entries.joinToString("; ") { "${it.key} ${it.value}" }))
             out.conn?.uri
         }
     }
