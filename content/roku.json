@@ -16,7 +16,7 @@
     "null. Once set, the credits section links to /blog/<slug>. The render fails if",
     "the post does not exist or is still a draft, so the page never links a 404."
   ],
-  "betaFull": false,
+  "betaFull": true,
   "accessCode": "JRLVTGL",
   "addUrl": "https://my.roku.com/account/add/JRLVTGL",
   "discordUrl": "https://discord.gg/FgnZcr5bDT",
