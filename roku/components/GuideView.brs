@@ -1621,8 +1621,10 @@ end sub
 ' Roku draws subtitles only while its caption mode is on, and that mode is the
 ' TV's own setting. When it is off, it is turned on just while subtitles show
 ' and put back afterwards. The old value is saved first, so a launch after
-' leaving with Home puts it back too.
+' leaving with Home puts it back too. Back puts it back before the app closes
+' (#117), and nothing turns it on again while the app waits to close.
 sub setCaptions(show as Boolean)
+    if m.leaving = true then show = false
     m.video.suppressCaptions = not show
     reg = NxRegSection("player")
     if show and m.video.globalCaptionMode <> "On" then
@@ -2447,7 +2449,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         openSettings()
         return true
     end if
-    if m.channels.Count() = 0 and (key = "play" or key = "back") then return key <> "back"
+    if m.channels.Count() = 0 and key = "back" then
+        ' Leaving: the caption setting goes back first, as below (#117).
+        restoreCaptionMode()
+        return false
+    end if
+    if m.channels.Count() = 0 and key = "play" then return true
     if key = "OK" then
         ' A channel the sleep timer stopped starts again, and one that
         ' stopped trying tries again.
@@ -2472,6 +2479,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             renderInfo()
             return true
         end if
+        ' Every way on from here leaves the app, so the TV's caption setting
+        ' goes back now, while the app still can (#117). Home gives the app no
+        ' such chance; that case is put back on the next launch.
+        restoreCaptionMode()
         if action = "stop" then
             print "guide: back, stopping the server's stream before leaving"
             m.leaving = true
