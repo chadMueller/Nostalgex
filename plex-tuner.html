@@ -4416,14 +4416,14 @@
     const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
     const colour = (id, value) => { const el = document.getElementById(id); if (el) el.style.color = value; };
     const width = (id, value) => { const el = document.getElementById(id); if (el) el.style.width = value; };
-    text('np-channel-tag', `● CH ${num} — ${ch.name}`);
+    text('np-channel-tag', `\u25CF CH ${num} \u2014 ${ch.name}`);   // the same tag switchChannel writes
     colour('np-channel-tag', ch.color);
     text('np-title', WATERSHED_GUIDE_LABEL);
     text('np-meta', '');
     width('np-progress', '0%');
     text('np-time', '');
     text('np-upnext', '');
-    text('info-channel-tag', `CH ${num} — ${ch.name}`);
+    text('info-channel-tag', `CH ${num} \u2014 ${ch.name}`);
     colour('info-channel-tag', ch.color);
     text('info-title', WATERSHED_GUIDE_LABEL);
     text('info-episode-title', '');
@@ -4452,8 +4452,12 @@
     if (ch && ch.enabled && isWatershedHold(ch)) return;
     hideWatershedCard();
     if (ch && ch.enabled && currentChannel === ch.id) {
+      // Tuning sets appState to 'player', and the keys read it: with Settings open (the card's
+      // OPEN SETTINGS leaves it open) it has to stay 'config', or the arrow keys stop working there.
+      const keepConfig = configVisible && appState === 'config';
       currentChannel = null;   // switchChannel ignores the channel it is already on
       switchChannel(ch.id);
+      if (keepConfig) appState = 'config';
     }
   }
 

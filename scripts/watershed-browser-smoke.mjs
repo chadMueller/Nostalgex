@@ -345,6 +345,28 @@ try {
   failures.push(`desktop flow stopped: ${String(err.message || err).split("\n")[0]}`);
 }
 
+// ── 1b. 9 PM with Settings open: the channel tunes, and Settings keeps its keys ──
+try {
+  const { page, errors } = await launch("desktop", { watershed: true });
+  page.setDefaultTimeout(10000);
+  await page.locator(`#grid-body .grid-row[data-channel-id="${FRIGHT}"]`).click();
+  await settle(page, 600);
+  await page.locator("#watershed-card-settings").click();
+  await settle(page, 400);
+  let s = await read(page);
+  check("9 PM with Settings open: the card is up and Settings is open", s.card.shown && s.configOpen);
+  await page.clock.fastForward("07:00:30");
+  await settle(page, 2600);
+  s = await read(page);
+  const keyState = await page.evaluate(() => ({ appState, configVisible }));
+  check("9 PM with Settings open: the card clears and the channel tunes", !s.card.shown && playingId(s.src) !== null, `${s.card.shown} ${s.src}`);
+  check("9 PM with Settings open: Settings stays open and keeps the keys (appState config)", s.configOpen && keyState.appState === "config" && keyState.configVisible === true, JSON.stringify(keyState));
+  check("9 PM with Settings open: no page errors", errors.length === 0, errors.join(" | "));
+  await page.context().close();
+} catch (err) {
+  failures.push(`9 PM with Settings open stopped: ${String(err.message || err).split("\n")[0]}`);
+}
+
 // ── 2. Every size: the card and the switch work by click alone ──
 for (const name of Object.keys(viewports)) try {
   if (process.env.DEBUG_WS) console.log("viewport", name);

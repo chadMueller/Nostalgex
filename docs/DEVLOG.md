@@ -27,6 +27,8 @@ called `isWatershedHold`, so nobody on the web or in the container could turn it
 - A programme already playing finishes, as on the Apple TV. The card goes up when a channel is
   tuned or a programme ends with nothing left to air. Switching it off, or the clock passing
   9 PM, clears the card and tunes the channel; midnight closes the gate again for the next day.
+  If that happens with Settings open (OPEN SETTINGS leaves it open), tuning no longer takes the
+  Settings keys: `switchChannel` sets `appState` to 'player', and the arrow keys read it.
 - Bug found on the way: `buildChannelSchedule` returned early on an empty pool without clearing
   what the last pool built. A channel Watershed had just emptied kept its schedule, so its R
   titles stayed in the guide and kept airing and the card never came. It clears now. The same
@@ -35,10 +37,10 @@ called `isWatershedHold`, so nobody on the web or in the container could turn it
   over its button. Under 560 px wide or 520 px tall it uses smaller type and fits.
 
 **Verified.** `npm test` green. New `scripts/watershed-browser-smoke.mjs` (`npm run
-test:watershed:browser`, 95 checks, headless Chromium, a mock Jellyfin of 42 films, clock
+test:watershed:browser`, 99 checks, headless Chromium, a mock Jellyfin of 42 films, clock
 pinned to 2 PM): the words against the Swift source, the default, the click, a film left to
 finish, the card, OPEN SETTINGS, 9 PM, midnight, a reload, and the card and the switch by click
-alone at phone, tablet, desktop and 960x540, never in browser full screen. The same 95 pass on
+alone at phone, tablet, desktop and 960x540, never in browser full screen. The same 99 pass on
 the hosted build (`dist`) and the Docker build (`dist-selfhost`). Negative controls: origin/main's
 page fails (no switch); the page without the empty-pool clear fails 7 checks, three R titles on
 the all-R channel's guide row and no card.
