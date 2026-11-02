@@ -86,6 +86,9 @@ class MediaBrowserScanTest {
             check("tmdbID", w.s("tmdbID")?.toLongOrNull(), g.tmdbID)
             check("doviProfile", w.l("doviProfile")?.toInt(), g.doviProfile)
             check("showKey", w.s("showKey"), g.showKey)
+            // audioStreams isn't compared: plex-tuner.html builds it in mediaInfo but never puts it
+            // on the item (only `subtitles: mi.subtitles`), so the web's items have none. The
+            // Android scan keeps them, as the Apple TV reads them, for the transcode's track.
         }
         assertEquals("fields that differ from the web tuner (first 15)", emptyList<String>(), problems.take(15))
         // The same requests, as a set: the web asks five series at once, so its order interleaves.

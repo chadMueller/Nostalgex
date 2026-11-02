@@ -100,6 +100,9 @@ class MediaBrowserLibrary(
                                 librarySource = if (isMusicVideoSection) "musicVideo" else "tv",
                                 tmdbID = showTmdb,
                                 doviProfile = mi.doviProfile,
+                                audioStreams = mi.audioStreams,
+                                videoWidth = mi.width,
+                                videoHeight = mi.height,
                                 partKey = mi.msid,
                                 container = mi.container,
                                 videoCodec = mi.videoCodec,
@@ -142,6 +145,9 @@ class MediaBrowserLibrary(
                             librarySource = if (isMusicVideo) "musicVideo" else "movie",
                             tmdbID = tmdbFromProviderIds(jf.obj("ProviderIds")),
                             doviProfile = mi.doviProfile,
+                            audioStreams = mi.audioStreams,
+                            videoWidth = mi.width,
+                            videoHeight = mi.height,
                             partKey = mi.msid,
                             container = mi.container,
                             videoCodec = mi.videoCodec,
@@ -180,6 +186,7 @@ class MediaBrowserLibrary(
 
     private data class MediaInfo(
         val msid: String?, val container: String?, val videoCodec: String?, val audioCodec: String?, val doviProfile: Int?, val bitrate: Int,
+        val audioStreams: List<AudioStream>, val width: Int?, val height: Int?,
     )
 
     /** The best source (highest bitrate, then tallest) and what plays from it. */
@@ -197,6 +204,18 @@ class MediaBrowserLibrary(
             // Emby only: Jellyfin has no ExtendedVideoSubType.
             doviProfile = v?.let { embyDoviProfile(it.str("ExtendedVideoSubType")) },
             bitrate = src?.num("Bitrate")?.takeIf { it > 0 }?.let { Math.round(it / 1000).toInt() } ?: 0,
+            audioStreams = streams.filter { it.str("Type") == "Audio" }.map { s ->
+                AudioStream(
+                    index = s.long("Index")?.toInt() ?: 0,
+                    lang = (s.str("Language") ?: "").lowercase(),
+                    codec = (s.str("Codec") ?: "").lowercase(),
+                    channels = s.long("Channels")?.toInt() ?: 0,
+                    title = s.str("DisplayTitle")?.ifEmpty { null } ?: s.str("Title")?.ifEmpty { null } ?: s.str("Language")?.ifEmpty { null } ?: "Audio",
+                    isDefault = (s["IsDefault"] as? JsonPrimitive)?.content == "true",
+                )
+            },
+            width = v?.long("Width")?.toInt()?.takeIf { it > 0 },
+            height = v?.long("Height")?.toInt()?.takeIf { it > 0 },
         )
     }
 

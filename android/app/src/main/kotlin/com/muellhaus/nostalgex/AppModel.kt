@@ -239,6 +239,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     var subtitleLanguage by mutableStateOf(prefs.subtitleLanguage)
         private set
     var audioLanguage by mutableStateOf(prefs.audioLanguage)
+        .also { playback.audioLanguages = listOf(LanguageChoice.resolved(prefs.audioLanguage)) }
         private set
 
     fun chooseSubtitleLanguage(code: String) {
@@ -251,6 +252,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun chooseAudioLanguage(code: String) {
         audioLanguage = code
         prefs.audioLanguage = code
+        // A transcode asks for its track when it starts; the next one carries the new language.
+        playback.audioLanguages = listOf(LanguageChoice.resolved(code))
         audioChosenFor = null
         lastTracks?.let(::onTracks)
     }
