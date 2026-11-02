@@ -1457,6 +1457,34 @@
     display: flex;
   }
 
+  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY). NORMAL is every size the guide drew
+     before the setting existed, so each multiplier is 1 and calc(18px * 1) is 18px. LARGE
+     scales by the ratios of the Apple TV's GuideTextMetrics.large over .normal (Roku's
+     GuideText.brs has the same numbers): titles and times 26/20, CHANNEL heading 22/18,
+     channel number 24/20, channel name 20/18. Only text grows: rows, header and the channel
+     column keep their size, so the name gives up characters to the ellipsis. The panel above
+     the grid is not touched. scripts/guide-text-smoke.mjs holds these to the Swift file. */
+  .guide-grid {
+    --gt-title: 1;
+    --gt-time: 1;
+    --gt-head: 1;
+    --gt-num: 1;
+    --gt-name: 1;
+  }
+  body.guide-text-large .guide-grid {
+    --gt-title: 1.3;
+    --gt-time: 1.3;
+    --gt-head: 1.2222;
+    --gt-num: 1.2;
+    --gt-name: 1.1111;
+  }
+  /* A phone has four time columns of 72px (390 wide), and a label wider than its column
+     pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)
+     is the last size that fits. The times grow less there; titles and names grow in full. */
+  @media (max-width: 560px) {
+    body.guide-text-large .guide-grid { --gt-time: 1.05; }
+  }
+
   /* Grid header - time slots */
   .grid-header {
     display: flex;
@@ -1470,7 +1498,7 @@
     width: 160px;
     flex-shrink: 0;
     font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
+    font-size: calc(8px * var(--gt-head));
     color: var(--yellow);
     letter-spacing: 2px;
     padding: 0 12px;
@@ -1483,7 +1511,7 @@
   .grid-time-slot {
     flex: 1;
     font-family: 'VT323', monospace;
-    font-size: 20px;
+    font-size: calc(20px * var(--gt-time));
     color: var(--yellow);
     letter-spacing: 1px;
     padding: 0 8px;
@@ -1554,13 +1582,13 @@
   }
   .grid-ch-num {
     font-family: 'VT323', monospace;
-    font-size: 20px;
+    font-size: calc(20px * var(--gt-num));
     color: rgba(255,255,255,0.35);
-    min-width: 28px;
+    min-width: calc(28px * var(--gt-num));
   }
   .grid-ch-name {
     font-family: 'VT323', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--gt-name));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -1580,7 +1608,7 @@
     align-items: center;
     padding: 0 8px;
     font-family: 'VT323', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--gt-title));
     color: rgba(255,255,255,0.8);
     white-space: nowrap;
     overflow: hidden;
@@ -2410,12 +2438,12 @@
     /* Guide: narrower channel column, shorter rows, so more of the lineup
        is on screen at once. */
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
-    .grid-channel-col { font-size: 7px; letter-spacing: 1px; }
+    .grid-channel-col { font-size: calc(7px * var(--gt-head)); letter-spacing: 1px; }
     .grid-row { height: 34px; }
-    .grid-ch-num { font-size: 16px; min-width: 18px; }
-    .grid-ch-name { font-size: 15px; letter-spacing: 0; }
+    .grid-ch-num { font-size: calc(16px * var(--gt-num)); min-width: calc(18px * var(--gt-num)); }
+    .grid-ch-name { font-size: calc(15px * var(--gt-name)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
-    .grid-time-slot { font-size: 16px; padding: 0 6px; white-space: nowrap; }
+    .grid-time-slot { font-size: calc(16px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -2460,7 +2488,7 @@
        tighter: one more channel on screen at 393x852. */
     .grid-row { height: 32px; }
     /* Four time columns in 256px once the channel column is paid for. */
-    .grid-time-slot { font-size: 15px; padding: 0 5px; }
+    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 5px; }
   }
 
   /* ──────────────────────────────────────
@@ -2671,11 +2699,11 @@
     .info-upnext { display: none; }
 
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
-    .grid-channel-col { font-size: 7px; letter-spacing: 1px; }
+    .grid-channel-col { font-size: calc(7px * var(--gt-head)); letter-spacing: 1px; }
     .grid-row { height: 30px; }
-    .grid-ch-num { font-size: 15px; min-width: 16px; }
-    .grid-ch-name { font-size: 14px; letter-spacing: 0; }
-    .grid-time-slot { font-size: 15px; padding: 0 6px; white-space: nowrap; }
+    .grid-ch-num { font-size: calc(15px * var(--gt-num)); min-width: calc(16px * var(--gt-num)); }
+    .grid-ch-name { font-size: calc(14px * var(--gt-name)); letter-spacing: 0; }
+    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -3514,6 +3542,18 @@
           <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 4px;">CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio. Shortcut: B</div>
         </div>
         <button class="plex-btn" id="cfg-retro-toggle" style="font-size: 11px; padding: 12px 22px;" onclick="toggleRetroMode()">ON</button>
+      </div>
+      <!-- Two built-in sizes, as on the Apple TV and Roku. Real buttons, so a TV browser with no keys
+           can pick one. -->
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Guide text size</div>
+          <div class="cfg-row-desc">Bigger program titles, times and channel names in the guide</div>
+        </div>
+        <div class="sleep-chips" id="cfg-guide-text-chips" role="group" aria-label="Guide text size">
+          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">NORMAL</button>
+          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGE</button>
+        </div>
       </div>
 
       <div class="config-section-label" style="margin-top: 28px;">PLAYBACK</div>
@@ -4505,6 +4545,9 @@
     if (guideLayout === 'side') {
       document.getElementById('player-screen').classList.add('layout-side');
     }
+
+    // Apply the saved guide text size before the guide can be drawn
+    applyGuideTextSize();
 
     // Apply saved retro mode
     if (retroMode) {
@@ -7099,6 +7142,33 @@
     }
     const cfg = document.getElementById('cfg-retro-toggle');
     if (cfg) { cfg.textContent = retroMode ? 'ON' : 'OFF'; cfg.classList.toggle('on', retroMode); }
+  }
+
+  // ── GUIDE TEXT SIZE ─────────────────────────────────────────────────────
+  // NORMAL or LARGE, saved as 'normal' / 'large' under the Apple TV's own key. Nothing saved,
+  // or anything else, is NORMAL (GuideTextSize.init(stored:), NxGuideTextFrom). The sizes are
+  // CSS (body.guide-text-large); this only keeps the class and the buttons in step. Kept per
+  // browser: the web has no settings sync.
+  const GUIDE_TEXT_KEY = 'nostalgex_guide_text_size';
+
+  function guideTextSize() {
+    try { return localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'; } catch (e) { return 'normal'; }
+  }
+
+  /** The class and the buttons show what is saved, so a write storage refused reads as unchanged. */
+  function applyGuideTextSize() {
+    const size = guideTextSize();
+    document.body.classList.toggle('guide-text-large', size === 'large');
+    for (const b of document.querySelectorAll('#cfg-guide-text-chips .sleep-chip')) {
+      const active = b.dataset.size === size;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    }
+  }
+
+  function setGuideTextSize(size) {
+    lsSet(GUIDE_TEXT_KEY, size === 'large' ? 'large' : 'normal');
+    applyGuideTextSize();
   }
 
   function updateSyncActivityControls() {
