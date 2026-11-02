@@ -57,18 +57,19 @@ Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker cont
 
 **Latest: `tuner-v1.0.13`.** WATERSHED, the Apple TV's 9 PM hold for R, 18 and TV-MA titles (off until you switch it on, in Settings), GUIDE TEXT SIZE for a bigger guide, and a faster Plex connect at home. Also fixed: the same title almost never on two channels at once, the card that says why something won't play now shows in the split view, two Plex servers sharing an address no longer load the wrong library, and AUDIO LANGUAGE works on Jellyfin and Emby. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.13). Already running it? `docker compose pull && docker compose up -d`.
 
-<a id="whats-new-in-1028"></a>
-## What's new in 1.0.28
+<a id="whats-new-in-1029"></a>
+## What's new in 1.0.29
 
-1.0.27 is folded in, so this is everything since 1.0.26. [Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.28)
+[Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.29)
 
-- **An easier Jellyfin and Emby sign-in.** Pick Jellyfin or Emby and Nostalgex finds your server on your network. Jellyfin puts a Quick Connect code on screen to approve from your phone, Emby shows its users so you pick your name, and the address is checked before you type a password.
-- **Holiday channels.** TIS THE SEASON grows to eight channels with MISTLETOE, CHRISTMAS SPECIALS, KIDS CHRISTMAS TV and TURKEY DAY, and shows up a week before US Thanksgiving.
-- **SCREAM is eight channels** and can stay on in any month, plus MYSTERY BOX TV, CRINGE TV and A24.
-- **Ratings from outside the US** count like their US equivalents, so UK, German and other ratings fill the kids and family channels.
-- **Clock changes** no longer leave channels dark for the last hour of the day.
-- **Playback:** Blu-ray 7.1 audio plays, Emby keeps the sound in sync when you join a film part way through, Jellyfin and Emby stop burning subtitles into the picture, and stalled streams recover.
-- **TV show collections** become channels too, and Report Playback is two switches. Thanks to [@w6trp](https://github.com/w6trp) and [@tydude001](https://github.com/tydude001).
+- **Channel numbers change once.** Every package has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
+- **A new Settings layout.** Pick a category on the left and its settings open on the right. Settings also tells you why a channel isn't on the air.
+- **Pick which libraries load** when your server has more than one. A library you leave off is never scanned.
+- **Three new 80s channels** in NOSTALGEX: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV.
+- **WATERSHED** holds R, 18 and TV-MA titles until 9 PM on every channel. It's off unless you turn it on. **GUIDE TEXT SIZE** makes the guide bigger.
+- **STREAM QUALITY has an Original choice** for a Plex server on your home network, and some 4K Dolby Vision streams that played with no sound have sound again. Thanks to [@w6trp](https://github.com/w6trp).
+- **Plex sign-in is much quicker.**
+- **Fixes:** audio matches your language exactly on Jellyfin and Emby, rating-based channels no longer come up empty on Emby, STOP WAITING only stops the server you pressed it on (thanks to [@androbwebb](https://github.com/androbwebb) for the report), and deleting and reinstalling the app starts you at the connect screen.
 
 ## Join in
 
@@ -237,7 +238,7 @@ Each film series in your library (Star Wars, Rocky, whatever you own) gets its o
 <a id="maintained"></a>
 Nostalgex has been on the App Store since April 19, 2026, and gets updates every month. I'm one person, and I read every issue.
 
-- **Releases:** 1.0.28 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
+- **Releases:** 1.0.29 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
 - **Dev log:** [docs/DEVLOG.md](docs/DEVLOG.md) explains why things changed and what's still half done.
 - **Outside contributors:** thank you to [@w6trp](https://github.com/w6trp) for #18, #19, #20 and #21 in 1.0.26, and to [@Gorbataras](https://github.com/Gorbataras) for [#5](https://github.com/chadMueller/Nostalgex/pull/5) and [#7](https://github.com/chadMueller/Nostalgex/pull/7) (Emby seek fix, and no more sound over a black picture on Jellyfin and Emby).
 - **Tests** run in CI on every push to `main` and on every pull request.
