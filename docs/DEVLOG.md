@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku: kbps rounding floors only a Double or a Float, #160 follow-up)
+
+**Why.** Chad's merge note on #160: `NxMbBitrateKbps` skipped `Int()` only for a list of
+whole-number types, so a Double still went through it and a boxed `roInt` wasn't in the list.
+On a TV `Int()` goes through a Float (`Int(19269499)` is 19269500), so anything left on that path
+can round a bitrate wrong.
+
+**Changed.** The check is flipped: a Double is floored by `NxFloorDouble`, which never calls
+`Int()` on the whole value, a Float still goes through `Int()` (it can't hold 19269499 anyway),
+and every other number is taken as it is. Five cases in `tests/MediaBrowserTests.brs`: a Double
+with a fraction, a whole Double, an `roInt`, and 20000499 and 20000500 bps, which round to 20000
+and 20001, either side of `NxMbVideoQuery`'s line: over 20,000 kbps it sends
+`AllowVideoStreamCopy=false`.
+
+**Measured.** `tests/run.sh` ends in ALL TESTS PASSED, mediabrowser 5660 (5655 before), but the
+interpreter's `Int()` is exact, so these cases pass there either way. On our 55" TCL (55R617, Roku
+OS 15.3.4), `scripts/deploy.sh --test` ends in ALL TESTS PASSED, mediabrowser 5660 passed, 0 failed.
+
 ## 2026-11-02 (Roku 1.0.11: Roku's email screen is asked for on a button, not as the sign-in screen opens)
 
 **Shipped.** Nothing yet. Branch `roku/rfi-on-request`, cut from `origin/main` at `e5375d3`, not pushed.
