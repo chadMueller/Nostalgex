@@ -1328,7 +1328,7 @@ Found and fixed on the way: after typing in a text field (an address, a username
 
 **Tested on the emulator** against Jellyfin 12.4 (20 films and one series, 21 TMDB ids) with a local stand-in for Supabase holding rows for 6 of them, and the real relay. Full load: 1 Supabase read of 21 ids, 6 rows; the relay refused the first round of 6 with 403 and was asked nothing more; nothing written back; 693 ms. Launch from the saved library: 6 local hits in 7 ms before the guide; the refresh asked the stand-in for the 15 others only, found nothing new and did not rebuild. The shared filter, run over the emulator's own saved library and cache, gave MUSICALS 1 title with the cache attached and 0 without; the test library is too small for any channel to reach its minimum, so no change in the guide was seen. Not measured: a relay that answers 200 for `android`, OMDb lookups, and the real Supabase project.
 
-**Half-done.** Uncommitted on `feature/android`. The relay change only takes effect once Chad agrees to it and it deploys; a note asking him, as for the Roku in Discussion #8, is drafted but not posted.
+**Half-done.** Committed and pushed on `feature/android` (`83ef73d`). The relay change only takes effect once Chad agrees to it and it deploys; a note asking him, as for the Roku in Discussion #8, is drafted but not posted.
 
 **Next.** With the relay accepting `android` and a build with the Supabase values, check on the SHIELD: the METADATA step's counts, OMDb's 50 a load, and which channels a real library gains.
 
