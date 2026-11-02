@@ -172,17 +172,27 @@ servers, driven over ECP.
   playable. A launch now checks the token (`GET /Users/{id}`); on a 401 it
   signs out and says why, as a refused Plex token does.
 
-- **Emby restarts its transcode on every segment after a mid-file join**
-  (2026-10-19, Emby 4.10.1, Discussion #8). Joined 335 s into an MKV whose
-  audio it converts, the 43S45 fetched each segment once, but Emby
-  started ffmpeg again for each one ("segmentGap is 53 … requestedIndex=55",
-  then 54, 55, …: 26 restarts in 11 s). curl alone does the same, so it's
-  Emby's, not the TV's: it seems to count the restarted ffmpeg's segments
-  from 0, not from its `-start_number`. A file whose streams are only copied
-  restarted once. This fits the maintainer's 500s ("Error starting ffmpeg")
-  and repeated fetches. `StartTimeTicks` on the playlist is dropped from the
-  segment requests, so it's no way round it. Not fixed here yet; a single
-  progressive stream for these files is the next thing to try.
+- **Emby restarted its transcode over and over after a mid-file join over
+  fMP4, and doesn't over TS** (2026-10-19, Emby 4.10.1, Discussion #8;
+  TS measured 2026-11-02). Joined 335 s into an MKV whose audio it
+  converts, the 43S45 fetched each segment once, but Emby started ffmpeg
+  again for each one ("segmentGap is 53 … requestedIndex=55", then 54, 55,
+  …: 26 restarts in 11 s). curl alone does the same. The port asked for
+  fMP4 segments then, which Emby cuts with ffmpeg's `hls` muxer. For TS it
+  uses the `segment` muxer, and the restarts stop. Against the lab Emby,
+  curl asked as the port asks and fetched 15 segments back to back from
+  30 min into a 2-hour H.264 file, its Opus track converted:
+  - fMP4: five ffmpeg starts, at `-start_number` 900, 903, 906, 909 and
+    912;
+  - TS: one, at `-segment_start_number 900`; one each also for two HEVC
+    files over 20 Mb/s, re-encoded, joined 30 s in.
+
+  The port has asked for TS since 2026-10-22 (below). In Emby's logs from
+  2026-10-31 to 11-02, nine joins by the 43S45 and the 55" TCL (Roku OS
+  16.0.4 and 15.3.4), 12 to 79 minutes into that file, each ran one ffmpeg
+  over 23 to 92 segments. The restarts fit the maintainer's 500s ("Error
+  starting ffmpeg") and repeated fetches. `StartTimeTicks` on the playlist is
+  dropped from the segment requests, so it was no way round it.
 - **What that restart costs is sync, upstream found** (Discussion #8,
   2026-10-20). With the video copied and the audio converted, fMP4 stamps
   both tracks from zero, so on their Apple TV the sound ran early by up to a
