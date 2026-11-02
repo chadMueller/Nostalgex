@@ -21,6 +21,12 @@ function NxRunCrossChannelTests() as Integer
     NxCheck(r, "overlap: another title", NxOccupancyOverlap(occ, "c", 100, 200, 2).ToStr(), "0")
     NxCheck(r, "overlap: an empty slot is never added", NxOccupancyOverlap(occ, "b", 0, 1000, 2).ToStr(), "0")
     NxCheck(r, "overlap: the key is case sensitive", NxOccupancyOverlap(occ, "A", 100, 200, 2).ToStr(), "0")
+    gatedOcc = NxOccupancy()
+    NxOccupancyAdd(gatedOcc, 4, "g", 0, 100, true)
+    NxOccupancyAdd(gatedOcc, 5, "g", 50, 100, false)
+    NxCheck(r, "overlap: a time-gated channel is seen by the rest", NxOccupancyOverlap(gatedOcc, "g", 0, 100, 2).ToStr(), "150")
+    NxCheck(r, "overlap: a time-gated channel asking skips the gated ones", NxOccupancyOverlap(gatedOcc, "g", 0, 100, 2, true).ToStr(), "50")
+    NxCheck(r, "overlap: skipping gated ones leaves the rest as they were", NxOccupancyOverlap(occ, "a", 150, 250, 2, true).ToStr(), "80")
 
     ' ── The mark of a multi-part film ───────────────────────────────────────
     NxCheck(r, "mark: Part 2", NxMarkText(NxSequelMark({ type: "movie", title: "The Long Night Part 2" })), "the long night 2")
@@ -66,6 +72,11 @@ function NxRunCrossChannelTests() as Integer
     for i = 0 to 8
         NxOccupancyAdd(longBusy, 9, "x" + i.ToStr(), 0, 3600)
     end for
+    gatedBusy = NxOccupancy()
+    NxOccupancyAdd(gatedBusy, 9, "a", 0, 3600, true)
+    NxCheck(r, "pick: a gated channel gives way to an ungated one", NxPickCandidate([a, b, c], 0, NxBusyUngated("a"), 1, invalid, true, 0, 0, true).ToStr(), "1")
+    NxCheck(r, "pick: a gated channel never gives way to another gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, 0, 0, true).ToStr(), "0")
+    NxCheck(r, "pick: an ungated channel gives way to a gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, 0, 0, false).ToStr(), "1")
     NxCheck(r, "pick: looks at the first 8 only", NxPickCandidate(longQueue, 0, longBusy, 1, invalid, true).ToStr(), "-1")
 
     ' ── The channel order ───────────────────────────────────────────────────
@@ -111,6 +122,21 @@ function NxRunCrossChannelTests() as Integer
     first2 = NxManifestBlocks(ch1, ch1.pool, at&)
     NxManifestBlocks(off, off.pool, at&)
     NxCheck(r, "lineup: a channel off the guide changes no lineup channel's day", FormatJson(NxCrossKeys(first2)), FormatJson(NxCrossKeys(first)))
+    ' The lineup's pack hands back every channel's day, stored or packed now.
+    NxClearManifests()
+    NxSetLineup([ch1, ch2])
+    NxManifestBlocks(ch1, ch1.pool, at&)
+    storedDays = NxPackLineupDay([{ channel: ch1, pool: pool, fp: NxPoolFingerprint(pool) }, { channel: ch2, pool: pool, fp: NxPoolFingerprint(pool) }], invalid, NxLocalDay(at&))
+    NxCheck(r, "lineup: the pack returns the stored days too", (storedDays["1"].Count() > 0).ToStr() + " " + (storedDays["2"].Count() > 0).ToStr(), "true true")
+    NxCheck(r, "gated: a channel with timeRestrictions", NxIsGated({ id: 1, timeRestrictions: { tvOnlyBefore: 0 } }).ToStr() + " " + NxIsGated({ id: 1 }).ToStr() + " " + NxIsGated({ id: 1, timeRestrictions: invalid }).ToStr(), "true false false")
+    ' The guide schedules the very array that is the lineup, as LibraryTask does: a
+    ' nested `for each` over one array stopped the outer loop on a TV.
+    NxClearManifests()
+    ordered = [ch1, ch2, ch3]
+    NxSetLineup(ordered)
+    guide = NxScheduleGuide(ordered, at&)
+    NxCheck(r, "guide: every channel of the lineup it is given", guide.Count().ToStr(), "3")
+    NxCheck(r, "guide: the last channel has its blocks", (guide[2].blocks.Count() > 24).ToStr(), "true")
     NxClearManifests()
     NxCheck(r, "lineup: a library load clears the lineup", (GetGlobalAA().nxLineup = invalid).ToStr(), "true")
 
@@ -126,6 +152,13 @@ function NxCrossEntry(id as Integer, gated as Boolean) as Object
     ch = { id: id }
     if gated then ch.timeRestrictions = { tvOnlyBefore: 0 }
     return { channel: ch, pool: [], fp: "" }
+end function
+
+' A title on air on an ungated channel, over the first hour.
+function NxBusyUngated(key as String) as Object
+    occ = NxOccupancy()
+    NxOccupancyAdd(occ, 9, key, 0, 3600, false)
+    return occ
 end function
 
 ' A title's whole slot taken by another channel, over [startAt, endAt).

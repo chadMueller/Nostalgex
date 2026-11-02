@@ -347,7 +347,7 @@ function NxLookahead() as Integer
     return 8
 end function
 
-' What the other channels have on, by title: ratingKey -> [{ ch, s, e }].
+' What the other channels have on, by title: ratingKey -> [{ ch, s, e, gated }].
 ' Mirrors ScheduleOccupancy.
 function NxOccupancy() as Object
     byKey = {}
@@ -355,24 +355,26 @@ function NxOccupancy() as Object
     return { byKey: byKey }
 end function
 
-sub NxOccupancyAdd(occupancy as Object, channelId as Integer, ratingKey as String, startSec as Integer, endSec as Integer)
+sub NxOccupancyAdd(occupancy as Object, channelId as Integer, ratingKey as String, startSec as Integer, endSec as Integer, gated = false as Boolean)
     if not (endSec > startSec) then return
     list = occupancy.byKey[ratingKey]
     if list = invalid then
         list = []
         occupancy.byKey[ratingKey] = list
     end if
-    list.Push({ ch: channelId, s: startSec, e: endSec })
+    list.Push({ ch: channelId, s: startSec, e: endSec, gated: gated })
 end sub
 
 ' The seconds of [startSec, endSec) that some other channel already airs the
-' title for.
-function NxOccupancyOverlap(occupancy as Object, ratingKey as String, startSec as Integer, endSec as Integer, channelId as Integer) as Integer
+' title for. A time-gated channel asks with skipGated: it gives way to the rest of
+' the lineup, never to another time-gated one, so its day can't depend on the
+' hour that one was first built.
+function NxOccupancyOverlap(occupancy as Object, ratingKey as String, startSec as Integer, endSec as Integer, channelId as Integer, skipGated = false as Boolean) as Integer
     list = occupancy.byKey[ratingKey]
     if list = invalid then return 0
     sec = 0
     for each x in list
-        if x.ch <> channelId then
+        if x.ch <> channelId and not (skipGated and x.gated) then
             lo = startSec
             if x.s > lo then lo = x.s
             hi = endSec
@@ -422,7 +424,7 @@ end function
 ' earlier one waiting before it. With no occupancy, or nothing on elsewhere,
 ' this is always 0: the channel's own order. Mirrors
 ' DailyManifestScheduler.pickCandidate.
-function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, firstOffsetSec = 0 as Integer, capSec = 0 as Integer) as Integer
+function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, firstOffsetSec = 0 as Integer, capSec = 0 as Integer, skipGated = false as Boolean) as Integer
     n = queue.Count()
     if n > NxLookahead() then n = NxLookahead()
     best = -1
@@ -442,7 +444,7 @@ function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, ch
                 play = NxDuration(item) * 60
                 if i = 0 then play = play - firstOffsetSec
                 if capSec > 0 and play > capSec then play = capSec
-                ov = NxOccupancyOverlap(occupancy, item.ratingKey, t, t + play, channelId)
+                ov = NxOccupancyOverlap(occupancy, item.ratingKey, t, t + play, channelId, skipGated)
             end if
             if ov = 0 then return i
             if best < 0 or ov < bestOverlap then
@@ -465,8 +467,10 @@ end function
 ' yesterdayAired is an AA used as a set of ratingKeys; yesterdayLastRatingKey
 ' is a String or invalid. occupancy (NxOccupancy) is what the other channels
 ' of the lineup have on today, or invalid when this channel packs alone: then
-' every pick is the first, as before. Mirrors DailyManifestScheduler.packDay.
-function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic) as Object
+' every pick is the first, as before. gated: a channel whose pool changes with
+' the hour packs with the others' days in view but not other gated ones'.
+' Mirrors DailyManifestScheduler.packDay.
+function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic, gated = false as Boolean) as Object
     totalPoolSec = 0&
     for each item in pool
         totalPoolSec = totalPoolSec + NxDuration(item) * 60
@@ -500,7 +504,7 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         if NxDuration(item) > 0 then queue.Push(item)
     end for
     while queue.Count() > 0 and t < dayEndSec
-        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true)
+        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true, 0, 0, gated)
         if j < 0 then exit while
         item = queue[j]
         queue.Delete(j)
@@ -560,7 +564,7 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
             if first then offFirst% = offsetInItem
             lastKey = yesterdayLastRatingKey
             if blocks.Count() > 0 then lastKey = blocks.Peek().ratingKey
-            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, offFirst%, remainingDay%)
+            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, offFirst%, remainingDay%, gated)
             item = cycle[j]
             playSec = NxDuration(item) * 60
             if j = 0 and first then playSec = playSec - offFirst%

@@ -12,14 +12,31 @@
 ' `NxSetLineup(ordered)` lines are the engine's registration of the lineup; a
 ' log from before the engine had one is made by deleting them.
 '
-'   BENCH <channels> channels, <items> items: cold <ms>, warm <ms>, switch <ms>, doubled <pct>%
+'   BENCH <wide|crowded>: <channels> channels (<n> scheduled), <items> items: cold <ms>, warm <ms>, switch <ms>, doubled <pct>%
 sub Main(args = invalid as Dynamic)
     config = ParseJson(ReadAsciiFile("pkg:/data/channels.json"))
-    items = NxBenchItems(12000)
     ' A fixed instant: 2026-10-15 20:00 UTC, 4 PM at UTC-4.
     nowSec& = 1792094400&
     GetGlobalAA().nxTzOffsetSec = -4 * 3600
-    sizes = [3000, 1500, 800, 400, 200, 120, 80]
+    ' Wide: pools of hundreds to thousands out of 12,000 items, so a channel's day
+    ' is a sliver of its pool and titles seldom meet.
+    NxBenchScenario("wide", config, NxBenchItems(12000), [3000, 1500, 800, 400, 200, 120, 80], nowSec&)
+    ' Crowded: pools of 40 to 200 out of 600 items, every title on dozens of
+    ' channels, as a small library's channels are (94% of one device's minutes were
+    ' a title on two channels at once).
+    NxBenchScenario("crowded", config, NxBenchItems(600), [200, 120, 80, 60, 40], nowSec&)
+    print "BENCH DONE"
+    ' On a TV (it gets launch parameters) stay up, so the console can be read.
+    if args <> invalid then
+        while true
+            Sleep(1000)
+        end while
+    end if
+end sub
+
+' One lineup of the real channels over `items`, each channel's pool a window of
+' them (`sizes` in turn), timed cold, warm and as a package switch.
+sub NxBenchScenario(label as String, config as Object, items as Object, sizes as Object, nowSec as LongInteger)
     ordered = []
     c = 0
     for each def in config.channels
@@ -41,11 +58,11 @@ sub Main(args = invalid as Dynamic)
     NxClearManifests()
     timer = CreateObject("roTimespan")
     NxSetLineup(ordered)
-    cold = NxScheduleGuide(ordered, nowSec&)
+    cold = NxScheduleGuide(ordered, nowSec)
     coldMs = timer.TotalMilliseconds()
     timer.Mark()
     NxSetLineup(ordered)
-    warm = NxScheduleGuide(ordered, nowSec& + 30)
+    warm = NxScheduleGuide(ordered, nowSec + 30)
     warmMs = timer.TotalMilliseconds()
     ' A package switch: every channel built afresh, the day's schedules kept.
     rebuilt = []
@@ -58,19 +75,18 @@ sub Main(args = invalid as Dynamic)
     end for
     timer.Mark()
     NxSetLineup(rebuilt)
-    switched = NxScheduleGuide(rebuilt, nowSec& + 60)
+    switched = NxScheduleGuide(rebuilt, nowSec + 60)
     switchMs = timer.TotalMilliseconds()
-    doubled = NxBenchDoubled(cold, NxLocalDay(nowSec&).dayStartSec)
-    same = FormatJson(cold) = FormatJson(warm) and FormatJson(warm) = FormatJson(switched)
-    if not same then NxBenchDiff(cold, warm, switched)
-    print "BENCH "; ordered.Count().ToStr(); " channels, "; items.Count().ToStr(); " items: cold "; coldMs.ToStr(); " ms, warm "; warmMs.ToStr(); " ms, switch "; switchMs.ToStr(); " ms, doubled "; Str(doubled); "%, same on re-check "; same
-    print "BENCH DONE"
-    ' On a TV (it gets launch parameters) stay up, so the console can be read.
-    if args <> invalid then
-        while true
-            Sleep(1000)
-        end while
-    end if
+    doubled = NxBenchDoubled(cold, NxLocalDay(nowSec).dayStartSec)
+    ' By channel: the whole guide is a few MB of text, which a TV's FormatJson cut short once.
+    same = cold.Count() = ordered.Count() and warm.Count() = ordered.Count() and switched.Count() = ordered.Count()
+    for i = 0 to cold.Count() - 1
+        if same then
+            if FormatJson(cold[i]) <> FormatJson(warm[i]) or FormatJson(warm[i]) <> FormatJson(switched[i]) then same = false
+        end if
+    end for
+    print "BENCH "; label; ": "; ordered.Count().ToStr(); " channels ("; cold.Count().ToStr(); " scheduled), "; items.Count().ToStr(); " items: cold "; coldMs.ToStr(); " ms, warm "; warmMs.ToStr(); " ms, switch "; switchMs.ToStr(); " ms, doubled "; Str(doubled); "%, same on re-check "; same
+    NxClearManifests()
 end sub
 
 ' 12,000 made-up items: two in five films (some in "Part n" families), the rest
@@ -162,27 +178,3 @@ function NxBenchDoubled(channels as Object, dayStart as LongInteger) as Float
     return doubled& * 100.0 / total&
 end function
 
-' Where two runs of the same guide differ: each channel's blocks, the first that
-' isn't the same (a difference on re-check would mean a day was packed twice).
-sub NxBenchDiff(cold as Object, warm as Object, switched as Object)
-    shown = 0
-    for i = 0 to cold.Count() - 1
-        a = cold[i].blocks
-        for each other in [warm[i].blocks, switched[i].blocks]
-            at = -1
-            n = a.Count()
-            if other.Count() < n then n = other.Count()
-            for k = 0 to n - 1
-                if at < 0 and (a[k].ratingKey <> other[k].ratingKey or a[k].startSec <> other[k].startSec or a[k].endSec <> other[k].endSec) then at = k
-            end for
-            if at >= 0 or a.Count() <> other.Count() then
-                if shown < 6 then
-                    shown = shown + 1
-                    line = "DIFF channel " + cold[i].id.ToStr() + ": " + a.Count().ToStr() + " blocks, then " + other.Count().ToStr() + ", first difference at " + at.ToStr()
-                    if at >= 0 then line = line + " (" + a[at].ratingKey + " " + a[at].startSec.ToStr() + "-" + a[at].endSec.ToStr() + " vs " + other[at].ratingKey + " " + other[at].startSec.ToStr() + "-" + other[at].endSec.ToStr() + ")"
-                    print line
-                end if
-            end if
-        end for
-    end for
-end sub

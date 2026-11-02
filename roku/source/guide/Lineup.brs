@@ -222,7 +222,12 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
         own = { channel: channel, pool: valid, fp: fp }
         entries = []
         at = -1
-        for each lc in NxList(GetGlobalAA().nxLineup)
+        ' By index: the guide's `for each` over its channels is this very array,
+        ' and a nested `for each` over the same array shares its place on a TV (the
+        ' outer loop stopped after the first channel).
+        lineup = NxList(GetGlobalAA().nxLineup)
+        for li = 0 to lineup.Count() - 1
+            lc = lineup[li]
             if lc.id = channel.id then
                 at = entries.Count()
                 entries.Push(own)
@@ -233,9 +238,10 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
         end for
         extra = invalid
         if at < 0 then extra = own
-        NxPackLineupDay(entries, extra, day)
+        packedBy = NxPackLineupDay(entries, extra, day)
         cache = NxManifestCache()
         cached = cache[key]
+        if cached = invalid then cached = { fp: fp, blocks: NxList(packedBy[channel.id.ToStr()]) }
     end if
 
     out = []
@@ -268,10 +274,17 @@ end function
 function NxLineupBefore(a as Object, b as Object) as Boolean
     ra = 0
     rb = 0
-    if type(a.channel.timeRestrictions) = "roAssociativeArray" then ra = 1
-    if type(b.channel.timeRestrictions) = "roAssociativeArray" then rb = 1
+    if NxIsGated(a.channel) then ra = 1
+    if NxIsGated(b.channel) then rb = 1
     if ra <> rb then return ra < rb
     return a.channel.id < b.channel.id
+end function
+
+' A channel whose pool changes with the hour (timeRestrictions), which packs
+' after the rest and gives way to them but never to another like it. Mirrors
+' Channel.timeRestrictions != nil.
+function NxIsGated(channel as Object) as Boolean
+    return type(channel.timeRestrictions) = "roAssociativeArray"
 end function
 
 ' The stored day's blocks ([] if none), whatever pool packed them.
@@ -292,7 +305,7 @@ end function
 ' entries: [{ channel, pool (playable items), fp }], every pool non-empty.
 ' extra: one more { channel, pool, fp } that is not in the guide, packed after
 ' the lineup against it and seen by nothing, or invalid. day: NxLocalDay.
-' Returns channel id (text) -> the blocks it packed.
+' Returns channel id (text) -> its day's blocks, stored or packed now.
 function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as Object
     dayEndSec = NxStartOfNextLocalDaySec(day.dayStartSec)
     yesterdayKey = NxPreviousLocalDayKey(day.dayStartSec)
@@ -310,7 +323,7 @@ function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as 
         ' guide's channels' only: one off the guide is seen by nothing).
         if extra = invalid or id <> extra.channel.id then
             for each b in prev
-                if b.endSec > day.dayStartSec then NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec)
+                if b.endSec > day.dayStartSec then NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec, NxIsGated(entry.channel))
             end for
         end if
     end for
@@ -321,9 +334,10 @@ function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as 
         if cached <> invalid and cached.fp = entry.fp then
             if extra = invalid or id <> extra.channel.id then
                 for each b in cached.blocks
-                    NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec)
+                    NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec, NxIsGated(entry.channel))
                 end for
             end if
+            packedBy[id.ToStr()] = cached.blocks
         else
             toPack.Push(entry)
         end if
@@ -338,12 +352,12 @@ function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as 
             aired[b.ratingKey] = true
         end for
         if prev.Count() > 0 then last = prev.Peek().ratingKey
-        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy)
+        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy, NxIsGated(channel))
         cache[channel.id.ToStr() + "_" + day.dayKey] = { fp: entry.fp, blocks: packed }
         packedBy[channel.id.ToStr()] = packed
         if extra = invalid or channel.id <> extra.channel.id then
             for each b in packed
-                NxOccupancyAdd(occupancy, channel.id, b.ratingKey, b.startSec, b.endSec)
+                NxOccupancyAdd(occupancy, channel.id, b.ratingKey, b.startSec, b.endSec, NxIsGated(channel))
             end for
         end if
     end for
