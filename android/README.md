@@ -41,11 +41,14 @@ listing; it installs over `adb`.
 - RETRO MODE's look: scanlines, flicker, vignette and the tracking line over
   the picture, and tuning snow when a start takes longer than 0.75 s.
 - Settings (SETTINGS above the guide, or the top of the package sidebar that
-  Left opens at the guide's first half hour): servers, libraries, RESCAN
-  LIBRARY, DISCONNECT, the playback settings, the channel packages with their
-  availability and WHY AREN'T THESE ON AIR? (each missing channel's rules in
-  plain words, and how many titles match against how many it needs), and
-  WATERSHED. The sidebar jumps to a package's first channel.
+  Left opens at the guide's first half hour), as the Apple TV's rail: PLAYBACK &
+  PICTURE, CHANNELS & BUNDLES (CHANNEL PACKAGES with an amber count of channels
+  still short of content, MISSING CHANNELS with each one's rules in plain words
+  and how many titles match, and WATERSHED), SERVERS & ACCOUNTS (servers,
+  libraries, RESCAN LIBRARY, DISCONNECT) and ABOUT. Up and Down on the rail swap
+  the pane; Right or OK goes into the rows; Left comes back to the category;
+  Back steps out one level at a time. The sidebar jumps to a package's first
+  channel, in guide order.
 - Library selection: after sign-in, a server with more than one library offers
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned. A Plex music library adds nothing on either app (Plex lists
@@ -72,7 +75,13 @@ app asks for the stored file, then the hand-built HLS stream, which is the
 Apple TV's fallback path).
 
 Different on purpose, because the Apple TV's version has no counterpart here:
-- No SUPPORT NOSTALGEX (App Store ratings and tips) and no iCloud sync.
+- No SUPPORT NOSTALGEX (App Store ratings and tips), no NOSTALGEX PRO (hidden on
+  the Apple TV too) and no iCloud sync.
+- The Settings rail shows each category's pixel icon where the Apple TV uses an
+  SF Symbol, which Android doesn't have. CHANNELS & BUNDLES reads "Packages and
+  the schedule": FRANCHISES is a package under CHANNEL PACKAGES rather than its
+  own page, and there is no MY COLLECTIONS page, until franchises and
+  collections are ported.
 - The loading screen's rail is LINEUP, LIBRARY, CHANNELS, READY: the Apple TV's
   COLLECTIONS, METADATA and MUSIC steps have no work behind them here yet.
 - No reinstall check: Android deletes an app's data with the app (and backup is
