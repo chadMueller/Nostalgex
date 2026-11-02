@@ -86,6 +86,8 @@ check("plex-tuner.html: no rounded minutes", !/Math\.round\([^)]*(?:60000|600000
 for (const fn of ["minutesFromPlexMs", "minutesFromTicks", "unixSecondsFromISO"]) {
   check(`plex-tuner.html: the loaders use NostalgexDailyManifest.${fn}`, page.includes(`NostalgexDailyManifest.${fn}(`));
 }
+check("plex-tuner.html: the guide's lineup is registered, so each day packs across it",
+  /NostalgexDailyManifest\.setLineup\(guideLineup\)/.test(page));
 check("plex-tuner.html: a programme that plays to its end advances as a natural end",
   /video\.onended = \(\) => \{[^}]*onItemEnded\(channel, item, true\)/.test(page));
 check("plex-tuner.html: a tune plays the schedule's first row", /const now = ch\.schedule\[0\];/.test(page.slice(page.indexOf("function switchChannel("))));
@@ -179,6 +181,10 @@ const controls = [
   ["the higher channel keeps the title", patched("higher keeps", "const losers = [...ids].sort((a, b) => a - b).slice(1);", "const losers = [...ids].sort((a, b) => b - a).slice(1);"), (fx) => fx],
   ["an advance that ignores other channels", patched("no advance conflict", "if (pick && findConflict(pick, channel.id, channels, nowSec, serverKey) != null) {", "if (false) {"), (fx) => fx],
   ["a guide window that stops at midnight", patched("one day", "while (cursor <= endDay) {", "while (cursor <= endDay && result.length === 0) {"), (fx) => fx],
+  ["each channel packed on its own", patched("no lineup", "Boolean(channel.isPremiereChannel), last, occupancy);", "Boolean(channel.isPremiereChannel), last, null);"), (fx) => fx],
+  ["yesterday's late programme not seen", patched("no overrun", "for (const b of prev) if (b.endSec > dayStartSec) occupancy.add(", "for (const b of prev) if (false) occupancy.add("), (fx) => fx],
+  ["a later part ahead of an earlier one", patched("parts jump", "if (i > 0 && waitsForEarlierPart(queue, i)) continue;", ""), (fx) => fx],
+  ["a time-gated channel packs among the rest", patched("gated first", "const rank = (e) => (e.channel.timeRestrictions ? 1 : 0);", "const rank = () => 0;"), (fx) => fx],
 ];
 // The web's old pool shuffle, verbatim apart from the clock: by UTC day, every channel the same.
 function oldShuffle(arr, nowMs) {

@@ -98,14 +98,25 @@ final class ScheduleParityTests: XCTestCase {
 
         // The lineup, in guide order.
         var channels: [Channel] = []
+        var offGuide = Set<Int>()
         for row in try XCTUnwrap(fx["channels"] as? [[String: Any]]) {
             let id = try XCTUnwrap(int(row["id"]))
             let pool = ((row["pool"] as? [String]) ?? []).compactMap { byKey[$0] }
+            // "gated": a channel whose pool changes with the hour, which packs after the rest
+            // (DailyManifestScheduler.lineupPriority). An hour no fixture reaches, so the pool
+            // itself never changes here.
+            let gated = (row["gated"] as? Bool) ?? false
             var ch = Channel(id: id, number: int(row["number"]) ?? id, name: "CH \(id)", color: .blue, category: nil,
-                             rules: nil, timeRestrictions: nil, minItems: 1, itemPool: pool, enabled: true)
+                             rules: nil, timeRestrictions: gated ? TimeRestrictions(blockRatings: nil, tvOnlyBefore: 0, onlyAfterHour: nil) : nil,
+                             minItems: 1, itemPool: pool, enabled: true)
             ch.isPremiereChannel = (row["premiere"] as? Bool) ?? false
+            if (row["offGuide"] as? Bool) == true { offGuide.insert(id) }
             channels.append(ch)
         }
+        // The guide's lineup, as AppState registers it: each day is packed across all of it.
+        // An offGuide row is dumped but not registered, like a channel the guide doesn't carry.
+        DailyManifestScheduler.setLineup(channels.filter { !offGuide.contains($0.id) }, credentialFingerprint: fp)
+        defer { DailyManifestScheduler.setLineup([], credentialFingerprint: nil) }
 
         func at(_ t: Int) -> Date { Date(timeIntervalSince1970: TimeInterval(t)) }
         func unix(_ d: Date) -> Int { Int(d.timeIntervalSince1970) }

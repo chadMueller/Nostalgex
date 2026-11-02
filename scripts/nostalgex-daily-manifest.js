@@ -19,6 +19,12 @@
 // the server lists it, never shuffled, with minutes truncated (minutesFromPlexMs,
 // minutesFromTicks), as the Apple TV's loaders build it.
 //
+// A day is packed for the whole lineup at once (setLineup, packLineupDay): channels
+// in priority order, each in its own running order except that a programme another
+// channel already has on in the same slot waits for a later one (pickCandidate,
+// LOOKAHEAD). What is stored stays put. So which channels are in the guide is an
+// input too: two devices with the same library, lineup and history air the same day.
+//
 // KNOWN REMAINING DIFFERENCES (deliberate, they never change what airs):
 //  1. `poolFingerprint` is a cheap string hash here vs SHA-256 on tvOS. It only
 //     decides whether a *locally cached* manifest is still valid; it never feeds
@@ -30,13 +36,24 @@
 //     can air different days.
 //  3. `localDayNumber` uses Math.floor where Swift uses Int() truncation. Identical
 //     for every post-1970 timestamp; they would only diverge before the epoch.
+//  4. A channel off the guide packs against the lineup's day kept in memory once it is
+//     known (occupancyMemo), where the Apple TV reads the stored days again. Same answer;
+//     the page builds every channel, enabled or not, and the re-read cost ten times more.
 (function (global) {
   'use strict';
 
   const MANIFEST_PREFIX = 'plex90_manifest_';
   // 2: the schedule follows the Apple TV's (pools in library order, minutes truncated), so a
   // day stored by an older tuner is packed again rather than aired the old way until midnight.
-  const SCHEMA_VERSION = 2;
+  // 3: the lineup's days are packed together, so one title is never on two channels at once.
+  // A day stored by an older tuner is packed again once, from what aired the day before.
+  const SCHEMA_VERSION = 3;
+
+  /**
+   * How far down its running order a channel looks for a programme no other channel has on
+   * in the same slot. Mirrors DailyManifestScheduler.lookahead.
+   */
+  const LOOKAHEAD = 8;
   const MASK64 = 0xFFFFFFFFFFFFFFFFn;
 
   /** Mirrors `splitmix64` in SchedulePoolOrdering.swift. */
@@ -335,29 +352,86 @@
     } catch { /* quota */ }
   }
 
-  function airedRatingKeys(serverKey, channelId, dayKey) {
-    try {
-      const raw = localStorage.getItem(storageKey(serverKey, channelId, dayKey));
-      if (!raw) return new Set();
-      const manifest = JSON.parse(raw);
-      return new Set((manifest.blocks || []).map(b => b.ratingKey));
-    } catch {
-      return new Set();
-    }
+  // ── Across channels: one title on one channel at a time ─────────────────
+  // Mirrors DailyManifestScheduler's lineup packing and ScheduleOccupancy.
+
+  /**
+   * What the other channels have on, by title: key -> [{ ch, s, e }]. `overlap` is the
+   * seconds of [s, e) that some other channel already airs the title for. Mirrors
+   * ScheduleOccupancy.
+   */
+  function makeOccupancy() {
+    const byKey = new Map();
+    return {
+      add(channelId, ratingKey, s, e) {
+        if (!(e > s)) return;
+        let list = byKey.get(ratingKey);
+        if (!list) { list = []; byKey.set(ratingKey, list); }
+        list.push({ ch: channelId, s, e });
+      },
+      overlap(ratingKey, s, e, channelId) {
+        const list = byKey.get(ratingKey);
+        if (!list) return 0;
+        let sec = 0;
+        for (const x of list) {
+          if (x.ch === channelId) continue;
+          const lo = Math.max(s, x.s), hi = Math.min(e, x.e);
+          if (hi > lo) sec += hi - lo;
+        }
+        return sec;
+      },
+    };
   }
 
-  function lastAiredRatingKey(serverKey, channelId, dayKey) {
-    try {
-      const raw = localStorage.getItem(storageKey(serverKey, channelId, dayKey));
-      if (!raw) return null;
-      const blocks = JSON.parse(raw).blocks || [];
-      return blocks.length ? blocks[blocks.length - 1].ratingKey : null;
-    } catch {
-      return null;
-    }
+  /** The story and part of a multi-part film ("... Part 2"), or null. Same test as groupSequelParts. */
+  function sequelMark(item) {
+    if (!item || item.type !== 'movie') return null;
+    const match = SEQUEL_MARKER.exec(item.title || '');
+    if (!match) return null;
+    const ordinal = parseInt(match[2], 10);
+    if (!Number.isFinite(ordinal)) return null;
+    const base = match[1].toLowerCase().trim();
+    return base ? { base, ordinal } : null;
   }
 
-  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey) {
+  /** A later part may not jump ahead of an earlier part of the same story still waiting before it. */
+  function waitsForEarlierPart(queue, i) {
+    const mark = sequelMark(queue[i]);
+    if (!mark) return false;
+    for (let k = 0; k < i; k++) {
+      const other = sequelMark(queue[k]);
+      if (other && other.base === mark.base && other.ordinal < mark.ordinal) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Which of the first LOOKAHEAD programmes in `queue` airs at `t`: the first one no other
+   * channel has on during its slot; failing that, -1 when `mustFit` (the caller has
+   * something else to try), else the one that overlaps least (the earliest of those).
+   * `playSec(i)` is how long candidate i would run from `t`. `avoidKey` (the title that just
+   * played here) is passed over while there is anything else, and a later part of a story
+   * never goes ahead of an earlier one waiting before it. With no occupancy, or nothing on
+   * elsewhere, this is always 0: the channel's own order. Mirrors
+   * DailyManifestScheduler.pickCandidate.
+   */
+  function pickCandidate(queue, t, playSec, occupancy, channelId, avoidKey, mustFit) {
+    const n = Math.min(LOOKAHEAD, queue.length);
+    let best = -1;
+    let bestOverlap = Infinity;
+    for (let i = 0; i < n; i++) {
+      const item = queue[i];
+      if (n > 1 && avoidKey != null && item.ratingKey === avoidKey) continue;
+      if (i > 0 && waitsForEarlierPart(queue, i)) continue;
+      const ov = occupancy ? occupancy.overlap(item.ratingKey, t, t + playSec(i), channelId) : 0;
+      if (ov === 0) return i;
+      if (ov < bestOverlap) { bestOverlap = ov; best = i; }
+    }
+    if (mustFit) return -1;
+    return best >= 0 ? best : 0;
+  }
+
+  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy) {
     // As long as the local day, so a 25-hour day has no empty last hour and a 23-hour day
     // doesn't run an hour into tomorrow. Same end as DailyManifestScheduler.blocks passes in.
     const dayEndSec = dayStartSec + localDayLengthSec(dayStartSec);
@@ -388,10 +462,16 @@
     const blocks = [];
     let t = dayStartSec;
 
-    for (const item of unplayedOrdered) {
-      if (t >= dayEndSec) break;
-      const dur = (item.duration || 0) * 60;
-      if (dur <= 0) continue;
+    // In the channel's order, except that a programme another channel has on in the same
+    // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
+    // today if the day has room, and counts as unplayed tomorrow if not. When nothing
+    // waiting fits, the day goes on with the filler loop below, which holds the whole pool.
+    const queue = unplayedOrdered.filter((item) => (item.duration || 0) > 0);
+    while (queue.length && t < dayEndSec) {
+      const j = pickCandidate(queue, t, (i) => queue[i].duration * 60, occupancy, channelId, null, true);
+      if (j < 0) break;
+      const item = queue.splice(j, 1)[0];
+      const dur = item.duration * 60;
       blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur });
       t += dur;
     }
@@ -424,35 +504,149 @@
         }
       }
 
-      let idx = cycleIndex;
-      while (t < dayEndSec) {
-        const item = orderedFull[idx % orderedFull.length];
-        const fullDur = (item.duration || 0) * 60;
-        if (fullDur <= 0) {
-          idx++;
-          offsetInItem = 0;
-          continue;
-        }
-        const remainingInItem = fullDur - offsetInItem;
+      // The loop as a queue from the cycle's start: what airs goes to the back, so with
+      // nothing on elsewhere this is the cycle in order. The first programme starts part
+      // way in (offsetInItem) only if it airs first; one picked ahead of it starts at 0.
+      const loop = orderedFull.slice(cycleIndex).concat(orderedFull.slice(0, cycleIndex))
+        .filter((item) => (item.duration || 0) > 0);
+      let first = true;
+      while (t < dayEndSec && loop.length) {
         const remainingDay = dayEndSec - t;
-        const playSec = Math.min(remainingInItem, remainingDay);
-        if (playSec <= 0) {
-          idx++;
-          offsetInItem = 0;
-          continue;
-        }
+        const playFor = (i) => Math.min(loop[i].duration * 60 - (first && i === 0 ? offsetInItem : 0), remainingDay);
+        const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
+        const j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false);
+        const playSec = playFor(j);
+        const item = loop.splice(j, 1)[0];
+        loop.push(item);
+        first = false;
         blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec });
         t += playSec;
-        if (offsetInItem + playSec >= fullDur) {
-          idx++;
-          offsetInItem = 0;
-        } else {
-          offsetInItem += playSec;
-        }
       }
     }
 
     return blocks;
+  }
+
+  /**
+   * Packs one local day for the lineup's channels whose day isn't stored yet, together, so
+   * no title is on two of them at once. Channels pack in priority order (lineupPriority):
+   * each one's day is its own running order (packDay) except where a programme is already on
+   * another channel in that slot. Days already stored, and the programmes that run over
+   * from the day before, are fixed: what airs now never moves because another channel's
+   * pool changed. Writes every day it packs. Mirrors DailyManifestScheduler.packLineupDay.
+   *
+   * `entries`: [{ channel, pool }] with pools already valid (duration > 0, non-empty).
+   * `extra`: one more { channel, pool } that is not in the guide, packed after the lineup
+   * against it and seen by nothing, or null. Returns channel id -> the blocks it packed.
+   */
+  function packLineupDay(entries, extra, atMs, serverKey) {
+    const dayStartSec = Math.floor(startOfLocalDayMs(atMs) / 1000);
+    const dayKey = localDayKey(atMs);
+    const dayNumber = localDayNumber(atMs);
+    const yesterdayKey = previousLocalDayKey(atMs);
+    const memoKey = `${serverKey}|${dayKey}`;
+    // A channel off the guide, when the lineup's day is already known: pack it against that
+    // and nothing else. The page builds every channel, enabled or not, and reading the
+    // lineup's stored days again for each one cost ten times the whole lineup's pack.
+    if (extra && occupancyMemo && occupancyMemo.key === memoKey && occupancyMemo.generation === lineupGeneration) {
+      const prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey);
+      const packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, new Set(prev.map((b) => b.ratingKey)),
+                             Boolean(extra.channel.isPremiereChannel), prev.length ? prev[prev.length - 1].ratingKey : null,
+                             occupancyMemo.occupancy);
+      saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: extra.channel.id, dayKey,
+        poolFingerprint: poolFingerprint(extra.pool), blocks: packed });
+      return new Map([[extra.channel.id, packed]]);
+    }
+    const occupancy = makeOccupancy();
+    const toPack = [];
+    const packedBy = new Map();
+    const all = sortByLineupPriority(entries);
+    if (extra) all.push(extra);
+    const yesterday = new Map();
+    for (const entry of all) {
+      const id = entry.channel.id;
+      const prev = storedBlocks(serverKey, id, yesterdayKey);
+      yesterday.set(id, prev);
+      // What runs past midnight from yesterday is on air today too (the guide's channels'
+      // only: one off the guide is seen by nothing).
+      if (entry !== extra) for (const b of prev) if (b.endSec > dayStartSec) occupancy.add(id, b.ratingKey, b.startSec, b.endSec);
+    }
+    for (const entry of all) {
+      const fp = poolFingerprint(entry.pool);
+      const cached = loadManifest(serverKey, entry.channel.id, dayKey, fp);
+      if (cached) {
+        if (entry !== extra) for (const b of cached.blocks) occupancy.add(entry.channel.id, b.ratingKey, b.startSec, b.endSec);
+      } else {
+        toPack.push({ entry, fp });
+      }
+    }
+    for (const { entry, fp } of toPack) {
+      const { channel, pool } = entry;
+      const prev = yesterday.get(channel.id);
+      const aired = new Set(prev.map((b) => b.ratingKey));
+      const last = prev.length ? prev[prev.length - 1].ratingKey : null;
+      const packed = packDay(pool, dayStartSec, dayNumber, channel.id, aired,
+                             Boolean(channel.isPremiereChannel), last, occupancy);
+      saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: channel.id, dayKey, poolFingerprint: fp, blocks: packed });
+      packedBy.set(channel.id, packed);
+      if (entry !== extra) {
+        for (const b of packed) occupancy.add(channel.id, b.ratingKey, b.startSec, b.endSec);
+        lineupGeneration += 1;
+      }
+    }
+    // Everything the guide's channels air this day, for the next channel off the guide. The
+    // memo goes stale the moment one of them is packed again (lineupGeneration).
+    occupancyMemo = { key: memoKey, generation: lineupGeneration, occupancy };
+    return packedBy;
+  }
+
+  // The lineup's day as packLineupDay last saw it, for channels off the guide only.
+  let occupancyMemo = null;
+  let lineupGeneration = 0;
+
+  /**
+   * The order channels claim programmes in: channels whose pool changes with the hour
+   * (timeRestrictions) last, so the others' days never depend on when a device first built
+   * them; then by channel id, so the lowest keeps a title, as resolveConflicts does. Stable.
+   * Mirrors DailyManifestScheduler.lineupPriority.
+   */
+  function sortByLineupPriority(entries) {
+    const rank = (e) => (e.channel.timeRestrictions ? 1 : 0);
+    return entries.slice().sort((a, b) => (rank(a) - rank(b)) || (a.channel.id - b.channel.id));
+  }
+
+  /** The stored day's blocks, whatever version stored them ([] if none). */
+  function storedBlocks(serverKey, channelId, dayKey) {
+    try {
+      const raw = localStorage.getItem(storageKey(serverKey, channelId, dayKey));
+      if (!raw) return [];
+      return JSON.parse(raw).blocks || [];
+    } catch {
+      return [];
+    }
+  }
+
+  // The guide's channels with the pools they air from, for packing a day across them:
+  // a function returning [{ channel, pool }], or an array. Unset, a channel packs alone.
+  let lineupSource = null;
+
+  /** Registers the guide's lineup ({ channel, pool } pairs, or a function returning them). */
+  function setLineup(source) {
+    lineupSource = source || null;
+    occupancyMemo = null;
+  }
+
+  function currentLineup() {
+    const raw = typeof lineupSource === 'function' ? lineupSource() : lineupSource;
+    const seen = new Set();
+    const out = [];
+    for (const entry of raw || []) {
+      if (!entry || !entry.channel || seen.has(entry.channel.id)) continue;
+      seen.add(entry.channel.id);
+      const pool = (entry.pool || []).filter((i) => i && (i.duration || 0) > 0);
+      if (pool.length) out.push({ channel: entry.channel, pool });
+    }
+    return out;
   }
 
   function resolveBlocks(storedBlocks, pool) {
@@ -478,22 +672,16 @@
     const cached = loadManifest(serverKey, channelId, dayKey, poolFP);
     if (cached) return resolveBlocks(cached.blocks, validPool);
 
-    const dayNumber = localDayNumber(atMs);
-    const yesterdayKey = previousLocalDayKey(atMs);
-    const yesterdayAired = airedRatingKeys(serverKey, channelId, yesterdayKey);
+    // Not stored: pack the day for the whole lineup at once. This channel takes its place
+    // in the lineup with the pool it was asked with; one the guide doesn't carry packs after
+    // the lineup, against it, so it never changes what the guide's channels air.
+    const lineup = currentLineup();
+    const at = lineup.findIndex((e) => e.channel.id === channelId);
+    const self = { channel, pool: validPool };
+    if (at >= 0) lineup[at] = self;
 
-    const yesterdayLast = lastAiredRatingKey(serverKey, channelId, yesterdayKey);
-    const packed = packDay(validPool, dayStartSec, dayNumber, channelId, yesterdayAired,
-                           Boolean(channel.isPremiereChannel), yesterdayLast);
-    saveManifest(serverKey, {
-      schemaVersion: SCHEMA_VERSION,
-      channelId,
-      dayKey,
-      poolFingerprint: poolFP,
-      blocks: packed,
-    });
-
-    return resolveBlocks(packed, validPool);
+    const packed = packLineupDay(lineup, at >= 0 ? null : self, atMs, serverKey).get(channelId);
+    return resolveBlocks(packed || [], validPool);
   }
 
   // ── What airs: the guide's schedule, cross-channel conflicts, the next pick ──
@@ -694,11 +882,14 @@
         if (key && key.startsWith(prefix)) toRemove.push(key);
       }
       toRemove.forEach(k => localStorage.removeItem(k));
+      occupancyMemo = null;
+      lineupGeneration += 1;
     } catch { /* ignore */ }
   }
 
   const api = {
     getManifestBlocks,
+    setLineup,
     blocksInRange,
     buildSchedule,
     scheduleIsCurrent,

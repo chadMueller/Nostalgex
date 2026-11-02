@@ -83,6 +83,8 @@ jobs:
               - 'scripts/nostalgex-schedule-parity-smoke.mjs'
               - 'scripts/schedule-parity-dump.mjs'
               - 'scripts/schedule-parity-golden.json'
+              # One title on one channel at a time: the lineup's days packed together.
+              - 'scripts/nostalgex-schedule-lineup-smoke.mjs'
               # START OVER on the loading screen.
               - 'scripts/start-over-smoke.mjs'
               - 'franchises.json'
@@ -149,6 +151,8 @@ jobs:
               - 'scripts/filter-golden.json'
               - 'scripts/season-golden.json'
               - 'scripts/schedule-dst-golden.json'
+              # Roku's ScheduleParityGoldenTests reads it as is.
+              - 'scripts/schedule-parity-golden.json'
               - 'scripts/nostalgex-filter-golden-smoke.mjs'
               - 'scripts/nostalgex-season-smoke.mjs'
               - 'scripts/rating-golden.json'

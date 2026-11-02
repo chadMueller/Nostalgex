@@ -416,7 +416,11 @@ class AppState {
 
     var allItems: [PlexMediaItem] = []
     var allChannels: [Channel] = []
-    var channels: [Channel] = []
+    /// The guide's channels. The scheduler packs each day across all of them, so one title is
+    /// never on two at once: it has to know the lineup before any schedule is built.
+    var channels: [Channel] = [] {
+        didSet { DailyManifestScheduler.setLineup(channels, credentialFingerprint: scheduleCredentialFingerprint) }
+    }
     /// Full channel config from JSON (kept for re-filtering after enrichment)
     var channelConfigChannels: [Channel] = []
 

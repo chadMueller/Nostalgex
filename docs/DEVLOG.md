@@ -3,6 +3,65 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (one title on one channel at a time: the lineup's days packed together)
+
+**Shipped.** Nothing. Branch `schedule/cross-channel-dedupe`, off main `9438f2a`, carrying the
+harness commit from `harness/cross-channel-duplicates`. Not pushed. Trello: Z4K7aJG6.
+
+**Why.** Each channel's day was packed on its own, so a film in several pools aired on two or
+more channels at once for almost the whole day. `resolveConflicts` only relabels the info
+panel; tuning still plays the doubled title. Measured on a guide and its manifests pulled
+read-only from a real Apple TV: a title was on two or more channels at once for 95.3% of the
+minutes of one day and 94.2% of the next. One film under two ratingKeys (copies across
+libraries or servers) was not part of it there: 0.04% of the doubled minutes, all music videos.
+
+**Changed.** One engine change, in Swift and JS together, with new golden vectors.
+- `DailyManifestScheduler.packLineupDay` / `packLineupDay` in `scripts/nostalgex-daily-manifest.js`:
+  when a day isn't stored, it is packed for the whole registered lineup at once. Channels go in
+  priority order (channels with `timeRestrictions` last, so no other channel's day depends on
+  the hour a device first built it; then by id, so the lowest keeps a title, as
+  `resolveConflicts` does). Each channel keeps its own running order, except that a programme
+  another channel has on in an overlapping slot waits: `pickCandidate` takes the first of the
+  next 8 that is free. The primary pass hands over to the filler loop when nothing waiting
+  fits (the unplayed films stay unplayed for tomorrow); the filler takes the least overlap
+  when nothing fits, never the title that just played, and a later part of a story never jumps
+  ahead of an earlier one. Stored days and what runs over from the night before are fixed.
+- With no lineup registered, or nothing on elsewhere, the pick is always the first: a channel
+  packs exactly as before. The lowest channel never changes.
+- The lineup comes from `AppState.channels` (`didSet`, scoped to the sign-in's credential
+  fingerprint) and from `guideLineup()` in `plex-tuner.html`. A channel off the guide packs
+  after the lineup, against it, and is seen by none of it.
+- Schema bumps (Swift manifest 1 to 2, web 2 to 3), so the first launch after the update packs
+  today again from yesterday's history: a one-time reshuffle. Channels that had no clash keep
+  their day exactly; the others change from their first clash on.
+- `scripts/schedule-parity-golden.json`: a fourth case (a crowded lineup: three channels
+  sharing two films, a three-part story, a premiere channel, a time-gated one, one off the
+  guide); the other three cases now pack across their lineups. Four new negative controls in
+  the parity smoke. New `scripts/nostalgex-schedule-lineup-smoke.mjs` (in `npm test`),
+  `NostalgexTests/ScheduleLineupTests.swift`, `scripts/qa/cross-channel-repack.mjs` and
+  `CrossChannelDuplicateHarness.testRepackOnDeviceData`.
+
+**Measured.** On the pulled data, the device's next day packed again from its own history.
+The old engine reproduces the device's manifests exactly (every channel, every block), in JS
+and in Swift. Then:
+- doubled minutes 94.2% before, 0.2% after; on a day with no history, 95.3% before, 0% after.
+  What is left is 3 minutes on a three-film franchise channel with no free alternative.
+- The Swift and JS engines pack the same day on that data, channel for channel.
+- Lookahead 4, 8, 16 and 1000 all give 0.2%; 2 gives 7.6%.
+- A rescan that changed nothing packs the days ahead the same (Swift test and JS smoke).
+- Pack time for the whole lineup's day: JS (Node, Mac) 21 to 33 ms; Swift (tvOS simulator,
+  debug) 346 to 305 ms (it now reads each yesterday file once). With half the lineup off the
+  guide the web page also builds those channels; a memo of the lineup's day keeps that at
+  45 ms (22 ms before), where re-reading it cost 222 ms.
+
+**Half-done.** Roku: `roku/tests` goes red on `ScheduleParityGoldenTests` until the
+BrightScript port of `packLineupDay` lands in the same merge. Not measured on an Apple
+TV or a Roku stick; the Roku build time on a large library is the open number. Same show on two
+channels at once (different episodes) is unchanged and out of scope.
+
+**Next.** Roku port, then a device check on the living room Apple TV and the stick. Web and
+Docker need a tuner version bump when this ships.
+
 ## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones

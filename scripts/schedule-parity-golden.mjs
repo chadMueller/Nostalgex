@@ -196,6 +196,51 @@ function embyCase() {
 }
 
 /**
+ * One lineup, crowded: three channels share two films, so one of them always has a title
+ * another has on, while the rest have room to give way. A story in three parts on two
+ * channels, a premiere channel, a channel whose pool changes with the hour ("gated", which
+ * packs after the rest) and one channel the guide doesn't carry ("offGuide", packed after the
+ * lineup and seen by none of it).
+ */
+function crowdedCase() {
+  const zone = "America/Chicago";
+  const day = local(zone, 2026, 11, 10, 0);
+  const titles = [
+    "Predator", "Robocop", "Total Recall", "Commando", "Die Hard", "Lethal Weapon", "Tango and Cash",
+    "Road House", "Cobra", "Top Gun", "Point Break", "Speed", "True Lies", "Face Off",
+    "The Long Night Part 1", "The Long Night Part 2", "The Long Night Part 3",
+  ];
+  const items = titles.map((title, i) => ({ backend: "plex", kind: "movie", raw: {
+    ratingKey: String(3001 + i), title, type: "movie",
+    duration: ((88 + ((i * 29) % 47)) * 60 + (i % 4) * 13) * 1000,
+    addedAt: i % 5 === 3 ? day - 86400 * (1 + (i % 4)) : 1580000000 + i * 86400,
+  } }));
+  const k = (i) => String(3001 + i);
+  const range = (a, b) => Array.from({ length: b - a }, (_, i) => k(a + i));
+  const channels = [
+    { id: 30, pool: [k(0), k(1)] },
+    { id: 31, pool: [k(1), k(0)] },
+    { id: 32, pool: [k(0), k(1)] },
+    { id: 33, pool: range(0, 17) },
+    { id: 34, pool: range(2, 14) },
+    { id: 35, premiere: true, pool: range(3, 17) },
+    { id: 36, gated: true, pool: range(0, 14) },
+    { id: 37, offGuide: true, pool: range(2, 10) },
+    { id: 38, pool: [k(16), k(14), k(4), k(15), k(5)] },
+  ];
+  return {
+    name: "plex-chicago-crowded-lineup",
+    fixture: {
+      zone, fingerprint: "parity-crowded",
+      prime: [local(zone, 2026, 11, 9, 12)],
+      days: [local(zone, 2026, 11, 10, 12)],
+      at: [local(zone, 2026, 11, 10, 0, 20), local(zone, 2026, 11, 10, 9, 45), local(zone, 2026, 11, 10, 20, 5)],
+      channels, items,
+    },
+  };
+}
+
+/**
  * Adds instants where one title is on two channels, found by walking the main day minute by
  * minute with the web engine. They are inputs only: the answers still come from the Apple TV.
  */
@@ -203,35 +248,28 @@ function addConflictInstants(c, want = 3) {
   const engine = loadEngine();
   const { M } = engine;
   const fx = c.fixture;
-  dump(engine, { ...fx, at: [], days: [] });        // fills the store's yesterday; the walk below reuses it
-  const items = new Map();
-  for (const spec of fx.items) {
-    const [, item] = makeItem(M, spec);
-    if (item) items.set(item.ratingKey, item);
-  }
+  // The days the golden walk packs, across the lineup the way every surface packs them.
+  const dayAt = fx.days[fx.days.length - 1];
+  const { days } = dump(engine, { ...fx, at: [], days: [dayAt] });
   const saved = process.env.TZ;
   process.env.TZ = fx.zone;
-  // dump() clears the store when it starts, not when it ends, so the primed days are still there.
-  const dayAt = fx.days[fx.days.length - 1];
   const from = M.startOfLocalDayMs(dayAt * 1000) / 1000;
   const to = M.startOfNextLocalDayMs(dayAt * 1000) / 1000;
-  const blocks = fx.channels.map((row) => [row.id, M.getManifestBlocks(
-    { id: row.id, isPremiereChannel: Boolean(row.premiere) },
-    row.pool.map((k) => items.get(k)).filter(Boolean), dayAt * 1000, fx.fingerprint)]);
+  if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
+  const blocks = fx.channels.map((row) => [row.id, days[dayAt][row.id]]);
   const seen = new Set();
   const found = [];
   for (let t = from + 420; t < to && found.length < want; t += 60) {
     const on = new Map();
     for (const [id, bs] of blocks) {
-      const b = bs.find((x) => x.startSec <= t && t < x.endSec);
+      const b = bs.find((x) => x[1] <= t && t < x[2]);
       if (!b) continue;
-      const k = b.item.ratingKey;
+      const k = b[0];
       if (!on.has(k)) { on.set(k, id); continue; }
       const pair = `${on.get(k)}-${id}-${k}`;
       if (!seen.has(pair)) { seen.add(pair); found.push(t); }
     }
   }
-  if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
   fx.at = [...new Set([...fx.at, ...found])].sort((a, b) => a - b);
   return found.length;
 }
@@ -245,7 +283,10 @@ const ABOUT = [
   "fixture: zone (every date in it is local there), fingerprint (the manifest store's key), items in the",
   "server's own shape (Plex ms and addedAt; Jellyfin and Emby RunTimeTicks and DateCreated), channels in",
   "guide order with their pools in library order, prime (days packed first, so yesterday exists), days",
-  "(dumped in full) and at (instants, unix seconds).",
+  "(dumped in full) and at (instants, unix seconds). The channels are the guide's lineup, registered with",
+  "the scheduler, and each day is packed across all of them so one title is not on two at once; a row",
+  "with gated: true has a pool that changes with the hour (it packs after the rest; the hour never comes),",
+  "and one with offGuide: true is not in the lineup (it packs after it, against it, seen by none of it).",
   "expect.items: key -> [minutes, addedAt (0 if before 1970), title, type], null where the loader drops it.",
   "expect.days: instant -> channel -> [key, start, end] for that local day.",
   "expect.at[].ch: now [key,start,end], elapsed, next and span [entries, first start, last end] of the",
@@ -277,7 +318,7 @@ function pretty(value, pad = "") {
 
 const [, , cmd, path] = process.argv;
 const build = () => {
-  const cases = [plexCase(), jellyfinCase(), embyCase()];
+  const cases = [plexCase(), jellyfinCase(), embyCase(), crowdedCase()];
   for (const c of cases) {
     const n = addConflictInstants(c);
     if (n === 0) console.error(`${c.name}: no instant with one title on two channels`);

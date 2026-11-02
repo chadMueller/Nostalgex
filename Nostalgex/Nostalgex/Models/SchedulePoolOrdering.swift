@@ -164,6 +164,20 @@ enum SchedulePoolOrdering {
         options: [.caseInsensitive]
     )
 
+    /// The story and part of a film titled with a part marker ("... Part 2"), the same test
+    /// `groupSequelParts` applies. Mirrors `sequelMark` in scripts/nostalgex-daily-manifest.js.
+    static func sequelMark(_ item: PlexMediaItem) -> (base: String, ordinal: Int)? {
+        guard item.type == .movie else { return nil }
+        let title = item.title
+        let range = NSRange(title.startIndex..., in: title)
+        guard let match = sequelMarker.firstMatch(in: title, options: [], range: range),
+              let baseRange = Range(match.range(at: 1), in: title),
+              let ordRange = Range(match.range(at: 2), in: title),
+              let ordinal = Int(title[ordRange]) else { return nil }
+        let base = title[baseRange].lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        return base.isEmpty ? nil : (base, ordinal)
+    }
+
     /// Reorders so films that are parts of one story air back to back in part order,
     /// anchored where the earliest of them already sat. Grouping runs AFTER premiere
     /// promotion: if part 1 was just added, part 2 rides forward next to it.

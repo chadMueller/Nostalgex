@@ -19,7 +19,10 @@ struct DailyManifestFile: Codable {
 }
 
 enum DailyManifestStore {
-    private static let schemaVersion = 1
+    /// 2: the lineup's days are packed together, so one title is never on two channels at once
+    /// (DailyManifestScheduler.packLineupDay). A day stored at 1 is packed again once, from
+    /// what aired the day before, which still reads at any version.
+    static let schemaVersion = 2
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]
@@ -120,6 +123,18 @@ enum DailyManifestStore {
         } catch {
             print("[Plex90] Manifest: save failed CH\(manifest.channelId) \(manifest.dayKey): \(error)")
         }
+    }
+
+    /// A stored day's blocks, in the order they air, whatever schema or pool stored them; []
+    /// if the day was never scheduled. What aired yesterday, and what ran past its midnight.
+    static func storedBlocks(channelId: Int, dayKey: String, credentialFingerprint: String) -> [StoredManifestBlock] {
+        guard let url = fileURL(channelId: channelId, dayKey: dayKey, credentialFingerprint: credentialFingerprint),
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let manifest = try? decoder.decode(DailyManifestFile.self, from: data) else {
+            return []
+        }
+        return manifest.blocks
     }
 
     static func airedRatingKeys(channelId: Int, dayKey: String, credentialFingerprint: String) -> Set<String> {

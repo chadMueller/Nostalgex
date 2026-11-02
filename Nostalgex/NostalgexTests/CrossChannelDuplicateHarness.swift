@@ -307,6 +307,65 @@ final class CrossChannelDuplicateHarness: XCTestCase {
         try runControl(dir: URL(fileURLWithPath: control))
     }
 
+    /// The device's day packed again from the day before it, by the real scheduler: each channel
+    /// alone (what every build up to 1.0.29 does) and across the lineup (packLineupDay), with
+    /// the time each takes. Writes both days, block for block, so they can be compared with the
+    /// device's own manifest and with scripts/qa/cross-channel-repack.mjs (the web engine). A
+    /// time-gated pool follows the clock the test runs at, as on a TV.
+    ///
+    ///     TEST_RUNNER_NX_DUP_DATA=<dir> TEST_RUNNER_NX_DUP_HISTORY=2026-10-31 \
+    ///     TEST_RUNNER_NX_DUP_DAY=2026-11-01 TEST_RUNNER_NX_DUP_REPACK_OUT=<out.json> \
+    ///     [TEST_RUNNER_NX_DUP_RUNS=5] xcodebuild test ... \
+    ///     -only-testing:NostalgexTests/CrossChannelDuplicateHarness/testRepackOnDeviceData
+    func testRepackOnDeviceData() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let data = env["NX_DUP_DATA"], let history = env["NX_DUP_HISTORY"], let day = env["NX_DUP_DAY"],
+              let out = env["NX_DUP_REPACK_OUT"] else {
+            throw XCTSkip("set TEST_RUNNER_NX_DUP_DATA, TEST_RUNNER_NX_DUP_HISTORY, TEST_RUNNER_NX_DUP_DAY and TEST_RUNNER_NX_DUP_REPACK_OUT")
+        }
+        let runs = Int(env["NX_DUP_RUNS"] ?? "") ?? 5
+        let l = try install(dataDir: URL(fileURLWithPath: data))
+        defer {
+            uninstall(l)
+            DailyManifestScheduler.setLineup([], credentialFingerprint: nil)
+        }
+        let at = Self.localMidnight(day).addingTimeInterval(3600)
+        let fm = FileManager.default
+
+        /// Leaves only the history day on disk, then packs `day` for every channel in guide order.
+        func pack(lineup: Bool) throws -> (ms: [Double], days: [String: [[Any]]]) {
+            var times: [Double] = []
+            var days: [String: [[Any]]] = [:]
+            for _ in 0..<runs {
+                for name in try fm.contentsOfDirectory(atPath: l.installedManifests.path) where !name.hasSuffix("_\(history).json") {
+                    try fm.removeItem(at: l.installedManifests.appendingPathComponent(name))
+                }
+                DailyManifestScheduler.invalidateMemo()
+                DailyManifestScheduler.setLineup(lineup ? l.channels : [], credentialFingerprint: l.fingerprint)
+                let t0 = Date()
+                var got: [String: [[Any]]] = [:]
+                for ch in l.channels {
+                    got["\(ch.id)"] = DailyManifestScheduler.blocks(for: ch, at: at, credentialFingerprint: l.fingerprint)
+                        .map { [$0.item.id, Int($0.startTime.timeIntervalSince1970), Int($0.endTime.timeIntervalSince1970)] }
+                }
+                times.append(Date().timeIntervalSince(t0) * 1000)
+                days = got
+            }
+            return (times, days)
+        }
+
+        let alone = try pack(lineup: false)
+        let together = try pack(lineup: true)
+        func median(_ x: [Double]) -> Double { x.sorted()[x.count / 2] }
+        let report: [String: Any] = [
+            "channels": l.channels.count, "runs": runs,
+            "alone": ["msMedian": median(alone.ms), "ms": alone.ms, "days": alone.days],
+            "lineup": ["msMedian": median(together.ms), "ms": together.ms, "days": together.days],
+        ]
+        try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]).write(to: URL(fileURLWithPath: out))
+        print("[repack] \(l.channels.count) channels: alone \(Int(median(alone.ms))) ms, lineup \(Int(median(together.ms))) ms")
+    }
+
     func testMeasureDuplicatesOnDeviceData() throws {
         let env = ProcessInfo.processInfo.environment
         guard let data = env["NX_DUP_DATA"], let day = env["NX_DUP_DAY"], let out = env["NX_DUP_OUT"] else {
