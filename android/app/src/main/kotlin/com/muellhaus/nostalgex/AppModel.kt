@@ -40,6 +40,10 @@ import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.Pick
 import com.muellhaus.nostalgex.engine.ScanProgress
+import com.muellhaus.nostalgex.engine.DemoData
+import com.muellhaus.nostalgex.engine.Season
+import java.time.LocalDateTime
+import androidx.compose.runtime.mutableIntStateOf
 import com.muellhaus.nostalgex.mediabrowser.CheckedServer
 import com.muellhaus.nostalgex.mediabrowser.DiscoveredServer
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
@@ -244,6 +248,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** SUBTITLE LANGUAGE and AUDIO LANGUAGE, as stored (LanguageChoice.SYSTEM follows the TV). */
     var subtitleLanguage by mutableStateOf(prefs.subtitleLanguage)
+        .also { playback.subtitleLanguage = LanguageChoice.resolved(prefs.subtitleLanguage) }
         private set
     var audioLanguage by mutableStateOf(prefs.audioLanguage)
         .also { playback.audioLanguages = listOf(LanguageChoice.resolved(prefs.audioLanguage)) }
@@ -252,6 +257,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun chooseSubtitleLanguage(code: String) {
         subtitleLanguage = code
         prefs.subtitleLanguage = code
+        playback.subtitleLanguage = LanguageChoice.resolved(code)
         applySubtitles()
     }
 
@@ -609,9 +615,64 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
+    // ── Demo mode (AppState.enterDemoMode) ───────────────────────────────
+
+    /**
+     * Demo mode: the Apple TV's five sample channels, no account and no server. Every channel
+     * plays Apple's public sample stream. Not saved, as on the Apple TV: the next launch is the
+     * sign-in screen again, and DISCONNECT leaves it.
+     */
+    var demoMode by mutableStateOf(false)
+        private set
+    private var demoJob: Job? = null
+    /** When the block the clip stands in for ends, unix seconds (demoBlockEnd). */
+    private var demoBlockEndSec = 0.0
+
+    fun enterDemoMode() {
+        signInJob?.cancel()
+        connectJob?.cancel()
+        Log.i(TAG, "DEMO MODE")
+        demoMode = true
+        playback.demo = true
+        screen = Screen.Loading("")
+        scope.launch {
+            val (config, _) = channelData.await()
+            bundles = config.bundles
+            val l = withContext(Dispatchers.Default) {
+                Lineup(config, null, DailyManifest(ZoneId.systemDefault(), manifestStore), DemoData.SERVER_KEY).apply {
+                    watershed = prefs.watershed
+                    airFixed(DemoData.channels())
+                    rebuildSchedules()
+                }
+            }
+            show(l)
+        }
+        // demoScheduleTick: the clip's length has nothing to do with the schedule, so the clock
+        // says when a block ends and the next programme starts.
+        demoJob?.cancel()
+        demoJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                val ch = channel ?: continue
+                if (item != null && failure == null && System.currentTimeMillis() / 1000.0 >= demoBlockEndSec) {
+                    Log.i(TAG, "DEMO: block ended at the clock, moving to the next programme")
+                    play(lineup?.tune(ch))
+                }
+            }
+        }
+    }
+
+    private fun leaveDemoMode() {
+        if (!demoMode) return
+        demoJob?.cancel()
+        demoMode = false
+        playback.demo = false
+    }
+
     fun signOut() {
         closeSettings()
         playback.stop()
+        leaveDemoMode()
         prefs.signOut()
         mbServer = null
         libraryStore.clear()
@@ -951,6 +1012,8 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** As AppState.toggleBundle: the last package on can't be switched off. */
     fun toggleBundle(id: String) {
+        // Demo mode's channels belong to no package; a switch here would only change the saved choice.
+        if (demoMode) return
         val l = lineup ?: return
         val on = id in enabledBundles
         if (on && enabledBundles.size <= 1) return
@@ -972,6 +1035,36 @@ class AppModel(private val context: Context) : Playback.Listener {
                 show(l)
             }
         }
+    }
+
+    // ── The seasonal invite (AppState+Channels.swift) ────────────────────
+
+    /** Bumped when an invite is answered: the answer lives in Prefs, which Compose can't see. */
+    private var seasonalRevision by mutableIntStateOf(0)
+
+    /**
+     * The seasonal package the invite above channel one offers, or null (seasonalBundleOnOffer).
+     * Read with the minute's tick, so a season starting at midnight shows its invite then.
+     * Seasonal packages are never switched on for anyone: only YES, TURN IT ON does that.
+     */
+    val seasonalOffer: ChannelConfig.Bundle?
+        get() {
+            seasonalRevision
+            scheduleTick
+            if (demoMode) return null
+            val now = LocalDateTime.now()
+            return Season.bundleToOffer(bundles, enabledBundles, now) { Season.isSilenced(it, now, prefs::flag) }
+        }
+
+    /**
+     * The viewer's answer (answerSeasonalPrompt). YES switches the package on, and it stays on
+     * until switched off; NOT THIS YEAR is quiet until the season ends; DON'T ASK AGAIN is for good.
+     */
+    fun answerSeasonalPrompt(answer: Season.Answer, bundle: ChannelConfig.Bundle) {
+        val turnOn = Season.record(answer, bundle.id, LocalDateTime.now(), prefs::setFlag)
+        Log.i(TAG, "SEASONAL INVITE ${bundle.id}: $answer")
+        seasonalRevision++
+        if (turnOn && bundle.id !in enabledBundles) toggleBundle(bundle.id)
     }
 
     // ── Franchises and collections (AppState+Franchises.swift) ──────────
@@ -1054,7 +1147,8 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** RESCAN LIBRARY: read every server again behind the guide, as the launch refresh does. */
     fun rescanLibrary() {
-        if (loadingLibrary || refreshing) return
+        // Demo mode is fully bundled: never the network (loadLibrary's isDemoMode return).
+        if (demoMode || loadingLibrary || refreshing) return
         refreshInBackground(selectedServers, scannedItems)
     }
 
@@ -1528,6 +1622,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
             return
         }
+        if (demoMode) demoBlockEndSec = System.currentTimeMillis() / 1000.0 - pick.seekSeconds + pick.item.duration * 60L
         watchReporter.begin(pick.item, pick.seekSeconds, reportServer(pick.item))
         playback.play(pick.item, pick.seekSeconds)
     }
@@ -1567,6 +1662,9 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     override fun onEnded(item: MediaItem) {
         val ch = channel ?: return
+        // Demo mode: the clip running out says nothing about the schedule. Stay on the block
+        // that is on, at the clock's position (advanceToNextItem's demo branch).
+        if (demoMode) return play(lineup?.tune(ch))
         play(lineup?.next(ch, item, fromNaturalEnd = true))
     }
 

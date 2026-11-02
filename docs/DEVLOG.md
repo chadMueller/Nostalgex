@@ -3929,6 +3929,39 @@ between USE EMAIL AND PASSWORD and the EMAIL field. The Roku section of the priv
 Roku for the account email and only fills a field with it (`privacy.html` and
 `Nostalgex/PRIVACY_POLICY.md` together).
 
+## 2026-11-02 (Android TV: the seasonal invite and demo mode)
+
+**Changed.** On `feature/android`. The last two Apple TV features Android lacked; the README's "Not ported yet" list is gone.
+
+- The seasonal invite (`SeasonalPrompt.swift`, `SeasonalInviteRow`). `Season.kt` gains `bundleToOffer`, `isSilenced`, `record` and `headline`, under the Apple TV's storage keys (`nostalgex_seasonal_never_<id>`, `nostalgex_seasonal_dismissed_<id>_<year>`). `SeasonGoldenTest` now also runs the golden file's `offer`, `answers` and `headline` sections, every case passing; the `lead` section is still not read on Android. The row sits above channel one at one channel row's height in the season's colour, and its question offers YES, TURN IT ON, NOT THIS YEAR and DON'T ASK AGAIN. Focus stays inside the question until Back.
+- Demo mode (`enterDemoMode`, `DemoData.swift`). A quiet "demo mode" button under EMBY. The Apple TV's five sample channels go into a `Lineup` through `airFixed`, so schedules, tuning and the guide are the ordinary ones. Every programme plays Apple's bipbop sample at the clock's position modulo its 600 s, through a data source that sends none of this app's headers. As on the Apple TV, the clip ending keeps the programme on (at the clock's position), and a one-second tick moves to the next programme when the block ends. WATCH HISTORY is hidden, RESCAN does nothing, and DISCONNECT leaves; it is not saved. A package switch does nothing in demo mode, so the demo can't change the saved packages. `DemoDataTest`: the five channels, a schedule for each, and the clip offset.
+
+**Measured** on the Android TV emulator, with its clock set to 20 November 2026 for the invite and Jellyfin 12.4 behind it:
+- The invite showed "THE HOLIDAYS ARE HERE. DECK THE CHANNELS." above channel one, and Up from the channel focused it. In the first build Down walked out of the question into the guide behind it; it now holds focus.
+- Back from the question returned focus to the invite. NOT THIS YEAR wrote `nostalgex_seasonal_dismissed_tis-the-season_2026` and the row stayed gone after a relaunch. YES added `tis-the-season` to the packages.
+- Demo mode: the guide showed the five channels. The clip started in 1.7 to 2.9 s, 267 s into the clip for a programme 867 s in. On CH 4 the clip ran out and played on at 2,403 s of the programme, 3 s into the clip. At 19:40:51 the block ended and Late Shift Diner started at 1 s. DISCONNECT went back to the first screen with nothing playing.
+- With the clock moved to 20 November, the demo clip failed its TLS handshake ("Trust anchor for certification path not found") although the CDN's certificate runs from 25 October 2026 to 21 January 2027. With the clock back on automatic it played. This came from the test setup, not the app.
+
+**Not checked:** the SHIELD, SCREAM's October invite (only TIS THE SEASON was shown), the PLAYBACK INFORMATION panel in demo mode, and the invite with a seasonal package that has content in the library.
+
+## 2026-11-02 (Android TV: the PlaybackInfo handshake on Jellyfin and Emby)
+
+**Changed.** On `feature/android`. Android asked Jellyfin and Emby for the stored file, then a hand-built HLS stream, which is only the Apple TV's fallback. It now asks the server first, as the Apple TV does.
+
+- `PlaybackInfoHandshake.kt` ports `JellyfinPlaybackResolver`: the body (`SubtitleStreamIndex` -1 with every subtitle format External; `EnableDirectPlay` and `EnableDirectStream` false on the retry after a failed direct play, because Emby still offers the file with only the first), `resolve` (the server's TranscodingUrl as built, `api_key` added once, the audio track pinned), `forcedSubtitleToBurn` and `negotiate` (a second request burns a forced track in the viewer's SUBTITLE LANGUAGE; if it fails, the first answer plays). 24 tests, the Apple TV's `JellyfinPlaybackInfoTests` cases that apply to this player.
+- Asked where the Apple TV asks: when the app skips direct play (a container Media3 has no extractor for, or a file over the remote ceiling), and on the retry after a direct play failed. The capped 1080p retry stays hand-built, as on the Apple TV. A failed answer, an empty one, or none within 12 s plays the hand-built stream. An answer for a tune already replaced is dropped and its session stopped.
+- The device profile differs from the Apple TV's on purpose: H.264 and AAC in MPEG-TS, the stream the hand-built request already plays, where the Apple TV asks for fMP4 with HEVC for AVPlayer; and no DirectPlayProfiles, because this app decides direct play by trying the file and asks the server only after deciding not to. The 10-bit H.264 cap is kept. The audio track is pinned by the Roku's rule, as the hand-built stream already was.
+- The startup watchdog's fallback now starts from the planned offset, as the Apple TV's (`beginServerFallback(position: seekOffset)`), not from the playhead. Found in this test: an MKV whose video Media3 could not read went ready without its seek, played sound from 0 s, and the server stream then started at 14 s on a programme 137 s in. The starvation fallback still resumes from the playhead, as on the Apple TV.
+
+**Measured** on the Android TV emulator against Jellyfin 12.4 and Emby 4.10.2 in Docker, with two generated files: an MKV in MS-MPEG4 (no decoder on the emulator) with a French default track, an English 5.1 track, a default English subtitle and a forced English one; and a WMV.
+- The MKV: the watchdog moved it off direct play at 15 s; PlaybackInfo with direct play off answered in 58 to 100 ms on both servers, asked a second time for subtitle 4, and played in 1.2 to 1.3 s. Both servers' ffmpeg burned stream 4 (`subtitles=`) and mapped the English 5.1 track (`-map 0:2`, AAC 6 channels) into MPEG-TS with libx264. The forced line shows in the guide preview.
+- The WMV: one request, no forced track, answered in 56 to 77 ms, played in 0.6 to 0.7 s, no subtitle filter.
+- An AVI whose direct play failed for lack of a decoder: answered in 163 ms, played in 1.5 s at the right offset.
+- The next programme stopped the last one's encode by the server's session id: Jellyfin deleted its stream files 13 ms before the next PlaybackInfo; Emby answered the `DELETE /Videos/ActiveEncodings` 204.
+- Through a proxy holding PlaybackInfo: held 8 s with Home pressed at 3 s, the answer was dropped at 8.1 s and its session stopped; held 15 s, the request gave up at 12.1 s and the hand-built stream played in 1.3 s.
+
+**Not checked:** the SHIELD, a real library, an HEVC or Dolby Vision file through the handshake (the profile offers H.264 only, so those are re-encoded, as by the hand-built request), and a file over the remote bitrate ceiling.
+
 ## 2026-11-02 (Android TV: STOP WAITING, SHOW NOW PLAYING and MARK WATCHED)
 
 **Changed.** On `feature/android`. Two Apple TV features Android lacked.

@@ -285,6 +285,20 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         }
     }
 
+    /**
+     * POST /Items/{id}/PlaybackInfo, blocking: the answer's text, or an exception on any HTTP
+     * error. 12 s at most, as the Apple TV's: a hung handshake falls through to the hand-built
+     * stream rather than holding the tune.
+     */
+    fun playbackInfo(server: MediaBrowserServer, itemId: String, body: JsonObject): String {
+        val req = request("${server.url}/Items/$itemId/PlaybackInfo?userId=${server.userId}", server.token)
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        return check.newCall(req).execute().use {
+            if (!it.isSuccessful) throw MediaBrowserHttpException(it.code, "PlaybackInfo")
+            it.body.string()
+        }
+    }
+
     private fun enqueue(req: Request) = http.newCall(req).enqueue(object : okhttp3.Callback {
         override fun onFailure(call: okhttp3.Call, e: IOException) {}
         override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()

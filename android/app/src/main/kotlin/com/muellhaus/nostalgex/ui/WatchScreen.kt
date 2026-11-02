@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -80,6 +82,7 @@ import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.Schedule
+import com.muellhaus.nostalgex.engine.Season
 import com.muellhaus.nostalgex.engine.ScheduleEntry
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -117,6 +120,8 @@ private const val HEADER_HEIGHT = 60
 /** 24-hour horizon in 30-minute slots, four visible: Left and Right scroll up to 44 slots on. */
 private const val MAX_SLOT_OFFSET = 44
 private const val VISIBLE_SECONDS = 7200L
+/** The seasonal invite's focus id (ChannelGuideView.seasonalRowID): no channel's id is negative. */
+private const val SEASONAL_ROW_ID = -900
 
 private val clock = DateTimeFormatter.ofPattern("h:mm a")
 private fun time(sec: Long) = clock.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
@@ -167,6 +172,8 @@ fun WatchScreen(model: AppModel) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
             var picker by remember { mutableStateOf<PanelPicker?>(null) }
             var sidebarOpen by remember { mutableStateOf(false) }
+            /** The seasonal package the invite's question is asking about (ChannelGuideView's confirmationDialog). */
+            var asking by remember { mutableStateOf<ChannelConfig.Bundle?>(null) }
             fun flashOsd() { osdUntil = System.currentTimeMillis() + 8000 }
             fun focusLive() {
                 focusTarget = model.channel?.id ?: return
@@ -187,6 +194,11 @@ fun WatchScreen(model: AppModel) {
                         // "STILL WATCHING?" takes the next key, whatever it is (SleepGracePrompt).
                         if (model.sleepGrace) {
                             if (up) model.keepAwake()
+                            return@onPreviewKeyEvent true
+                        }
+                        // The invite's question: Back closes it, focus back on the invite.
+                        if (asking != null && code == AndroidKeyEvent.KEYCODE_BACK) {
+                            if (up) { asking = null; focusTarget = SEASONAL_ROW_ID; focusRequest++ }
                             return@onPreviewKeyEvent true
                         }
                         when (code) {
@@ -231,6 +243,7 @@ fun WatchScreen(model: AppModel) {
                         onFocusTarget = { focusTarget = it; focusRequest++ },
                         sidebarOpen = sidebarOpen,
                         onSidebar = { sidebarOpen = it },
+                        onInvite = { asking = it },
                     )
                 }
 
@@ -275,6 +288,14 @@ fun WatchScreen(model: AppModel) {
 
                 if (model.fullScreen) {
                     FullScreen(model, osdUntil = osdUntil, overlay = overlay, onOverlay = { overlay = it }, picker = picker, onPicker = { picker = it }, onFlash = ::flashOsd)
+                }
+                asking?.let { offer ->
+                    if (!model.fullScreen) SeasonalQuestion(offer) { answer ->
+                        asking = null
+                        model.answerSeasonalPrompt(answer, offer)
+                        // Answered, the invite goes: focus to the live row.
+                        focusLive()
+                    }
                 }
                 if (model.sleepGrace) SleepGracePrompt(model)
             }
@@ -393,6 +414,7 @@ private fun Tuner(
     onFocusTarget: (Int) -> Unit,
     sidebarOpen: Boolean,
     onSidebar: (Boolean) -> Unit,
+    onInvite: (ChannelConfig.Bundle) -> Unit,
 ) {
     var previewId by remember { mutableStateOf<Int?>(null) }
     Column(Modifier.fillMaxSize()) {
@@ -425,6 +447,7 @@ private fun Tuner(
             onFocusTarget = onFocusTarget,
             sidebarOpen = sidebarOpen,
             onSidebar = onSidebar,
+            onInvite = onInvite,
         )
     }
 }
@@ -550,14 +573,18 @@ private fun Guide(
     onFocusTarget: (Int) -> Unit,
     sidebarOpen: Boolean,
     onSidebar: (Boolean) -> Unit,
+    onInvite: (ChannelConfig.Bundle) -> Unit,
 ) {
     val lineup = model.lineup ?: return
     // Read so the rows redraw when the schedules are rebuilt.
     model.scheduleTick
     val channels = lineup.channels
+    // The seasonal invite sits above channel one while a seasonal package is in season and off.
+    val offer = model.seasonalOffer
+    val lead = if (offer != null) 1 else 0
     var slotOffset by remember { mutableIntStateOf(0) }
     var rowFocus by remember { mutableStateOf<Int?>(null) }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, channels.indexOfFirst { it.id == focusTarget } - 2))
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, channels.indexOfFirst { it.id == focusTarget } + lead - 2))
     val visibleStart = lineup.windowStartSec + slotOffset * 1800L
     val now = ticking()
 
@@ -596,6 +623,15 @@ private fun Guide(
             GridHeader(visibleStart, programsWidth)
             Box(Modifier.fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.25f)))
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                if (offer != null) item(key = "seasonal-invite") {
+                    SeasonalInviteRow(
+                        bundle = offer,
+                        requestFocus = focusTarget == SEASONAL_ROW_ID,
+                        focusRequest = focusRequest,
+                        onFocused = { rowFocus = SEASONAL_ROW_ID; onFocused(SEASONAL_ROW_ID) },
+                        onSelect = { onInvite(offer) },
+                    )
+                }
                 itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
                     EpgRow(
                         ch = ch,
@@ -642,13 +678,15 @@ private fun Guide(
     }
 
     // Bring the asked-for row into the middle of the guide (proxy.scrollTo(id, anchor: .center)).
+    // The invite, when there is one, is the list's first item, so a channel's place is one further on.
+    fun lazyIndex(id: Int?) = if (id == SEASONAL_ROW_ID && offer != null) 0 else channels.indexOfFirst { it.id == id }.let { if (it < 0) -1 else it + lead }
     LaunchedEffect(focusRequest) {
-        val index = channels.indexOfFirst { it.id == focusTarget }
+        val index = lazyIndex(focusTarget)
         if (index >= 0) listState.animateScrollToItem(maxOf(0, index - 2))
     }
     // And keep a row moved to with Up and Down there too.
     LaunchedEffect(rowFocus) {
-        val index = channels.indexOfFirst { it.id == rowFocus }
+        val index = lazyIndex(rowFocus)
         if (index >= 0) listState.animateScrollToItem(maxOf(0, index - 2))
     }
 }
@@ -1049,6 +1087,113 @@ internal fun OnboardingButton(
             .padding(horizontal = u(36), vertical = u(if (primary) 24 else 20)),
     )
     if (focusFirst) LaunchedEffect(Unit) { runCatching { requester.requestFocus() } }
+}
+
+// ── The seasonal invite (ChannelGuideView.swift's SeasonalInviteRow) ────
+
+/** Each season its own colour, so the invite reads as part of that season, not a notice. */
+private fun seasonAccent(bundle: ChannelConfig.Bundle) = when (bundle.id) {
+    "seasonal" -> Color(0xFFFF6B00)        // pumpkin
+    "tis-the-season" -> Color(0xFFE74C3C)  // holiday red
+    else -> Color(0xFFFFE500)
+}
+
+/**
+ * The invite above channel one while a seasonal package is in season and off. Exactly one
+ * channel row high, so the guide still reads as a grid: the outline, the fill and the pill do
+ * the separating. Nothing is added to anyone's lineup until they answer its question.
+ */
+@Composable
+private fun SeasonalInviteRow(
+    bundle: ChannelConfig.Bundle,
+    requestFocus: Boolean,
+    focusRequest: Int,
+    onFocused: () -> Unit,
+    onSelect: () -> Unit,
+) {
+    val accent = seasonAccent(bundle)
+    var focused by remember { mutableStateOf(false) }
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(focusRequest, requestFocus) { if (requestFocus) runCatching { requester.requestFocus() } }
+    val shape = RoundedCornerShape(u(6))
+    Box(
+        Modifier
+            .zIndex(1f)
+            .fillMaxWidth()
+            .height(u(ROW_HEIGHT))
+            .focusRequester(requester)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+            .focusable()
+            .onKeyEvent { e ->
+                when (e.key.nativeKeyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> {
+                        if (e.type == KeyEventType.KeyUp) onSelect()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .background(if (focused) accent else accent.copy(alpha = 0.22f)),
+    ) {
+        Box(Modifier.matchParentSize().padding(u(2)).border(u(if (focused) 4 else 2), accent, shape))
+        Box(Modifier.width(u(if (focused) 8 else 4)).fillMaxHeight().background(accent))
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = u(20)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(u(14)),
+        ) {
+            val headline = Season.headline(bundle, java.time.LocalDateTime.now())
+            val style = font(DMMonoMedium, 22, if (focused) Color.Black else accent)
+            BasicText(
+                headline, style = style, maxLines = 1,
+                autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.7f, maxFontSize = style.fontSize),
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // One call to action, not two.
+            Text(
+                "PRESS TO ADD THE ${bundle.name} PACKAGE",
+                style = font(DMMonoMedium, 14, if (focused) Color.Black.copy(alpha = 0.65f) else Color.Black),
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (focused) Color.Black.copy(alpha = 0.18f) else accent)
+                    .padding(horizontal = u(11), vertical = u(5)),
+            )
+        }
+    }
+}
+
+/**
+ * The invite's question (ChannelGuideView's confirmationDialog): the package stays on until
+ * switched off. Focus starts on YES; Back closes it with nothing changed.
+ */
+@Composable
+private fun SeasonalQuestion(bundle: ChannelConfig.Bundle, onAnswer: (Season.Answer) -> Unit) {
+    val shape = RoundedCornerShape(u(18))
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .widthIn(max = u(900))
+                .clip(shape)
+                .background(Color(0xFF16161C))
+                .border(u(1), Color.White.copy(alpha = 0.12f), shape)
+                // Focus stays on the three answers, as in the Apple TV's dialog: Back is the way out.
+                .focusProperties { onExit = { cancelFocusChange() } }
+                .focusGroup()
+                .padding(horizontal = u(64), vertical = u(48)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(u(20)),
+        ) {
+            Text(
+                "Add ${bundle.name} to your lineup? It stays on until you switch it off.",
+                style = font(DMMonoMedium, 28, Color.White), textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = u(12)),
+            )
+            OnboardingButton("YES, TURN IT ON", primary = true, focusFirst = true, fontSize = 24, fullWidth = true) { onAnswer(Season.Answer.YES) }
+            OnboardingButton("NOT THIS YEAR", primary = false, fontSize = 24, fullWidth = true) { onAnswer(Season.Answer.NOT_NOW) }
+            OnboardingButton("DON'T ASK AGAIN", primary = false, fontSize = 24, fullWidth = true) { onAnswer(Season.Answer.NEVER) }
+        }
+    }
 }
 
 // ── Watershed's slate (WatershedCard.swift) ─────────────────────────────

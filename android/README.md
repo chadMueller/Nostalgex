@@ -23,8 +23,12 @@ listing; it installs over `adb`.
 - Airs the Apple TV's schedule: the same programme at the same minute.
 - Plays through ExoPlayer: the file as stored (direct play) first, the
   server's HLS transcode if that fails or a track has no decoder on the
-  device. On Jellyfin and Emby the transcode carries no start time and the
-  player seeks, as on the Apple TV.
+  device. On Jellyfin and Emby the server is asked how to stream it first
+  (PlaybackInfo, as on the Apple TV): it copies or re-encodes the video, burns
+  in a forced subtitle track in your SUBTITLE LANGUAGE, and the stream carries
+  the audio track in your AUDIO LANGUAGE. The hand-built stream is used if it
+  fails to answer in 12 s. The stream carries no start time and the player
+  seeks, as on the Apple TV.
 - Opens on the Apple TV's tuner, at its measurements: the info panel for the
   focused channel, the picture in a 4:3 box, and the timeline guide below
   (two hours, a half hour at a time with Left and Right, the now line, the
@@ -78,6 +82,15 @@ listing; it installs over `adb`.
   Nothing is left in Continue Watching, Resume or On Deck: Plex reports carry no
   position, and a Jellyfin or Emby item's watch state is read first and put
   back when its session ends (`scripts/nostalgex-watch-state.js`).
+- The seasonal invite: while SCREAM (October) or TIS THE SEASON (from a week
+  before US Thanksgiving to December 31) is in season and switched off, a row
+  above channel one offers it. YES, TURN IT ON adds the package; NOT THIS YEAR
+  is quiet until the season ends; DON'T ASK AGAIN is for good. A seasonal
+  package is never switched on any other way (`scripts/season-golden.json`).
+- demo mode, under EMBY on the first screen: the Apple TV's five sample
+  channels with no account or server, every channel playing Apple's public
+  sample stream at the clock's place in the programme. Not saved: the next
+  launch, or DISCONNECT, goes back to the first screen.
 - WATERSHED (off by default): R, NC-17 and TV-MA titles wait for 9 PM on every
   channel but VHS VAULT, which holds its own. A channel with nothing else to
   show says BROADCASTS WILL RESUME AT 9 PM, and comes on at 9.
@@ -93,10 +106,7 @@ listing; it installs over `adb`.
 The aim is the Apple TV app, screen for screen. Where this app differs, it is
 listed here.
 
-Not ported yet: the seasonal invite row
-above channel one; demo mode; the PlaybackInfo handshake on Jellyfin and Emby (this
-app asks for the stored file, then the hand-built HLS stream, which is the
-Apple TV's fallback path).
+Everything on the Apple TV is ported, apart from what is listed below as different.
 
 Different on purpose, because the Apple TV's version has no counterpart here:
 - No SUPPORT NOSTALGEX (App Store ratings and tips), no NOSTALGEX PRO (hidden on
@@ -124,6 +134,14 @@ Different on purpose, because the Apple TV's version has no counterpart here:
   then English, then the file's default. The Apple TV counts English as one of
   the wanted languages, so a German viewer gets an English 5.1 mix over German
   stereo, and a Norwegian one Kon-Tiki in English (measured on the emulator).
+- The PlaybackInfo device profile asks for the stream this app's hand-built
+  request already plays, H.264 and AAC in MPEG-TS, where the Apple TV asks for
+  fMP4 with HEVC (AVPlayer shows HEVC only from fMP4). It offers no direct play
+  back: this app decides that by trying the file, and asks the server only
+  once it has decided not to.
+- In demo mode a package switch in Settings does nothing and saves nothing:
+  the demo channels belong to no package. The Apple TV's switch is not guarded
+  there (not checked on an Apple TV).
 - The wordmark in the nav bar, as the Roku port uses at the maintainer's
   request; the Apple TV still shows its earlier logo.
 - CH+ and CH- change channel and INFO shows the banner, for Android remotes

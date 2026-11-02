@@ -54,4 +54,45 @@ object Season {
         val names = months.filter { it in 1..12 }.map { MONTHS[it - 1] }
         return if (names.isEmpty()) "" else "SPOTLIGHTED ${names.joinToString(", ")}"
     }
+
+    // ── The invite above channel one (SeasonalPrompt.swift) ──
+
+    /** What the viewer chose: YES, TURN IT ON; NOT THIS YEAR; DON'T ASK AGAIN. */
+    enum class Answer { YES, NOT_NOW, NEVER }
+
+    /**
+     * The Apple TV's storage keys. The dismissal carries the year, so a "no" this season does not
+     * silence the next: every season ends by December 31, so one calendar year holds one.
+     */
+    fun neverKey(bundleId: String) = "nostalgex_seasonal_never_$bundleId"
+    fun dismissedKey(bundleId: String, year: Int) = "nostalgex_seasonal_dismissed_${bundleId}_$year"
+
+    /**
+     * The one seasonal package worth offering now, or null (SeasonalPrompt.bundleToOffer):
+     * seasonal, in season, off, and not silenced. Config order wins when several qualify, so
+     * the viewer is asked one thing at a time. A seasonal package is never switched on for anyone.
+     */
+    fun bundleToOffer(
+        bundles: List<ChannelConfig.Bundle>, enabledBundleIds: Set<String>, now: LocalDateTime, isSilenced: (String) -> Boolean,
+    ): ChannelConfig.Bundle? = bundles.firstOrNull {
+        isSeasonal(it) && isInSeason(it, now) && it.id !in enabledBundleIds && !isSilenced(it.id)
+    }
+
+    /** Silenced for good, or for this calendar year's season. `flag` reads a stored boolean. */
+    fun isSilenced(bundleId: String, now: LocalDateTime, flag: (String) -> Boolean): Boolean =
+        flag(neverKey(bundleId)) || flag(dismissedKey(bundleId, now.year))
+
+    /** Records an answer through `set`, which stores a key as true. True when the package should be switched on. */
+    fun record(answer: Answer, bundleId: String, now: LocalDateTime, set: (String) -> Unit): Boolean = when (answer) {
+        Answer.YES -> true
+        Answer.NOT_NOW -> { set(dismissedKey(bundleId, now.year)); false }
+        Answer.NEVER -> { set(neverKey(bundleId)); false }
+    }
+
+    /** The invite's headline (SeasonalPrompt.headline, inviteHeadline). TIS THE SEASON only says December in December. */
+    fun headline(bundle: ChannelConfig.Bundle, now: LocalDateTime): String = when (bundle.id) {
+        "seasonal" -> "IT'S OCTOBER. ARE YOU READY TO SCREAM?"
+        "tis-the-season" -> if (now.monthValue == 12) "IT'S DECEMBER. DECK THE CHANNELS." else "THE HOLIDAYS ARE HERE. DECK THE CHANNELS."
+        else -> "${bundle.name} IS IN SEASON."
+    }
 }

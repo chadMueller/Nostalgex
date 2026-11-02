@@ -23,9 +23,11 @@ import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import com.muellhaus.nostalgex.engine.DemoData
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
+import com.muellhaus.nostalgex.engine.PlaybackInfoHandshake
 import com.muellhaus.nostalgex.engine.PlaybackStarvation
 import com.muellhaus.nostalgex.engine.PlaybackWatchdog
 import com.muellhaus.nostalgex.engine.StreamQuality
@@ -85,6 +87,18 @@ class Playback(
     /** The viewer's languages (AUDIO LANGUAGE, resolved), for the track a Jellyfin or Emby transcode carries. */
     var audioLanguages: List<String> = emptyList()
 
+    /** The viewer's subtitle language (SUBTITLE LANGUAGE, resolved), for a forced track a server stream burns in. */
+    var subtitleLanguage: String = "en"
+
+    /** PlaybackInfo requests, off the main thread; a pool, so one hung request never holds up the next tune. */
+    private val handshakes = java.util.concurrent.Executors.newCachedThreadPool()
+
+    /**
+     * Demo mode (AppState.isDemoMode): every programme plays [DemoData.STREAM_URL], seeked to the
+     * clock modulo the clip, as the Apple TV's demo. No server is asked anything.
+     */
+    var demo = false
+
     /** STREAM QUALITY, read when each programme starts (it never reaches a stream already playing). */
     var quality: StreamQuality = StreamQuality.AUTO
 
@@ -101,6 +115,8 @@ class Playback(
     private data class Current(
         val item: MediaItem, val offsetSec: Long, val delivery: Delivery, val session: String?, val startedAtMs: Long,
         val capped: Boolean = false, val requestedOffsetSec: Long = 0,
+        /** Demo mode's sample clip: nothing to fall back to, so the ladder's next step is the card. */
+        val demo: Boolean = false,
     )
 
     private var current: Current? = null
@@ -208,6 +224,11 @@ class Playback(
     fun play(item: MediaItem, offsetSec: Long) {
         stopSession()
         val q = quality
+        if (demo) {
+            // The demo's PLAYBACK INFORMATION: backend Demo, no source codecs (beginPlaybackInformation).
+            info = PlaybackInfo(qualityAtTune = q, videoCodec = null, audioCodec = null, backend = "Demo")
+            return start(item, offsetSec, Delivery.TRANSCODE, PlaybackInfo.Reason.NONE)
+        }
         info = PlaybackInfo(qualityAtTune = q, videoCodec = item.videoCodec, audioCodec = item.audioCodec, backend = serverName)
         // Away from home a file over the level's ceiling is transcoded: direct play can't step
         // down when the connection can't carry it (PlexAPIService.buildDirectPlayURL).
@@ -220,11 +241,18 @@ class Playback(
     /** Where the viewer is in the programme, on the file's own clock. */
     private fun positionSec(): Long = maxOf(0L, (player.currentPosition / 1000.0 + hlsBase).toLong())
 
-    private fun fallBack(c: Current, reason: String, infoReason: PlaybackInfo.Reason) {
-        // Resume where the direct play got to, or the planned offset if it never started.
-        val at = if (started) positionSec() else c.offsetSec
+    /**
+     * Resume where the direct play got to, or the planned offset if it never started. The
+     * startup watchdog passes the planned offset (`atOffset`), as the Apple TV's does
+     * (`beginServerFallback(position: seekOffset)`): a direct play that gave no picture may
+     * still report a playhead, and it is not where the viewer is. Measured on the emulator: an
+     * MKV whose video Media3 could not read went ready without its seek, played sound from 0 s
+     * for 15 s, and the server stream then started at 14 s on a programme 137 s in.
+     */
+    private fun fallBack(c: Current, reason: String, infoReason: PlaybackInfo.Reason, atOffset: Boolean = false) {
+        val at = if (started && !atOffset) positionSec() else c.offsetSec
         Log.i(TAG, "DIRECT PLAY FAILED ${describe(c.item)}: $reason; transcoding from ${at}s")
-        start(c.item, at, Delivery.TRANSCODE, infoReason)
+        start(c.item, at, Delivery.TRANSCODE, infoReason, serverStreamOnly = true)
     }
 
     /** The last rung: the server stream again, asked for no more than 1080p (cappedTranscodeURL). */
@@ -247,10 +275,15 @@ class Playback(
         main.removeCallbacksAndMessages(null)
     }
 
-    private fun start(item: MediaItem, offsetSec: Long, delivery: Delivery, reason: PlaybackInfo.Reason, capped: Boolean = false) {
+    /**
+     * One attempt. `serverStreamOnly` is the retry after a direct play failed: on Jellyfin and
+     * Emby the PlaybackInfo handshake is then asked not to offer the stored file again.
+     */
+    private fun start(
+        item: MediaItem, offsetSec: Long, delivery: Delivery, reason: PlaybackInfo.Reason,
+        capped: Boolean = false, serverStreamOnly: Boolean = false,
+    ) {
         endAttempt()
-        val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource(serverName))
-        val token = item.serverToken ?: ""
         started = false
         firstFrame = false
         bufferingSinceMs = 0
@@ -259,9 +292,13 @@ class Playback(
         loadUnreachable = false
         loadedBytes = false
         info = info?.copy(delivery = delivery, reason = reason, ready = false, capped = capped)
+        if (demo) return startDemo(item, offsetSec)
+        val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource(serverName))
+        val token = item.serverToken ?: ""
         // The capped retry is the Apple TV's `.high` preset whatever was chosen: 1080p, 12 Mbps.
         val q = if (capped) StreamQuality.HIGH else info?.qualityAtTune ?: quality
         val mb = mediaBrowserServer
+        if (mb != null && delivery == Delivery.TRANSCODE && !capped) return handshake(mb, item, offsetSec, q, serverStreamOnly)
         val exo = if (mb != null) mediaBrowserItem(mb, item, offsetSec, delivery, q, capped) else when (delivery) {
             Delivery.DIRECT_PLAY -> {
                 current = Current(item, offsetSec, delivery, null, System.currentTimeMillis())
@@ -297,11 +334,91 @@ class Playback(
                 ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
             }
         }
+        load(exo, item, offsetSec, delivery, capped)
+    }
+
+    /**
+     * The demo clip, through a data source with no headers of this app's: Apple's CDN gets
+     * nothing that identifies this install. It seeks to the clock modulo the clip's 600 s, since
+     * most tune-ins land further into a block than the clip runs (playerSeekSeconds).
+     */
+    private fun startDemo(item: MediaItem, offsetSec: Long) {
+        current = Current(item, offsetSec, Delivery.TRANSCODE, null, System.currentTimeMillis(), demo = true)
+        val at = DemoData.clipOffset(offsetSec)
+        Log.i(TAG, "TRY DEMO ${describe(item)} at ${offsetSec}s of the programme, ${at}s into the clip")
+        val source = demoSources.createMediaSource(ExoItem.Builder().setUri(DemoData.STREAM_URL).setMimeType(MimeTypes.APPLICATION_M3U8).build())
+        player.playWhenReady = true
+        player.setMediaSource(source, at * 1000)
+        player.prepare()
+        current?.let { watch(attempt, it) }
+    }
+
+    private val demoSources by lazy {
+        DefaultMediaSourceFactory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true))
+            .setLoadErrorHandlingPolicy(NoRetryOnHttpError)
+    }
+
+    private fun load(exo: ExoItem, item: MediaItem, offsetSec: Long, delivery: Delivery, capped: Boolean) {
         Log.i(TAG, "TRY ${delivery.label}${if (capped) " (capped at 1080p)" else ""} ${describe(item)} from ${offsetSec}s")
         player.playWhenReady = true
         player.setMediaItem(exo, offsetSec * 1000)
         player.prepare()
         current?.let { watch(attempt, it) }
+    }
+
+    /**
+     * Jellyfin and Emby: ask the server how to stream this (PlaybackInfoHandshake, the Apple TV's
+     * resolveTranscodePlayback and resolveServerStream), off the main thread. The answer is
+     * played as the server built it, with the server's PlaySessionId, so a channel change stops
+     * exactly that encode. A failed or empty answer falls through to the hand-built stream, as
+     * on the Apple TV. An answer for an attempt already replaced is dropped and its encode
+     * stopped: the server opened it, and nothing else knows its id.
+     */
+    private fun handshake(mb: MediaBrowserServer, item: MediaItem, offsetSec: Long, q: StreamQuality, serverStreamOnly: Boolean) {
+        val a = attempt
+        val askedAt = System.currentTimeMillis()
+        current = Current(item, offsetSec, Delivery.TRANSCODE, null, askedAt)
+        // The old programme stops now, not when the answer comes (replaceCurrentItem(with: nil)).
+        player.stop()
+        val subtitleLanguage = subtitleLanguage
+        val languages = audioLanguages
+        handshakes.execute {
+            val r = runCatching {
+                PlaybackInfoHandshake.negotiate(
+                    send = { body -> mediaBrowser.playbackInfo(mb, item.ratingKey, body) },
+                    serverUrl = mb.url, apiKey = mb.token, itemId = item.ratingKey, mediaSourceId = item.partKey ?: item.ratingKey,
+                    maxBitrateBps = q.maxBitrateKbps * 1000L, serverStreamOnly = serverStreamOnly,
+                    subtitleLanguage = subtitleLanguage, audioLanguages = languages,
+                    log = { Log.i(TAG, "PLAYBACK INFO ${describe(item)}: $it") },
+                )
+            }
+            main.post {
+                val ms = System.currentTimeMillis() - askedAt
+                if (a != attempt) {
+                    r.getOrNull()?.playSessionId?.let { mediaBrowser.stopEncoding(mb, it) }
+                    Log.i(TAG, "PLAYBACK INFO answered after the tune moved on (${ms} ms); its session stopped")
+                    return@post
+                }
+                val res = r.getOrNull()
+                when {
+                    r.isFailure -> Log.i(TAG, "PLAYBACK INFO failed in $ms ms (${r.exceptionOrNull()}); using the hand-built stream")
+                    res == null -> Log.i(TAG, "PLAYBACK INFO offered nothing playable in $ms ms; using the hand-built stream")
+                    else -> Log.i(TAG, "PLAYBACK INFO in $ms ms: ${if (res.isDirectPlay) "the stored file" else "server stream"}" +
+                        "${if (serverStreamOnly) " (direct play off)" else ""}, session ${res.playSessionId}" +
+                        "${Regex("[?&]SubtitleStreamIndex=(\\d+)").find(res.url)?.let { m -> ", burning subtitle ${m.groupValues[1]}" } ?: ""}" +
+                        "${Regex("[?&]AudioStreamIndex=(\\d+)").find(res.url)?.let { m -> ", audio ${m.groupValues[1]}" } ?: ""}")
+                }
+                if (res == null) {
+                    val exo = mediaBrowserItem(mb, item, offsetSec, Delivery.TRANSCODE, q, false)
+                    return@post load(exo, item, offsetSec, Delivery.TRANSCODE, false)
+                }
+                val delivery = if (res.isDirectPlay) Delivery.DIRECT_PLAY else Delivery.TRANSCODE
+                current = Current(item, offsetSec, delivery, res.playSessionId, askedAt)
+                if (res.isDirectPlay) info = info?.copy(delivery = delivery)
+                val exo = ExoItem.Builder().setUri(res.url).apply { if (!res.isDirectPlay) setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
+                load(exo, item, offsetSec, delivery, false)
+            }
+        }
     }
 
     // ── The ladder ──────────────────────────────────────────────────────────
@@ -332,9 +449,9 @@ class Playback(
         when {
             c.delivery == Delivery.DIRECT_PLAY -> {
                 Log.i(TAG, "WATCHDOG ${deadline}s, direct play gave no picture ($detail)")
-                fallBack(c, "no picture after ${deadline}s", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+                fallBack(c, "no picture after ${deadline}s", PlaybackInfo.Reason.STARTUP_NO_PICTURE, atOffset = true)
             }
-            !c.capped -> capped(c, c.offsetSec, "no picture after ${deadline}s ($detail)", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+            !c.capped && !c.demo -> capped(c, c.offsetSec, "no picture after ${deadline}s ($detail)", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
             else -> {
                 val failure = PlaybackFailure.classify(serverName, evidence(null, c.item))
                 Log.w(TAG, "WATCHDOG ${deadline}s, capped stream gave no picture ($detail); ${failure.headline}")
@@ -358,7 +475,7 @@ class Playback(
                 Log.i(TAG, "STARVED on direct play ($detail)")
                 fallBack(c, "starved", PlaybackInfo.Reason.STREAM_STALLED)
             }
-            !c.capped -> capped(c, at, "starved ($detail)", PlaybackInfo.Reason.STREAM_STALLED)
+            !c.capped && !c.demo -> capped(c, at, "starved ($detail)", PlaybackInfo.Reason.STREAM_STALLED)
             else -> {
                 // The server answered and still couldn't be watched: a different sentence from "refused".
                 Log.w(TAG, "STARVED at 1080p too ($detail); nothing smaller to ask for")
@@ -371,8 +488,9 @@ class Playback(
     /**
      * Jellyfin and Emby, as the web tuner's nostalgex-jellyfin-urls.js. Direct play is the file
      * as stored (`Static=true`), labelled `stream.mp4` for the MP4 family so the server sends
-     * `video/mp4` rather than going by the file's name. The transcode is the hand-built HLS
-     * request in MPEG-TS, H.264 and AAC, with its own PlaySessionId so a channel change stops
+     * `video/mp4` rather than going by the file's name. A server stream is first asked of the
+     * server ([handshake]); this hand-built HLS request is what plays when that fails or offers
+     * nothing, and the capped retry, as on the Apple TV. MPEG-TS, H.264 and AAC, with its own PlaySessionId so a channel change stops
      * exactly this encode. It carries no start time: Jellyfin copies the query onto every
      * segment URL and refuses `StartTimeTicks` there with HTTP 400, so the player seeks
      * instead (JellyfinPlaybackResolver.offsetPlayback), which `setMediaItem` does. The capped
@@ -450,6 +568,7 @@ class Playback(
 
     fun release() {
         stop()
+        handshakes.shutdown()
         player.release()
     }
 
