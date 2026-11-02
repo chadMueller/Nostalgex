@@ -195,8 +195,8 @@ fun WatchScreen(model: AppModel) {
                             // release can't reach the next screen.
                             AndroidKeyEvent.KEYCODE_BACK -> when {
                                 // Settings: a picker page first, then Settings itself, back to the live row.
-                                model.settingsOpen && model.settingsPicker != null -> { if (up) model.settingsPicker = null; true }
-                                model.settingsOpen -> { if (up) { model.closeSettings(); focusLive() }; true }
+                                // Settings steps back one level at a time; from the rail it closes.
+                                model.settingsOpen -> { if (up && !model.settingsBack()) focusLive(); true }
                                 // The package sidebar closes back to the guide (BundleJumpSidebar's onExitCommand).
                                 sidebarOpen -> { if (up) { sidebarOpen = false; focusLive() }; true }
                                 // An open picker first: dropping out of the panel from inside a list would lose it on a mis-press.
@@ -971,7 +971,7 @@ private fun StatusScreen(model: AppModel, content: @Composable () -> Unit) {
                     .onPreviewKeyEvent { e ->
                         if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_BACK || !model.settingsOpen) return@onPreviewKeyEvent false
                         if (e.type == KeyEventType.KeyUp) {
-                            if (model.settingsPicker != null) model.settingsPicker = null else model.closeSettings()
+                            model.settingsBack()
                         }
                         true
                     },

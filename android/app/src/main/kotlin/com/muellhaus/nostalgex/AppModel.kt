@@ -87,6 +87,14 @@ sealed interface Screen {
     data object Watching : Screen
 }
 
+/** Settings' rail (SettingsCategory.swift). SUPPORT NOSTALGEX and NOSTALGEX PRO have no counterpart here. */
+enum class SettingsCategory(val title: String, val subtitle: String, val icon: Int) {
+    PLAYBACK("PLAYBACK & PICTURE", "Picture, quality, subtitles and audio", R.drawable.settings_hero_playback),
+    CHANNELS("CHANNELS & BUNDLES", "Packages and the schedule", R.drawable.settings_hero_channels),
+    SERVERS("SERVERS & ACCOUNTS", "Servers, libraries, rescans and sign out", R.drawable.settings_hero_servers),
+    ABOUT("ABOUT", "Version and links", R.drawable.settings_hero_about),
+}
+
 /** Where the connect screens are, as SettingsView.Screen and its waiting states. */
 sealed interface ConnectStep {
     data object Picker : ConnectStep
@@ -788,17 +796,47 @@ class AppModel(private val context: Context) : Playback.Listener {
         else -> "Could not start Quick Connect. Check the server address, or sign in with your password."
     }
 
-    // ── Settings (BundleManagerView.swift's SettingsPageView) ────────────
+    // ── Settings (SettingsContainerView: a rail of categories, a pane of rows) ──
 
-    /** The settings page, over the tuner. The picture plays on, muted, as on the Apple TV. */
+    /** Settings, over the tuner. The picture plays on, muted, as on the Apple TV. */
     var settingsOpen by mutableStateOf(false)
         private set
     /** A picker page over Settings: "stream_quality", "sub_lang" or "audio_lang". */
     var settingsPicker: String? by mutableStateOf(null)
 
+    /** The category the pane shows. It follows focus on the rail, with no press. */
+    var settingsCategory by mutableStateOf(SettingsCategory.PLAYBACK)
+    /** The CHANNELS & BUNDLES sub-page on show: "packages", "missing", or null for its list. */
+    var channelsPage: String? by mutableStateOf(null)
+    /** Whether focus is on the rail (true) or in the pane's rows. Set by the rail's rows. */
+    var settingsOnRail by mutableStateOf(true)
+    /** Asks the screen to put focus on the rail's selected category, or on a pane row. */
+    var railFocusTick by mutableStateOf(0)
+        private set
+    var paneFocusTick by mutableStateOf(0)
+        private set
+    /**
+     * Set while the pane swaps one sub-page for another. The row that had focus goes away, and
+     * Compose drops focus on the first thing it finds, a rail row; that must not switch the
+     * category. Cleared when the new page's row takes focus.
+     */
+    var paneSwapping = false
+
+    /** The last pane tick the pane acted on. Different from `paneFocusTick`: a pane row is waiting for focus. */
+    var paneTickHandled = 0
+
+    /** The pane row to focus at the next pane tick; null is the first row. */
+    var paneFocusKey: String? = null
+        private set
+
     fun openSettings() {
         settingsOpen = true
         settingsPicker = null
+        settingsCategory = SettingsCategory.PLAYBACK
+        channelsPage = null
+        settingsOnRail = true
+        paneSwapping = false
+        paneTickHandled = paneFocusTick
         playback.player.volume = 0f
         refreshServers()
         refreshSections()
@@ -808,6 +846,42 @@ class AppModel(private val context: Context) : Playback.Listener {
         settingsOpen = false
         settingsPicker = null
         playback.player.volume = 1f
+    }
+
+    /** Right or OK on the rail, or a link row: focus a pane row (`key`), or its first. */
+    fun focusPane(key: String? = null) {
+        paneSwapping = true
+        paneFocusKey = key
+        paneFocusTick++
+    }
+
+    /** Left from the rows: back to the selected category, not whichever is level with the row. */
+    fun focusRail() {
+        railFocusTick++
+    }
+
+    /** A link row on CHANNELS & BUNDLES: the sub-page, focus on its first row. */
+    fun openChannelsPage(page: String) {
+        paneSwapping = true
+        channelsPage = page
+        focusPane()
+    }
+
+    /**
+     * Back in Settings, one step at a time: a picker closes; a sub-page goes up to the page
+     * that opened it, focus on the row that did; the rows give focus to the rail; the rail
+     * closes Settings. False when Settings closed, so the caller can put focus on the guide.
+     */
+    fun settingsBack(): Boolean {
+        when {
+            // The picker's row is keyed by the picker's own name.
+            settingsPicker != null -> { val row = settingsPicker; settingsPicker = null; focusPane(row) }
+            !settingsOnRail && channelsPage == "missing" -> { paneSwapping = true; channelsPage = "packages"; focusPane("channels_missing") }
+            !settingsOnRail && channelsPage == "packages" -> { paneSwapping = true; channelsPage = null; focusPane("channels_packages") }
+            !settingsOnRail -> focusRail()
+            else -> { closeSettings(); return false }
+        }
+        return true
     }
 
     /** Every package in channels.json, in its order. */
