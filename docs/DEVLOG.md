@@ -3,6 +3,45 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Web tuner 1.0.12: the Docker release that carries the franchise channels)
+
+**Shipped.** Nothing yet. Branch `web/tuner-1.0.12`, off `origin/main` at `0795e19` (the merge of
+`web/franchise-parity`, already live on nostalgex.app), not pushed and not tagged. Docker gets the
+franchise channels when `tuner-v1.0.12` is tagged on the bump.
+
+**Changed.** `tunerVersion` 1.0.12 and README's latest-release lines. The release notes for
+`tuner-v1.0.12` are drafted and wait with the tag.
+
+**Checked.**
+- `npm test` passes, `npm run build` and `npm run build:selfhost` pass, `npm run test:tuner-version:builds`
+  reads 1.0.12 in both builds.
+- The Docker image builds locally (Colima, buildx, `--load`, nothing pushed). Run read-only on a
+  tmpfs it answers `/healthz`, serves `WEB TUNER 1.0.12` in the page's version meta and in
+  `config.json`, serves `nostalgex-franchise-builder.js` and `nostalgex-franchise-lineup.js` as
+  JavaScript and `franchises.json` as JSON, runs as uid 101, and takes `NOSTALGEX_TUNER_VERSION` and
+  `NOSTALGEX_ENRICHMENT=off` from the environment. The files inside that image pass
+  `npm run test:franchise-channels:browser` (51 checks). That smoke now sets the three enrichment meta
+  tags by pattern: the image bakes in whatever Supabase build args it got, an empty value in a local
+  build, and replacing only the `%VITE_...%` placeholder left the page with no enrichment.
+- Against a real Plex library of roughly 12,000 items (2,900 films, 8,900 episodes), headless, from
+  this branch's page. Read only: no playback, no writes, enrichment read from the shared cache and no
+  TMDB lookups. The page signs in through the server's plex.direct address, as the tuner does; the
+  raw-IP https address fails the certificate name check in a browser, which is the known limit.
+  - It loaded in 57 s with no page errors. 125 server collections came back, 101 with three or more
+    items. The classifier filed 89 of those under FRANCHISES and 12 under OTHER COLLECTIONS, and 82 of
+    the 89 folded into a classic or a found franchise, so 7 franchise collections stay listed.
+  - The builder found 94 franchises: 6 of them are covered by a classic (two classics took extra items
+    the rule did not pass, 10 and 1) and 88 can have channels of their own, 10 of those from the
+    dictionary. One starts on, a dictionary default, so one found channel airs until the viewer
+    switches more on.
+  - ADD ALL on that library puts 95 franchises in 90 places: the block fills at CH 310-399 with no gap,
+    5 are on but not shown, the 12 other collections take CH 400-411, no number repeats and every
+    runtime channel has a schedule. REMOVE ALL empties the 300s. A full rebuild took 128 to 135 ms.
+  - Not checked on that library: playback, and what the viewer thinks of which series were found.
+
+**Next.** Chad's go: push the bump to `main`, then tag `tuner-v1.0.12` on it and write the release
+note. The release workflow stops if the tag and `tunerVersion` disagree.
+
 ## 2026-11-01 (Web tuner and Docker: franchise channels and the FRANCHISES / OTHER COLLECTIONS split, #122)
 
 **Shipped.** Nothing yet. Branch `web/franchise-parity`, cut from `origin/main` at `9438f2a`, not
