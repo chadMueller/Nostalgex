@@ -23,7 +23,7 @@
 // reading of the responses and its collection logic, not the TV's network
 // path, which `scripts/deploy.sh` builds then exercise.
 import { execFileSync } from "node:child_process";
-import { readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -92,6 +92,7 @@ console.log(`  upstream: ${candidates.length} candidates, ${candidates.filter((c
 
 // ── The port, over the same data ────────────────────────────────────────────
 const slim = (it) => ({ ratingKey: it.ratingKey, serverIndex: keyFor(it), type: it.type, title: it.title, showKey: it.showKey ?? null, tmdbID: it.tmdbID ?? null });
+mkdirSync(join(repo, "out"), { recursive: true }); // absent in a fresh clone or worktree
 writeFileSync(join(repo, "out", "live-collections.json"), JSON.stringify({
   servers: recorded, serverKeys: {}, items: items.map(slim), enabledKeys,
   staticChannels: staticChannels.map((ch) => ({ id: ch.id, number: ch.number, name: ch.name })),

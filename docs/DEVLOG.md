@@ -17,6 +17,33 @@ old code throws, the new one loads 5521 items, 29 titles with accents and no U+F
 
 **Half-done.** On `roku-live-utf8-global` (off main), not pushed.
 
+## 2026-10-31 (Roku: tests/run.sh runs as many interpreters as memory allows)
+
+**Why.** `tests/run.sh` ran one brs interpreter per CPU thread. Each takes 0.5-1.7 GB, so
+on a 20-thread, 31 GB Linux desktop the 20 of them filled about 25 GB, and the kernel's
+out-of-memory killer took the desktop (kwin, plasmashell) instead of them (2026-10-25).
+
+**Changed.** On `roku-test-memcap` (off main), not pushed. Both pools (the component parse
+and the suites) run at most one interpreter per 2 GB free (MemAvailable on Linux, the whole
+RAM on macOS), and never more than the CPU threads; `NX_TEST_JOBS` still overrides. On
+Linux the run marks itself the kernel's first pick (`oom_score_adj` 1000), and with a
+systemd user session each pool runs in a scope held to the memory free at the start, with
+no swap, so an overrun kills a test part, which then fails, and not the desktop.
+
+## 2026-10-31 (Roku live tools: two fresh-clone crashes, branch roku-live-tools-guards)
+
+**Changed.** `roku/tests/live/collections.mjs` and `compare.mjs` create `roku/out/`
+before writing to it. It is git-ignored, so in a fresh clone or worktree both died
+with `ENOENT` after the whole Plex load.
+
+**Changed.** `servers()` in `roku/tests/live/plex-env.mjs` refuses an empty token
+before any request, naming the `.env` it read and `plex-link.mjs`. Before, a run
+from a checkout with no `.env` got a bare `plex.tv resources answered 401`, and the
+request's `clientId()` left behind a `roku/.env` holding only `PLEX_CLIENT_ID`.
+Checked by running `compare.mjs` in a fresh worktree on the old and new code.
+
+**Half-done.** Open as a PR from `tydude001:roku-live-tools-guards`; not yet merged.
+
 ## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones
