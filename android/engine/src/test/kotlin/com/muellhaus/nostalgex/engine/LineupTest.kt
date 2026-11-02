@@ -135,4 +135,21 @@ class LineupTest {
         assertTrue("Plex airs some profile 5 titles", aired("plex").any { it in dv5 })
         assertTrue("Emby airs none", aired("emby").none { it in dv5 })
     }
+
+    /** The sidebar lists packages in guide order: each at its earliest channel there (bundleJumpTargets). */
+    @Test
+    fun theSidebarFollowsTheGuideOrder() {
+        val l = lineup()
+        val all = config.bundles.map { it.id }.toSet()
+        l.build(library(3000, 60), all)
+        l.rebuildSchedules(ZonedDateTime.of(2026, 10, 29, 20, 15, 0, 0, zone))
+        val targets = l.jumpTargets(all)
+        assertTrue("more than one package fills", targets.size > 1)
+        val at = targets.map { (_, ch) -> l.channels.indexOfFirst { it.id == ch.id } }
+        assertEquals("rows in guide order", at.sorted(), at)
+        for ((b, ch) in targets) {
+            val earliest = l.channels.indexOfFirst { it.id in b.channelIDs }
+            assertEquals("${b.id} jumps to its earliest channel", earliest, l.channels.indexOfFirst { it.id == ch.id })
+        }
+    }
 }

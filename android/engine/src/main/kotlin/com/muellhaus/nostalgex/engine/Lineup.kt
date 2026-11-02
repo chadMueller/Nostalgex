@@ -112,12 +112,17 @@ class Lineup(
         }
     }
 
-    /** The package sidebar's rows: each package on, and the first of its channels in the guide (bundleJumpTargets). */
+    /**
+     * The package sidebar's rows (bundleJumpTargets): each package on, at the earliest of its
+     * channels in the guide, in guide order, so a seasonal package leading the guide leads here.
+     */
     fun jumpTargets(enabledBundles: Set<String>): List<Pair<ChannelConfig.Bundle, GuideChannel>> {
-        val byId = channels.associateBy { it.id }
-        return config.bundles.filter { it.id in enabledBundles }.mapNotNull { b ->
-            b.channelIDs.firstNotNullOfOrNull { byId[it] }?.let { b to it }
-        }
+        val position = HashMap<Int, Int>()
+        channels.forEachIndexed { i, ch -> position.putIfAbsent(ch.id, i) }
+        return config.bundles.filter { it.id in enabledBundles }
+            .mapNotNull { b -> b.channelIDs.mapNotNull { position[it] }.minOrNull()?.let { at -> Triple(b, channels[at], at) } }
+            .sortedBy { it.third }
+            .map { it.first to it.second }
     }
 
     private fun filter(
