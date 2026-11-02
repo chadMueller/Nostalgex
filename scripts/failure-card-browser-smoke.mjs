@@ -14,7 +14,7 @@
  *   - the card is on screen, inside the picture, with its headline and detail;
  *   - the title lines of the text display are not drawn behind it;
  *   - a connection error ("NOT CONNECTED...") shows the same way;
- *   - clearing the error puts the split view back as it was;
+ *   - clearing the error, or signing out, puts the split view back as it was;
  *   - the full view (the other layout) still shows it.
  *
  * Set SHOTS=/dir for screenshots. NX_TUNER_HTML=/path serves another copy of the page
@@ -158,6 +158,16 @@ for (const name of Object.keys(viewports)) try {
   await page.waitForTimeout(300);
   s = await read(page);
   check(`${name}: clearing the error hides the block again in the split view`, s.displayDisplay === "none" && !s.hasFailure, `${s.displayDisplay} ${s.hasFailure}`);
+
+  // Signing out ends the session the card belongs to: it must not be on screen over the next sign-in.
+  await page.evaluate(() => { showPlaybackFailure(classifyPlaybackFailure({ noSource: true }), false); });
+  await page.waitForTimeout(300);
+  s = await read(page);
+  check(`${name}: a failure card is up before the sign-out`, s.shown && s.hasFailure, `${s.displayDisplay} ${s.hasFailure}`);
+  await page.evaluate(() => signOut());
+  await page.waitForTimeout(400);
+  s = await read(page);
+  check(`${name}: signing out takes the card down in the split view`, !s.shown && s.displayDisplay === "none" && !s.hasFailure && s.text === "", `${s.shown} ${s.displayDisplay} ${s.hasFailure} "${s.text}"`);
 
   // The other layout still shows it.
   await page.evaluate(() => { toggleGuideLayout(); showPlaybackFailure(classifyPlaybackFailure({ noSource: true }), false); });

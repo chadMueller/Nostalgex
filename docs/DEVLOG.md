@@ -5,8 +5,8 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-02 (Web tuner and Docker: the playback failure card shows in the split view)
 
-**Shipped.** Nothing. Branch `web/failure-card-split-view`, cut from `origin/main` at `03c7ae9`,
-not pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/failure-card-split-view`, cut from `origin/main` at `03c7ae9`.
 
 **Why.** Found while building the WATERSHED card (branch `web/watershed-switch`). The failure card
 ("This one wouldn't play", amber when the server is at fault, red when the browser is) and the
@@ -19,15 +19,18 @@ the Apple TV and Roku, never showed.
 
 **Changed.** A failure or a connection error puts a `has-failure` class on `.channel-display`,
 which shows the block again in the split view and hides the text display's title lines behind it.
-`clearVideoError` takes the class off, so the split view is as it was. The full view is unchanged.
+`clearVideoError` takes the class off, so the split view is as it was, and `signOut` calls it, so a card from
+one session is not on screen over the next sign-in. The full view is unchanged.
 
 **Verified.** New `scripts/failure-card-browser-smoke.mjs` (`npm run test:failure-card:browser`,
 headless Chromium, a Jellyfin-shaped server that refuses every video request so the page's own
 recovery runs to the card) at phone, tablet, desktop and 960x540: the card is on screen inside the
 picture with its headline and detail, a connection error shows the same way, clearing hides the
-block again in the split view, the full view still shows it, no page errors: 40 checks, the same
-40 on the hosted build (`dist`) and the Docker build (`dist-selfhost`). Negative control:
-origin/main's page fails 16 of them, with the card at 0 by 0 at all four sizes.
+block again in the split view, signing out takes the card down, the full view still shows it, no page
+errors: 48 checks (40 on the branch's own head `d6aa6cc`, the 8 sign-out checks added in the bundle), the same
+40 on the hosted build (`dist`) and the Docker build (`dist-selfhost`) at `d6aa6cc`. Negative controls:
+origin/main's page fails 16 of the 40, with the card at 0 by 0 at all four sizes; without the `signOut` line
+the 4 sign-out checks fail, the card staying up over the connect screen.
 
 **Not verified.** A real server refusing a real stream; a real TV browser; Safari. The playback
 recovery ladder behind the card is unchanged and is a separate, larger gap (no 1080p step, stops
@@ -79,8 +82,8 @@ fail the new cases. The full suite and the stick check on the 1.0.10 build are r
 
 ## 2026-11-02 (Web tuner and Docker: Plex sign-in stops waiting once the answer cannot change)
 
-**Shipped.** Nothing. Branch `web/plex-lan-early-exit`, cut from `origin/main` at `54cb410`, not
-pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/plex-lan-early-exit`, cut from `origin/main` at `54cb410`.
 
 **Why.** `findWorkingConnection` tested every address plex.tv lists with `Promise.all` and then
 took the best that answered, so a sign-in waited for the slowest address even when the home
@@ -162,8 +165,8 @@ TV yet (see the entry below).
 
 ## 2026-11-02 (Web tuner and Docker: a WATERSHED switch and the 9 PM card)
 
-**Shipped.** Nothing. Branch `web/watershed-switch`, cut from `origin/main` at `8ebd1e2`,
-not pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/watershed-switch`, cut from `origin/main` at `8ebd1e2`.
 
 **Why.** The hold has been in `plex-tuner.html` since the Apple TV's Watershed landed
 (`getTimeFilteredPool` reads `nostalgex_watershed`), but nothing wrote that key and nothing
@@ -209,12 +212,12 @@ one-second tick, so a background tab catches up on its next tick, not at 9:00:00
 **Next.** Roku has no Watershed yet. While in the page: with the split view on (the default), the
 playback failure card and `showVideoError` text live in `.channel-display`, which
 `.player-screen.layout-side` hides with `display: none !important`. Measured: a failure card
-has a 0 by 0 box at desktop and phone sizes. Not fixed on this branch.
+has a 0 by 0 box at desktop and phone sizes. Fixed by `web/failure-card-split-view`, in the same bundle.
 
 ## 2026-11-02 (Web tuner and Docker: GUIDE TEXT SIZE)
 
-**Shipped.** Nothing. Branch `web/guide-text-size`, cut from `origin/main` at `8ebd1e2`, not
-pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/guide-text-size`, cut from `origin/main` at `8ebd1e2`.
 
 **Why.** The Apple TV (1.0.29) and Roku have a GUIDE TEXT SIZE choice, NORMAL or LARGE. The web
 had only an automatic CSS zoom for small landscape screens, which is not a choice, and a TV

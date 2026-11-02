@@ -8856,6 +8856,9 @@
 
     currentChannel = null;
     hideWatershedCard();
+    // A failure card or a connection error belongs to the session that is ending: in the split
+    // view it is on screen, and it would be there again, over the next sign-in.
+    clearVideoError();
     document.getElementById('player-screen').classList.remove('has-channel');
     document.getElementById('channel-display').classList.remove('active');
     document.getElementById('plex-connect').style.display = 'flex';
