@@ -13,18 +13,24 @@ data class PlaybackInfo(
     val delivery: Delivery? = null,
     val reason: Reason = Reason.NONE,
     val ready: Boolean = false,
+    /** The ladder's compatibility retry, up to 1080p (RecoveryRequest.compatibility1080p). */
+    val capped: Boolean = false,
+    /** Plex, Jellyfin or Emby: the server signed in to. */
+    val backend: String = "Plex",
 ) {
     /** Observed recovery decisions, never a guessed cause. */
     enum class Reason(val message: String) {
         NONE("No fallback used."),
         SERVER_STREAM_SELECTED("Server streaming was selected for this source."),
         DIRECT_PLAY_FAILED("Direct Play failed. Trying a server stream."),
+        STARTUP_NO_PICTURE("No picture reached the startup deadline. Trying a different stream."),
+        STREAM_STALLED("Playback stopped making progress. Trying a different stream."),
     }
 
     data class Row(val label: String, val value: String)
 
     fun rows(width: Int?, height: Int?): List<Row> = listOf(
-        Row("BACKEND", "Plex"),
+        Row("BACKEND", backend),
         Row("PLAYBACK", if (!ready) "Loading" else when (delivery) {
             Delivery.DIRECT_PLAY -> "Direct Play"
             Delivery.TRANSCODE -> "Server stream"
@@ -34,7 +40,7 @@ data class PlaybackInfo(
         Row("PLAYER SIZE", if (ready && width != null && height != null && width in 1..65_536 && height in 1..65_536) "$width × $height" else "Unknown"),
         Row("SOURCE METADATA", "Video: ${codec(videoCodec, VIDEO)} · Audio: ${codec(audioCodec, AUDIO)}"),
         Row("FALLBACK", reason.message),
-    )
+    ) + listOfNotNull(if (capped) Row("RECOVERY REQUEST", "Compatibility retry, up to 1080p") else null)
 
     companion object {
         /** The Apple TV's note; "AVPlayer" is ExoPlayer here. */
