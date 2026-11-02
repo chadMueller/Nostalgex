@@ -6,7 +6,7 @@
  * point 11 in scripts/nostalgex-jellyfin-urls.js.
  *
  * Runs the page's own scan (fetchJellyfinLibraryFromServer), filterItems and
- * refreshCollectionChannels, cut out of plex-tuner.html, against a fake server answering with
+ * refreshDynamicChannels, cut out of plex-tuner.html, against a fake server answering with
  * the video stream fields Emby 4.10.1.0 and Jellyfin 12.2.0 send (copied from the lab servers,
  * 2026-10-19), over the shipped channels.json. Every "left off" check has a control: the same
  * file from Jellyfin, through the same code, reaching channels.
@@ -25,6 +25,8 @@ const tunerPath = process.env.TUNER || path.join(root, "plex-tuner.html");
 const filterPath = process.env.FILTER || path.join(root, "scripts/nostalgex-channel-filter.cjs");
 const urlsPath = process.env.URLS || path.join(root, "scripts/nostalgex-jellyfin-urls.js");
 const collectionsPath = path.join(root, "scripts/nostalgex-collections.js");
+const franchiseBuilderPath = path.join(root, "scripts/nostalgex-franchise-builder.js");
+const franchiseLineupPath = path.join(root, "scripts/nostalgex-franchise-lineup.js");
 // The loaders read minutes and dates through the schedule engine, as the page loads it first.
 const manifestPath = path.join(root, "scripts/nostalgex-daily-manifest.js");
 const tuner = fs.readFileSync(tunerPath, "utf8");
@@ -161,7 +163,7 @@ function fakeServer(video) {
 const PAGE_FUNCTIONS = [
   "backendDisplayName", "pickBestVersion", "formatDuration", "channelFilter", "filterItems",
   "fetchJellyfinLibraryFromServer", "isMediaBrowserBackend", "collectionServerKeyForItem",
-  "refreshCollectionChannels",
+  "refreshDynamicChannels", "franchiseItemKey", "franchisePackageOn", "franchiseBundleChannelIDs", "rulePoolOf", "isRuntimeChannel",
 ];
 
 function page(backend, server) {
@@ -187,14 +189,15 @@ function page(backend, server) {
     },
     channelMembershipManifest: manifest,
     exclusiveRules,
-    // refreshCollectionChannels
+    // refreshDynamicChannels
     allItemsCache: [], allChannelsUnfiltered: [], rawCollections: null, collectionCandidates: [],
     collectionsOverCap: 0, enabledCollectionKeys: new Set(), currentChannel: null,
+    franchiseDefinitions: [], enabledFranchiseIDs: new Set(), disabledFranchiseIDs: new Set(), foundFranchises: [], franchiseRows: [], franchiseOverCap: 0, FRANCHISES_BUNDLE_ID: "franchises",
     guideVisible: false, configVisible: false, configTab: "",
     applyBundleFilter() {}, renderConfig() {}, renderActiveGuide() {}, renderBundleList() {}, buildChannelSchedule() {},
   };
   vm.createContext(ctx);
-  for (const p of [manifestPath, urlsPath, filterPath, collectionsPath]) vm.runInContext(fs.readFileSync(p, "utf8"), ctx, { filename: p });
+  for (const p of [manifestPath, urlsPath, filterPath, collectionsPath, franchiseBuilderPath, franchiseLineupPath]) vm.runInContext(fs.readFileSync(p, "utf8"), ctx, { filename: p });
   vm.runInContext((/const BACKEND_NAMES = \{[^}]*\};/.exec(tuner) || [""])[0].replace("const ", "var "), ctx);
   for (const name of PAGE_FUNCTIONS) vm.runInContext(extractFunction(tuner, name), ctx, { filename: `plex-tuner.html#${name}` });
   ctx.logs = logs;
@@ -294,7 +297,7 @@ await check("Plex profile 5 stays on channels", () => {
   for (const id of LEFT_OFF) same(channelsHolding(plex, items, id), control[id], id);
 });
 
-// ── Server collections: the page's own refreshCollectionChannels ─────────
+// ── Server collections: the page's own refreshDynamicChannels ─────────
 
 function collectionPool(scanned) {
   const ctx = scanned.ctx;
@@ -302,7 +305,7 @@ function collectionPool(scanned) {
   ctx.allChannelsUnfiltered = [];
   ctx.rawCollections = [{ id: "jellyfin:c-lab", title: "Lab Set", childKeys: ["f-dv5", "f-dv81", "f-hdr10", "f-sdr"], serverKey: "jellyfin" }];
   ctx.enabledCollectionKeys = new Set(["jellyfin:c-lab"]);
-  vm.runInContext("refreshCollectionChannels()", ctx);
+  vm.runInContext("refreshDynamicChannels()", ctx);
   const ch = ctx.allChannelsUnfiltered.find((c) => c.collection && c.collectionID === "jellyfin:c-lab");
   return ch ? ch.itemPool.map((i) => i.ratingKey).sort() : null;
 }

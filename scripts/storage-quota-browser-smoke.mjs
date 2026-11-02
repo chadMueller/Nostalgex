@@ -35,11 +35,12 @@
  * resolvable `playwright`. Run: `npm run test:storage-quota`. Headless only.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = (process.env.TUNER_ROOT ? resolve(process.env.TUNER_ROOT) : new URL("../", import.meta.url).pathname.replace(/\/$/, "")) + "/";
+const root = (process.env.TUNER_ROOT ? resolve(process.env.TUNER_ROOT) : fileURLToPath(new URL("../", import.meta.url)).replace(/\/$/, "")) + "/";
 const REPORT = !!process.env.REPORT;
 const VERBOSE = !!process.env.VERBOSE;
 // How long a load may take before it counts as stuck. Lower it when running against code that is expected to hang.

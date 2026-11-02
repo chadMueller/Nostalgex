@@ -55,6 +55,11 @@ sub Main(args = invalid as Dynamic)
         failures = failures + NxRunCollectionTests("pkg:/tests/vectors/collections.json", "pkg:/data/channels.json", "pkg:/data/franchises.json")
         print "  collections took "; timer.TotalMilliseconds(); " ms"
     end if
+    timer.Mark()
+    if NxTestWants("franchise-lineup") then
+        failures = failures + NxRunFranchiseLineupTests("pkg:/tests/vectors/franchise-lineup-golden.json", "pkg:/data/channels.json", "pkg:/data/franchises.json")
+        print "  franchise lineup took "; timer.TotalMilliseconds(); " ms"
+    end if
     if NxTestWants("subtitle") then failures = failures + NxRunSubtitleTests()
     if NxTestWants("guide-nav") then failures = failures + NxRunGuideNavTests()
     if NxTestWants("tune-queue") then failures = failures + NxRunTuneQueueTests()

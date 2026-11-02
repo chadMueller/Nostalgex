@@ -170,6 +170,25 @@ Users can enable/disable individual channel bundles (and individual channels wit
 
 ---
 
+## Franchises and collections
+
+The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as the Apple TV (1.0.29) and the Roku (1.0.8). Settings → Bundles has a FRANCHISES section and a MY COLLECTIONS section under the packages.
+
+| What | Where it airs |
+|------|---------------|
+| The seven classics (Star Wars, Marvel, Harry Potter, Jurassic Park, Lord of the Rings, Mission: Impossible, Jason Bourne), from `channels.json` | CH 300-306 |
+| Franchises found in the library, and the server's movie-series collections | CH 310-399, one pool of 90, numbered A to Z by name |
+| Every other server collection (actors, directors, your own sets) | CH 400-499, the first 100 switched on |
+| HIGH ROTATION | CH 500 and up |
+
+- **One switch for the lot, one for each.** The FRANCHISES package switch heads the section: off, no classic, found franchise or franchise collection airs. Under it ADD ALL and REMOVE ALL (real buttons, since a TV browser has no keys) and one alphabetical list. A classic starts on, a found franchise starts off except STAR TREK and FAST & FURIOUS (`defaultOn` in `franchises.json`). Choices are kept by stable id (`dict:STAR WARS`, `tmdb:99999`) in `nostalgex_enabled_franchises` and `nostalgex_disabled_franchises`, never by channel number. A choice is kept for a franchise whether or not the library has it.
+- **Found franchises** come from TMDB's own collections (a film's `franchiseID`, which needs enrichment) and the dictionary, `franchises.json`. Three films make a channel. What a classic covers joins that classic's pool, so The Mandalorian airs on CH 300; it does not join a pool another channel owns (a manifest lock or an exclusive rule).
+- **Server collections** are classified FRANCHISES (movie series: a shared TMDB collection, a known name, a keyword like "saga", a repeated word or title prefix) or OTHER COLLECTIONS. A collection that is the same franchise as a classic or a found one is folded into it and listed nowhere else. A collection holding shows folds only into a franchise that airs those shows.
+- **When more are on than fit** in CH 310-399, the ones with the most films stay, then the kept ones are numbered by name. Settings says how many are on but not shown.
+- **One engine.** `scripts/nostalgex-franchise-builder.js` groups the library, `scripts/nostalgex-collections.js` classifies and numbers, `scripts/nostalgex-franchise-lineup.js` puts them together in the Apple TV's order. `scripts/franchise-lineup-golden.json` holds them to the Apple TV's answers; the Swift test (`FranchiseLineupGoldenTests`) wrote those answers from the app's own code, and the Roku tests read a copy. `npm run test:franchise-lineup` checks this engine, `npm run test:franchise-channels:browser` drives the page.
+
+---
+
 ## Playback scrobbling
 
 Reports "Now Playing" to the server and marks an item watched when the user has:
