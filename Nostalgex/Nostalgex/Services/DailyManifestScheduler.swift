@@ -99,8 +99,9 @@ enum DailyManifestScheduler {
     // all of them together (packLineupDay), each giving way where another has the title.
 
     private static let lineupLock = NSLock()
-    private static var lineup: [Channel] = []
-    private static var lineupFingerprint: String?
+    /// By credential fingerprint. The app holds one (its sign-in); ScheduleTiming adds a
+    /// scratch one next to it for the length of a bench, so the guide's own never changes.
+    private static var lineups: [String: [Channel]] = [:]
     /// Serialises packing: two threads asking for an unpacked day pack it once.
     private static let packLock = NSLock()
     /// Test seam: runs after a caller found no day stored and before it waits for the pack
@@ -119,14 +120,25 @@ enum DailyManifestScheduler {
     static func setLineup(_ channels: [Channel], credentialFingerprint: String?) {
         lineupLock.lock()
         defer { lineupLock.unlock() }
-        lineup = channels
-        lineupFingerprint = channels.isEmpty ? nil : credentialFingerprint
+        if let credentialFingerprint, !channels.isEmpty {
+            lineups = [credentialFingerprint: channels]
+        } else {
+            lineups = [:]
+        }
+    }
+
+    /// A lineup for one more fingerprint, leaving every other registration as it is; an empty
+    /// one removes it. Only ScheduleTiming uses it, for its scratch folder.
+    static func setAdditionalLineup(_ channels: [Channel], credentialFingerprint: String) {
+        lineupLock.lock()
+        defer { lineupLock.unlock() }
+        lineups[credentialFingerprint] = channels.isEmpty ? nil : channels
     }
 
     private static func registeredLineup(for credentialFingerprint: String) -> [Channel] {
         lineupLock.lock()
         defer { lineupLock.unlock() }
-        return lineupFingerprint == credentialFingerprint ? lineup : []
+        return lineups[credentialFingerprint] ?? []
     }
 
     /// The order channels claim programmes in: channels whose pool changes with the hour

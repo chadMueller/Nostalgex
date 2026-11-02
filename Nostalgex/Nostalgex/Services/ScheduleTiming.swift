@@ -8,8 +8,11 @@ import Foundation
 /// dropped with `devicectl device copy to`, then a launch. scripts/qa/appletv-schedule-timing.sh
 /// does all of it. Lines go to `soak-results.log` and stdout, ending `[sched-timing] done`.
 ///
-/// It packs in a scratch manifest folder seeded with this TV's own yesterday, so the TV's
-/// schedules are never touched, and puts the guide's lineup registration back when it ends.
+/// It packs in scratch manifest folders seeded with this TV's own yesterday, under scratch
+/// fingerprints: one with no lineup (each channel alone) and one with the guide's lineup
+/// registered next to the app's own (setAdditionalLineup). The app's registration is never
+/// changed, so a guide build running at the same time packs and saves the TV's own days
+/// across the lineup as usual.
 /// Each run, on the main actor:
 ///   - alone: every channel's today packed on its own, as every build before the lineup did,
 ///     with the slowest single channel (what one tune used to wait for at most);
@@ -39,11 +42,13 @@ enum ScheduleTiming {
         let channels = appState.channels
         let realFP = appState.scheduleCredentialFingerprint
         let scratch = "timing-\(realFP.prefix(12))"
+        let scratchAlone = "timing-alone-\(realFP.prefix(12))"
         let now = Date()
         let yesterday = DailyManifestStore.previousLocalDayKey(before: now)
         defer {
+            DailyManifestScheduler.setAdditionalLineup([], credentialFingerprint: scratch)
             DailyManifestStore.clearAll(credentialFingerprint: scratch)
-            appState.registerScheduleLineup()
+            DailyManifestStore.clearAll(credentialFingerprint: scratchAlone)
             emit("done")
         }
         guard !channels.isEmpty else {
@@ -53,29 +58,30 @@ enum ScheduleTiming {
         let pools = channels.map { $0.filteredPool().count }
         emit("start: \(channels.count) channels, \(appState.allItems.count) items, pools \(pools.min() ?? 0) to \(pools.max() ?? 0), \(runs) runs, yesterday \(yesterday) seeded from this TV")
 
-        /// Scratch folder with only this TV's yesterday in it, memo empty.
+        /// Scratch folders with only this TV's yesterday in them, memo empty.
         func reset() {
-            DailyManifestStore.clearAll(credentialFingerprint: scratch)
-            DailyManifestStore.copyDays([yesterday], from: realFP, to: scratch)
+            for fp in [scratch, scratchAlone] {
+                DailyManifestStore.clearAll(credentialFingerprint: fp)
+                DailyManifestStore.copyDays([yesterday], from: realFP, to: fp)
+            }
             DailyManifestScheduler.invalidateMemo()
         }
+        DailyManifestScheduler.setAdditionalLineup(channels, credentialFingerprint: scratch)
 
         var alone: [Double] = [], aloneMax: [Double] = [], lineup: [Double] = [], rest: [Double] = [], tune: [Double] = []
         for _ in 0..<runs {
             reset()
-            DailyManifestScheduler.setLineup([], credentialFingerprint: nil)
             var worst = 0.0
             let t0 = Date()
             for ch in channels {
                 let t = Date()
-                _ = DailyManifestScheduler.blocks(for: ch, at: now, credentialFingerprint: scratch)
+                _ = DailyManifestScheduler.blocks(for: ch, at: now, credentialFingerprint: scratchAlone)
                 worst = max(worst, ms(t))
             }
             alone.append(ms(t0))
             aloneMax.append(worst)
 
             reset()
-            DailyManifestScheduler.setLineup(channels, credentialFingerprint: scratch)
             let t1 = Date()
             _ = DailyManifestScheduler.blocks(for: channels[0], at: now, credentialFingerprint: scratch)
             lineup.append(ms(t1))
