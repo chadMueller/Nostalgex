@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Roku: Back puts the TV's caption setting back, #117 option C)
+
+**Why.** The Roku draws subtitles only while the TV's own caption mode is on, so the app
+turns it on while its subtitles show. On 2026-10-30 a 43" TCL (Roku OS 16.0.4) kept the
+TV's captions on after leaving with Back as well as Home, until the next launch. Back left
+without a `subtitles false`, so `restoreCaptionMode` never ran. Chad picked option C on
+#117: put it back on Back too; Home stays as it is, since the app gets no event before Home
+closes it.
+
+**Changed.** Branch `roku-caption-back` (tydude001), off main at 9438f2a.
+`GuideView.brs`: the Back handler runs `restoreCaptionMode()` before every exit (stop the
+server's stream first, report the stop first, let Roku close the app, and Back on an empty
+guide), and `setCaptions` keeps captions off once `m.leaving` is set, so a track list
+arriving while the app waits to close can't turn the mode on again. Checked on the 43"
+with the lab Emby's forced-subtitle film: the TV read Off 5 s and 20 s after Back closed
+the app (On after both on 2026-10-30).
+
+**Next.** Option A (draw forced text subtitles in the app, so the setting is never
+touched for them) is on Chad's roadmap for after the Roku settles.
+
 ## 2026-11-01 (Web tuner and Docker: franchise channels and the FRANCHISES / OTHER COLLECTIONS split, #122)
 
 **Shipped.** Nothing yet. Branch `web/franchise-parity`, cut from `origin/main` at `9438f2a`, not
