@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku: tests/run.sh runs as many interpreters as memory allows)
+
+**Why.** `tests/run.sh` ran one brs interpreter per CPU thread. Each takes 0.5-1.7 GB, so
+on a 20-thread, 31 GB Linux desktop the 20 of them filled about 25 GB, and the kernel's
+out-of-memory killer took the desktop (kwin, plasmashell) instead of them (2026-10-25).
+
+**Changed.** On `roku-test-memcap` (off main), not pushed. Both pools (the component parse
+and the suites) run at most one interpreter per 2 GB free (MemAvailable on Linux, the whole
+RAM on macOS), and never more than the CPU threads; `NX_TEST_JOBS` still overrides. On
+Linux the run marks itself the kernel's first pick (`oom_score_adj` 1000), and with a
+systemd user session each pool runs in a scope held to the memory free at the start, with
+no swap, so an overrun kills a test part, which then fails, and not the desktop.
+
 ## 2026-10-31 (Roku live tools: two fresh-clone crashes, branch roku-live-tools-guards)
 
 **Changed.** `roku/tests/live/collections.mjs` and `compare.mjs` create `roku/out/`
