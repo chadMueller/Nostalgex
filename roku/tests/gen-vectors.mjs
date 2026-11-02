@@ -11,10 +11,11 @@
 // (roku/..), so the vectors always come from the same tree as the data the
 // port reads. tests/vectors/ is generated, git-ignored, and rewritten by
 // tests/run.sh and scripts/deploy.sh --test on every run. It also gets byte
-// copies of upstream's scripts/franchise-golden.json, filter-golden.json,
-// rating-golden.json, season-golden.json, schedule-dst-golden.json and
-// schedule-parity-golden.json, which the Franchise, FilterGolden,
-// RatingGolden, Seasonal, ScheduleDSTGolden and ScheduleParityGolden tests read.
+// copies of upstream's scripts/franchise-golden.json, franchise-lineup-golden.json,
+// filter-golden.json, rating-golden.json, season-golden.json,
+// schedule-dst-golden.json and schedule-parity-golden.json, which the Franchise,
+// FranchiseLineup, FilterGolden, RatingGolden, Seasonal, ScheduleDSTGolden and
+// ScheduleParityGolden tests read.
 // Every number in the output fits a 32-bit Integer, and 64-bit values travel as
 // hex strings, so the Roku's ParseJson reads them without loss.
 // The filter's date rules run in local time; pin it so the vectors don't
@@ -276,7 +277,7 @@ const files = [
   // ScheduleDSTGoldenTests.brs, ScheduleParityGoldenTests.brs, ReportTests.brs
   // (watch-cleanup-golden.json), StreamQualityTests.brs and Utf8RepairTests.brs
   // read them.
-  ...["franchise-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json"].map((g) =>
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;

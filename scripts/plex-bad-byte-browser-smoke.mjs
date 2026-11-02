@@ -16,11 +16,12 @@
  * resolvable `playwright`. Run: `npm run test:plex-bad-byte`.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 // Titles as raw bytes. "@E9@" style markers are swapped for the byte after JSON encoding.
 const BAD = { "@E9@": 0xe9, "@93@": 0x93, "@94@": 0x94, "@E2@": 0xe2 };

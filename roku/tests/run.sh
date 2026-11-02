@@ -42,7 +42,39 @@ brs=$(npx -y -p @rokucommunity/brs@0.47.6 -c 'command -v brs')
 # at once.
 # getconf, not nproc: macOS has no nproc.
 cpus=$(getconf _NPROCESSORS_ONLN)
-bad=$(printf '%s\0' components/*.brs | xargs -0 -P "$cpus" -I{} sh -c '
+# One interpreter takes up to 1.7 GB, so at most one per 2 GB free: 20 at once
+# filled a 31 GB Linux desktop and the kernel killed the desktop, not them
+# (2026-10-25). Free memory is MemAvailable on Linux; macOS has no
+# /proc/meminfo, so there it is the whole RAM.
+if [ -r /proc/meminfo ]; then
+    mem_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
+else
+    mem_mb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
+fi
+jobs=$cpus
+if [ "${mem_mb:-0}" -gt 0 ] && [ $((mem_mb / 2048)) -lt "$jobs" ]; then
+    jobs=$((mem_mb / 2048))
+    [ "$jobs" -gt 0 ] || jobs=1
+fi
+jobs=${NX_TEST_JOBS:-$jobs}
+# If the guess is still wrong, the tests die first: on Linux every process
+# from here on is the kernel's first pick, and with a systemd user session the
+# interpreters run in a scope held to the memory free now, with no swap.
+echo 1000 2>/dev/null >/proc/self/oom_score_adj || true
+# --expand-environment=no (systemd 254 and later) keeps systemd-run off the
+# $ in the sh -c scripts; an older systemd runs the pools without the scope.
+scope=(systemd-run --user --scope -q --expand-environment=no)
+scoped=0
+[ "${mem_mb:-0}" -gt 0 ] && "${scope[@]}" true 2>/dev/null && scoped=1
+pool() {
+    if [ "$scoped" = 1 ]; then
+        "${scope[@]}" -p MemoryMax="${mem_mb}M" -p MemorySwapMax=0 "$@"
+    else
+        "$@"
+    fi
+}
+echo "tests: $jobs at a time ($cpus CPU threads, ${mem_mb:-?} MB free, memory scope $scoped)"
+bad=$(printf '%s\0' components/*.brs | pool xargs -0 -P "$jobs" -I{} sh -c '
     "$1" --root . "$2" 2>&1 | grep -q "Error occurred parsing" && echo "$2"' _ "$brs" {} || true)
 if [ -n "$bad" ]; then
     for f in $bad; do
@@ -75,13 +107,12 @@ for suite in $suites; do
         printf 'function NxTestShard() as Dynamic\n    return { suite: "%s", index: %d, count: %d }\nend function\n' "$suite" "$i" "$n" >"$parts/$suite-$i.brs"
     done
 done
-files=(tests/main.brs tests/runtime-interpreter.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/GuideNavTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/DolbyVisionTests.brs tests/DailyRefreshTests.brs tests/SmallLibraryTests.brs tests/MultiServerFilterTests.brs tests/ReportTests.brs tests/PlaybackInfoTests.brs tests/StreamQualityTests.brs tests/Utf8RepairTests.brs source/plex/PlexPoster.brs source/plex/ServerChoice.brs source/plex/ServerResolve.brs source/plex/LibrarySnapshot.brs source/plex/PlexLibrary.brs source/plex/PlexApi.brs source/plex/PlexPlayback.brs source/util/*.brs source/schedule/*.brs source/filter/*.brs source/guide/*.brs source/franchise/*.brs source/enrich/*.brs source/subtitles/*.brs source/collections/*.brs source/mediabrowser/*.brs)
-# One part per CPU thread at a time ($NX_TEST_JOBS overrides), the split
-# suites' parts first, so the small ones fill in around them.
-jobs=${NX_TEST_JOBS:-$cpus}
+files=(tests/main.brs tests/runtime-interpreter.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/GuideNavTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/FranchiseLineupTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/DolbyVisionTests.brs tests/DailyRefreshTests.brs tests/SmallLibraryTests.brs tests/MultiServerFilterTests.brs tests/ReportTests.brs tests/PlaybackInfoTests.brs tests/StreamQualityTests.brs tests/Utf8RepairTests.brs source/plex/PlexPoster.brs source/plex/ServerChoice.brs source/plex/ServerResolve.brs source/plex/LibrarySnapshot.brs source/plex/PlexLibrary.brs source/plex/PlexApi.brs source/plex/PlexPlayback.brs source/util/*.brs source/schedule/*.brs source/filter/*.brs source/guide/*.brs source/franchise/*.brs source/enrich/*.brs source/subtitles/*.brs source/collections/*.brs source/mediabrowser/*.brs)
+# $jobs parts at a time ($NX_TEST_JOBS overrides), the split suites' parts
+# first, so the small ones fill in around them.
 export brs
 { ls "$parts"/filter-*.brs "$parts"/qr-*.brs; ls "$parts"/*.brs | grep -v -e /filter- -e /qr-; } |
-    xargs -P "$jobs" -I{} sh -c '"$brs" --root . "$@" "$0" >"${0%.brs}.log" 2>&1' {} "${files[@]}" || true
+    pool xargs -P "$jobs" -I{} sh -c '"$brs" --root . "$@" "$0" >"${0%.brs}.log" 2>&1' {} "${files[@]}" || true
 # A part that crashed has no ALL TESTS PASSED line, so the check below fails it.
 failed=0
 for part in "$parts"/*.brs; do

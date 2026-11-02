@@ -29,6 +29,7 @@ export function lift(name) {
 
 export const CF = require(join(upstream, "scripts", "nostalgex-channel-filter.cjs"));
 new Function(readFileSync(join(upstream, "scripts", "nostalgex-music-brainz.js"), "utf8"))();
+new Function(readFileSync(join(upstream, "scripts", "nostalgex-utf8-repair.js"), "utf8"))();
 new Function("module", readFileSync(join(upstream, "scripts", "nostalgex-daily-manifest.js"), "utf8"))(undefined);
 export const MD = globalThis.NostalgexDailyManifest;
 
@@ -43,6 +44,7 @@ export const loader = vm.createContext({
   discoveredGenres: {},
   channelFilter: () => CF,
   NostalgexMusicBrainz: globalThis.NostalgexMusicBrainz,
+  NostalgexUTF8Repair: globalThis.NostalgexUTF8Repair,
   NostalgexDailyManifest: MD,
 });
 loader.globalThis = loader;

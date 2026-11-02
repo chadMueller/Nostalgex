@@ -12,7 +12,7 @@
 // token. The full reference lines go to out/live-reference.tsv (git-ignored)
 // for inspecting a mismatch.
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,7 @@ const lineOf = (it) => FIELDS.map((f) => (Array.isArray(it[f]) ? it[f].map(value
 const sha1 = (s) => createHash("sha1").update(s, "utf8").digest("hex");
 
 const lines = items.map(lineOf);
+mkdirSync(join(repo, "out"), { recursive: true }); // absent in a fresh clone or worktree
 writeFileSync(join(repo, "out", "live-reference.tsv"), lines.join("\n") + "\n", { mode: 0o600 });
 const all = createHash("sha1");
 for (const l of lines) all.update(l + "\n", "utf8");

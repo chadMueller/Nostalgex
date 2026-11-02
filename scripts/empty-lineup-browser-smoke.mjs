@@ -18,11 +18,12 @@
  * resolvable `playwright`. Run: `npm run test:empty-lineup`.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 // PREMIERES wants films added in the last 14 days, so the default is "now", not a fixed date.
 const film = (n, name, year, genres, rating, added = new Date().toISOString()) => ({
