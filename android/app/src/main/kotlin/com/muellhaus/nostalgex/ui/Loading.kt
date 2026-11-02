@@ -129,6 +129,22 @@ fun LibraryLoadScreen(model: AppModel, state: Screen.LibraryLoad) {
                     if (state.caption.isNotEmpty()) Text(state.caption.uppercase(), style = font(DMMono, 19, Color.White.copy(alpha = 0.4f)))
                 }
             }
+            // LoadingView.stallBlock: the scan has gone quiet for a minute. The watchdog resolves it
+            // on its own at 210 s, but nobody should sit before a frozen screen with no way out.
+            // STOP WAITING takes focus as it appears: a stray press only keeps what has loaded.
+            if (model.loadStalling && !confirming) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(u(14)), modifier = Modifier.padding(top = u(12))) {
+                    Text(
+                        "Still waiting on your server. Nothing has come back for a while.",
+                        style = font(DMMono, 20, Color.White.copy(alpha = 0.5f)), textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = u(760)),
+                    )
+                    OnboardingButton("STOP WAITING", primary = true, focusFirst = true, fontSize = 24, onClick = model::stopWaitingForLibraryScan)
+                    Text(
+                        "Keeps whatever has loaded so far and finishes the rest later.",
+                        style = font(DMMono, 17, Color.White.copy(alpha = 0.3f)), textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = u(760)),
+                    )
+                }
+            }
             // Always there while a load runs, behind a question: it is often the focused control.
             Box(Modifier.padding(top = u(8))) {
                 if (!confirming) OnboardingButton("START OVER", primary = false, focusFirst = true, fontSize = 20) { confirming = true }

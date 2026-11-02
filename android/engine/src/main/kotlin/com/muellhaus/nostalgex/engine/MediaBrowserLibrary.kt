@@ -58,10 +58,16 @@ class MediaBrowserLibrary(
      * Every item in every library but those in `excluded` (view ids), which are skipped before
      * any request for their items goes out.
      */
-    fun scan(progress: Progress = Progress { }, excluded: Set<String> = emptySet()): List<MediaItem> {
+    fun scan(
+        progress: Progress = Progress { },
+        excluded: Set<String> = emptySet(),
+        /** Each library once it is read whole, so a scan abandoned later still has these (LibraryScanInterrupted). */
+        onSection: (List<MediaItem>) -> Unit = {},
+    ): List<MediaItem> {
         val viewList = views().filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
         for ((index, view) in viewList.withIndex()) {
+            val sectionStart = out.size
             val type = sectionType(view.str("CollectionType"))
             val isMusicVideoSection = type == "musicvideo"
             val name = view.str("Name") ?: "Library"
@@ -72,7 +78,7 @@ class MediaBrowserLibrary(
                     for ((done, show) in shows.withIndex()) {
                         val showGenres = show.strings("Genres")
                         val showTmdb = tmdbFromProviderIds(show.obj("ProviderIds"))
-                        val episodes = try { fetchItems(show.str("Id") ?: "", "Episode") } catch (e: Exception) { emptyList() }
+                        val episodes = try { fetchItems(show.str("Id") ?: "", "Episode") } catch (e: ScanCancelled) { throw e } catch (e: Exception) { emptyList() }
                         for (ep in episodes) {
                             val minutes = DailyManifest.minutesFromTicks(ep.long("RunTimeTicks"))
                             if (minutes <= 0) continue
@@ -157,6 +163,9 @@ class MediaBrowserLibrary(
                     }
                     progress.update(ScanProgress(index, viewList.size, name, type, out.size))
                 }
+                onSection(out.subList(sectionStart, out.size).toList())
+            } catch (e: ScanCancelled) {
+                throw e
             } catch (e: Exception) {
                 // One library that fails leaves the others, as the web tuner's per-view catch.
             }

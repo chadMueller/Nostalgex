@@ -69,7 +69,15 @@ listing; it installs over `adb`.
 - The loading screen's step rail, with what the scan is reading and a progress
   bar, and START OVER (it asks first) for the whole load. After two loads in a
   row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY
-  AGAIN or START OVER.
+  AGAIN or START OVER. A scan that goes quiet for a minute offers STOP WAITING,
+  and one quiet for 210 s is abandoned on its own; either way the libraries
+  already read whole make the guide, and with none the load says why.
+- WATCH HISTORY under PLAYBACK & PICTURE, both off by default: SHOW NOW
+  PLAYING ON PLEX (or Jellyfin, Emby) tells the server what is on, and MARK
+  WATCHED counts a programme tuned in during its first 15% and 75% watched.
+  Nothing is left in Continue Watching, Resume or On Deck: Plex reports carry no
+  position, and a Jellyfin or Emby item's watch state is read first and put
+  back when its session ends (`scripts/nostalgex-watch-state.js`).
 - WATERSHED (off by default): R, NC-17 and TV-MA titles wait for 9 PM on every
   channel but VHS VAULT, which holds its own. A channel with nothing else to
   show says BROADCASTS WILL RESUME AT 9 PM, and comes on at 9.
@@ -85,9 +93,8 @@ listing; it installs over `adb`.
 The aim is the Apple TV app, screen for screen. Where this app differs, it is
 listed here.
 
-Not ported yet: SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
-above channel one; demo mode; the loading screen's STOP WAITING when a scan
-goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
+Not ported yet: the seasonal invite row
+above channel one; demo mode; the PlaybackInfo handshake on Jellyfin and Emby (this
 app asks for the stored file, then the hand-built HLS stream, which is the
 Apple TV's fallback path).
 

@@ -19,6 +19,8 @@ import com.muellhaus.nostalgex.engine.FranchiseDefinition
 import com.muellhaus.nostalgex.engine.FranchiseLineup
 import com.muellhaus.nostalgex.engine.ServerCollection
 import com.muellhaus.nostalgex.engine.LanguageChoice
+import com.muellhaus.nostalgex.engine.LibraryLoadProgressSample
+import com.muellhaus.nostalgex.engine.LibraryLoadStallDetector
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.playback.PlaybackInfo
@@ -45,6 +47,7 @@ import com.muellhaus.nostalgex.mediabrowser.MediaBrowserHttpException
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.playback.Delivery
 import com.muellhaus.nostalgex.playback.Playback
+import com.muellhaus.nostalgex.playback.WatchReporter
 import com.muellhaus.nostalgex.plex.PlexClient
 import com.muellhaus.nostalgex.plex.PlexHttpException
 import com.muellhaus.nostalgex.plex.PlexLibrary
@@ -60,6 +63,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -129,6 +133,9 @@ class AppModel(private val context: Context) : Playback.Listener {
     private val plex = PlexClient(prefs.clientId, versionName)
     private val mediaBrowser = MediaBrowserClient(prefs.clientId, versionName)
     val playback = Playback(context, plex, mediaBrowser, this)
+
+    /** SHOW NOW PLAYING and MARK WATCHED: what the server is told about what plays (PlaybackTracker). */
+    val watchReporter = WatchReporter(plex.headers) { token -> mediaBrowser.authHeader(token) }
 
     /** The Jellyfin or Emby server signed in to, read once from Prefs; null on Plex. */
     private var mbServer: MediaBrowserServer? = prefs.mediaBrowser
@@ -249,6 +256,32 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     /** Applies to the programme playing as well as the next (Roku #118, AppState's didSet). */
+    // ── WATCH HISTORY (SettingsPlaybackView): both off by default ──────
+
+    var showNowPlaying by mutableStateOf(prefs.showNowPlaying)
+        private set
+    var markWatched by mutableStateOf(prefs.markWatched)
+        private set
+
+    fun toggleShowNowPlaying() {
+        showNowPlaying = !showNowPlaying
+        prefs.showNowPlaying = showNowPlaying
+        watchReporter.setChoices(showNowPlaying, markWatched)
+    }
+
+    fun toggleMarkWatched() {
+        markWatched = !markWatched
+        prefs.markWatched = markWatched
+        watchReporter.setChoices(showNowPlaying, markWatched)
+    }
+
+    /** Where a programme's reports go: the server it came from. */
+    private fun reportServer(item: MediaItem): WatchReporter.Server? {
+        mbServer?.let { return WatchReporter.Server.MediaBrowser(item.serverUrl ?: it.url, it.userId, it.token) }
+        val url = item.serverUrl ?: return null
+        return WatchReporter.Server.Plex(url, item.serverToken ?: "")
+    }
+
     fun chooseAudioLanguage(code: String) {
         audioLanguage = code
         prefs.audioLanguage = code
@@ -387,6 +420,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             delay(20_000)
             // AppState.expireSleepTimer: pause, drop the transcode, back to the guide; the sign-in stays.
             playback.pause()
+            watchReporter.onPause()
             cancelSleepTimer()
             fullScreen = false
         }
@@ -474,6 +508,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     private var clockJob: Job? = null
 
     init {
+        watchReporter.setChoices(prefs.showNowPlaying, prefs.markWatched)
         playback.quality = streamQuality
         playback.mediaBrowserServer = mbServer
         playback.player.addListener(object : Player.Listener {
@@ -1123,7 +1158,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     }
                     step(LoadPhase.PREPARING, LoadPhase.PREPARING.headline(if (firstRun) "First setup" else "Updating lineup"), LoadPhase.PREPARING.hint.uppercase())
                     step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("Connecting to $backendName"), LoadPhase.SCANNING.hint.uppercase())
-                    val items = scan(servers) { p, serverName ->
+                    val scanned = scan(servers) { p, serverName ->
                         // Posted from the scan's threads: one arriving after the scan moved on is dropped.
                         if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.SCANNING) return@scan
                         // AppState+Library's scan events: the kind of library as the headline, the section under it.
@@ -1145,10 +1180,19 @@ class AppModel(private val context: Context) : Playback.Listener {
                                 (p.section + 1f) / maxOf(p.sections, 1), "Section ${p.section + 1} of ${p.sections} · ${p.itemsSoFar} items")
                         }
                     }
+                    val items = scanned.items
+                    // Abandoned partway: a reduced guide beats an error screen; the next launch's
+                    // refresh fills in the rest (isLibraryStale).
+                    if (scanned.abandoned) Log.i(TAG, "LOAD abandoned mid-scan; building from the ${items.size} items read")
                     Log.i(TAG, "LIBRARY ${items.size} items from ${servers.size} server(s) read in ${SystemClock.elapsedRealtime() - t0} ms")
                     // COLLECTIONS: the servers' own collections, before metadata (the fold reads TMDB collection ids).
                     step(LoadPhase.COLLECTIONS, LoadPhase.COLLECTIONS.headline(), LoadPhase.COLLECTIONS.hint.uppercase())
-                    serverCollections = readCollections(servers)
+                    // Not after an abandoned scan: the server just went quiet, and the viewer has
+                    // stopped waiting on it. The next refresh reads them with the rest.
+                    serverCollections = if (scanned.abandoned) {
+                        Log.i(TAG, "COLLECTIONS skipped: the scan was abandoned")
+                        emptyList()
+                    } else readCollections(servers)
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
                     scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
@@ -1188,6 +1232,9 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** AppState.userFacingPlexAPIServiceError: what CONNECTION FAILED says for each way a load fails. */
     private fun connectionFailure(e: Throwable): String = when {
+        // userFacingLoadLibraryError: nothing usable came back, so say what happened and what to check.
+        e is LoadStalled && e.userInitiated -> "Stopped waiting. Nothing had come back from your server, so no channels were built. Retry when the connection looks better."
+        e is LoadStalled -> "Your server stopped sending data partway through the scan and never resumed. Check that it is awake and reachable on this network, then Retry."
         e is PlexHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException -> "$backendName returned HTTP ${e.code}. Check the server is running, then try again."
@@ -1200,18 +1247,113 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     /** Every library but those switched off, with where the scan has got to (on the main thread) and the server's name. */
-    private suspend fun scan(servers: List<PlexServer>, onProgress: (ScanProgress, String) -> Unit): List<MediaItem> {
+    /** What a scan read, and whether some server's scan was abandoned (LibraryScanInterrupted). */
+    private class ScanResult(val items: List<MediaItem>, val abandoned: Boolean)
+
+    /** Nothing came back before the scan was abandoned (LibraryLoadStalled). */
+    private class LoadStalled(val userInitiated: Boolean) : Exception("library scan abandoned")
+
+    /** True while a foreground scan has gone quiet long enough to say so (isLoadStalling). */
+    var loadStalling by mutableStateOf(false)
+        private set
+
+    /** STOP WAITING, read by the scan's watch on its next look (loadCancelRequested). */
+    @Volatile private var stopWaitingRequested = false
+
+    /** The scan's counters as they last moved, for the watch (libraryScanProgressSample). */
+    @Volatile private var scanSample = LibraryLoadProgressSample()
+
+    /** STOP WAITING: the same way out as the watchdog's, at once (stopWaitingForLibraryScan). */
+    fun stopWaitingForLibraryScan() {
+        if (loadingLibrary) stopWaitingRequested = true
+    }
+
+    /**
+     * Every library but those switched off, under the stall watch, one server at a time.
+     * `foreground` is a load the viewer is watching: it says when the scan goes quiet and
+     * offers STOP WAITING. A server whose scan is abandoned keeps the libraries it read whole;
+     * one with none counts as failed, and if every server failed that way the load fails with
+     * the Apple TV's words.
+     */
+    private suspend fun scan(servers: List<PlexServer>, foreground: Boolean = true, onProgress: (ScanProgress, String) -> Unit): ScanResult {
+        fun progress(p: ScanProgress, name: String) {
+            scanSample = LibraryLoadProgressSample(1, p.section, p.sections, p.itemsSoFar, "$name|${p.title}|${p.showsDone}/${p.showsTotal}")
+            scope.launch { onProgress(p, name) }
+        }
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
-            return mediaBrowser.scan(mb, { p -> scope.launch { onProgress(p, mb.name) } }, excluded)
+            val (items, abandoned) = watched(foreground, mb.name) { onSection, cancelled ->
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled)
+            }
+            return ScanResult(items, abandoned)
         }
         val library = PlexLibrary(plex)
         val items = ArrayList<MediaItem>()
+        var abandoned = false
+        var stalled: LoadStalled? = null
+        var read = 0
         for (server in servers) {
-            items += library.scan(server, { p -> scope.launch { onProgress(p, server.name) } },
-                items.size, LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier))
+            try {
+                val (got, gaveUp) = watched(foreground, server.name) { onSection, _ ->
+                    library.scan(server, { p -> progress(p, server.name) }, items.size,
+                        LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier), onSection)
+                }
+                items += got
+                abandoned = abandoned || gaveUp
+                read++
+            } catch (e: LoadStalled) {
+                abandoned = true
+                stalled = e
+            }
         }
-        return items
+        if (read == 0) stalled?.let { throw it }
+        return ScanResult(items, abandoned)
+    }
+
+    /**
+     * One server's scan under the stall watch (withLibraryLoadStallWatch): its progress is
+     * sampled every 2 s, and STOP WAITING or 210 s without progress abandons it. The scan runs
+     * apart from the caller, so an abandoned one isn't waited for: its request in flight finishes
+     * on its own and is dropped. Returns what it read and whether it was abandoned.
+     */
+    private suspend fun watched(
+        foreground: Boolean,
+        label: String,
+        run: suspend (onSection: (List<MediaItem>) -> Unit, cancelled: () -> Boolean) -> List<MediaItem>,
+    ): Pair<List<MediaItem>, Boolean> {
+        // A press meant for the server before belongs to it (issue #146).
+        stopWaitingRequested = false
+        if (foreground) loadStalling = false
+        val sections = java.util.Collections.synchronizedList(ArrayList<MediaItem>())
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        val job = scope.async(Dispatchers.IO) { run({ sections.addAll(it) }, { stop.get() }) }
+        fun now() = SystemClock.elapsedRealtime() / 1000.0
+        val detector = LibraryLoadStallDetector(scanSample, now())
+        try {
+            while (true) {
+                val done = withTimeoutOrNull(2_000) { job.await() }
+                if (done != null) return done to false
+                val user = stopWaitingRequested
+                val verdict = detector.evaluate(scanSample, now())
+                // A background refresh has no loading screen: it says nothing and keeps the guide.
+                if (foreground) loadStalling = verdict !is LibraryLoadStallDetector.Verdict.Progressing
+                if (user || verdict is LibraryLoadStallDetector.Verdict.Stalled) {
+                    stop.set(true)
+                    job.cancel()
+                    val kept = sections.toList()
+                    val quiet = (verdict as? LibraryLoadStallDetector.Verdict.Stalled)?.secondsWithoutProgress
+                        ?: (verdict as? LibraryLoadStallDetector.Verdict.Slow)?.secondsWithoutProgress ?: 0.0
+                    Log.i(TAG, "STALL ${if (user) "viewer stopped waiting on" else "no progress from"} $label after ${quiet.toInt()} s quiet; " +
+                        "${kept.size} items from the libraries read whole")
+                    if (kept.isEmpty()) throw LoadStalled(user)
+                    return kept to true
+                }
+            }
+        } finally {
+            if (foreground) loadStalling = false
+            stopWaitingRequested = false
+            job.cancel()
+        }
     }
 
     /**
@@ -1223,7 +1365,13 @@ class AppModel(private val context: Context) : Playback.Listener {
             refreshing = true
             try {
                 val t0 = SystemClock.elapsedRealtime()
-                val items = scan(servers) { _, _ -> }
+                val scanned = scan(servers, foreground = false) { _, _ -> }
+                // An abandoned refresh is a subset of what is on screen: keep the guide (isLibraryStale).
+                if (scanned.abandoned) {
+                    Log.i(TAG, "REFRESH abandoned mid-scan; keeping the loaded lineup")
+                    return@launch
+                }
+                val items = scanned.items
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
                 val collections = readCollections(servers)
@@ -1369,6 +1517,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         item = pick?.item
         delivery = null
         if (pick == null) {
+            watchReporter.stop()
             playback.stop()
             val ch = channel
             if (ch != null && lineup?.isWatershedHold(ch) == true) {
@@ -1379,6 +1528,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
             return
         }
+        watchReporter.begin(pick.item, pick.seekSeconds, reportServer(pick.item))
         playback.play(pick.item, pick.seekSeconds)
     }
 
@@ -1397,6 +1547,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     override fun onStarted(item: MediaItem, delivery: Delivery) {
         this.delivery = delivery
+        watchReporter.onReady()
         // The guide follows what is on, as TunerView rebuilds on a change of current item.
         lineup?.let { l ->
             scope.launch {
@@ -1441,6 +1592,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     fun release() {
         scope.cancel()
+        watchReporter.stop()
         playback.release()
     }
 

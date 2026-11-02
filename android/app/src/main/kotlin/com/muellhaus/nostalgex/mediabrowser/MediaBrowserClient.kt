@@ -236,8 +236,19 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
      * The engine's scan over this server, as the web tuner's fetchJellyfinLibraryFromServer,
      * with the server stamped on each item for playback. Throws on a refused or failed read.
      */
-    suspend fun scan(server: MediaBrowserServer, progress: MediaBrowserLibrary.Progress, excluded: Set<String> = emptySet()): List<MediaItem> = withContext(Dispatchers.IO) {
-        library(server).scan(progress, excluded).map { it.copy(serverUrl = server.url, serverToken = server.token) }
+    /**
+     * `cancelled` is asked before every request: the scan's calls block, so a coroutine cancel
+     * alone would leave it asking the server after the viewer stopped waiting.
+     */
+    suspend fun scan(
+        server: MediaBrowserServer,
+        progress: MediaBrowserLibrary.Progress,
+        excluded: Set<String> = emptySet(),
+        onSection: (List<MediaItem>) -> Unit = {},
+        cancelled: () -> Boolean = { false },
+    ): List<MediaItem> = withContext(Dispatchers.IO) {
+        fun stamp(items: List<MediaItem>) = items.map { it.copy(serverUrl = server.url, serverToken = server.token) }
+        library(server, cancelled).scan(progress, excluded) { onSection(stamp(it)) }.let(::stamp)
     }
 
     /**
@@ -254,7 +265,8 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
     }
 
     /** The engine's scan over this server. A refused or failed read throws. */
-    private fun library(server: MediaBrowserServer) = MediaBrowserLibrary({ path ->
+    private fun library(server: MediaBrowserServer, cancelled: () -> Boolean = { false }) = MediaBrowserLibrary({ path ->
+        if (cancelled()) throw com.muellhaus.nostalgex.engine.ScanCancelled()
         http.newCall(request(server.url + path, server.token).build()).execute().use { res ->
             if (res.code == 401 || res.code >= 500) throw MediaBrowserHttpException(res.code, server.url + path.substringBefore('?'))
             res.code to (if (res.isSuccessful) json.parseToJsonElement(res.body.string()) else null)
