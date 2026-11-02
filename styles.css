@@ -2935,10 +2935,6 @@ sup.tm { font-size: 0.32em; vertical-align: top; position: relative; top: 0.35em
    house parts (.btn-outline, .cta-sticker, .server-mark).
    ══════════════════════════════════════════════════════════════════ */
 
-/* The servers section now sits between the hero and "wherever you watch".
-   Both carry their own top padding, so this one gives up its bottom. */
-.page-home #servers { padding-bottom: 0; }
-
 /* .cta-sticker is absolutely positioned, so the button is its anchor here. */
 .page-home .hero-roku { margin-top: 34px; }
 .page-home .hero-roku .btn { position: relative; }
