@@ -76,7 +76,7 @@ OS 15.3.4), `scripts/deploy.sh --test` ends in ALL TESTS PASSED, mediabrowser 56
 
 ## 2026-11-02 (Roku 1.0.11: Roku's email screen is asked for on a button, not as the sign-in screen opens)
 
-**Shipped.** Nothing yet. Branch `roku/rfi-on-request`, cut from `origin/main` at `e5375d3`, not pushed.
+**Shipped.** Goes out in Roku 1.0.11, to the beta and the public app, with tydude001's #173, #174 and #175 (their own entries are below).
 
 **Why.** Roku's automated behavior analysis ran on the public app (1.0.10). Sign In and Sign Out passed; launch
 performance, deep linking and content play errored, each with the connect screen as the active element, and the
