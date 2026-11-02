@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-10-31 (Roku live tools: the shared loader gets the web tuner's UTF-8 repair)
+
+**Why.** Since `e66be04` (#125) the web tuner's Plex loader reads every server answer
+through `NostalgexUTF8Repair.json`, which `scripts/nostalgex-utf8-repair.js` defines.
+`roku/tests/live/plex-loader.mjs` lifts that loader out of `plex-tuner.html` but never
+loaded the script, so every tool on it (`compare.mjs`, `collections.mjs`, and anything
+importing it) died with `ReferenceError: NostalgexUTF8Repair is not defined`.
+
+**Changed.** The loader runs the script as it runs `nostalgex-music-brainz.js` and puts
+the global in the lifted functions' context. Checked against a real Plex library: the
+old code throws, the new one loads 5521 items, 29 titles with accents and no U+FFFD.
+
+**Half-done.** On `roku-live-utf8-global` (off main), not pushed.
+
 ## 2026-10-31 (Roku: tests/run.sh runs as many interpreters as memory allows)
 
 **Why.** `tests/run.sh` ran one brs interpreter per CPU thread. Each takes 0.5-1.7 GB, so
