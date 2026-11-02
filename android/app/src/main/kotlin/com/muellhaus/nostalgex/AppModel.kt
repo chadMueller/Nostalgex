@@ -180,6 +180,15 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
+    /** GUIDE TEXT SIZE: NORMAL, the guide as it was, or LARGE for a couch further away (I-060). */
+    var guideTextLarge by mutableStateOf(prefs.guideTextLarge)
+        private set
+
+    fun toggleGuideTextSize() {
+        guideTextLarge = !guideTextLarge
+        prefs.guideTextLarge = guideTextLarge
+    }
+
     /** STREAM QUALITY: read as each programme starts, so a change reaches the next one. */
     var streamQuality by mutableStateOf(StreamQuality.fromId(prefs.streamQuality))
         private set

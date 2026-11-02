@@ -75,6 +75,11 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(LibrarySection.STORAGE_KEY, null) ?: emptySet()
         set(value) = prefs.edit().putStringSet(LibrarySection.STORAGE_KEY, value).apply()
 
+    /** GUIDE TEXT SIZE: "large", or anything else for NORMAL, under the Apple TV's key. */
+    var guideTextLarge: Boolean
+        get() = prefs.getString("nostalgex_guide_text_size", null) == "large"
+        set(value) = prefs.edit().putString("nostalgex_guide_text_size", if (value) "large" else "normal").apply()
+
     /** WATERSHED (Settings > SCHEDULE), off unless switched on, under the Apple TV's key. */
     var watershed: Boolean
         get() = prefs.getBoolean(ChannelConfig.WATERSHED_STORAGE_KEY, false)
