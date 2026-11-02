@@ -11,7 +11,8 @@ class GuideChannel(val def: ChannelConfig.StockChannel, val pool: List<MediaItem
     val id get() = def.id
     val number get() = def.number
     val name get() = def.name
-    val ref = ScheduleChannel(def.id, def.isPremiereChannel)
+    /** Gated: its pool changes with the hour (timeRestrictions), so it packs after the rest of the lineup. */
+    val ref = ScheduleChannel(def.id, def.isPremiereChannel, def.timeRestrictions != null)
 }
 
 /**
@@ -167,10 +168,20 @@ class Lineup(
 
     private fun lineupNow(now: ZonedDateTime) = channels.map { it.ref to poolNow(it, now) }
 
+    /** The instant the engine is being asked about, so the lineup's pools are read at the guide's hour. */
+    @Volatile private var askedAt: ZonedDateTime = ZonedDateTime.now()
+
+    init {
+        // Each day is packed across the guide's channels with the pools they air from, so one
+        // title is never on two of them at once (the web tuner's guideLineup, AppState.channels).
+        engine.setLineup { lineupNow(askedAt) }
+    }
+
     private fun ZonedDateTime.sec() = toInstant().toEpochMilli() / 1000.0
 
     /** TunerView.buildAllSchedules: every channel at one instant, then conflicts resolved. */
     fun rebuildSchedules(now: ZonedDateTime = ZonedDateTime.now()) {
+        askedAt = now
         val nowSec = now.sec()
         val raw = LinkedHashMap<Int, Schedule>()
         for (ch in channels) {
@@ -183,8 +194,29 @@ class Lineup(
         engine.pruneManifests(serverKey, now.toInstant().toEpochMilli())
     }
 
+    /**
+     * Minutes of the guide's window where a title is on more than one channel, out of the
+     * minutes scheduled, for the log (scripts/qa/cross-channel-duplicates.mjs measures the same).
+     */
+    fun doubledMinutes(): Pair<Long, Long> {
+        class Span(val ch: Int, val s: Long, val e: Long)
+        val byKey = HashMap<String, MutableList<Span>>()
+        var total = 0L
+        for ((ch, schedule) in schedules) for (e in schedule.entries) {
+            total += e.endSec - e.startSec
+            byKey.getOrPut(e.item.ratingKey) { ArrayList() }.add(Span(ch, e.startSec, e.endSec))
+        }
+        var doubled = 0L
+        for (spans in byKey.values) for (i in spans.indices) for (j in 0 until i) {
+            val a = spans[i]; val b = spans[j]
+            if (a.ch != b.ch) doubled += maxOf(0L, minOf(a.e, b.e) - maxOf(a.s, b.s))
+        }
+        return doubled / 60 to total / 60
+    }
+
     /** What tuning in plays, and from where. */
     fun tune(ch: GuideChannel, now: ZonedDateTime = ZonedDateTime.now()): Pick? {
+        askedAt = now
         val pool = poolNow(ch, now)
         return engine.tuneIn(ch.ref, pool, schedules[ch.id], now.sec(), serverKey)
             ?: pool.randomOrNull()?.let { Pick(it, 0) }
@@ -192,6 +224,7 @@ class Lineup(
 
     /** What plays when a programme ends (naturally, or after a failure: from where it is now). */
     fun next(ch: GuideChannel, ended: MediaItem?, fromNaturalEnd: Boolean, now: ZonedDateTime = ZonedDateTime.now()): Pick? {
+        askedAt = now
         val pool = poolNow(ch, now)
         return engine.advancePick(ch.ref, pool, ended?.ratingKey, now.sec(), lineupNow(now), serverKey, fromNaturalEnd)
             ?: pool.randomOrNull()?.let { Pick(it, 0) }

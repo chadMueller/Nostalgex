@@ -85,10 +85,15 @@ class ScheduleParityGoldenTest {
                 items[key] = if (item == null) JsonNull else arr(item.duration, maxOf(0L, item.addedAt), item.title, item.type)
             }
         }
-        val lineup = fx["channels"]!!.jsonArray.map { it.jsonObject }.map { row ->
-            ScheduleChannel(row["id"]!!.jsonPrimitive.int, (row["premiere"] as? JsonPrimitive)?.boolean == true) to
+        val rows = fx["channels"]!!.jsonArray.map { it.jsonObject }
+        fun flag(row: JsonObject, k: String) = (row[k] as? JsonPrimitive)?.boolean == true
+        val lineup = rows.map { row ->
+            ScheduleChannel(row["id"]!!.jsonPrimitive.int, flag(row, "premiere"), flag(row, "gated")) to
                 (row["pool"]?.jsonArray ?: JsonArray(emptyList())).mapNotNull { byKey[it.jsonPrimitive.content] }
         }
+        // The guide's lineup, as the dump registers it; an offGuide row is dumped but not registered.
+        val guide = lineup.filterIndexed { i, _ -> !flag(rows[i], "offGuide") }
+        m.setLineup { guide }
 
         for (t in fx["prime"]?.jsonArray ?: JsonArray(emptyList())) {
             for ((channel, pool) in lineup) m.getManifestBlocks(channel, pool, t.jsonPrimitive.long * 1000, sk)

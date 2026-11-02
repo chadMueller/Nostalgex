@@ -1210,7 +1210,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         val tFilter = SystemClock.elapsedRealtime()
         lineup.rebuildSchedules()
         Log.i(TAG, "LINEUP ($source) ${items.size} items; $built channels in ${tFilter - t0} ms (config ${configMs}, item facts ${lineup.prepareMs}, filter ${tFilter - t0 - configMs - lineup.prepareMs}); " +
-            "${lineup.channels.size} in the guide; schedules in ${SystemClock.elapsedRealtime() - tFilter} ms; channels.json v${config.version}")
+            "${lineup.channels.size} in the guide; schedules in ${SystemClock.elapsedRealtime() - tFilter} ms; " +
+            lineup.doubledMinutes().let { (d, t) -> "$d of $t guide minutes on two channels at once; " } + "channels.json v${config.version}")
         lineup
     }
 
