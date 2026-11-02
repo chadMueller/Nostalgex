@@ -71,7 +71,7 @@ import java.time.LocalDateTime
 // Up and Down on the rail swap the pane with no press; Right or OK moves into its rows; Left
 // from the rows lands on the selected category; Back steps out one level at a time.
 // Not here: SUPPORT NOSTALGEX and NOSTALGEX PRO (no store tips or Pro on a sideloaded app),
-// WATCH HISTORY (watch state isn't ported), iCloud sync (Apple only), SCAN MY COLLECTIONS
+// iCloud sync (Apple only), SCAN MY COLLECTIONS
 // (collections are read with every load and rescan), and DISCORD and RATE NOSTALGEX, hidden on
 // the Apple TV too.
 
@@ -370,6 +370,8 @@ private fun PlaybackRows(model: AppModel) {
             modifier = Modifier.paneRow(model, "audio_lang"),
         ) { model.settingsPicker = "audio_lang" }
         // WATCH HISTORY (SettingsPlaybackView): what the server is told about what you watch.
+        // Not in demo mode, where there is no server to tell.
+        if (model.demoMode) return@Column
         val server = model.backendName
         SectionHeader("WATCH HISTORY", "What $server is told about what you watch")
         ToggleRow(
@@ -515,7 +517,8 @@ private fun FranchisesPage(model: AppModel) {
         ) { model.toggleBundle(Lineup.FRANCHISES_BUNDLE) }
         if (on && entries.isEmpty()) {
             Text(
-                "Franchises you own show up here once your library has been enriched.",
+                if (model.demoMode) "Demo mode has no library to search. Connect a server to find your franchises."
+                else "Franchises you own show up here once your library has been enriched.",
                 style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(vertical = u(12)),
             )
         }

@@ -102,6 +102,10 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("nostalgex_mark_watched_v2", false)
         set(value) = prefs.edit().putBoolean("nostalgex_mark_watched_v2", value).apply()
 
+    /** The seasonal invite's answers, under the Apple TV's keys (Season.neverKey, Season.dismissedKey): set means silenced. */
+    fun flag(key: String) = prefs.getBoolean(key, false)
+    fun setFlag(key: String) = prefs.edit().putBoolean(key, true).apply()
+
     /** GUIDE TEXT SIZE: "large", or anything else for NORMAL, under the Apple TV's key. */
     var guideTextLarge: Boolean
         get() = prefs.getString("nostalgex_guide_text_size", null) == "large"

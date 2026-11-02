@@ -154,6 +154,9 @@ private fun Picker(model: AppModel, error: String?) {
         Text("OR CONNECT WITH", style = font(DMMono, 20, Color.White.copy(alpha = 0.35f), tracking = 2), modifier = Modifier.padding(top = u(10)))
         OnboardingButton("JELLYFIN", primary = false, fontSize = 28, fullWidth = true) { model.connectTo("jellyfin") }
         OnboardingButton("EMBY", primary = false, fontSize = 28, fullWidth = true) { model.connectTo("emby") }
+        // Demo mode: sample channels, no account. Small so a real server is the obvious choice,
+        // lit like everything else when focus lands on it (SettingsView's "demo mode").
+        QuietButton("demo mode", fontSize = 18, modifier = Modifier.padding(top = u(30))) { model.enterDemoMode() }
     }
 }
 
@@ -415,14 +418,14 @@ private fun Waiting(message: String) {
 
 /** The quiet role: a capsule that fills only when focused, for BACK and CANCEL. */
 @Composable
-private fun QuietButton(label: String, focusFirst: Boolean = false, quietFocus: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun QuietButton(label: String, focusFirst: Boolean = false, quietFocus: Boolean = false, fontSize: Int = 24, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
     val shape = RoundedCornerShape(50)
     val slab = focused && !quietFocus
     Text(
         label,
-        style = font(DMMonoMedium, 24, if (slab) Color(0f, 0.06f, 0.09f) else if (focused) Color.White else Color.White.copy(alpha = 0.42f), tracking = 1),
+        style = font(DMMonoMedium, fontSize, if (slab) Color(0f, 0.06f, 0.09f) else if (focused) Color.White else Color.White.copy(alpha = 0.42f), tracking = 1),
         modifier = modifier
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused }

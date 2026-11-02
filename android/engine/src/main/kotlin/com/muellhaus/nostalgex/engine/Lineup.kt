@@ -110,6 +110,15 @@ class Lineup(
         return bundles - enabledBundles
     }
 
+    /**
+     * Demo mode: these channels and nothing else, with no library and no filtering
+     * (enterDemoMode's `channels = DemoData.channels()`). Schedules, tuning and the next
+     * programme work as for any lineup. Packages don't apply: [setBundles] leaves it as it is.
+     */
+    fun airFixed(fixed: List<GuideChannel>) {
+        channels = fixed
+    }
+
     private fun franchiseBundle() = config.bundles.firstOrNull { it.id == FRANCHISES_BUNDLE }
 
     /**
