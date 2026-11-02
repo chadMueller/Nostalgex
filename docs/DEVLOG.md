@@ -3,6 +3,52 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Roku: every franchise on one Settings page, an amber count on a short package)
+
+**Why.** Apple TV 1.0.29 (N-028) moved the franchise collections onto the FRANCHISES page, left
+MY COLLECTIONS with the viewer's own, and put a small amber count on a package short of content
+where an "N need more content" line was. The Roku still listed franchise collections in their
+own accordion under MY COLLECTIONS. Trello bJu4Q3Ap, ours, not tydude001's.
+
+**Changed.** On `roku/settings-franchises-page` (off main `9438f2a`), not pushed. Settings UI
+only: no data, numbering or channel change.
+- FRANCHISES leaves CHANNEL PACKAGES and heads its own section. The switch, then ADD ALL /
+  REMOVE ALL and one A to Z list of the classics, the found franchises and the franchise
+  collections (tagged COLLECTION), ignoring case, digits as characters, as the Apple TV's merged
+  list sorts. ADD ALL covers all three. One "Up to 90" note counts the found franchises and the
+  collections past the block (the old two notes, one of them under MY COLLECTIONS, are gone).
+- The collections stay listed while the switch is off, as on the Apple TV's page.
+- MY COLLECTIONS holds OTHER COLLECTIONS only, with a line for how many sit under FRANCHISES.
+- A package that is on shows "14/15 CHANNELS" and an amber count of the rest
+  (`source/guide/SettingsChannels.brs`, the logic; `AlertCountBadge` is the look). The Roku never
+  had the "N need more content" line, so this is new there. Not for a package switched on during
+  the visit (the guide has none of its channels yet), nor one with none on air, where the Apple TV
+  says "Not enough content" and dims the row; that is not ported. The amber count has no explainer
+  page on the Roku (WHY ARE SOME CHANNELS MISSING?, I-004; queue item 33).
+- `refreshRows` matched a row on kind, index and category, so every collection row matched the
+  first and focus jumped to it after a guide rebuild. Rows keep an identity now (own commit).
+- `scripts/deploy.sh --settings-tour` (`tests/settings`): SettingsView alone over made-up data, in
+  the test data space only, with no library and no video.
+
+**Verified.** 50 cases in `tests/SettingsChannelsTests.brs`. `tests/run.sh` (NX_TEST_JOBS=2) ends
+in ALL TESTS PASSED; `deploy.sh --test` on the Streaming Stick Plus (OS 15.3.4) ends in ALL TESTS
+PASSED, the 50 cases among them (`deploy.sh --test` needs `e43b262` on a Mac, which is still only
+on `roku/deploy-test-macos`). Static analysis shows one warning, `SubtitleSettings.brs` line 181
+at 1,434 characters, which is on main already. With the settings tour on the stick: the amber 1 and 12, "14/15" and "4/16 CHANNELS", the merged list with a
+dimmed duplicate collection, ADD ALL turning the collections on too, FRANCHISES off leaving only
+the collections, the over-capacity note and the all-folded line, each seen in a screenshot and
+the console clean. Screenshots: `projects/nostalgex-internal/screens-roku-settings-franchises/`.
+
+**Not verified.** The real app's Settings over a real library. On 2026-11-01 the stick showed
+"HDCP Error Detected" in every screenshot of the app while a video played, and the remote keys
+did not reach it (deep links did). The cause is not measured; a TV that is off or on another
+input is the likely one. So `GuideView` handing Settings the ids on air is checked by reading
+and by the tour only.
+
+**Open.** On the Apple TV the page lists franchise collections while the switch is off and lets
+you switch them, though `d7f6aa3` gates their channels on the switch and the page's own comment
+says they air while it is off. Read, not run on an Apple TV; the Roku copies the page.
+
 ## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones
