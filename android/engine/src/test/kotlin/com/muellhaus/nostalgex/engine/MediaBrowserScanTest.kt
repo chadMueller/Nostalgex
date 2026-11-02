@@ -85,6 +85,7 @@ class MediaBrowserScanTest {
             check("librarySource", w.s("librarySource"), g.librarySource)
             check("tmdbID", w.s("tmdbID")?.toLongOrNull(), g.tmdbID)
             check("doviProfile", w.l("doviProfile")?.toInt(), g.doviProfile)
+            check("showKey", w.s("showKey"), g.showKey)
         }
         assertEquals("fields that differ from the web tuner (first 15)", emptyList<String>(), problems.take(15))
         // The same requests, as a set: the web asks five series at once, so its order interleaves.

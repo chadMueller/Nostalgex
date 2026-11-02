@@ -50,8 +50,40 @@ val genEnrichmentVectors = tasks.register<Exec>("genEnrichmentVectors") {
     commandLine("node", "scripts/gen-enrichment-vectors.mjs", out.get().asFile.absolutePath)
 }
 
+/**
+ * The web tuner's franchise builder over the Roku port's text edge cases (Unicode titles, case
+ * mapping, token boundaries, name order), so FranchiseVectorTest compares the Kotlin port with
+ * the JS's own answers. Upstream's golden file is read directly by FranchiseGoldenTest. Needs node.
+ */
+val genFranchiseVectors = tasks.register<Exec>("genFranchiseVectors") {
+    val out = layout.buildDirectory.file("vectors/franchise.json")
+    inputs.file("scripts/gen-franchise-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("scripts/nostalgex-franchise-builder.js"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/gen-franchise.mjs"))
+    inputs.file(rootDir.parentFile.resolve("franchises.json"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-franchise-vectors.mjs", out.get().asFile.absolutePath)
+}
+
+/**
+ * The web tuner's server collections run over the Roku port's fixtures, so
+ * CollectionsVectorTest compares the Kotlin candidates, folds, numbering and server calls with
+ * the JS's own output. Needs node.
+ */
+val genCollectionsVectors = tasks.register<Exec>("genCollectionsVectors") {
+    val out = layout.buildDirectory.file("vectors/collections.json")
+    inputs.file("scripts/gen-collections-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("scripts/nostalgex-collections.js"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/gen-collections.mjs"))
+    inputs.file(rootDir.parentFile.resolve("channels.json"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-collections-vectors.mjs", out.get().asFile.absolutePath)
+}
+
 tasks.test {
-    dependsOn(genMediaBrowserVectors, genEnrichmentVectors)
+    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors)
+    systemProperty("nostalgex.collectionsVectors", layout.buildDirectory.file("vectors/collections.json").get().asFile.absolutePath)
+    systemProperty("nostalgex.franchiseVectors", layout.buildDirectory.file("vectors/franchise.json").get().asFile.absolutePath)
     systemProperty("nostalgex.enrichmentVectors", layout.buildDirectory.file("vectors/enrichment.json").get().asFile.absolutePath)
     systemProperty("nostalgex.mediaBrowserVectors", layout.buildDirectory.file("vectors/mediabrowser.json").get().asFile.absolutePath)
     // The golden files and channels.json live at the repo root, shared with every surface.
@@ -61,7 +93,10 @@ tasks.test {
         rootDir.parentFile.resolve("scripts/filter-golden.json"),
         rootDir.parentFile.resolve("scripts/stream-quality-golden.json"),
         rootDir.parentFile.resolve("scripts/season-golden.json"),
+        rootDir.parentFile.resolve("scripts/franchise-golden.json"),
+        rootDir.parentFile.resolve("franchises.json"),
         rootDir.parentFile.resolve("channels.json"),
         rootDir.parentFile.resolve("channels-memberships.json"),
+        rootDir.parentFile.resolve("scripts/franchise-lineup-golden.json"),
     )
 }

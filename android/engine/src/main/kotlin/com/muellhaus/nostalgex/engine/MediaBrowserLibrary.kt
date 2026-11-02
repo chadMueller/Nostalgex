@@ -87,6 +87,8 @@ class MediaBrowserLibrary(
                                 addedAt = DailyManifest.unixSecondsFromISO(ep.str("DateCreated")),
                                 episodeTitle = ep.str("Name") ?: "",
                                 seTag = (s + e).ifEmpty { null },
+                                // The series, for a server collection of shows (plex-tuner.html showKey).
+                                showKey = show.str("Id"),
                                 summary = ep.str("Overview")?.ifEmpty { null } ?: show.str("Overview") ?: "",
                                 year = show.long("ProductionYear")?.toInt()?.takeIf { it != 0 },
                                 originallyAvailableAt = (ep.str("PremiereDate")?.ifEmpty { null } ?: show.str("PremiereDate")?.ifEmpty { null })?.take(10),

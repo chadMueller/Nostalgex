@@ -11,7 +11,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.muellhaus.nostalgex.engine.CollectionCategory
+import com.muellhaus.nostalgex.engine.Collections
 import com.muellhaus.nostalgex.engine.EnrichmentService
+import com.muellhaus.nostalgex.engine.FranchiseBuilder
+import com.muellhaus.nostalgex.engine.FranchiseDefinition
+import com.muellhaus.nostalgex.engine.FranchiseLineup
+import com.muellhaus.nostalgex.engine.ServerCollection
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.StreamQuality
@@ -456,6 +462,10 @@ class AppModel(private val context: Context) : Playback.Listener {
         Log.i(TAG, "CONFIG channels.json v${config.version} and memberships parsed in ${SystemClock.elapsedRealtime() - t0} ms")
         config to memberships
     }
+    /** franchises.json: the dictionary the franchise builder and the fold read. */
+    private val franchiseDefinitions: Deferred<List<FranchiseDefinition>> = scope.async(Dispatchers.Default) {
+        runCatching { FranchiseBuilder.parseDefinitions(asset("franchises.json")) }.getOrDefault(emptyList())
+    }
     private val manifestStore = FileManifestStore(context)
     private var signInJob: Job? = null
     private var clockJob: Job? = null
@@ -883,6 +893,8 @@ class AppModel(private val context: Context) : Playback.Listener {
             settingsPicker != null -> { val row = settingsPicker; settingsPicker = null; focusPane(row) }
             !settingsOnRail && channelsPage == "missing" -> { paneSwapping = true; channelsPage = "packages"; focusPane("channels_missing") }
             !settingsOnRail && channelsPage == "packages" -> { paneSwapping = true; channelsPage = null; focusPane("channels_packages") }
+            !settingsOnRail && channelsPage == "franchises" -> { paneSwapping = true; channelsPage = null; focusPane("channels_franchises") }
+            !settingsOnRail && channelsPage == "collections" -> { paneSwapping = true; channelsPage = null; focusPane("channels_collections") }
             !settingsOnRail -> focusRail()
             else -> { closeSettings(); return false }
         }
@@ -923,6 +935,55 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
         }
     }
+
+    // ── Franchises and collections (AppState+Franchises.swift) ──────────
+
+    /** A row's switch in the franchise list: a classic or a found franchise, by stable id. */
+    fun toggleFranchiseRow(row: FranchiseLineup.Row) {
+        val on = !row.enabled
+        prefs.enabledFranchises = if (on) prefs.enabledFranchises + row.id else prefs.enabledFranchises - row.id
+        prefs.disabledFranchises = if (on) prefs.disabledFranchises - row.id else prefs.disabledFranchises + row.id
+        applyFranchiseChoices()
+    }
+
+    /**
+     * ADD ALL / REMOVE ALL (setAllFranchises): every classic, found franchise and franchise
+     * collection in the list, as one choice.
+     */
+    fun setAllFranchises(on: Boolean) {
+        val f = lineup?.franchises ?: return
+        val rowIds = f.rows.map { it.id }.toSet()
+        val collectionIds = f.candidates.filter { it.category == CollectionCategory.FRANCHISES && it.foldedInto == null }.map { it.id }.toSet()
+        prefs.enabledFranchises = if (on) prefs.enabledFranchises + rowIds else prefs.enabledFranchises - rowIds
+        prefs.disabledFranchises = if (on) prefs.disabledFranchises - rowIds else prefs.disabledFranchises + rowIds
+        prefs.enabledCollections = if (on) prefs.enabledCollections + collectionIds else prefs.enabledCollections - collectionIds
+        applyFranchiseChoices()
+    }
+
+    /** A server collection's switch, under FRANCHISES or MY COLLECTIONS. Every collection starts off. */
+    fun toggleCollection(id: String) {
+        val now = prefs.enabledCollections
+        prefs.enabledCollections = if (id in now) now - id else now + id
+        applyFranchiseChoices()
+    }
+
+    /** The franchise step again with the new choices, then the guide (rebuildLineupAfterBundleChange). */
+    private fun applyFranchiseChoices() {
+        val l = lineup ?: return
+        val choices = franchiseChoices()
+        scope.launch {
+            withContext(Dispatchers.Default) {
+                l.setFranchiseChoices(choices, enabledBundles)
+                l.rebuildSchedules()
+            }
+            scheduleTick++
+            franchiseTick++
+        }
+    }
+
+    /** Bumped when the franchise list or the collections change, so Settings reads them again. */
+    var franchiseTick by mutableStateOf(0)
+        private set
 
     /** SERVERS: every server the account can reach, plus any switched on that didn't answer this time. */
     var availableServers: List<PlexServer> by mutableStateOf(emptyList())
@@ -965,6 +1026,24 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** The same items as the servers gave them, before enrichment: what a refresh compares and saves. */
     private var scannedItems: List<MediaItem> = emptyList()
+
+    /** The servers' collections, read with the library (CollectionScan). */
+    private var serverCollections: List<ServerCollection> = emptyList()
+
+    /** The franchise and collection switches, as Prefs keeps them. */
+    private fun franchiseChoices() = Lineup.FranchiseChoices(prefs.enabledFranchises, prefs.disabledFranchises, prefs.enabledCollections)
+
+    /**
+     * Each server's collections (scanCollections): Plex's from its movie and TV sections, a
+     * Jellyfin or Emby server's BoxSets. A server that fails gives none and the rest go on.
+     */
+    private suspend fun readCollections(servers: List<PlexServer>): List<ServerCollection> {
+        val t0 = SystemClock.elapsedRealtime()
+        val out = mbServer?.let { mb -> runCatching { mediaBrowser.collections(mb) }.onFailure { Log.w(TAG, "Collections failed", it) }.getOrDefault(emptyList()) }
+            ?: servers.flatMap { server -> runCatching { plex.collections(server) }.onFailure { Log.w(TAG, "Collections on ${server.name} failed", it) }.getOrDefault(emptyList()) }
+        Log.i(TAG, "COLLECTIONS ${out.size} read in ${SystemClock.elapsedRealtime() - t0} ms")
+        return out
+    }
     var libraryUpdatedMs: Long? by mutableStateOf(null)
         private set
     private var loadingLibrary = false
@@ -1024,14 +1103,15 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val t0 = SystemClock.elapsedRealtime()
                 val saved = withContext(Dispatchers.IO) { libraryStore.load(servers) }
                 if (saved != null) {
-                    Log.i(TAG, "SAVED LIBRARY ${saved.size} items read in ${SystemClock.elapsedRealtime() - t0} ms")
+                    Log.i(TAG, "SAVED LIBRARY ${saved.items.size} items and ${saved.collections.size} collections read in ${SystemClock.elapsedRealtime() - t0} ms")
                     prefs.initialLoadComplete = true
-                    scannedItems = saved
+                    scannedItems = saved.items
+                    serverCollections = saved.collections
                     // The local enrichment cache only: the network waits for the refresh behind the guide.
-                    libraryItems = enrich(saved, remote = false)
+                    libraryItems = enrich(saved.items, remote = false)
                     libraryUpdatedMs = libraryStore.savedAtMs()
                     if (!show(buildLineup(libraryItems, "saved"))) return@launch
-                    refreshInBackground(servers, saved)
+                    refreshInBackground(servers, saved.items)
                 } else {
                     fullLoad = true
                     val firstRun = !prefs.initialLoadComplete
@@ -1063,7 +1143,10 @@ class AppModel(private val context: Context) : Playback.Listener {
                         }
                     }
                     Log.i(TAG, "LIBRARY ${items.size} items from ${servers.size} server(s) read in ${SystemClock.elapsedRealtime() - t0} ms")
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
+                    // COLLECTIONS: the servers' own collections, before metadata (the fold reads TMDB collection ids).
+                    step(LoadPhase.COLLECTIONS, LoadPhase.COLLECTIONS.headline(), LoadPhase.COLLECTIONS.hint.uppercase())
+                    serverCollections = readCollections(servers)
+                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
                     scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
                     if (enrichment != null) {
@@ -1140,19 +1223,26 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val items = scan(servers) { _, _ -> }
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
-                val scanChanged = items != saved
+                val collections = readCollections(servers)
+                val collectionsChanged = collections != serverCollections
+                val scanChanged = items != saved || collectionsChanged
                 if (scanChanged) {
                     scannedItems = items
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
+                    serverCollections = collections
+                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
                 }
                 val enriched = enrich(items, remote = true)
-                if (enriched == libraryItems) {
+                if (enriched == libraryItems && !collectionsChanged) {
                     Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged")
                     return@launch
                 }
                 libraryItems = enriched
                 Log.i(TAG, "REFRESH ${items.size} items read in $took ms; " +
-                    (if (scanChanged) "library changed (was ${saved.size})" else "enrichment changed") + ", rebuilding")
+                    (when {
+                    items != saved -> "library changed (was ${saved.size})"
+                    collectionsChanged -> "collections changed"
+                    else -> "enrichment changed"
+                }) + ", rebuilding")
                 val fresh = buildLineup(enriched, "refreshed")
                 if (fresh.channels.isEmpty()) return@launch
                 // What is on keeps playing; the channel now airs from its new pool from the next programme.
@@ -1196,16 +1286,24 @@ class AppModel(private val context: Context) : Playback.Listener {
         val configMs = SystemClock.elapsedRealtime() - t0
         val serverKey = (mbServer?.let { "${it.kind}_${it.serverId}" } ?: ("plex_" + prefs.servers.joinToString("_") { it.machineIdentifier }))
             .replace(Regex("[^A-Za-z0-9]"), "_").take(60)
-        val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex")
+        val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex", franchiseDefinitions.await())
         lineup.watershed = prefs.watershed
+        lineup.franchiseChoices = franchiseChoices()
         var built = 0
-        val switchedOn = lineup.build(items, prefs.enabledBundles) { done, total ->
+        val switchedOn = lineup.build(items, prefs.enabledBundles, serverCollections) { done, total ->
             built = maxOf(built, done)
             scope.launch { onBuild(done, total) }
         }
         if (switchedOn.isNotEmpty()) {
             prefs.enabledBundles = prefs.enabledBundles + switchedOn
             withContext(Dispatchers.Main) { enabledBundles = prefs.enabledBundles }
+        }
+        // The Apple TV's COLLECTIONS and FRANCHISES lines: each collection's place, and the franchises found.
+        lineup.franchises?.let { f ->
+            for (c in f.candidates) Log.i(TAG, "COLLECTIONS: '${c.title}' -> ${Collections.memberSummary(c)} [${c.category?.wire}]" +
+                (c.foldedInto?.let { " folded into $it" } ?: "") + (Collections.duplicateWarning(c)?.let { " ($it)" } ?: "") + if (c.enabled) " ON" else "")
+            Log.i(TAG, "FRANCHISES: ${f.found.count { !it.isCovered }} found (${f.found.count { !it.isCovered && it.enabled }} on), " +
+                "${f.found.count { it.isCovered }} on classics; ${f.channels.size} runtime channel(s)")
         }
         val tFilter = SystemClock.elapsedRealtime()
         lineup.rebuildSchedules()

@@ -108,6 +108,8 @@ class PlexLibrary(private val client: PlexClient) {
                     addedAt = ep.long("addedAt") ?: 0,
                     episodeTitle = ep.str("title") ?: "",
                     seTag = seTag(ep),
+                    // The show, for a server collection of shows (plex-tuner.html showKey).
+                    showKey = show.str("ratingKey"),
                     summary = ep.str("summary")?.ifEmpty { null } ?: show.str("summary") ?: "",
                     year = show.long("year")?.toInt(),
                     originallyAvailableAt = ep.str("originallyAvailableAt") ?: show.str("originallyAvailableAt"),

@@ -240,6 +240,14 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         library(server).scan(progress, excluded).map { it.copy(serverUrl = server.url, serverToken = server.token) }
     }
 
+    /**
+     * The server's BoxSets with their members' keys (nostalgex-collections.js
+     * fetchBoxSetCollections). Keyed by the server's address, as the library's items are.
+     */
+    suspend fun collections(server: MediaBrowserServer): List<com.muellhaus.nostalgex.engine.ServerCollection> = withContext(Dispatchers.IO) {
+        com.muellhaus.nostalgex.engine.Collections.fetchBoxSetCollections(server.url, server.userId, { path -> kotlinx.coroutines.runBlocking { getJson(server.url + path, server.token) } })
+    }
+
     /** Every library the user can see, for the library-selection screen and Settings. */
     suspend fun sections(server: MediaBrowserServer, serverId: String): List<LibrarySection> = withContext(Dispatchers.IO) {
         library(server).sections(serverId, server.name)

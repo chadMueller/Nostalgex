@@ -40,6 +40,48 @@ class LineupTest {
 
     private fun lineup() = Lineup(config, memberships, DailyManifest(zone, InMemoryManifestStore()), "test")
 
+    /**
+     * Server collections in the guide: a franchise collection at CH 310 while FRANCHISES is on,
+     * another collection at CH 400 whatever the package, both scheduled and in the sidebar, and
+     * each gone when its switch is (materializeDynamicChannels, applyBundleFilter).
+     */
+    @Test
+    fun serverCollectionsBecomeChannelsAt310And400() {
+        val definitions = FranchiseBuilder.parseDefinitions(repoRoot.resolve("franchises.json").readText())
+        // Unrelated titles, as on the emulator's Jellyfin: "Film 1, 2, 3" would read as a numbered series.
+        val titles = mapOf("m1" to "Night of the Living Dead", "m2" to "Carnival of Souls", "m3" to "House on Haunted Hill",
+            "m4" to "Big Buck Bunny", "m5" to "Sintel", "m6" to "Tears of Steel")
+        val items = library(300, 6).map { it.copy(serverUrl = "srv", title = titles[it.ratingKey] ?: it.title) }
+        val collections = listOf(
+            ServerCollection("srv:1", "Night Horrors", listOf("m1", "m2", "m3"), "srv"),
+            ServerCollection("srv:2", "Blender Open Movie Trilogy", listOf("m4", "m5", "m6"), "srv"),
+        )
+        val l = Lineup(config, memberships, DailyManifest(zone, InMemoryManifestStore()), "test", "plex", definitions)
+        val both = Lineup.FranchiseChoices(enabledCollections = setOf("srv:1", "srv:2"))
+        l.franchiseChoices = both
+        val bundles = setOf("nostalgex", "franchises")
+        l.build(items, bundles, collections)
+        val categories = l.franchises!!.candidates.associate { it.title to it.category }
+        assertEquals(CollectionCategory.CUSTOM, categories["NIGHT HORRORS"])
+        assertEquals(CollectionCategory.FRANCHISES, categories["BLENDER OPEN MOVIE TRILOGY"])
+        val byNumber = l.channels.associateBy { it.number }
+        assertEquals("NIGHT HORRORS", byNumber[400]?.name)
+        assertEquals("BLENDER OPEN MOVIE TRILOGY", byNumber[310]?.name)
+        assertEquals(listOf("m1", "m2", "m3"), byNumber.getValue(400).pool.map { it.ratingKey })
+        assertEquals(l.channels.sortedBy { it.number }.map { it.id }, l.channels.map { it.id })
+        l.rebuildSchedules(ZonedDateTime.of(2026, 10, 29, 20, 15, 0, 0, zone))
+        assertTrue("CH 400 has a programme now", l.schedules[byNumber.getValue(400).id]?.nowPlaying != null)
+        val sidebar = l.jumpTargets(bundles).map { it.first.id }
+        assertTrue(sidebar.toString(), "franchises" in sidebar && Lineup.OTHER_COLLECTIONS_BUNDLE in sidebar)
+
+        // FRANCHISES off: the franchise collection goes with it, the other collection stays.
+        l.setBundles(setOf("nostalgex"))
+        assertEquals(listOf(400), l.channels.map { it.number }.filter { it >= 300 })
+        // Its own switch off: gone too.
+        l.setFranchiseChoices(Lineup.FranchiseChoices(), setOf("nostalgex"))
+        assertEquals(emptyList<Int>(), l.channels.map { it.number }.filter { it >= 300 })
+    }
+
     @Test
     fun aLibraryFillsTheNostalgexPackageAndEveryChannelHasAProgrammeNow() {
         val l = lineup()
