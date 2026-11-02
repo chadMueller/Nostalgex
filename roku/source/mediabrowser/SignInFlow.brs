@@ -453,3 +453,19 @@ function NxRfiPrefill(typed as String, shared as String) as String
     if typed.Trim() <> "" then return typed
     return shared
 end function
+
+' What the EMAIL keyboard starts with. While the field holds only the address
+' Roku shared, the keyboard opens empty, so what is typed (a person's, or a
+' recorded sign-in script's) replaces it instead of being added to the end of
+' it. Anything the viewer changed is kept as it is.
+function NxRfiKeyboardStart(current as String, shared as String) as String
+    if shared <> "" and current = shared then return ""
+    return current
+end function
+
+' What EMAIL holds once the keyboard closes: what was typed, except that a
+' keyboard closed with nothing typed leaves the address Roku shared in place.
+function NxRfiKeyboardKeep(typed as String, current as String, shared as String) as String
+    if typed.Trim() = "" and shared <> "" and current = shared then return current
+    return typed
+end function

@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
+
+**Why.** Measured on a Streaming Stick Plus on 1.0.9: after Continue on Roku's own Sign in
+screen, EMAIL holds the Roku account email, and opening the keyboard from EMAIL showed that
+text with the cursor at the end. A sign-in script recorded in the Roku Remote Tool types its
+`script-login` there, so it would have been added to the address and the sign-in would have
+failed, and a person who wants a different address had to delete the shared one first. Back on
+Roku's screen declines and leaves EMAIL empty, so a script recorded with Back was already safe on
+that stick; Roku's cloud test devices answer that screen in a way nobody can see from here.
+
+**Changed.** While EMAIL holds only the address Roku shared, the keyboard opens empty
+(`NxRfiKeyboardStart`), and closing it with nothing typed leaves that address in place
+(`NxRfiKeyboardKeep`). An address the viewer has edited opens with its text as before. Both are in
+`SignInFlow.brs` with 11 cases in `SignInFlowTests.brs`; `ConnectView` calls them from
+`openKeyboard` and `keyboardDone`. Nothing is sent, saved or printed that wasn't before. The
+build is 1.0.10 (`build_version=10`), its own commit.
+
+**Checked.** Off the TV: the sign-in suite (142 cases), and two deliberate breakages of the helpers each
+fail the new cases. The full suite and the stick check on the 1.0.10 build are recorded in
+`nostalgex-internal/docs/ROKU-PUBLIC-RELEASE.md`, section 10.
+
 ## 2026-11-02 (Privacy: the Roku account email line)
 
 **Changed.** The Roku section of `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` has one new

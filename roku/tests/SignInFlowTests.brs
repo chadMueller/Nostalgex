@@ -347,6 +347,19 @@ function NxRunSignInFlowTests() as Integer
     NxCheck(r, "RFI: declined leaves the field as it was", NxRfiPrefill("", ""), "")
     NxCheck(r, "RFI: declined leaves a typed email as it was", NxRfiPrefill("typed@example.com", ""), "typed@example.com")
 
+    ' The keyboard over an address Roku shared opens empty, so typing replaces it.
+    NxCheck(r, "RFI keyboard: over the shared address it opens empty", NxRfiKeyboardStart("roku@example.com", "roku@example.com"), "")
+    NxCheck(r, "RFI keyboard: over an edited address it opens with the text", NxRfiKeyboardStart("typed@example.com", "roku@example.com"), "typed@example.com")
+    NxCheck(r, "RFI keyboard: over an empty field it opens empty", NxRfiKeyboardStart("", "roku@example.com"), "")
+    NxCheck(r, "RFI keyboard: nothing shared, a typed address is kept", NxRfiKeyboardStart("typed@example.com", ""), "typed@example.com")
+    NxCheck(r, "RFI keyboard: nothing shared, nothing typed", NxRfiKeyboardStart("", ""), "")
+    NxCheck(r, "RFI keyboard: closed with nothing typed keeps the shared address", NxRfiKeyboardKeep("", "roku@example.com", "roku@example.com"), "roku@example.com")
+    NxCheck(r, "RFI keyboard: closed with only spaces keeps the shared address", NxRfiKeyboardKeep("   ", "roku@example.com", "roku@example.com"), "roku@example.com")
+    NxCheck(r, "RFI keyboard: typing over the shared address replaces it", NxRfiKeyboardKeep("login@example.com", "roku@example.com", "roku@example.com"), "login@example.com")
+    NxCheck(r, "RFI keyboard: a viewer who cleared their own text gets an empty field", NxRfiKeyboardKeep("", "typed@example.com", "roku@example.com"), "")
+    NxCheck(r, "RFI keyboard: nothing shared, empty stays empty", NxRfiKeyboardKeep("", "", ""), "")
+    NxCheck(r, "RFI keyboard: a script's text over a shared address is the whole field", NxRfiKeyboardKeep("script-login", "roku@example.com", "roku@example.com"), "script-login")
+
     print "sign-in flow cases (upstream SignInFlowTests):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

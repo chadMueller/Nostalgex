@@ -951,7 +951,7 @@ sub openKeyboard(field as String)
         kb.text = m.username
     else if field = "plexEmail" then
         kb.title = m.copy.plexEmailLabel
-        kb.text = m.plexEmail
+        kb.text = NxRfiKeyboardStart(m.plexEmail, m.rfiEmail)
     else if field = "plexPw" then
         kb.title = m.copy.password
         kb.text = m.plexPw
@@ -1004,7 +1004,7 @@ sub keyboardDone(viaOK as Boolean)
         m.focusId = "password"
         render()
     else if field = "plexEmail" then
-        m.plexEmail = text
+        m.plexEmail = NxRfiKeyboardKeep(text, m.plexEmail, m.rfiEmail)
         m.focusId = "plexPw"
         render()
     else if field = "plexPw" then
@@ -1151,8 +1151,10 @@ end sub
 ' the app wouldn't use. The viewer shares the email or cancels; either way the
 ' flow goes on as it was and nothing waits for the answer. A shared address
 ' only starts the EMAIL field, and like anything typed there goes to plex.tv
-' when the viewer presses SIGN IN. It is kept for this view, never saved, and
-' never printed.
+' when the viewer presses SIGN IN. While the field holds only that address the
+' keyboard opens empty, so typing (or a recorded sign-in script) replaces it
+' and is never added to the end of it. It is kept for this view, never saved,
+' and never printed.
 
 sub askRoku()
     if m.rfiAsked or m.rfiStore <> invalid then return
