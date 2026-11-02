@@ -49,10 +49,32 @@ and in Swift. Then:
 - The Swift and JS engines pack the same day on that data, channel for channel.
 - Lookahead 4, 8, 16 and 1000 all give 0.2%; 2 gives 7.6%.
 - A rescan that changed nothing packs the days ahead the same (Swift test and JS smoke).
-- Pack time for the whole lineup's day: JS (Node, Mac) 21 to 33 ms; Swift (tvOS simulator,
-  debug) 346 to 305 ms (it now reads each yesterday file once). With half the lineup off the
-  guide the web page also builds those channels; a memo of the lineup's day keeps that at
-  45 ms (22 ms before), where re-reading it cost 222 ms.
+- Pack time for the whole lineup's day, before (each channel alone) and after (the lineup):
+  JS (Node, Mac) 21 ms before, 33 ms after. Swift (tvOS simulator, debug build) 346 ms before,
+  305 ms after; it is faster because it now reads each yesterday file once, not twice. With
+  half the lineup off the guide the web page also builds those channels: 22 ms before, 45 ms
+  after with a memo of the lineup's day, 222 ms without it.
+
+**Review fixes (same branch).**
+- A caller that found its day unstored and then waited on the pack lock while another
+  thread packed the day could get an empty schedule back, if the memo was dropped in between
+  (`purgeDays`, or the 256-entry memo full with today and tomorrow of a large lineup). It now
+  reads the store again inside the lock, and `packLineupDay` returns the stored days as well
+  as the packed ones. `ScheduleLineupTests.testAWaiterGetsTheDayAnotherThreadPacked`
+  reproduces the empty return without the fix.
+- Web: the off-guide memo is keyed on which channels the guide holds, so a channel switched on
+  or off (any path that flips `enabled`) can't leave it stale. A smoke control keyed on the day
+  alone clashes; the fix doesn't.
+- Apple TV: the lineup is registered again whenever anything the credential fingerprint is
+  made of changes (backend, servers, server URL, Jellyfin/Emby user), not only the channels.
+- Two time-gated channels: a time-gated channel gives way to the ungated lineup only, never to
+  another time-gated one, so its day can't depend on the hour the other was first built. Two
+  of them can air the same title at once; channels.json has one (VHS VAULT). A second gated
+  channel in the golden case and a negative control cover it.
+- `ScheduleTiming` (trigger `sched-timing` in `soak.trigger`) and
+  `scripts/qa/appletv-schedule-timing.sh` time, on a real Apple TV's main thread, what a tune
+  waits for when the day isn't packed, before and after, in a scratch manifest folder. Not run
+  yet: it needs the owner's OK to install on the low-end bench TV.
 
 **Half-done.** Roku: `roku/tests` goes red on `ScheduleParityGoldenTests` until the
 BrightScript port of `packLineupDay` lands in the same merge. Not measured on an Apple

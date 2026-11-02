@@ -16,26 +16,29 @@ struct ManifestBlock {
 
 /// Every block the lineup's channels already air on a day, by title (the manifest's key), so a
 /// channel packing its day can see where a title is on elsewhere. `overlap` is the seconds of
-/// [start, end) another channel airs the title for. Mirrors `makeOccupancy` in
+/// [start, end) another channel airs the title for. A time-gated channel asks with
+/// `skippingGated`: it gives way to the rest of the lineup, never to another time-gated one,
+/// so its day can't depend on the hour that one was first built. Mirrors `makeOccupancy` in
 /// scripts/nostalgex-daily-manifest.js.
 struct ScheduleOccupancy {
     private struct Span {
         let channelID: Int
         let start: Int
         let end: Int
+        let gated: Bool
     }
 
     private var byKey: [String: [Span]] = [:]
 
-    mutating func add(channelID: Int, key: String, start: Int, end: Int) {
+    mutating func add(channelID: Int, key: String, start: Int, end: Int, gated: Bool) {
         guard end > start else { return }
-        byKey[key, default: []].append(Span(channelID: channelID, start: start, end: end))
+        byKey[key, default: []].append(Span(channelID: channelID, start: start, end: end, gated: gated))
     }
 
-    func overlap(key: String, start: Int, end: Int, excludingChannel channelID: Int) -> Int {
+    func overlap(key: String, start: Int, end: Int, excludingChannel channelID: Int, skippingGated: Bool) -> Int {
         guard let spans = byKey[key] else { return 0 }
         var seconds = 0
-        for s in spans where s.channelID != channelID {
+        for s in spans where s.channelID != channelID && !(skippingGated && s.gated) {
             let lo = max(start, s.start), hi = min(end, s.end)
             if hi > lo { seconds += hi - lo }
         }
@@ -100,6 +103,9 @@ enum DailyManifestScheduler {
     private static var lineupFingerprint: String?
     /// Serialises packing: two threads asking for an unpacked day pack it once.
     private static let packLock = NSLock()
+    /// Test seam: runs after a caller found no day stored and before it waits for the pack
+    /// lock, where another thread can pack the day and a purge can drop the memo. Nil in the app.
+    static var testHookBeforePackLock: (() -> Void)?
 
     /// How far down its running order a channel looks for a programme no other channel has on
     /// in the same slot. 4 already left nothing avoidable on a 128-channel test library; 8 is
@@ -175,10 +181,23 @@ enum DailyManifestScheduler {
             return resolved
         }
 
+        testHookBeforePackLock?()
         packLock.lock()
         defer { packLock.unlock() }
-        // Another thread may have packed the day while this one waited.
+        // Another thread may have packed the day while this one waited. Its memo entry can be
+        // gone already (purgeDays, or the memo full with today and tomorrow of a big lineup),
+        // so the store is read again too: a day packed and saved is never handed back empty.
         if let hit = memoized(key) { return hit }
+        if let cached = DailyManifestStore.load(
+            channelId: channel.id,
+            dayKey: dayKey,
+            credentialFingerprint: credentialFingerprint,
+            expectedPoolFingerprint: poolFP
+        ) {
+            let resolved = resolveBlocks(cached.blocks, pool: pool)
+            storeMemo(resolved, for: key)
+            return resolved
+        }
 
         // The whole lineup's day, this channel in its place with the pool it was asked with.
         // One the guide doesn't carry packs after the lineup, against it, and is seen by
@@ -211,7 +230,8 @@ enum DailyManifestScheduler {
     /// one's day is its own running order (packDay) except where a programme is already on
     /// another channel in that slot. Days already stored, and the programmes that run over
     /// from the day before, are fixed: what airs now never moves because another channel's
-    /// pool changed. Saves and memoises every day it packs; returns them by channel id.
+    /// pool changed. Saves and memoises every day it packs; returns every channel's day, the
+    /// stored ones and the packed ones, by channel id.
     /// Mirrors `packLineupDay` in scripts/nostalgex-daily-manifest.js.
     static func packLineupDay(
         _ entries: [LineupEntry],
@@ -244,10 +264,14 @@ enum DailyManifestScheduler {
             // channels' only: one off the guide is seen by nothing).
             guard id != extraID else { continue }
             for b in prev where b.endUnix > dayStartUnix {
-                occupancy.add(channelID: id, key: b.ratingKey, start: b.startUnix, end: b.endUnix)
+                occupancy.add(channelID: id, key: b.ratingKey, start: b.startUnix, end: b.endUnix,
+                              gated: entry.channel.timeRestrictions != nil)
             }
         }
 
+        // Every channel's day, stored or packed now: a caller asking for a channel whose day
+        // another thread stored gets it back from here as well.
+        var dayByChannel: [Int: [ManifestBlock]] = [:]
         var toPack: [(entry: LineupEntry, fingerprint: String)] = []
         for entry in all {
             let fp = DailyManifestStore.poolFingerprint(ratingKeys: entry.pool.map(\.id))
@@ -256,18 +280,19 @@ enum DailyManifestScheduler {
                                                     expectedPoolFingerprint: fp) {
                 if entry.channel.id != extraID {
                     for b in cached.blocks {
-                        occupancy.add(channelID: entry.channel.id, key: b.ratingKey, start: b.startUnix, end: b.endUnix)
+                        occupancy.add(channelID: entry.channel.id, key: b.ratingKey, start: b.startUnix, end: b.endUnix,
+                                      gated: entry.channel.timeRestrictions != nil)
                     }
                 }
-                storeMemo(resolveBlocks(cached.blocks, pool: entry.pool),
-                          for: memoKey(channelID: entry.channel.id, dayKey: dayKey, pool: entry.pool,
-                                       credentialFingerprint: credentialFingerprint))
+                let resolved = resolveBlocks(cached.blocks, pool: entry.pool)
+                storeMemo(resolved, for: memoKey(channelID: entry.channel.id, dayKey: dayKey, pool: entry.pool,
+                                                 credentialFingerprint: credentialFingerprint))
+                dayByChannel[entry.channel.id] = resolved
             } else {
                 toPack.append((entry, fp))
             }
         }
 
-        var packedByChannel: [Int: [ManifestBlock]] = [:]
         for (entry, fp) in toPack {
             let channel = entry.channel
             let prev = yesterday[channel.id] ?? []
@@ -280,7 +305,8 @@ enum DailyManifestScheduler {
                 isPremiereChannel: channel.isPremiereChannel,
                 yesterdayAiredKeys: Set(prev.map(\.ratingKey)),
                 yesterdayLastItemID: prev.last?.ratingKey,
-                occupancy: occupancy
+                occupancy: occupancy,
+                gated: channel.timeRestrictions != nil
             )
             let stored = packed.map {
                 StoredManifestBlock(
@@ -299,14 +325,15 @@ enum DailyManifestScheduler {
             ))
             storeMemo(packed, for: memoKey(channelID: channel.id, dayKey: dayKey, pool: entry.pool,
                                            credentialFingerprint: credentialFingerprint))
-            packedByChannel[channel.id] = packed
+            dayByChannel[channel.id] = packed
             if channel.id != extraID {
                 for b in stored {
-                    occupancy.add(channelID: channel.id, key: b.ratingKey, start: b.startUnix, end: b.endUnix)
+                    occupancy.add(channelID: channel.id, key: b.ratingKey, start: b.startUnix, end: b.endUnix,
+                                  gated: channel.timeRestrictions != nil)
                 }
             }
         }
-        return packedByChannel
+        return dayByChannel
     }
 
     static func blocksInRange(
@@ -356,7 +383,8 @@ enum DailyManifestScheduler {
         occupancy: ScheduleOccupancy?,
         channelId: Int,
         avoidKey: String?,
-        mustFit: Bool
+        mustFit: Bool,
+        skippingGated: Bool
     ) -> Int? {
         let n = min(lookahead, queue.count)
         var best = -1
@@ -365,7 +393,8 @@ enum DailyManifestScheduler {
             let item = queue[i]
             if n > 1, let avoidKey, item.id == avoidKey { continue }
             if i > 0, waitsForEarlierPart(queue, i) { continue }
-            let overlap = occupancy?.overlap(key: item.id, start: t, end: t + playSeconds(i), excludingChannel: channelId) ?? 0
+            let overlap = occupancy?.overlap(key: item.id, start: t, end: t + playSeconds(i), excludingChannel: channelId,
+                                             skippingGated: skippingGated) ?? 0
             if overlap == 0 { return i }
             if overlap < bestOverlap {
                 bestOverlap = overlap
@@ -397,7 +426,8 @@ enum DailyManifestScheduler {
         isPremiereChannel: Bool,
         yesterdayAiredKeys: Set<String>,
         yesterdayLastItemID: String?,
-        occupancy: ScheduleOccupancy? = nil
+        occupancy: ScheduleOccupancy? = nil,
+        gated: Bool = false
     ) -> [ManifestBlock] {
         let totalPoolSec = pool.reduce(0) { $0 + $1.duration * 60 }
         guard totalPoolSec > 0 else { return [] }
@@ -451,7 +481,7 @@ enum DailyManifestScheduler {
                 return pickCandidate(current, at: Int(t.timeIntervalSince1970),
                                      playSeconds: { current[$0].duration * 60 },
                                      occupancy: occupancy, channelId: channelId,
-                                     avoidKey: nil, mustFit: true)
+                                     avoidKey: nil, mustFit: true, skippingGated: gated)
             }()
             guard let j = picked else { break }
             let item = queue.remove(at: j)
@@ -516,7 +546,7 @@ enum DailyManifestScheduler {
                     return pickCandidate(current, at: Int(t.timeIntervalSince1970),
                                          playSeconds: { min(current[$0].duration * 60 - ($0 == 0 ? lead : 0), remainingDay) },
                                          occupancy: occupancy, channelId: channelId,
-                                         avoidKey: lastKey, mustFit: false) ?? 0
+                                         avoidKey: lastKey, mustFit: false, skippingGated: gated) ?? 0
                 }()
                 let playSec = min(loop[j].duration * 60 - (j == 0 ? lead : 0), remainingDay)
                 let item = loop.remove(at: j)

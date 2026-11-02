@@ -164,6 +164,20 @@ enum DailyManifestStore {
         return manifest.blocks.last?.ratingKey
     }
 
+    /// Copies the stored days `dayKeys` from one fingerprint's folder to another's, replacing
+    /// what the target held for them. For ScheduleTiming, which packs in a scratch folder so a
+    /// TV's own schedules are never touched.
+    static func copyDays(_ dayKeys: [String], from source: String, to target: String) {
+        guard let src = baseDirectory(credentialFingerprint: source),
+              let dst = baseDirectory(credentialFingerprint: target),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: src.path) else { return }
+        for name in names where dayKeys.contains(where: { name.hasSuffix("_\($0).json") }) {
+            let to = dst.appendingPathComponent(name)
+            try? FileManager.default.removeItem(at: to)
+            try? FileManager.default.copyItem(at: src.appendingPathComponent(name), to: to)
+        }
+    }
+
     static func clearAll(credentialFingerprint: String? = nil) {
         guard let root = LocalStore.rootDirectory else { return }
         let manifests = root.appendingPathComponent("daily_manifests", isDirectory: true)

@@ -200,7 +200,8 @@ function embyCase() {
  * another has on, while the rest have room to give way. A story in three parts on two
  * channels, a premiere channel, a channel whose pool changes with the hour ("gated", which
  * packs after the rest) and one channel the guide doesn't carry ("offGuide", packed after the
- * lineup and seen by none of it).
+ * lineup and seen by none of it). A second time-gated channel shares the first's films and
+ * gives way to the ungated lineup only.
  */
 function crowdedCase() {
   const zone = "America/Chicago";
@@ -225,6 +226,9 @@ function crowdedCase() {
     { id: 34, pool: range(2, 14) },
     { id: 35, premiere: true, pool: range(3, 17) },
     { id: 36, gated: true, pool: range(0, 14) },
+    // A second time-gated channel sharing most of the first's pool: it gives way to the
+    // ungated lineup only, never to channel 36, so it can't depend on when 36 was built.
+    { id: 39, gated: true, pool: range(0, 12) },
     { id: 37, offGuide: true, pool: range(2, 10) },
     { id: 38, pool: [k(16), k(14), k(4), k(15), k(5)] },
   ];
@@ -285,7 +289,8 @@ const ABOUT = [
   "guide order with their pools in library order, prime (days packed first, so yesterday exists), days",
   "(dumped in full) and at (instants, unix seconds). The channels are the guide's lineup, registered with",
   "the scheduler, and each day is packed across all of them so one title is not on two at once; a row",
-  "with gated: true has a pool that changes with the hour (it packs after the rest; the hour never comes),",
+  "with gated: true has a pool that changes with the hour (it packs after the rest and gives way to the",
+  "ungated lineup only, never to another gated channel; the hour never comes),",
   "and one with offGuide: true is not in the lineup (it packs after it, against it, seen by none of it).",
   "expect.items: key -> [minutes, addedAt (0 if before 1970), title, type], null where the loader drops it.",
   "expect.days: instant -> channel -> [key, start, end] for that local day.",

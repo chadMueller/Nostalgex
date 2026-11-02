@@ -126,6 +126,11 @@ struct RootView: View {
             if !restored {
                 await appState.loadLibrary()
             }
+            if ScheduleTiming.isRequested {
+                // A one-off bench (scripts/qa/appletv-schedule-timing.sh): times the schedule
+                // pack in a scratch folder, then the launch carries on as normal.
+                ScheduleTiming.run(appState: appState)
+            }
             if PlaybackSoak.isRequested {
                 // A background refresh rebuilding 90 channels on the main actor would
                 // starve the player and the soak's own clock; measure playback alone.

@@ -92,6 +92,27 @@ final class ScheduleLineupTests: XCTestCase {
         XCTAssertEqual(ahead0, Array(ahead1.reversed()))
     }
 
+    /// A caller that found its day unstored, then waited on the pack lock while another thread
+    /// packed the day and a purge (`purgeDays`, or the memo filling up) dropped the memo, must
+    /// still get the day back, not an empty schedule (review of 89a2f5c).
+    func testAWaiterGetsTheDayAnotherThreadPacked() {
+        let channels = lineup()
+        DailyManifestScheduler.setLineup(channels, credentialFingerprint: fp)
+        let target = channels[3]
+        DailyManifestScheduler.testHookBeforePackLock = { [fp, day] in
+            DailyManifestScheduler.testHookBeforePackLock = nil
+            // The other thread's pack, then the memo dropped under it.
+            _ = DailyManifestScheduler.blocks(for: channels[0], at: day, credentialFingerprint: fp)
+            DailyManifestScheduler.invalidateMemo()
+        }
+        defer { DailyManifestScheduler.testHookBeforePackLock = nil }
+        let got = DailyManifestScheduler.blocks(for: target, at: day, credentialFingerprint: fp)
+        XCTAssertFalse(got.isEmpty, "the waiter got an empty schedule for a day that was packed")
+        DailyManifestScheduler.invalidateMemo()
+        XCTAssertEqual(got.map(\.item.id),
+                       DailyManifestScheduler.blocks(for: target, at: day, credentialFingerprint: fp).map(\.item.id))
+    }
+
     func testAnotherSignInsLineupIsNotUsed() {
         let channels = lineup()
         DailyManifestScheduler.setLineup(channels, credentialFingerprint: "someone-else")

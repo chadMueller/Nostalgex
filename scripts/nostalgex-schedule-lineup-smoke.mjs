@@ -14,6 +14,7 @@
  *   7. A later part of a story never airs right before an earlier one.
  *   8. Cost: the lineup's day packs in a bounded multiple of packing each channel alone.
  */
+import { readFileSync } from "node:fs";
 import { loadEngine } from "./schedule-parity-dump.mjs";
 
 let passed = 0;
@@ -127,6 +128,48 @@ check("the same days whatever order the guide asks in", JSON.stringify(runs.guid
   packDays(after.M, L, order(L.length, "guide"), [0]);
   const offAfter = after.M.getManifestBlocks(off.channel, off.pool, dayAt(0), SK).map((b) => `${b.item.ratingKey}@${b.startSec}`);
   check("a channel off the guide packs the same asked before or after the guide", JSON.stringify(offFirst) === JSON.stringify(offAfter));
+}
+
+// 5b. A channel switched on after the day was packed: the next channel off the guide packs
+// against the new lineup, as a fresh start with that lineup would.
+// The stale case is a channel whose day was stored while it was off the guide: switched on,
+// it is read from the store and nothing packs, so only the memo's key can notice.
+{
+  const engineSrc = readFileSync(new URL("./nostalgex-daily-manifest.js", import.meta.url), "utf8");
+  const staleSrc = engineSrc.replace(/const memoKey = `\$\{serverKey\}\|\$\{dayKey\}\|\$\{entries[^`]*`;/, "const memoKey = `${serverKey}|${dayKey}`;");
+  check("control patched: an off-guide memo keyed on the day only", staleSrc !== engineSrc);
+  const small = L.slice(0, 20);
+  const x = L[20];
+  const y = { channel: { id: 7, isPremiereChannel: false, timeRestrictions: null }, pool: x.pool };
+  const clashesWithX = (src) => {
+    const { M } = loadEngine(src);
+    let current = small;
+    M.setLineup(() => current);                       // the page's one provider, never re-registered
+    packDays(M, small, order(small.length, "guide"), [0]);
+    const xDay = M.getManifestBlocks(x.channel, x.pool, dayAt(0), SK);   // off the guide, stored
+    current = [...small, x];                          // switched on: its day is read, not packed
+    M.getManifestBlocks(x.channel, x.pool, dayAt(0), SK);
+    const yDay = M.getManifestBlocks(y.channel, y.pool, dayAt(0), SK);   // the next off-guide channel
+    let n = 0;
+    for (const a of yDay) for (const b of xDay) if (a.item.ratingKey === b.item.ratingKey && Math.min(a.endSec, b.endSec) > Math.max(a.startSec, b.startSec)) n++;
+    return n;
+  };
+  check("a channel switched on reaches the next off-guide channel's day", clashesWithX(engineSrc) === 0, `${clashesWithX(engineSrc)} clashes`);
+  check("control: keyed on the day only, the off-guide channel clashes with it", clashesWithX(staleSrc) > 0);
+}
+
+// 5c. Two time-gated channels: the second's day doesn't depend on the pool the first had
+// when it was built (its rating hold before 9 PM, say).
+{
+  const gatedA = (pool) => ({ channel: { id: 90, isPremiereChannel: false, timeRestrictions: { blockBefore: 21 } }, pool });
+  const gatedB = { channel: { id: 91, isPremiereChannel: false, timeRestrictions: { tvOnlyBefore: 11 } }, pool: films.slice(0, 60) };
+  const dayOfB = (poolA) => {
+    const { M } = loadEngine();
+    const lu = [...L, gatedA(poolA), gatedB];
+    M.setLineup(lu);
+    return packDays(M, lu, order(lu.length, "guide"), [0])[0][91];
+  };
+  check("a time-gated channel's day doesn't depend on another's pool", JSON.stringify(dayOfB(films.slice(0, 40))) === JSON.stringify(dayOfB(films.slice(10, 70))));
 }
 
 // 6. No lineup, or a lineup of one: the channel's own order.

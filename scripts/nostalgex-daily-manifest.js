@@ -356,25 +356,27 @@
   // Mirrors DailyManifestScheduler's lineup packing and ScheduleOccupancy.
 
   /**
-   * What the other channels have on, by title: key -> [{ ch, s, e }]. `overlap` is the
-   * seconds of [s, e) that some other channel already airs the title for. Mirrors
+   * What the other channels have on, by title: key -> [{ ch, s, e, gated }]. `overlap` is
+   * the seconds of [s, e) that some other channel already airs the title for. A time-gated
+   * channel asks with `skipGated`: it gives way to the rest of the lineup, never to another
+   * time-gated one, so its day can't depend on the hour that one was first built. Mirrors
    * ScheduleOccupancy.
    */
   function makeOccupancy() {
     const byKey = new Map();
     return {
-      add(channelId, ratingKey, s, e) {
+      add(channelId, ratingKey, s, e, gated) {
         if (!(e > s)) return;
         let list = byKey.get(ratingKey);
         if (!list) { list = []; byKey.set(ratingKey, list); }
-        list.push({ ch: channelId, s, e });
+        list.push({ ch: channelId, s, e, gated: Boolean(gated) });
       },
-      overlap(ratingKey, s, e, channelId) {
+      overlap(ratingKey, s, e, channelId, skipGated) {
         const list = byKey.get(ratingKey);
         if (!list) return 0;
         let sec = 0;
         for (const x of list) {
-          if (x.ch === channelId) continue;
+          if (x.ch === channelId || (skipGated && x.gated)) continue;
           const lo = Math.max(s, x.s), hi = Math.min(e, x.e);
           if (hi > lo) sec += hi - lo;
         }
@@ -415,7 +417,7 @@
    * elsewhere, this is always 0: the channel's own order. Mirrors
    * DailyManifestScheduler.pickCandidate.
    */
-  function pickCandidate(queue, t, playSec, occupancy, channelId, avoidKey, mustFit) {
+  function pickCandidate(queue, t, playSec, occupancy, channelId, avoidKey, mustFit, skipGated) {
     const n = Math.min(LOOKAHEAD, queue.length);
     let best = -1;
     let bestOverlap = Infinity;
@@ -423,7 +425,7 @@
       const item = queue[i];
       if (n > 1 && avoidKey != null && item.ratingKey === avoidKey) continue;
       if (i > 0 && waitsForEarlierPart(queue, i)) continue;
-      const ov = occupancy ? occupancy.overlap(item.ratingKey, t, t + playSec(i), channelId) : 0;
+      const ov = occupancy ? occupancy.overlap(item.ratingKey, t, t + playSec(i), channelId, skipGated) : 0;
       if (ov === 0) return i;
       if (ov < bestOverlap) { bestOverlap = ov; best = i; }
     }
@@ -431,7 +433,7 @@
     return best >= 0 ? best : 0;
   }
 
-  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy) {
+  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy, gated) {
     // As long as the local day, so a 25-hour day has no empty last hour and a 23-hour day
     // doesn't run an hour into tomorrow. Same end as DailyManifestScheduler.blocks passes in.
     const dayEndSec = dayStartSec + localDayLengthSec(dayStartSec);
@@ -468,7 +470,7 @@
     // waiting fits, the day goes on with the filler loop below, which holds the whole pool.
     const queue = unplayedOrdered.filter((item) => (item.duration || 0) > 0);
     while (queue.length && t < dayEndSec) {
-      const j = pickCandidate(queue, t, (i) => queue[i].duration * 60, occupancy, channelId, null, true);
+      const j = pickCandidate(queue, t, (i) => queue[i].duration * 60, occupancy, channelId, null, true, gated);
       if (j < 0) break;
       const item = queue.splice(j, 1)[0];
       const dur = item.duration * 60;
@@ -514,7 +516,7 @@
         const remainingDay = dayEndSec - t;
         const playFor = (i) => Math.min(loop[i].duration * 60 - (first && i === 0 ? offsetInItem : 0), remainingDay);
         const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
-        const j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false);
+        const j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated);
         const playSec = playFor(j);
         const item = loop.splice(j, 1)[0];
         loop.push(item);
@@ -537,14 +539,18 @@
    *
    * `entries`: [{ channel, pool }] with pools already valid (duration > 0, non-empty).
    * `extra`: one more { channel, pool } that is not in the guide, packed after the lineup
-   * against it and seen by nothing, or null. Returns channel id -> the blocks it packed.
+   * against it and seen by nothing, or null. Returns channel id -> its day's blocks, stored
+   * or packed now.
    */
   function packLineupDay(entries, extra, atMs, serverKey) {
     const dayStartSec = Math.floor(startOfLocalDayMs(atMs) / 1000);
     const dayKey = localDayKey(atMs);
     const dayNumber = localDayNumber(atMs);
     const yesterdayKey = previousLocalDayKey(atMs);
-    const memoKey = `${serverKey}|${dayKey}`;
+    // The day, and which channels the guide holds: a channel switched on or off (a package,
+    // a franchise, any path that flips `enabled`) changes the key, so the memo can't outlive
+    // the lineup it was made from.
+    const memoKey = `${serverKey}|${dayKey}|${entries.map((e) => e.channel.id).sort((a, b) => a - b).join(',')}`;
     // A channel off the guide, when the lineup's day is already known: pack it against that
     // and nothing else. The page builds every channel, enabled or not, and reading the
     // lineup's stored days again for each one cost ten times the whole lineup's pack.
@@ -552,7 +558,7 @@
       const prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey);
       const packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, new Set(prev.map((b) => b.ratingKey)),
                              Boolean(extra.channel.isPremiereChannel), prev.length ? prev[prev.length - 1].ratingKey : null,
-                             occupancyMemo.occupancy);
+                             occupancyMemo.occupancy, isGated(extra.channel));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: extra.channel.id, dayKey,
         poolFingerprint: poolFingerprint(extra.pool), blocks: packed });
       return new Map([[extra.channel.id, packed]]);
@@ -569,13 +575,14 @@
       yesterday.set(id, prev);
       // What runs past midnight from yesterday is on air today too (the guide's channels'
       // only: one off the guide is seen by nothing).
-      if (entry !== extra) for (const b of prev) if (b.endSec > dayStartSec) occupancy.add(id, b.ratingKey, b.startSec, b.endSec);
+      if (entry !== extra) for (const b of prev) if (b.endSec > dayStartSec) occupancy.add(id, b.ratingKey, b.startSec, b.endSec, isGated(entry.channel));
     }
     for (const entry of all) {
       const fp = poolFingerprint(entry.pool);
       const cached = loadManifest(serverKey, entry.channel.id, dayKey, fp);
       if (cached) {
-        if (entry !== extra) for (const b of cached.blocks) occupancy.add(entry.channel.id, b.ratingKey, b.startSec, b.endSec);
+        if (entry !== extra) for (const b of cached.blocks) occupancy.add(entry.channel.id, b.ratingKey, b.startSec, b.endSec, isGated(entry.channel));
+        packedBy.set(entry.channel.id, cached.blocks);
       } else {
         toPack.push({ entry, fp });
       }
@@ -586,11 +593,11 @@
       const aired = new Set(prev.map((b) => b.ratingKey));
       const last = prev.length ? prev[prev.length - 1].ratingKey : null;
       const packed = packDay(pool, dayStartSec, dayNumber, channel.id, aired,
-                             Boolean(channel.isPremiereChannel), last, occupancy);
+                             Boolean(channel.isPremiereChannel), last, occupancy, isGated(channel));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: channel.id, dayKey, poolFingerprint: fp, blocks: packed });
       packedBy.set(channel.id, packed);
       if (entry !== extra) {
-        for (const b of packed) occupancy.add(channel.id, b.ratingKey, b.startSec, b.endSec);
+        for (const b of packed) occupancy.add(channel.id, b.ratingKey, b.startSec, b.endSec, isGated(channel));
         lineupGeneration += 1;
       }
     }
@@ -611,8 +618,13 @@
    * Mirrors DailyManifestScheduler.lineupPriority.
    */
   function sortByLineupPriority(entries) {
-    const rank = (e) => (e.channel.timeRestrictions ? 1 : 0);
+    const rank = (e) => (isGated(e.channel) ? 1 : 0);
     return entries.slice().sort((a, b) => (rank(a) - rank(b)) || (a.channel.id - b.channel.id));
+  }
+
+  /** A channel whose pool changes with the hour (timeRestrictions). Mirrors Channel.timeRestrictions != nil. */
+  function isGated(channel) {
+    return Boolean(channel && channel.timeRestrictions);
   }
 
   /** The stored day's blocks, whatever version stored them ([] if none). */

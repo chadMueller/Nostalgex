@@ -180,15 +180,21 @@ class AppState {
 
     /// Primary server URL — mirrors `selectedServers.first` for display and legacy
     /// single-server paths (demo, App Review repro). Source of truth is `selectedServers`.
-    var serverURL: String = ""
+    var serverURL: String = "" {
+        didSet { registerScheduleLineup() }
+    }
     var token: String     = ""
     var serverName: String = ""
 
     /// Which media backend the user authenticated with. Drives `apiForServer`.
     /// Defaults to `.plex` so existing installs keep working without re-auth.
-    var backendKind: MediaBackendKind = .plex
+    var backendKind: MediaBackendKind = .plex {
+        didSet { registerScheduleLineup() }
+    }
     /// Jellyfin user id (paired with `token` as the access token when on Jellyfin).
-    var jellyfinUserId: String = ""
+    var jellyfinUserId: String = "" {
+        didSet { registerScheduleLineup() }
+    }
 
     static let backendKindKey = "backend_kind"
     static let jellyfinUserIdKey = "jellyfin_user_id"
@@ -216,7 +222,9 @@ class AppState {
 
     /// Servers feeding the library. Persisted. Empty in demo / App Review repro
     /// (those use `serverURL`/`token` directly).
-    var selectedServers: [ServerRef] = []
+    var selectedServers: [ServerRef] = [] {
+        didSet { registerScheduleLineup() }
+    }
     /// Most recent discovery result — drives the login picker and the Settings server list.
     var availableServers: [ServerRef] = []
 
@@ -419,7 +427,16 @@ class AppState {
     /// The guide's channels. The scheduler packs each day across all of them, so one title is
     /// never on two at once: it has to know the lineup before any schedule is built.
     var channels: [Channel] = [] {
-        didSet { DailyManifestScheduler.setLineup(channels, credentialFingerprint: scheduleCredentialFingerprint) }
+        didSet { registerScheduleLineup() }
+    }
+
+    /// Hands the scheduler the lineup under the fingerprint schedules are packed with now.
+    /// Called when the channels change and when anything the fingerprint is made of changes
+    /// (`snapshotIdentitySeed`: backend, servers, server URL, Jellyfin/Emby user), so it can't
+    /// fall behind a sign-in. If it ever did, the scheduler packs each channel on its own,
+    /// as every build did before the lineup: duplicates come back, nothing breaks.
+    func registerScheduleLineup() {
+        DailyManifestScheduler.setLineup(channels, credentialFingerprint: scheduleCredentialFingerprint)
     }
     /// Full channel config from JSON (kept for re-filtering after enrichment)
     var channelConfigChannels: [Channel] = []
