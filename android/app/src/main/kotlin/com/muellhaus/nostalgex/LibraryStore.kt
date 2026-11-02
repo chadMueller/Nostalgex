@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex
 
 import android.content.Context
 import com.muellhaus.nostalgex.engine.MediaItem
+import com.muellhaus.nostalgex.engine.ServerCollection
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -17,7 +18,7 @@ import java.io.File
  */
 class LibraryStore(context: Context) {
     @Serializable
-    private data class Saved(val format: Int, val servers: List<String>, val items: List<MediaItem>)
+    private data class Saved(val format: Int, val servers: List<String>, val items: List<MediaItem>, val collections: List<ServerCollection> = emptyList())
 
     private val file = File(context.filesDir, "library.json")
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
@@ -25,16 +26,19 @@ class LibraryStore(context: Context) {
     private fun key(servers: List<PlexServer>) = servers.map { "${it.machineIdentifier}@${it.url}" }
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-    fun load(servers: List<PlexServer>): List<MediaItem>? = runCatching {
+    /** The library as last read, with the server collections read with it. */
+    class Library(val items: List<MediaItem>, val collections: List<ServerCollection>)
+
+    fun load(servers: List<PlexServer>): Library? = runCatching {
         if (!file.exists()) return null
         val saved = file.inputStream().buffered().use { json.decodeFromStream<Saved>(it) }
-        saved.items.takeIf { saved.format == FORMAT && saved.servers == key(servers) }
+        Library(saved.items, saved.collections).takeIf { saved.format == FORMAT && saved.servers == key(servers) }
     }.getOrNull()
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-    fun save(servers: List<PlexServer>, items: List<MediaItem>) {
+    fun save(servers: List<PlexServer>, items: List<MediaItem>, collections: List<ServerCollection>) {
         val tmp = File(file.path + ".tmp")
-        tmp.outputStream().buffered().use { json.encodeToStream(Saved(FORMAT, key(servers), items), it) }
+        tmp.outputStream().buffered().use { json.encodeToStream(Saved(FORMAT, key(servers), items, collections), it) }
         tmp.renameTo(file)
     }
 
@@ -47,6 +51,6 @@ class LibraryStore(context: Context) {
 
     companion object {
         /** Bump when MediaItem or what the scan fills in changes, so an old copy is read again. */
-        private const val FORMAT = 4 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate
+        private const val FORMAT = 5 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey
     }
 }

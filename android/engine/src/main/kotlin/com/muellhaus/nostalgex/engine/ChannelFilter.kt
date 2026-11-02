@@ -183,7 +183,7 @@ object ChannelFilter {
     fun releaseYear(item: MediaItem): Int? =
         item.year ?: item.originallyAvailableAt?.let { DATE_PREFIX.find(it)?.groupValues?.get(1)?.toInt() }
 
-    private fun manifestEntry(item: MediaItem, manifest: JsonObject?): JsonObject? {
+    internal fun manifestEntry(item: MediaItem, manifest: JsonObject?): JsonObject? {
         val items = manifest?.obj("items") ?: return null
         val tmdb = item.tmdbID ?: return null
         if (tmdb == 0L) return null

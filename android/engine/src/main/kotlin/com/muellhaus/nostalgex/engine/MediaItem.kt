@@ -42,6 +42,14 @@ data class MediaItem(
     val serverToken: String? = null,
     /** Plex artwork path (`thumb`), for the Now Playing poster. */
     val thumb: String? = null,
+    /**
+     * An episode's show: Plex `grandparentRatingKey`, Jellyfin and Emby `SeriesId`, as the
+     * web tuner's `showKey` and PlexMediaItem.showKey. A server collection that lists a
+     * show resolves to every episode carrying its key (Collections.resolveMembers).
+     */
+    val showKey: String? = null,
+    /** Which server the item came from, the web tuner's `serverID`. A ratingKey is unique on one server only. */
+    val serverID: String? = null,
 )
 
 /**

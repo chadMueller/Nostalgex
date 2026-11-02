@@ -4,13 +4,15 @@ import android.content.Context
 import android.util.Log
 
 /**
- * The loading screen's steps (LibraryLoadPhase.swift). The Apple TV also has Collections and
- * Music between Library and Channels; this app has no collections or MusicBrainz step to show.
+ * The loading screen's steps (LibraryLoadPhase.swift). The Apple TV also has Music between
+ * Library and Channels; this app has no MusicBrainz step to show. Collections is always a step,
+ * as every scan reads them (as on the Roku).
  * Metadata is on the rail only in a build with enrichment ([visible]).
  */
 enum class LoadPhase(val title: String, val hint: String) {
     PREPARING("Lineup", "Loading channel rules and bundles"),
     SCANNING("Library", "Reading movies, shows, and music from your server"),
+    COLLECTIONS("Collections", "Finding smart collections in your library"),
     METADATA("Metadata", "TMDB and OMDb power the genre and network channels"),
     BUILDING("Channels", "Matching your library to each channel"),
     FINISHING("Ready", "Almost there");
@@ -21,6 +23,7 @@ enum class LoadPhase(val title: String, val hint: String) {
         detail.isNotEmpty() -> detail
         this == PREPARING -> "PREPARING LINEUP"
         this == SCANNING -> "SCANNING LIBRARY"
+        this == COLLECTIONS -> "DISCOVERING COLLECTIONS"
         this == METADATA -> "ENRICHING METADATA"
         else -> "BUILDING CHANNELS"
     }.uppercase()

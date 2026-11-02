@@ -141,6 +141,15 @@ class PlexClient(private val clientId: String, versionName: String) {
     suspend fun get(server: PlexServer, path: String): JsonObject =
         getJson("${server.url}$path", server.token).jsonObject
 
+    /**
+     * The server's collections from its movie and TV sections (nostalgex-collections.js
+     * fetchPlexCollections), each with its members' keys. The server key is its address, as
+     * the library's items carry it (`serverUrl`), so members resolve against this server only.
+     */
+    suspend fun collections(server: PlexServer): List<com.muellhaus.nostalgex.engine.ServerCollection> = withContext(Dispatchers.IO) {
+        com.muellhaus.nostalgex.engine.Collections.fetchPlexCollections(server.url, { path -> kotlinx.coroutines.runBlocking { get(server, path) } })
+    }
+
     /** Ends a transcode this app started, by its own session id only. */
     fun stopTranscode(server: String, token: String, session: String) {
         val url = "$server/video/:/transcode/universal/stop".toHttpUrl().newBuilder()

@@ -75,6 +75,24 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(LibrarySection.STORAGE_KEY, null) ?: emptySet()
         set(value) = prefs.edit().putStringSet(LibrarySection.STORAGE_KEY, value).apply()
 
+    /**
+     * Franchises switched on and off by stable id ("dict:STAR WARS", "tmdb:2806"), under the
+     * Apple TV's keys (PreferenceSync). A franchise in neither set takes its default: a stock
+     * classic on, a found franchise on only if the dictionary says so (FranchiseDictionary.isOn).
+     */
+    var enabledFranchises: Set<String>
+        get() = prefs.getStringSet("nostalgex_enabled_franchises", null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("nostalgex_enabled_franchises", value).apply()
+
+    var disabledFranchises: Set<String>
+        get() = prefs.getStringSet("nostalgex_disabled_franchises", null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("nostalgex_disabled_franchises", value).apply()
+
+    /** Server collections switched on, by collection id; every collection starts off. The Apple TV's key. */
+    var enabledCollections: Set<String>
+        get() = prefs.getStringSet("nostalgex_enabled_collections", null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("nostalgex_enabled_collections", value).apply()
+
     /** GUIDE TEXT SIZE: "large", or anything else for NORMAL, under the Apple TV's key. */
     var guideTextLarge: Boolean
         get() = prefs.getString("nostalgex_guide_text_size", null) == "large"

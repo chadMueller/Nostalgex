@@ -44,11 +44,24 @@ listing; it installs over `adb`.
   Left opens at the guide's first half hour), as the Apple TV's rail: PLAYBACK &
   PICTURE, CHANNELS & BUNDLES (CHANNEL PACKAGES with an amber count of channels
   still short of content, MISSING CHANNELS with each one's rules in plain words
-  and how many titles match, and WATERSHED), SERVERS & ACCOUNTS (servers,
+  and how many titles match, FRANCHISES, MY COLLECTIONS and WATERSHED), SERVERS &
+  ACCOUNTS (servers,
   libraries, RESCAN LIBRARY, DISCONNECT) and ABOUT. Up and Down on the rail swap
   the pane; Right or OK goes into the rows; Left comes back to the category;
   Back steps out one level at a time. The sidebar jumps to a package's first
   channel, in guide order.
+- Franchises and server collections, as on the Apple TV 1.0.29. The FRANCHISES
+  page: the package switch, ADD ALL / REMOVE ALL, and one A to Z list of the
+  classics (CH 300-306), the film series found in the library and the server's
+  franchise collections (COLLECTION). While the package is on, a classic also
+  carries the shows the dictionary puts on it (The Mandalorian on STAR WARS),
+  and a server collection that is a franchise already on offer folds away. MY
+  COLLECTIONS lists the other collections, saying when one is mostly on another
+  channel already. Found franchises and franchise collections share CH 310-399,
+  other collections CH 400-499; every collection starts off. Collections are
+  Plex's from its movie and TV sections, and a Jellyfin or Emby server's
+  BoxSets, read with every library load and rescan. Without enrichment no film
+  has a TMDB collection id, so only the dictionary's titles find a franchise.
 - Library selection: after sign-in, a server with more than one library offers
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned. A Plex music library adds nothing on either app (Plex lists
@@ -72,8 +85,7 @@ listing; it installs over `adb`.
 The aim is the Apple TV app, screen for screen. Where this app differs, it is
 listed here.
 
-Not ported yet: server collections, found franchises and MY COLLECTIONS;
-SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
+Not ported yet: SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
 above channel one; demo mode; the loading screen's STOP WAITING when a scan
 goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
 app asks for the stored file, then the hand-built HLS stream, which is the
@@ -83,13 +95,12 @@ Different on purpose, because the Apple TV's version has no counterpart here:
 - No SUPPORT NOSTALGEX (App Store ratings and tips), no NOSTALGEX PRO (hidden on
   the Apple TV too) and no iCloud sync.
 - The Settings rail shows each category's pixel icon where the Apple TV uses an
-  SF Symbol, which Android doesn't have. CHANNELS & BUNDLES reads "Packages and
-  the schedule": FRANCHISES is a package under CHANNEL PACKAGES rather than its
-  own page, and there is no MY COLLECTIONS page, until franchises and
-  collections are ported.
-- The loading screen's rail is LINEUP, LIBRARY, METADATA, CHANNELS, READY
-  (METADATA only in a build with enrichment): the Apple TV's COLLECTIONS and
-  MUSIC steps have no work behind them here yet.
+  SF Symbol, which Android doesn't have.
+- No SCAN MY COLLECTIONS button: collections are read with every load and
+  RESCAN LIBRARY, as on the Roku.
+- The loading screen's rail is LINEUP, LIBRARY, COLLECTIONS, METADATA, CHANNELS,
+  READY (METADATA only in a build with enrichment): the Apple TV's MUSIC step has
+  no work behind it here yet.
 - Enrichment asks the Nostalgex relay as `X-Nostalgex-Client: android`. Until
   the deployed relay accepts that value it answers 403, and the first 403 ends
   the TMDB and OMDb steps for that load (as on the Roku), so the app runs on
@@ -137,8 +148,12 @@ filter and Watershed (`ChannelFilter.kt`, from
 `scripts/nostalgex-channel-filter.cjs`), stream quality (`StreamQuality.kt`),
 seasonal packages (`Season.kt`), the Jellyfin and Emby library scan
 (`MediaBrowserLibrary.kt`, from `plex-tuner.html`'s
-`fetchJellyfinLibraryFromServer`), and TMDB and OMDb enrichment
-(`EnrichmentService.kt`, from `scripts/nostalgex-enrichment.js`). Its tests read the Apple TV's golden files
+`fetchJellyfinLibraryFromServer`), TMDB and OMDb enrichment
+(`EnrichmentService.kt`, from `scripts/nostalgex-enrichment.js`), and
+franchises and server collections (`FranchiseBuilder.kt`, `Collections.kt`,
+`CollectionClassifier.kt` and `FranchiseLineup.kt`, from
+`scripts/nostalgex-franchise-builder.js`, `nostalgex-collections.js` and
+`nostalgex-franchise-lineup.js`, and `CollectionClassifier.swift`). Its tests read the Apple TV's golden files
 from `scripts/` and run on the JVM:
 
 ```sh
@@ -159,7 +174,12 @@ Enrichment's parsers, Supabase rows, OMDb gates and quota clock are compared
 with the web tuner's over the Roku port's fixture documents
 (`engine/scripts/gen-enrichment-vectors.mjs`, from
 `roku/tests/gen-enrichment.mjs`), and its caches, batching, relay and OMDb
-budget run the cases of `scripts/nostalgex-enrichment-smoke.mjs`. The engine
+budget run the cases of `scripts/nostalgex-enrichment-smoke.mjs`. Franchises
+and collections are held to `scripts/franchise-golden.json`, to
+`scripts/franchise-lineup-golden.json` (whole lineups the Apple TV computed:
+found franchises, classic pools, Settings rows, folds, numbers and the guide),
+and to vectors run from the web tuner's own modules over the Roku port's
+fixtures (`roku/tests/gen-franchise.mjs`, `gen-collections.mjs`). The engine
 tests need Node. Change the JS engines and these have to follow.
 
 ## Build and install on a SHIELD

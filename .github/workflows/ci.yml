@@ -195,6 +195,13 @@ jobs:
               - 'roku/tests/fixtures/mediabrowser-server.json'
               - 'scripts/nostalgex-enrichment.js'
               - 'roku/tests/gen-enrichment.mjs'
+              - 'scripts/nostalgex-franchise-builder.js'
+              - 'scripts/franchise-golden.json'
+              - 'scripts/franchise-lineup-golden.json'
+              - 'franchises.json'
+              - 'roku/tests/gen-franchise.mjs'
+              - 'scripts/nostalgex-collections.js'
+              - 'roku/tests/gen-collections.mjs'
 
   # Every pull request, whatever it touches: the repo is public, and this keeps the
   # maintainer's home network and real server names out of it. No npm install needed.

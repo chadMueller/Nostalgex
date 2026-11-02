@@ -27,7 +27,31 @@ class Lineup(
     private val serverKey: String,
     /** "plex", "jellyfin" or "emby": Emby leaves Dolby Vision profile 5 off channels (isLeftOffChannels). */
     private val backend: String = "plex",
+    /** franchises.json, for the found franchises and the fold. Empty: no franchise is found. */
+    private val franchiseDefinitions: List<FranchiseDefinition> = emptyList(),
 ) {
+    /** The viewer's franchise and collection switches (Prefs), by stable id and collection id. */
+    data class FranchiseChoices(
+        val enabledFranchises: Set<String> = emptySet(),
+        val disabledFranchises: Set<String> = emptySet(),
+        val enabledCollections: Set<String> = emptySet(),
+    )
+
+    @Volatile var franchiseChoices = FranchiseChoices()
+
+    /** The server's collections, read with the library. */
+    private var collections: List<ServerCollection> = emptyList()
+
+    /** The FRANCHISES package and the server collections at the last build (FranchiseLineup.build). */
+    var franchises: FranchiseLineup.Result? = null
+        private set
+
+    /** The classics' pools as their rules built them, before what the franchises add. */
+    private val rulePools = HashMap<Int, List<MediaItem>>()
+
+    /** Runtime channels: found franchises and server collections, CH 310-499. */
+    private var runtime: List<GuideChannel> = emptyList()
+
     /** The pools built at the last library load: the chosen packages' channels, or every channel if those filled nothing. */
     private val pools = ConcurrentHashMap<Int, List<MediaItem>>()
     /** The library and filter options of the last build, so switching a package on filters only its channels. */
@@ -55,7 +79,13 @@ class Lineup(
      * (staticChannelIDsForPoolBuild). Channels are filtered in parallel. Returns the packages it
      * switched on, if none of the chosen ones had content.
      */
-    fun build(items: List<MediaItem>, enabledBundles: Set<String>, onProgress: (Int, Int) -> Unit = { _, _ -> }): Set<String> {
+    fun build(
+        items: List<MediaItem>,
+        enabledBundles: Set<String>,
+        collections: List<ServerCollection> = emptyList(),
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+    ): Set<String> {
+        this.collections = collections
         val t0 = System.nanoTime()
         val opts = ChannelFilter.Options(memberships, config.exclusiveRules, backend).also { it.prepare(items) }
         prepareMs = (System.nanoTime() - t0) / 1_000_000
@@ -75,8 +105,58 @@ class Lineup(
             }.map { it.id }
             bundles = bundles + extra
         }
+        applyFranchises(bundles)
         channels = select(bundles)
         return bundles - enabledBundles
+    }
+
+    private fun franchiseBundle() = config.bundles.firstOrNull { it.id == FRANCHISES_BUNDLE }
+
+    /**
+     * rebuildFoundFranchises, applyFranchiseFolds and materializeDynamicChannels together
+     * (FranchiseLineup.build): the found franchises, what each classic gains, which server
+     * collections fold away, and the runtime channels. Rerun when a franchise or collection
+     * switch changes; the rule-built pools are kept, so nothing is filtered again.
+     */
+    private fun applyFranchises(bundles: Set<String>) {
+        val o = opts ?: return
+        val classicIds = franchiseBundle()?.channelIDs ?: emptyList()
+        // The classics' rule pools, filtered once even with the package off (Settings counts them).
+        val missing = config.channels.filter { it.id in classicIds && !pools.containsKey(it.id) }
+        if (missing.isNotEmpty()) filter(items, missing, o, pools) { _, _ -> }
+        for (id in classicIds) rulePools.getOrPut(id) { pools[id] ?: emptyList() }
+        val defs = config.channels.associateBy { it.id }
+        val stock = classicIds.mapNotNull { id ->
+            val def = defs[id] ?: return@mapNotNull null
+            val pool = rulePools[id] ?: emptyList()
+            if (pool.size < def.minItems) null else FranchiseLineup.Stock(id, def.number, def.name, pool)
+        }
+        val staticChannels = config.channels.mapNotNull { def ->
+            val pool = (if (def.id in rulePools) rulePools[def.id] else pools[def.id]) ?: return@mapNotNull null
+            if (pool.size < def.minItems) null else Collections.StockChannel(def.id, def.number, def.name, pool)
+        }
+        val eligible = items.filterNot { ChannelFilter.isLeftOffChannels(it, backend) }
+        val c = franchiseChoices
+        val result = FranchiseLineup.build(
+            franchiseDefinitions, FRANCHISES_BUNDLE in bundles, c.enabledFranchises, c.disabledFranchises,
+            eligible, stock, classicIds, memberships, config.exclusiveRules,
+            FranchiseLineup.CollectionInput(collections, Collections.indexLibrary(eligible) { it.serverUrl ?: "" }, staticChannels, c.enabledCollections),
+        )
+        franchises = result
+        for (id in classicIds) pools[id] = (rulePools[id] ?: emptyList()) + (result.stockAdditions[id] ?: emptyList())
+        runtime = result.channels.map { ch ->
+            GuideChannel(
+                ChannelConfig.StockChannel(ch.id, ch.number, ch.name, ch.colorHex, ch.category.wire, ch.minItems, null, null, false),
+                ch.itemPool.filter { it.duration > 0 },
+            )
+        }
+    }
+
+    /** A franchise or collection switch: the franchise step again, then the guide. */
+    fun setFranchiseChoices(choices: FranchiseChoices, enabledBundles: Set<String>) {
+        franchiseChoices = choices
+        applyFranchises(enabledBundles)
+        channels = select(enabledBundles)
     }
 
     /**
@@ -87,6 +167,7 @@ class Lineup(
         val o = opts ?: return
         val missing = bundleChannelIds(enabledBundles).filter { !pools.containsKey(it) }.toSet()
         filter(items, config.channels.filter { it.id in missing }, o, pools) { _, _ -> }
+        applyFranchises(enabledBundles)
         channels = select(enabledBundles)
     }
 
@@ -120,7 +201,13 @@ class Lineup(
     fun jumpTargets(enabledBundles: Set<String>): List<Pair<ChannelConfig.Bundle, GuideChannel>> {
         val position = HashMap<Int, Int>()
         channels.forEachIndexed { i, ch -> position.putIfAbsent(ch.id, i) }
-        return config.bundles.filter { it.id in enabledBundles }
+        // FRANCHISES is one entry for the classics, found franchises and franchise collections;
+        // the other collections get OTHER COLLECTIONS (bundleJumpTargets).
+        val franchiseIds = runtime.filter { it.def.category == CollectionCategory.FRANCHISES.wire }.map { it.id }
+        val otherIds = runtime.filter { it.def.category != CollectionCategory.FRANCHISES.wire }.map { it.id }
+        val bundles = config.bundles.map { b -> if (b.id == FRANCHISES_BUNDLE) b.copy(channelIDs = b.channelIDs + franchiseIds) else b } +
+            listOfNotNull(if (otherIds.isEmpty()) null else ChannelConfig.Bundle(OTHER_COLLECTIONS_BUNDLE, "OTHER COLLECTIONS", otherIds, null))
+        return bundles.filter { it.id in enabledBundles || it.id == OTHER_COLLECTIONS_BUNDLE }
             .mapNotNull { b -> b.channelIDs.mapNotNull { position[it] }.minOrNull()?.let { at -> Triple(b, channels[at], at) } }
             .sortedBy { it.third }
             .map { it.first to it.second }
@@ -152,9 +239,17 @@ class Lineup(
         val lead = config.bundles.filter { Season.isSeasonal(it) && it.id in bundles && Season.isInSeason(it, now) }
             .flatMap { it.channelIDs }.distinct()
         val rank = lead.withIndex().associate { (i, id) -> id to i }
+        // A classic switched off in the franchise list leaves the guide on its own (applyBundleFilter).
+        val packageOn = FRANCHISES_BUNDLE in bundles
+        val classicIds = franchiseBundle()?.channelIDs ?: emptyList()
+        val switchedOff = franchises?.switchedOffStock ?: emptySet()
         val picked = config.channels.filter { it.id in ids && it.id in available }
-        return (picked.filter { it.id in rank }.sortedBy { rank.getValue(it.id) } + picked.filter { it.id !in rank }.sortedBy { it.number })
+            .filter { FranchiseLineup.stockVisible(it.id, packageOn, classicIds, switchedOff) }
             .map { GuideChannel(it, pools.getValue(it.id).filter { item -> item.duration > 0 }) }
+        // Found franchises and franchise collections go with the package; other collections air when switched on.
+        val dynamic = runtime.filter { it.def.category != CollectionCategory.FRANCHISES.wire || packageOn }
+        val rest = (picked.filter { it.id !in rank } + dynamic).sortedBy { it.number }
+        return picked.filter { it.id in rank }.sortedBy { rank.getValue(it.id) } + rest
     }
 
     /** Watershed (Settings > SCHEDULE): read at every schedule, tune and next programme. */
@@ -228,5 +323,12 @@ class Lineup(
         val pool = poolNow(ch, now)
         return engine.advancePick(ch.ref, pool, ended?.ratingKey, now.sec(), lineupNow(now), serverKey, fromNaturalEnd)
             ?: pool.randomOrNull()?.let { Pick(it, 0) }
+    }
+
+    companion object {
+        /** The stock FRANCHISES package (ids 100-106, CH 300-306); found franchises ride on its switch. */
+        const val FRANCHISES_BUNDLE = "franchises"
+        /** The sidebar's entry for the other collections (CollectionCategory.custom's bundle). */
+        const val OTHER_COLLECTIONS_BUNDLE = "collections-custom"
     }
 }

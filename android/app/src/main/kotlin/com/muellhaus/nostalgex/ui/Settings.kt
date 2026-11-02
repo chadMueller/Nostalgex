@@ -57,6 +57,9 @@ import androidx.tv.material3.Text
 import com.muellhaus.nostalgex.AppModel
 import com.muellhaus.nostalgex.SettingsCategory
 import com.muellhaus.nostalgex.engine.ChannelConfig
+import com.muellhaus.nostalgex.engine.CollectionCategory
+import com.muellhaus.nostalgex.engine.Collections
+import com.muellhaus.nostalgex.engine.FranchiseLineup
 import com.muellhaus.nostalgex.engine.ChannelRequirements
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.Lineup
@@ -68,9 +71,9 @@ import java.time.LocalDateTime
 // Up and Down on the rail swap the pane with no press; Right or OK moves into its rows; Left
 // from the rows lands on the selected category; Back steps out one level at a time.
 // Not here: SUPPORT NOSTALGEX and NOSTALGEX PRO (no store tips or Pro on a sideloaded app),
-// WATCH HISTORY (watch state isn't ported), iCloud sync (Apple only), FRANCHISES and MY
-// COLLECTIONS as pages (found franchises and collections aren't ported, so FRANCHISES is a
-// package under CHANNEL PACKAGES), and DISCORD and RATE NOSTALGEX, hidden on the Apple TV too.
+// WATCH HISTORY (watch state isn't ported), iCloud sync (Apple only), SCAN MY COLLECTIONS
+// (collections are read with every load and rescan), and DISCORD and RATE NOSTALGEX, hidden on
+// the Apple TV too.
 
 private val PageTop = Color(0.04f, 0.04f, 0.10f)
 private val PageBottom = Color(0.05f, 0.05f, 0.12f)
@@ -288,6 +291,8 @@ private fun Pane(model: AppModel) {
                         SettingsCategory.CHANNELS -> when (page) {
                             "packages" -> PackagesPage(model)
                             "missing" -> MissingPage(model)
+                            "franchises" -> FranchisesPage(model)
+                            "collections" -> CollectionsPage(model)
                             else -> ChannelsList(model)
                         }
                         SettingsCategory.SERVERS -> ServerRows(model)
@@ -369,15 +374,27 @@ private fun PlaybackRows(model: AppModel) {
 
 // ── CHANNELS & BUNDLES ──
 
-/** The packages with a switch: every one but the per-category collection ones. */
-private fun lineupPackages(model: AppModel) = model.bundles.filter { !it.id.startsWith("collections-") }
+/**
+ * The packages with a switch: every one but the per-category collection ones and FRANCHISES,
+ * whose switch heads its own page (1.0.29).
+ */
+private fun lineupPackages(model: AppModel) = model.bundles.filter { !it.id.startsWith("collections-") && it.id != Lineup.FRANCHISES_BUNDLE }
 
-/** The Channels list: CHANNEL PACKAGES with how many are on, then the WATERSHED switch. */
+/** The Channels list (ChannelsHomePage): CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS with how many are on, then WATERSHED. */
 @Composable
 private fun ChannelsList(model: AppModel) {
     Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+        model.franchiseTick
         val on = lineupPackages(model).count { it.id in model.enabledBundles }
         LinkRow("CHANNEL PACKAGES", "$on ON", Modifier.paneRow(model, "channels_packages")) { model.openChannelsPage("packages") }
+        val packageOn = Lineup.FRANCHISES_BUNDLE in model.enabledBundles
+        val franchisesOn = franchiseOnCount(model)
+        LinkRow("FRANCHISES", if (!packageOn && franchisesOn == 0) "OFF" else "$franchisesOn ON", Modifier.paneRow(model, "channels_franchises")) {
+            model.openChannelsPage("franchises")
+        }
+        LinkRow("MY COLLECTIONS", "${otherCollections(model).count { it.enabled }} ON", Modifier.paneRow(model, "channels_collections")) {
+            model.openChannelsPage("collections")
+        }
         ToggleRow(
             title = "WATERSHED",
             subtitle = "18 and R-rated titles wait until 9 PM",
@@ -436,6 +453,135 @@ private fun PackagesPage(model: AppModel) {
         }
     }
 }
+
+// ── FRANCHISES and MY COLLECTIONS (ChannelsFranchisesPage, ChannelsCollectionsPage) ──
+
+/** Server collections filed as franchises that no franchise row already covers. */
+private fun franchiseCollections(model: AppModel) =
+    model.lineup?.franchises?.candidates?.filter { it.category == CollectionCategory.FRANCHISES && it.foldedInto == null } ?: emptyList()
+
+/** Every collection that isn't a franchise, for MY COLLECTIONS. */
+private fun otherCollections(model: AppModel) =
+    model.lineup?.franchises?.candidates?.filter { it.category != CollectionCategory.FRANCHISES && it.foldedInto == null } ?: emptyList()
+
+/** What the Channels list shows for FRANCHISES: everything on that is on air. */
+private fun franchiseOnCount(model: AppModel): Int {
+    val rows = if (Lineup.FRANCHISES_BUNDLE in model.enabledBundles) model.lineup?.franchises?.rows?.count { it.enabled } ?: 0 else 0
+    return rows + franchiseCollections(model).count { it.enabled }
+}
+
+/** "N% already on CH X" or "Exists: CH X": a collection mostly on another channel (duplicateWarning). */
+private fun collectionWarning(c: Collections.Candidate) = Collections.duplicateWarning(c)
+
+/**
+ * FRANCHISES: the package's switch heads the page; while it is on, ADD ALL / REMOVE ALL and one
+ * A to Z list of the classics, the found franchises and the franchise collections (COLLECTION).
+ * The collections stay listed while it is off, as on the Apple TV: the switch gates their channels.
+ */
+@Composable
+private fun FranchisesPage(model: AppModel) {
+    model.franchiseTick
+    val f = model.lineup?.franchises
+    val on = Lineup.FRANCHISES_BUNDLE in model.enabledBundles
+    val collections = franchiseCollections(model)
+    class Entry(val key: String, val name: String, val isOn: Boolean, val row: FranchiseLineup.Row?, val collection: Collections.Candidate?)
+    val entries = ((if (on) f?.rows?.map { Entry("franchise_${it.id}", it.name, it.enabled, it, null) } ?: emptyList() else emptyList()) +
+        collections.map { Entry("collection_${it.id}", it.title, it.enabled, null, it) })
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+    Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+        val building = on && Lineup.FRANCHISES_BUNDLE in model.buildingBundles
+        ToggleRow(
+            title = "FRANCHISES",
+            subtitle = if (building) "Finding your franchises" else "The classics and the series in your library",
+            on = on,
+            loading = if (building) "BUILDING" else null,
+            modifier = Modifier.paneRow(model, "franchises_master").padding(bottom = u(8)),
+        ) { model.toggleBundle(Lineup.FRANCHISES_BUNDLE) }
+        if (on && entries.isEmpty()) {
+            Text(
+                "Franchises you own show up here once your library has been enriched.",
+                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(vertical = u(12)),
+            )
+        }
+        if (entries.isNotEmpty()) {
+            // Only when the franchise block (CH 310-399) is full. Found franchises and franchise collections share it.
+            val over = if (on) (f?.overCapFound ?: 0) + (f?.overCapFranchises ?: 0) else 0
+            if (over > 0) CapNote("Up to 90 franchise channels fit in the guide. $over more are on but not shown.")
+            if (on) {
+                val allOn = entries.all { it.isOn }
+                val allOff = entries.none { it.isOn }
+                Row(horizontalArrangement = Arrangement.spacedBy(u(12)), modifier = Modifier.padding(bottom = u(4))) {
+                    ToggleRow(
+                        title = "ADD ALL", subtitle = if (allOn) "Every franchise is on" else "Turn on all ${entries.size}",
+                        on = false, showToggle = false,
+                        modifier = Modifier.weight(1f).paneRow(model, "franchise_add_all").alpha(if (allOn) 0.5f else 1f),
+                    ) { if (!allOn) model.setAllFranchises(true) }
+                    ToggleRow(
+                        title = "REMOVE ALL", subtitle = if (allOff) "None are on" else "Take them all out of the guide",
+                        on = false, showToggle = false,
+                        modifier = Modifier.weight(1f).paneRow(model, "franchise_remove_all").alpha(if (allOff) 0.5f else 1f),
+                    ) { if (!allOff) model.setAllFranchises(false) }
+                }
+            }
+            for (e in entries) {
+                val row = e.row
+                val c = e.collection
+                if (row != null) {
+                    ToggleRow(
+                        title = row.name, subtitle = row.countLabel.ifEmpty { null }, detail = row.channelNumber?.let { "CH $it" },
+                        on = row.enabled, modifier = Modifier.paneRow(model, e.key),
+                    ) { model.toggleFranchiseRow(row) }
+                } else if (c != null) {
+                    val warning = collectionWarning(c)
+                    ToggleRow(
+                        title = c.title, subtitle = warning ?: Collections.memberSummary(c), detail = "COLLECTION",
+                        on = c.enabled, modifier = Modifier.paneRow(model, e.key).alpha(if (warning != null && !c.enabled) 0.7f else 1f),
+                    ) { model.toggleCollection(c.id) }
+                }
+            }
+        }
+    }
+}
+
+/** MY COLLECTIONS: the server's collections that aren't franchises, as channels from CH 400. */
+@Composable
+private fun CollectionsPage(model: AppModel) {
+    model.franchiseTick
+    val f = model.lineup?.franchises
+    val rows = otherCollections(model)
+    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+        SectionHeader("MY COLLECTIONS", "Turn your server's collections into channels")
+        val all = f?.candidates ?: emptyList()
+        when {
+            all.isEmpty() -> Text(
+                "Franchise collections go under FRANCHISES; the rest show up here after a scan.",
+                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.paneRow(model, "collections_none").focusable(),
+            )
+            rows.isEmpty() -> Text(
+                "All ${all.size} of your ${if (all.size == 1) "collection is a franchise" else "collections are franchises"}, under FRANCHISES.",
+                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.paneRow(model, "collections_none").focusable(),
+            )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(u(12)), verticalAlignment = Alignment.Bottom) {
+                    Subheader("OTHER COLLECTIONS")
+                    Text("${rows.count { it.enabled }}/${rows.size} ON", style = font(VT323, 22, Color.White.copy(alpha = 0.4f)))
+                }
+                val over = f?.overCapCustom ?: 0
+                if (over > 0) CapNote("Up to 100 of these fit in the guide. $over more are on but not shown.")
+                for (c in rows) {
+                    val warning = collectionWarning(c)
+                    ToggleRow(
+                        title = c.title, subtitle = warning ?: Collections.memberSummary(c), on = c.enabled,
+                        modifier = Modifier.paneRow(model, "collection_${c.id}").alpha(if (warning != null && !c.enabled) 0.7f else 1f),
+                    ) { model.toggleCollection(c.id) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CapNote(text: String) = Text(text, style = font(DMMono, 18, Color.White.copy(alpha = 0.45f)), modifier = Modifier.padding(vertical = u(6)))
 
 /** MISSING CHANNELS: each channel's rules in plain words, and how many titles match. Read-only. */
 @Composable
