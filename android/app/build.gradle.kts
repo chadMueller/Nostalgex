@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// Enrichment (TMDB and OMDb through the Nostalgex relay and its shared Supabase cache) is off
+// unless local.properties, which git ignores, turns it on and names the Supabase project:
+//   nostalgex.enrichment=on
+//   nostalgex.supabaseUrl=https://<project>.supabase.co
+//   nostalgex.supabaseAnonKey=<anon key>
+// The Roku's .env carries the same three (NOSTALGEX_ENRICHMENT and its two neighbours).
+val localProps = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun localProp(key: String) = localProps.getProperty(key, "").trim()
+fun quoted(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
     namespace = "com.muellhaus.nostalgex"
@@ -15,6 +29,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        val enrichmentOn = localProp("nostalgex.enrichment") == "on"
+        buildConfigField("boolean", "ENRICHMENT", enrichmentOn.toString())
+        buildConfigField("String", "SUPABASE_URL", quoted(if (enrichmentOn) localProp("nostalgex.supabaseUrl").trimEnd('/') else ""))
+        buildConfigField("String", "SUPABASE_ANON_KEY", quoted(if (enrichmentOn) localProp("nostalgex.supabaseAnonKey") else ""))
     }
 
     buildTypes {
@@ -30,6 +49,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {

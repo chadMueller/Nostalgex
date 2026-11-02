@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.muellhaus.nostalgex.engine.EnrichmentService
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.StreamQuality
@@ -439,6 +440,10 @@ class AppModel(private val context: Context) : Playback.Listener {
         private set
 
     private val libraryStore = LibraryStore(context)
+
+    /** TMDB and OMDb, in a build that turned them on (EnrichmentSetup); null otherwise. */
+    private val enrichment = EnrichmentSetup.create(context)
+    val enrichmentOn: Boolean get() = enrichment != null
 
     /**
      * channels.json and channels-memberships.json (1.3 MB), parsed once per launch and started
@@ -951,12 +956,15 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** RESCAN LIBRARY: read every server again behind the guide, as the launch refresh does. */
     fun rescanLibrary() {
         if (loadingLibrary || refreshing) return
-        refreshInBackground(selectedServers, libraryItems)
+        refreshInBackground(selectedServers, scannedItems)
     }
 
-    /** What the app holds, for the RESCAN LIBRARY row (LibraryDiagnostics.summary). */
+    /** What the app holds, enrichment attached, for the RESCAN LIBRARY row (LibraryDiagnostics.summary). */
     var libraryItems: List<MediaItem> = emptyList()
         private set
+
+    /** The same items as the servers gave them, before enrichment: what a refresh compares and saves. */
+    private var scannedItems: List<MediaItem> = emptyList()
     var libraryUpdatedMs: Long? by mutableStateOf(null)
         private set
     private var loadingLibrary = false
@@ -1018,9 +1026,11 @@ class AppModel(private val context: Context) : Playback.Listener {
                 if (saved != null) {
                     Log.i(TAG, "SAVED LIBRARY ${saved.size} items read in ${SystemClock.elapsedRealtime() - t0} ms")
                     prefs.initialLoadComplete = true
-                    libraryItems = saved
+                    scannedItems = saved
+                    // The local enrichment cache only: the network waits for the refresh behind the guide.
+                    libraryItems = enrich(saved, remote = false)
                     libraryUpdatedMs = libraryStore.savedAtMs()
-                    if (!show(buildLineup(saved, "saved"))) return@launch
+                    if (!show(buildLineup(libraryItems, "saved"))) return@launch
                     refreshInBackground(servers, saved)
                 } else {
                     fullLoad = true
@@ -1054,10 +1064,23 @@ class AppModel(private val context: Context) : Playback.Listener {
                     }
                     Log.i(TAG, "LIBRARY ${items.size} items from ${servers.size} server(s) read in ${SystemClock.elapsedRealtime() - t0} ms")
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
-                    libraryItems = items
+                    scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
+                    if (enrichment != null) {
+                        val titles = items.count { it.tmdbID != null }
+                        step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
+                    }
+                    libraryItems = enrich(items, remote = true) { status, done, total ->
+                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.METADATA) return@enrich
+                        val current = screen as Screen.LibraryLoad
+                        screen = current.copy(
+                            detail = status.uppercase(),
+                            progress = if (total > 0 && done >= 0) done.toFloat() / total else null,
+                            caption = if (total > 0 && done >= 0) "Metadata $done/$total" else "",
+                        )
+                    }
                     step(LoadPhase.BUILDING)
-                    val built = buildLineup(items, "read") { done, total ->
+                    val built = buildLineup(libraryItems, "read") { done, total ->
                         if ((screen as? Screen.LibraryLoad)?.phase == LoadPhase.BUILDING) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
                     }
                     step(LoadPhase.FINISHING)
@@ -1105,7 +1128,10 @@ class AppModel(private val context: Context) : Playback.Listener {
         return items
     }
 
-    /** Reads every server again while the guide is up. The guide changes only if the library did. */
+    /**
+     * Reads every server again while the guide is up, then asks for the enrichment the local
+     * cache didn't have. The guide changes only if the library or its enrichment did.
+     */
     private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>) {
         scope.launch {
             refreshing = true
@@ -1114,14 +1140,20 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val items = scan(servers) { _, _ -> }
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
-                if (items == saved) {
+                val scanChanged = items != saved
+                if (scanChanged) {
+                    scannedItems = items
+                    withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
+                }
+                val enriched = enrich(items, remote = true)
+                if (enriched == libraryItems) {
                     Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged")
                     return@launch
                 }
-                libraryItems = items
-                Log.i(TAG, "REFRESH ${items.size} items read in $took ms; changed (was ${saved.size}), rebuilding")
-                withContext(Dispatchers.IO) { libraryStore.save(servers, items) }
-                val fresh = buildLineup(items, "refreshed")
+                libraryItems = enriched
+                Log.i(TAG, "REFRESH ${items.size} items read in $took ms; " +
+                    (if (scanChanged) "library changed (was ${saved.size})" else "enrichment changed") + ", rebuilding")
+                val fresh = buildLineup(enriched, "refreshed")
                 if (fresh.channels.isEmpty()) return@launch
                 // What is on keeps playing; the channel now airs from its new pool from the next programme.
                 val id = channel?.id
@@ -1134,6 +1166,26 @@ class AppModel(private val context: Context) : Playback.Listener {
                 refreshing = false
             }
         }
+    }
+
+    /**
+     * The items with their TMDB and OMDb records attached (EnrichmentService). With `remote`
+     * false only the local cache is read. `onStatus(line, done, total)` gets the Apple TV's
+     * status lines, on the main thread; `done` is -1 while there is no count to show.
+     * Without enrichment, the items as they came.
+     */
+    private suspend fun enrich(items: List<MediaItem>, remote: Boolean, onStatus: (String, Int, Int) -> Unit = { _, _, _ -> }): List<MediaItem> {
+        val service = enrichment ?: return items
+        val rules = channelData.await().first.channels.map { it.rules }
+        val t0 = SystemClock.elapsedRealtime()
+        val result = withContext(Dispatchers.IO) {
+            service.enrich(items, if (remote) rules else emptyList(), remote) { done, total, phase ->
+                val line = if (phase == "cache") "Checking metadata cache $done/$total" else "Fetching metadata $done/$total"
+                scope.launch { onStatus(line, if (phase == "fetch") done else -1, if (phase == "fetch") total else 0) }
+            }
+        }
+        Log.i(TAG, "ENRICHMENT (${if (remote) "full" else "local"}) ${result.stats} in ${SystemClock.elapsedRealtime() - t0} ms")
+        return withContext(Dispatchers.Default) { EnrichmentService.attach(items, result.records) }
     }
 
     private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
