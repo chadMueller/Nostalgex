@@ -16,6 +16,20 @@ Linux the run marks itself the kernel's first pick (`oom_score_adj` 1000), and w
 systemd user session each pool runs in a scope held to the memory free at the start, with
 no swap, so an overrun kills a test part, which then fails, and not the desktop.
 
+## 2026-10-31 (Roku live tools: two fresh-clone crashes, branch roku-live-tools-guards)
+
+**Changed.** `roku/tests/live/collections.mjs` and `compare.mjs` create `roku/out/`
+before writing to it. It is git-ignored, so in a fresh clone or worktree both died
+with `ENOENT` after the whole Plex load.
+
+**Changed.** `servers()` in `roku/tests/live/plex-env.mjs` refuses an empty token
+before any request, naming the `.env` it read and `plex-link.mjs`. Before, a run
+from a checkout with no `.env` got a bare `plex.tv resources answered 401`, and the
+request's `clientId()` left behind a `roku/.env` holding only `PLEX_CLIENT_ID`.
+Checked by running `compare.mjs` in a fresh worktree on the old and new code.
+
+**Half-done.** Open as a PR from `tydude001:roku-live-tools-guards`; not yet merged.
+
 ## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones

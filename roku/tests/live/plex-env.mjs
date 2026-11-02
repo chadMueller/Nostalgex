@@ -58,6 +58,9 @@ export async function https(url, { method = "GET", token = "", timeoutMs = 15000
 // The account's servers with a working HTTPS connection, ranked as the TV
 // ranks them: direct before relay, local before remote.
 export async function servers(token) {
+  // Checked before any request: a request calls clientId(), which would write a
+  // .env holding only PLEX_CLIENT_ID here, and plex.tv would answer a bare 401.
+  if (!token) throw new Error(`no PLEX_TOKEN in ${ENV_PATH}: run tests/live/plex-link.mjs, or run from the checkout whose .env holds it`);
   const res = await https("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", { token });
   if (res.status !== 200 || !Array.isArray(res.json)) throw new Error(`plex.tv resources answered ${res.status}`);
   const out = [];

@@ -366,38 +366,7 @@ function addQr(col as Object, code as String, x as Float, y as Float) as Float
     side = 200
     url = "https://www.plex.tv/link/"
     if code <> "" then url = "https://www.plex.tv/link/?pin=" + code
-    modules = NxQrMatrix(url)
-    bg = CreateObject("roSGNode", "Rectangle")
-    bg.width = side
-    bg.height = side
-    bg.color = "0xFFFFFFFF"
-    g.AppendChild(bg)
-    if modules <> invalid then
-        size = modules.Count()
-        ' Two light modules of quiet zone each side, inside the white square.
-        cell = side \ (size + 4)
-        origin = (side - cell * size) \ 2
-        for row = 0 to size - 1
-            line = modules[row]
-            cx = 0
-            while cx < size
-                if line[cx] then
-                    start = cx
-                    while cx < size and line[cx]
-                        cx = cx + 1
-                    end while
-                    r = CreateObject("roSGNode", "Rectangle")
-                    r.translation = [origin + start * cell, origin + row * cell]
-                    r.width = (cx - start) * cell
-                    r.height = cell
-                    r.color = "0x000000FF"
-                    g.AppendChild(r)
-                else
-                    cx = cx + 1
-                end if
-            end while
-        end for
-    end if
+    NxQrDraw(g, NxQrMatrix(url), side)
     cap = newLabel(m.copy.plexScan, "DMMono-Regular", 20, "0x8E8E9399")
     cap.width = side
     cap.horizAlign = "center"
