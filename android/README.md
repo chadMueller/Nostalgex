@@ -146,7 +146,9 @@ from `scripts/` and run on the JVM:
 ```
 
 `scripts/schedule-parity-golden.json` is compared field for field with the
-Apple TV's answers, and `scripts/filter-golden.json` case for case against the
+Apple TV's answers, each day packed across the guide's lineup so one title is
+never on two channels at once (`ScheduleLineupTest` holds the properties of
+`scripts/nostalgex-schedule-lineup-smoke.mjs`), and `scripts/filter-golden.json` case for case against the
 shipped `channels.json`; `scripts/stream-quality-golden.json`,
 `scripts/season-golden.json` and `scripts/watershed-golden.json` hold the
 quality table, the package seasons and Watershed's hold to the same answers.

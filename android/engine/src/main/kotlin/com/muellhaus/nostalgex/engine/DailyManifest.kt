@@ -20,7 +20,14 @@ import kotlin.math.min
  * The running order depends on the pool's order, so a pool must be in library order as the
  * server lists it, never shuffled, with minutes truncated (minutesFromPlexMs, minutesFromTicks).
  *
- * Where the JS reads the browser's local time zone, this takes [zone].
+ * A day is packed for the whole lineup at once ([setLineup], packLineupDay): channels in
+ * priority order, each in its own running order except that a programme another channel
+ * already has on in the same slot waits for a later one (pickCandidate, [LOOKAHEAD]). What is
+ * stored stays put. So which channels are in the guide is an input too: two devices with the
+ * same library, lineup and history air the same day.
+ *
+ * Where the JS reads the browser's local time zone, this takes [zone]. Every public call is
+ * synchronized: the lineup's day is packed once, whichever thread asks first.
  */
 class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) {
 
@@ -64,15 +71,16 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         store.set(storageKey(serverKey, manifest.channelId, manifest.dayKey), json.encodeToString(manifest))
     }
 
-    private fun airedRatingKeys(serverKey: String, channelId: Int, dayKey: String): Set<String> =
-        readManifest(storageKey(serverKey, channelId, dayKey))?.blocks?.mapTo(HashSet()) { it.ratingKey } ?: emptySet()
+    /** The stored day's blocks, whatever version stored them (empty if none). */
+    private fun storedBlocks(serverKey: String, channelId: Int, dayKey: String): List<StoredBlock> =
+        readManifest(storageKey(serverKey, channelId, dayKey))?.blocks ?: emptyList()
 
-    private fun lastAiredRatingKey(serverKey: String, channelId: Int, dayKey: String): String? =
-        readManifest(storageKey(serverKey, channelId, dayKey))?.blocks?.lastOrNull()?.ratingKey
-
+    @Synchronized
     fun clearManifests(serverKey: String) {
         val prefix = "$MANIFEST_PREFIX${serverKey}_"
         store.keys().filter { it.startsWith(prefix) }.forEach(store::remove)
+        occupancyMemo = null
+        lineupGeneration++
     }
 
     /** Drops stored days before yesterday: the next day only ever reads the one before it. */
@@ -80,6 +88,157 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         val prefix = "$MANIFEST_PREFIX${serverKey}_"
         val keep = previousLocalDayKey(nowMs)
         store.keys().filter { it.startsWith(prefix) && it.substringAfterLast('_') < keep }.forEach(store::remove)
+    }
+
+    // ── Across channels: one title on one channel at a time ──────────────
+    // Mirrors DailyManifestScheduler's lineup packing and ScheduleOccupancy.
+
+    /**
+     * What the other channels have on, by title. [overlap] is the seconds of [s, e) that some
+     * other channel already airs the title for. A time-gated channel asks with `skipGated`: it
+     * gives way to the rest of the lineup, never to another time-gated one, so its day can't
+     * depend on the hour that one was first built.
+     */
+    class Occupancy {
+        private class Slot(val ch: Int, val s: Long, val e: Long, val gated: Boolean)
+        private val byKey = HashMap<String, MutableList<Slot>>()
+
+        fun add(channelId: Int, ratingKey: String, s: Long, e: Long, gated: Boolean) {
+            if (e <= s) return
+            byKey.getOrPut(ratingKey) { ArrayList() }.add(Slot(channelId, s, e, gated))
+        }
+
+        fun overlap(ratingKey: String, s: Long, e: Long, channelId: Int, skipGated: Boolean): Long {
+            val list = byKey[ratingKey] ?: return 0
+            var sec = 0L
+            for (x in list) {
+                if (x.ch == channelId || (skipGated && x.gated)) continue
+                val lo = max(s, x.s)
+                val hi = min(e, x.e)
+                if (hi > lo) sec += hi - lo
+            }
+            return sec
+        }
+    }
+
+    private class Entry(val channel: ScheduleChannel, val pool: List<MediaItem>)
+
+    private class Memo(val key: String, val generation: Int, val occupancy: Occupancy)
+
+    // The lineup's day as packLineupDay last saw it, for channels off the guide only.
+    private var occupancyMemo: Memo? = null
+    private var lineupGeneration = 0
+
+    // The guide's channels with the pools they air from. Unset, a channel packs alone.
+    private var lineupSource: (() -> List<Pair<ScheduleChannel, List<MediaItem>>>)? = null
+
+    /** Registers the guide's lineup: its channels with the pools they air from now. Null packs each channel alone. */
+    @Synchronized
+    fun setLineup(source: (() -> List<Pair<ScheduleChannel, List<MediaItem>>>)?) {
+        lineupSource = source
+        occupancyMemo = null
+    }
+
+    private fun currentLineup(): MutableList<Entry> {
+        val seen = HashSet<Int>()
+        val out = ArrayList<Entry>()
+        for ((channel, pool) in lineupSource?.invoke() ?: emptyList()) {
+            if (!seen.add(channel.id)) continue
+            val valid = pool.filter { it.duration > 0 }
+            if (valid.isNotEmpty()) out.add(Entry(channel, valid))
+        }
+        return out
+    }
+
+    /**
+     * Packs one local day for the lineup's channels whose day isn't stored yet, together, so no
+     * title is on two of them at once. Days already stored, and the programmes that run over
+     * from the day before, are fixed. `extra` is one more channel not in the guide, packed
+     * after the lineup against it and seen by nothing. Returns channel id to its day's blocks.
+     * Mirrors DailyManifestScheduler.packLineupDay.
+     */
+    private fun packLineupDay(entries: List<Entry>, extra: Entry?, atMs: Long, serverKey: String): Map<Int, List<StoredBlock>> {
+        val dayStartSec = Math.floorDiv(startOfLocalDayMs(atMs), 1000L)
+        val dayKey = localDayKey(atMs)
+        val dayNumber = localDayNumber(atMs)
+        val yesterdayKey = previousLocalDayKey(atMs)
+        // The day, and which channels the guide holds, so the memo can't outlive the lineup it was made from.
+        val memoKey = "$serverKey|$dayKey|${entries.map { it.channel.id }.sorted().joinToString(",")}"
+        val memo = occupancyMemo
+        if (extra != null && memo != null && memo.key == memoKey && memo.generation == lineupGeneration) {
+            val prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey)
+            val packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, prev.mapTo(HashSet()) { it.ratingKey },
+                extra.channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, memo.occupancy, extra.channel.gated)
+            saveManifest(serverKey, Manifest(SCHEMA_VERSION, extra.channel.id, dayKey, poolFingerprint(extra.pool), packed))
+            return mapOf(extra.channel.id to packed)
+        }
+        val occupancy = Occupancy()
+        val packedBy = HashMap<Int, List<StoredBlock>>()
+        val all = sortByLineupPriority(entries).toMutableList()
+        if (extra != null) all.add(extra)
+        val yesterday = HashMap<Int, List<StoredBlock>>()
+        for (entry in all) {
+            val id = entry.channel.id
+            val prev = storedBlocks(serverKey, id, yesterdayKey)
+            yesterday[id] = prev
+            // What runs past midnight from yesterday is on air today too (the guide's channels' only).
+            if (entry !== extra) for (b in prev) if (b.endSec > dayStartSec) occupancy.add(id, b.ratingKey, b.startSec, b.endSec, entry.channel.gated)
+        }
+        val toPack = ArrayList<Pair<Entry, String>>()
+        for (entry in all) {
+            val fp = poolFingerprint(entry.pool)
+            val cached = loadManifest(serverKey, entry.channel.id, dayKey, fp)
+            if (cached != null) {
+                if (entry !== extra) for (b in cached.blocks) occupancy.add(entry.channel.id, b.ratingKey, b.startSec, b.endSec, entry.channel.gated)
+                packedBy[entry.channel.id] = cached.blocks
+            } else {
+                toPack.add(entry to fp)
+            }
+        }
+        for ((entry, fp) in toPack) {
+            val channel = entry.channel
+            val prev = yesterday.getValue(channel.id)
+            val packed = packDay(entry.pool, dayStartSec, dayNumber, channel.id, prev.mapTo(HashSet()) { it.ratingKey },
+                channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, occupancy, channel.gated)
+            saveManifest(serverKey, Manifest(SCHEMA_VERSION, channel.id, dayKey, fp, packed))
+            packedBy[channel.id] = packed
+            if (entry !== extra) {
+                for (b in packed) occupancy.add(channel.id, b.ratingKey, b.startSec, b.endSec, channel.gated)
+                lineupGeneration++
+            }
+        }
+        // Everything the guide's channels air this day, for the next channel off the guide.
+        occupancyMemo = Memo(memoKey, lineupGeneration, occupancy)
+        return packedBy
+    }
+
+    /**
+     * Which of the first [LOOKAHEAD] programmes in `queue` airs at `t`: the first one no other
+     * channel has on during its slot; failing that, -1 when `mustFit`, else the one that
+     * overlaps least (the earliest of those). `avoidKey` (what just played here) is passed over
+     * while there is anything else, and a later part of a story never goes ahead of an earlier
+     * one waiting before it. Mirrors DailyManifestScheduler.pickCandidate.
+     */
+    private fun pickCandidate(
+        queue: List<MediaItem>, t: Long, playSec: (Int) -> Long, occupancy: Occupancy?, channelId: Int,
+        avoidKey: String?, mustFit: Boolean, skipGated: Boolean,
+    ): Int {
+        val n = min(LOOKAHEAD, queue.size)
+        var best = -1
+        var bestOverlap = Long.MAX_VALUE
+        for (i in 0 until n) {
+            val item = queue[i]
+            if (n > 1 && avoidKey != null && item.ratingKey == avoidKey) continue
+            if (i > 0 && waitsForEarlierPart(queue, i)) continue
+            val ov = occupancy?.overlap(item.ratingKey, t, t + playSec(i), channelId, skipGated) ?: 0L
+            if (ov == 0L) return i
+            if (ov < bestOverlap) {
+                bestOverlap = ov
+                best = i
+            }
+        }
+        if (mustFit) return -1
+        return if (best >= 0) best else 0
     }
 
     // ── Packing a day ────────────────────────────────────────────────────
@@ -92,6 +251,8 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         yesterdayAired: Set<String>,
         isPremiereChannel: Boolean,
         yesterdayLastRatingKey: String?,
+        occupancy: Occupancy? = null,
+        gated: Boolean = false,
     ): List<StoredBlock> {
         val dayEndSec = dayStartSec + localDayLengthSec(dayStartSec)
         val totalPoolSec = pool.sumOf { it.duration.toLong() * 60 }
@@ -111,10 +272,15 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         val blocks = ArrayList<StoredBlock>()
         var t = dayStartSec
 
-        for (item in unplayedOrdered) {
-            if (t >= dayEndSec) break
+        // In the channel's order, except that a programme another channel has on in the same
+        // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
+        // today if the day has room. When nothing waiting fits, the filler loop below goes on.
+        val queue = unplayedOrdered.filter { it.duration > 0 }.toMutableList()
+        while (queue.isNotEmpty() && t < dayEndSec) {
+            val j = pickCandidate(queue, t, { queue[it].duration.toLong() * 60 }, occupancy, channelId, null, true, gated)
+            if (j < 0) break
+            val item = queue.removeAt(j)
             val dur = item.duration.toLong() * 60
-            if (dur <= 0) continue
             blocks.add(StoredBlock(item.ratingKey, t, t + dur))
             t += dur
         }
@@ -147,29 +313,24 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
                 }
             }
 
-            var idx = cycleIndex
-            while (t < dayEndSec) {
-                val item = orderedFull[idx % orderedFull.size]
-                val fullDur = item.duration.toLong() * 60
-                if (fullDur <= 0) {
-                    idx++
-                    offsetInItem = 0
-                    continue
-                }
-                val playSec = min(fullDur - offsetInItem, dayEndSec - t)
-                if (playSec <= 0) {
-                    idx++
-                    offsetInItem = 0
-                    continue
-                }
+            // The loop as a queue from the cycle's start: what airs goes to the back, so with
+            // nothing on elsewhere this is the cycle in order. The first programme starts part
+            // way in (offsetInItem) only if it airs first; one picked ahead of it starts at 0.
+            val loop = (orderedFull.subList(cycleIndex, orderedFull.size) + orderedFull.subList(0, cycleIndex))
+                .filter { it.duration > 0 }.toMutableList()
+            var first = true
+            while (t < dayEndSec && loop.isNotEmpty()) {
+                val remainingDay = dayEndSec - t
+                val isFirst = first
+                val playFor = { i: Int -> min(loop[i].duration.toLong() * 60 - (if (isFirst && i == 0) offsetInItem else 0L), remainingDay) }
+                val lastKey = blocks.lastOrNull()?.ratingKey ?: yesterdayLastRatingKey
+                val j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated)
+                val playSec = playFor(j)
+                val item = loop.removeAt(j)
+                loop.add(item)
+                first = false
                 blocks.add(StoredBlock(item.ratingKey, t, t + playSec))
                 t += playSec
-                if (offsetInItem + playSec >= fullDur) {
-                    idx++
-                    offsetInItem = 0
-                } else {
-                    offsetInItem += playSec
-                }
             }
         }
 
@@ -181,6 +342,7 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         return stored.mapNotNull { b -> lookup[b.ratingKey]?.let { Block(it, b.startSec, b.endSec) } }
     }
 
+    @Synchronized
     fun getManifestBlocks(channel: ScheduleChannel, pool: List<MediaItem>, atMs: Long, serverKey: String): List<Block> {
         val validPool = pool.filter { it.duration > 0 }
         if (validPool.isEmpty()) return emptyList()
@@ -192,13 +354,15 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
 
         loadManifest(serverKey, channelId, dayKey, poolFP)?.let { return resolveBlocks(it.blocks, validPool) }
 
-        val dayNumber = localDayNumber(atMs)
-        val yesterdayKey = previousLocalDayKey(atMs)
-        val yesterdayAired = airedRatingKeys(serverKey, channelId, yesterdayKey)
-        val yesterdayLast = lastAiredRatingKey(serverKey, channelId, yesterdayKey)
-        val packed = packDay(validPool, dayStartSec, dayNumber, channelId, yesterdayAired, channel.isPremiereChannel, yesterdayLast)
-        saveManifest(serverKey, Manifest(SCHEMA_VERSION, channelId, dayKey, poolFP, packed))
-        return resolveBlocks(packed, validPool)
+        // Not stored: pack the day for the whole lineup at once. This channel takes its place
+        // in the lineup with the pool it was asked with; one the guide doesn't carry packs after
+        // the lineup, against it, so it never changes what the guide's channels air.
+        val lineup = currentLineup()
+        val at = lineup.indexOfFirst { it.channel.id == channelId }
+        val self = Entry(channel, validPool)
+        if (at >= 0) lineup[at] = self
+        val packed = packLineupDay(lineup, if (at >= 0) null else self, atMs, serverKey)[channelId]
+        return resolveBlocks(packed ?: emptyList(), validPool)
     }
 
     // ── What airs: the guide, conflicts, the next pick ───────────────────
@@ -326,7 +490,41 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
 
     companion object {
         private const val MANIFEST_PREFIX = "plex90_manifest_"
-        private const val SCHEMA_VERSION = 2
+        /**
+         * 2: the schedule follows the Apple TV's. 3: the lineup's days are packed together, so
+         * one title is never on two channels at once; a day stored before is packed again once.
+         */
+        private const val SCHEMA_VERSION = 3
+
+        /** How far down its running order a channel looks for a programme no other channel has on. DailyManifestScheduler.lookahead. */
+        const val LOOKAHEAD = 8
+
+        /**
+         * The order channels claim programmes in: time-gated channels last, so the others' days
+         * never depend on when a device first built them; then by channel id. Stable.
+         */
+        private fun sortByLineupPriority(entries: List<Entry>) =
+            entries.sortedWith(compareBy<Entry>({ if (it.channel.gated) 1 else 0 }, { it.channel.id }))
+
+        private data class PartMark(val base: String, val ordinal: Int)
+
+        /** The story and part of a multi-part film ("... Part 2"), or null. Same test as groupSequelParts. */
+        private fun sequelMark(item: MediaItem): PartMark? {
+            if (item.type != "movie") return null
+            val match = SEQUEL_MARKER.matchEntire(item.title) ?: return null
+            val base = JsText.trim(match.groupValues[1].lowercase())
+            return if (base.isEmpty()) null else PartMark(base, match.groupValues[2].toInt())
+        }
+
+        /** A later part may not jump ahead of an earlier part of the same story still waiting before it. */
+        private fun waitsForEarlierPart(queue: List<MediaItem>, i: Int): Boolean {
+            val mark = sequelMark(queue[i]) ?: return false
+            for (k in 0 until i) {
+                val other = sequelMark(queue[k]) ?: continue
+                if (other.base == mark.base && other.ordinal < mark.ordinal) return true
+            }
+            return false
+        }
         private val json = Json { ignoreUnknownKeys = true }
 
         /** A week of recency earns priority placement, from 7 PM, in 15-minute slots to midnight. */
@@ -565,7 +763,8 @@ class InMemoryManifestStore : ManifestStore {
     fun clear() = map.clear()
 }
 
-data class ScheduleChannel(val id: Int, val isPremiereChannel: Boolean = false)
+/** `gated`: the channel's pool changes with the hour (timeRestrictions), so it packs after the rest. */
+data class ScheduleChannel(val id: Int, val isPremiereChannel: Boolean = false, val gated: Boolean = false)
 
 @Serializable
 data class StoredBlock(val ratingKey: String, val startSec: Long, val endSec: Long)
