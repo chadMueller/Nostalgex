@@ -24,6 +24,7 @@ and already pinned to the Apple TV.
 | `PlexAPIService.bestReachableURI`: one verified address per server, best of local, remote, relay | `source/plex/ServerResolve.brs` | ported for the servers on, every address at once, an answer counting only if `/identity` names that server; saved, not re-checked on later launches. Cases in `tests/ServerResolveTests.brs` |
 | `LoadingView`, `LibraryLoadStepRail`, `LibraryLoadPhase` (`Plex90App.swift`) | `components/LoadingView.*`, phases from `components/LibraryTask.brs` | ported; Collections is always a step, as every scan reads them |
 | `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby |
+| `LaunchGuard.swift` (unfinished loads), `startOverButton` and `UnfinishedLoadsView` (`Plex90App.swift`), `AppState.startOver()` (#150) | `source/util/LaunchGuard.brs`, START OVER in `components/LoadingView.*`, LOADING DIDN'T FINISH and the keys in `components/MainScene.brs` | ported; the reinstall check isn't needed, since deleting the channel cleared its registry on a TV (differences in [A way out of a load](#a-way-out-of-a-load)); cases in `tests/LaunchGuardTests.brs`; pressed on a 43S45 against Emby |
 | `SettingsPageView` order and `CollectionAccordionHeaderRow` (`BundleManagerView.swift`); `toggleBundle`, `rebuildLineupAfterBundleChange` (`AppState+Channels.swift`) | `components/SettingsView.*`, `rebuildForBundles` in `components/LibraryTask.brs` | ported; no rating, tips or stream quality rows. SUBTITLE LANGUAGE and AUDIO LANGUAGE (#62) open their list in place, as MY COLLECTIONS does, where upstream opens a picker sheet. A package switch builds only its own channels, behind Settings; its pools matched a full rebuild's on the 43S45 |
 | RESCAN LIBRARY under CONNECTION (`BundleManagerView.swift`), `rescanLibrary` (`AppState+Auth.swift`), `LibraryDiagnostics.summary`, `PlaybackDiagnostics` (issue #66) | `components/SettingsView.*`, `onRescanRequest` in `components/MainScene.brs`, `source/util/RescanInfo.brs`, `source/util/PlaybackVerdict.brs` | ported; the row reads every server again behind the guide, as the launch refresh does, so the guide changes only if the pools did (upstream also clears its day schedules). The summary counts are taken when a load ends and kept with the sign-in; the last verdict is a given-up programme's only (upstream also logs its fallbacks). Cases in `tests/RescanTests.brs`, passing on device; pressed on a Streaming Stick Plus against Emby |
 | `PlayerView`, `MiniChannelStrip`, `NowPlayingPanel`, `SleepGracePrompt`, `SleepTimerLogic` | `components/GuideView.brs`, `components/MiniStripView.*`, `components/NowPlayingView.*`, `source/guide/SleepTimer.brs` | ported (differences below); sleep-timer cases in `tests/SleepTimerTests.brs` |
@@ -437,6 +438,54 @@ the Lab library's 16 films:
   items a page): no STOP WAITING in screenshots every 6 s.
 - Not exercised on a TV: Plex, Jellyfin, a stop between two servers, and
   the 210 s stop with nothing loaded.
+
+## A way out of a load
+
+After upstream's #150. START OVER is under every load the viewer waits on,
+quiet, and asks first: the first * shows "START OVER?" with upstream's
+line, a second * signs out (stopping the load) and the connect screen comes
+up; OK or Back keeps loading. A registry marker (section `launch`) is set
+when such a load starts and cleared when the app lives to see it end: the
+guide up, an error, a sign-out. Still set at the next launch means the app
+closed inside the load, crashed or sent Home. Two in a row, and the launch
+shows LOADING DIDN'T FINISH instead of a third load: OK tries again with the
+count reset, * starts over. A refresh behind a guide on screen carries no
+marker; a saved guide shown first, or a load the app stops (a rejected Plex
+sign-in drops it), clears it without resetting the count.
+
+Where it differs:
+- The Roku has no focusable button on the loading screen (MainScene holds
+  the focus and OK is STOP WAITING), so START OVER is the * key, as on the
+  sign-in and error screens, and the confirm is the second press, as
+  Settings' SIGN OUT. * already signed out during a load before this, with
+  its hint hidden under the loading screen; now it asks.
+- LOADING DIDN'T FINISH is the error screen's prompt and hint, OK and *,
+  not two buttons.
+- It names the kind of server (Plex, Jellyfin or Emby), as the sign-out
+  hint does, not the server's own name.
+- The count resets when a load behind a saved guide finishes too
+  (`refreshed`), where upstream resets it only after a load it tracked.
+- Not ported, and not needed: the reinstall check. tvOS keeps keychain
+  items after an app is deleted. A Roku's registry belongs to the developer
+  key, and deleting the only channel with that key cleared it.
+  On the 55R617 (OS 15.3.4, 2026-11-02), a test-data 1.0.10 build signed in
+  to Emby kept its sign-in when installed over the top, and after a delete
+  through the developer installer and a fresh sideload it opened on CONNECT
+  YOUR SERVER. That was a sideload; the store app wasn't tried.
+
+Pressed on the 43S45 (OS 16.0.4, 2026-11-02), a test-data build (this work on
+main `54cb410`) signed in to the lab Emby, with a scratch 40 s hold in the library step and saved guides
+off so each launch waited on its load:
+- `* START OVER` under the step rail; * showed the confirm, OK and then Back
+  each put the line back with the load still running.
+- Home during the hold, relaunch: `1 in a row`. Again: `2 in a row`, and that
+  launch showed LOADING DIDN'T FINISH and started no load.
+- A load that finished just before Home counted nothing.
+- OK there loaded again; ** during that load signed out to CONNECT YOUR
+  SERVER with no error after it, and the next launch read 0 in a row.
+- Before one review change: a load the app stops (`releaseLibrary`) clears
+  the marker too. None of the steps above stopped a load that way except
+  START OVER, whose sign-out clears it anyway.
 
 ## The connect screens
 

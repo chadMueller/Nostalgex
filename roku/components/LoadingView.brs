@@ -27,6 +27,7 @@ sub init()
     m.timer.repeat = true
     m.timer.ObserveField("fire", "onDots")
     m.timer.control = "start"
+    renderStartOver()
 end sub
 
 function fontOf(name as String, size as Integer) as Object
@@ -255,4 +256,25 @@ sub renderRail(g as Object, y as Float, current as Integer)
             x = x + connW
         end if
     end for
+end sub
+
+' Upstream's startOverButton (App/Plex90App.swift): quiet, under every load,
+' since it is a rare-use way out rather than something to press by accident,
+' and it asks first. The Roku has no focusable button here (MainScene holds the
+' focus, and OK is STOP WAITING), so it is the * key, as on the sign-in and
+' error screens, and the confirm is the second press. Pinned near the bottom,
+' clear of the centred stack at its tallest.
+sub renderStartOver()
+    g = m.top.FindNode("startOver")
+    if g = invalid then return
+    g.RemoveChildrenIndex(g.GetChildCount(), 0)
+    if not m.top.startOverArmed then
+        g.AppendChild(centred("* START OVER", "DMMono-Regular", 17, "0xFFFFFF4D", 980))
+        return
+    end if
+    name = m.top.serverName
+    if name = "" then name = "your server"
+    g.AppendChild(centred("START OVER?", "DMMono-Medium", 24, "0xFFFFFFCC", 896))
+    g.AppendChild(centred("Stops loading and signs out of " + name + ". You can sign in again right away.", "DMMono-Regular", 20, "0xFFFFFF80", 938))
+    g.AppendChild(centred("Press * again to start over, or OK to keep loading.", "DMMono-Regular", 17, "0xFFFFFF66", 976))
 end sub
