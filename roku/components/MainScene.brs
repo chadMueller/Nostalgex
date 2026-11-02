@@ -23,7 +23,7 @@ sub init()
 end sub
 
 ' Whether a launch would go straight into a library load: a saved sign-in
-' with servers to read, as init's own checks below.
+' with servers to read, as launchLoad's own checks.
 function NxSignedInToLoad() as Boolean
     reg = NxPlexRegistry()
     if reg.Read("servers") = "" then return false
@@ -481,6 +481,10 @@ sub releaseLibrary()
     m.library.control = "stop"
     m.library = invalid
     m.libraryBusy = false
+    ' The app saw this load end, so it isn't one that closed the app; a load
+    ' stopped part way proves nothing about whether one can finish, so the
+    ' count stays (a rejected Plex sign-in at launch drops it, for one).
+    NxLoadEnded(NxLaunchGuardRegistry(), false)
 end sub
 
 sub dropGuide()
@@ -557,9 +561,6 @@ end function
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
-    ' Sign out from the sign-in and error screens only: stop any sign-in in
-    ' progress and forget everything stored. With the guide up, * is the
-    ' guide's own, and sign-out is in Settings, behind a second OK.
     ' START OVER on the loading screen, as upstream's, asks first: the first *
     ' arms it, a second signs out; OK or Back keeps loading.
     if m.loading <> invalid and m.loading.startOverArmed then
@@ -575,6 +576,9 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.loading.startOverArmed = true
         return true
     end if
+    ' Sign out from the sign-in and error screens: stop any sign-in in
+    ' progress and forget everything stored. With the guide up, * is the
+    ' guide's own, and sign-out is in Settings, behind a second OK.
     if key = "options" and m.guide = invalid then
         signOut()
         return true

@@ -450,7 +450,8 @@ guide up, an error, a sign-out. Still set at the next launch means the app
 closed inside the load, crashed or sent Home. Two in a row, and the launch
 shows LOADING DIDN'T FINISH instead of a third load: OK tries again with the
 count reset, * starts over. A refresh behind a guide on screen carries no
-marker; a saved guide shown first clears it without resetting the count.
+marker; a saved guide shown first, or a load the app stops (a rejected Plex
+sign-in drops it), clears it without resetting the count.
 
 Where it differs:
 - The Roku has no focusable button on the loading screen (MainScene holds
@@ -478,6 +479,9 @@ off so each launch waited on its load:
 - A load that finished just before Home counted nothing.
 - OK there loaded again; ** during that load signed out to CONNECT YOUR
   SERVER with no error after it, and the next launch read 0 in a row.
+- Before one review change: a load the app stops (`releaseLibrary`) clears
+  the marker too. None of the steps above stopped a load that way except
+  START OVER, whose sign-out clears it anyway.
 
 ## The connect screens
 
