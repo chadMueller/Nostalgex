@@ -21,6 +21,32 @@ and 20001, either side of `NxMbVideoQuery`'s line: over 20,000 kbps it sends
 interpreter's `Int()` is exact, so these cases pass there either way. On our 55" TCL (55R617, Roku
 OS 15.3.4), `scripts/deploy.sh --test` ends in ALL TESTS PASSED, mediabrowser 5660 passed, 0 failed.
 
+## 2026-11-02 (site: the servers section moves under the guide)
+
+**Shipped.** Nothing until this lands on main. Branch `site/servers-below-guide`, cut from `origin/main` at `e0c41cc`, not pushed. Homepage only: `index.html` and `styles.css`.
+
+**Why.** With the servers section right under the hero, the page went from the hero's own server strip straight into a second server block. Chad wants it after the guide section instead.
+
+**Changed.**
+- "All three servers. Natively." now sits directly below the guide section (the navy block the THE GUIDE link points to), above the tip jar card. The order is hero, where to watch, how it works, the guide, the servers, the tip jar card, the lineup.
+- The `.page-home #servers` rule that dropped the section's bottom padding is gone. That only made sense while it sat between two sections that carry their own top padding. It has the normal `.section` padding again.
+- Everything else from the entry below is unchanged: the hero's Roku call-out, the server-mark strip, no Apple badge.
+
+## 2026-11-02 (site: homepage hero, the servers section moved up)
+
+**Shipped.** Nothing until this lands on main. Branch `site/home-roku-hero`, cut from `origin/main` at `e5375d3`, not pushed. Homepage only: `index.html` and `styles.css`.
+
+**Why.** The hero told one story, an Apple TV app, while Roku is in beta and the three servers were the last thing on the page.
+
+**Changed.**
+- The "All three servers. Natively." section is directly under the hero. It had been the second-to-last section. `#servers` carries no bottom padding now, so the gap before "Cable's back, wherever you watch!" stays one section's worth.
+- The black "Download on Apple TV" badge is out of the hero. The "Get it on Apple TV" and "Try the web tuner, free" buttons stay, and so does the header's "Get the tvOS app" button.
+- A Roku call-out sits where the badge was: a `.btn-outline` button, "Roku TV app", with the existing `.cta-sticker` Beta sticker, linking to `/roku` in the same tab. The line under it reads "Beta now full. Channel Store coming soon."
+- The one-line note ("Plex, Jellyfin, and Emby. All three, right on Apple TV...") is a strip of the three server marks, each linking to `/plex`, `/jellyfin` and `/emby`, then "Free and open source" with the repo link as before. The marks are the same inline SVGs the servers section uses. Each link has an aria-label, since the Jellyfin and Emby marks carry no name.
+- `<body>` on the homepage is `class="page-home"`, and the new rules sit in one block at the end of `styles.css` under that class. No new colours.
+
+**Not touched.** The tuner pages and the Docker output hash the same as a build of `origin/main`. Copy that still says Apple TV only: the hero paragraph, the title and meta descriptions, the structured data description, the "How it works" step, the "Native on Apple TV" feature, two FAQ answers and the closing "Now on Apple TV." The wider multi-platform wording comes later.
+
 ## 2026-11-02 (Web tuner and Docker: the playback failure card shows in the split view)
 
 **Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
