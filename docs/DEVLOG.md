@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (site: the servers section moves under the guide)
+
+**Shipped.** Nothing until this lands on main. Branch `site/servers-below-guide`, cut from `origin/main` at `e0c41cc`, not pushed. Homepage only: `index.html` and `styles.css`.
+
+**Why.** With the servers section right under the hero, the page went from the hero's own server strip straight into a second server block. Chad wants it after the guide section instead.
+
+**Changed.**
+- "All three servers. Natively." now sits directly below the guide section (the navy block the THE GUIDE link points to), above the tip jar card. The order is hero, where to watch, how it works, the guide, the servers, the tip jar card, the lineup.
+- The `.page-home #servers` rule that dropped the section's bottom padding is gone. That only made sense while it sat between two sections that carry their own top padding. It has the normal `.section` padding again.
+- Everything else from the entry below is unchanged: the hero's Roku call-out, the server-mark strip, no Apple badge.
+
 ## 2026-11-02 (site: homepage hero, the servers section moved up)
 
 **Shipped.** Nothing until this lands on main. Branch `site/home-roku-hero`, cut from `origin/main` at `e5375d3`, not pushed. Homepage only: `index.html` and `styles.css`.
