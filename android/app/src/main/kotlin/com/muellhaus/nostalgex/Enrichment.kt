@@ -24,7 +24,10 @@ import java.util.concurrent.TimeUnit
 object EnrichmentSetup {
     fun create(context: Context): EnrichmentService? {
         if (!BuildConfig.ENRICHMENT) return null
-        val config = EnrichmentService.Config(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+        val config = EnrichmentService.Config(
+            BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY,
+            BuildConfig.RELAY_URL.ifEmpty { EnrichmentService.RELAY_URL },
+        )
         if (!config.isComplete) {
             Log.w("Nostalgex", "ENRICHMENT switched on without a Supabase URL and anon key; off")
             return null

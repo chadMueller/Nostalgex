@@ -213,7 +213,8 @@ nostalgex.supabaseAnonKey=<anon key>
 ```
 
 They go into the build, never into the repo; the Roku's `.env` carries the same
-three. Only TMDB and IMDb ids leave the TV, never titles or server details.
+three. `nostalgex.relayUrl` points the build at a stand-in for the relay, for
+testing only; without it the build asks the real one. Only TMDB and IMDb ids leave the TV, never titles or server details.
 
 What each programme did is logged: `adb logcat -s Nostalgex` shows each
 DIRECT PLAY or TRANSCODE, why a direct play fell back, how long a programme
