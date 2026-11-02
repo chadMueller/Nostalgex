@@ -3,6 +3,96 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Web tuner and Docker: franchise channels and the FRANCHISES / OTHER COLLECTIONS split, #122)
+
+**Shipped.** Nothing yet. Branch `web/franchise-parity`, cut from `origin/main` at `9438f2a`, not
+merged, not pushed. A push to `main` deploys the hosted tuner; the Docker image needs its own
+`tuner-v` tag and a `tunerVersion` bump in the tagged commit.
+
+**Why.** The web tuner and Docker showed the seven classics (CH 100-106 by channel rules) and
+nothing else: no found franchises, no switches, and every server collection in one list from
+CH 400. The Apple TV (1.0.29) and the Roku (1.0.8) build a franchise channel for each series in
+the library and split collections into FRANCHISES and OTHER COLLECTIONS. The franchise builder
+(`scripts/nostalgex-franchise-builder.js`) already existed and was checked against its own golden
+file, but the page never loaded it, and `nostalgex-collections.js` said outright that the classifier
+and found franchises were not ported.
+
+**Changed.**
+- The classics are CH 300-306. Found franchises and the server's franchise collections share
+  CH 310-399 (90 places) as one pool, numbered A to Z by name then stable id; when more are on than
+  fit, the ones with the most films stay. Other collections take CH 400-499 (100 places, the first
+  100 switched on). Ids stay per kind (1,000,000, 1,010,000 and 1,020,000). HIGH ROTATION is 500 up.
+- `nostalgex-collections.js` gained `classify` (CollectionClassifier.swift, rule for rule, with
+  Swift's Character handling for lengths and prefixes), `keptInDisplayOrder` and a `materialize`
+  that numbers both blocks. It is opt-in (`ctx.classify`, `opts.found`): without them the module
+  answers exactly as before, which the Roku collection vectors rely on (they came out
+  byte-identical before and after).
+- New `scripts/nostalgex-franchise-lineup.js` puts the pieces in the Apple TV's order: the builder
+  groups the library; while the FRANCHISES package is on, what a classic covers joins that classic's
+  pool unless another channel owns the item (manifest lock or exclusive rule); each collection is
+  classified and folded into a classic or a found franchise (FranchiseCollectionFold.swift, with the
+  guard that a collection holding shows folds only into a franchise that airs them); then the
+  blocks are numbered. `plex-tuner.html` calls it as `refreshDynamicChannels()` after the library
+  loads, after enrichment (which is what carries a film's TMDB collection), after a collection scan
+  and after every switch.
+- Settings, Bundles: a FRANCHISES section under the packages. The package switch heads it, then
+  ADD ALL and REMOVE ALL (buttons, for TV browsers) and one alphabetical list of the classics, the
+  found franchises and the franchise collections, each with its own switch. MY COLLECTIONS lists
+  only the other collections. The FRANCHISES switch is every franchise channel's: off, none airs
+  (found franchises, franchise collections, classics). Choices are saved by stable id in
+  `nostalgex_enabled_franchises` and `nostalgex_disabled_franchises`, the Apple TV's key names.
+- The franchise builder had a 7.6 s hot spot that the page would have hit on its first call: it
+  re-derived every explicit title list for every episode, 180 microseconds each. A library of
+  42,000 episodes and 2,000 films took 7,586 ms; it takes 17 ms now (an episode takes the answer
+  its show's first episode got, and the lists are keyed once). Same answers: all 48 existing
+  franchise golden checks pass.
+
+**How it is held to the Apple TV.** `scripts/franchise-lineup-golden.json` (65 classifier cases, 10
+block cases, 9 lineups) is read by three tests. The expected answers were not written by any engine
+under test: `Nostalgex/NostalgexTests/FranchiseLineupGoldenTests.swift` builds every case with the
+app's own `CollectionClassifier`, `AppState.rebuildFoundFranchises` and `materializeDynamicChannels`
+and, with `TEST_RUNNER_NOSTALGEX_GOLDEN_DUMP` set, writes what it got; `scripts/merge-franchise-lineup-golden.mjs`
+puts that in the file. Then:
+- Swift: `FranchiseLineupGoldenTests` passes against the file (tvOS simulator, 0.19 s).
+- Web: `npm run test:franchise-lineup`, 97 checks, in `npm test`. Four deliberate breaks (the franchise
+  block starts at CH 300, the repeated-word threshold, the order that decides who stays, the lock on a
+  classic's pool) each fail it.
+- Roku: `roku/tests/FranchiseLineupTests.brs` reads a byte copy (`gen-vectors.mjs` vendors it), 134
+  checks, run in the brs interpreter on its own (not on a TV). Two cases are listed as known
+  differences in the test and not counted as failures, each with its reason: the classifier compares
+  code points where Swift compares Characters (a combining accent in a shared title prefix), and with
+  the FRANCHISES package off the Roku folds nothing where the Apple TV still folds against the
+  classics it built. The test fails if a listed case starts to agree.
+- The page: `npm run test:franchise-channels:browser` (headless, not in `npm test`) loads
+  `plex-tuner.html` against a Jellyfin-shaped test server holding the first lineup of the golden file,
+  with its TMDB collections served as the enrichment rows the page reads, and compares the classics'
+  pools, the Settings rows, each collection's category and fold, every runtime channel and the
+  guide with the Apple TV's answers: 51 checks, identical on the repo's page, `dist` (hosted) and
+  `dist-selfhost` (Docker). Against `origin/main`'s page the same script fails all 9 sections.
+  It also clicks and keys through the switches, REMOVE ALL, ADD ALL, the package switch and a reload,
+  and checks the section at 390x844, 820x1180, 1440x900 and 960x540 (clicks only, nothing in
+  browser full screen). A rebuild on a synthetic 11,539-item library (10,000 episodes) took 8 to 10 ms.
+
+**Also fixed.** Eight browser smokes read their root from `new URL("../", import.meta.url).pathname`,
+which keeps a space as `%20`, so none of them could start from a checkout whose path has a space
+in it. They use `fileURLToPath` now.
+
+**Half-done.**
+- Not run against a real Plex library. The Plex collection fetch is unchanged and has its own
+  smoke test; the new page code is backend-neutral, and the browser run used the Jellyfin path.
+  A run against a real library with a few hundred collections would show the classifier's real-world
+  hit rate, which the golden cases do not.
+- The web tuner has no package list in the guide (the Apple TV's and the Roku's press-left list that
+  jumps between packages), so there is no FRANCHISES entry to merge there. Adding that list is a
+  separate feature.
+- Observed on the Apple TV, not changed: `franchiseListRows` gives a classic that is not in the lineup
+  the channel's id as its number (JASON BOURNE reads CH 106, its channel is CH 306), where the Roku
+  reads the real number; the web page shows the real number. And the comment on `ChannelsFranchisesPage`
+  says franchise collections stay switchable while the package is off, but `applyBundleFilter` takes
+  them out of the guide with it.
+
+**Next.** Review of the branch. Chad's go for a push (hosted) and a `tuner-v` tag (Docker).
+
 ## 2026-10-31 (Roku: Norwegian, Bokmal and Nynorsk are one language)
 
 **Why.** Norwegian has three ISO 639-1 codes ("no", "nb", "nn") and three ISO 639-2 ones
