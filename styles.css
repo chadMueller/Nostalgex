@@ -2734,6 +2734,16 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
    are generated from content/roku.json (scripts/render-roku.mjs).
    ══════════════════════════════════════════════════════════════════ */
 
+/* The Beta sticker hangs off the headline's top-right corner. .cta-sticker is
+   absolutely positioned, so on this page the h1 is its anchor. */
+.page-roku .hero h1 { position: relative; }
+.page-roku .hero h1 .cta-sticker { top: -6px; right: 0; }
+/* Stacked, the h1 carries 72px of padding above the text, so the sticker
+   drops into that gap instead of sitting against the nav. */
+@media (max-width: 1024px) {
+  .page-roku .hero h1 .cta-sticker { top: 18px; }
+}
+
 .page-roku .roku-smallprint {
   margin-top: 36px;
   text-align: center;
@@ -2917,3 +2927,53 @@ sup.tm { font-size: 0.32em; vertical-align: top; position: relative; top: 0.35em
 /* "Channel surfing" is a long first line; at the house hero size it broke
    in two on a laptop and the headline ran to four lines. */
 .page-appletv .hero h1 { font-size: clamp(42px, 4.2vw, 60px); }
+
+/* ══════════════════════════════════════════════════════════════════
+   HOME PAGE  (/)
+   Two things in the hero: the Roku call-out under the two buttons, and the
+   strip of server marks that replaced the one-line note. Built from the
+   house parts (.btn-outline, .cta-sticker, .server-mark).
+   ══════════════════════════════════════════════════════════════════ */
+
+/* .cta-sticker is absolutely positioned, so the button is its anchor here. */
+.page-home .hero-roku { margin-top: 34px; }
+.page-home .hero-roku .btn { position: relative; }
+.page-home .hero-roku .cta-sticker { top: -21px; right: -22px; }
+/* The button runs full width on a phone, so the sticker hangs inside it. */
+@media (max-width: 480px) {
+  .page-home .hero-roku .cta-sticker { right: 16px; }
+}
+.page-home .hero-roku-note {
+  margin-top: 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.page-home .hero-servers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  margin-top: 34px;
+}
+.page-home .hero-servers-logos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+}
+.page-home .hero-servers-logos a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 44px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  transition: background 200ms var(--ease);
+}
+.page-home .hero-servers-logos a:hover { background: var(--feature-hover); }
+.page-home .hero-servers .server-mark { width: 30px; height: 30px; }

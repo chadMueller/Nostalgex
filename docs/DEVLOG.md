@@ -38,6 +38,88 @@ key's registry. On our 55" TCL
 the top, and opened on CONNECT YOUR SERVER after a delete and a fresh sideload (the store app
 wasn't tried). Not run on a Streaming Stick.
 
+## 2026-11-02 (site: the servers section moves under the guide)
+
+**Shipped.** Nothing until this lands on main. Branch `site/servers-below-guide`, cut from `origin/main` at `e0c41cc`, not pushed. Homepage only: `index.html` and `styles.css`.
+
+**Why.** With the servers section right under the hero, the page went from the hero's own server strip straight into a second server block. Chad wants it after the guide section instead.
+
+**Changed.**
+- "All three servers. Natively." now sits directly below the guide section (the navy block the THE GUIDE link points to), above the tip jar card. The order is hero, where to watch, how it works, the guide, the servers, the tip jar card, the lineup.
+- The `.page-home #servers` rule that dropped the section's bottom padding is gone. That only made sense while it sat between two sections that carry their own top padding. It has the normal `.section` padding again.
+- Everything else from the entry below is unchanged: the hero's Roku call-out, the server-mark strip, no Apple badge.
+
+## 2026-11-02 (site: homepage hero, the servers section moved up)
+
+**Shipped.** Nothing until this lands on main. Branch `site/home-roku-hero`, cut from `origin/main` at `e5375d3`, not pushed. Homepage only: `index.html` and `styles.css`.
+
+**Why.** The hero told one story, an Apple TV app, while Roku is in beta and the three servers were the last thing on the page.
+
+**Changed.**
+- The "All three servers. Natively." section is directly under the hero. It had been the second-to-last section. `#servers` carries no bottom padding now, so the gap before "Cable's back, wherever you watch!" stays one section's worth.
+- The black "Download on Apple TV" badge is out of the hero. The "Get it on Apple TV" and "Try the web tuner, free" buttons stay, and so does the header's "Get the tvOS app" button.
+- A Roku call-out sits where the badge was: a `.btn-outline` button, "Roku TV app", with the existing `.cta-sticker` Beta sticker, linking to `/roku` in the same tab. The line under it reads "Beta now full. Channel Store coming soon."
+- The one-line note ("Plex, Jellyfin, and Emby. All three, right on Apple TV...") is a strip of the three server marks, each linking to `/plex`, `/jellyfin` and `/emby`, then "Free and open source" with the repo link as before. The marks are the same inline SVGs the servers section uses. Each link has an aria-label, since the Jellyfin and Emby marks carry no name.
+- `<body>` on the homepage is `class="page-home"`, and the new rules sit in one block at the end of `styles.css` under that class. No new colours.
+
+**Not touched.** The tuner pages and the Docker output hash the same as a build of `origin/main`. Copy that still says Apple TV only: the hero paragraph, the title and meta descriptions, the structured data description, the "How it works" step, the "Native on Apple TV" feature, two FAQ answers and the closing "Now on Apple TV." The wider multi-platform wording comes later.
+
+## 2026-11-02 (Web tuner and Docker: the playback failure card shows in the split view)
+
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/failure-card-split-view`, cut from `origin/main` at `03c7ae9`.
+
+**Why.** Found while building the WATERSHED card (branch `web/watershed-switch`). The failure card
+("This one wouldn't play", amber when the server is at fault, red when the browser is) and the
+connection errors ("NOT CONNECTED. RECONNECT YOUR SERVER") are drawn inside `.channel-display`. The
+split view, the default at every size, hides that block with
+`.player-screen.layout-side .channel-display { display: none !important; }`. Measured at desktop
+and phone sizes: the card has a 0 by 0 box. A programme the server would not stream was a black
+picture with no reason, in the layout everyone uses, so the card, which was shipped for parity with
+the Apple TV and Roku, never showed.
+
+**Changed.** A failure or a connection error puts a `has-failure` class on `.channel-display`,
+which shows the block again in the split view and hides the text display's title lines behind it.
+`clearVideoError` takes the class off, so the split view is as it was, and `signOut` calls it, so a card from
+one session is not on screen over the next sign-in. The full view is unchanged.
+
+**Verified.** New `scripts/failure-card-browser-smoke.mjs` (`npm run test:failure-card:browser`,
+headless Chromium, a Jellyfin-shaped server that refuses every video request so the page's own
+recovery runs to the card) at phone, tablet, desktop and 960x540: the card is on screen inside the
+picture with its headline and detail, a connection error shows the same way, clearing hides the
+block again in the split view, signing out takes the card down, the full view still shows it, no page
+errors: 48 checks (40 on the branch's own head `d6aa6cc`, the 8 sign-out checks added in the bundle), the same
+40 on the hosted build (`dist`) and the Docker build (`dist-selfhost`) at `d6aa6cc`. Negative controls:
+origin/main's page fails 16 of the 40, with the card at 0 by 0 at all four sizes; without the `signOut` line
+the 4 sign-out checks fail, the card staying up over the connect screen.
+
+**Not verified.** A real server refusing a real stream; a real TV browser; Safari. The playback
+recovery ladder behind the card is unchanged and is a separate, larger gap (no 1080p step, stops
+after 3 failures where the Apple TV stops after 5).
+
+**Next.** Nothing for this change.
+
+## 2026-11-02 (site: the Roku beta is full, /roku linked across the site, the Docker post's channel numbers)
+
+**Shipped.** Nothing until this lands on main. Branch `site/roku-beta-links`, cut from `origin/main` at `03c7ae9`, not pushed. Nothing on it depends on an app release.
+
+**Why.** `/roku` still told visitors the beta had room, when Roku's 20 tester spots are taken, and the only way to it was a URL. The homepage Roku tile went to a GitHub discussion and no footer linked the page. Separately, web tuner and Docker 1.0.11 (and Roku 1.0.8) give every package its own block of channel numbers, so the numbers in the Docker post were out of date for anyone on the current image.
+
+**Changed.**
+- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. Drop that commit if a spot opens.
+- `scripts/render-roku.mjs`: the full-beta line is one constant used by both the hero and the beta card, and reads "The beta is full right now. Join the Discord and you'll hear first when spots open or when it lands in the Roku Channel Store." The has-room state keeps its own softer hint, so the renderer never says the beta is full when it isn't.
+- `roku.html`: a Beta sticker (the existing `.cta-sticker`) beside the headline, the subtitle says it is in beta and coming to the Channel Store, and the "Is it in the Roku Channel Store?" answer says "Not yet", in the page and in the FAQ structured data. `styles.css` gets two page-scoped rules so the sticker anchors to the headline: `.cta-sticker` is absolutely positioned, and with no positioned parent it landed in the hero's top-right corner, half under the nav.
+- `index.html`: the Roku tile goes to `/roku` in the same tab and says "Beta now, Channel Store coming soon".
+- Footer: "Roku (beta)" after "Web tuner" on `index`, `roku`, `apple-tv`, `plex`, `jellyfin`, `emby`, `self-host` and `support`, and in `scripts/site-chrome.mjs`, which builds the footer for every blog post and channel guide page. `privacy.html`, `terms.html` and `404.html` have no footer.
+- `plex.html`, `jellyfin.html`, `emby.html`: "Also on Roku, in beta." links to `/roku` in the line that says where it runs.
+- `docker-web-tuner-1-0-1-how-to`: SCREAM is channels 180 to 187, MYSTERY BOX TV 120, CRINGE TV 65, A24 160.
+
+**Not touched.** `web-tuner.html` and `plex-tuner.html`. The hosted tuner's footer is its own and has no "Web tuner" link to sit next to, so a Roku link there is a web-tuner change. The tuner pages, the tuner assets and all of `dist-selfhost/` hash the same as a build of `origin/main`.
+
+**Half-done.** The Docker post's three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). They are images on R2 and need re-shoots on tuner 1.0.11 or later. The note block at the bottom of the post says so. The `/roku` meta descriptions still end "Join the Roku beta.", and the Apple TV page's "No Apple TV?" answer still says "join the Roku beta".
+
+**Next.** The other blog posts that quote channel numbers describe the Apple TV app, so their fixes wait for 1.0.29 (branch `site/1.0.29-live`).
+
 ## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
 
 **Why.** Measured on a Streaming Stick Plus on 1.0.9: after Continue on Roku's own Sign in
@@ -59,6 +141,75 @@ build is 1.0.10 (`build_version=10`), its own commit.
 fail the new cases. The full suite and the stick check on the 1.0.10 build are recorded in
 `nostalgex-internal/docs/ROKU-PUBLIC-RELEASE.md`, section 10.
 
+## 2026-11-02 (Web tuner and Docker: Plex sign-in stops waiting once the answer cannot change)
+
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/plex-lan-early-exit`, cut from `origin/main` at `54cb410`.
+
+**Why.** `findWorkingConnection` tested every address plex.tv lists with `Promise.all` and then
+took the best that answered, so a sign-in waited for the slowest address even when the home
+network's answered in 30 ms, and a dead remote address cost its whole 5 s timeout every time.
+`confirmMultiServerSelection` asked the servers one after another, so each server that was off
+added its own wait. The Apple TV (`PlexAPIService.bestReachableURI`) and Roku
+(`ServerResolve.brs:NxResolveOutcome`) stop as soon as the answer cannot change and ask every server
+at once.
+
+**Changed.**
+- New `scripts/nostalgex-server-resolve.js`, the rules of the Apple TV and Roku in one pure file:
+  home network first, then remote HTTPS, remote plain, relay (HTTPS first within a kind); the best
+  kind that has answered wins as soon as nothing better is still waiting, so a home answer settles at
+  once; a home address silent for 3 s counts as failed, but only once another address has answered;
+  every probe is told to stop when the choice is made; everything still waiting at 10 s counts as
+  failed. `findWorkingConnection` is that, with the same 5 s probe.
+- A lone slow home address is still waited for. A seeded property check over random servers found
+  my first version returning no address for a server whose only answering address replied at 3.2 s,
+  which the old code connected to. The grace applies only when something else has answered. (Roku's
+  `NxResolveStatus` counts a silent home address failed after its grace whether or not anything else
+  has answered; not run on a stick, so unverified there.)
+- An address that answers as a different Plex server is turned down, as on Roku: `/identity` must
+  name the `machineIdentifier` plex.tv gave. An answer that cannot be read, or a missing identifier,
+  is accepted as before. Before, the page connected to the other server's library.
+- Servers are resolved together, not one after another; the list keeps the order they were picked in,
+  so the first stays the primary.
+- The old wait-for-everything path stays as `findWorkingConnectionWaitingForAll`, used only if the new
+  script did not load.
+- One difference from before that is deliberate: the home network now ranks above remote HTTPS. On
+  nostalgex.app, which is https, only HTTPS addresses answer anyway; in Docker a home http address now
+  wins over a remote HTTPS one, as on the Apple TV.
+
+**Verified.** Headless Chromium, real sockets: the page signs in the way a second visit does (a
+plex.tv token, plex.tv's server list served by the harness, a Plex server per address that answers,
+hangs like a dead address does, or is refused). The connect phase is plex.tv's list arriving to the
+first library request, median of 3 runs, and includes about 0.7 s of page work that is the same in
+both:
+
+| Case | main | this branch |
+|---|---|---|
+| home 30 ms, remote and relay dead | 5671 ms | 699 ms |
+| home 30 ms, remote 300 ms, relay 1800 ms | 2474 ms | 699 ms |
+| home refused, remote 150 ms, relay dead | 5668 ms | 821 ms |
+| shared server, remote 150 ms, relay dead | 5673 ms | 819 ms |
+| home dead, remote 150 ms, relay dead | 5668 ms | 3678 ms (the home address gets its 3 s) |
+| only the relay answers (200 ms) | 871 ms | 872 ms |
+| home is another Plex server, remote 150 ms | 820 ms, wrong server | 820 ms, right server |
+| nothing answers | same error | same error, same time |
+| three servers, each: home 30 ms, remote and relay dead | 15672 ms | 686 ms |
+| two servers: first answers in 900 ms, second in 30 ms | 1606 ms | 1572 ms, the first stays the primary |
+| three servers, two of them off (every address dead), one answering | 10701 ms | 5665 ms (one wait for the dead ones, not one each) |
+
+`scripts/nostalgex-server-resolve-smoke.mjs` (`npm run test:plex-resolve`, in `npm test`) runs the
+engine on a virtual clock: the cases of the Apple TV's `ConnectionDiscoveryEarlyExitTests.swift`
+and Roku's `ServerResolveTests.brs`, then 400 random servers, 1,988 checks. `npm test` green.
+`scripts/plex-resolve-browser-smoke.mjs` (`npm run test:plex-resolve:browser`) holds the table to
+bounds (46 checks), on source, the hosted build and the Docker build; origin/main's page fails 8 of them.
+
+**Not verified.** A real Plex server and plex.tv: the addresses here are loopback sockets. Chrome's
+local network access prompt, and a real `*.plex.direct` home address, were not exercised. Probes are
+still `/identity` only, 5 s, no retry (the apps use `/identity` and `/library/sections`, 12 to 25 s and a
+retry); the timeouts are unchanged on purpose.
+
+**Next.** Roku: check the lone slow home address case on a stick.
+
 ## 2026-11-02 (Privacy: the Roku account email line)
 
 **Changed.** The Roku section of `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` has one new
@@ -72,6 +223,100 @@ closes the open item at the end of the Roku entry below.
 
 **Not verified.** The policy describes what the code does. Roku's own screen has not run on a
 TV yet (see the entry below).
+
+## 2026-11-02 (Web tuner and Docker: a WATERSHED switch and the 9 PM card)
+
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/watershed-switch`, cut from `origin/main` at `8ebd1e2`.
+
+**Why.** The hold has been in `plex-tuner.html` since the Apple TV's Watershed landed
+(`getTimeFilteredPool` reads `nostalgex_watershed`), but nothing wrote that key and nothing
+called `isWatershedHold`, so nobody on the web or in the container could turn it on.
+
+**Changed.**
+- Settings > GENERAL > SCHEDULE has a Watershed row, "18 and R-rated titles wait until 9 PM",
+  off on a new install, a real button with `aria-pressed`. It writes `nostalgex_watershed`
+  ('1' on), the key the engine already read, and shows what the engine will read, so a write
+  that storage refused shows as still OFF. It is in GENERAL and not BUNDLES because the BUNDLES
+  tab is one arrow-key list with its own index, and a switch outside that list is skipped by
+  the keys; GENERAL's rows are walked by the real focusable elements.
+- A channel Watershed has emptied says BROADCASTS RESUME AT 9 PM in the guide. Tuning it puts
+  up the card, the words of `WatershedCard.swift`: BROADCASTS WILL RESUME AT 9 PM, the 18 and
+  R-rated line, "Turn off Watershed in Settings to watch now." The card sits over the picture,
+  not in `.channel-display`, which the split view hides. One addition to the Apple TV's card:
+  an OPEN SETTINGS button, because a TV browser has no keys and the line names Settings.
+- A programme already playing finishes, as on the Apple TV. The card goes up when a channel is
+  tuned or a programme ends with nothing left to air. Switching it off, or the clock passing
+  9 PM, clears the card and tunes the channel; midnight closes the gate again for the next day.
+  If that happens with Settings open (OPEN SETTINGS leaves it open), tuning no longer takes the
+  Settings keys: `switchChannel` sets `appState` to 'player', and the arrow keys read it.
+- Bug found on the way: `buildChannelSchedule` returned early on an empty pool without clearing
+  what the last pool built. A channel Watershed had just emptied kept its schedule, so its R
+  titles stayed in the guide and kept airing and the card never came. It clears now. The same
+  early return meant a prime-time-gated channel kept yesterday's schedule overnight.
+- Phone: the card was taller than the 219 px picture and the hidden Now Playing overlay sat
+  over its button. Under 560 px wide or 520 px tall it uses smaller type and fits.
+
+**Verified.** `npm test` green. New `scripts/watershed-browser-smoke.mjs` (`npm run
+test:watershed:browser`, 99 checks, headless Chromium, a mock Jellyfin of 42 films, clock
+pinned to 2 PM): the words against the Swift source, the default, the click, a film left to
+finish, the card, OPEN SETTINGS, 9 PM, midnight, a reload, and the card and the switch by click
+alone at phone, tablet, desktop and 960x540, never in browser full screen. The same 99 pass on
+the hosted build (`dist`) and the Docker build (`dist-selfhost`). Negative controls: origin/main's
+page fails (no switch); the page without the empty-pool clear fails 7 checks, three R titles on
+the all-R channel's guide row and no card.
+
+**Not verified.** A real Plex, Jellyfin or Emby server; a real TV browser (the 960x540 run
+emulates the size and a pointer, it is not TV Bro); Safari. The 9 PM edge uses the page's
+one-second tick, so a background tab catches up on its next tick, not at 9:00:00.
+
+**Next.** Roku has no Watershed yet. While in the page: with the split view on (the default), the
+playback failure card and `showVideoError` text live in `.channel-display`, which
+`.player-screen.layout-side` hides with `display: none !important`. Measured: a failure card
+has a 0 by 0 box at desktop and phone sizes. Fixed by `web/failure-card-split-view`, in the same bundle.
+
+## 2026-11-02 (Web tuner and Docker: GUIDE TEXT SIZE)
+
+**Shipped.** To the hosted tuner on nostalgex.app 2026-11-02, from `web/parity-bundle`. Docker gets it in the next
+`tuner-v` tag (`tunerVersion` stays 1.0.12 until then). Branch `web/guide-text-size`, cut from `origin/main` at `8ebd1e2`.
+
+**Why.** The Apple TV (1.0.29) and Roku have a GUIDE TEXT SIZE choice, NORMAL or LARGE. The web
+had only an automatic CSS zoom for small landscape screens, which is not a choice, and a TV
+browser has no keys to make a page bigger.
+
+**Changed.**
+- Settings > GENERAL > DISPLAY has Guide text size, "Bigger program titles, times and channel
+  names in the guide", with NORMAL and LARGE as real buttons (`aria-pressed`), so a TV browser
+  with a cursor and no keys can pick one. Saved as 'normal' or 'large' under the Apple TV's key,
+  `nostalgex_guide_text_size`; nothing saved, or anything but exactly 'large', is NORMAL, as in
+  `GuideTextSize.init(stored:)` and Roku's `NxGuideTextFrom`. The class is applied before the
+  guide can draw. The web has no settings sync, so the choice is per browser.
+- LARGE is the Apple TV's and Roku's sizes as ratios of NORMAL, applied to the web's own sizes:
+  titles and times 26/20, CHANNEL heading 22/18, channel number 24/20, channel name 20/18. Every
+  guide font size and the number box now go through a `--gt-*` multiplier that is 1 at NORMAL.
+  Only text grows; row height, header height and the channel column stay, so a long channel name
+  gives up characters to the ellipsis as it does on the Apple TV. The panel above the guide is
+  untouched. The automatic zoom is unchanged.
+- On a phone the four time columns are 72 px wide at 390, and a time label at the full 1.3 made
+  the header run off the screen and out of line with the rows (measured). Times grow 1.05 there,
+  the largest that fits was 1.07; titles and names grow in full.
+
+**Verified.** `npm test` green, including new `scripts/guide-text-smoke.mjs` (24 checks), which
+reads `GuideTextSize.swift`, Roku's `GuideText.brs` and the page and holds the three to the same
+numbers, and fails if a guide rule keeps a raw font size. New `scripts/guide-text-browser-smoke.mjs`
+(`npm run test:guide-text:browser`, 104 checks, headless Chromium): at phone, tablet, desktop and
+960x540 by click alone it checks NORMAL by default, the buttons, each size against the Apple TV's
+ratio, row, header and channel column unchanged, no time label out of its slot, the header
+fitting the screen and lining up with the rows, a reload, and stored values that are not 'large'.
+Same 104 on the hosted build (`dist`) and the Docker build (`dist-selfhost`). NORMAL is unchanged:
+computed font sizes and rectangles of 104 guide elements at the four sizes are identical to
+origin/main's page. Negative control: origin/main's page fails 9.
+
+**Not verified.** A real TV browser (the 960x540 run emulates the size and a pointer); Safari; a
+guide with long real channel names and 200+ channels.
+
+**Next.** Roku and the Apple TV already have this, so nothing to port. The two-pane Settings
+redesign on the web would move this row.
 
 ## 2026-11-02 (Roku: ask for the Roku account email at sign-in, getUserData / RFI)
 

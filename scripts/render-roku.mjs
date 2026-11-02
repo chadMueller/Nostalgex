@@ -65,13 +65,18 @@ function validate(data) {
 
 const external = 'target="_blank" rel="noopener"';
 
+// What the page says while the beta is full. The hero and the beta card both
+// use it. Chad's wording (roku page handoff, section D), so keep it as written.
+const BETA_FULL_LINE =
+  "The beta is full right now. Join the Discord and you'll hear first when spots open or when it lands in the Roku Channel Store.";
+
 // ── the hero button ──────────────────────────────────────────────────────────
 
 function renderHeroCta(data) {
   if (data.betaFull) {
     return [
       "",
-      '            <p class="roku-full-note">Beta full? Join the Discord and you\'ll hear first when spots open.</p>',
+      `            <p class="roku-full-note">${BETA_FULL_LINE}</p>`,
       '            <div class="cta-row">',
       `              <a class="btn btn-ink btn-lg" href="${escapeHtml(data.discordUrl)}" ${external}>Join the Discord</a>`,
       "            </div>",
@@ -92,7 +97,8 @@ function renderHeroCta(data) {
 const BETA_BODY =
   "Roku allows 20 testers per beta, so spots are limited. You'll need a Roku and your own " +
   "Plex, Jellyfin or Emby server with some movies and shows on it.";
-const BETA_FULL_LINE = "Beta full? Join the Discord and you'll hear first when spots open.";
+// The has-room state keeps a hint for anyone who finds the beta full anyway.
+const BETA_ROOM_NOTE = "If the beta is full, join the Discord for news on spots.";
 
 function discordButton(data, style) {
   return `<a class="btn ${style} btn-lg" href="${escapeHtml(data.discordUrl)}" ${external}>Join the Discord</a>`;
@@ -134,7 +140,7 @@ function renderBeta(data) {
     '          <div class="cta-row roku-beta-actions">',
     `            ${discordButton(data, "btn-ink")}`,
     "          </div>",
-    `          <p class="roku-beta-note">${BETA_FULL_LINE}</p>`,
+    `          <p class="roku-beta-note">${BETA_ROOM_NOTE}</p>`,
     "        </div>",
     "        ",
   ].join("\n");

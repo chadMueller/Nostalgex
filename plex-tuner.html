@@ -33,6 +33,7 @@
 <script src="scripts/nostalgex-sleep-timer.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
+<script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
   :root {
     --bg: #080810;
@@ -1297,6 +1298,15 @@
   }
   .channel-display.active { display: flex; }
   .player-screen.layout-side .channel-display { display: none !important; }
+  /* Why a programme will not play, or why the server cannot be reached, is shown here, and the
+     split view (the default) hides this whole block. A failure shows it again, without the
+     title lines that belong to the text display. */
+  .player-screen.layout-side .channel-display.has-failure { display: flex !important; }
+  .channel-display.has-failure .playing-title-main,
+  .channel-display.has-failure .playing-episode,
+  .channel-display.has-failure .playing-position { display: none; }
+  .channel-display.has-failure { padding: 12px 16px; box-sizing: border-box; }
+  .channel-display.has-failure .display-status { margin-top: 0; }
   .channel-display.switching {
     animation: channel-switch 0.5s ease forwards;
   }
@@ -1457,6 +1467,34 @@
     display: flex;
   }
 
+  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY). NORMAL is every size the guide drew
+     before the setting existed, so each multiplier is 1 and calc(18px * 1) is 18px. LARGE
+     scales by the ratios of the Apple TV's GuideTextMetrics.large over .normal (Roku's
+     GuideText.brs has the same numbers): titles and times 26/20, CHANNEL heading 22/18,
+     channel number 24/20, channel name 20/18. Only text grows: rows, header and the channel
+     column keep their size, so the name gives up characters to the ellipsis. The panel above
+     the grid is not touched. scripts/guide-text-smoke.mjs holds these to the Swift file. */
+  .guide-grid {
+    --gt-title: 1;
+    --gt-time: 1;
+    --gt-head: 1;
+    --gt-num: 1;
+    --gt-name: 1;
+  }
+  body.guide-text-large .guide-grid {
+    --gt-title: 1.3;
+    --gt-time: 1.3;
+    --gt-head: 1.2222;
+    --gt-num: 1.2;
+    --gt-name: 1.1111;
+  }
+  /* A phone has four time columns of 72px (390 wide), and a label wider than its column
+     pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)
+     is the last size that fits. The times grow less there; titles and names grow in full. */
+  @media (max-width: 560px) {
+    body.guide-text-large .guide-grid { --gt-time: 1.05; }
+  }
+
   /* Grid header - time slots */
   .grid-header {
     display: flex;
@@ -1470,7 +1508,7 @@
     width: 160px;
     flex-shrink: 0;
     font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
+    font-size: calc(8px * var(--gt-head));
     color: var(--yellow);
     letter-spacing: 2px;
     padding: 0 12px;
@@ -1483,7 +1521,7 @@
   .grid-time-slot {
     flex: 1;
     font-family: 'VT323', monospace;
-    font-size: 20px;
+    font-size: calc(20px * var(--gt-time));
     color: var(--yellow);
     letter-spacing: 1px;
     padding: 0 8px;
@@ -1554,13 +1592,13 @@
   }
   .grid-ch-num {
     font-family: 'VT323', monospace;
-    font-size: 20px;
+    font-size: calc(20px * var(--gt-num));
     color: rgba(255,255,255,0.35);
-    min-width: 28px;
+    min-width: calc(28px * var(--gt-num));
   }
   .grid-ch-name {
     font-family: 'VT323', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--gt-name));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -1580,7 +1618,7 @@
     align-items: center;
     padding: 0 8px;
     font-family: 'VT323', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--gt-title));
     color: rgba(255,255,255,0.8);
     white-space: nowrap;
     overflow: hidden;
@@ -2410,12 +2448,12 @@
     /* Guide: narrower channel column, shorter rows, so more of the lineup
        is on screen at once. */
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
-    .grid-channel-col { font-size: 7px; letter-spacing: 1px; }
+    .grid-channel-col { font-size: calc(7px * var(--gt-head)); letter-spacing: 1px; }
     .grid-row { height: 34px; }
-    .grid-ch-num { font-size: 16px; min-width: 18px; }
-    .grid-ch-name { font-size: 15px; letter-spacing: 0; }
+    .grid-ch-num { font-size: calc(16px * var(--gt-num)); min-width: calc(18px * var(--gt-num)); }
+    .grid-ch-name { font-size: calc(15px * var(--gt-name)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
-    .grid-time-slot { font-size: 16px; padding: 0 6px; white-space: nowrap; }
+    .grid-time-slot { font-size: calc(16px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -2460,7 +2498,7 @@
        tighter: one more channel on screen at 393x852. */
     .grid-row { height: 32px; }
     /* Four time columns in 256px once the channel column is paid for. */
-    .grid-time-slot { font-size: 15px; padding: 0 5px; }
+    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 5px; }
   }
 
   /* ──────────────────────────────────────
@@ -2671,11 +2709,11 @@
     .info-upnext { display: none; }
 
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
-    .grid-channel-col { font-size: 7px; letter-spacing: 1px; }
+    .grid-channel-col { font-size: calc(7px * var(--gt-head)); letter-spacing: 1px; }
     .grid-row { height: 30px; }
-    .grid-ch-num { font-size: 15px; min-width: 16px; }
-    .grid-ch-name { font-size: 14px; letter-spacing: 0; }
-    .grid-time-slot { font-size: 15px; padding: 0 6px; white-space: nowrap; }
+    .grid-ch-num { font-size: calc(15px * var(--gt-num)); min-width: calc(16px * var(--gt-num)); }
+    .grid-ch-name { font-size: calc(14px * var(--gt-name)); letter-spacing: 0; }
+    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -3120,6 +3158,40 @@
   .sleep-ended-title { font-family: 'Press Start 2P', monospace; font-size: 11px; letter-spacing: 2px; color: var(--cyan); line-height: 1.5; }
   .sleep-ended-detail { font-size: 24px; color: rgba(255,255,255,0.8); margin-top: 10px; }
 
+  /* WATERSHED: the slate a station puts up until 9 PM (WatershedCard.swift). Nothing is
+     broken, so it is cyan like the sleep card, not amber or red like a failure. It sits over
+     the video, not in .channel-display, because the split view hides that. */
+  .watershed-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 8;
+    width: min(560px, calc(100% - 32px));
+    padding: 24px 28px;
+    background: rgba(0,0,0,0.82);
+    border: 1px solid rgba(0,196,255,0.35);
+    border-radius: 10px;
+    text-align: center;
+  }
+  .watershed-card[hidden] { display: none; }
+  .watershed-card-title { font-family: 'Press Start 2P', monospace; font-size: 11px; letter-spacing: 2px; color: var(--cyan); line-height: 1.6; }
+  .watershed-card-detail { font-size: 22px; color: rgba(255,255,255,0.75); margin-top: 12px; line-height: 1.3; }
+  .watershed-card-hint { font-size: 18px; color: rgba(255,255,255,0.4); margin-top: 10px; }
+  .watershed-card .nx-btn { margin-top: 16px; }
+  /* A phone's picture is about 220px tall, and the card has to sit inside it: the Apple TV
+     draws a compact card in its windowed tuner for the same reason. */
+  @media (max-width: 560px), (max-height: 520px) {
+    .watershed-card { padding: 12px 14px; width: calc(100% - 24px); }
+    .watershed-card-title { font-size: 9px; letter-spacing: 1px; }
+    .watershed-card-detail { font-size: 16px; margin-top: 8px; line-height: 1.15; }
+    .watershed-card-hint { font-size: 14px; margin-top: 6px; }
+    .watershed-card .nx-btn { margin-top: 10px; padding: 8px 10px; }
+  }
+  /* The row in the guide Watershed has emptied (the placeholder in ChannelGuideView.swift). */
+  .grid-program--held { color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
+  #cfg-watershed-toggle.on { background: var(--cyan); color: #000; }
+
   /* Phones: one column, label over value. */
   @media (max-width: 560px) {
     .pi-rows { grid-template-columns: 1fr; gap: 4px; }
@@ -3379,6 +3451,16 @@
         <div class="sleep-ended-detail">Pick a channel to start watching again.</div>
       </div>
 
+      <!-- WATERSHED hold: this channel has content, all of it 18/R-rated, and the setting is
+           holding it until 9 PM. The words are WatershedCard.swift's. The button is the one
+           addition: a TV browser has no keys, and the line above it names Settings. -->
+      <div class="watershed-card" id="watershed-card" role="status" hidden>
+        <div class="watershed-card-title">BROADCASTS WILL RESUME AT 9 PM</div>
+        <div class="watershed-card-detail">This channel's 18 and R-rated titles wait for 9 PM, like broadcast TV. Everything in its pool right now falls in that window.</div>
+        <div class="watershed-card-hint">Turn off Watershed in Settings to watch now.</div>
+        <button class="nx-btn" id="watershed-card-settings" type="button" onclick="openWatershedSettings()">OPEN SETTINGS</button>
+      </div>
+
 
       <!-- Active channel display (fallback when no video) -->
       <div class="channel-display" id="channel-display">
@@ -3515,6 +3597,18 @@
         </div>
         <button class="plex-btn" id="cfg-retro-toggle" style="font-size: 11px; padding: 12px 22px;" onclick="toggleRetroMode()">ON</button>
       </div>
+      <!-- Two built-in sizes, as on the Apple TV and Roku. Real buttons, so a TV browser with no keys
+           can pick one. -->
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Guide text size</div>
+          <div class="cfg-row-desc">Bigger program titles, times and channel names in the guide</div>
+        </div>
+        <div class="sleep-chips" id="cfg-guide-text-chips" role="group" aria-label="Guide text size">
+          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">NORMAL</button>
+          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGE</button>
+        </div>
+      </div>
 
       <div class="config-section-label" style="margin-top: 28px;">PLAYBACK</div>
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
@@ -3553,6 +3647,15 @@
           <div class="cfg-row-desc">How this program is playing: direct or through your server, player size, source codecs, and why a fallback happened.</div>
         </div>
         <button class="plex-btn" id="cfg-playback-info-btn" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="openPlaybackInfo()" aria-haspopup="dialog">VIEW</button>
+      </div>
+
+      <div class="config-section-label" style="margin-top: 28px;">SCHEDULE</div>
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Watershed</div>
+          <div class="cfg-row-desc">18 and R-rated titles wait until 9 PM</div>
+        </div>
+        <button class="plex-btn" id="cfg-watershed-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleWatershed()" aria-label="Watershed" aria-pressed="false">OFF</button>
       </div>
 
       <div class="config-section-label" style="margin-top: 28px;">LANGUAGE</div>
@@ -4300,6 +4403,119 @@
     return getTimeFilteredPool(channel, watershedEnabled).length === 0;
   }
 
+  // ── WATERSHED: the switch, and the card for a channel it has emptied ─────────
+  // The two functions above read `nostalgex_watershed` ('1' is on). This is the only code
+  // that writes it. Off unless the viewer turns it on, and kept per browser: the Apple TV
+  // keeps it per TV and does not sync it either. Wording is the Apple TV's (Settings row in
+  // SettingsChannelsView.swift, WatershedCard.swift, the guide row in ChannelGuideView.swift).
+  const WATERSHED_KEY = 'nostalgex_watershed';
+  const WATERSHED_HOUR = 21;   // Channel.watershedHour: 9 PM local, until midnight
+  const WATERSHED_GUIDE_LABEL = 'BROADCASTS RESUME AT 9 PM';
+
+  function watershedOn() {
+    try { return localStorage.getItem(WATERSHED_KEY) === '1'; } catch (e) { return false; }
+  }
+  // Whether the gate is closed right now: the switch is on and it is before 9 PM.
+  function watershedHolding() {
+    return watershedOn() && new Date().getHours() < WATERSHED_HOUR;
+  }
+  let lastWatershedHolding = watershedHolding();
+  // The channel whose card is up, or null.
+  let watershedHeldChannel = null;
+
+  /** The button shows what the engine will read, so a write that failed shows as still OFF. */
+  function updateWatershedControls() {
+    const on = watershedOn();
+    const button = document.getElementById('cfg-watershed-toggle');
+    if (!button) return;
+    button.textContent = on ? 'ON' : 'OFF';
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
+
+  function toggleWatershed() {
+    // lsSet never throws and says whether it saved. Nothing changes if it did not: the
+    // engine reads this same key, so a setting it cannot read would do nothing.
+    if (lsSet(WATERSHED_KEY, watershedOn() ? '0' : '1')) watershedChanged();
+    updateWatershedControls();
+  }
+
+  /**
+   * The gate opened or closed (the switch, 9 PM, midnight). Every channel's schedule is
+   * rebuilt from its new pool, the guide is redrawn, and a card that no longer applies goes.
+   * A programme already playing is left to finish, as on the Apple TV: the card goes up
+   * when a channel is tuned or a programme ends, not in the middle of a film.
+   */
+  function watershedChanged() {
+    const holding = watershedHolding();
+    if (holding === lastWatershedHolding) return;
+    lastWatershedHolding = holding;
+    rebuildAllSchedules();
+    renderActiveGuide();
+    releaseWatershedHold();
+  }
+
+  /** Puts the card up for `ch`: nothing plays, and the panels say why. */
+  function holdForWatershed(ch) {
+    stopVideo();
+    watershedHeldChannel = ch.id;
+    document.getElementById('channel-display').classList.remove('active');
+    document.getElementById('watershed-card').hidden = false;
+    // The panels would otherwise keep the last channel's programme.
+    const num = String(chNum(ch)).padStart(2, '0');
+    const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    const colour = (id, value) => { const el = document.getElementById(id); if (el) el.style.color = value; };
+    const width = (id, value) => { const el = document.getElementById(id); if (el) el.style.width = value; };
+    text('np-channel-tag', `\u25CF CH ${num} \u2014 ${ch.name}`);   // the same tag switchChannel writes
+    colour('np-channel-tag', ch.color);
+    text('np-title', WATERSHED_GUIDE_LABEL);
+    text('np-meta', '');
+    width('np-progress', '0%');
+    text('np-time', '');
+    text('np-upnext', '');
+    text('info-channel-tag', `CH ${num} \u2014 ${ch.name}`);
+    colour('info-channel-tag', ch.color);
+    text('info-title', WATERSHED_GUIDE_LABEL);
+    text('info-episode-title', '');
+    text('info-description', '');
+    const meta = document.getElementById('info-meta-row');
+    if (meta) meta.textContent = '';
+    width('info-progress', '0%');
+    text('info-time', '');
+    text('info-upnext', '');
+    text('fs-overlay-channel', `CH ${num} · ${ch.name}`);
+    text('fs-overlay-title', WATERSHED_GUIDE_LABEL);
+    width('fs-overlay-progress', '0%');
+    text('fs-overlay-time', '');
+  }
+
+  function hideWatershedCard() {
+    watershedHeldChannel = null;
+    const card = document.getElementById('watershed-card');
+    if (card) card.hidden = true;
+  }
+
+  /** A card on screen whose hold has lifted (switched off, 9 PM, new titles): tune the channel. */
+  function releaseWatershedHold() {
+    if (watershedHeldChannel === null) return;
+    const ch = CHANNELS.find(c => c.id === watershedHeldChannel);
+    if (ch && ch.enabled && isWatershedHold(ch)) return;
+    hideWatershedCard();
+    if (ch && ch.enabled && currentChannel === ch.id) {
+      // Tuning sets appState to 'player', and the keys read it: with Settings open (the card's
+      // OPEN SETTINGS leaves it open) it has to stay 'config', or the arrow keys stop working there.
+      const keepConfig = configVisible && appState === 'config';
+      currentChannel = null;   // switchChannel ignores the channel it is already on
+      switchChannel(ch.id);
+      if (keepConfig) appState = 'config';
+    }
+  }
+
+  function openWatershedSettings() {
+    showConfig();
+    switchConfigTab('general');
+  }
+
   let currentChannel = null;
   let guideVisible = false;
   let configVisible = false;
@@ -4506,6 +4722,9 @@
       document.getElementById('player-screen').classList.add('layout-side');
     }
 
+    // Apply the saved guide text size before the guide can be drawn
+    applyGuideTextSize();
+
     // Apply saved retro mode
     if (retroMode) {
       document.body.classList.add('retro-mode');
@@ -4577,6 +4796,7 @@
     // Reflect the saved retro state across all controls on load
     updateRetroControls();
     updateSyncActivityControls();
+    updateWatershedControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
     const menuBtn = document.getElementById('m-menu-btn');
@@ -4773,7 +4993,7 @@
   function showPlaybackFailure(failure, willSkip) {
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
-    display.classList.add('active');
+    display.classList.add('active', 'has-failure');
     status.textContent = '';
     status.classList.remove('server-side', 'device-side');
     status.classList.add(failure.serverSide ? 'server-side' : 'device-side');
@@ -4792,7 +5012,7 @@
   function showVideoError(message) {
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
-    display.classList.add('active');
+    display.classList.add('active', 'has-failure');
     status.textContent = message;
     status.classList.add('visible');
     console.warn('[PLEX 90] Video error:', message);
@@ -4802,6 +5022,7 @@
     const status = document.getElementById('display-status');
     status.textContent = '';
     status.classList.remove('visible');
+    document.getElementById('channel-display').classList.remove('has-failure');
   }
 
   // ══════════════════════════════════════
@@ -4824,7 +5045,15 @@
   function buildChannelSchedule(channel, nowSec = Date.now() / 1000) {
     channel.itemPool = (channel.itemPool || []).filter(item => item && item.duration > 0);
     const items = getTimeFilteredPool(channel);
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      // Nothing airs right now (Watershed, or a prime-time gate). Drop what an earlier pool
+      // built, or the guide and the info panel keep showing the last programme on a channel
+      // that is off the air.
+      channel._live = null;
+      channel._manifestBlocks = null;
+      channel.schedule = [];
+      return;
+    }
 
     const live = NostalgexDailyManifest.buildSchedule(channel, items, nowSec, manifestServerKey());
     if (!live) return;
@@ -5054,6 +5283,13 @@
           prog.title = displayTitle;
           progsCol.appendChild(prog);
         }
+      } else if (isWatershedHold(ch)) {
+        // Real content, all of it held until 9 PM: say so instead of a blank slot.
+        const held = document.createElement('div');
+        held.className = 'grid-program grid-program--held';
+        held.style.width = '100%';
+        held.textContent = WATERSHED_GUIDE_LABEL;
+        progsCol.appendChild(held);
       } else {
         // No content
         const empty = document.createElement('div');
@@ -5199,6 +5435,7 @@
     if (currentChannel === channelId) return;
 
     clearVideoError();
+    hideWatershedCard();
     sleepStoppedPlayback = false;
     const sleepEnded = document.getElementById('sleep-ended');
     if (sleepEnded) sleepEnded.hidden = true;
@@ -5217,7 +5454,10 @@
     const now = ch.schedule[0];
     const next = ch.schedule[1];
 
-    if (!now) { stopVideo(); return; }
+    // Watershed can empty a channel without it being empty: say so with the card, below,
+    // rather than leave a black screen (AppState.playCurrentItem's .watershedHold).
+    const watershedHeld = !now && isWatershedHold(ch);
+    if (!now && !watershedHeld) { stopVideo(); return; }
 
     // Gentle tuning haze on channel change — a soft fade (via the overlay's 0.35s CSS
     // transition) at a restrained peak, not a hard full-brightness flash. Skipped when
@@ -5239,6 +5479,14 @@
     document.getElementById('plex-connect').style.display = 'none';
     document.getElementById('loading-library').style.display = 'none';
     document.getElementById('player-screen').classList.remove('building');
+
+    if (watershedHeld) {
+      holdForWatershed(ch);
+      showNowPlaying();
+      showGuide();
+      renderActiveGuide();
+      return;
+    }
 
     // Update now playing overlay
     document.getElementById('np-channel-tag').textContent = `\u25CF CH ${String(chNum(ch)).padStart(2, '0')} \u2014 ${ch.name}`;
@@ -5661,6 +5909,7 @@
 
     clearVideoError();
     disarmPlayRetry();   // a retry armed for the outgoing program must not start this one
+    hideWatershedCard(); // anything that plays ends the hold
 
     // Hide the text display
     document.getElementById('channel-display').classList.remove('active');
@@ -5952,6 +6201,10 @@
       // Update UI
       document.getElementById('np-title').textContent = next.title.toUpperCase();
       document.getElementById('np-meta').textContent = next.meta || '';
+      showNowPlaying();
+    } else if (currentChannel === channel.id && isWatershedHold(channel)) {
+      // Nothing left to air until 9 PM: the card, as when the channel is tuned.
+      holdForWatershed(channel);
       showNowPlaying();
     }
     renderActiveGuide();
@@ -7101,6 +7354,33 @@
     if (cfg) { cfg.textContent = retroMode ? 'ON' : 'OFF'; cfg.classList.toggle('on', retroMode); }
   }
 
+  // ── GUIDE TEXT SIZE ─────────────────────────────────────────────────────
+  // NORMAL or LARGE, saved as 'normal' / 'large' under the Apple TV's own key. Nothing saved,
+  // or anything else, is NORMAL (GuideTextSize.init(stored:), NxGuideTextFrom). The sizes are
+  // CSS (body.guide-text-large); this only keeps the class and the buttons in step. Kept per
+  // browser: the web has no settings sync.
+  const GUIDE_TEXT_KEY = 'nostalgex_guide_text_size';
+
+  function guideTextSize() {
+    try { return localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'; } catch (e) { return 'normal'; }
+  }
+
+  /** The class and the buttons show what is saved, so a write storage refused reads as unchanged. */
+  function applyGuideTextSize() {
+    const size = guideTextSize();
+    document.body.classList.toggle('guide-text-large', size === 'large');
+    for (const b of document.querySelectorAll('#cfg-guide-text-chips .sleep-chip')) {
+      const active = b.dataset.size === size;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', String(active));
+    }
+  }
+
+  function setGuideTextSize(size) {
+    lsSet(GUIDE_TEXT_KEY, size === 'large' ? 'large' : 'normal');
+    applyGuideTextSize();
+  }
+
   function updateSyncActivityControls() {
     for (const [id, enabled] of [['cfg-nowplaying-toggle', nowPlayingReportingEnabled], ['cfg-markwatched-toggle', markWatched]]) {
       const button = document.getElementById(id);
@@ -7859,6 +8139,7 @@
     const subSel = document.getElementById('cfg-subtitle-lang');
     if (subSel) subSel.value = subtitleLanguage;
     updateAutoSubsControls();
+    updateWatershedControls();
   }
 
   function hideConfig() {
@@ -8085,41 +8366,62 @@
     }
   }
 
-  // Test a single Plex server connection URL
-  async function testConnection(uri, token) {
+  // Test a single Plex server connection URL. True when the address answers as this server:
+  // /identity is 200 and, when plex.tv gave us the server's machineIdentifier and the answer
+  // names one, they match. A private address on some other network can be another Plex server
+  // (a viewer's own, say), and Roku has refused those since it began finding addresses this way.
+  // An answer that cannot be read counts as an answer, as before. `signal` ends the probe when
+  // the choice is already made.
+  async function testConnection(uri, token, machineIdentifier = '', signal = null) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const onOuterAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', onOuterAbort, { once: true });
+    }
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${uri}/identity`, {
         headers: { 'Accept': 'application/json', 'X-Plex-Token': token },
         signal: controller.signal,
       });
-      clearTimeout(timeout);
-      return res.ok;
+      if (!res.ok) return false;
+      if (!machineIdentifier || !globalThis.NostalgexServerResolve) return true;
+      let body = null;
+      try { body = await res.json(); } catch { /* not JSON: counts as an answer */ }
+      return globalThis.NostalgexServerResolve.identityMatches(body, machineIdentifier);
     } catch {
       return false;
+    } finally {
+      clearTimeout(timeout);
+      if (signal) signal.removeEventListener('abort', onOuterAbort);
     }
   }
 
-  // Find the first reachable connection for a server
+  // Find the best reachable connection for a server: every address is tried at once, and the
+  // choice is made as soon as it cannot change (scripts/nostalgex-server-resolve.js: the Apple
+  // TV's order, home network first, and its early exit). Before, this waited for every address,
+  // so one dead remote address cost its whole 5 s timeout on every sign-in.
   async function findWorkingConnection(server, token) {
-    // Try all connections in parallel, prefer HTTPS remote > local > relay
+    const R = globalThis.NostalgexServerResolve;
+    if (!R) return findWorkingConnectionWaitingForAll(server, token);   // a stale cache without the script
+    const found = await R.resolve(server.connections || [],
+      (conn, signal) => testConnection(conn.uri, token, server.machineIdentifier || '', signal));
+    return found ? found.conn : null;
+  }
+
+  // The way this worked before the early exit, kept for a page whose script cache is older than
+  // its HTML: test everything, then take the best that answered (HTTPS remote > local > relay).
+  async function findWorkingConnectionWaitingForAll(server, token) {
     const sorted = [...(server.connections || [])].sort((a, b) => {
-      // Prefer non-relay HTTPS connections first
       if (!a.relay && a.protocol === 'https' && (b.relay || b.protocol !== 'https')) return -1;
       if (!b.relay && b.protocol === 'https' && (a.relay || a.protocol !== 'https')) return 1;
-      // Then local connections
       if (a.local && !b.local) return -1;
       if (b.local && !a.local) return 1;
       return 0;
     });
-
-    // Test all in parallel and return first success
     const results = await Promise.all(
-      sorted.map(async (conn) => ({
-        conn,
-        ok: await testConnection(conn.uri, token),
-      }))
+      sorted.map(async (conn) => ({ conn, ok: await testConnection(conn.uri, token) }))
     );
     const working = results.find(r => r.ok);
     return working ? working.conn : null;
@@ -8260,17 +8562,22 @@
 
     const chosen = [...selectedServerIndices].map(i => discoveredServers[i]).filter(Boolean);
 
-    const resolved = [];
-    for (const server of chosen) {
+    // Every server at once, as the Apple TV and Roku do: one after another, a server that is
+    // off (a shared one, say) cost its whole timeout before the next was even asked. The list
+    // keeps the order the viewer picked, so resolved[0] is still the primary server.
+    document.querySelector('#plex-waiting .plex-waiting-label').textContent = chosen.length === 1
+      ? `CONNECTING TO ${chosen[0].name.toUpperCase()}`
+      : `CONNECTING TO ${chosen.length} SERVERS`;
+    const found = await Promise.all(chosen.map(async (server) => {
       const token = server.accessToken || plexToken;
-      document.querySelector('#plex-waiting .plex-waiting-label').textContent = `CONNECTING TO ${server.name.toUpperCase()}`;
       const workingConn = await findWorkingConnection(server, token);
-      if (workingConn) {
-        resolved.push({ name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' });
-      } else {
+      if (!workingConn) {
         console.warn(`[Nostalgex] No reachable connection for server: ${server.name}`);
+        return null;
       }
-    }
+      return { name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' };
+    }));
+    const resolved = found.filter(Boolean);
 
     if (resolved.length === 0) {
       const errorEl = document.getElementById('plex-error-label');
@@ -8548,6 +8855,10 @@
     });
 
     currentChannel = null;
+    hideWatershedCard();
+    // A failure card or a connection error belongs to the session that is ending: in the split
+    // view it is on screen, and it would be there again, over the next sign-in.
+    clearVideoError();
     document.getElementById('player-screen').classList.remove('has-channel');
     document.getElementById('channel-display').classList.remove('active');
     document.getElementById('plex-connect').style.display = 'flex';
@@ -10035,6 +10346,10 @@
   let _lastTickItemKey = null; // track current item to detect transitions
 
   function tickProgress() {
+    // 9 PM and midnight move the Watershed gate with no one touching a control; a card
+    // whose hold has lifted (new titles, the switch) clears here too.
+    watershedChanged();
+    if (watershedHeldChannel !== null) releaseWatershedHold();
     if (!currentChannel) return;
 
     const ch = CHANNELS.find(c => c.id === currentChannel);
