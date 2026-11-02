@@ -4,13 +4,19 @@
      warning, the step rail, the step's headline, a detail line and a bar.
      It reads everything from the LibraryTask it is given. stalling, set by
      MainScene's stall watch, adds upstream's STOP WAITING block; OK on it
-     goes to MainScene, which holds the focus. -->
+     goes to MainScene, which holds the focus. START OVER sits under it all
+     for the whole load, as upstream's: * arms it (startOverArmed, set by
+     MainScene), and a second * signs out. -->
 <component name="LoadingView" extends="Group">
   <interface>
     <field id="task" type="node" onChange="onTask" />
     <field id="stalling" type="boolean" value="false" onChange="render" />
     <!-- The library step's headline, for the kind being scanned. -->
     <field id="scanHeadline" type="string" value="" />
+    <!-- START OVER asked for once; the next * signs out (MainScene). -->
+    <field id="startOverArmed" type="boolean" value="false" onChange="renderStartOver" />
+    <!-- Who START OVER signs out of: Plex, Jellyfin or Emby. -->
+    <field id="serverName" type="string" value="" onChange="renderStartOver" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LoadingNote.brs" />
@@ -18,5 +24,6 @@
   <children>
     <Rectangle width="1920" height="1080" color="0x000000FF" />
     <Group id="content" />
+    <Group id="startOver" />
   </children>
 </component>

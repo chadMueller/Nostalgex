@@ -8,9 +8,41 @@
 
 sub init()
     m.libraryBusy = false
+    m.unfinished = false
     m.prompt = m.top.FindNode("prompt")
     m.hint = m.top.FindNode("hint")
     m.top.SetFocus(true)
+    ' Upstream's LaunchGuard: a load the app didn't live to finish counts, and
+    ' after two in a row the next launch asks before loading again.
+    NxLoadRecordLaunch(NxLaunchGuardRegistry())
+    if NxSignedInToLoad() and NxLoadShouldAsk(NxLaunchGuardRegistry()) then
+        showUnfinished()
+        return
+    end if
+    launchLoad()
+end sub
+
+' Whether a launch would go straight into a library load: a saved sign-in
+' with servers to read, as init's own checks below.
+function NxSignedInToLoad() as Boolean
+    reg = NxPlexRegistry()
+    if reg.Read("servers") = "" then return false
+    if NxSignedInKind() <> "plex" then return true
+    return NxPlexLoadToken() <> "" and reg.Read("needsPick") = ""
+end function
+
+' upstream's UnfinishedLoadsView: LOADING DIDN'T FINISH, TRY AGAIN (OK) or
+' START OVER (*), in place of a third load. As the error screen, OK retries.
+sub showUnfinished()
+    m.unfinished = true
+    m.prompt.text = "LOADING DIDN'T FINISH" + Chr(10) + Chr(10) + "The last two times, Nostalgex closed before your library finished loading."
+    m.hint.text = "Press OK to try again, or * to start over: sign in again or pick a different server."
+    print "launch: two loads in a row didn't finish; asking before a third"
+    launchComplete()
+end sub
+
+' The launch as it runs when nothing needs asking first, and TRY AGAIN.
+sub launchLoad()
     reg = NxPlexRegistry()
     kind = NxSignedInKind()
     if kind <> "plex" then
@@ -242,6 +274,7 @@ end sub
 
 sub startLibrary(useCache = false as Boolean, rebuild = false as Boolean, rescan = false as Boolean)
     releaseLibrary()
+    if NxLoadTracked(m.guide <> invalid) then NxLoadStarted(NxLaunchGuardRegistry())
     m.library = CreateObject("roSGNode", "LibraryTask")
     m.library.ObserveField("bundleBuilt", "onBundleBuilt")
     m.library.useCache = useCache
@@ -317,6 +350,7 @@ sub onLibraryPhase()
     if m.guide <> invalid or m.loading <> invalid or m.library.phase = "" then return
     m.loading = CreateObject("roSGNode", "LoadingView")
     m.loading.scanHeadline = NxScanHeadline(NxSignedInKind())
+    m.loading.serverName = NxKindName(NxSignedInKind())
     m.top.AppendChild(m.loading)
     m.loading.task = m.library
 end sub
@@ -331,6 +365,7 @@ sub onLibraryStatus()
     if m.library = invalid then return
     status = m.library.status
     if status = "error" then
+        NxLoadEnded(NxLaunchGuardRegistry())
         setLibraryBusy(false)
         if m.guide <> invalid then return
         closeLoading()
@@ -339,6 +374,9 @@ sub onLibraryStatus()
         m.hint.text = "Press OK to try again, or * to sign out of " + NxKindName(NxSignedInKind()) + " on this TV."
         launchComplete()
     else if status = "ready" then
+        ' A saved guide shown first proves nothing about the full load, which
+        ' goes on behind it uncounted (onLibraryRefreshed ends it).
+        NxLoadEnded(NxLaunchGuardRegistry(), not m.library.fromCache)
         closeLoading()
         m.prompt.text = ""
         m.hint.text = ""
@@ -467,6 +505,7 @@ sub onRescanRequest()
 end sub
 
 sub onLibraryRefreshed()
+    NxLoadEnded(NxLaunchGuardRegistry())
     setLibraryBusy(false)
 end sub
 
@@ -505,6 +544,8 @@ sub signOut()
     NxPlexClearAuth()
     ' The saved library and the caches made from it go with the sign-in.
     NxClearAccountCaches()
+    NxLoadEnded(NxLaunchGuardRegistry())
+    m.unfinished = false
     m.prompt.text = ""
     m.hint.text = ""
     showConnect()
@@ -519,8 +560,33 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     ' Sign out from the sign-in and error screens only: stop any sign-in in
     ' progress and forget everything stored. With the guide up, * is the
     ' guide's own, and sign-out is in Settings, behind a second OK.
+    ' START OVER on the loading screen, as upstream's, asks first: the first *
+    ' arms it, a second signs out; OK or Back keeps loading.
+    if m.loading <> invalid and m.loading.startOverArmed then
+        if key = "options" then
+            print "library: the viewer started over during the load"
+            signOut()
+        else if key = "OK" or key = "back" then
+            m.loading.startOverArmed = false
+        end if
+        return true
+    end if
+    if key = "options" and m.loading <> invalid then
+        m.loading.startOverArmed = true
+        return true
+    end if
     if key = "options" and m.guide = invalid then
         signOut()
+        return true
+    end if
+    ' TRY AGAIN on LOADING DIDN'T FINISH: the full allowance back, then the
+    ' launch as usual.
+    if key = "OK" and m.unfinished = true then
+        m.unfinished = false
+        NxLoadResetUnfinished(NxLaunchGuardRegistry())
+        m.prompt.text = ""
+        m.hint.text = ""
+        launchLoad()
         return true
     end if
     if key = "OK" and m.signIn <> invalid and m.signIn.status = "error" then
