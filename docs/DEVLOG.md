@@ -3,17 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-## 2026-11-02 (site: the Docker post's channel numbers, and the Roku beta page)
+## 2026-11-02 (site: the Roku beta is full, /roku linked across the site, the Docker post's channel numbers)
 
-**Shipped.** Nothing until this lands on main. Branch `site/release-nov-2`, three commits, not pushed. Nothing on it depends on an app release.
+**Shipped.** Nothing until this lands on main. Branch `site/roku-beta-links`, cut from `origin/main` at `03c7ae9`, not pushed. Nothing on it depends on an app release.
 
-**Why.** Web tuner and Docker 1.0.11 (and Roku 1.0.8) give every package its own block of channel numbers, so the numbers in the Docker post were out of date for anyone on the current image. Separately, `/roku` still told visitors the beta had room, when Roku's 20 tester spots are taken.
+**Why.** `/roku` still told visitors the beta had room, when Roku's 20 tester spots are taken, and the only way to it was a URL. The homepage Roku tile went to a GitHub discussion and no footer linked the page. Separately, web tuner and Docker 1.0.11 (and Roku 1.0.8) give every package its own block of channel numbers, so the numbers in the Docker post were out of date for anyone on the current image.
 
 **Changed.**
+- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. Drop that commit if a spot opens.
+- `scripts/render-roku.mjs`: the full-beta line is one constant used by both the hero and the beta card, and reads "The beta is full right now. Join the Discord and you'll hear first when spots open or when it lands in the Roku Channel Store." The has-room state keeps its own softer hint, so the renderer never says the beta is full when it isn't.
+- `roku.html`: a Beta sticker (the existing `.cta-sticker`) beside the headline, the subtitle says it is in beta and coming to the Channel Store, and the "Is it in the Roku Channel Store?" answer says "Not yet", in the page and in the FAQ structured data. `styles.css` gets two page-scoped rules so the sticker anchors to the headline: `.cta-sticker` is absolutely positioned, and with no positioned parent it landed in the hero's top-right corner, half under the nav.
+- `index.html`: the Roku tile goes to `/roku` in the same tab and says "Beta now, Channel Store coming soon".
+- Footer: "Roku (beta)" after "Web tuner" on `index`, `roku`, `apple-tv`, `plex`, `jellyfin`, `emby`, `self-host` and `support`, and in `scripts/site-chrome.mjs`, which builds the footer for every blog post and channel guide page. `privacy.html`, `terms.html` and `404.html` have no footer.
+- `plex.html`, `jellyfin.html`, `emby.html`: "Also on Roku, in beta." links to `/roku` in the line that says where it runs.
 - `docker-web-tuner-1-0-1-how-to`: SCREAM is channels 180 to 187, MYSTERY BOX TV 120, CRINGE TV 65, A24 160.
-- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. The line under it now reads "The beta is full. Join the Discord for news on spots." (it used to promise "you'll hear first when spots open"), and the has-room state has its own softer hint, so the renderer no longer says the beta is full when it isn't. Drop the `betaFull` commit if a spot has opened.
 
-**Half-done.** The Docker post's three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). They are images on R2 and need re-shoots on tuner 1.0.11 or later. The note block at the bottom of the post says so.
+**Not touched.** `web-tuner.html` and `plex-tuner.html`. The hosted tuner's footer is its own and has no "Web tuner" link to sit next to, so a Roku link there is a web-tuner change. The tuner pages, the tuner assets and all of `dist-selfhost/` hash the same as a build of `origin/main`.
+
+**Half-done.** The Docker post's three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). They are images on R2 and need re-shoots on tuner 1.0.11 or later. The note block at the bottom of the post says so. The `/roku` meta descriptions still end "Join the Roku beta.", and the Apple TV page's "No Apple TV?" answer still says "join the Roku beta".
 
 **Next.** The other blog posts that quote channel numbers describe the Apple TV app, so their fixes wait for 1.0.29 (branch `site/1.0.29-live`).
 
