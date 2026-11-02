@@ -217,6 +217,21 @@
     return defaultOnIDs(definitions).has(id);
   }
 
+  // The explicit lists as keys, worked out once per definition. A 40,000-episode library
+  // asks the same question of every episode of a show, so this and the per-title memo in
+  // `build` are what keep a rebuild off the main thread's critical path (measured 7.6 s
+  // without them, 42,000 episodes). They only skip repeats; the answers are unchanged.
+  const explicitKeyCache = new WeakMap();
+  function explicitKeys(def, field) {
+    let byField = explicitKeyCache.get(def);
+    if (!byField) {
+      byField = {};
+      explicitKeyCache.set(def, byField);
+    }
+    if (!byField[field]) byField[field] = new Set(def[field].map(explicitTitleKey));
+    return byField[field];
+  }
+
   function collectionMap(definitions) {
     const map = new Map();
     for (const def of definitions) {
@@ -236,7 +251,7 @@
     const key = explicitTitleKey(title);
     for (const def of definitions) {
       if (!includeStudioRuled && def.studioRuled) continue;
-      if (def[explicitField].some((t) => explicitTitleKey(t) === key)) return def;
+      if (explicitKeys(def, explicitField).has(key)) return def;
     }
     const titleLower = normalizedTitle(title);
     for (const def of definitions) {
@@ -351,20 +366,28 @@
 
     // 2. TV: dictionary (explicit titles, studio-ruled included, then tokens), else
     //    a found franchise whose name the show title contains.
-    for (const tv of tvItems) {
-      const def = dictionaryMatchTitle(tv.title, 'tvShowTitles', definitions, true);
-      if (def) {
-        bucketFor(keyForDefinition(def), def.canonicalName, def).tvItems.push(tv);
-        continue;
-      }
-      const titleLower = normalizedTitle(tv.title);
+    //    The answer depends on the title alone, so an episode takes the answer its show's
+    //    first episode got (a Map by title) and goes into the same bucket, in input order.
+    const placeTV = new Map();
+    const placeFor = (title) => {
+      const def = dictionaryMatchTitle(title, 'tvShowTitles', definitions, true);
+      if (def) return { def };
+      const titleLower = normalizedTitle(title);
       for (const key of foundKeys) {
         const b = buckets.get(key);
-        if (b && titleContainsToken(titleLower, b.name.toLowerCase())) {
-          b.tvItems.push(tv);
-          break;
-        }
+        if (b && titleContainsToken(titleLower, b.name.toLowerCase())) return { found: b };
       }
+      return null;
+    };
+    for (const tv of tvItems) {
+      let place = placeTV.get(tv.title);
+      if (place === undefined) {
+        place = placeFor(tv.title);
+        placeTV.set(tv.title, place);
+      }
+      if (!place) continue;
+      if (place.def) bucketFor(keyForDefinition(place.def), place.def.canonicalName, place.def).tvItems.push(tv);
+      else place.found.tvItems.push(tv);
     }
 
     // 3. Resolve: stock fold (needs one item, not gated on films) or dynamic (gated).

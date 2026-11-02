@@ -10,11 +10,12 @@
  * resolvable `playwright`. Run: `npm run test:start-over:browser`.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 // The stuck server: answers the sign-in check and the library list, never the items.
 const scanRequests = [];
