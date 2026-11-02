@@ -4851,6 +4851,10 @@
   function guideLineup() {
     return CHANNELS.filter(ch => ch.enabled).map(ch => ({ channel: ch, pool: getTimeFilteredPool(ch) }));
   }
+  // Each day is packed across the guide's lineup, so one title is never on two channels at
+  // once (the Apple TV registers AppState.channels the same way). A cached older engine
+  // script has no setLineup: it packs each channel alone, as before, until it reloads.
+  if (typeof NostalgexDailyManifest.setLineup === 'function') NostalgexDailyManifest.setLineup(guideLineup);
 
   /**
    * TunerView.buildAllSchedules: every channel at one instant, then one title on two

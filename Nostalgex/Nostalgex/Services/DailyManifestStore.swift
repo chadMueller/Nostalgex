@@ -19,7 +19,10 @@ struct DailyManifestFile: Codable {
 }
 
 enum DailyManifestStore {
-    private static let schemaVersion = 1
+    /// 2: the lineup's days are packed together, so one title is never on two channels at once
+    /// (DailyManifestScheduler.packLineupDay). A day stored at 1 is packed again once, from
+    /// what aired the day before, which still reads at any version.
+    static let schemaVersion = 2
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]
@@ -122,6 +125,18 @@ enum DailyManifestStore {
         }
     }
 
+    /// A stored day's blocks, in the order they air, whatever schema or pool stored them; []
+    /// if the day was never scheduled. What aired yesterday, and what ran past its midnight.
+    static func storedBlocks(channelId: Int, dayKey: String, credentialFingerprint: String) -> [StoredManifestBlock] {
+        guard let url = fileURL(channelId: channelId, dayKey: dayKey, credentialFingerprint: credentialFingerprint),
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let manifest = try? decoder.decode(DailyManifestFile.self, from: data) else {
+            return []
+        }
+        return manifest.blocks
+    }
+
     static func airedRatingKeys(channelId: Int, dayKey: String, credentialFingerprint: String) -> Set<String> {
         guard let dir = baseDirectory(credentialFingerprint: credentialFingerprint) else { return [] }
         let url = dir.appendingPathComponent("\(channelId)_\(dayKey).json")
@@ -147,6 +162,20 @@ enum DailyManifestStore {
             return nil
         }
         return manifest.blocks.last?.ratingKey
+    }
+
+    /// Copies the stored days `dayKeys` from one fingerprint's folder to another's, replacing
+    /// what the target held for them. For ScheduleTiming, which packs in a scratch folder so a
+    /// TV's own schedules are never touched.
+    static func copyDays(_ dayKeys: [String], from source: String, to target: String) {
+        guard let src = baseDirectory(credentialFingerprint: source),
+              let dst = baseDirectory(credentialFingerprint: target),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: src.path) else { return }
+        for name in names where dayKeys.contains(where: { name.hasSuffix("_\($0).json") }) {
+            let to = dst.appendingPathComponent(name)
+            try? FileManager.default.removeItem(at: to)
+            try? FileManager.default.copyItem(at: src.appendingPathComponent(name), to: to)
+        }
     }
 
     static func clearAll(credentialFingerprint: String? = nil) {

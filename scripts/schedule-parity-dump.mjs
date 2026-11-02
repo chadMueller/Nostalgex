@@ -70,10 +70,16 @@ export function dump(engine, fx) {
       // as 0, where Foundation's dates (Julian before 1582) and JavaScript's disagree.
       if (!spec.compact) items[key] = item ? [item.duration, Math.max(0, item.addedAt), item.title, item.type] : null;
     }
+    // "gated": a channel whose pool changes with the hour, which packs after the rest
+    // (sortByLineupPriority); an hour no fixture reaches, so the pool itself never changes.
     const lineup = fx.channels.map((row) => ({
-      channel: { id: row.id, number: row.number ?? row.id, isPremiereChannel: Boolean(row.premiere) },
+      channel: { id: row.id, number: row.number ?? row.id, isPremiereChannel: Boolean(row.premiere),
+        timeRestrictions: row.gated ? { tvOnlyBefore: 0 } : null },
       pool: (row.pool || []).map((k) => byKey.get(k)).filter(Boolean),
     }));
+    // The guide's lineup, as plex-tuner.html registers it: each day is packed across all of it.
+    // An offGuide row is dumped but not registered, like a channel the guide doesn't carry.
+    if (typeof M.setLineup === "function") M.setLineup(lineup.filter((_, i) => !fx.channels[i].offGuide));
 
     for (const t of fx.prime || []) {
       for (const { channel, pool } of lineup) M.getManifestBlocks(channel, pool, t * 1000, sk);
@@ -128,6 +134,7 @@ export function dump(engine, fx) {
     }
     return { items, days, at };
   } finally {
+    if (typeof M.setLineup === "function") M.setLineup(null);
     if (savedTZ === undefined) delete process.env.TZ;
     else process.env.TZ = savedTZ;
   }
