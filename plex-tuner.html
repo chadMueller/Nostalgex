@@ -33,6 +33,7 @@
 <script src="scripts/nostalgex-sleep-timer.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
+<script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
   :root {
     --bg: #080810;
@@ -8365,41 +8366,62 @@
     }
   }
 
-  // Test a single Plex server connection URL
-  async function testConnection(uri, token) {
+  // Test a single Plex server connection URL. True when the address answers as this server:
+  // /identity is 200 and, when plex.tv gave us the server's machineIdentifier and the answer
+  // names one, they match. A private address on some other network can be another Plex server
+  // (a viewer's own, say), and Roku has refused those since it began finding addresses this way.
+  // An answer that cannot be read counts as an answer, as before. `signal` ends the probe when
+  // the choice is already made.
+  async function testConnection(uri, token, machineIdentifier = '', signal = null) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const onOuterAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', onOuterAbort, { once: true });
+    }
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${uri}/identity`, {
         headers: { 'Accept': 'application/json', 'X-Plex-Token': token },
         signal: controller.signal,
       });
-      clearTimeout(timeout);
-      return res.ok;
+      if (!res.ok) return false;
+      if (!machineIdentifier || !globalThis.NostalgexServerResolve) return true;
+      let body = null;
+      try { body = await res.json(); } catch { /* not JSON: counts as an answer */ }
+      return globalThis.NostalgexServerResolve.identityMatches(body, machineIdentifier);
     } catch {
       return false;
+    } finally {
+      clearTimeout(timeout);
+      if (signal) signal.removeEventListener('abort', onOuterAbort);
     }
   }
 
-  // Find the first reachable connection for a server
+  // Find the best reachable connection for a server: every address is tried at once, and the
+  // choice is made as soon as it cannot change (scripts/nostalgex-server-resolve.js: the Apple
+  // TV's order, home network first, and its early exit). Before, this waited for every address,
+  // so one dead remote address cost its whole 5 s timeout on every sign-in.
   async function findWorkingConnection(server, token) {
-    // Try all connections in parallel, prefer HTTPS remote > local > relay
+    const R = globalThis.NostalgexServerResolve;
+    if (!R) return findWorkingConnectionWaitingForAll(server, token);   // a stale cache without the script
+    const found = await R.resolve(server.connections || [],
+      (conn, signal) => testConnection(conn.uri, token, server.machineIdentifier || '', signal));
+    return found ? found.conn : null;
+  }
+
+  // The way this worked before the early exit, kept for a page whose script cache is older than
+  // its HTML: test everything, then take the best that answered (HTTPS remote > local > relay).
+  async function findWorkingConnectionWaitingForAll(server, token) {
     const sorted = [...(server.connections || [])].sort((a, b) => {
-      // Prefer non-relay HTTPS connections first
       if (!a.relay && a.protocol === 'https' && (b.relay || b.protocol !== 'https')) return -1;
       if (!b.relay && b.protocol === 'https' && (a.relay || a.protocol !== 'https')) return 1;
-      // Then local connections
       if (a.local && !b.local) return -1;
       if (b.local && !a.local) return 1;
       return 0;
     });
-
-    // Test all in parallel and return first success
     const results = await Promise.all(
-      sorted.map(async (conn) => ({
-        conn,
-        ok: await testConnection(conn.uri, token),
-      }))
+      sorted.map(async (conn) => ({ conn, ok: await testConnection(conn.uri, token) }))
     );
     const working = results.find(r => r.ok);
     return working ? working.conn : null;
@@ -8540,17 +8562,22 @@
 
     const chosen = [...selectedServerIndices].map(i => discoveredServers[i]).filter(Boolean);
 
-    const resolved = [];
-    for (const server of chosen) {
+    // Every server at once, as the Apple TV and Roku do: one after another, a server that is
+    // off (a shared one, say) cost its whole timeout before the next was even asked. The list
+    // keeps the order the viewer picked, so resolved[0] is still the primary server.
+    document.querySelector('#plex-waiting .plex-waiting-label').textContent = chosen.length === 1
+      ? `CONNECTING TO ${chosen[0].name.toUpperCase()}`
+      : `CONNECTING TO ${chosen.length} SERVERS`;
+    const found = await Promise.all(chosen.map(async (server) => {
       const token = server.accessToken || plexToken;
-      document.querySelector('#plex-waiting .plex-waiting-label').textContent = `CONNECTING TO ${server.name.toUpperCase()}`;
       const workingConn = await findWorkingConnection(server, token);
-      if (workingConn) {
-        resolved.push({ name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' });
-      } else {
+      if (!workingConn) {
         console.warn(`[Nostalgex] No reachable connection for server: ${server.name}`);
+        return null;
       }
-    }
+      return { name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' };
+    }));
+    const resolved = found.filter(Boolean);
 
     if (resolved.length === 0) {
       const errorEl = document.getElementById('plex-error-label');
