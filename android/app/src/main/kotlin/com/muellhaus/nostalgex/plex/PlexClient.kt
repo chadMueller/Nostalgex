@@ -6,6 +6,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import android.os.SystemClock
+import android.util.Log
+import com.muellhaus.nostalgex.engine.ServerResolve
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -112,30 +118,61 @@ class PlexClient(private val clientId: String, versionName: String) {
 
     private val probe = http.newBuilder().callTimeout(5, TimeUnit.SECONDS).build()
 
-    /** Every address at once; the first in the web's order (HTTPS direct, then local) that answers. */
-    private suspend fun findWorkingConnection(resource: JsonObject, token: String): String? = coroutineScope {
-        data class Conn(val uri: String, val local: Boolean, val relay: Boolean, val https: Boolean)
+    /**
+     * The address to use for one server: every address asked at once, and no more waiting once the
+     * answer cannot change (ServerResolve, the Apple TV's bestReachableURI and Roku's
+     * NxResolveOutcome, through the web tuner's nostalgex-server-resolve.js). Home network first,
+     * then remote HTTPS, remote plain, relay. A home answer settles at once; a home address silent
+     * for 3 s stops holding up a remote answer; 10 s ends the wait. The probes still waiting are
+     * cancelled when it settles. A probe is /identity with a 5 s timeout, as the web's, and an
+     * address that answers as a different Plex server is turned down.
+     */
+    private suspend fun findWorkingConnection(resource: JsonObject, token: String): String? {
+        val machineId = (resource["clientIdentifier"] as? JsonPrimitive)?.content
         val conns = resource["connections"]?.jsonArray?.map { it.jsonObject }?.map { c ->
-            Conn(
-                c["uri"]!!.jsonPrimitive.content,
+            ServerResolve.Conn(
+                (c["uri"] as? JsonPrimitive)?.content ?: "",
                 (c["local"] as? JsonPrimitive)?.booleanOrNull == true,
                 (c["relay"] as? JsonPrimitive)?.booleanOrNull == true,
-                (c["protocol"] as? JsonPrimitive)?.content == "https",
             )
-        } ?: return@coroutineScope null
-        val sorted = conns.sortedWith { a, b ->
-            val aDirect = !a.relay && a.https
-            val bDirect = !b.relay && b.https
-            when {
-                aDirect && !bDirect -> -1
-                bDirect && !aDirect -> 1
-                a.local && !b.local -> -1
-                b.local && !a.local -> 1
-                else -> 0
+        } ?: return null
+        val resolver = ServerResolve.Resolver(conns)
+        resolver.result?.let { return null }
+        val started = SystemClock.elapsedRealtime()
+        fun elapsed() = SystemClock.elapsedRealtime() - started
+        // Every probe and timer reports here; the resolver is read on one coroutine only.
+        val events = Channel<() -> ServerResolve.Outcome?>(Channel.UNLIMITED)
+        val calls = java.util.concurrent.ConcurrentLinkedQueue<okhttp3.Call>()
+        val name = resource["name"]?.jsonPrimitive?.content ?: "Plex"
+        return coroutineScope {
+            val graceJob = launch { delay(resolver.graceMs); events.send { resolver.graceFired(elapsed()) } }
+            val deadlineJob = launch { delay(resolver.deadlineMs); events.send { resolver.expired(elapsed()) } }
+            for (c in resolver.candidates) {
+                val call = probe.newCall(request("${c.conn.uri}/identity", token).build())
+                calls += call
+                call.enqueue(object : okhttp3.Callback {
+                    override fun onFailure(call: okhttp3.Call, e: IOException) {
+                        events.trySend { resolver.report(c, false, elapsed()) }
+                    }
+                    override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                        val ok = response.use { res ->
+                            res.isSuccessful && runCatching {
+                                val mc = json.parseToJsonElement(res.body.string()).jsonObject["MediaContainer"] as? JsonObject
+                                ServerResolve.identityMatches((mc?.get("machineIdentifier") as? JsonPrimitive)?.content, machineId)
+                            }.getOrDefault(true)
+                        }
+                        events.trySend { resolver.report(c, ok, elapsed()) }
+                    }
+                })
             }
+            var out: ServerResolve.Outcome? = null
+            while (out == null) out = events.receive()()
+            graceJob.cancel()
+            deadlineJob.cancel()
+            calls.forEach { it.cancel() }
+            Log.i(TAG, "SERVER ADDRESS \"$name\": ${out.conn?.let { "${out.kind} ${it.uri.substringBefore("://")}" } ?: "none answered"} in ${elapsed()} ms of ${resolver.candidates.size} tried")
+            out.conn?.uri
         }
-        val results = sorted.map { c -> async { c to runCatching { getJson("${c.uri}/identity", token, probe) }.isSuccess } }.awaitAll()
-        results.firstOrNull { it.second }?.first?.uri
     }
 
     suspend fun get(server: PlexServer, path: String): JsonObject =
@@ -163,6 +200,7 @@ class PlexClient(private val clientId: String, versionName: String) {
     }
 
     companion object {
+        private const val TAG = "Nostalgex"
         fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString || it.content != "null" }?.content
         fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.let { it.longOrNull ?: it.content.toDoubleOrNull()?.toLong() }
     }

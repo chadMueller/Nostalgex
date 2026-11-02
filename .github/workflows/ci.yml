@@ -221,6 +221,7 @@ jobs:
               - 'scripts/nostalgex-collections.js'
               - 'roku/tests/gen-collections.mjs'
               - 'scripts/nostalgex-watch-state.js'
+              - 'scripts/nostalgex-server-resolve.js'
               - 'scripts/watch-cleanup-golden.json'
               - 'roku/tests/gen-watch.mjs'
 

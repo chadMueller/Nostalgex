@@ -3929,6 +3929,18 @@ between USE EMAIL AND PASSWORD and the EMAIL field. The Roku section of the priv
 Roku for the account email and only fills a field with it (`privacy.html` and
 `Nostalgex/PRIVACY_POLICY.md` together).
 
+## 2026-11-02 (Android TV: rebased onto main; Plex addresses chosen as the Apple TV and Roku do)
+
+**Changed.** On `feature/android`, rebased onto `main` at `e0c41cc`; the 17 commits since `e6cc985` touched no Android file and none of the files its tests read.
+
+- `main` brought the web tuner the Apple TV's and Roku's way of choosing a Plex address (`scripts/nostalgex-server-resolve.js`). Android had the web's old way. It waited for every address before choosing, and preferred remote HTTPS over the home network. It also took any address that answered, even as a different Plex server. Now ported:
+  - `ServerResolve.kt` holds the rules as a state machine with no clock: home network, remote HTTPS, remote plain, relay; settled once nothing better can answer; a silent home address is given up after 3 s once something else has answered; everything ends at 10 s.
+  - `PlexClient.findWorkingConnection` asks every address at once (`/identity`, 5 s), cancels the rest when it settles, and turns down a different `machineIdentifier`. Each server's choice is logged as `SERVER ADDRESS`.
+- `gen-resolve-vectors.mjs` runs the web module on the smoke's virtual clock: its 16 named cases (the Apple TV's `ConnectionDiscoveryEarlyExitTests`, Roku's `ServerResolveTests`) and its 400 seeded random servers. `ServerResolveTest` replays every run, and all 416 choose the same address at the same millisecond. Removing the "once something else has answered" condition made it fail. The CI path filter now includes the module.
+- The other changes on `main` (GUIDE TEXT SIZE, the WATERSHED switch, the failure card in the split view, and the site) were the web catching up with the Apple TV. Android already had all of them.
+
+**Not checked:** the app's probes against real Plex addresses. That needs Settings opened on the SHIELD, which lists the account's servers through this code.
+
 ## 2026-11-02 (Android TV: the seasonal invite and demo mode)
 
 **Changed.** On `feature/android`. The last two Apple TV features Android lacked; the README's "Not ported yet" list is gone.
