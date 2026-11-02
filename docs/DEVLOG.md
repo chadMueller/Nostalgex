@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (site: the Docker post's channel numbers, and the Roku beta page)
+
+**Shipped.** Nothing until this lands on main. Branch `site/release-nov-2`, three commits, not pushed. Nothing on it depends on an app release.
+
+**Why.** Web tuner and Docker 1.0.11 (and Roku 1.0.8) give every package its own block of channel numbers, so the numbers in the Docker post were out of date for anyone on the current image. Separately, `/roku` still told visitors the beta had room, when Roku's 20 tester spots are taken.
+
+**Changed.**
+- `docker-web-tuner-1-0-1-how-to`: SCREAM is channels 180 to 187, MYSTERY BOX TV 120, CRINGE TV 65, A24 160.
+- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. Drop that commit if a spot has opened.
+
+**Half-done.** The Docker post's three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). They are images on R2 and need re-shoots on tuner 1.0.11 or later. The note block at the bottom of the post says so.
+
+**Next.** The other blog posts that quote channel numbers describe the Apple TV app, so their fixes wait for 1.0.29 (branch `site/1.0.29-live`).
+
 ## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
 
 **Why.** Measured on a Streaming Stick Plus on 1.0.9: after Continue on Roku's own Sign in
