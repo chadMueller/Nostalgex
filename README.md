@@ -62,7 +62,7 @@ Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker cont
 
 [Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.29)
 
-- **Channel numbers change once.** Every package has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
+- **Channel numbers change in this update.** Every package has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
 - **A new Settings layout.** Pick a category on the left and its settings open on the right. Settings also tells you why a channel isn't on the air.
 - **Pick which libraries load** when your server has more than one. A library you leave off is never scanned.
 - **Three new 80s channels** in NOSTALGEX: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV.

@@ -50,13 +50,13 @@ That's how a franchise used to feel on cable. You'd catch the movie on one night
 
 They still count, and they won't show up twice. If you already made a collection for a series on your Plex, Jellyfin or Emby server and Nostalgex found the same series on its own, it's folded into one channel instead of two.
 
-The rest of your collections come along too. In Settings, under MY COLLECTIONS, press SCAN MY COLLECTIONS and Nostalgex lists the movie and TV show collections on your server so you can turn the ones you want into channels. Film series land in FRANCHISES. Everything else, like actor and director sets or a holiday shelf, lands in OTHER COLLECTIONS.
+The rest of your collections come along too. In Settings, under CHANNELS & BUNDLES, open MY COLLECTIONS and press SCAN MY COLLECTIONS. Nostalgex lists the movie and TV show collections on your server so you can turn the ones you want into channels. Film series land in FRANCHISES. Everything else, like actor and director sets or a holiday shelf, lands in OTHER COLLECTIONS.
 
 ## Where do I turn franchise channels on?
 
-Open Settings on your Apple TV and go to CHANNEL PACKAGES. Turn on FRANCHISES. Give it a moment while it builds.
+Open Settings on your Apple TV, go to CHANNELS & BUNDLES and open FRANCHISES. The FRANCHISES switch sits at the top of the page. Turn it on and give it a moment while it builds.
 
-Once it's on, a list called YOUR FRANCHISES opens right under it, with a switch for every series Nostalgex found, plus ADD ALL and REMOVE ALL. So if you want BAD BOYS and JASON BOURNE but would rather keep AMERICAN PIE off the TV when your parents visit, you can. Nothing else in your lineup changes.
+Once it's on, ADD ALL and REMOVE ALL appear under it, followed by one list from A to Z with a switch for every series Nostalgex found, the classics and your server's film-series collections included. So if you want BAD BOYS and JASON BOURNE but would rather keep AMERICAN PIE off the TV when your parents visit, you can. Nothing else in your lineup changes.
 
 ## Five franchise marathons worth flipping to
 
@@ -76,7 +76,7 @@ Usually one of three things:
 
 1. **You own fewer than three films from it.** Two isn't enough for a channel yet.
 2. **A film isn't matched.** If a movie has an odd title or year on your server, it may not match its series. Fix the match on the server and let Nostalgex rescan.
-3. **The package is off.** The YOUR FRANCHISES list only shows up when FRANCHISES is on.
+3. **The switch is off.** The series Nostalgex found only show up on the FRANCHISES page once the FRANCHISES switch is on.
 
 ## Does it work with Jellyfin and Emby?
 
@@ -84,7 +84,7 @@ Yes. Franchise channels work the same way on Plex, Jellyfin and Emby, and Emby i
 
 ## How do I start a franchise marathon tonight?
 
-Get Nostalgex on your Apple TV (tvOS 18 or later) and connect your server. On Plex that's scanning the code on screen with your phone. On Jellyfin you pick your server from the list it finds on your network and approve a Quick Connect code, and on Emby you sign in with your username and password. Then turn on FRANCHISES under CHANNEL PACKAGES in Settings. You'll get 130+ channels built from your own library, with your franchises right there on the dial. Then flip around and see which sequel is on right now.
+Get Nostalgex on your Apple TV (tvOS 18 or later) and connect your server. On Plex that's scanning the code on screen with your phone. On Jellyfin you pick your server from the list it finds on your network and approve a Quick Connect code, and on Emby you sign in with your username and password. Then open Settings, go to CHANNELS & BUNDLES and turn on FRANCHISES. You'll get 130+ channels built from your own library, with your franchises right there on the dial. Then flip around and see which sequel is on right now.
 
 Free on Apple TV, [get it on the App Store](https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&ct=blog_franchises&mt=8). Open source (MIT), no account. No Apple TV handy? The [web tuner](https://www.nostalgex.app/web-tuner?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_franchises&utm_content=web_tuner) shows you what Nostalgex does with your library in a browser, and the [support page](https://www.nostalgex.app/support?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_franchises&utm_content=support) has fixes if connecting gets stuck.
 

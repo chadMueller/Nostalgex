@@ -5,16 +5,17 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-02 (the site for Apple TV 1.0.29)
 
-**Shipped.** Nothing until 1.0.29 is on the App Store. Branch `site/1.0.29-live`, two commits on top of `site/release-nov-2`. The site only shows the App Store version, so this stays off main until App Store Connect reads Ready for Sale.
+**Shipped.** Nothing until 1.0.29 is on the App Store. Branch `site/1.0.29-live`, commits on top of `site/release-nov-2`. The site only shows the App Store version, so this stays off main until App Store Connect reads Ready for Sale.
 
 **Changed.**
-- `content/changelog.json`: 1.0.29 is `released: true`, rendered into the home page's What's New. Its date moves from OCT 2026 (when the entry was started) to NOV 2026.
-- `README.md`: What's new is 1.0.29 and the Releases line says 1.0.29 is live. The link to the `v1.0.29` GitHub release works once that release is published.
-- The slasher post, the franchise post and the channel-surfing cover alt use the 1.0.29 numbers: SCREAM from 180, franchise classics 300 to 306, found franchises from 310. They describe the Apple TV app, so they go out with the release. The found-franchise examples lost their numbers, since those depend on the library, and the two image alts that printed old numbers no longer print any.
+- `content/changelog.json`: 1.0.29 is `released: true`, rendered into the home page's What's New. Its date moves from OCT 2026 (when the entry was started) to NOV 2026. The first bullet reads "Channel numbers change in this update", not "change once", since "once" promises something about later releases.
+- `README.md`: What's new is 1.0.29 and the Releases line says 1.0.29 is live. The link to the `v1.0.29` GitHub release only resolves once that release is published, so the tag and the release go out in the same step as the push.
+- The slasher post, the franchise post and the channel-surfing cover alt use the 1.0.29 numbers: SCREAM from 180, franchise classics 300 to 306, found franchises from 310. They describe the Apple TV app, so they go out with the release. The slasher post keeps its history (1.0.23 added four channels, 1.0.28 grew SCREAM to eight) and now gives all eight numbers, 180 to 187. The found-franchise examples lost their numbers, since those depend on the library, and the two image alts that printed old numbers no longer print any.
+- The franchise post's Settings steps now follow the 1.0.29 layout: Settings, CHANNELS & BUNDLES, then FRANCHISES (the switch, ADD ALL and REMOVE ALL, one A to Z list) or MY COLLECTIONS (SCAN MY COLLECTIONS). Labels checked against `SettingsChannelsView.swift` and `SettingsCategory.swift` on main.
 
-**Half-done.** The guide screenshots in those three posts still show the old numbers (images on R2: the slasher guide frame, the channel-surfing cover, the two guide frames and the cover in the franchise post). They need re-shoots on 1.0.29. The Settings paths in the franchise post (CHANNEL PACKAGES, YOUR FRANCHISES) and the iCloud line in the 1.0.26 post (CONNECTION) describe the old Settings layout, which 1.0.29 replaces. Rewrite them once someone has looked at the new Settings on a TV.
+**Half-done.** The guide screenshots in those three posts still show the old numbers (images on R2: the slasher guide frame, the channel-surfing cover, the two guide frames and the cover in the franchise post). They need re-shoots on 1.0.29. Still describing the old Settings layout: the iCloud line in the 1.0.26 post (CONNECTION), and "collection Channel Packages" on the Plex, Jellyfin, Emby and support pages.
 
-**Next.** Tag `v1.0.29` and publish the GitHub release from the changelog entry.
+**Next.** Tag `v1.0.29` and publish the GitHub release from the changelog entry, then push.
 
 ## 2026-11-02 (Web tuner and Docker 1.0.13: Jellyfin and Emby items keep their audio tracks, #176)
 
