@@ -13,11 +13,13 @@ needs its output, so the bench had no library to run on.
 
 **Changed.** It loads the library with `plex-loader.mjs`'s `loadLibrary`, as the live tools do,
 and keeps its own part: the shared cache's enrichment rows and `out/bench/library.json`. About 40
-lines of duplicated lifting are gone, so a global the loader needs is added in one place.
+lines of duplicated lifting are gone, so a global the loader needs is added in one place. As
+the live tools do, it tells the loader when there is more than one server (it passed `false`),
+and an empty library stops with `loadLibrary`'s error instead of writing an empty file.
 
 **Measured.** On main it stops at `ENOENT ... roku/data/UPSTREAM`. On the branch, against a real
 Plex library: 5,404 items and 911 enrichment rows in 3 min 44 s, 28 titles with accents and no
-U+FFFD.
+U+FFFD. `tests/bench/run.sh` over that file hadn't finished in the interpreter after 15 minutes.
 
 ## 2026-11-02 (site: the Roku beta is full, /roku linked across the site, the Docker post's channel numbers)
 
