@@ -72,7 +72,6 @@ sub init()
     m.fixtureTimer = invalid
     m.rfiStore = invalid
     m.rfiEmail = ""
-    m.rfiAsked = false
     renderLeft()
     render()
     m.top.SetFocus(true)
@@ -483,6 +482,8 @@ function buildPlexCreds(col as Object) as Float
     y = y + addField(col, "plexEmail", m.copy.plexEmailLabel, m.copy.pressToType, m.plexEmail, false, y) + 20
     y = y + addField(col, "plexPw", m.copy.password, m.copy.pressToType, m.plexPw, true, y) + 20
     y = y + addButton(col, "plexCredsSignIn", m.copy.signIn, "primary", y, { enabled: m.plexEmail.Trim() <> "" and m.plexPw <> "" }) + 20 + 6
+    waiting = m.rfiStore <> invalid
+    y = y + addButton(col, "plexRoku", NxRfiButtonLabel(waiting), "quiet", y, { enabled: not waiting }) + 6
     y = y + addButton(col, "back", m.copy.back, "quiet", y, {})
     return y
 end function
@@ -720,7 +721,9 @@ sub activate(id as String)
         go("plexCreds")
         m.plexEmail = NxRfiPrefill(m.plexEmail, m.rfiEmail)
         render()
+    else if id = "plexRoku" then
         askRoku()
+        render()
     else if id = "plexEmail" or id = "plexPw" then
         openKeyboard(id)
     else if id = "plexCredsSignIn" then
@@ -1143,22 +1146,25 @@ end sub
 
 ' ── Roku's Request for Information (getUserData) ───────────────────────────
 ' Certification wants an authenticated app to ask for the viewer's Roku account
-' email during sign-in (static analysis, RP 2.1 and RP 4.1). It is asked where
-' an email is typed: when the viewer opens USE EMAIL AND PASSWORD, once per
-' view. That is a press of the viewer's own, so a recorded sign-in script meets
-' Roku's "Sign in" screen at the same step every time, and a viewer on the
-' plex.tv/link code or a Jellyfin or Emby server isn't asked for an address
-' the app wouldn't use. The viewer shares the email or cancels; either way the
-' flow goes on as it was and nothing waits for the answer. A shared address
-' only starts the EMAIL field, and like anything typed there goes to plex.tv
-' when the viewer presses SIGN IN. While the field holds only that address the
-' keyboard opens empty, so typing (or a recorded sign-in script) replaces it
-' and is never added to the end of it. It is kept for this view, never saved,
-' and never printed.
+' email during sign-in (static analysis, RP 2.1 and RP 4.1). It is asked when
+' the viewer presses USE MY ROKU EMAIL on the email and password screen, and
+' only then. 1.0.9 and 1.0.10 asked as the screen opened, but Roku decides when
+' its own Sign in screen appears: on one stick it came up within a second, then
+' took 25.5 to 25.8 s in seven timed tries over the next five minutes, then
+' 0.7 s again, all on the same build. A screen that lands in the middle of
+' typing is a bug, and a recorded sign-in script that presses OK on a timer
+' cannot tell whether it has appeared: with it five seconds late the script
+' ended on the connect screen without signing in. So nothing asks unprompted.
+' The viewer shares the email or cancels; either way the flow goes on as it
+' was and nothing waits for the answer except the button, which says WAITING
+' FOR ROKU... until it comes. A shared address only starts the EMAIL field, and
+' like anything typed there goes to plex.tv when the viewer presses SIGN IN.
+' While the field holds only that address the keyboard opens empty, so typing
+' (or a recorded sign-in script) replaces it and is never added to the end of
+' it. It is kept for this view, never saved, and never printed.
 
 sub askRoku()
-    if m.rfiAsked or m.rfiStore <> invalid then return
-    m.rfiAsked = true
+    if m.rfiStore <> invalid then return
     if m.top.dryRun or m.top.discoveryFixture <> "" then return
     store = CreateObject("roSGNode", "ChannelStore")
     info = CreateObject("roSGNode", "ContentNode")
@@ -1182,11 +1188,8 @@ sub onRokuAnswer()
     end if
     ' The answer can land after the viewer is already on the Plex fields.
     if m.screen = "plexCreds" and m.auth = "" then
-        shared = NxRfiPrefill(m.plexEmail, m.rfiEmail)
-        if shared <> m.plexEmail then
-            m.plexEmail = shared
-            render()
-        end if
+        m.plexEmail = NxRfiPrefill(m.plexEmail, m.rfiEmail)
+        render()
     end if
 end sub
 

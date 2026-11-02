@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku 1.0.11: Roku's email screen is asked for on a button, not as the sign-in screen opens)
+
+**Shipped.** Nothing yet. Branch `roku/rfi-on-request`, cut from `origin/main` at `e5375d3`, not pushed.
+
+**Why.** Roku's automated behavior analysis ran on the public app (1.0.10). Sign In and Sign Out passed; launch
+performance, deep linking and content play errored, each with the connect screen as the active element, and the
+launch beacon absent. The sign-in script never got the TV signed in. 1.0.9 and 1.0.10 asked Roku for the account
+email (`getUserData`, certification RP 2.1 and RP 4.1) the moment USE EMAIL AND PASSWORD opened, and Roku's own
+Sign in screen is not on our clock. Timed on one Streaming Stick Plus, same build: under a second, then 25.5 to
+25.8 s in seven tries over five minutes, then 0.7 s. A recorded script presses OK on a timer, so it needs the
+screen to be where it expects it: with the screen simulated 5 s late the script ended on the connect screen, never
+reaching plex.tv; 15 s late it works only if the script waits longer than that; 25 s late it ended inside Roku's
+Privacy policy dialog. A person typing a password would get the same screen dropped over the keyboard.
+
+**Changed.** The ask moved from opening the screen to a button, USE MY ROKU EMAIL, under SIGN IN. It says
+WAITING FOR ROKU... until Roku answers. Sharing still fills the EMAIL field only, and nothing else about the
+sign-in changed. `getUserData` is still called from `ConnectView.brs`, so static analysis still sees it.
+
+**Not verified.** That this was the cause of the result on Roku's lab device: no log from it exists. The result is
+consistent with it (no sign-in reached plex.tv), and the mechanism reproduces on the stick.
+
+**Next.** Package, upload to the public app, re-run Roku's behavior analysis. The privacy page line about the Roku
+email names USE EMAIL AND PASSWORD and needs the new button's name.
+
 ## 2026-11-02 (site: the servers section moves under the guide)
 
 **Shipped.** Nothing until this lands on main. Branch `site/servers-below-guide`, cut from `origin/main` at `e0c41cc`, not pushed. Homepage only: `index.html` and `styles.css`.

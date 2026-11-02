@@ -346,6 +346,8 @@ function NxRunSignInFlowTests() as Integer
     NxCheck(r, "RFI: a blank field starts with the shared email", NxRfiPrefill("   ", "viewer@example.com"), "viewer@example.com")
     NxCheck(r, "RFI: declined leaves the field as it was", NxRfiPrefill("", ""), "")
     NxCheck(r, "RFI: declined leaves a typed email as it was", NxRfiPrefill("typed@example.com", ""), "typed@example.com")
+    NxCheck(r, "RFI: the button reads USE MY ROKU EMAIL", NxRfiButtonLabel(false), "USE MY ROKU EMAIL")
+    NxCheck(r, "RFI: the button reads WAITING FOR ROKU... while Roku has not answered", NxRfiButtonLabel(true), "WAITING FOR ROKU...")
 
     ' The keyboard over an address Roku shared opens empty, so typing replaces it.
     NxCheck(r, "RFI keyboard: over the shared address it opens empty", NxRfiKeyboardStart("roku@example.com", "roku@example.com"), "")

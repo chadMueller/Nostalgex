@@ -357,6 +357,8 @@ function NxSignInCopy() as Object
         connectPlex: "CONNECT TO PLEX",
         useEmailPassword: "USE EMAIL AND PASSWORD",
         plexEmailLabel: "EMAIL",
+        useRokuEmail: "USE MY ROKU EMAIL",
+        waitingForRoku: "WAITING FOR ROKU...",
         plexCredsNote: "If this account signs in to Plex with Google or Apple, it has no Plex password. Use CONNECT TO PLEX instead.",
         plexIncorrectPassword: "Incorrect email or password.",
         plexCredsUnreachable: "Could not reach plex.tv. Check your connection, then try again.",
@@ -445,6 +447,16 @@ function NxRfiEmail(userData as Dynamic) as String
     at = Instr(1, email, "@")
     if at < 2 or at = Len(email) or Len(email) > 254 or Instr(1, email, " ") > 0 then return ""
     return email
+end function
+
+' The label of the button that asks Roku for the account email: its own text,
+' or WAITING FOR ROKU... while the question is out. Roku can take anywhere
+' from under a second to well over twenty to put its Sign in screen up, so the
+' button says so rather than leaving the viewer guessing.
+function NxRfiButtonLabel(waiting as Boolean) as String
+    copy = NxSignInCopy()
+    if waiting then return copy.waitingForRoku
+    return copy.useRokuEmail
 end function
 
 ' What the Plex EMAIL field starts with: whatever the viewer already typed,
