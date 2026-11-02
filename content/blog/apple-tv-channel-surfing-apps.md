@@ -3,7 +3,7 @@ title: "The Best Channel Surfing Apps for Apple TV: Live Channels From Your Plex
 seo_title: "Best Channel Surfing Apps for Apple TV 2026"
 description: "Coax, Bunny Ears TV, TubeTime+, analoq and Nostalgex turn Plex or Jellyfin into live channels on Apple TV. Prices, tvOS needs and who each one really fits."
 cover: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/apple-tv-channel-surfing-apps/cover.jpg"
-cover_alt: "Channel surfing on Apple TV with Nostalgex: a movie playing full screen on channel 140 Nostalgex Horror"
+cover_alt: "Channel surfing on Apple TV with Nostalgex: a movie playing full screen on the Nostalgex Horror channel"
 excerpt: "Coax, Bunny Ears TV, TubeTime+, analoq and Nostalgex all turn your library into live TV on Apple TV. I built one of them, so here's the fairest comparison I can write."
 author: "Chad Mueller"
 slug: apple-tv-channel-surfing-apps

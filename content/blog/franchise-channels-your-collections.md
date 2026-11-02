@@ -30,17 +30,17 @@ That's the fun part. Turn on JASON BOURNE and you're an hour and a half into The
 
 ## Which franchise channels are there?
 
-Two kinds, and they sit in two places on the dial.
+Two kinds, and they sit side by side in the 300s.
 
-**The classics, in the 100s.** These are channels for the big series a lot of libraries have. In my guide right now that's 101 MARVEL, 102 HARRY POTTER, 103 JURASSIC PARK, 104 LORD OF THE RINGS, 105 MISSION IMPOSSIBLE and 106 JASON BOURNE. They fill from the films you actually own.
+**The classics, from 300.** These are channels for the big series a lot of libraries have. In my guide right now that's 301 MARVEL, 302 HARRY POTTER, 303 JURASSIC PARK, 304 LORD OF THE RINGS, 305 MISSION IMPOSSIBLE and 306 JASON BOURNE. They fill from the films you actually own.
 
-**Your own, in the 300s.** This is where it gets personal. Nostalgex looks through your movies, works out which ones belong to the same series using TMDB and IMDb data, and any series where you own 3 or more films gets a channel. My library came up with 300 AMERICAN PIE, 301 BAD BOYS, 302 CAPTAIN AMERICA and 303 FAST & FURIOUS. Yours will be different, because your shelf is different. That's the point.
+**Your own, from 310.** This is where it gets personal. Nostalgex looks through your movies, works out which ones belong to the same series using TMDB and IMDb data, and any series where you own 3 or more films gets a channel. My library came up with AMERICAN PIE, BAD BOYS, CAPTAIN AMERICA and FAST & FURIOUS. Yours will be different, because your shelf is different. That's the point.
 
 Two films is a double feature, not a channel. Three or more and there's enough to keep a schedule going.
 
 ## Do TV spinoffs show up on franchise channels?
 
-Yes, and it's my favourite surprise in the whole feature. If you own a show from the same franchise, it can mix in with the films. Flip to 103 JURASSIC PARK in my guide and Jurassic World: Camp Cretaceous is on, with Jurassic World: Chaos Theory coming up after it.
+Yes, and it's my favourite surprise in the whole feature. If you own a show from the same franchise, it can mix in with the films. Flip to 303 JURASSIC PARK in my guide and Jurassic World: Camp Cretaceous is on, with Jurassic World: Chaos Theory coming up after it.
 
 ![Nostalgex TV guide on Apple TV with the JURASSIC PARK channel airing Jurassic World: Camp Cretaceous and Chaos Theory, next to LORD OF THE RINGS and MISSION IMPOSSIBLE channels](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/franchise-channels-your-collections/jurassic-park-guide.webp)
 
@@ -66,7 +66,7 @@ These are straight off my guide this week. Yours will look a little different, s
 2. **LORD OF THE RINGS.** The Fellowship of the Ring, then The Hobbit: The Battle of the Five Armies. Middle-earth doesn't care about release order, and honestly neither do I.
 3. **AMERICAN PIE.** American Wedding, then American Pie Presents: Beta House. Maybe not with your parents in the room.
 4. **BAD BOYS.** Bad Boys: Ride or Die, then Bad Boys II. Miami, explosions, Saturday afternoon sorted.
-5. **CAPTAIN AMERICA.** Captain America: The First Avenger, then Captain America: Brave New World, while MARVEL runs its own thing on 101.
+5. **CAPTAIN AMERICA.** Captain America: The First Avenger, then Captain America: Brave New World, while MARVEL runs its own thing on 301.
 
 If you'd rather have a whole genre than one series, my posts on the [best 90s buddy cop movies channel](https://www.nostalgex.app/blog/best-90s-buddy-cop-movies-channel?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_franchises&utm_content=buddy_cop_post) and a [90s slasher movie marathon](https://www.nostalgex.app/blog/90s-slasher-movies-halloween-marathon?utm_source=blog&utm_medium=internal&utm_campaign=launch_oct26_blog_franchises&utm_content=slasher_post) show how those channels fill up from a normal library.
 

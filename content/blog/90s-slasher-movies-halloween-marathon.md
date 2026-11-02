@@ -60,11 +60,11 @@ The Faculty (1998) is Robert Rodriguez doing Invasion of the Body Snatchers in a
 
 Nostalgex is a free, open source app for Apple TV, plus a free [web tuner](/web-tuner), that turns your own Plex, Jellyfin, or Emby library into live channels with a retro TV guide. It's plug and play. Connect your server and it builds the channels and the schedules from what you own, so the SCREAM channels are already airing when you open the guide. It doesn't come with movies, though. It plays what's on your server, so these films need to be in your library. (New to the idea? Here's how to make your Plex library feel like cable.)
 
-### SCREAM is on channels 137 to 140
+### SCREAM is on channels 180 to 183
 
-Version 1.0.23 added SCREAM, a Halloween bundle with four channels: SCREAM KIDS (137), FRIGHT NIGHT (138), SCREAM ADULTS (139), and NOSTALGEX HORROR (140), which is built for 70s, 80s, and 90s horror. In October the Apple TV guide offers SCREAM right at the top (say yes and it's in your lineup), with the kids channel first. Handy while the doorbell's still going. It's available any month from Settings, too, if you watch Scream in July.
+Version 1.0.23 added SCREAM, a Halloween bundle with four channels: SCREAM KIDS (180), FRIGHT NIGHT (181), SCREAM ADULTS (182), and NOSTALGEX HORROR (183), which is built for 70s, 80s, and 90s horror. In October the Apple TV guide offers SCREAM right at the top (say yes and it's in your lineup), with the kids channel first. Handy while the doorbell's still going. It's available any month from Settings, too, if you watch Scream in July.
 
-![Nostalgex guide on Apple TV with Scream Kids, Fright Night, Scream Adults and Nostalgex Horror on channels 137 to 140](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/90s-slasher-movies-halloween-marathon/scream-bundle-guide.webp)
+![Nostalgex guide on Apple TV with Scream Kids, Fright Night, Scream Adults and Nostalgex Horror channels](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/90s-slasher-movies-halloween-marathon/scream-bundle-guide.webp)
 
 The channels keep airing even when nobody's watching, so when you tune in at 9:40, you land in the middle of something, like 1997.
 
