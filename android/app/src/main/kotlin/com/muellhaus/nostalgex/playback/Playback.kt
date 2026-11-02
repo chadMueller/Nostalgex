@@ -2,6 +2,9 @@ package com.muellhaus.nostalgex.playback
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -13,16 +16,24 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
+import com.muellhaus.nostalgex.engine.PlaybackStarvation
+import com.muellhaus.nostalgex.engine.PlaybackWatchdog
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.plex.PlexClient
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.UUID
 
 /** How a programme reached the screen. */
@@ -32,9 +43,18 @@ enum class Delivery(val label: String) { DIRECT_PLAY("DIRECT PLAY"), TRANSCODE("
  * One ExoPlayer for the whole session. Each programme tries direct play first, the file as
  * the server stores it, and falls back to the server's HLS transcode when the player fails or
  * a track it needs has no decoder here. Plex, Jellyfin and Emby take the same path; only the
- * URLs and the way a transcode is stopped differ. The web tuner can only direct play MP4, WebM and MOV;
- * finding out how much more a SHIELD plays directly is what this spike is for, so every
- * decision is logged under the "Nostalgex" tag (`adb logcat -s Nostalgex`).
+ * URLs and the way a transcode is stopped differ. Every decision is logged under the
+ * "Nostalgex" tag (`adb logcat -s Nostalgex`).
+ *
+ * The Apple TV's recovery ladder (AppState+Playback.swift) watches every attempt:
+ * - The startup watchdog ([PlaybackWatchdog]): no picture by the deadline (15 s direct, 20 s
+ *   a transcode) moves a direct play to the server stream, and a transcode to one retry capped
+ *   at 1080p, then to the failure card.
+ * - The starvation monitor ([PlaybackStarvation]), once a second after picture: a source that
+ *   can't keep up moves a direct play to the server stream and a transcode to the capped
+ *   retry, from where the viewer is; a capped stream that starves too ends in "Your server
+ *   couldn't keep up".
+ * Each attempt has a number; a callback from an earlier one does nothing.
  */
 @OptIn(UnstableApi::class)
 class Playback(
@@ -51,9 +71,11 @@ class Playback(
 
     interface Listener {
         fun onStarted(item: MediaItem, delivery: Delivery)
+        /** The watchdog saw a picture: a decoded frame and a moving playhead (PlaybackWatchdog.hasPicture). */
+        fun onPicture(item: MediaItem)
         /** The programme played to its end. */
         fun onEnded(item: MediaItem)
-        /** Neither direct play nor a transcode worked, and why (PlaybackFailure.classify). */
+        /** Nothing on the ladder worked, and why (PlaybackFailure.classify). */
         fun onFailed(item: MediaItem, failure: PlaybackFailure)
         /** What PLAYBACK INFORMATION shows changed. */
         fun onInfo(info: PlaybackInfo)
@@ -68,12 +90,29 @@ class Playback(
             value?.let(listener::onInfo)
         }
 
-    private data class Current(val item: MediaItem, val offsetSec: Long, val delivery: Delivery, val session: String?, val startedAtMs: Long)
+    /**
+     * The attempt on screen. `capped` is the ladder's 1080p retry, the last rung. `requestedOffsetSec`
+     * is the start time the request itself carried (Plex's `offset`), for [PlaybackWatchdog.hlsBaseOffset].
+     */
+    private data class Current(
+        val item: MediaItem, val offsetSec: Long, val delivery: Delivery, val session: String?, val startedAtMs: Long,
+        val capped: Boolean = false, val requestedOffsetSec: Long = 0,
+    )
 
     private var current: Current? = null
     private var started = false
     /** A frame reached the screen for the programme on: proof the device can decode it. */
     private var firstFrame = false
+    private var bufferingSinceMs = 0L
+    /** Seconds to add to the player's clock for a transcode whose server rebased it to zero. */
+    private var hlsBase = 0.0
+    /** What the loads of this attempt saw, for the card when the watchdog gives up without a player error. */
+    private var loadStatus: Int? = null
+    private var loadUnreachable = false
+    private var loadedBytes = false
+
+    private val main = Handler(Looper.getMainLooper())
+    private var attempt = 0
 
     private val http = DefaultHttpDataSource.Factory()
         .setDefaultRequestProperties(plex.headers)
@@ -87,14 +126,27 @@ class Playback(
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     val c = current ?: return
+                    // Every rebuffer once a programme is on, so a stall can be counted from the log.
+                    if (started && state == Player.STATE_BUFFERING) {
+                        bufferingSinceMs = System.currentTimeMillis()
+                        Log.i(TAG, "BUFFERING at ${currentPosition / 1000}s")
+                    } else if (started && state == Player.STATE_READY && bufferingSinceMs > 0) {
+                        Log.i(TAG, "PLAYING again after ${System.currentTimeMillis() - bufferingSinceMs} ms")
+                        bufferingSinceMs = 0
+                    }
                     when (state) {
                         Player.STATE_READY -> if (!started) {
                             started = true
+                            if (c.delivery == Delivery.TRANSCODE) hlsBase = PlaybackWatchdog.hlsBaseOffset(c.requestedOffsetSec, currentPosition / 1000.0)
                             info = info?.copy(ready = true)
-                            Log.i(TAG, "STARTED ${c.delivery.label} ${describe(c.item)} in ${System.currentTimeMillis() - c.startedAtMs} ms at ${currentPosition / 1000}s of ${duration / 1000}s")
+                            Log.i(TAG, "STARTED ${c.delivery.label}${if (c.capped) " (capped at 1080p)" else ""} ${describe(c.item)} in " +
+                                "${System.currentTimeMillis() - c.startedAtMs} ms at ${currentPosition / 1000}s of ${duration / 1000}s")
                             listener.onStarted(c.item, c.delivery)
                         }
-                        Player.STATE_ENDED -> listener.onEnded(c.item)
+                        Player.STATE_ENDED -> {
+                            endAttempt()
+                            listener.onEnded(c.item)
+                        }
                     }
                 }
 
@@ -107,7 +159,7 @@ class Playback(
                         val groups = tracks.groups.filter { it.type == type }
                         if (groups.isNotEmpty() && groups.none { it.isSupported }) {
                             val formats = groups.flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).sampleMimeType } }
-                            fallBack(c, "no decoder for ${if (type == C.TRACK_TYPE_VIDEO) "video" else "audio"} $formats")
+                            fallBack(c, "no decoder for ${if (type == C.TRACK_TYPE_VIDEO) "video" else "audio"} $formats", PlaybackInfo.Reason.DIRECT_PLAY_FAILED)
                             return
                         }
                     }
@@ -120,12 +172,30 @@ class Playback(
                 override fun onPlayerError(error: PlaybackException) {
                     val c = current ?: return
                     if (c.delivery == Delivery.DIRECT_PLAY) {
-                        fallBack(c, "${error.errorCodeName}: ${error.message}")
+                        fallBack(c, "${error.errorCodeName}: ${error.message}", PlaybackInfo.Reason.DIRECT_PLAY_FAILED)
                     } else {
                         val failure = PlaybackFailure.classify(serverName, evidence(error, c.item))
                         Log.w(TAG, "FAILED TRANSCODE ${describe(c.item)}: ${error.errorCodeName}; ${failure.headline}", error)
-                        stopSession()
-                        listener.onFailed(c.item, failure)
+                        fail(c, failure)
+                    }
+                }
+            })
+            // What each request answered, for a card the watchdog has to write without a player error.
+            addAnalyticsListener(object : AnalyticsListener {
+                override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+                    if (loadEventInfo.bytesLoaded > 0) loadedBytes = true
+                }
+
+                override fun onLoadError(
+                    eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData,
+                    error: IOException, wasCanceled: Boolean,
+                ) {
+                    if (loadEventInfo.bytesLoaded > 0) loadedBytes = true
+                    var cause: Throwable? = error
+                    while (cause != null) {
+                        if (cause is HttpDataSource.InvalidResponseCodeException) loadStatus = cause.responseCode
+                        if (cause is SocketTimeoutException || cause is UnknownHostException || cause is java.net.ConnectException) loadUnreachable = true
+                        cause = cause.cause
                     }
                 }
             })
@@ -134,7 +204,7 @@ class Playback(
     fun play(item: MediaItem, offsetSec: Long) {
         stopSession()
         val q = quality
-        info = PlaybackInfo(qualityAtTune = q, videoCodec = item.videoCodec, audioCodec = item.audioCodec)
+        info = PlaybackInfo(qualityAtTune = q, videoCodec = item.videoCodec, audioCodec = item.audioCodec, backend = serverName)
         // Away from home a file over the level's ceiling is transcoded: direct play can't step
         // down when the connection can't carry it (PlexAPIService.buildDirectPlayURL).
         val overCeiling = !StreamQuality.isLikelyLocalServer(item.serverUrl) && (item.bitrate ?: 0) > q.remoteDirectPlayCeilingKbps
@@ -143,22 +213,52 @@ class Playback(
         start(item, offsetSec, delivery, if (delivery == Delivery.TRANSCODE) PlaybackInfo.Reason.SERVER_STREAM_SELECTED else PlaybackInfo.Reason.NONE)
     }
 
-    private fun fallBack(c: Current, reason: String) {
+    /** Where the viewer is in the programme, on the file's own clock. */
+    private fun positionSec(): Long = maxOf(0L, (player.currentPosition / 1000.0 + hlsBase).toLong())
+
+    private fun fallBack(c: Current, reason: String, infoReason: PlaybackInfo.Reason) {
         // Resume where the direct play got to, or the planned offset if it never started.
-        val at = if (started) player.currentPosition / 1000 else c.offsetSec
+        val at = if (started) positionSec() else c.offsetSec
         Log.i(TAG, "DIRECT PLAY FAILED ${describe(c.item)}: $reason; transcoding from ${at}s")
-        start(c.item, at, Delivery.TRANSCODE, PlaybackInfo.Reason.DIRECT_PLAY_FAILED)
+        start(c.item, at, Delivery.TRANSCODE, infoReason)
     }
 
-    private fun start(item: MediaItem, offsetSec: Long, delivery: Delivery, reason: PlaybackInfo.Reason) {
+    /** The last rung: the server stream again, asked for no more than 1080p (cappedTranscodeURL). */
+    private fun capped(c: Current, at: Long, why: String, infoReason: PlaybackInfo.Reason) {
+        Log.i(TAG, "CAPPED RETRY ${describe(c.item)}: $why; transcoding at up to 1080p from ${at}s")
+        stopSession()
+        start(c.item, at, Delivery.TRANSCODE, infoReason, capped = true)
+    }
+
+    /** Gives up on this programme: its transcode stopped, its timers off, the card shown. */
+    private fun fail(c: Current, failure: PlaybackFailure) {
+        endAttempt()
+        stopSession()
+        listener.onFailed(c.item, failure)
+    }
+
+    /** Callbacks from the attempt on screen stop counting. */
+    private fun endAttempt() {
+        attempt++
+        main.removeCallbacksAndMessages(null)
+    }
+
+    private fun start(item: MediaItem, offsetSec: Long, delivery: Delivery, reason: PlaybackInfo.Reason, capped: Boolean = false) {
+        endAttempt()
         val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource(serverName))
         val token = item.serverToken ?: ""
         started = false
         firstFrame = false
-        info = info?.copy(delivery = delivery, reason = reason, ready = false)
-        val q = info?.qualityAtTune ?: quality
+        bufferingSinceMs = 0
+        hlsBase = 0.0
+        loadStatus = null
+        loadUnreachable = false
+        loadedBytes = false
+        info = info?.copy(delivery = delivery, reason = reason, ready = false, capped = capped)
+        // The capped retry is the Apple TV's `.high` preset whatever was chosen: 1080p, 12 Mbps.
+        val q = if (capped) StreamQuality.HIGH else info?.qualityAtTune ?: quality
         val mb = mediaBrowserServer
-        val exo = if (mb != null) mediaBrowserItem(mb, item, offsetSec, delivery, q) else when (delivery) {
+        val exo = if (mb != null) mediaBrowserItem(mb, item, offsetSec, delivery, q, capped) else when (delivery) {
             Delivery.DIRECT_PLAY -> {
                 current = Current(item, offsetSec, delivery, null, System.currentTimeMillis())
                 ExoItem.Builder().setUri("$server${item.partKey}?X-Plex-Token=${Uri.encode(token)}").build()
@@ -167,7 +267,7 @@ class Playback(
                 // The web tuner's request (plex-tuner.html playCurrentItem), with its own session
                 // id so a channel change can stop exactly this transcode and no other.
                 val session = UUID.randomUUID().toString()
-                current = Current(item, offsetSec, delivery, session, System.currentTimeMillis())
+                current = Current(item, offsetSec, delivery, session, System.currentTimeMillis(), capped, requestedOffsetSec = offsetSec)
                 val url = Uri.parse("$server/video/:/transcode/universal/start.m3u8").buildUpon()
                     .appendQueryParameter("path", "/library/metadata/${item.ratingKey}")
                     .appendQueryParameter("mediaIndex", "0")
@@ -193,10 +293,75 @@ class Playback(
                 ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
             }
         }
-        Log.i(TAG, "TRY ${delivery.label} ${describe(item)} from ${offsetSec}s")
+        Log.i(TAG, "TRY ${delivery.label}${if (capped) " (capped at 1080p)" else ""} ${describe(item)} from ${offsetSec}s")
         player.playWhenReady = true
         player.setMediaItem(exo, offsetSec * 1000)
         player.prepare()
+        current?.let { watch(attempt, it) }
+    }
+
+    // ── The ladder ──────────────────────────────────────────────────────────
+
+    private fun watch(a: Int, c: Current) {
+        val deadline = PlaybackWatchdog.deadlineSeconds(c.delivery == Delivery.DIRECT_PLAY, null, null)
+        val window = PlaybackWatchdog.PROGRESS_WINDOW_SECONDS
+        var sampleA = 0L
+        main.postDelayed({ if (a == attempt) sampleA = player.currentPosition }, (deadline - window) * 1000L)
+        main.postDelayed({ if (a == attempt) judgeStartup(c, deadline, (player.currentPosition - sampleA) / 1000.0) }, deadline * 1000L)
+        val monitor = PlaybackStarvation(STALL_SECONDS)
+        main.postDelayed(object : Runnable {
+            override fun run() {
+                if (a != attempt) return
+                if (started && sample(c, monitor)) return
+                main.postDelayed(this, 1000)
+            }
+        }, 1000)
+    }
+
+    /** PlaybackWatchdog at the deadline: a picture, or the next rung. */
+    private fun judgeStartup(c: Current, deadline: Int, progressed: Double) {
+        if (PlaybackWatchdog.hasPicture(started, progressed, firstFrame)) {
+            listener.onPicture(c.item)
+            return
+        }
+        val detail = "ready=$started, playhead moved ${"%.1f".format(progressed)}s, frame=$firstFrame, bytes=$loadedBytes"
+        when {
+            c.delivery == Delivery.DIRECT_PLAY -> {
+                Log.i(TAG, "WATCHDOG ${deadline}s, direct play gave no picture ($detail)")
+                fallBack(c, "no picture after ${deadline}s", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+            }
+            !c.capped -> capped(c, c.offsetSec, "no picture after ${deadline}s ($detail)", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+            else -> {
+                val failure = PlaybackFailure.classify(serverName, evidence(null, c.item))
+                Log.w(TAG, "WATCHDOG ${deadline}s, capped stream gave no picture ($detail); ${failure.headline}")
+                fail(c, failure)
+            }
+        }
+    }
+
+    /** One starvation sample. True when the attempt was replaced or given up. */
+    private fun sample(c: Current, monitor: PlaybackStarvation): Boolean {
+        val durationMs = player.duration
+        val remaining = if (durationMs == C.TIME_UNSET) null else (durationMs - player.currentPosition) / 1000.0
+        val before = monitor.recentStalls
+        val verdict = monitor.observe(player.currentPosition / 1000.0, SystemClock.elapsedRealtime() / 1000.0, !player.playWhenReady, remaining)
+        if (monitor.recentStalls > before) Log.i(TAG, "STALL counted: ${monitor.recentStalls} in the last 2 min, longest ${"%.0f".format(monitor.longestStall)}s")
+        verdict ?: return false
+        val at = positionSec()
+        val detail = "stalls=${verdict.stalls} longest=${"%.0f".format(verdict.longestStallSeconds)}s at ${at}s"
+        when {
+            c.delivery == Delivery.DIRECT_PLAY -> {
+                Log.i(TAG, "STARVED on direct play ($detail)")
+                fallBack(c, "starved", PlaybackInfo.Reason.STREAM_STALLED)
+            }
+            !c.capped -> capped(c, at, "starved ($detail)", PlaybackInfo.Reason.STREAM_STALLED)
+            else -> {
+                // The server answered and still couldn't be watched: a different sentence from "refused".
+                Log.w(TAG, "STARVED at 1080p too ($detail); nothing smaller to ask for")
+                fail(c, PlaybackFailure.classify(serverName, PlaybackFailure.Evidence(starvedAfterCappedRetry = true)))
+            }
+        }
+        return true
     }
 
     /**
@@ -206,9 +371,10 @@ class Playback(
      * request in MPEG-TS, H.264 and AAC, with its own PlaySessionId so a channel change stops
      * exactly this encode. It carries no start time: Jellyfin copies the query onto every
      * segment URL and refuses `StartTimeTicks` there with HTTP 400, so the player seeks
-     * instead (JellyfinPlaybackResolver.offsetPlayback), which `setMediaItem` does.
+     * instead (JellyfinPlaybackResolver.offsetPlayback), which `setMediaItem` does. The capped
+     * retry is JellyfinPlaybackResolver.cappedTranscodeURL's 1920 wide at 8 Mbps.
      */
-    private fun mediaBrowserItem(mb: MediaBrowserServer, item: MediaItem, offsetSec: Long, delivery: Delivery, q: StreamQuality): ExoItem {
+    private fun mediaBrowserItem(mb: MediaBrowserServer, item: MediaItem, offsetSec: Long, delivery: Delivery, q: StreamQuality, capped: Boolean): ExoItem {
         val source = item.partKey ?: item.ratingKey
         return when (delivery) {
             Delivery.DIRECT_PLAY -> {
@@ -226,15 +392,15 @@ class Playback(
             }
             Delivery.TRANSCODE -> {
                 val session = UUID.randomUUID().toString().replace("-", "")
-                current = Current(item, offsetSec, delivery, session, System.currentTimeMillis())
+                current = Current(item, offsetSec, delivery, session, System.currentTimeMillis(), capped)
                 val url = Uri.parse("${mb.url}/Videos/${item.ratingKey}/master.m3u8").buildUpon()
                     .appendQueryParameter("MediaSourceId", source)
                     .appendQueryParameter("api_key", mb.token)
                     .appendQueryParameter("ApiKey", mb.token)
                     .appendQueryParameter("VideoCodec", "h264")
                     .appendQueryParameter("AudioCodec", "aac")
-                    .appendQueryParameter("MaxWidth", q.width.toString())
-                    .appendQueryParameter("VideoBitrate", (q.maxBitrateKbps * 1000L).toString())
+                    .appendQueryParameter("MaxWidth", (if (capped) 1920 else q.width).toString())
+                    .appendQueryParameter("VideoBitrate", (if (capped) CAPPED_MEDIA_BROWSER_BPS else q.maxBitrateKbps * 1000L).toString())
                     .appendQueryParameter("SegmentContainer", "ts")
                     .appendQueryParameter("DeviceId", mediaBrowser.deviceId)
                     .appendQueryParameter("PlaySessionId", session)
@@ -256,11 +422,13 @@ class Playback(
 
     /** Pauses on the picture and ends any transcode, for the sleep timer; the next tune plays again. */
     fun pause() {
+        endAttempt()
         stopSession()
         player.pause()
     }
 
     fun stop() {
+        endAttempt()
         stopSession()
         current = null
         info = null
@@ -272,23 +440,24 @@ class Playback(
         player.release()
     }
 
-    /** What the player saw, in PlaybackFailure's terms. */
-    private fun evidence(error: PlaybackException, item: MediaItem): PlaybackFailure.Evidence {
+    /** What the player saw, in PlaybackFailure's terms; with no error, what the loads saw. */
+    private fun evidence(error: PlaybackException?, item: MediaItem): PlaybackFailure.Evidence {
         var status: Int? = null
         var cause: Throwable? = error
         while (cause != null && status == null) {
             if (cause is HttpDataSource.InvalidResponseCodeException) status = cause.responseCode
             cause = cause.cause
         }
-        val code = error.errorCode
+        val code = error?.errorCode
         return PlaybackFailure.Evidence(
-            httpStatuses = listOfNotNull(status ?: if (code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) 404 else null),
+            httpStatuses = listOfNotNull(status ?: loadStatus ?: if (code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) 404 else null),
             unreachable = code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            decoderFailed = code in 4001..4005,
+                code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT || (error == null && loadUnreachable),
+            decoderFailed = code != null && code in 4001..4005,
             everShowedPicture = started,
             decodedAFrame = firstFrame,
             sourceCodec = item.videoCodec,
+            serverDeliveredBytes = loadedBytes,
         )
     }
 
@@ -306,6 +475,18 @@ class Playback(
 
     companion object {
         private const val TAG = "Nostalgex"
+
+        /**
+         * The starvation monitor's stall length: 2 s where the Apple TV uses 3. Measured on the
+         * emulator through a throttling proxy (2026-11-02): direct play at 0.67x real time
+         * stopped for 2.6 to 2.9 s every 8 to 9 s and carried on, so 3 s counted none of 20
+         * freezes in 120 s; healthy rebuffers peaked at 0.5 s (31 in 200 s). AVPlayer froze for
+         * good instead. `PlaybackRecoveryTest` holds both shapes at every sampling phase.
+         */
+        private const val STALL_SECONDS = 2.0
+
+        /** JellyfinPlaybackResolver.cappedTranscodeURL's VideoBitrate. */
+        private const val CAPPED_MEDIA_BROWSER_BPS = 8_000_000L
 
         /** Containers Media3 has an extractor for. The codecs are the device's question; tracks tell. */
         private val DIRECT_CONTAINERS = setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "ts", "mpegts", "flv", "ogg")

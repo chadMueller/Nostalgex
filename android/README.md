@@ -74,9 +74,8 @@ listed here.
 
 Not ported yet: server collections, found franchises and MY COLLECTIONS;
 SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
-above channel one; demo mode; the Apple TV's playback recovery ladder
-(watchdog, stalls, compatibility retry) and the loading screen's STOP WAITING
-when a scan goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
+above channel one; demo mode; the loading screen's STOP WAITING when a scan
+goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
 app asks for the stored file, then the hand-built HLS stream, which is the
 Apple TV's fallback path).
 
@@ -111,8 +110,16 @@ Different in the detail:
 - The failure card says "this TV" where the Apple TV's says "Apple TV", as
   the Roku's says "this Roku". Its classification reads ExoPlayer's errors
   (HTTP status, unreachable, decoder failure, first frame) in place of
-  AVPlayer's error log; the starvation ladder that feeds "couldn't keep up"
-  isn't ported, so that verdict comes only from late or silent servers.
+  AVPlayer's error log, plus what each request answered when the watchdog
+  gives up without a player error.
+- The recovery ladder is the Apple TV's (startup watchdog, starvation monitor,
+  one retry capped at 1080p, then the card), with two numbers that differ. A
+  stall counts from 2 s, not 3: on a source at 0.67x real time ExoPlayer stops
+  for 2.6 to 2.9 s every 8 to 9 s and carries on, where AVPlayer froze for good,
+  so 3 s never fired (measured on the emulator; healthy rebuffers there peaked at
+  0.5 s). And a 4K transcode gets the 20 s deadline, not 40 s, since this app
+  doesn't read a file's frame size yet. The capped retry asks Jellyfin and Emby
+  for H.264 in TS, as this app's first transcode does.
 - The guide header keeps in line with the rows, where the Apple TV's runs 12
   points wide (as the Roku port also chose).
 - An episode's summary gets one line in the info panel, where SwiftUI shrinks

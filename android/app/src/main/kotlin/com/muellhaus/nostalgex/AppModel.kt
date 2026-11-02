@@ -1294,8 +1294,6 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     override fun onStarted(item: MediaItem, delivery: Delivery) {
-        // A picture: count again.
-        failureRun.reset()
         this.delivery = delivery
         // The guide follows what is on, as TunerView rebuilds on a change of current item.
         lineup?.let { l ->
@@ -1304,6 +1302,14 @@ class AppModel(private val context: Context) : Playback.Listener {
                 scheduleTick++
             }
         }
+    }
+
+    /**
+     * The startup watchdog saw a picture: count again. Reaching ready is not enough, as on the
+     * Apple TV: a file the TV opens but can't decode reaches ready with a black screen.
+     */
+    override fun onPicture(item: MediaItem) {
+        failureRun.reset()
     }
 
     override fun onEnded(item: MediaItem) {
