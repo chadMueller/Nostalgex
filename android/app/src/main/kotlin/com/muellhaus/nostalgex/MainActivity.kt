@@ -33,7 +33,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Leaving the app stops playback (and any transcode); coming back tunes in again.
+        // Leaving the app stops playback (and any transcode), ends the server's session and puts
+        // its watch state back (PlaybackTracker.onBackground); coming back tunes in again.
+        model.watchReporter.stop()
         model.playback.stop()
     }
 

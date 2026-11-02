@@ -80,8 +80,19 @@ val genCollectionsVectors = tasks.register<Exec>("genCollectionsVectors") {
     commandLine("node", "scripts/gen-collections-vectors.mjs", out.get().asFile.absolutePath)
 }
 
+/** The web tuner's watch state over the Roku port's scripts, for WatchStateTest. Needs node. */
+val genWatchVectors = tasks.register<Exec>("genWatchVectors") {
+    val out = layout.buildDirectory.file("vectors/watch.json")
+    inputs.file("scripts/gen-watch-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("scripts/nostalgex-watch-state.js"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/gen-watch.mjs"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-watch-vectors.mjs", out.get().asFile.absolutePath)
+}
+
 tasks.test {
-    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors)
+    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors, genWatchVectors)
+    systemProperty("nostalgex.watchVectors", layout.buildDirectory.file("vectors/watch.json").get().asFile.absolutePath)
     systemProperty("nostalgex.collectionsVectors", layout.buildDirectory.file("vectors/collections.json").get().asFile.absolutePath)
     systemProperty("nostalgex.franchiseVectors", layout.buildDirectory.file("vectors/franchise.json").get().asFile.absolutePath)
     systemProperty("nostalgex.enrichmentVectors", layout.buildDirectory.file("vectors/enrichment.json").get().asFile.absolutePath)
@@ -98,5 +109,6 @@ tasks.test {
         rootDir.parentFile.resolve("channels.json"),
         rootDir.parentFile.resolve("channels-memberships.json"),
         rootDir.parentFile.resolve("scripts/franchise-lineup-golden.json"),
+        rootDir.parentFile.resolve("scripts/watch-cleanup-golden.json"),
     )
 }

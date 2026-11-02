@@ -93,6 +93,15 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet("nostalgex_enabled_collections", null) ?: emptySet()
         set(value) = prefs.edit().putStringSet("nostalgex_enabled_collections", value).apply()
 
+    /** SHOW NOW PLAYING and MARK WATCHED, off unless switched on, under the Apple TV's keys (PlaybackReportingPreferences). */
+    var showNowPlaying: Boolean
+        get() = prefs.getBoolean("nostalgex_show_now_playing_v2", false)
+        set(value) = prefs.edit().putBoolean("nostalgex_show_now_playing_v2", value).apply()
+
+    var markWatched: Boolean
+        get() = prefs.getBoolean("nostalgex_mark_watched_v2", false)
+        set(value) = prefs.edit().putBoolean("nostalgex_mark_watched_v2", value).apply()
+
     /** GUIDE TEXT SIZE: "large", or anything else for NORMAL, under the Apple TV's key. */
     var guideTextLarge: Boolean
         get() = prefs.getString("nostalgex_guide_text_size", null) == "large"

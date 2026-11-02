@@ -40,10 +40,18 @@ class PlexLibrary(private val client: PlexClient) {
     }
 
     /** Every library but those in `excluded` (section keys), which are skipped before any request for their items. */
-    suspend fun scan(server: PlexServer, progress: Progress, baseCount: Int = 0, excluded: Set<String> = emptySet()): List<MediaItem> {
+    suspend fun scan(
+        server: PlexServer,
+        progress: Progress,
+        baseCount: Int = 0,
+        excluded: Set<String> = emptySet(),
+        /** Each library once it is read whole, so a scan abandoned later still has these (LibraryScanInterrupted). */
+        onSection: (List<MediaItem>) -> Unit = {},
+    ): List<MediaItem> {
         val sections = directories(server).filter { (it.str("key") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
         for ((index, section) in sections.withIndex()) {
+            val sectionStart = out.size
             val title = section.str("title") ?: ""
             val type = section.str("type") ?: ""
             try {
@@ -62,6 +70,7 @@ class PlexLibrary(private val client: PlexClient) {
                 } else {
                     items.mapNotNullTo(out) { movieItem(server, it, type, isMusicVideoSection) }
                 }
+                onSection(out.subList(sectionStart, out.size).toList())
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -133,6 +142,9 @@ class PlexLibrary(private val client: PlexClient) {
                     thumb = ep.str("thumb") ?: show.str("thumb"),
                 )
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // A stopped scan, not a missing show: the section mustn't be counted as read whole.
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch episodes for ${show.str("title")}", e)
             emptyList()

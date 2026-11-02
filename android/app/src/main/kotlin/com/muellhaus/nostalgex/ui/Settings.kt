@@ -369,6 +369,22 @@ private fun PlaybackRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "audio_lang"),
         ) { model.settingsPicker = "audio_lang" }
+        // WATCH HISTORY (SettingsPlaybackView): what the server is told about what you watch.
+        val server = model.backendName
+        SectionHeader("WATCH HISTORY", "What $server is told about what you watch")
+        ToggleRow(
+            title = "SHOW NOW PLAYING ON ${server.uppercase()}",
+            subtitle = if (server == "Plex") "Show the current program on Plex. Leave Mark Watched off to keep watch history unchanged."
+            else "Show the current program. Prior watch state is restored when playback ends; a working connection is required.",
+            on = model.showNowPlaying,
+            modifier = Modifier.paneRow(model, "now_playing_sync"),
+        ) { model.toggleShowNowPlaying() }
+        ToggleRow(
+            title = "MARK WATCHED ON ${server.uppercase()}",
+            subtitle = "Count a program as watched when you tune in during its first 15% and watch at least 75%. Independent of Now Playing. Off by default.",
+            on = model.markWatched,
+            modifier = Modifier.paneRow(model, "mark_watched"),
+        ) { model.toggleMarkWatched() }
     }
 }
 
