@@ -121,6 +121,49 @@ playback failure card and `showVideoError` text live in `.channel-display`, whic
 `.player-screen.layout-side` hides with `display: none !important`. Measured: a failure card
 has a 0 by 0 box at desktop and phone sizes. Not fixed on this branch.
 
+## 2026-11-02 (Web tuner and Docker: GUIDE TEXT SIZE)
+
+**Shipped.** Nothing. Branch `web/guide-text-size`, cut from `origin/main` at `8ebd1e2`, not
+pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+
+**Why.** The Apple TV (1.0.29) and Roku have a GUIDE TEXT SIZE choice, NORMAL or LARGE. The web
+had only an automatic CSS zoom for small landscape screens, which is not a choice, and a TV
+browser has no keys to make a page bigger.
+
+**Changed.**
+- Settings > GENERAL > DISPLAY has Guide text size, "Bigger program titles, times and channel
+  names in the guide", with NORMAL and LARGE as real buttons (`aria-pressed`), so a TV browser
+  with a cursor and no keys can pick one. Saved as 'normal' or 'large' under the Apple TV's key,
+  `nostalgex_guide_text_size`; nothing saved, or anything but exactly 'large', is NORMAL, as in
+  `GuideTextSize.init(stored:)` and Roku's `NxGuideTextFrom`. The class is applied before the
+  guide can draw. The web has no settings sync, so the choice is per browser.
+- LARGE is the Apple TV's and Roku's sizes as ratios of NORMAL, applied to the web's own sizes:
+  titles and times 26/20, CHANNEL heading 22/18, channel number 24/20, channel name 20/18. Every
+  guide font size and the number box now go through a `--gt-*` multiplier that is 1 at NORMAL.
+  Only text grows; row height, header height and the channel column stay, so a long channel name
+  gives up characters to the ellipsis as it does on the Apple TV. The panel above the guide is
+  untouched. The automatic zoom is unchanged.
+- On a phone the four time columns are 72 px wide at 390, and a time label at the full 1.3 made
+  the header run off the screen and out of line with the rows (measured). Times grow 1.05 there,
+  the largest that fits was 1.07; titles and names grow in full.
+
+**Verified.** `npm test` green, including new `scripts/guide-text-smoke.mjs` (24 checks), which
+reads `GuideTextSize.swift`, Roku's `GuideText.brs` and the page and holds the three to the same
+numbers, and fails if a guide rule keeps a raw font size. New `scripts/guide-text-browser-smoke.mjs`
+(`npm run test:guide-text:browser`, 104 checks, headless Chromium): at phone, tablet, desktop and
+960x540 by click alone it checks NORMAL by default, the buttons, each size against the Apple TV's
+ratio, row, header and channel column unchanged, no time label out of its slot, the header
+fitting the screen and lining up with the rows, a reload, and stored values that are not 'large'.
+Same 104 on the hosted build (`dist`) and the Docker build (`dist-selfhost`). NORMAL is unchanged:
+computed font sizes and rectangles of 104 guide elements at the four sizes are identical to
+origin/main's page. Negative control: origin/main's page fails 9.
+
+**Not verified.** A real TV browser (the 960x540 run emulates the size and a pointer); Safari; a
+guide with long real channel names and 200+ channels.
+
+**Next.** Roku and the Apple TV already have this, so nothing to port. The two-pane Settings
+redesign on the web would move this row.
+
 ## 2026-11-02 (Roku: ask for the Roku account email at sign-in, getUserData / RFI)
 
 **Why.** Roku's static analysis gives an authenticated app an error: "All authenticated
