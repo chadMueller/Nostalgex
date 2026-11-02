@@ -3,6 +3,10 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Privacy: the Roku email is asked for only on the USE MY ROKU EMAIL button)
+
+**Changed.** The Roku paragraph in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` now says the app asks Roku for the account email only when the viewer presses USE MY ROKU EMAIL, because Roku 1.0.11 stopped asking as the email and password screen opens; checked against `roku/components/ConnectView.brs` on `96650ca`, and the effective date stays November 2, 2026.
+
 ## 2026-11-02 (Roku: START OVER while loading, LOADING DIDN'T FINISH after two unfinished loads, #150's port)
 
 **Why.** #150 gave the Apple TV a way out of a load that never finishes or keeps closing the app,
