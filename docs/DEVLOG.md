@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Privacy: the Roku account email line)
+
+**Changed.** The Roku section of `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` has one new
+paragraph: the Roku app may ask Roku to share the account email when USE EMAIL AND PASSWORD
+opens, only to fill the EMAIL field. Roku shows its own screen and the viewer chooses; the app
+holds the address only during sign-in, never saves it, and sends it to plex.tv only on SIGN IN.
+Checked against `ConnectView.brs` and `SignInFlow.brs` on `8ebd1e2`: the address lives in two
+view variables and the EMAIL field, none of it is written to storage, and the only request that
+carries it is the plex.tv sign-in. Effective date moved to November 2, 2026 in both files. This
+closes the open item at the end of the Roku entry below.
+
+**Not verified.** The policy describes what the code does. Roku's own screen has not run on a
+TV yet (see the entry below).
+
 ## 2026-11-02 (Roku: ask for the Roku account email at sign-in, getUserData / RFI)
 
 **Why.** Roku's static analysis gives an authenticated app an error: "All authenticated
