@@ -419,3 +419,37 @@ function NxSignInSwitchedKind(kind as String) as String
     name = NxKindName(kind)
     return "That address is a " + name + " server, so this is a " + name + " sign-in."
 end function
+
+' ── Roku's Request for Information (getUserData) ────────────────────────────
+' Roku's static analysis fails an authenticated app that never asks for the
+' viewer's Roku account email during sign-in ("All authenticated channels must
+' use the Request for Information (getUserData) API call to obtain a user's
+' email address", RP 2.1 and RP 4.1). ConnectView sends the call through a
+' ChannelStore node (context "signin", the email only); these two are the
+' parts that run off a TV.
+
+' The email a ChannelStore's userData holds, or "" when the viewer declined
+' (userData is invalid), when it holds no email, or when what it holds can't
+' be an address. The node is read with GetField; the associative array is
+' what the tests pass.
+function NxRfiEmail(userData as Dynamic) as String
+    t = type(userData)
+    email = invalid
+    if t = "roSGNode" then
+        email = userData.GetField("email")
+    else if t = "roAssociativeArray" then
+        email = userData.email
+    end if
+    if not NxIsString(email) then return ""
+    email = email.Trim()
+    at = Instr(1, email, "@")
+    if at < 2 or at = Len(email) or Len(email) > 254 or Instr(1, email, " ") > 0 then return ""
+    return email
+end function
+
+' What the Plex EMAIL field starts with: whatever the viewer already typed,
+' else the email Roku shared.
+function NxRfiPrefill(typed as String, shared as String) as String
+    if typed.Trim() <> "" then return typed
+    return shared
+end function

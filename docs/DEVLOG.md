@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku: ask for the Roku account email at sign-in, getUserData / RFI)
+
+**Why.** Roku's static analysis gives an authenticated app an error: "All authenticated
+channels must use the Request for Information (getUserData) API call to obtain a user's email
+address" (RP 2.1 and RP 4.1), and an error blocks scheduling a public app. The dashboard showed
+it on the 1.0.5 beta, because the listing says customers sign in; it names no exemption for a
+free app. Roku's ChannelStore page says the call works for free apps and that a viewer who
+declines leaves `userData` invalid. Nostalgex has no Roku Pay and no ads, and reads nothing
+from the viewer's Roku account today.
+
+**Changed.** `ConnectView` asks once per view, when the viewer opens USE EMAIL AND PASSWORD: a
+ChannelStore node with `requestedUserData` "email", `requestedUserDataInfo.context` "signin" and
+`command` "getUserData", which brings up Roku's own "Sign in" screen. It is asked there, on the
+viewer's own press, because that is where an email is typed (Roku asks for the minimum) and
+because a recorded sign-in script then meets Roku's screen at the same step every time. A viewer
+on the plex.tv/link code or a Jellyfin or Emby server isn't asked. It is skipped in the sign-in
+tour (`dryRun`, `discoveryFixture`). Nothing waits for the answer, so sharing or cancelling
+leaves the flow as it was. A shared address only starts the EMAIL field when that field is empty.
+It is kept in the view, never saved and never printed; it goes to plex.tv only if the viewer
+presses SIGN IN, as anything typed there does. `NxRfiEmail` (what a `userData` holds) and
+`NxRfiPrefill` are in `SignInFlow.brs`, with 20 cases in `SignInFlowTests.brs`.
+
+**Not run.** Nothing here has been on a TV: the ChannelStore node and Roku's screen can't run off
+the TV. Open: whether a sideloaded build shows the screen, whether the observer fires when the
+viewer cancels (nothing depends on it), whether Roku's reviewers, who may sign in with the link
+code and never open USE EMAIL AND PASSWORD, accept that, and, only in the dashboard, whether the
+analysis stops flagging the error. A recorded sign-in script needs one more step: Roku's screen,
+between USE EMAIL AND PASSWORD and the EMAIL field. The Roku section of the privacy page needs a line saying the app may ask
+Roku for the account email and only fills a field with it (`privacy.html` and
+`Nostalgex/PRIVACY_POLICY.md` together).
+
 ## 2026-11-01 (Roku: one title on one channel at a time, the lineup's days packed together)
 
 **Why.** The Apple TV and web engines pack each day for the whole lineup now (`89a2f5c`, review

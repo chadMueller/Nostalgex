@@ -322,6 +322,31 @@ function NxRunSignInFlowTests() as Integer
     leak = NxPlexPasswordAuthResult(201, ParseJson("{""user"":{""authToken"":""tok999"",""password"":""should-never-appear""}}"))
     NxCheck(r, "password sign-in: only status, token and name come back", leak.status + " " + leak.token + " " + leak.name + " " + NxToStr(leak.DoesExist("password")), "ok tok999 Plex false")
 
+    ' ── Roku's Request for Information (getUserData): what the answer holds ──
+    ' The port's own, with no Swift twin: Roku's certification rule, not
+    ' Apple TV behaviour. The ChannelStore node itself only runs on a TV;
+    ' these are the parts around it.
+    NxCheck(r, "RFI: shared email is read", NxRfiEmail({ email: "viewer@example.com" }), "viewer@example.com")
+    NxCheck(r, "RFI: surrounding space is trimmed", NxRfiEmail({ email: "  viewer@example.com " }), "viewer@example.com")
+    NxCheck(r, "RFI: phone only (a sign-in can return either) is no email", NxRfiEmail({ phone: "5555550100" }), "")
+    NxCheck(r, "RFI: declined (userData invalid) is no email", NxRfiEmail(invalid), "")
+    NxCheck(r, "RFI: the text ""invalid"" is no email", NxRfiEmail("invalid"), "")
+    NxCheck(r, "RFI: an empty email is no email", NxRfiEmail({ email: "" }), "")
+    NxCheck(r, "RFI: a number in the email field is no email", NxRfiEmail({ email: 5 }), "")
+    NxCheck(r, "RFI: an invalid email field is no email", NxRfiEmail({ email: invalid }), "")
+    NxCheck(r, "RFI: no @ is no email", NxRfiEmail({ email: "viewer.example.com" }), "")
+    NxCheck(r, "RFI: nothing before the @ is no email", NxRfiEmail({ email: "@example.com" }), "")
+    NxCheck(r, "RFI: nothing after the @ is no email", NxRfiEmail({ email: "viewer@" }), "")
+    NxCheck(r, "RFI: a space inside is no email", NxRfiEmail({ email: "view er@example.com" }), "")
+    NxCheck(r, "RFI: 255 characters is no email", NxRfiEmail({ email: String(250, "a") + "@b.co" }), "")
+    NxCheck(r, "RFI: 254 characters is still read", Len(NxRfiEmail({ email: String(249, "a") + "@b.co" })).ToStr(), "254")
+    NxCheck(r, "RFI: an array is no email", NxRfiEmail([ "viewer@example.com" ]), "")
+    NxCheck(r, "RFI: a typed email is kept over the shared one", NxRfiPrefill("typed@example.com", "viewer@example.com"), "typed@example.com")
+    NxCheck(r, "RFI: an empty field starts with the shared email", NxRfiPrefill("", "viewer@example.com"), "viewer@example.com")
+    NxCheck(r, "RFI: a blank field starts with the shared email", NxRfiPrefill("   ", "viewer@example.com"), "viewer@example.com")
+    NxCheck(r, "RFI: declined leaves the field as it was", NxRfiPrefill("", ""), "")
+    NxCheck(r, "RFI: declined leaves a typed email as it was", NxRfiPrefill("typed@example.com", ""), "typed@example.com")
+
     print "sign-in flow cases (upstream SignInFlowTests):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

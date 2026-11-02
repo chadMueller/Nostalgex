@@ -70,6 +70,9 @@ sub init()
     m.waitTimer.ObserveField("fire", "onWaitTick")
     m.top.AppendChild(m.waitTimer)
     m.fixtureTimer = invalid
+    m.rfiStore = invalid
+    m.rfiEmail = ""
+    m.rfiAsked = false
     renderLeft()
     render()
     m.top.SetFocus(true)
@@ -715,7 +718,9 @@ sub activate(id as String)
     else if id = "plexCreds" then
         m.kind = "plex"
         go("plexCreds")
+        m.plexEmail = NxRfiPrefill(m.plexEmail, m.rfiEmail)
         render()
+        askRoku()
     else if id = "plexEmail" or id = "plexPw" then
         openKeyboard(id)
     else if id = "plexCredsSignIn" then
@@ -1133,6 +1138,53 @@ sub onPlexTaskStatus()
         m.auth = ""
         m.focusId = ""
         render()
+    end if
+end sub
+
+' ── Roku's Request for Information (getUserData) ───────────────────────────
+' Certification wants an authenticated app to ask for the viewer's Roku account
+' email during sign-in (static analysis, RP 2.1 and RP 4.1). It is asked where
+' an email is typed: when the viewer opens USE EMAIL AND PASSWORD, once per
+' view. That is a press of the viewer's own, so a recorded sign-in script meets
+' Roku's "Sign in" screen at the same step every time, and a viewer on the
+' plex.tv/link code or a Jellyfin or Emby server isn't asked for an address
+' the app wouldn't use. The viewer shares the email or cancels; either way the
+' flow goes on as it was and nothing waits for the answer. A shared address
+' only starts the EMAIL field, and like anything typed there goes to plex.tv
+' when the viewer presses SIGN IN. It is kept for this view, never saved, and
+' never printed.
+
+sub askRoku()
+    if m.rfiAsked or m.rfiStore <> invalid then return
+    m.rfiAsked = true
+    if m.top.dryRun or m.top.discoveryFixture <> "" then return
+    store = CreateObject("roSGNode", "ChannelStore")
+    info = CreateObject("roSGNode", "ContentNode")
+    info.addFields({ context: "signin" })
+    store.requestedUserDataInfo = info
+    store.requestedUserData = "email"
+    store.ObserveField("userData", "onRokuAnswer")
+    m.rfiStore = store
+    store.command = "getUserData"
+end sub
+
+sub onRokuAnswer()
+    if m.rfiStore = invalid then return
+    m.rfiEmail = NxRfiEmail(m.rfiStore.userData)
+    m.rfiStore.UnobserveField("userData")
+    m.rfiStore = invalid
+    if m.rfiEmail = "" then
+        print "connect: the Roku account email was not shared"
+    else
+        print "connect: the Roku account email was shared"
+    end if
+    ' The answer can land after the viewer is already on the Plex fields.
+    if m.screen = "plexCreds" and m.auth = "" then
+        shared = NxRfiPrefill(m.plexEmail, m.rfiEmail)
+        if shared <> m.plexEmail then
+            m.plexEmail = shared
+            render()
+        end if
     end if
 end sub
 
