@@ -5,7 +5,8 @@
 ' upstream's scripts/schedule-parity-dump.mjs, through the port's code:
 '   items: each fixture item through the port's own loader (NxPlexMovieItem,
 '          NxMbEpisodeItem, ...), so minutes are truncated as the Apple TV's;
-'   days:  each channel's day from NxManifestBlocks, pools in library order;
+'   days:  each channel's day from NxManifestBlocks, pools in library order,
+'          packed across the registered lineup (NxSetLineup) as every surface does;
 '   at:    at each instant the guide's channels from NxScheduleGuide, the
 '          24-hour window (NxChannelSchedule), one title on two channels
 '          (NxGaveWay), what tuning in plays (startTune: what is on, from
@@ -40,6 +41,7 @@ function NxRunScheduleParityGoldenTests(goldenPath as String, zonesPath as Strin
         end if
     end for
     g.nxTzOffsets = invalid
+    NxSetLineup(invalid)
 
     ' The golden file covers what it claims, so a pass here means something.
     NxCheck(r, "a channel gives a title way to a lower one", (cover.gaveWay >= 6).ToStr(), "true")
@@ -81,9 +83,21 @@ sub NxParityCase(r as Object, name as String, fx as Object, want as Object, cove
         end for
         number = row.id
         if row.number <> invalid then number = row.number
-        lineup.Push({ id: row.id, number: number, name: "CH " + row.id.ToStr(), colorHex: "#FFFFFF",
-            isPremiereChannel: NxTruthy(row.premiere), pool: pool })
+        ch = { id: row.id, number: number, name: "CH " + row.id.ToStr(), colorHex: "#FFFFFF",
+            isPremiereChannel: NxTruthy(row.premiere), pool: pool }
+        ' "gated": a pool that changes with the hour, so the channel packs after
+        ' the rest; an hour no fixture reaches, so the pool itself never changes.
+        if NxTruthy(row.gated) then ch.timeRestrictions = { tvOnlyBefore: 0 }
+        lineup.Push(ch)
     end for
+    ' The guide's lineup, as LibraryTask registers it: each day is packed across
+    ' all of it. An offGuide row is dumped but not registered, like a channel the
+    ' guide doesn't carry (packed after the lineup, against it, seen by none of it).
+    registered = []
+    for i = 0 to lineup.Count() - 1
+        if not NxTruthy(fx.channels[i].offGuide) then registered.Push(lineup[i])
+    end for
+    NxSetLineup(registered)
 
     for each t in fx.prime
         for each ch in lineup

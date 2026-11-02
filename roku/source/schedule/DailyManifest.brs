@@ -335,6 +335,127 @@ function NxGroupSequelParts(items as Object) as Object
     return result
 end function
 
+' ── Across channels: one title on one channel at a time ─────────────────────
+' Mirrors DailyManifestScheduler's lineup packing and ScheduleOccupancy
+' (nostalgex-daily-manifest.js makeOccupancy, sequelMark, waitsForEarlierPart,
+' pickCandidate). A day is packed for the whole lineup at once
+' (NxPackLineupDay, source/guide/Lineup.brs); the pieces are here.
+
+' How far down its running order a channel looks for a programme no other
+' channel has on in the same slot (DailyManifestScheduler.lookahead).
+function NxLookahead() as Integer
+    return 8
+end function
+
+' What the other channels have on, by title: ratingKey -> [{ ch, s, e }].
+' Mirrors ScheduleOccupancy.
+function NxOccupancy() as Object
+    byKey = {}
+    byKey.SetModeCaseSensitive()
+    return { byKey: byKey }
+end function
+
+sub NxOccupancyAdd(occupancy as Object, channelId as Integer, ratingKey as String, startSec as Integer, endSec as Integer)
+    if not (endSec > startSec) then return
+    list = occupancy.byKey[ratingKey]
+    if list = invalid then
+        list = []
+        occupancy.byKey[ratingKey] = list
+    end if
+    list.Push({ ch: channelId, s: startSec, e: endSec })
+end sub
+
+' The seconds of [startSec, endSec) that some other channel already airs the
+' title for.
+function NxOccupancyOverlap(occupancy as Object, ratingKey as String, startSec as Integer, endSec as Integer, channelId as Integer) as Integer
+    list = occupancy.byKey[ratingKey]
+    if list = invalid then return 0
+    sec = 0
+    for each x in list
+        if x.ch <> channelId then
+            lo = startSec
+            if x.s > lo then lo = x.s
+            hi = endSec
+            if x.e < hi then hi = x.e
+            if hi > lo then sec = sec + (hi - lo)
+        end if
+    end for
+    return sec
+end function
+
+' The story and part of a multi-part film ("... Part 2"), or invalid: the same
+' test as NxGroupSequelParts, as sequelMark.
+function NxSequelMark(item as Object) as Dynamic
+    if item.type <> "movie" then return invalid
+    g = GetGlobalAA()
+    if g.nxSequelRegex = invalid then g.nxSequelRegex = CreateObject("roRegex", "^(.*?)[\s:,-]+(?:part|pt\.?)\s*([0-9]{1,2})\s*$", "i")
+    title = item.title
+    if title = invalid then title = ""
+    match = g.nxSequelRegex.Match(title)
+    if match.Count() <> 3 then return invalid
+    base = LCase(match[1]).Trim()
+    if base = "" then return invalid
+    return { base: base, ordinal: match[2].ToInt() }
+end function
+
+' A later part may not jump ahead of an earlier part of the same story still
+' waiting before it.
+function NxWaitsForEarlierPart(queue as Object, i as Integer) as Boolean
+    mark = NxSequelMark(queue[i])
+    if mark = invalid then return false
+    for k = 0 to i - 1
+        other = NxSequelMark(queue[k])
+        if other <> invalid then
+            if other.base = mark.base and other.ordinal < mark.ordinal then return true
+        end if
+    end for
+    return false
+end function
+
+' Which of the first NxLookahead() programmes in `queue` airs at t: the first
+' one no other channel has on during its slot; failing that, -1 when mustFit
+' (the caller has something else to try), else the one that overlaps least (the
+' earliest of those). How long candidate i runs from t is its length, less
+' firstOffsetSec for the first, and at most capSec when that is above 0 (the
+' day's end). avoidKey (the title that just played here) is passed over while
+' there is anything else, and a later part of a story never goes ahead of an
+' earlier one waiting before it. With no occupancy, or nothing on elsewhere,
+' this is always 0: the channel's own order. Mirrors
+' DailyManifestScheduler.pickCandidate.
+function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, firstOffsetSec = 0 as Integer, capSec = 0 as Integer) as Integer
+    n = queue.Count()
+    if n > NxLookahead() then n = NxLookahead()
+    best = -1
+    bestOverlap = 0
+    for i = 0 to n - 1
+        item = queue[i]
+        skip = false
+        if n > 1 and avoidKey <> invalid then
+            if item.ratingKey = avoidKey then skip = true
+        end if
+        if not skip and i > 0 then
+            if NxWaitsForEarlierPart(queue, i) then skip = true
+        end if
+        if not skip then
+            ov = 0
+            if occupancy <> invalid then
+                play = NxDuration(item) * 60
+                if i = 0 then play = play - firstOffsetSec
+                if capSec > 0 and play > capSec then play = capSec
+                ov = NxOccupancyOverlap(occupancy, item.ratingKey, t, t + play, channelId)
+            end if
+            if ov = 0 then return i
+            if best < 0 or ov < bestOverlap then
+                bestOverlap = ov
+                best = i
+            end if
+        end if
+    end for
+    if mustFit then return -1
+    if best >= 0 then return best
+    return 0
+end function
+
 ' ── One day's schedule ──────────────────────────────────────────────────────
 
 ' Returns [{ ratingKey, startSec, endSec }] covering dayStartSec to dayEndSec.
@@ -342,8 +463,10 @@ end function
 ' dayStartSec + 86,400: a 25-hour day packed for 24 left its last hour empty,
 ' and a 23-hour one ran an hour into the next day.
 ' yesterdayAired is an AA used as a set of ratingKeys; yesterdayLastRatingKey
-' is a String or invalid. Mirrors DailyManifestScheduler.packDay.
-function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic) as Object
+' is a String or invalid. occupancy (NxOccupancy) is what the other channels
+' of the lineup have on today, or invalid when this channel packs alone: then
+' every pick is the first, as before. Mirrors DailyManifestScheduler.packDay.
+function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic) as Object
     totalPoolSec = 0&
     for each item in pool
         totalPoolSec = totalPoolSec + NxDuration(item) * 60
@@ -367,14 +490,24 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
 
     blocks = []
     t = dayStartSec
+    ' In the channel's order, except that a programme another channel has on
+    ' in the same slot waits for a later one (NxPickCandidate). It stays in
+    ' the queue, so it still airs today if the day has room, and counts as
+    ' unplayed tomorrow if not. When nothing waiting fits, the day goes on
+    ' with the filler loop below, which holds the whole pool.
+    queue = []
     for each item in ordered
-        if t >= dayEndSec then exit for
-        dur = NxDuration(item) * 60
-        if dur > 0 then
-            blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur })
-            t = t + dur
-        end if
+        if NxDuration(item) > 0 then queue.Push(item)
     end for
+    while queue.Count() > 0 and t < dayEndSec
+        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true)
+        if j < 0 then exit while
+        item = queue[j]
+        queue.Delete(j)
+        dur = NxDuration(item) * 60
+        blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur })
+        t = t + dur
+    end while
 
     if t < dayEndSec then
         ' Filler loop: sequels only, no premiere promotion, as on tvOS.
@@ -409,28 +542,34 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
             end if
         end if
 
-        idx = cycleIndex
-        while t < dayEndSec
-            item = orderedFull[idx mod orderedFull.Count()]
-            fullDur = NxDuration(item) * 60
-            playSec = 0
-            if fullDur > 0 then
-                playSec = fullDur - offsetInItem
-                if dayEndSec - t < playSec then playSec = dayEndSec - t
-            end if
-            if playSec <= 0 then
-                idx = idx + 1
-                offsetInItem = 0
-            else
-                blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec })
-                t = t + playSec
-                if offsetInItem + playSec >= fullDur then
-                    idx = idx + 1
-                    offsetInItem = 0
-                else
-                    offsetInItem = offsetInItem + playSec
-                end if
-            end if
+        ' The loop as a queue from the cycle's start: what airs goes to the
+        ' back, so with nothing on elsewhere this is the cycle in order. The
+        ' first programme starts part way in (offsetInItem) only if it airs
+        ' first; one picked ahead of it starts at 0.
+        cycle = []
+        for i = cycleIndex to orderedFull.Count() - 1
+            if NxDuration(orderedFull[i]) > 0 then cycle.Push(orderedFull[i])
+        end for
+        for i = 0 to cycleIndex - 1
+            if NxDuration(orderedFull[i]) > 0 then cycle.Push(orderedFull[i])
+        end for
+        first = true
+        while t < dayEndSec and cycle.Count() > 0
+            remainingDay% = dayEndSec - t
+            offFirst% = 0
+            if first then offFirst% = offsetInItem
+            lastKey = yesterdayLastRatingKey
+            if blocks.Count() > 0 then lastKey = blocks.Peek().ratingKey
+            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, offFirst%, remainingDay%)
+            item = cycle[j]
+            playSec = NxDuration(item) * 60
+            if j = 0 and first then playSec = playSec - offFirst%
+            if playSec > remainingDay% then playSec = remainingDay%
+            cycle.Delete(j)
+            cycle.Push(item)
+            first = false
+            blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec })
+            t = t + playSec
         end while
     end if
 

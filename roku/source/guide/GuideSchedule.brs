@@ -3,6 +3,14 @@
 ' The guide's schedules from the built pools, as LibraryTask hands them to
 ' the render thread.
 
+' The guide's lineup, the channels each day is packed across so one title is
+' not on two of them at once (NxManifestBlocks, NxPackLineupDay). Set it before
+' every NxScheduleGuide, to the channels it is given: a channel not in it packs
+' after them. invalid for none; a library load clears it (NxClearManifests).
+sub NxSetLineup(ordered as Dynamic)
+    GetGlobalAA().nxLineup = ordered
+end sub
+
 ' What each channel airs today and tomorrow, as buildChannelSchedule
 ' computes it: the hour's time restrictions, then the day's schedule from the
 ' session cache.

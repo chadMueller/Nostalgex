@@ -163,39 +163,52 @@ function NxManifestCache() as Object
     return g.nxManifests
 end function
 
+' A library load starts over: no stored days, and no lineup until the new
+' one's pools are scheduled (NxSetLineup), so the last build's pools aren't
+' held while the next is built.
 sub NxClearManifests()
-    GetGlobalAA().nxManifests = {}
+    g = GetGlobalAA()
+    g.nxManifests = {}
+    g.nxLineup = invalid
 end sub
+
+' What depends only on a pool: its playable items, their lookup and its
+' fingerprint, { valid, lookup, fp (invalid for none) }. `memo`, when given, holds it
+' from an earlier call with the same pool: the fingerprint alone took most of a
+' 30 s re-check at 120 channels.
+function NxPoolPrepare(pool as Object, memo = invalid as Dynamic) as Object
+    if memo <> invalid and memo.fp <> invalid then return { valid: memo.valid, lookup: memo.lookup, fp: memo.fp }
+    valid = []
+    lookup = {}
+    lookup.SetModeCaseSensitive()
+    for each it in pool
+        if it <> invalid and NxDuration(it) > 0 then
+            valid.Push(it)
+            lookup[NxToStr(it.ratingKey)] = it
+        end if
+    end for
+    fp = invalid
+    if valid.Count() > 0 then fp = NxPoolFingerprint(valid)
+    if memo <> invalid then
+        memo.valid = valid
+        memo.lookup = lookup
+        memo.fp = fp
+    end if
+    return { valid: valid, lookup: lookup, fp: fp }
+end function
 
 ' The day's blocks for a channel as [{ item, startSec, endSec }]. Mirrors
 ' getManifestBlocks: reuse the day's schedule while the pool is unchanged,
-' otherwise pack it fresh, skipping what aired yesterday.
-' `memo`, when given, holds what depends only on the pool (its playable
-' items, their lookup and its fingerprint) from an earlier call with the same
-' pool: the fingerprint alone took most of a 30 s re-check at 120 channels.
+' otherwise pack the day for the whole lineup (NxSetLineup) at once, so one
+' title is on one channel at a time, skipping what aired yesterday. A channel
+' the lineup doesn't carry packs after it, against it.
+' `memo`, when given, holds what depends only on the pool from an earlier call
+' with the same pool (NxPoolPrepare).
 function NxManifestBlocks(channel as Object, pool as Object, atSec as LongInteger, memo = invalid as Dynamic) as Object
-    if memo <> invalid and memo.fp <> invalid then
-        valid = memo.valid
-        lookup = memo.lookup
-        fp = memo.fp
-    else
-        valid = []
-        lookup = {}
-        lookup.SetModeCaseSensitive()
-        for each it in pool
-            if it <> invalid and NxDuration(it) > 0 then
-                valid.Push(it)
-                lookup[NxToStr(it.ratingKey)] = it
-            end if
-        end for
-        fp = invalid
-        if valid.Count() > 0 then fp = NxPoolFingerprint(valid)
-        if memo <> invalid then
-            memo.valid = valid
-            memo.lookup = lookup
-            memo.fp = fp
-        end if
-    end if
+    prepared = NxPoolPrepare(pool, memo)
+    valid = prepared.valid
+    lookup = prepared.lookup
+    fp = prepared.fp
     if valid.Count() = 0 then return []
 
     day = NxLocalDay(atSec)
@@ -203,21 +216,26 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
     key = channel.id.ToStr() + "_" + day.dayKey
     cached = cache[key]
     if cached = invalid or cached.fp <> fp then
-        ' Yesterday by the calendar, and today up to the next midnight, not
-        ' 86,400 s either way: see NxStartOfNextLocalDaySec.
-        yesterday = cache[channel.id.ToStr() + "_" + NxPreviousLocalDayKey(day.dayStartSec)]
-        aired = {}
-        aired.SetModeCaseSensitive()
-        last = invalid
-        if yesterday <> invalid then
-            for each b in yesterday.blocks
-                aired[b.ratingKey] = true
-            end for
-            if yesterday.blocks.Count() > 0 then last = yesterday.blocks.Peek().ratingKey
-        end if
-        packed = NxPackDay(valid, day.dayStartSec, NxStartOfNextLocalDaySec(day.dayStartSec), day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last)
-        cached = { fp: fp, blocks: packed }
-        cache[key] = cached
+        ' Not stored. This channel takes its place in the lineup with the pool
+        ' it was asked with; one the guide doesn't carry packs after the
+        ' lineup, against it, so it never changes what the guide's channels air.
+        own = { channel: channel, pool: valid, fp: fp }
+        entries = []
+        at = -1
+        for each lc in NxList(GetGlobalAA().nxLineup)
+            if lc.id = channel.id then
+                at = entries.Count()
+                entries.Push(own)
+            else
+                lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour), NxPoolMemo(lc, day.hour))
+                if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp })
+            end if
+        end for
+        extra = invalid
+        if at < 0 then extra = own
+        NxPackLineupDay(entries, extra, day)
+        cache = NxManifestCache()
+        cached = cache[key]
     end if
 
     out = []
@@ -226,6 +244,110 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
         if it <> invalid then out.Push({ item: it, startSec: b.startSec, endSec: b.endSec })
     end for
     return out
+end function
+
+' The order channels claim programmes in: channels whose pool changes with the
+' hour (timeRestrictions) last, so the others' days never depend on when a device
+' first built them; then by channel id, so the lowest keeps a title, as
+' resolveConflicts does. A stable insertion sort; a new list. Mirrors
+' DailyManifestScheduler.lineupPriority.
+function NxSortByLineupPriority(entries as Object) as Object
+    out = []
+    for each e in entries
+        i = out.Count()
+        out.Push(e)
+        while i > 0 and NxLineupBefore(e, out[i - 1])
+            out[i] = out[i - 1]
+            i = i - 1
+        end while
+        out[i] = e
+    end for
+    return out
+end function
+
+function NxLineupBefore(a as Object, b as Object) as Boolean
+    ra = 0
+    rb = 0
+    if type(a.channel.timeRestrictions) = "roAssociativeArray" then ra = 1
+    if type(b.channel.timeRestrictions) = "roAssociativeArray" then rb = 1
+    if ra <> rb then return ra < rb
+    return a.channel.id < b.channel.id
+end function
+
+' The stored day's blocks ([] if none), whatever pool packed them.
+function NxStoredBlocks(cache as Object, channelId as Integer, dayKey as String) as Object
+    stored = cache[channelId.ToStr() + "_" + dayKey]
+    if stored = invalid then return []
+    return stored.blocks
+end function
+
+' Packs one local day for the lineup's channels whose day isn't stored yet,
+' together, so no title is on two of them at once. Channels pack in priority
+' order (NxSortByLineupPriority): each one's day is its own running order
+' (NxPackDay) except where a programme is already on another channel in that
+' slot. Days already stored, and the programmes that run over from the day
+' before, are fixed: what airs now never moves because another channel's pool
+' changed. Writes every day it packs into the session cache. Mirrors
+' DailyManifestScheduler.packLineupDay.
+' entries: [{ channel, pool (playable items), fp }], every pool non-empty.
+' extra: one more { channel, pool, fp } that is not in the guide, packed after
+' the lineup against it and seen by nothing, or invalid. day: NxLocalDay.
+' Returns channel id (text) -> the blocks it packed.
+function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as Object
+    dayEndSec = NxStartOfNextLocalDaySec(day.dayStartSec)
+    yesterdayKey = NxPreviousLocalDayKey(day.dayStartSec)
+    cache = NxManifestCache()
+    occupancy = NxOccupancy()
+    packedBy = {}
+    all = NxSortByLineupPriority(entries)
+    if extra <> invalid then all.Push(extra)
+    yesterday = {}
+    for each entry in all
+        id = entry.channel.id
+        prev = NxStoredBlocks(cache, id, yesterdayKey)
+        yesterday[id.ToStr()] = prev
+        ' What runs past midnight from yesterday is on air today too (the
+        ' guide's channels' only: one off the guide is seen by nothing).
+        if extra = invalid or id <> extra.channel.id then
+            for each b in prev
+                if b.endSec > day.dayStartSec then NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec)
+            end for
+        end if
+    end for
+    toPack = []
+    for each entry in all
+        id = entry.channel.id
+        cached = cache[id.ToStr() + "_" + day.dayKey]
+        if cached <> invalid and cached.fp = entry.fp then
+            if extra = invalid or id <> extra.channel.id then
+                for each b in cached.blocks
+                    NxOccupancyAdd(occupancy, id, b.ratingKey, b.startSec, b.endSec)
+                end for
+            end if
+        else
+            toPack.Push(entry)
+        end if
+    end for
+    for each entry in toPack
+        channel = entry.channel
+        prev = yesterday[channel.id.ToStr()]
+        aired = {}
+        aired.SetModeCaseSensitive()
+        last = invalid
+        for each b in prev
+            aired[b.ratingKey] = true
+        end for
+        if prev.Count() > 0 then last = prev.Peek().ratingKey
+        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy)
+        cache[channel.id.ToStr() + "_" + day.dayKey] = { fp: entry.fp, blocks: packed }
+        packedBy[channel.id.ToStr()] = packed
+        if extra = invalid or channel.id <> extra.channel.id then
+            for each b in packed
+                NxOccupancyAdd(occupancy, channel.id, b.ratingKey, b.startSec, b.endSec)
+            end for
+        end if
+    end for
+    return packedBy
 end function
 
 ' The block on air at nowSec, as buildChannelSchedule finds it: the one

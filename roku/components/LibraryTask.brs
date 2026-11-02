@@ -246,6 +246,7 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
     end for
     NxClearManifests()
     timer.Mark()
+    NxSetLineup(ordered)
     channels = NxScheduleGuide(ordered, nowSec, true)
     print "library: saved pools scheduled for today in "; timer.TotalMilliseconds(); " ms"
     guide = {
@@ -307,6 +308,7 @@ sub loadLibrary()
                 print "library: showing the saved pools, scheduled for today, after "; timer.TotalMilliseconds(); " ms; refreshing in the background"
                 ' Then tomorrow, so the guide can be read past midnight.
                 t = CreateObject("roTimespan")
+                NxSetLineup(fromPools.ordered)
                 fromPools.guide.channels = NxScheduleGuide(fromPools.ordered, clock0.nowSec)
                 m.top.guide = fromPools.guide
                 m.shownGuide = fromPools.guide
@@ -766,6 +768,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         builtAt& = oldAt&
         print "library: pools match the guide on screen; its schedules stand"
     else
+        NxSetLineup(ordered)
         out = NxScheduleGuide(ordered, nowSec&)
         print "library: scheduled in "; timer.TotalMilliseconds(); " ms"
     end if
@@ -899,6 +902,7 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
         else if type(msg) = "roSGNodeEvent" and NxScheduleHourKey(CreateObject("roDateTime").AsSeconds()) <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
             lastHour = NxScheduleHourKey(nowSec&)
+            NxSetLineup(ordered)
             channels = NxScheduleGuide(ordered, nowSec&)
             now = FormatJson(channels)
             if now <> last then
@@ -961,6 +965,7 @@ sub keepSavedGuide()
             if ordered = invalid then
                 print "library: no saved pools to schedule the new hour from; the guide stays as it is"
             else
+                NxSetLineup(ordered)
                 guide.channels = NxScheduleGuide(ordered, nowSec&)
                 m.top.guide = guide
                 m.top.status = "ready"
