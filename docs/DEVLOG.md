@@ -88,6 +88,27 @@ the fixture are untouched.
 **Watch.** OMDb's free tier is 1,000 requests a day across every client together. This is a fourth client population on the same quota. The shared Supabase cache and the 7 day edge cache absorb most of it.
 
 
+## 2026-11-02 (Roku live tools: a library the loader left part of stops, instead of loading short)
+
+**Why.** `roku/tests/bench/dump-library.mjs` wrote a library without its Movies section (4,635
+items of 5,404) and exited 0. Plex's log shows the cause: the first page of Movies took Plex
+317 s, Node's `fetch` had given up at its 300 s default (the loader sets no limit of its own),
+and Plex logged the request as "Completed after connection close". The loader catches each
+section's and each show's error, warns and goes on without it, and
+`roku/tests/live/plex-loader.mjs` silenced those warnings. It refused only an empty library, so a
+library without Movies passed. `compare.mjs` and `collections.mjs` load through the same
+`loadLibrary`.
+
+**Changed.** `loadLibrary` keeps the loader's warnings and stops when there are any, listing each
+one with the fetch error's code. The loader itself is unchanged.
+
+**Measured.** Against a real Plex library: a clean load keeps 5,404 items, and
+`dump-library.mjs` writes them. With the Movies page fetch failing as a timeout does, it stops
+with `Failed to fetch section Movies: fetch failed (UND_ERR_HEADERS_TIMEOUT)` after 4,635 items,
+the short library's count; one show's episodes failing stops it at 5,400; a missing loader
+global stops it at 0. `collections.mjs` still matches upstream. The slow page didn't happen
+again in 15 loads.
+
 ## 2026-11-02 (the site for Apple TV 1.0.29)
 
 **Shipped.** Apple TV 1.0.29 (build 53) is live on the App Store: App Store Connect reads Ready for Sale and the public lookup returns 1.0.29. Nothing is on nostalgex.app yet. Branch `site/1.0.29-live` is rebased onto `origin/main` at `4602216` and not pushed. The site only shows the App Store version, so this was held off main until now.
