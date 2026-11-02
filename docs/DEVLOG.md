@@ -70,6 +70,57 @@ closes the open item at the end of the Roku entry below.
 **Not verified.** The policy describes what the code does. Roku's own screen has not run on a
 TV yet (see the entry below).
 
+## 2026-11-02 (Web tuner and Docker: a WATERSHED switch and the 9 PM card)
+
+**Shipped.** Nothing. Branch `web/watershed-switch`, cut from `origin/main` at `8ebd1e2`,
+not pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+
+**Why.** The hold has been in `plex-tuner.html` since the Apple TV's Watershed landed
+(`getTimeFilteredPool` reads `nostalgex_watershed`), but nothing wrote that key and nothing
+called `isWatershedHold`, so nobody on the web or in the container could turn it on.
+
+**Changed.**
+- Settings > GENERAL > SCHEDULE has a Watershed row, "18 and R-rated titles wait until 9 PM",
+  off on a new install, a real button with `aria-pressed`. It writes `nostalgex_watershed`
+  ('1' on), the key the engine already read, and shows what the engine will read, so a write
+  that storage refused shows as still OFF. It is in GENERAL and not BUNDLES because the BUNDLES
+  tab is one arrow-key list with its own index, and a switch outside that list is skipped by
+  the keys; GENERAL's rows are walked by the real focusable elements.
+- A channel Watershed has emptied says BROADCASTS RESUME AT 9 PM in the guide. Tuning it puts
+  up the card, the words of `WatershedCard.swift`: BROADCASTS WILL RESUME AT 9 PM, the 18 and
+  R-rated line, "Turn off Watershed in Settings to watch now." The card sits over the picture,
+  not in `.channel-display`, which the split view hides. One addition to the Apple TV's card:
+  an OPEN SETTINGS button, because a TV browser has no keys and the line names Settings.
+- A programme already playing finishes, as on the Apple TV. The card goes up when a channel is
+  tuned or a programme ends with nothing left to air. Switching it off, or the clock passing
+  9 PM, clears the card and tunes the channel; midnight closes the gate again for the next day.
+  If that happens with Settings open (OPEN SETTINGS leaves it open), tuning no longer takes the
+  Settings keys: `switchChannel` sets `appState` to 'player', and the arrow keys read it.
+- Bug found on the way: `buildChannelSchedule` returned early on an empty pool without clearing
+  what the last pool built. A channel Watershed had just emptied kept its schedule, so its R
+  titles stayed in the guide and kept airing and the card never came. It clears now. The same
+  early return meant a prime-time-gated channel kept yesterday's schedule overnight.
+- Phone: the card was taller than the 219 px picture and the hidden Now Playing overlay sat
+  over its button. Under 560 px wide or 520 px tall it uses smaller type and fits.
+
+**Verified.** `npm test` green. New `scripts/watershed-browser-smoke.mjs` (`npm run
+test:watershed:browser`, 99 checks, headless Chromium, a mock Jellyfin of 42 films, clock
+pinned to 2 PM): the words against the Swift source, the default, the click, a film left to
+finish, the card, OPEN SETTINGS, 9 PM, midnight, a reload, and the card and the switch by click
+alone at phone, tablet, desktop and 960x540, never in browser full screen. The same 99 pass on
+the hosted build (`dist`) and the Docker build (`dist-selfhost`). Negative controls: origin/main's
+page fails (no switch); the page without the empty-pool clear fails 7 checks, three R titles on
+the all-R channel's guide row and no card.
+
+**Not verified.** A real Plex, Jellyfin or Emby server; a real TV browser (the 960x540 run
+emulates the size and a pointer, it is not TV Bro); Safari. The 9 PM edge uses the page's
+one-second tick, so a background tab catches up on its next tick, not at 9:00:00.
+
+**Next.** Roku has no Watershed yet. While in the page: with the split view on (the default), the
+playback failure card and `showVideoError` text live in `.channel-display`, which
+`.player-screen.layout-side` hides with `display: none !important`. Measured: a failure card
+has a 0 by 0 box at desktop and phone sizes. Not fixed on this branch.
+
 ## 2026-11-02 (Roku: ask for the Roku account email at sign-in, getUserData / RFI)
 
 **Why.** Roku's static analysis gives an authenticated app an error: "All authenticated

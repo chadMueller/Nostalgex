@@ -111,6 +111,8 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
     // npm run test:schedule-parity. Here it is the fixture's next schedule row.
     nextAfterEnd: channel => (channel.schedule && channel.schedule[0]) || null,
     showNowPlaying() {}, updateInfoPanel() {}, showGuide() {}, renderActiveGuide() {}, updateFsOverlay() {},
+    // Watershed's card and hold test: no channel here is held (scripts/watershed-browser-smoke.mjs drives the real ones).
+    hideWatershedCard() {}, holdForWatershed() {}, isWatershedHold: () => false,
     buildSubtitleUrl: item => `https://fixture.invalid/subtitles/${item.ratingKey}`,
     clearVideoError() {}, showVideoError: error => failures.push(error), showPlaybackFailure: error => failures.push(error), classifyPlaybackFailure: details => details,
     document: {

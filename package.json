@@ -24,6 +24,7 @@
     "test:ratings": "node scripts/nostalgex-rating-smoke.mjs",
     "test:watershed": "node scripts/nostalgex-watershed-smoke.mjs",
     "test:failure-card:browser": "node scripts/failure-card-browser-smoke.mjs",
+    "test:watershed:browser": "node scripts/watershed-browser-smoke.mjs",
     "test:schedule": "node scripts/nostalgex-schedule-order-smoke.mjs",
     "test:schedule-dst": "node scripts/nostalgex-schedule-dst-smoke.mjs",
     "test:schedule-parity": "node scripts/nostalgex-schedule-parity-smoke.mjs",
