@@ -154,7 +154,11 @@ const files = http.createServer((req, res) => {
     if (process.env.NX_TUNER_HTML) body = readFileSync(process.env.NX_TUNER_HTML);
     body = body.toString()
       .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/hls\.js[^>]*><\/script>/, "<script>window.Hls = { isSupported: () => false };</script>")
-      .replace("%VITE_SUPABASE_URL%", api).replace("%VITE_SUPABASE_ANON_KEY%", "anon").replace("%VITE_TMDB_RELAY_URL%", `${api}/relay`);
+      // The page's enrichment settings: a placeholder in the source, left empty or filled in a build
+      // (the Docker image bakes in whatever build args it got), so the meta contents are set either way.
+      .replace(/(name="nostalgex-supabase-url" content=")[^"]*"/, `$1${api}"`)
+      .replace(/(name="nostalgex-supabase-anon-key" content=")[^"]*"/, '$1anon"')
+      .replace(/(name="nostalgex-tmdb-relay" content=")[^"]*"/, `$1${api}/relay"`);
   }
   res.writeHead(200, { "Content-Type": types[extname(p)] || "application/octet-stream" });
   res.end(body);
