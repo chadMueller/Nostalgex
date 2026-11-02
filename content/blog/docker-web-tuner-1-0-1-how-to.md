@@ -110,11 +110,11 @@ In the Docker container, a plain `http://` Emby address works. On nostalgex.app 
 
 ### SCREAM goes from 4 channels to 8
 
-SLASHER, HORROR COMEDY, FOUND FOOTAGE and WORLD HORROR join SCREAM KIDS, FRIGHT NIGHT, SCREAM ADULTS and NOSTALGEX HORROR, on channels 137 to 144. Thanks to @tydude001 for the channel ideas. Switch SCREAM on in Settings and its channels build from the horror movies you own. It also stays on in any month now, so if you're a Halloween in July person, I see you.
+SLASHER, HORROR COMEDY, FOUND FOOTAGE and WORLD HORROR join SCREAM KIDS, FRIGHT NIGHT, SCREAM ADULTS and NOSTALGEX HORROR, on channels 180 to 187. Thanks to @tydude001 for the channel ideas. Switch SCREAM on in Settings and its channels build from the horror movies you own. It also stays on in any month now, so if you're a Halloween in July person, I see you.
 
 ### Three more channels
 
-**MYSTERY BOX TV** (84), **CRINGE TV** (55) and **A24** (118), any month.
+**MYSTERY BOX TV** (120), **CRINGE TV** (65) and **A24** (160), any month.
 
 One heads up for all the new ones: a channel with too few titles in your library stays hidden until you have enough for it. If you're light on found footage, that one waits for you.
 
@@ -165,7 +165,8 @@ NOTES (not rendered)
 Verified Oct 19, 2026 against github.com/chadMueller/Nostalgex:
 - Release tuner-v1.0.1 (published Oct 16, 2026, 6:45 PM Toronto): https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.1 . Source for sleep timer (15 MIN, 30 MIN, 1 HR, "Still watching?" 20 s, MENU on phones), INFO / I key / Settings > PLAYBACK, Connect with Emby (username and password, auto switch of old Jellyfin route sign ins, http in container vs https on nostalgex.app), SCREAM 4 to 8, @tydude001, MYSTERY BOX TV / CRINGE TV / A24, thin channels hidden, Show Now Playing and Mark Watched split (@w6trp), update commands, image tags 1.0.1 / 1.0 / latest.
 - Image name ghcr.io/chadmueller/nostalgex, docker run command, compose block, port remap, amd64/arm64 no armv7, uid 101 non root, read only + /tmp: README "Docker container" sections, docker/compose.yaml, .github/workflows/docker.yml, and the live https://www.nostalgex.app/self-host page.
-- Channel numbers from public/channels.json: SLASHER 141, HORROR COMEDY 142, FOUND FOOTAGE 143, WORLD HORROR 144, SCREAM KIDS 137, MYSTERY BOX TV 84, CRINGE TV 55, A24 118.
+- Channel numbers from public/channels.json (renumbered in tuner 1.0.11, each package has its own block): SCREAM KIDS 180, FRIGHT NIGHT 181, SCREAM ADULTS 182, NOSTALGEX HORROR 183, SLASHER 184, HORROR COMEDY 185, FOUND FOOTAGE 186, WORLD HORROR 187, MYSTERY BOX TV 120, CRINGE TV 65, A24 160. The post originally had SLASHER 141, HORROR COMEDY 142, FOUND FOOTAGE 143, WORLD HORROR 144, SCREAM KIDS 137, MYSTERY BOX TV 84, CRINGE TV 55, A24 118.
+- The three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). Re-shoot them on tuner 1.0.11 or later.
 - "SCREAM stays on in any month": release notes. The same release says the holiday bundle does too; held per brief, not mentioned.
 - Playback information is also in Apple TV 1.0.27, which is unreleased, so the post does not mention the Apple TV app panel.
 - Avoided: the own-server phrasing (the self-host page heading uses it), browser compatibility claims for specific TVs and phones, any date for future channels.

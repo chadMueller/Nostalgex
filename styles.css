@@ -2734,6 +2734,16 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
    are generated from content/roku.json (scripts/render-roku.mjs).
    ══════════════════════════════════════════════════════════════════ */
 
+/* The Beta sticker hangs off the headline's top-right corner. .cta-sticker is
+   absolutely positioned, so on this page the h1 is its anchor. */
+.page-roku .hero h1 { position: relative; }
+.page-roku .hero h1 .cta-sticker { top: -6px; right: 0; }
+/* Stacked, the h1 carries 72px of padding above the text, so the sticker
+   drops into that gap instead of sitting against the nav. */
+@media (max-width: 1024px) {
+  .page-roku .hero h1 .cta-sticker { top: 18px; }
+}
+
 .page-roku .roku-smallprint {
   margin-top: 36px;
   text-align: center;
