@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku bench: dump-library.mjs runs upstream's loader through the shared live module)
+
+**Why.** `roku/tests/bench/dump-library.mjs` kept its own copy of the loader from before the port
+moved here: it read the pinned commit from `roku/data/UPSTREAM`, which no longer exists, so it
+stopped with `ENOENT` before reading anything, and its lifted loader also lacked the
+`NostalgexUTF8Repair` global that #169 gave `tests/live/plex-loader.mjs`. `tests/bench/run.sh`
+needs its output, so the bench had no library to run on.
+
+**Changed.** It loads the library with `plex-loader.mjs`'s `loadLibrary`, as the live tools do,
+and keeps its own part: the shared cache's enrichment rows and `out/bench/library.json`. About 40
+lines of duplicated lifting are gone, so a global the loader needs is added in one place.
+
+**Measured.** On main it stops at `ENOENT ... roku/data/UPSTREAM`. On the branch, against a real
+Plex library: 5,404 items and 911 enrichment rows in 3 min 44 s, 28 titles with accents and no
+U+FFFD.
+
 ## 2026-11-02 (site: the Roku beta is full, /roku linked across the site, the Docker post's channel numbers)
 
 **Shipped.** Nothing until this lands on main. Branch `site/roku-beta-links`, cut from `origin/main` at `03c7ae9`, not pushed. Nothing on it depends on an app release.
