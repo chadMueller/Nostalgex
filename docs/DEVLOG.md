@@ -3,6 +3,53 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Roku: one title on one channel at a time, the lineup's days packed together)
+
+**Why.** The Apple TV and web engines pack each day for the whole lineup now (`89a2f5c`, review
+fixes `faede9b`, below): on a pulled Apple TV guide, doubled minutes went from 94.2% to 0.2%. The
+Roku engine is held to the same golden file, which it failed 123 of 366 on until this port.
+Trello z4K7aJG6.
+
+**Changed.** On `roku/cross-channel-dedupe`, off `faede9b` so it merges with it as one, not
+pushed. A line-for-line port of `scripts/nostalgex-daily-manifest.js`:
+- `DailyManifest.brs`: the occupancy, the multi-part guard, `NxPickCandidate` (the next 8 are
+  looked at); `NxPackDay` takes the occupancy and a `gated` flag. The filler is the rotating
+  queue; the main pass hands over to it when nothing waiting fits.
+- `Lineup.brs`: on a cache miss `NxManifestBlocks` packs the registered lineup's day
+  (`NxPackLineupDay`): time-gated channels last then by id, yesterday's overruns and the days
+  already stored fixed, a gated channel giving way to the rest but not to another gated one, a
+  channel off the lineup packing after it and adding nothing. The lineup's pools are read at the
+  hour the guide's own are.
+- `GuideSchedule.brs`, `LibraryTask.brs`: `NxSetLineup(ordered)` before every `NxScheduleGuide`;
+  a library load clears it.
+- `ScheduleParityGoldenTests.brs`: gated rows get `timeRestrictions`, every row but `offGuide` is
+  registered, and `offGuide` rows are still dumped. `CrossChannelTests.brs` (46 cases) for the
+  pieces; `tests/bench/BenchLineup.brs` for the time.
+
+**A bug the bench found.** `NxManifestBlocks` first walked the lineup with `for each`, and
+`NxScheduleGuide`'s own `for each` is over that same array. A nested `for each` over one array
+shares its place on a TV, so the guide stopped after its first channel (1 of 142 on the stick).
+The interpreter doesn't do it and every golden case walks by index, so only the bench saw it. The
+lineup is walked by index now, and `CrossChannelTests` schedules the very array it registers.
+
+**Measured.**
+- Parity golden: 363 passed, 0 failed off-device (it was 243 passed, 123 failed with the new golden
+  and the old engine); the whole suite runs on the Streaming Stick Plus (OS 15.3.4) and ends in
+  ALL TESTS PASSED, the golden in 5.9 s there.
+- `BenchLineup`, a made-up 142-channel lineup on the stick, before then after: wide (12,000 items,
+  pools of 80 to 3,000) cold 39.3 s then 40.6 s, warm 0.62 s then 0.61 s, package switch 6.5 s
+  then 6.4 s, doubled minutes 1.0% then 0%. Crowded (600 items, pools of 40 to 200, every title on
+  dozens of channels) cold 4.8 s then 6.1 s (+27%), warm 0.60 s then 0.65 s, switch 1.16 s then
+  1.18 s, doubled minutes 17.6% then 0.15%.
+- The real library on the stick (11,800 items, 31 channels): cold schedule of both days 2.62 s and
+  2.91 s before, 2.73 s and 2.82 s after, two launches each. A launch shows the saved guide (1.1 s
+  to AppLaunchComplete both ways); the schedule runs behind it, so launch time doesn't move. The
+  first launch with no saved guide, and the first guide after an update's rebuild, are where the
+  cold cost shows (C1).
+
+**Half-done.** Nothing run on an Apple TV. The crowded bench is the worst case measured: a lineup
+of 142 channels on a library that small is not one anyone has.
+
 ## 2026-11-01 (one title on one channel at a time: the lineup's days packed together)
 
 **Shipped.** Nothing. Branch `schedule/cross-channel-dedupe`, off main `9438f2a`, carrying the
