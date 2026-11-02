@@ -3,6 +3,34 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Roku: START OVER while loading, LOADING DIDN'T FINISH after two unfinished loads, #150's port)
+
+**Why.** #150 gave the Apple TV a way out of a load that never finishes or keeps closing the app,
+and the web tuner has had START OVER since 2026-10-23 ("Roku has no START OVER on its loading screen yet;
+that's a port"). On the Roku, * already signed out during a load, but its hint sat under the
+loading screen, so nobody could see it, and it didn't ask first.
+
+**Changed.** Branch `roku-start-over` (tydude001), off main at `03c7ae9` (1.0.10).
+- `source/util/LaunchGuard.brs` (new): upstream's unfinished-load half of `LaunchGuard.swift`, over
+  a `launch` registry section. A marker for a load the viewer waits on (no guide on screen),
+  cleared on any end the app sees; a saved guide shown first clears it without resetting the count.
+- `MainScene.brs`: the launch is recorded first; two unfinished in a row and it shows LOADING DIDN'T
+  FINISH (OK tries again, * starts over) instead of a third load. On the loading screen the first *
+  arms START OVER, a second signs out, OK or Back disarms. A sign-out clears the marker and count.
+- `LoadingView`: `* START OVER` near the bottom for the whole load, and upstream's confirm text
+  once armed (`startOverArmed`, `serverName`), in its own group so the stack isn't rebuilt.
+- `tests/LaunchGuardTests.brs`: 17 cases from `LaunchGuardTests.swift` and `StartOverTests`.
+
+**Measured.** `tests/run.sh` ends in ALL TESTS PASSED (launch guard 17 passed). Pressed on our 43"
+TCL (43S45, OS 16.0.4) with a scratch build of this branch on its first base, `54cb410` (a 40 s hold in the library step,
+saved guides off; the rebase onto `03c7ae9` brought only the EMAIL keyboard fix and the version), signed in to the lab Emby: the confirm, OK and Back keeping the load; Home mid-load
+twice read 1 then 2 in a row and the third launch asked without loading; a load that finished
+just before Home counted nothing; OK loaded, ** signed out to CONNECT YOUR SERVER, and the next launch read 0.
+Details in `roku/docs/PORTING.md` (A way out of a load).
+
+**Not done.** The reinstall half: whether deleting the channel clears its registry is unchecked on a
+TV. Not run on a Streaming Stick.
+
 ## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
 
 **Why.** Measured on a Streaming Stick Plus on 1.0.9: after Continue on Roku's own Sign in
