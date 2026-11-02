@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Web tuner and Docker: the playback failure card shows in the split view)
+
+**Shipped.** Nothing. Branch `web/failure-card-split-view`, cut from `origin/main` at `03c7ae9`,
+not pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+
+**Why.** Found while building the WATERSHED card (branch `web/watershed-switch`). The failure card
+("This one wouldn't play", amber when the server is at fault, red when the browser is) and the
+connection errors ("NOT CONNECTED. RECONNECT YOUR SERVER") are drawn inside `.channel-display`. The
+split view, the default at every size, hides that block with
+`.player-screen.layout-side .channel-display { display: none !important; }`. Measured at desktop
+and phone sizes: the card has a 0 by 0 box. A programme the server would not stream was a black
+picture with no reason, in the layout everyone uses, so the card, which was shipped for parity with
+the Apple TV and Roku, never showed.
+
+**Changed.** A failure or a connection error puts a `has-failure` class on `.channel-display`,
+which shows the block again in the split view and hides the text display's title lines behind it.
+`clearVideoError` takes the class off, so the split view is as it was. The full view is unchanged.
+
+**Verified.** New `scripts/failure-card-browser-smoke.mjs` (`npm run test:failure-card:browser`,
+headless Chromium, a Jellyfin-shaped server that refuses every video request so the page's own
+recovery runs to the card) at phone, tablet, desktop and 960x540: the card is on screen inside the
+picture with its headline and detail, a connection error shows the same way, clearing hides the
+block again in the split view, the full view still shows it, no page errors: 40 checks, the same
+40 on the hosted build (`dist`) and the Docker build (`dist-selfhost`). Negative control:
+origin/main's page fails 16 of them, with the card at 0 by 0 at all four sizes.
+
+**Not verified.** A real server refusing a real stream; a real TV browser; Safari. The playback
+recovery ladder behind the card is unchanged and is a separate, larger gap (no 1080p step, stops
+after 3 failures where the Apple TV stops after 5).
+
+**Next.** Nothing for this change.
+
 ## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
 
 **Why.** Measured on a Streaming Stick Plus on 1.0.9: after Continue on Roku's own Sign in

@@ -1297,6 +1297,15 @@
   }
   .channel-display.active { display: flex; }
   .player-screen.layout-side .channel-display { display: none !important; }
+  /* Why a programme will not play, or why the server cannot be reached, is shown here, and the
+     split view (the default) hides this whole block. A failure shows it again, without the
+     title lines that belong to the text display. */
+  .player-screen.layout-side .channel-display.has-failure { display: flex !important; }
+  .channel-display.has-failure .playing-title-main,
+  .channel-display.has-failure .playing-episode,
+  .channel-display.has-failure .playing-position { display: none; }
+  .channel-display.has-failure { padding: 12px 16px; box-sizing: border-box; }
+  .channel-display.has-failure .display-status { margin-top: 0; }
   .channel-display.switching {
     animation: channel-switch 0.5s ease forwards;
   }
@@ -4773,7 +4782,7 @@
   function showPlaybackFailure(failure, willSkip) {
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
-    display.classList.add('active');
+    display.classList.add('active', 'has-failure');
     status.textContent = '';
     status.classList.remove('server-side', 'device-side');
     status.classList.add(failure.serverSide ? 'server-side' : 'device-side');
@@ -4792,7 +4801,7 @@
   function showVideoError(message) {
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
-    display.classList.add('active');
+    display.classList.add('active', 'has-failure');
     status.textContent = message;
     status.classList.add('visible');
     console.warn('[PLEX 90] Video error:', message);
@@ -4802,6 +4811,7 @@
     const status = document.getElementById('display-status');
     status.textContent = '';
     status.classList.remove('visible');
+    document.getElementById('channel-display').classList.remove('has-failure');
   }
 
   // ══════════════════════════════════════
