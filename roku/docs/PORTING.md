@@ -14,7 +14,7 @@ and already pinned to the Apple TV.
 | Upstream | Here | State |
 |----------|------|-------|
 | `channels.json`, `channels-memberships.json` | `data/`, unchanged | symlinks to the repo root; `scripts/stage.sh` copies the files into the package |
-| `scripts/nostalgex-daily-manifest.js` (Swift: `SchedulePoolOrdering.swift`, `DailyManifestScheduler.swift`) | `source/schedule/DailyManifest.brs` | ported, passing on device |
+| `scripts/nostalgex-daily-manifest.js` (Swift: `SchedulePoolOrdering.swift`, `DailyManifestScheduler.swift`) | `source/schedule/DailyManifest.brs`, `source/guide/Lineup.brs` | ported, passing on device; each day is packed across the whole lineup so one title is not on two channels at once (below) |
 | `scripts/nostalgex-channel-filter.cjs` (Swift: `AppState+Channels.swift` `filterItems`) | `source/filter/ChannelFilter.brs` | ported, passing on device |
 | `plex-tuner.html`: `getTimeFilteredPool`, bundles, `minItems` | BrightScript | with the guide |
 | What airs, after the Apple TV (web tuner 1.0.7, `f9b5562`): pools in library order, minutes truncated (`minutesFromPlexMs`, `minutesFromTicks`); the guide's 24-hour window (`ChannelScheduleBuilder.buildSchedule`); one title on two channels kept by the lowest channel id (`resolveConflicts`); the next pick (`AppState.advanceToNextItem`: `findConflict`, `advancePick`) | `source/plex/PlexLibrary.brs`, `source/mediabrowser/MediaBrowserLibrary.brs`, `source/guide/Advance.brs`, `components/GuideView.brs` | ported; upstream's `scripts/schedule-parity-golden.json`, from the Apple TV's own code, passing off-device and on the 55R617 (`tests/ScheduleParityGoldenTests.brs`, 314 checks), and matched live against upstream (below). As on the web, the guide shows a title given way unmarked rather than the next programme as on now |
@@ -102,6 +102,27 @@ filter results (kept in the saved pools file), as a package switch does,
 except for channels whose rules read the clock to the day
 (`addedWithinDays`, `releasedWithinMonths`); the file's key holds the month,
 which is all the rest read.
+
+A day is packed for the whole lineup at once (`89a2f5c` and `faede9b`, Apple TV
+and web), so one title is not on two channels at once. `NxPackDay` takes the
+lineup's occupancy (`NxOccupancy`, `NxPickCandidate`, `NxSequelMark`,
+`NxWaitsForEarlierPart`) and whether the channel is time-gated. `NxManifestBlocks`
+packs the registered lineup's day on a cache miss (`NxPackLineupDay`): channels
+in priority order, time-gated ones last and then by id, each in its own order
+except that a programme another channel has on in the same slot waits for a later
+one (the next 8 are looked at). A time-gated channel gives way to the others, never
+to another time-gated one. Yesterday's overruns and the days already stored are
+fixed. A channel off the lineup packs after it and adds nothing to it.
+LibraryTask registers the lineup (`NxSetLineup`) before every `NxScheduleGuide`,
+and a library load clears it. Where this differs from the JS, with the same
+answer: no memo of the lineup's day for a channel off the guide (the TV never asks
+for one), and the lineup's pools are read at the hour the guide's own are
+(`NxTimeFilteredPool`). The loops over the lineup go by index: a nested `for each`
+over the guide's own array stopped the outer loop after one channel on a TV (the
+interpreter doesn't). Held to `schedule-parity-golden.json` (its crowded lineup
+with two time-gated channels and one off the guide), `tests/CrossChannelTests.brs`
+and `tests/bench/BenchLineup.brs` (a made-up 142-channel lineup, off-device or on a
+TV).
 
 Not ported from the schedule module: its manifest cache (`localStorage`).
 The caller keeps a day's blocks in memory instead (`NxManifestCache`),
