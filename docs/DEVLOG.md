@@ -3,6 +3,75 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Web tuner and Docker: Plex sign-in stops waiting once the answer cannot change)
+
+**Shipped.** Nothing. Branch `web/plex-lan-early-exit`, cut from `origin/main` at `54cb410`, not
+pushed. It reaches the hosted tuner on a push to main and Docker on the next `tuner-v*` tag.
+
+**Why.** `findWorkingConnection` tested every address plex.tv lists with `Promise.all` and then
+took the best that answered, so a sign-in waited for the slowest address even when the home
+network's answered in 30 ms, and a dead remote address cost its whole 5 s timeout every time.
+`confirmMultiServerSelection` asked the servers one after another, so each server that was off
+added its own wait. The Apple TV (`PlexAPIService.bestReachableURI`) and Roku
+(`ServerResolve.brs:NxResolveOutcome`) stop as soon as the answer cannot change and ask every server
+at once.
+
+**Changed.**
+- New `scripts/nostalgex-server-resolve.js`, the rules of the Apple TV and Roku in one pure file:
+  home network first, then remote HTTPS, remote plain, relay (HTTPS first within a kind); the best
+  kind that has answered wins as soon as nothing better is still waiting, so a home answer settles at
+  once; a home address silent for 3 s counts as failed, but only once another address has answered;
+  every probe is told to stop when the choice is made; everything still waiting at 10 s counts as
+  failed. `findWorkingConnection` is that, with the same 5 s probe.
+- A lone slow home address is still waited for. A seeded property check over random servers found
+  my first version returning no address for a server whose only answering address replied at 3.2 s,
+  which the old code connected to. The grace applies only when something else has answered. (Roku's
+  `NxResolveStatus` counts a silent home address failed after its grace whether or not anything else
+  has answered; not run on a stick, so unverified there.)
+- An address that answers as a different Plex server is turned down, as on Roku: `/identity` must
+  name the `machineIdentifier` plex.tv gave. An answer that cannot be read, or a missing identifier,
+  is accepted as before. Before, the page connected to the other server's library.
+- Servers are resolved together, not one after another; the list keeps the order they were picked in,
+  so the first stays the primary.
+- The old wait-for-everything path stays as `findWorkingConnectionWaitingForAll`, used only if the new
+  script did not load.
+- One difference from before that is deliberate: the home network now ranks above remote HTTPS. On
+  nostalgex.app, which is https, only HTTPS addresses answer anyway; in Docker a home http address now
+  wins over a remote HTTPS one, as on the Apple TV.
+
+**Verified.** Headless Chromium, real sockets: the page signs in the way a second visit does (a
+plex.tv token, plex.tv's server list served by the harness, a Plex server per address that answers,
+hangs like a dead address does, or is refused). The connect phase is plex.tv's list arriving to the
+first library request, median of 3 runs, and includes about 0.7 s of page work that is the same in
+both:
+
+| Case | main | this branch |
+|---|---|---|
+| home 30 ms, remote and relay dead | 5671 ms | 699 ms |
+| home 30 ms, remote 300 ms, relay 1800 ms | 2474 ms | 699 ms |
+| home refused, remote 150 ms, relay dead | 5668 ms | 821 ms |
+| shared server, remote 150 ms, relay dead | 5673 ms | 819 ms |
+| home dead, remote 150 ms, relay dead | 5668 ms | 3678 ms (the home address gets its 3 s) |
+| only the relay answers (200 ms) | 871 ms | 872 ms |
+| home is another Plex server, remote 150 ms | 820 ms, wrong server | 820 ms, right server |
+| nothing answers | same error | same error, same time |
+| three servers, each: home 30 ms, remote and relay dead | 15672 ms | 686 ms |
+| two servers: first answers in 900 ms, second in 30 ms | 1606 ms | 1572 ms, the first stays the primary |
+| three servers, two of them off (every address dead), one answering | 10701 ms | 5665 ms (one wait for the dead ones, not one each) |
+
+`scripts/nostalgex-server-resolve-smoke.mjs` (`npm run test:plex-resolve`, in `npm test`) runs the
+engine on a virtual clock: the cases of the Apple TV's `ConnectionDiscoveryEarlyExitTests.swift`
+and Roku's `ServerResolveTests.brs`, then 400 random servers, 1,988 checks. `npm test` green.
+`scripts/plex-resolve-browser-smoke.mjs` (`npm run test:plex-resolve:browser`) holds the table to
+bounds (46 checks), on source, the hosted build and the Docker build; origin/main's page fails 8 of them.
+
+**Not verified.** A real Plex server and plex.tv: the addresses here are loopback sockets. Chrome's
+local network access prompt, and a real `*.plex.direct` home address, were not exercised. Probes are
+still `/identity` only, 5 s, no retry (the apps use `/identity` and `/library/sections`, 12 to 25 s and a
+retry); the timeouts are unchanged on purpose.
+
+**Next.** Roku: check the lone slow home address case on a stick.
+
 ## 2026-11-02 (Privacy: the Roku account email line)
 
 **Changed.** The Roku section of `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` has one new

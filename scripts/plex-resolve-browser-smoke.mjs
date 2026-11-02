@@ -10,8 +10,8 @@
  * does: a plex.tv token, plex.tv's list of servers (served here), and a Plex server per address
  * that answers, hangs (a blackhole: it takes the connection and never replies, as a dead
  * address does), or is refused. It reports, for each case, how long the connect phase took
- * (the first /identity probe to the first /library/sections request, read from the servers'
- * own clocks), which server the library came from, and how long until the library was in the
+ * (plex.tv's list of servers arriving, to the first /library/sections request, read from the
+ * servers' own clocks), which server the library came from, and how long until the library was in the
  * guide, and holds them to the bounds below.
  *
  *   MEASURE_ONLY=1   print the numbers and assert nothing, for a before/after run on another page
@@ -103,7 +103,7 @@ const browser = await chromium.launch({ headless: true });
  * One sign-in. servers: [{ name, id, addresses: [{ tier, behaviour }] }], tier one of
  * "local", "remote" (HTTPS, so a blackhole it is), "remote-plain", "relay".
  */
-async function signIn(servers) {
+async function signIn(servers, { waitMs = 40000 } = {}) {
   const log = [];
   const started = [];
   const resources = [];
@@ -123,11 +123,12 @@ async function signIn(servers) {
 
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.route((u) => !u.hostname.match(/^(127\.0\.0\.1|localhost)$/), (route) => route.abort());
-  await ctx.route(/plex\.tv\/api\/v2\/resources/, (route) => route.fulfill({
+  let resourcesAt = null;
+  await ctx.route(/plex\.tv\/api\/v2\/resources/, (route) => { resourcesAt = t0(); return route.fulfill({
     status: 200, contentType: "application/json",
     headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" },
     body: JSON.stringify(resources),
-  }));
+  }); });
   await ctx.addInitScript(() => {
     if (location.pathname.endsWith("plex-tuner.html") && !sessionStorage.getItem("nx-seeded")) {
       sessionStorage.setItem("nx-seeded", "1");
@@ -141,24 +142,28 @@ async function signIn(servers) {
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 160)));
   await page.goto(`${base}/plex-tuner.html`);
   // Two or more servers: the picker, with everything selected. CONNECT is a button.
-  if (servers.length > 1) await page.locator(".server-picker-connect").click({ timeout: 20000 });
+  let clickedAt = null;
+  if (servers.length > 1) { await page.locator(".server-picker-connect").click({ timeout: 20000 }); clickedAt = t0(); }
   let loaded = false;
   try {
-    await page.waitForFunction(() => typeof allItemsCache !== "undefined" && allItemsCache.length > 0, null, { timeout: 40000 });
+    await page.waitForFunction(() => typeof allItemsCache !== "undefined" && allItemsCache.length > 0, null, { timeout: waitMs });
     loaded = true;
   } catch { /* the failure case: nothing reachable */ }
   const loadedAt = t0();
   const errorText = await page.evaluate(() => (document.getElementById("plex-error-label") || {}).textContent || "");
   const tunerCount = await page.evaluate(() => (typeof allItemsCache !== "undefined" ? allItemsCache.length : 0));
+  const pickedNames = await page.evaluate(() => (typeof selectedServers !== "undefined" ? selectedServers.map((x) => x.name) : []));
+  const primaryName = await page.evaluate(() => (typeof plexServerName !== "undefined" ? plexServerName : null));
   await ctx.close();
   for (const a of started) await a.close();
-  const firstIdentity = log.find((l) => l.path === "/identity");
   const sections = log.filter((l) => l.path === "/library/sections");
   const firstSections = sections[0];
   return {
-    loaded, count: tunerCount, errors, errorText,
-    connectMs: firstIdentity && firstSections ? firstSections.at - firstIdentity.at : null,
-    loadMs: loaded && firstIdentity ? loadedAt - firstIdentity.at : null,
+    loaded, count: tunerCount, errors, errorText, pickedNames, primaryName,
+    // From plex.tv's list of servers arriving (or, with several servers, CONNECT pressed) to the
+    // first library request: the whole of finding addresses.
+    connectMs: resourcesAt !== null && firstSections ? firstSections.at - (clickedAt ?? resourcesAt) : null,
+    loadMs: loaded && resourcesAt !== null ? loadedAt - (clickedAt ?? resourcesAt) : null,
     sectionPorts: [...new Set(sections.map((l) => l.port))],
     resources, log,
   };
@@ -196,6 +201,21 @@ const cases = [
   { name: "three servers, each: home 30 ms, remote and relay dead",
     servers: ["A", "B", "C"].map((n) => ({ name: `Lab ${n}`, id: `lab-plex-${n}`, addresses: [{ tier: "local", behaviour: "ok:30" }, { tier: "remote", behaviour: "hang" }, { tier: "relay", behaviour: "hang" }] })),
     expectAddress: 0, max: 2500, many: true },
+  // Servers are asked together, not one after another, and the list keeps the order they were
+  // picked in: the first is the primary, even when a later one answers sooner.
+  { name: "two servers: the first answers in 900 ms, the second in 30 ms; the first stays the primary",
+    servers: [
+      { name: "Lab A", id: "lab-plex-A", addresses: [{ tier: "local", behaviour: "ok:900" }] },
+      { name: "Lab B", id: "lab-plex-B", addresses: [{ tier: "local", behaviour: "ok:30" }] },
+    ],
+    expectAddress: 0, max: 2500, many: true, expectOrder: ["Lab A", "Lab B"] },
+  { name: "three servers, two of them off (every address dead), one answering",
+    servers: [
+      { name: "Lab A", id: "lab-plex-A", addresses: [{ tier: "local", behaviour: "hang" }, { tier: "remote", behaviour: "hang" }] },
+      { name: "Lab B", id: "lab-plex-B", addresses: [{ tier: "local", behaviour: "ok:30" }] },
+      { name: "Lab C", id: "lab-plex-C", addresses: [{ tier: "remote", behaviour: "hang" }, { tier: "relay", behaviour: "hang" }] },
+    ],
+    expectAddress: 0, min: 4500, max: 7000, many: true, live: 1, expectOrder: ["Lab B"] },   // one wait for the dead ones, not one each
 ];
 
 let passed = 0;
@@ -204,14 +224,17 @@ const check = (label, ok, detail = "") => { if (ok) passed += 1; else failures.p
 
 const rows = [];
 for (const c of cases) {
+  if (process.env.ONLY && !c.name.includes(process.env.ONLY)) continue;
   const results = [];
-  for (let i = 0; i < runs; i++) results.push(await signIn(c.servers));
+  // A case where nothing answers waits just past the last probe's timeout, not for a library.
+  for (let i = 0; i < runs; i++) results.push(await signIn(c.servers, { waitMs: c.expectNone ? 9500 : 40000 }));
   const r = results[0];
   const connect = results.map((x) => x.connectMs).filter((x) => x !== null);
   const load = results.map((x) => x.loadMs).filter((x) => x !== null);
   const connectMs = connect.length ? median(connect) : null;
   const loadMs = load.length ? median(load) : null;
-  const usedAddress = r.sectionPorts.length ? r.resources[0].connections.findIndex((x) => x.port === r.sectionPorts[0]) : -1;
+  // Which address (its place in its own server's list) the first library request went to.
+  const usedAddress = r.sectionPorts.length ? Math.max(...r.resources.map((x) => x.connections.findIndex((y) => y.port === r.sectionPorts[0]))) : -1;
   rows.push({ name: c.name, connectMs, loadMs, loaded: r.loaded, usedAddress });
   console.log(`${connectMs === null ? "   n/a" : String(connectMs).padStart(6)} ms connect  ${loadMs === null ? "   n/a" : String(loadMs).padStart(6)} ms to library  ${r.loaded ? "library loaded" : "no library"}  ${r.sectionPorts.length ? `address #${usedAddress}` : "no address"}  | ${c.name}`);
   if (measureOnly) continue;
@@ -220,7 +243,9 @@ for (const c of cases) {
     check(`${c.name}: the page says the server cannot be reached`, /CANNOT REACH ANY SELECTED SERVER/.test(r.errorText), r.errorText);
     continue;
   }
-  check(`${c.name}: the library loads (every server's films)`, r.loaded && r.count === metadata.length * c.servers.length, `${r.loaded} ${r.count}`);
+  const live = c.live || c.servers.length;
+  check(`${c.name}: the library loads (every answering server's films)`, r.loaded && r.count === metadata.length * live, `${r.loaded} ${r.count}`);
+  if (c.expectOrder) check(`${c.name}: the servers are in the order they were picked, the first is the primary`, JSON.stringify(r.pickedNames) === JSON.stringify(c.expectOrder) && r.primaryName === c.expectOrder[0], `${JSON.stringify(r.pickedNames)} primary ${r.primaryName}`);
   check(`${c.name}: the library comes from the expected address (#${c.expectAddress})`, usedAddress === c.expectAddress, `address #${usedAddress}`);
   if (c.max != null) check(`${c.name}: connect phase under ${c.max} ms`, connectMs !== null && connectMs <= c.max, `${connectMs} ms`);
   if (c.min != null) check(`${c.name}: connect phase takes at least ${c.min} ms (the home address gets its grace)`, connectMs !== null && connectMs >= c.min, `${connectMs} ms`);

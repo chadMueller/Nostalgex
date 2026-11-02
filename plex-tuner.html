@@ -8282,17 +8282,22 @@
 
     const chosen = [...selectedServerIndices].map(i => discoveredServers[i]).filter(Boolean);
 
-    const resolved = [];
-    for (const server of chosen) {
+    // Every server at once, as the Apple TV and Roku do: one after another, a server that is
+    // off (a shared one, say) cost its whole timeout before the next was even asked. The list
+    // keeps the order the viewer picked, so resolved[0] is still the primary server.
+    document.querySelector('#plex-waiting .plex-waiting-label').textContent = chosen.length === 1
+      ? `CONNECTING TO ${chosen[0].name.toUpperCase()}`
+      : `CONNECTING TO ${chosen.length} SERVERS`;
+    const found = await Promise.all(chosen.map(async (server) => {
       const token = server.accessToken || plexToken;
-      document.querySelector('#plex-waiting .plex-waiting-label').textContent = `CONNECTING TO ${server.name.toUpperCase()}`;
       const workingConn = await findWorkingConnection(server, token);
-      if (workingConn) {
-        resolved.push({ name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' });
-      } else {
+      if (!workingConn) {
         console.warn(`[Nostalgex] No reachable connection for server: ${server.name}`);
+        return null;
       }
-    }
+      return { name: server.name, url: workingConn.uri, token, connections: server.connections || [], machineIdentifier: server.machineIdentifier || '' };
+    }));
+    const resolved = found.filter(Boolean);
 
     if (resolved.length === 0) {
       const errorEl = document.getElementById('plex-error-label');
