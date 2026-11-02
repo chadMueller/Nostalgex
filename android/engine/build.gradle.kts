@@ -40,8 +40,19 @@ val genMediaBrowserVectors = tasks.register<Exec>("genMediaBrowserVectors") {
     commandLine("node", "scripts/gen-mediabrowser-vectors.mjs", out.get().asFile.absolutePath)
 }
 
+val genEnrichmentVectors = tasks.register<Exec>("genEnrichmentVectors") {
+    val out = layout.buildDirectory.file("vectors/enrichment.json")
+    inputs.file("scripts/gen-enrichment-vectors.mjs")
+    inputs.file(rootDir.parentFile.resolve("scripts/nostalgex-enrichment.js"))
+    inputs.file(rootDir.parentFile.resolve("roku/tests/gen-enrichment.mjs"))
+    inputs.file(rootDir.parentFile.resolve("channels.json"))
+    outputs.file(out)
+    commandLine("node", "scripts/gen-enrichment-vectors.mjs", out.get().asFile.absolutePath)
+}
+
 tasks.test {
-    dependsOn(genMediaBrowserVectors)
+    dependsOn(genMediaBrowserVectors, genEnrichmentVectors)
+    systemProperty("nostalgex.enrichmentVectors", layout.buildDirectory.file("vectors/enrichment.json").get().asFile.absolutePath)
     systemProperty("nostalgex.mediaBrowserVectors", layout.buildDirectory.file("vectors/mediabrowser.json").get().asFile.absolutePath)
     // The golden files and channels.json live at the repo root, shared with every surface.
     systemProperty("nostalgex.repoRoot", rootDir.parentFile.absolutePath)

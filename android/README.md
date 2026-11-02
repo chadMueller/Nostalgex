@@ -60,6 +60,12 @@ listing; it installs over `adb`.
 - WATERSHED (off by default): R, NC-17 and TV-MA titles wait for 9 PM on every
   channel but VHS VAULT, which holds its own. A channel with nothing else to
   show says BROADCASTS WILL RESUME AT 9 PM, and comes on at 9.
+- TMDB and OMDb enrichment, in a build that turns it on (below): the keywords,
+  networks, production companies and IMDb ratings that channels like TEEN
+  MOVIES, MUSICALS, TRUE CRIME and CULT CLASSICS match on. A full load waits on
+  it as the METADATA step; a launch from the saved library builds the guide from
+  the local cache and asks the network behind it. Without it, those rules match
+  only on the server's own genres, as on an Apple TV with no enrichment.
 
 ## Differences from the Apple TV app
 
@@ -67,7 +73,7 @@ The aim is the Apple TV app, screen for screen. Where this app differs, it is
 listed here.
 
 Not ported yet: server collections, found franchises and MY COLLECTIONS;
-TMDB enrichment; SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
+SHOW NOW PLAYING and MARK WATCHED; the seasonal invite row
 above channel one; demo mode; the Apple TV's playback recovery ladder
 (watchdog, stalls, compatibility retry) and the loading screen's STOP WAITING
 when a scan goes quiet; the PlaybackInfo handshake on Jellyfin and Emby (this
@@ -82,8 +88,13 @@ Different on purpose, because the Apple TV's version has no counterpart here:
   the schedule": FRANCHISES is a package under CHANNEL PACKAGES rather than its
   own page, and there is no MY COLLECTIONS page, until franchises and
   collections are ported.
-- The loading screen's rail is LINEUP, LIBRARY, CHANNELS, READY: the Apple TV's
-  COLLECTIONS, METADATA and MUSIC steps have no work behind them here yet.
+- The loading screen's rail is LINEUP, LIBRARY, METADATA, CHANNELS, READY
+  (METADATA only in a build with enrichment): the Apple TV's COLLECTIONS and
+  MUSIC steps have no work behind them here yet.
+- Enrichment asks the Nostalgex relay as `X-Nostalgex-Client: android`. Until
+  the deployed relay accepts that value it answers 403, and the first 403 ends
+  the TMDB and OMDb steps for that load (as on the Roku), so the app runs on
+  the shared Supabase cache alone and fetches nothing new.
 - No reinstall check: Android deletes an app's data with the app (and backup is
   off), so a reinstall can't find an old sign-in the way tvOS's keychain can.
 - The Apple TV's fixes for its own player don't apply: getting 4K Dolby Vision
@@ -117,9 +128,10 @@ Different in the detail:
 (`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`), the channel
 filter and Watershed (`ChannelFilter.kt`, from
 `scripts/nostalgex-channel-filter.cjs`), stream quality (`StreamQuality.kt`),
-seasonal packages (`Season.kt`), and the Jellyfin and Emby library scan
+seasonal packages (`Season.kt`), the Jellyfin and Emby library scan
 (`MediaBrowserLibrary.kt`, from `plex-tuner.html`'s
-`fetchJellyfinLibraryFromServer`). Its tests read the Apple TV's golden files
+`fetchJellyfinLibraryFromServer`), and TMDB and OMDb enrichment
+(`EnrichmentService.kt`, from `scripts/nostalgex-enrichment.js`). Its tests read the Apple TV's golden files
 from `scripts/` and run on the JVM:
 
 ```sh
@@ -133,8 +145,13 @@ shipped `channels.json`; `scripts/stream-quality-golden.json`,
 quality table, the package seasons and Watershed's hold to the same answers.
 The scan is compared item for item with the web
 tuner's, run by `engine/scripts/gen-mediabrowser-vectors.mjs` over the Roku
-port's fixture server (`roku/tests/fixtures/mediabrowser-server.json`), so the
-engine tests need Node. Change the JS engines and these have to follow.
+port's fixture server (`roku/tests/fixtures/mediabrowser-server.json`).
+Enrichment's parsers, Supabase rows, OMDb gates and quota clock are compared
+with the web tuner's over the Roku port's fixture documents
+(`engine/scripts/gen-enrichment-vectors.mjs`, from
+`roku/tests/gen-enrichment.mjs`), and its caches, batching, relay and OMDb
+budget run the cases of `scripts/nostalgex-enrichment-smoke.mjs`. The engine
+tests need Node. Change the JS engines and these have to follow.
 
 ## Build and install on a SHIELD
 
@@ -156,6 +173,18 @@ Gradle downloads the JDK it runs on.
    installs over the other and keeps the sign-in.
 
 3. Nostalgex appears in the apps row.
+
+Enrichment is off unless `local.properties` (which git ignores) turns it on and
+names the Supabase project the maintainer gives for native builds:
+
+```properties
+nostalgex.enrichment=on
+nostalgex.supabaseUrl=https://<project>.supabase.co
+nostalgex.supabaseAnonKey=<anon key>
+```
+
+They go into the build, never into the repo; the Roku's `.env` carries the same
+three. Only TMDB and IMDb ids leave the TV, never titles or server details.
 
 What each programme did is logged: `adb logcat -s Nostalgex` shows each
 DIRECT PLAY or TRANSCODE, why a direct play fell back, how long a programme

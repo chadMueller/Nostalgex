@@ -44,7 +44,10 @@ data class MediaItem(
     val thumb: String? = null,
 )
 
-/** TMDB and OMDb values, as MediaEnrichment on the Apple TV. Null when TMDB has no record. */
+/**
+ * TMDB and OMDb values, as MediaEnrichment on the Apple TV and the web tuner's record
+ * (scripts/nostalgex-enrichment.js). Null on an item when TMDB has no record.
+ */
 @Serializable
 data class Enrichment(
     val keywords: List<String> = emptyList(),
@@ -53,7 +56,16 @@ data class Enrichment(
     val tmdbGenres: List<String> = emptyList(),
     val imdbRating: Double? = null,
     val imdbVotes: Double? = null,
+    /** Rotten Tomatoes, the web record's `rottenTomatoesScore`. */
     val rtScore: Double? = null,
     val metacriticScore: Double? = null,
     val awards: String? = null,
+    // What the caches and the write-backs carry beyond what the filter reads.
+    val tmdbID: String? = null,
+    val imdbID: String? = null,
+    /** "movie" or "tv". */
+    val mediaType: String? = null,
+    val franchiseID: Double? = null,
+    val franchiseName: String? = null,
+    val fetchedAt: String? = null,
 )

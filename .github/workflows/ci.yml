@@ -211,6 +211,8 @@ jobs:
               - 'plex-tuner.html'
               - 'roku/tests/gen-mediabrowser.mjs'
               - 'roku/tests/fixtures/mediabrowser-server.json'
+              - 'scripts/nostalgex-enrichment.js'
+              - 'roku/tests/gen-enrichment.mjs'
 
   # Every pull request, whatever it touches: the repo is public, and this keeps the
   # maintainer's home network and real server names out of it. No npm install needed.

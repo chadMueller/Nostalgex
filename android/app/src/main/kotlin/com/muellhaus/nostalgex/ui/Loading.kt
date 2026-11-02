@@ -116,7 +116,7 @@ fun LibraryLoadScreen(model: AppModel, state: Screen.LibraryLoad) {
                     modifier = Modifier.padding(horizontal = u(40)),
                 )
             }
-            StepRail(state.phase, Modifier.padding(horizontal = u(48)))
+            StepRail(state.phase, model.enrichmentOn, Modifier.padding(horizontal = u(48)))
             Text(state.headline + ".".repeat(n), style = font(DMMonoMedium, 32, BrandCyan), textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = u(800)))
             if (state.detail.isNotEmpty()) {
                 Text(state.detail, style = font(DMMono, 22, Color.White.copy(alpha = 0.45f)), textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = u(720)))
@@ -169,8 +169,8 @@ private fun StartOverQuestion(model: AppModel, onKeepLoading: () -> Unit) {
 
 /** LibraryLoadStepRail: a circle per step, a tick when done, a dot on the one running, joined by lines. */
 @Composable
-private fun StepRail(current: LoadPhase, modifier: Modifier = Modifier) {
-    val steps = LoadPhase.entries
+private fun StepRail(current: LoadPhase, enrichment: Boolean, modifier: Modifier = Modifier) {
+    val steps = LoadPhase.visible(enrichment)
     Row(modifier.widthIn(max = u(900)), verticalAlignment = Alignment.Top) {
         for ((i, step) in steps.withIndex()) {
             val done = step.ordinal < current.ordinal
