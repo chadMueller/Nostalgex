@@ -19,11 +19,12 @@
  * resolvable `playwright`. Run: `npm run test:cache-restore-crash`.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 const film = (n, title, genres) => ({
   Id: `f${n}`, Name: title, Type: "Movie", ProductionYear: 1990 + n, Genres: genres,
