@@ -19,11 +19,12 @@
  * resolvable `playwright`. Run: `npm run test:empty-guide`.
  */
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, statSync, mkdirSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT || "playwright");
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 const shots = process.env.SHOTS || "";
 if (shots) mkdirSync(shots, { recursive: true });
 
