@@ -162,6 +162,14 @@ private fun MainPage(model: AppModel) {
                 subtitle = "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio",
                 on = model.retroMode,
             ) { model.toggleRetroMode() }
+            // Two built-in sizes; OK switches between them.
+            ToggleRow(
+                title = "GUIDE TEXT SIZE",
+                subtitle = "Bigger program titles, times and channel names in the guide",
+                detail = if (model.guideTextLarge) "LARGE" else "NORMAL",
+                on = true,
+                showToggle = false,
+            ) { model.toggleGuideTextSize() }
             ToggleRow(
                 title = "STREAM QUALITY",
                 subtitle = "Lower this when your connection is slow or shared",

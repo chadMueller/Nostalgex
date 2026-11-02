@@ -152,7 +152,7 @@ internal fun ticking(): Double {
 fun WatchScreen(model: AppModel) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val unit = maxWidth / 1920f
-        CompositionLocalProvider(LocalUnit provides unit) {
+        CompositionLocalProvider(LocalUnit provides unit, LocalGuideText provides if (model.guideTextLarge) GuideText.LARGE else GuideText.NORMAL) {
             val height = maxHeight / unit
             // TunerView: the top section is 51.43% of the screen; the picture is 4:3 at that height.
             val videoHeight = height * 0.5143f
@@ -658,13 +658,13 @@ private fun GridHeader(visibleStart: Long, programsWidth: Float) {
     Row(Modifier.fillMaxWidth().height(u(HEADER_HEIGHT)).background(Color(0.04f, 0.04f, 0.08f)), verticalAlignment = Alignment.CenterVertically) {
         // The Apple TV's header runs 12 points wide of the rows (its padding is outside the
         // column's frame); kept in line with the rows here, as the Roku port does.
-        Text("CHANNEL", style = font(DMMonoMedium, 18, Color.White.copy(alpha = 0.7f)), modifier = Modifier.width(u(CHANNEL_COLUMN)).padding(start = u(12)))
+        Text("CHANNEL", style = font(DMMonoMedium, LocalGuideText.current.channelHeading, Color.White.copy(alpha = 0.7f)), modifier = Modifier.width(u(CHANNEL_COLUMN)).padding(start = u(12)))
         for (i in 0 until 4) {
             Box(Modifier.width(u(programsWidth / 4)).fillMaxHeight()) {
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.2f)))
                 Text(
                     time(visibleStart + i * 1800L),
-                    style = font(DMMonoMedium, 20, Color.White.copy(alpha = 0.95f)),
+                    style = font(DMMonoMedium, LocalGuideText.current.timeLabel, Color.White.copy(alpha = 0.95f)),
                     modifier = Modifier.align(Alignment.CenterStart).padding(start = u(14)),
                 )
             }
@@ -727,13 +727,13 @@ private fun EpgRow(
                     }
                     Text(
                         ch.number.toString(),
-                        style = font(DMMonoMedium, 20, if (focused) Color.White else color),
-                        modifier = Modifier.width(u(44)).padding(end = u(8)),
+                        style = font(DMMonoMedium, LocalGuideText.current.number, if (focused) Color.White else color),
+                        modifier = Modifier.width(u(LocalGuideText.current.numberWidth + 8)).padding(end = u(8)),
                         maxLines = 1,
                     )
                     Text(
                         ch.name.uppercase(),
-                        style = font(DMMonoMedium, 18, if (focused) Color.White else color.copy(alpha = 0.95f)),
+                        style = font(DMMonoMedium, LocalGuideText.current.name, if (focused) Color.White else color.copy(alpha = 0.95f)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -803,7 +803,7 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
             // ChannelGuideView's watershedRowPlaceholder.
             if (watershedHold) Row(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.02f)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.12f)))
-                Text("BROADCASTS RESUME AT 9 PM", style = font(DMMonoMedium, 18, Color.White.copy(alpha = 0.4f)), maxLines = 1, modifier = Modifier.padding(start = u(14)))
+                Text("BROADCASTS RESUME AT 9 PM", style = font(DMMonoMedium, LocalGuideText.current.placeholder, Color.White.copy(alpha = 0.4f)), maxLines = 1, modifier = Modifier.padding(start = u(14)))
             }
             return@Row
         }
@@ -831,7 +831,7 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                         Text(
                             entryTitle(e),
                             style = font(
-                                DMMonoMedium, 20,
+                                DMMonoMedium, LocalGuideText.current.title,
                                 when {
                                     e.isNowPlaying || focused -> Color.White
                                     isPast -> Color.White.copy(alpha = 0.5f)
@@ -916,6 +916,24 @@ private fun SidebarRow(title: String, color: Color, modifier: Modifier, onSelect
         if (focused) Box(Modifier.matchParentSize().padding(u(2)).border(u(3), color, RoundedCornerShape(u(6))))
     }
 }
+
+// ── GUIDE TEXT SIZE (GuideTextSize.swift, Roku's GuideText.brs) ──────────
+
+/**
+ * Type sizes for the text the guide grid draws. Only text changes: rows stay 80 high, the
+ * header 60, the channel column 220, and blocks are laid out from times alone, so LARGE never
+ * moves a row or a block. The number sits in a box that grows with it.
+ */
+internal data class GuideText(val title: Int, val timeLabel: Int, val channelHeading: Int, val number: Int, val numberWidth: Int, val name: Int, val placeholder: Int) {
+    companion object {
+        /** The sizes the guide drew before GUIDE TEXT SIZE. Must not change. */
+        val NORMAL = GuideText(title = 20, timeLabel = 20, channelHeading = 18, number = 20, numberWidth = 36, name = 18, placeholder = 18)
+        /** Roku's LARGE: titles and times 26, heading 22, number 24 in a wider box, name 20. */
+        val LARGE = GuideText(title = 26, timeLabel = 26, channelHeading = 22, number = 24, numberWidth = 44, name = 20, placeholder = 22)
+    }
+}
+
+internal val LocalGuideText = staticCompositionLocalOf { GuideText.NORMAL }
 
 // ── CONNECTION FAILED and NO CHANNELS FOUND (Plex90App.swift) ──────────────
 

@@ -35,6 +35,9 @@ listing; it installs over `adb`.
   SUBTITLE LANGUAGE, AUTO SUBTITLES, audio tracks, AUDIO LANGUAGE, RETRO MODE,
   STREAM QUALITY, the sleep timer and PLAYBACK INFORMATION), Back closes a
   picker, then the overlay, then returns to the tuner.
+- GUIDE TEXT SIZE (NORMAL or LARGE) under PLAYBACK: bigger programme titles,
+  times and channel names in the guide, the Apple TV's and Roku's LARGE sizes;
+  rows and blocks never move.
 - RETRO MODE's look: scanlines, flicker, vignette and the tracking line over
   the picture, and tuning snow when a start takes longer than 0.75 s.
 - Settings (SETTINGS above the guide, or the top of the package sidebar that
