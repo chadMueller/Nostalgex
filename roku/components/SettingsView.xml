@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Settings, in the order of the Apple TV app's SettingsPageView: support,
      the Plex servers to read and signing out, RETRO MODE and subtitles,
-     channel packages with each franchise under FRANCHISES, then the server's
-     collections under MY COLLECTIONS, folded closed, and the VERSION line.
+     channel packages (an amber count on one short of content), FRANCHISES
+     (its switch, then the classics, the found franchises and the franchise
+     collections in one A to Z list), then the viewer's own collections under
+     MY COLLECTIONS, folded closed, and the VERSION line.
      Choices are saved on the TV. A package switch is built at once, behind
      Settings, building only that package's channels; a franchise,
      collection or server change rebuilds the guide when Settings closes. -->
 <component name="SettingsView" extends="Group">
   <interface>
     <field id="bundles" type="array" />
+    <!-- The ids of the channels on air and the packages the guide was built
+         with, for the amber count on a package short of content. -->
+    <field id="onAirIds" type="array" />
+    <field id="builtBundles" type="array" />
     <!-- The franchise list under FRANCHISES, from the last guide build. -->
     <field id="franchises" type="array" />
     <field id="franchiseOverCap" type="integer" />
@@ -38,6 +44,7 @@
   <script type="text/brightscript" uri="pkg:/source/util/AppVersion.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/SettingsChannels.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />

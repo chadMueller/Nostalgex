@@ -192,10 +192,39 @@ in library order.
 The rows split as the Apple TV app's do, which the web tuner's don't:
 `source/collections/CollectionClassifier.brs` ports `CollectionClassifier`,
 with the cases of its Swift tests in `tests/CollectionTests.brs`. FRANCHISES
-(movie series) and OTHER COLLECTIONS (the rest) are an accordion each. A
-FRANCHISES row switched on airs in CH 310-399 and an OTHER COLLECTIONS row in
-CH 400-499 (the blocks above). A row already mostly on another channel says
-so ("N% already on CH X") and is dimmed while off.
+(movie series) and OTHER COLLECTIONS (the rest). A FRANCHISES row switched on
+airs in CH 310-399 and an OTHER COLLECTIONS row in CH 400-499 (the blocks
+above). A row already mostly on another channel says so ("N% already on CH X")
+and is dimmed while off.
+
+Settings lists them as the Apple TV's 1.0.29 CHANNELS & BUNDLES does (N-028),
+as one list, since the Roku has no drill-down pages. The franchise collections
+are in the FRANCHISES section, not under MY COLLECTIONS:
+- The FRANCHISES switch heads the section and is no longer one of the CHANNEL
+  PACKAGES. While it is on, ADD ALL / REMOVE ALL and one A to Z list follow: the
+  classics and the found franchises (`NxFranchiseListRows`) and the franchise
+  collections, tagged COLLECTION (`NxFranchisePageEntries`). The sort ignores
+  case and compares digits as characters, as the Apple TV's merged list does
+  (`localizedCaseInsensitiveCompare`, which is locale-aware where this is not: an
+  accented first letter sorts after Z here), where the franchise rows alone keep their
+  natural order. ADD ALL and REMOVE ALL cover all three kinds. One "Up to 90"
+  note counts the found franchises and the franchise collections past the block.
+- The collections stay listed while the switch is off, as there, where the
+  switch gates their channels: a row can read ON and not air until it is on.
+- MY COLLECTIONS holds OTHER COLLECTIONS only (still one accordion), with a line
+  for how many collections sit under FRANCHISES.
+- A package that is on shows how many of its channels are on air ("14/15
+  CHANNELS") and an amber count of the rest (`NxPackageBadge`, the Apple TV's
+  `AlertCountBadge`). Not for a package switched on during the visit (the guide
+  has none of its channels yet) and not for one with none on air, where the Apple
+  TV says "Not enough content to build this package" and dims it, which isn't
+  ported. The Roku has had no "N need more content" line to replace.
+
+Not ported: the pages themselves, and WHY ARE SOME CHANNELS MISSING? (I-004),
+the page the Apple TV's amber count points to, so the count has no explainer
+here. `scripts/deploy.sh --settings-tour` shows SettingsView alone over made-up
+packages, franchises and collections (`tests/settings`), in the test data space,
+for looking at these rows with no library and no video.
 
 While the FRANCHISES package is on, a collection that is a franchise the
 package already carries folds into it. It leaves the list and never gets a

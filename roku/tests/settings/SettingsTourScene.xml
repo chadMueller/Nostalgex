@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Settings tour's scene (tests/settings/SettingsTourMain.brs): SettingsView
+     alone over made-up data. Copied into the build by deploy.sh
+     --settings-tour, never part of the app. -->
+<component name="SettingsTourScene" extends="Scene">
+  <interface>
+    <field id="args" type="assocarray" onChange="onArgs" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
+  <script type="text/brightscript" uri="pkg:/source/collections/CollectionChoices.brs" />
+  <script type="text/brightscript" uri="pkg:/components/SettingsTourScene.brs" />
+  <children>
+    <Label id="refused" visible="false" translation="[120,80]" width="1680" wrap="true" color="0xFFFFFFFF" />
+  </children>
+</component>

@@ -3,6 +3,63 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Roku: every franchise on one Settings page, an amber count on a short package)
+
+**Why.** Apple TV 1.0.29 (N-028) moved the franchise collections onto the FRANCHISES page, left
+MY COLLECTIONS with the viewer's own, and put a small amber count on a package short of content
+where an "N need more content" line was. The Roku still listed franchise collections in their
+own accordion under MY COLLECTIONS. Trello bJu4Q3Ap, ours, not tydude001's.
+
+**Changed.** On `roku/settings-franchises-page` (off main `9438f2a`), not pushed. Settings UI
+only: no data, numbering or channel change.
+- FRANCHISES leaves CHANNEL PACKAGES and heads its own section. The switch, then ADD ALL /
+  REMOVE ALL and one A to Z list of the classics, the found franchises and the franchise
+  collections (tagged COLLECTION), ignoring case, digits as characters, as the Apple TV's merged
+  list sorts (but see Not matched). ADD ALL covers all three. One "Up to 90" note counts the found franchises and the
+  collections past the block (the old two notes, one of them under MY COLLECTIONS, are gone).
+- The collections stay listed while the switch is off, as on the Apple TV's page.
+- MY COLLECTIONS holds OTHER COLLECTIONS only, with a line for how many sit under FRANCHISES.
+- A package that is on shows "14/15 CHANNELS" and an amber count of the rest
+  (`source/guide/SettingsChannels.brs`, the logic; `AlertCountBadge` is the look). The Roku never
+  had the "N need more content" line, so this is new there. Not for a package switched on during
+  the visit (the guide has none of its channels yet), nor one with none on air, where the Apple TV
+  says "Not enough content" and dims the row; that is not ported. The amber count has no explainer
+  page on the Roku (WHY ARE SOME CHANNELS MISSING?, I-004; queue item 33).
+- `refreshRows` matched a row on kind, index and category, so every collection row matched the
+  first and focus jumped to it after a guide rebuild. Rows keep an identity now (own commit).
+- `scripts/deploy.sh --settings-tour` (`tests/settings`): SettingsView alone over made-up data, in
+  the test data space only, with no library and no video.
+
+**Verified.** 50 cases in `tests/SettingsChannelsTests.brs`. `tests/run.sh` (`NX_TEST_JOBS=2`)
+ends in ALL TESTS PASSED, and `deploy.sh --test` on the Streaming Stick Plus (OS 15.3.4) does too,
+the 50 cases among them (on a Mac, `deploy.sh --test` needs a fix that is not on main yet).
+Static analysis shows one warning, `SubtitleSettings.brs` line 181 at 1,434 characters, which is
+on main already.
+
+On the stick, with the settings tour (made-up data, no video), each seen in a screenshot and the
+console clean:
+- an amber 1 and an amber 12 on two packages, with "14/15" and "4/16 CHANNELS";
+- the merged A to Z list, with a dimmed duplicate collection among the franchises;
+- ADD ALL turning the franchise collections on too;
+- FRANCHISES off, leaving only the franchise collections in the section;
+- the over-capacity note, and the all-folded line under MY COLLECTIONS.
+
+On the real app, over a real library, through the real guide to Settings, also in screenshots:
+- packages short of content with the amber count (a 20 of 22 package showing a 2);
+- FRANCHISES off, with the library's franchise collections listed A to Z under its switch, each
+  tagged COLLECTION;
+- MY COLLECTIONS reading how many collections are the viewer's own and how many sit under
+  FRANCHISES, with OTHER COLLECTIONS the only accordion left.
+
+**Not matched.** The A to Z list compares lowercased text character by character. The Apple TV's
+`localizedCaseInsensitiveCompare` is locale-aware, so a title starting with an accented letter
+sorts after Z here and with its base letter there. BrightScript has no collation, and a table
+for it would be a guess at ICU's order. Collection titles that start with an accent are rare.
+
+**Open.** On the Apple TV the page lists franchise collections while the switch is off and lets
+you switch them, though `d7f6aa3` gates their channels on the switch and the page's own comment
+says they air while it is off. Read, not run on an Apple TV; the Roku copies the page.
+
 ## 2026-11-01 (Roku: a Jellyfin or Emby scan does less per item, #155)
 
 **Why.** #155: every cold boot rescans the whole library, and Chad asked where a cold scan's
