@@ -27,7 +27,7 @@ All three are free. Not sure? Use the app on a TV and the web tuner everywhere e
 
 <a id="tvos-nostalgex"></a>
 <a id="apple-tv-app"></a>
-## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app
+## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.28`
 
 The best way to watch on a TV. Connect one or more servers, then flip channels with the Siri Remote. Needs tvOS 18 or later.
 
@@ -35,7 +35,7 @@ The best way to watch on a TV. Connect one or more servers, then flip channels w
 
 <a id="web-tuner-web-tunerhtml--plex-tunerhtml"></a>
 <a id="web-tuner"></a>
-## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner
+## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.13`
 
 Nothing to install. Works on computers and phones.
 
@@ -43,7 +43,7 @@ Nothing to install. Works on computers and phones.
 
 <a id="run-it-on-your-server"></a>
 <a id="docker-container"></a>
-## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container
+## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.13`
 
 The same web tuner, packaged as a Docker container that runs on a computer at home, so it can reach servers the website can't. Most Plex users don't need it.
 
@@ -55,7 +55,7 @@ docker run -d --name nostalgex -p 8080:8080 --restart unless-stopped ghcr.io/cha
 
 Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker container guide](https://www.nostalgex.app/self-host).
 
-**Latest: `tuner-v1.0.12`.** Franchise channels, as on the Apple TV: every film series in your library gets its own channel and its own switch (the classics on CH 300 to 306, the series Nostalgex finds from CH 310), and your server's collections are split into FRANCHISES and OTHER COLLECTIONS. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.12). Already running it? `docker compose pull && docker compose up -d`.
+**Latest: `tuner-v1.0.13`.** WATERSHED, the Apple TV's 9 PM hold for R, 18 and TV-MA titles (off until you switch it on, in Settings), GUIDE TEXT SIZE for a bigger guide, and a faster Plex connect at home. Also fixed: the same title almost never on two channels at once, the card that says why something won't play now shows in the split view, two Plex servers sharing an address no longer load the wrong library, and AUDIO LANGUAGE works on Jellyfin and Emby. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.13). Already running it? `docker compose pull && docker compose up -d`.
 
 <a id="whats-new-in-1028"></a>
 ## What's new in 1.0.28
@@ -134,7 +134,7 @@ services:
     restart: unless-stopped
 ```
 
-**Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.12 · DOCKER`.
+**Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.13 · DOCKER`.
 
 **Platforms:** amd64 and arm64 (Synology and Unraid on Intel or AMD, NUCs, Raspberry Pi 4 and 5 on a 64 bit OS). No armv7. Runs as a non root user (uid 101) and works with a read only root filesystem as long as `/tmp` is writable.
 

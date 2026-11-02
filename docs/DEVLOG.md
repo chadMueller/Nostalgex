@@ -3,6 +3,58 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-02 (Web tuner and Docker 1.0.13: Jellyfin and Emby items keep their audio tracks, #176)
+
+**Shipped.** Nothing yet. Branch `web/tuner-1.0.13`, cut from `origin/main` at `f083748`, not pushed. It
+carries the fix for #176 and the `tunerVersion` bump to 1.0.13 that the Docker release needs. The parity
+bundle (WATERSHED, GUIDE TEXT SIZE, the faster Plex connect, the failure card) is already on main.
+
+**Why.** @owenvoke found it while porting the Jellyfin and Emby audio track choice to Android (PR #151).
+The scan's `mediaInfo` read every audio stream of a file into `audioStreams`, but the movie and the
+episode items it built took only `subtitles`, so on the web tuner and in Docker
+`pickAudioStream(item.audioStreams || [])` always saw an empty list. AUDIO LANGUAGE was ignored on Jellyfin
+and Emby, and the foreign-audio subtitle fallback (`shouldAutoEnableSubs`) never switched on there.
+
+**Changed.**
+- Both item types, movie and episode, now carry `audioStreams: mi.audioStreams`. Nothing else reads
+  `audioStreams`: `pickAudioStream` (the `AudioStreamIndex` in the PlaybackInfo body and on a direct
+  stream's URL), `shouldAutoEnableSubs`, and `loadSubtitleForCurrentItem`. All three already expected the
+  field. The shape is `mediaInfo`'s, unchanged: `index`, `lang`, `codec`, `channels`, `title`.
+- No change to the library cache version. A library saved before this fix has no audio tracks until its
+  24 hour refresh, or until a sign-out and back in; a version bump would make every user (Plex too)
+  rescan on first load. AUDIO LANGUAGE therefore starts working within a day of the update.
+- Not changed: an MP4 that direct plays and has several audio tracks. A direct stream is the file as it
+  is, and a browser cannot switch its tracks, so its default track plays. A file the server has to
+  transcode (an MKV, which is most multi-language files) plays the track that was asked for. Not
+  measured against a real server.
+
+**Verified.** New `scripts/jellyfin-audio-streams-browser-smoke.mjs` (`npm run test:jellyfin-audio:browser`,
+24 checks, headless Chromium, a Jellyfin-shaped and an Emby-shaped server that record every request): a
+scanned movie and a scanned episode carry their tracks; AUDIO LANGUAGE Auto asks for no track; English,
+picked in Settings by click, asks for the English track (index 2, the file's default is French), then German
+(3), then French on an episode (1); a film with audio only in French and German asks for its English
+subtitles by itself, a film with an English track does not. origin/main's page fails 14 of the 24.
+Library cache growth, measured with `CACHE_MEASURE=20000` on the same smoke (20,000 films, three audio and
+two subtitle tracks each, a 350 character summary): the saved library goes from 18.7 MB to 23.6 MB of JSON
+(934 to 1,179 bytes an item, +26%, +4.9 MB), and the load takes the same time (14.6 s both). A film with
+one audio track adds about a third of that. IndexedDB has no 5 MB ceiling (#152), so this stays inside it.
+
+**Not verified.** A real Jellyfin or Emby server with a multi-language file; Safari's own track switching.
+
+**Next.** `roku/tests/gen-mediabrowser.mjs` vectors and Android's scan comparison can include `audioStreams`
+again, as the issue says.
+
+## 2026-11-02 (Web tuner and Docker 1.0.13: the README names the live release on each platform heading)
+
+**Changed.** The README's `Apple TV app`, `Web tuner` and `Docker container` headings carry the version that
+is live, in code style, beside their icon or badge: `1.0.28`, `1.0.13`, `1.0.13`. The README is written by
+hand and has no generated region for these, so `scripts/readme-versions-check.mjs` (`npm run readme:check`,
+in `npm test`) fails when a heading disagrees with `package.json` `tunerVersion` or with the newest
+`released: true` Apple TV entry in `content/changelog.json`, when the `Latest: tuner-v` line does, or when a
+heading loses its icon. The Apple TV heading follows the App Store, so it stays on 1.0.28 while 1.0.29 is in
+review and moves when that entry is flipped to `released: true`. There is no Roku heading yet. RELEASING.md
+says to edit them.
+
 ## 2026-11-02 (Privacy: the Roku email is asked for only on the USE MY ROKU EMAIL button)
 
 **Changed.** The Roku paragraph in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` now says the app asks Roku for the account email only when the viewer presses USE MY ROKU EMAIL, because Roku 1.0.11 stopped asking as the email and password screen opens; checked against `roku/components/ConnectView.brs` on `96650ca`, and the effective date stays November 2, 2026.

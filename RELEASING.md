@@ -81,6 +81,10 @@ the site and the app. Tag when a batch of tuner changes is worth shipping to sel
 
 1. **Bump `"tunerVersion"` in `package.json` to `X.Y.Z` in the commit you are about to tag.**
    nostalgex.app shows the new number as soon as that commit is on `main`.
+   Edit the README's `Web tuner` and `Docker container` headings and its `Latest: tuner-vX.Y.Z`
+   line to the same number; `npm run readme:check` (part of `npm test`) fails until they match. The
+   `Apple TV app` heading follows the App Store: it moves when the newest `released: true` entry in
+   `content/changelog.json` does, not when a build is in review.
 2. `npm test`, `npm run build`, `npm run build:selfhost`, then
    `npm run test:tuner-version:builds` (both builds carry `X.Y.Z`).
 3. Tag that commit and push the tag:

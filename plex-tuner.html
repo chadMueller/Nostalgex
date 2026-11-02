@@ -9709,6 +9709,7 @@
                     librarySource: isMusicVideoSection ? 'musicVideo' : 'tv',
                     tmdbID: showTmdb,
                     subtitles: mi.subtitles,
+                    audioStreams: mi.audioStreams,
                     doviProfile: mi.doviProfile,
                   };
                 }).filter(Boolean);
@@ -9769,6 +9770,7 @@
               librarySource: isMusicVideo ? 'musicVideo' : 'movie',
               tmdbID: tmdbFromProviderIds(jf.ProviderIds),
               subtitles: mi.subtitles,
+              audioStreams: mi.audioStreams,
               doviProfile: mi.doviProfile,
             });
           });
