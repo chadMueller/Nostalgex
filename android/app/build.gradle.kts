@@ -11,6 +11,7 @@ plugins {
 //   nostalgex.enrichment=on
 //   nostalgex.supabaseUrl=https://<project>.supabase.co
 //   nostalgex.supabaseAnonKey=<anon key>
+// and, for testing against a local stand-in only, nostalgex.relayUrl (default: the real relay).
 // The Roku's .env carries the same three (NOSTALGEX_ENRICHMENT and its two neighbours).
 val localProps = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
@@ -34,6 +35,7 @@ android {
         buildConfigField("boolean", "ENRICHMENT", enrichmentOn.toString())
         buildConfigField("String", "SUPABASE_URL", quoted(if (enrichmentOn) localProp("nostalgex.supabaseUrl").trimEnd('/') else ""))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(if (enrichmentOn) localProp("nostalgex.supabaseAnonKey") else ""))
+        buildConfigField("String", "RELAY_URL", quoted(if (enrichmentOn) localProp("nostalgex.relayUrl") else ""))
     }
 
     buildTypes {
