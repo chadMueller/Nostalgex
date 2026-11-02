@@ -19,11 +19,12 @@ pushed. A line-for-line port of `scripts/nostalgex-daily-manifest.js`:
   (`NxPackLineupDay`): time-gated channels last then by id, yesterday's overruns and the days
   already stored fixed, a gated channel giving way to the rest but not to another gated one, a
   channel off the lineup packing after it and adding nothing. The lineup's pools are read at the
-  hour the guide's own are.
+  hour the guide's own are. A channel the lineup names twice counts once, at its first place, as
+  on the web and the Apple TV.
 - `GuideSchedule.brs`, `LibraryTask.brs`: `NxSetLineup(ordered)` before every `NxScheduleGuide`;
   a library load clears it.
 - `ScheduleParityGoldenTests.brs`: gated rows get `timeRestrictions`, every row but `offGuide` is
-  registered, and `offGuide` rows are still dumped. `CrossChannelTests.brs` (46 cases) for the
+  registered, and `offGuide` rows are still dumped. `CrossChannelTests.brs` (48 cases) for the
   pieces; `tests/bench/BenchLineup.brs` for the time.
 
 **A bug the bench found.** `NxManifestBlocks` first walked the lineup with `for each`, and
@@ -41,7 +42,7 @@ lineup is walked by index now, and `CrossChannelTests` schedules the very array 
   then 6.4 s, doubled minutes 1.0% then 0%. Crowded (600 items, pools of 40 to 200, every title on
   dozens of channels) cold 4.8 s then 6.1 s (+27%), warm 0.60 s then 0.65 s, switch 1.16 s then
   1.18 s, doubled minutes 17.6% then 0.15%.
-- The real library on the stick (11,800 items, 31 channels): cold schedule of both days 2.62 s and
+- A test library of about 12,000 items on the stick: cold schedule of both days 2.62 s and
   2.91 s before, 2.73 s and 2.82 s after, two launches each. A launch shows the saved guide (1.1 s
   to AppLaunchComplete both ways); the schedule runs behind it, so launch time doesn't move. The
   first launch with no saved guide, and the first guide after an update's rebuild, are where the
@@ -53,7 +54,7 @@ of 142 channels on a library that small is not one anyone has.
 ## 2026-11-01 (one title on one channel at a time: the lineup's days packed together)
 
 **Shipped.** Nothing. Branch `schedule/cross-channel-dedupe`, off main `9438f2a`, carrying the
-harness commit from `harness/cross-channel-duplicates`. Not pushed. Trello: Z4K7aJG6.
+harness commit from `harness/cross-channel-duplicates`. Not pushed. Trello: z4K7aJG6.
 
 **Why.** Each channel's day was packed on its own, so a film in several pools aired on two or
 more channels at once for almost the whole day. `resolveConflicts` only relabels the info

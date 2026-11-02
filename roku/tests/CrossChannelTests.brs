@@ -122,6 +122,22 @@ function NxRunCrossChannelTests() as Integer
     first2 = NxManifestBlocks(ch1, ch1.pool, at&)
     NxManifestBlocks(off, off.pool, at&)
     NxCheck(r, "lineup: a channel off the guide changes no lineup channel's day", FormatJson(NxCrossKeys(first2)), FormatJson(NxCrossKeys(first)))
+    ' A channel the lineup names twice counts once, at its first place: a second
+    ' entry for it, over the same films in the other order, changes nobody's day.
+    NxClearManifests()
+    NxSetLineup([ch1, ch2])
+    plain = NxManifestBlocks(ch2, ch2.pool, at&)
+    plainOne = NxManifestBlocks(ch1, ch1.pool, at&)
+    twicePool = []
+    for i = 29 to 0 step -1
+        twicePool.Push(pool[i])
+    end for
+    NxClearManifests()
+    NxSetLineup([ch1, ch2, { id: 1, pool: twicePool }])
+    twice = NxManifestBlocks(ch2, ch2.pool, at&)
+    twiceOne = NxManifestBlocks(ch1, ch1.pool, at&)
+    NxCheck(r, "lineup: a channel named twice leaves the others' days alone", FormatJson(NxCrossKeys(twice)), FormatJson(NxCrossKeys(plain)))
+    NxCheck(r, "lineup: a channel named twice keeps its first entry's day", FormatJson(NxCrossKeys(twiceOne)), FormatJson(NxCrossKeys(plainOne)))
     ' The lineup's pack hands back every channel's day, stored or packed now.
     NxClearManifests()
     NxSetLineup([ch1, ch2])

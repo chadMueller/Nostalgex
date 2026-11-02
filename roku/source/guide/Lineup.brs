@@ -225,15 +225,22 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
         ' By index: the guide's `for each` over its channels is this very array,
         ' and a nested `for each` over the same array shares its place on a TV (the
         ' outer loop stopped after the first channel).
+        ' A channel the lineup names twice counts once, at its first place, as
+        ' the web and the Apple TV count it.
+        seen = {}
         lineup = NxList(GetGlobalAA().nxLineup)
         for li = 0 to lineup.Count() - 1
             lc = lineup[li]
-            if lc.id = channel.id then
-                at = entries.Count()
-                entries.Push(own)
-            else
-                lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour), NxPoolMemo(lc, day.hour))
-                if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp })
+            lcKey = lc.id.ToStr()
+            if not seen.DoesExist(lcKey) then
+                seen[lcKey] = true
+                if lc.id = channel.id then
+                    at = entries.Count()
+                    entries.Push(own)
+                else
+                    lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour), NxPoolMemo(lc, day.hour))
+                    if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp })
+                end if
             end if
         end for
         extra = invalid
