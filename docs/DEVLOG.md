@@ -32,8 +32,11 @@ That run came before one review change (a load the app stops clears the marker t
 of its steps reach except START OVER, whose sign-out clears it anyway. Details in
 `roku/docs/PORTING.md` (A way out of a load).
 
-**Not done.** The reinstall half: whether deleting the channel clears its registry is unchecked on a
-TV. Not run on a Streaming Stick.
+**Not needed.** The reinstall half: deleting the only channel with a developer key cleared that
+key's registry. On our 55" TCL
+(55R617, OS 15.3.4) a signed-in test-data 1.0.10 sideload kept its sign-in when installed over
+the top, and opened on CONNECT YOUR SERVER after a delete and a fresh sideload (the store app
+wasn't tried). Not run on a Streaming Stick.
 
 ## 2026-11-02 (Roku: the EMAIL keyboard opens empty over the address Roku shared, 1.0.10)
 
