@@ -63,8 +63,10 @@ end function
 ' ChannelsFranchisesPage's entries: the stock classics and the found franchises
 ' (`franchises`, NxFranchiseListRows) and the server's franchise collections
 ' (`collectionRows`, the collection rows of category "franchises"), one list, A to
-' Z by name without regard to case (`localizedCaseInsensitiveCompare`; digits
-' compare as characters here, unlike the franchise rows' own natural order).
+' Z by name without regard to case (the Apple TV's `localizedCaseInsensitiveCompare`;
+' digits compare as characters here, unlike the franchise rows' own natural order).
+' Not locale-aware: the compare is on lowercased text, so a title starting with an
+' accented letter sorts after Z here and with its base letter there.
 ' The franchise rows are listed only while the package is on (`showFranchises`);
 ' the collections always are. A tie keeps the franchise first.
 ' Entries: { kind: "franchise", franchise } or { kind: "collection", collection }.

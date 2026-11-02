@@ -205,7 +205,8 @@ are in the FRANCHISES section, not under MY COLLECTIONS:
   classics and the found franchises (`NxFranchiseListRows`) and the franchise
   collections, tagged COLLECTION (`NxFranchisePageEntries`). The sort ignores
   case and compares digits as characters, as the Apple TV's merged list does
-  (`localizedCaseInsensitiveCompare`), where the franchise rows alone keep their
+  (`localizedCaseInsensitiveCompare`, which is locale-aware where this is not: an
+  accented first letter sorts after Z here), where the franchise rows alone keep their
   natural order. ADD ALL and REMOVE ALL cover all three kinds. One "Up to 90"
   note counts the found franchises and the franchise collections past the block.
 - The collections stay listed while the switch is off, as there, where the

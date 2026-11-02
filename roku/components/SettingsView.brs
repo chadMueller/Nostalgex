@@ -250,7 +250,6 @@ sub pushPackage(i as Integer)
     b = m.top.bundles[i]
     row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
     m.rows.Push(row)
-    if row.built and NxHasValue(m.enabled, b.id) then print "settings: "; b.id; " has "; row.avail.available; " of "; row.avail.total; " channels on air"
 end sub
 
 ' The FRANCHISES section (ChannelsFranchisesPage): the package's switch, then
