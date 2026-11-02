@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.PlaybackFailure
 import com.muellhaus.nostalgex.engine.PlaybackStarvation
@@ -80,6 +81,9 @@ class Playback(
         /** What PLAYBACK INFORMATION shows changed. */
         fun onInfo(info: PlaybackInfo)
     }
+
+    /** The viewer's languages (AUDIO LANGUAGE, resolved), for the track a Jellyfin or Emby transcode carries. */
+    var audioLanguages: List<String> = emptyList()
 
     /** STREAM QUALITY, read when each programme starts (it never reaches a stream already playing). */
     var quality: StreamQuality = StreamQuality.AUTO
@@ -303,7 +307,7 @@ class Playback(
     // ── The ladder ──────────────────────────────────────────────────────────
 
     private fun watch(a: Int, c: Current) {
-        val deadline = PlaybackWatchdog.deadlineSeconds(c.delivery == Delivery.DIRECT_PLAY, null, null)
+        val deadline = PlaybackWatchdog.deadlineSeconds(c.delivery == Delivery.DIRECT_PLAY, c.item.videoWidth, c.item.videoHeight)
         val window = PlaybackWatchdog.PROGRESS_WINDOW_SECONDS
         var sampleA = 0L
         main.postDelayed({ if (a == attempt) sampleA = player.currentPosition }, (deadline - window) * 1000L)
@@ -404,6 +408,15 @@ class Playback(
                     .appendQueryParameter("SegmentContainer", "ts")
                     .appendQueryParameter("DeviceId", mediaBrowser.deviceId)
                     .appendQueryParameter("PlaySessionId", session)
+                    // The server would send the file's default track, often a dub: ask for the
+                    // viewer's language (JellyfinPlaybackResolver.pinningAudioStream). Only when
+                    // there is a choice, so a one-track file's request is unchanged.
+                    .apply {
+                        LanguageChoice.preferredAudioIndex(item.audioStreams, audioLanguages)?.let { index ->
+                            appendQueryParameter("AudioStreamIndex", index.toString())
+                            Log.i(TAG, "AUDIO TRACK $index (${item.audioStreams.firstOrNull { it.index == index }?.lang}) of ${item.audioStreams.size} for ${describe(item)}")
+                        }
+                    }
                     .build()
                 ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
             }

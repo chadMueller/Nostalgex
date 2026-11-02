@@ -963,6 +963,18 @@ between USE EMAIL AND PASSWORD and the EMAIL field. The Roku section of the priv
 Roku for the account email and only fills a field with it (`privacy.html` and
 `Nostalgex/PRIVACY_POLICY.md` together).
 
+## 2026-11-02 (Android TV: the transcode's audio track, and the 4K deadline)
+
+**Changed.** On `feature/android`, uncommitted. Two small gaps from the earlier entries.
+
+- A Jellyfin or Emby transcode now asks for its audio track. The scan keeps each source's audio tracks (`MediaItem.audioStreams`: index, language, codec, channels, title, and IsDefault) and `LanguageChoice.preferredAudioIndex` picks one (JellyfinPlaybackResolver.preferredAudioIndex), which goes on the HLS request as `AudioStreamIndex`, only when there is more than one track. `AudioTrackSelectionTest` carries the cases of `AudioTrackSelectionTests.swift` and the language cases of `LanguageCodeMatchingTests.swift` (Estonian is not Spanish, `cze` and `ces` are Czech, and so on).
+- The rule is the Roku's (`NxMbChosenAudioIndex`, issue #62), which the owner chose over the Apple TV's: the viewer's AUDIO LANGUAGE ranks first and English only after it. The Apple TV adds English to the wanted languages and takes the most channels, first on a tie, so a German viewer gets an English 5.1 mix over German stereo. Measured on the emulator with AUDIO LANGUAGE Norwegian: Kon-Tiki (English default first, Norwegian second, both mono) was asked for in English, where Android's direct play picks the Norwegian; after the change it asks for track 2 (Norwegian), and The 39 Steps (French default, English) still gets English. Probed against Jellyfin 12.4: the same transcode request decodes to different audio with `AudioStreamIndex=2` than without it.
+- The startup watchdog's deadline reads the frame size, so a 4K transcode gets the Apple TV's 40 s: `videoWidth` and `videoHeight` from Plex's Media and Jellyfin's or Emby's video stream (Kon-Tiki saved as 1280 x 720). `LibraryStore` format 6.
+
+**Found, in the web tuner.** Its Jellyfin and Emby scan builds `audioStreams` in `mediaInfo` (plex-tuner.html around line 9313) but the item only takes `subtitles: mi.subtitles` (lines 9400 and 9460), never `audioStreams`. So `pickAudioStream(item.audioStreams || [])` always gets an empty list: the web tuner never asks for the viewer's audio language on Jellyfin or Emby, and its foreign-audio subtitle fallback never switches on there. Not changed here: it is the web tuner's to fix, in its own pull request. `MediaBrowserScanTest` leaves the field out of its comparison and says why.
+
+**Not checked:** an actual 4K file (the deadline function is tested, the frame size reaches the item; no 4K file in the test library), Emby, and the SHIELD.
+
 ## 2026-11-02 (Android TV: franchises and server collections)
 
 **Changed.** On `feature/android`, uncommitted. Android had the seven classics as an ordinary package and nothing else: no film series found in the library, no server collections, no FRANCHISES or MY COLLECTIONS pages. It now has all of it as the Apple TV 1.0.29 has it, ported from the web tuner's modules, each held to the Apple TV's or the web tuner's own answers.
@@ -1003,7 +1015,7 @@ Not checked: a classic taking a show (the test library has no classic's films), 
 
 **Measured** on the emulator against Jellyfin 12.4, through a proxy that throttles or cuts media delivery. Before: direct play at 0.67x real time froze for 2.6 to 2.9 s every 8 to 9 s, 16 times in 150 s, and never stepped down; a direct play that never sent a byte was black for 36 s before the transcode; with segments cut too, 72 s of black per programme and a card saying "Can't reach your server". After: the starving direct play moved to the server stream after 3 stalls (27 to 38 s after picture) at the same point in the film, and that stream started in 0.9 to 1.1 s and played clean; a hung direct play moved at 15 s; a transcode that never pictured reached the capped retry at 20 s and the card ("couldn't keep up") at 55 s; a capped stream that starved ended on that card after 3 stalls of 9 to 10 s. Healthy direct play and healthy transcoding, 3 minutes each: no stall counted.
 
-**One number differs from the Apple TV, on measurement.** A stall counts from 2 s, not 3. AVPlayer froze for good on a starving source; ExoPlayer stops and carries on, and at 3 s the monitor counted none of 20 freezes in 120 s. Healthy rebuffers on the emulator peaked at 511 ms (31 in 200 s, median 61 ms). `PlaybackRecoveryTest` samples both shapes at ten phases of the once-a-second clock. A 4K transcode also gets 20 s, not 40, because `MediaItem` carries no frame size yet.
+**One number differs from the Apple TV, on measurement.** A stall counts from 2 s, not 3. AVPlayer froze for good on a starving source; ExoPlayer stops and carries on, and at 3 s the monitor counted none of 20 freezes in 120 s. Healthy rebuffers on the emulator peaked at 511 ms (31 in 200 s, median 61 ms). `PlaybackRecoveryTest` samples both shapes at ten phases of the once-a-second clock. A 4K transcode also gets 20 s, not 40, because `MediaItem` carries no frame size yet (since fixed, in the entry on the transcode's audio track).
 
 **Seen, and left as the Apple TV does it.** A transcode already on screen but mid-stall at its 20 s deadline (moved 0.1 s across the window) counts as no picture, gets the capped retry, and if that is mid-stall too ends on "This one wouldn't play" rather than "couldn't keep up". It is the Apple TV's rule as written; changing it belongs in both apps.
 

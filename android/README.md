@@ -112,6 +112,11 @@ Different on purpose, because the Apple TV's version has no counterpart here:
   PLEX) quality, and the channel overlay stuck after a stall. This app plays
   the stored file directly first, MKV included.
 - MATCH TV LANGUAGE where the Apple TV says MATCH APPLE TV LANGUAGE.
+- A Jellyfin or Emby transcode asks for its audio track (`AudioStreamIndex`)
+  as the Roku does (`NxMbChosenAudioIndex`, issue #62): AUDIO LANGUAGE first,
+  then English, then the file's default. The Apple TV counts English as one of
+  the wanted languages, so a German viewer gets an English 5.1 mix over German
+  stereo, and a Norwegian one Kon-Tiki in English (measured on the emulator).
 - The wordmark in the nav bar, as the Roku port uses at the maintainer's
   request; the Apple TV still shows its earlier logo.
 - CH+ and CH- change channel and INFO shows the banner, for Android remotes
@@ -128,8 +133,7 @@ Different in the detail:
   stall counts from 2 s, not 3: on a source at 0.67x real time ExoPlayer stops
   for 2.6 to 2.9 s every 8 to 9 s and carries on, where AVPlayer froze for good,
   so 3 s never fired (measured on the emulator; healthy rebuffers there peaked at
-  0.5 s). And a 4K transcode gets the 20 s deadline, not 40 s, since this app
-  doesn't read a file's frame size yet. The capped retry asks Jellyfin and Emby
+  0.5 s). The capped retry asks Jellyfin and Emby
   for H.264 in TS, as this app's first transcode does.
 - The guide header keeps in line with the rows, where the Apple TV's runs 12
   points wide (as the Roku port also chose).

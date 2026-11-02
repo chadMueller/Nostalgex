@@ -107,4 +107,28 @@ object LanguageChoice {
         }
         return true
     }
+
+    /**
+     * Which audio track a Jellyfin or Emby transcode should carry, when the source has more
+     * than one (JellyfinPlaybackResolver.preferredAudioIndex). The server sends whichever track
+     * the file marks default, and plenty of files mark a dub: measured on the Apple TV, Joe Dirt
+     * played in Spanish on a channel with no way to change it. In order: a track in one of
+     * `preferredLanguages`, most channels first; then English, most channels first; then the
+     * file's default; then the first. Null when there is nothing to choose, which leaves the
+     * server's choice alone.
+     *
+     * This is the Roku's rule (NxMbChosenAudioIndex, issue #62): the viewer's AUDIO LANGUAGE
+     * first, then the Apple TV's, where English is always one of the wanted languages. The
+     * Apple TV alone differs: with English always wanted, a German viewer got an English 5.1
+     * mix over the German stereo track, and on the emulator Kon-Tiki (English default first,
+     * Norwegian second, both mono) was asked for in English for a Norwegian viewer.
+     */
+    fun preferredAudioIndex(streams: List<AudioStream>?, preferredLanguages: List<String>): Int? {
+        val audio = streams ?: return null
+        if (audio.size <= 1) return null
+        fun best(keys: Set<String>) = audio.filter { languageKey(it.lang)?.let { k -> k in keys } == true }.maxByOrNull { it.channels }
+        val viewer = preferredLanguages.mapNotNull { languageKey(it) }.toSet()
+        (best(viewer) ?: best(setOf("en")))?.let { return it.index }
+        return (audio.firstOrNull { it.isDefault } ?: audio.first()).index
+    }
 }

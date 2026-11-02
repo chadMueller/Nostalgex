@@ -50,6 +50,11 @@ data class MediaItem(
     val showKey: String? = null,
     /** Which server the item came from, the web tuner's `serverID`. A ratingKey is unique on one server only. */
     val serverID: String? = null,
+    /** Jellyfin and Emby: the source's audio tracks (plex-tuner.html audioStreams), for the transcode's track. */
+    val audioStreams: List<AudioStream> = emptyList(),
+    /** The picture's size, for the startup watchdog's 4K deadline (PlexMediaItem.videoWidth/videoHeight). */
+    val videoWidth: Int? = null,
+    val videoHeight: Int? = null,
 )
 
 /**
@@ -76,4 +81,16 @@ data class Enrichment(
     val franchiseID: Double? = null,
     val franchiseName: String? = null,
     val fetchedAt: String? = null,
+)
+
+/** One audio track of a Jellyfin or Emby source, as plex-tuner.html keeps it, plus IsDefault for the fallback. */
+@Serializable
+data class AudioStream(
+    val index: Int,
+    /** Lower-cased, "" when untagged. */
+    val lang: String = "",
+    val codec: String = "",
+    val channels: Int = 0,
+    val title: String = "",
+    val isDefault: Boolean = false,
 )
