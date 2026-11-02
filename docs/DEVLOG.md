@@ -3,6 +3,32 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-01 (Roku: a Jellyfin or Emby scan does less per item, #155)
+
+**Why.** #155: every cold boot rescans the whole library, and Chad asked where a cold scan's
+time goes before picking a change. On a 55R617 (Roku OS 15.3.4) signed in to a test Emby with
+5,551 titles (763 films, 4,773 episodes in 148 shows), a cold scan on 1.0.8 with timing prints
+took 17.5 s: about 3.3 s downloading (36 MB in 160 answers), 3.5 s in `ParseJson` and about
+10.7 s building items. Building channels took 10.9 s more. In a 200-episode sample, 90% of the
+bytes are `MediaSources`, most of them subtitle stream descriptions (937 titles carry 10 or
+more subtitle tracks). Dropping the show-level `Fields` from the episode request saves about 2%
+of the bytes.
+
+**Changed.** Branch `roku-mb-scan-speed` (tydude001), off main at 0795e19.
+`MediaBrowserLibrary.brs`: `NxMbIsTextSub` compares the codec in place instead of building
+an 11-item list per call; `NxMbUnixSeconds` makes its regex once per thread; `NxMbDoviProfile`
+tests the prefix before making a regex (Emby sends "None" for 5,530 of 5,559 files); the
+first video and audio stream come from one walk. The saved library is unchanged: on the 55",
+an MD5 over every scanned item's `FormatJson` matched main's across 8 scans. Scan time, 4
+scans each, behind a saved guide: main 18.7 to 19.3 s (mean 19.0), branch 16.7 to 19.3 s
+(mean 17.8). About 6%.
+
+**Next.** What's left is downloading and parsing the subtitle descriptions, and building
+items and channels. A guide seed in the registry (#155's second option) would let a cold boot
+show a guide while the scan runs, as a warm launch does. Leaving the subtitle detail out of the
+scan would need another way to get what the scan reads from `MediaSources` (the Dolby Vision
+profile, container, codecs, bitrate). Both are Chad's call.
+
 ## 2026-11-01 (Web tuner and Docker: franchise channels and the FRANCHISES / OTHER COLLECTIONS split, #122)
 
 **Shipped.** Nothing yet. Branch `web/franchise-parity`, cut from `origin/main` at `9438f2a`, not
