@@ -25,6 +25,8 @@
 <script src="scripts/nostalgex-season.js"></script>
 <script src="scripts/nostalgex-enrichment.js"></script>
 <script src="scripts/nostalgex-collections.js"></script>
+<script src="scripts/nostalgex-franchise-builder.js"></script>
+<script src="scripts/nostalgex-franchise-lineup.js"></script>
 <script src="scripts/nostalgex-watch-state.js"></script>
 <script src="scripts/nostalgex-jellyfin-urls.js"></script>
 <script src="scripts/nostalgex-stream-quality.js"></script>
@@ -3485,9 +3487,18 @@
         <!-- Rendered by JS -->
       </div>
 
+      <div class="config-section-label" style="margin-top: 28px;">FRANCHISES</div>
+      <div style="color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 1px; margin-bottom: 16px;">
+        The classics on CH 300-306, then the series found in your library and your server's movie-series collections from CH 310. One switch for the lot, one for each.
+      </div>
+      <div id="franchises-status" style="color: rgba(255,255,255,0.4); font-size: 11px; letter-spacing: 1px; margin-bottom: 12px;"></div>
+      <div id="franchise-list">
+        <!-- Rendered by JS -->
+      </div>
+
       <div class="config-section-label" style="margin-top: 28px;">MY COLLECTIONS</div>
       <div style="color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 1px; margin-bottom: 16px;">
-        Collections on your server with 3 or more movies or episodes. Switch one on and it airs from CH 400.
+        Collections on your server with 3 or more movies or episodes that are not movie series. Switch one on and it airs from CH 400. Movie series are under FRANCHISES.
       </div>
       <div id="collections-status" style="color: rgba(255,255,255,0.4); font-size: 11px; letter-spacing: 1px; margin-bottom: 12px;"></div>
       <div id="collection-list">
@@ -3834,6 +3845,58 @@
     lsSet('nostalgex_enabled_bundles', JSON.stringify([...enabledBundleIDs]));
   }
 
+  // The FRANCHISES package: the stock classics (channels.json, CH 300-306), the franchises
+  // found in the library, and the server's movie-series collections. The package switch is
+  // all of them; each also has its own switch, kept by stable id and never by number.
+  // Mirrors AppState+Franchises.swift. scripts/nostalgex-franchise-lineup.js decides what
+  // they are and where they are numbered, and holds it to the Apple TV's answers.
+  const FRANCHISES_BUNDLE_ID = 'franchises';
+  const ENABLED_FRANCHISES_KEY = 'nostalgex_enabled_franchises';
+  const DISABLED_FRANCHISES_KEY = 'nostalgex_disabled_franchises';
+  let franchiseDefinitions = [];                                // franchises.json
+  let enabledFranchiseIDs = loadStringSet(ENABLED_FRANCHISES_KEY);
+  let disabledFranchiseIDs = loadStringSet(DISABLED_FRANCHISES_KEY);
+  let foundFranchises = [];                                     // what the builder found, covered or not
+  let franchiseRows = [];                                       // the Settings list: classics and found
+  let franchiseOverCap = 0;                                     // switched on past CH 399, not on air
+
+  function loadStringSet(key) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) || '[]');
+      return new Set(Array.isArray(v) ? v.filter(k => typeof k === 'string') : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function saveFranchiseChoices() {
+    lsSet(ENABLED_FRANCHISES_KEY, JSON.stringify([...enabledFranchiseIDs].sort()));
+    lsSet(DISABLED_FRANCHISES_KEY, JSON.stringify([...disabledFranchiseIDs].sort()));
+  }
+
+  /** An explicit on or off. Both sets are kept so a franchise that starts on by default and
+   *  was switched off is not switched back on by the next rebuild. */
+  function recordFranchiseChoice(id, on) {
+    if (on) {
+      enabledFranchiseIDs.add(id);
+      disabledFranchiseIDs.delete(id);
+    } else {
+      enabledFranchiseIDs.delete(id);
+      disabledFranchiseIDs.add(id);
+    }
+  }
+
+  function franchisePackageOn() { return enabledBundleIDs.has(FRANCHISES_BUNDLE_ID); }
+
+  function franchiseBundleChannelIDs() {
+    const bundle = bundles.find(b => b.id === FRANCHISES_BUNDLE_ID);
+    return bundle ? bundle.channelIDs : [];
+  }
+
+  /** A channel the page makes at run time (a server collection or a found franchise): no
+   *  rules, its pool is its members, rebuilt from the scan and the saved switches. */
+  function isRuntimeChannel(ch) { return !!(ch.collection || ch.foundFranchise); }
+
   function toggleBundle(bundleId) {
     const wasEnabled = enabledBundleIDs.has(bundleId);
     if (enabledBundleIDs.has(bundleId)) {
@@ -3851,6 +3914,9 @@
       const bundle = bundles.find(b => b.id === bundleId);
       if (bundle) rebuildPoolsForBundle(bundle);
     }
+    // The package carries the found franchises and the franchise collections too, and what a
+    // classic covers joins its pool, so either way the franchise lineup is made again.
+    if (bundleId === FRANCHISES_BUNDLE_ID) refreshDynamicChannels();
 
     applyBundleFilter();
     renderBundleList();
@@ -3872,10 +3938,24 @@
     for (const ch of allChannelsUnfiltered) {
       if (!ids.has(ch.id)) continue;
       const matched = filterItems(allItemsCache, ch.rules, ch.id, ch.category);
-      ch.itemPool = matched;
+      setRulePool(ch, matched);
       ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
       if (ch.enabled) buildChannelSchedule(ch);
     }
+  }
+
+  /** What a stock channel's rule passes, without the items the franchise union added to it
+   *  (see refreshDynamicChannels). Rebuilding a pool from its rule starts from this. */
+  function rulePoolOf(ch) {
+    const added = ch._franchiseAdded;
+    if (!added || !added.size) return ch.itemPool || [];
+    return (ch.itemPool || []).filter(it => !added.has(franchiseItemKey(it)));
+  }
+
+  /** A stock channel's pool, freshly filtered by its rule: nothing from a union is in it. */
+  function setRulePool(ch, matched) {
+    ch.itemPool = matched;
+    ch._franchiseAdded = null;
   }
 
   // When a seasonal package is in season (its invite, its guide lead, its Settings
@@ -3946,12 +4026,24 @@
       }
     });
 
-    // Keep only channels that belong to an enabled bundle (plus any user-added custom channels)
+    // Keep only channels that belong to an enabled bundle (plus any user-added custom channels).
+    // Found franchises and the server's franchise collections are runtime channels that
+    // belong to the stock FRANCHISES package: they show while it is on and all go with it
+    // when it is off, so the package's one switch is every franchise channel's. A classic
+    // switched off in the franchise list leaves the guide on its own.
+    const FL = globalThis.NostalgexFranchiseLineup;
+    const franchiseGate = {
+      packageOn: enabledBundleIDs.has(FRANCHISES_BUNDLE_ID),
+      bundleChannelIDs: franchiseBundleChannelIDs(),
+      switchedOffStock: FL
+        ? FL.switchedOffStockChannelIDs(franchiseDefinitions, enabledFranchiseIDs, disabledFranchiseIDs)
+        : new Set(),
+    };
     CHANNELS.length = 0;
     allChannelsUnfiltered.forEach(ch => {
-      if (enabledChannelIDs.has(ch.id) || (!ch.stock && !ch.autoGenerated)) {
-        CHANNELS.push(ch);
-      }
+      if (!(enabledChannelIDs.has(ch.id) || (!ch.stock && !ch.autoGenerated))) return;
+      if (FL && !FL.franchiseChannelVisible(ch, franchiseGate)) return;
+      CHANNELS.push(ch);
     });
     const ordered = sortChannelsForGuide(CHANNELS);
     CHANNELS.length = 0;
@@ -4085,6 +4177,18 @@
       if (resp.ok) channelMembershipManifest = await resp.json();
     } catch (e) {
       console.warn('channels-memberships.json not loaded:', e);
+    }
+  }
+
+  // franchises.json: the franchise dictionary both engines read (STAR TREK, JOHN WICK, ...).
+  // If it cannot be read the dictionary is empty and franchises come only from the TMDB
+  // collections in the library. Degraded, never a crash.
+  async function loadFranchiseDefinitions() {
+    try {
+      const resp = await fetch('franchises.json');
+      if (resp.ok) franchiseDefinitions = globalThis.NostalgexFranchiseBuilder.normalizeDefinitions(await resp.json());
+    } catch (e) {
+      console.warn('franchises.json not loaded:', e);
     }
   }
 
@@ -4394,6 +4498,7 @@
       }
     }
     await loadChannelMemberships();
+    await loadFranchiseDefinitions();
     loadChannelConfig();
 
     // Apply saved layout
@@ -6329,10 +6434,10 @@
   }
 
   function saveChannelConfig() {
-    // Collection channels are rebuilt from the server scan and the saved switches
-    // (nostalgex_enabled_collections); restoring one here would bring it back as a
-    // custom channel with no rules.
-    const config = CHANNELS.filter(ch => !ch.autoGenerated && !ch.collection).map(ch => ({
+    // Collection and found-franchise channels are rebuilt from the server scan, the library
+    // and the saved switches (nostalgex_enabled_collections, nostalgex_enabled_franchises);
+    // restoring one here would bring it back as a custom channel with no rules.
+    const config = CHANNELS.filter(ch => !ch.autoGenerated && !isRuntimeChannel(ch)).map(ch => ({
       id: ch.id,
       name: ch.name,
       colorHex: ch.colorHex,
@@ -7320,65 +7425,274 @@
       return;
     }
 
-    const visibleBundles = bundles.filter(b => b.id !== 'collections');
-    // Clamp focus index. The collection rows below continue the same index.
-    const focusRows = visibleBundles.length + visibleCollections().length;
-    if (bundleFocusIndex >= focusRows) bundleFocusIndex = Math.max(0, focusRows - 1);
+    const model = bundleTabModel();
+    // Clamp focus index. The franchise and collection rows below continue the same index.
+    if (bundleFocusIndex >= model.total) bundleFocusIndex = Math.max(0, model.total - 1);
 
-    visibleBundles.forEach((bundle, idx) => {
-      const isEnabled = enabledBundleIDs.has(bundle.id);
-      // A seasonal bundle works in every month; outside its month the row says when
-      // it is spotlighted, like the Apple TV row ("Spotlighted OCT").
-      const spotlight = isBundleInSeason(bundle) ? '' : globalThis.NostalgexSeason.seasonalSpotlightLabel(bundle, new Date());
-      const isFocused = idx === bundleFocusIndex;
-      const channelCount = bundle.channelIDs.length;
-
-      // Count how many of this bundle's channels have content
-      const populatedCount = allChannelsUnfiltered.filter(ch =>
-        bundle.channelIDs.includes(ch.id) && ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)
-      ).length;
-
-      const row = document.createElement('div');
-      row.className = 'bundle-row';
-      const borderColor = isFocused ? 'var(--cyan)' : (isEnabled ? 'rgba(0,255,255,0.3)' : 'rgba(255,255,255,0.08)');
-      const bgColor = isFocused ? 'rgba(0,255,255,0.1)' : (isEnabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)');
-      row.style.cssText = `
-        display: flex; align-items: center; gap: 16px;
-        padding: 14px 16px; margin-bottom: 8px;
-        background: ${bgColor};
-        border: 2px solid ${borderColor};
-        border-radius: 6px; cursor: pointer;
-        transition: all 0.2s;
-        ${isFocused ? 'box-shadow: 0 0 12px rgba(0,255,255,0.2);' : ''}
-      `;
-      row.addEventListener('click', () => {
-        bundleFocusIndex = idx;
-        toggleBundle(bundle.id);
-      });
-
-      row.innerHTML = `
-        <div class="toggle-switch ${isEnabled ? 'on' : ''}" style="flex-shrink: 0;"></div>
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-size: 16px; font-weight: bold; letter-spacing: 2px; color: ${isEnabled ? '#fff' : 'rgba(255,255,255,0.4)'};">
-            ${escapeHtml(bundle.name)}
-          </div>
-          <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 1px;">
-            ${escapeHtml(bundle.description || '')}${spotlight ? ` · ${escapeHtml(spotlight)}` : ''}
-          </div>
-        </div>
-        <div style="text-align: right; flex-shrink: 0;">
-          <div style="font-size: 14px; color: ${isEnabled ? 'var(--cyan)' : 'rgba(255,255,255,0.3)'}; letter-spacing: 1px;">
-            ${populatedCount}/${channelCount}
-          </div>
-          <div style="font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">CHANNELS</div>
-        </div>
-      `;
-      container.appendChild(row);
-
-      // Scroll focused row into view
-      if (isFocused) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    model.packages.forEach((bundle, idx) => {
+      container.appendChild(bundleRowElement(bundle, idx));
     });
+    renderFranchiseList(model);
     renderCollectionList();
+  }
+
+  // The BUNDLES tab is one list for the arrow keys: the packages, the FRANCHISES section,
+  // then MY COLLECTIONS. FRANCHISES is not among the packages: its switch heads its own
+  // section, as it heads the FRANCHISES page on the Apple TV.
+  function bundleTabModel() {
+    const packages = bundles.filter(b => b.id !== 'collections' && b.id !== FRANCHISES_BUNDLE_ID);
+    const franchises = franchiseSectionRows();
+    const collections = visibleCollections();
+    return { packages, franchises, collections, total: packages.length + franchises.length + collections.length };
+  }
+
+  /** The rows of the FRANCHISES section: the package switch, then, while it is on, ADD ALL
+   *  and REMOVE ALL and one alphabetical list of the classics, the franchises found in the
+   *  library and the server's movie-series collections, each with its own switch. */
+  function franchiseSectionRows() {
+    const rows = [];
+    const master = bundles.find(b => b.id === FRANCHISES_BUNDLE_ID);
+    if (master) rows.push({ kind: 'master', bundle: master });
+    if (!franchisePackageOn()) return rows;
+    const entries = [
+      ...franchiseRows.map(row => ({ kind: 'row', row, name: row.name })),
+      ...franchiseCollections().map(c => ({ kind: 'collection', c, name: c.title })),
+    ].sort((a, b) => {
+      const x = a.name.toLowerCase();
+      const y = b.name.toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+    if (entries.length) rows.push({ kind: 'all', enabled: true }, { kind: 'all', enabled: false });
+    return rows.concat(entries);
+  }
+
+  /** What pressing a row in the BUNDLES tab does: Enter on the keyboard. */
+  function activateBundleTabRow(index) {
+    const m = bundleTabModel();
+    if (index < m.packages.length) {
+      toggleBundle(m.packages[index].id);
+      return;
+    }
+    index -= m.packages.length;
+    if (index < m.franchises.length) {
+      const r = m.franchises[index];
+      if (r.kind === 'master') toggleBundle(r.bundle.id);
+      else if (r.kind === 'all') setAllFranchises(r.enabled);
+      else if (r.kind === 'row') toggleFranchiseRow(r.row);
+      else if (r.kind === 'collection') toggleCollection(r.c.id);
+      return;
+    }
+    const c = m.collections[index - m.franchises.length];
+    if (c) toggleCollection(c.id);
+  }
+
+  /** One package row, with its switch and how many of its channels have content. */
+  function bundleRowElement(bundle, idx) {
+    const isEnabled = enabledBundleIDs.has(bundle.id);
+    // A seasonal bundle works in every month; outside its month the row says when
+    // it is spotlighted, like the Apple TV row ("Spotlighted OCT").
+    const spotlight = isBundleInSeason(bundle) ? '' : globalThis.NostalgexSeason.seasonalSpotlightLabel(bundle, new Date());
+    const isFocused = idx === bundleFocusIndex;
+    const channelCount = bundle.channelIDs.length;
+
+    // Count how many of this bundle's channels have content
+    const populatedCount = allChannelsUnfiltered.filter(ch =>
+      bundle.channelIDs.includes(ch.id) && ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)
+    ).length;
+
+    const row = document.createElement('div');
+    row.className = 'bundle-row';
+    const borderColor = isFocused ? 'var(--cyan)' : (isEnabled ? 'rgba(0,255,255,0.3)' : 'rgba(255,255,255,0.08)');
+    const bgColor = isFocused ? 'rgba(0,255,255,0.1)' : (isEnabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)');
+    row.style.cssText = `
+      display: flex; align-items: center; gap: 16px;
+      padding: 14px 16px; margin-bottom: 8px;
+      background: ${bgColor};
+      border: 2px solid ${borderColor};
+      border-radius: 6px; cursor: pointer;
+      transition: all 0.2s;
+      ${isFocused ? 'box-shadow: 0 0 12px rgba(0,255,255,0.2);' : ''}
+    `;
+    row.addEventListener('click', () => {
+      bundleFocusIndex = idx;
+      toggleBundle(bundle.id);
+    });
+
+    row.innerHTML = `
+      <div class="toggle-switch ${isEnabled ? 'on' : ''}" style="flex-shrink: 0;"></div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 2px; color: ${isEnabled ? '#fff' : 'rgba(255,255,255,0.4)'};">
+          ${escapeHtml(bundle.name)}
+        </div>
+        <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 1px;">
+          ${escapeHtml(bundle.description || '')}${spotlight ? ` · ${escapeHtml(spotlight)}` : ''}
+        </div>
+      </div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="font-size: 14px; color: ${isEnabled ? 'var(--cyan)' : 'rgba(255,255,255,0.3)'}; letter-spacing: 1px;">
+          ${populatedCount}/${channelCount}
+        </div>
+        <div style="font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">CHANNELS</div>
+      </div>
+    `;
+    // Scroll focused row into view
+    if (isFocused) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return row;
+  }
+
+  /** A switch row in the FRANCHISES section, in the style of the package rows. */
+  function franchiseRowElement({ idx, on, title, subtitle, warn, rightTop, rightBottom, dim, onClick }) {
+    const isFocused = configTab === 'bundles' && idx === bundleFocusIndex;
+    const row = document.createElement('div');
+    row.className = 'bundle-row';
+    const borderColor = isFocused ? 'var(--cyan)' : (on ? 'rgba(0,255,255,0.3)' : 'rgba(255,255,255,0.08)');
+    const bgColor = isFocused ? 'rgba(0,255,255,0.1)' : (on ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)');
+    row.style.cssText = `
+      display: flex; align-items: center; gap: 16px;
+      padding: 14px 16px; margin-bottom: 8px;
+      background: ${bgColor};
+      border: 2px solid ${borderColor};
+      border-radius: 6px; cursor: pointer;
+      transition: all 0.2s;
+      opacity: ${dim ? 0.7 : 1};
+      ${isFocused ? 'box-shadow: 0 0 12px rgba(0,255,255,0.2);' : ''}
+    `;
+    row.addEventListener('click', () => {
+      bundleFocusIndex = idx;
+      onClick();
+    });
+    row.innerHTML = `
+      <div class="toggle-switch ${on ? 'on' : ''}" style="flex-shrink: 0;"></div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 16px; font-weight: bold; letter-spacing: 2px; color: ${on ? '#fff' : 'rgba(255,255,255,0.4)'};">
+          ${escapeHtml(title)}
+        </div>
+        <div style="font-size: 11px; color: ${warn ? 'rgba(255,229,0,0.7)' : 'rgba(255,255,255,0.4)'}; margin-top: 4px; letter-spacing: 1px;">
+          ${escapeHtml(subtitle)}
+        </div>
+      </div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="font-size: 14px; color: ${rightTop.cyan ? 'var(--cyan)' : 'rgba(255,255,255,0.3)'}; letter-spacing: 1px;">${escapeHtml(rightTop.text)}</div>
+        <div style="font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">${escapeHtml(rightBottom)}</div>
+      </div>
+    `;
+    if (isFocused) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return row;
+  }
+
+  /** ADD ALL / REMOVE ALL: real buttons, since a TV browser has no keys. */
+  function franchiseAllElement({ idx, enabled, subtitle, active }) {
+    const isFocused = configTab === 'bundles' && idx === bundleFocusIndex;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bundle-row franchise-all';
+    btn.disabled = !active;
+    btn.style.cssText = `
+      flex: 1; min-width: 0; text-align: left; font-family: inherit;
+      padding: 14px 16px;
+      background: ${isFocused ? 'rgba(0,255,255,0.1)' : 'rgba(255,255,255,0.03)'};
+      border: 2px solid ${isFocused ? 'var(--cyan)' : 'rgba(255,255,255,0.12)'};
+      border-radius: 6px; cursor: ${active ? 'pointer' : 'default'};
+      opacity: ${active ? 1 : 0.45};
+      ${isFocused ? 'box-shadow: 0 0 12px rgba(0,255,255,0.2);' : ''}
+    `;
+    btn.innerHTML = `
+      <div style="font-size: 16px; font-weight: bold; letter-spacing: 2px; color: #fff;">${enabled ? 'ADD ALL' : 'REMOVE ALL'}</div>
+      <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 1px;">${escapeHtml(subtitle)}</div>
+    `;
+    btn.addEventListener('click', () => {
+      bundleFocusIndex = idx;
+      if (active) setAllFranchises(enabled);
+    });
+    if (isFocused) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return btn;
+  }
+
+  // The FRANCHISES section: the package switch, ADD ALL / REMOVE ALL and one list of the
+  // classics, the franchises found in the library and the movie-series collections on the
+  // server (the FRANCHISES page, SettingsChannelsView.swift).
+  function renderFranchiseList(model) {
+    const container = document.getElementById('franchise-list');
+    const statusEl = document.getElementById('franchises-status');
+    if (!container || !statusEl) return;
+    container.innerHTML = '';
+
+    const offset = model.packages.length;
+    const on = franchisePackageOn();
+    const entries = model.franchises.filter(r => r.kind === 'row' || r.kind === 'collection');
+    const isOn = (r) => (r.kind === 'row' ? r.row.enabled : r.c.enabled);
+    const onCount = entries.filter(isOn).length;
+    let status = '';
+    if (!on) {
+      status = 'SWITCH FRANCHISES ON TO PICK WHICH FRANCHISES AIR';
+    } else if (!allItemsCache.length) {
+      status = 'WAITING FOR YOUR LIBRARY';
+    } else if (entries.length) {
+      status = `${onCount}/${entries.length} ON`;
+    } else {
+      status = 'FRANCHISES YOU OWN SHOW UP HERE ONCE YOUR LIBRARY HAS BEEN ENRICHED';
+    }
+    if (on && franchiseOverCap > 0) {
+      status += ` · UP TO 90 FIT IN THE GUIDE, ${franchiseOverCap} MORE ARE ON BUT NOT SHOWN`;
+    }
+    statusEl.textContent = status;
+
+    const channelByFranchise = new Map(
+      allChannelsUnfiltered.filter(ch => ch.foundFranchise).map(ch => [ch.franchiseID, ch]));
+    const channelByCollection = new Map(
+      allChannelsUnfiltered.filter(ch => ch.collection).map(ch => [ch.collectionID, ch]));
+    const CL = globalThis.NostalgexCollections;
+    const allOn = entries.length > 0 && entries.every(isOn);
+    const allOff = !entries.some(isOn);
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display: flex; gap: 12px; margin-bottom: 8px;';
+
+    model.franchises.forEach((r, i) => {
+      const idx = offset + i;
+      if (r.kind === 'master') {
+        const bundle = r.bundle;
+        const populated = allChannelsUnfiltered.filter(ch =>
+          bundle.channelIDs.includes(ch.id) && ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)).length;
+        container.appendChild(franchiseRowElement({
+          idx, on, title: 'FRANCHISES', subtitle: bundle.description || 'The classics and the series in your library',
+          rightTop: { text: `${populated}/${bundle.channelIDs.length}`, cyan: on }, rightBottom: 'CHANNELS',
+          onClick: () => toggleBundle(bundle.id),
+        }));
+      } else if (r.kind === 'all') {
+        const active = r.enabled ? !allOn : !allOff;
+        const subtitle = r.enabled
+          ? (allOn ? 'Every franchise is on' : `Turn on all ${entries.length}`)
+          : (allOff ? 'None are on' : 'Take them all out of the guide');
+        bar.appendChild(franchiseAllElement({ idx, enabled: r.enabled, subtitle, active }));
+        if (!r.enabled) container.appendChild(bar);
+      } else if (r.kind === 'row') {
+        const row = r.row;
+        // A classic shows its own number (CH 300-306) even when its pool is too small to air.
+        // The list's `channelNumber` falls back to the channel's id for one that is not in the
+        // lineup, as the Apple TV's does, so the number comes from channels.json here.
+        const ch = row.stockChannelID != null
+          ? allChannelsUnfiltered.find(c => c.id === row.stockChannelID)
+          : channelByFranchise.get(row.id);
+        const number = ch ? ch.number : (row.stockChannelID != null ? row.channelNumber : null);
+        container.appendChild(franchiseRowElement({
+          idx, on: row.enabled, title: row.name, subtitle: row.countLabel,
+          rightTop: number != null ? { text: `CH ${number}`, cyan: row.enabled } : { text: '', cyan: false },
+          rightBottom: number != null ? 'CHANNEL' : '',
+          onClick: () => toggleFranchiseRow(row),
+        }));
+      } else if (r.kind === 'collection') {
+        const c = r.c;
+        const ch = channelByCollection.get(c.id);
+        const warning = CL ? CL.duplicateWarning(c) : null;
+        container.appendChild(franchiseRowElement({
+          idx, on: c.enabled, title: c.title, subtitle: warning || (CL ? CL.memberSummary(c) : `${c.movieCount} movies`),
+          warn: !!warning, dim: !!warning && !c.enabled,
+          rightTop: ch ? { text: `CH ${ch.number}`, cyan: true } : { text: 'COLLECTION', cyan: false },
+          rightBottom: ch ? 'CHANNEL' : '',
+          onClick: () => toggleCollection(c.id),
+        }));
+      }
+    });
   }
 
   // Mirrors the MY COLLECTIONS rows in BundleManagerView.swift: one switch per server
@@ -7390,18 +7704,22 @@
     container.innerHTML = '';
 
     const rows = visibleCollections();
-    const offset = bundles.filter(b => b.id !== 'collections').length;
+    const model = bundleTabModel();
+    const offset = model.packages.length + model.franchises.length;
     const onAir = rows.filter(c => c.enabled).length;
+    // The movie series, and what folded into a franchise, are under FRANCHISES.
+    const underFranchises = collectionCandidates.length - rows.length;
     let status = '';
     if (collectionScanState === 'scanning') {
       status = `READING COLLECTIONS FROM YOUR SERVER${collectionScanDetail ? ' ' + collectionScanDetail : ''}`;
     } else if (collectionScanState === 'failed' && !rows.length) {
       status = 'COULD NOT READ COLLECTIONS FROM YOUR SERVER';
-    } else if (rawCollections && !rows.length) {
+    } else if (rawCollections && !rows.length && !underFranchises) {
       status = 'NO COLLECTIONS WITH 3 OR MORE MOVIES OR EPISODES';
     } else if (rows.length) {
       status = `${onAir}/${rows.length} ON AIR`;
     }
+    if (underFranchises) status += `${status ? ' · ' : ''}${underFranchises} UNDER FRANCHISES`;
     if (collectionsOverCap > 0) {
       status += `${status ? ' · ' : ''}${collectionsOverCap} SWITCHED ON PAST CH 499, NOT ON AIR`;
     }
@@ -8210,6 +8528,8 @@
     libraryExtrasGeneration++;
     rawCollections = null;
     collectionCandidates = [];
+    foundFranchises = [];
+    franchiseRows = [];
     mediaBackend = 'plex';
     jellyfinUserId = '';
 
@@ -8218,6 +8538,7 @@
     // Clear channel data
     CHANNELS.forEach(ch => {
       ch.itemPool = [];
+      ch._franchiseAdded = null;
       ch.schedule = [];
       ch.enabled = true;
     });
@@ -8419,8 +8740,8 @@
     if (!options.skipCacheSave) saveLibraryCache(allItems);
     if (!options.skipManifestClear) NostalgexDailyManifest.clearManifests(manifestServerKey());
 
-    // Collection channels have no rules; their pool is the collection itself.
-    const targets = allChannelsUnfiltered.filter(ch => poolIDs.has(ch.id) && !ch.collection);
+    // Collection and found-franchise channels have no rules; their pool is their members.
+    const targets = allChannelsUnfiltered.filter(ch => poolIDs.has(ch.id) && !isRuntimeChannel(ch));
     LL.state.channelBuildTotal = targets.length;
     LL.state.channelBuildIndex = 0;
     LL.setPhase('buildingChannels', buildAll ? 'Full lineup' : 'Enabled bundles');
@@ -8430,7 +8751,7 @@
       LL.state.channelBuildIndex = i + 1;
       LL.setPhase('buildingChannels', ch.name);
       const matched = filterItems(allItems, ch.rules, ch.id, ch.category);
-      ch.itemPool = matched;
+      setRulePool(ch, matched);
       ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
       if ((i + 1) % 5 === 0) await new Promise(r => setTimeout(r, 0));
     }
@@ -8525,8 +8846,11 @@
   function startLibraryExtras(items) {
     const gen = ++libraryExtrasGeneration;
     // The last scan's collections come back at once, so a switched-on collection
-    // channel does not drop out of the guide while the server is asked again.
+    // channel does not drop out of the guide while the server is asked again. The
+    // franchises are made here too, from the dictionary alone; the TMDB collections that
+    // group the rest arrive with enrichment, below, and make them again.
     restoreCollectionsFromCache();
+    refreshDynamicChannels();
     runEnrichment(items, gen).catch(err => console.warn('[Enrichment] Failed:', err));
     scanServerCollections(gen).catch(err => console.warn('[Collections] Scan failed:', err));
   }
@@ -8586,21 +8910,26 @@
     });
     const changed = [];
     for (const ch of allChannelsUnfiltered) {
-      if (ch.collection || !ch.rules) continue;
-      const before = ch.itemPool || [];
+      if (isRuntimeChannel(ch) || !ch.rules) continue;
+      // The rule's own pool, not the one with a franchise union on top: the union is
+      // made again below, and would otherwise count as a change every time.
+      const before = rulePoolOf(ch);
       if (!poolIDs.has(ch.id) && before.length === 0) continue;
       const matched = filterItems(allItemsCache, ch.rules, ch.id, ch.category);
       if (samePoolMembers(before, matched)) continue;
-      ch.itemPool = matched;
+      setRulePool(ch, matched);
       ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
       changed.push({ ch, before: before.length });
     }
-    if (!changed.length) return 0;
-    applyBundleFilter();
-    changed.forEach(({ ch }) => { if (ch.enabled) buildChannelSchedule(ch); });
-    console.log(`[Enrichment] Re-filtered ${changed.length} channels: `
-      + changed.map(({ ch, before }) => `CH ${chNum(ch)} ${ch.name} ${before}->${ch.itemPool.length}`).join(', '));
-    refreshCollectionChannels();
+    if (changed.length) {
+      applyBundleFilter();
+      changed.forEach(({ ch }) => { if (ch.enabled) buildChannelSchedule(ch); });
+      console.log(`[Enrichment] Re-filtered ${changed.length} channels: `
+        + changed.map(({ ch, before }) => `CH ${chNum(ch)} ${ch.name} ${before}->${ch.itemPool.length}`).join(', '));
+    }
+    // Enrichment is what says which films share a TMDB collection, so the franchises are
+    // found again after it even when no rule's pool moved.
+    refreshDynamicChannels();
     renderConfig();
     if (guideVisible) renderActiveGuide();
     if (configVisible && configTab === 'bundles') renderBundleList();
@@ -8644,7 +8973,6 @@
       const saved = JSON.parse(localStorage.getItem(COLLECTION_SCAN_KEY) || 'null');
       if (!saved || saved.server !== manifestServerKey() || !Array.isArray(saved.collections)) return;
       rawCollections = saved.collections;
-      refreshCollectionChannels();
     } catch (e) {}
   }
 
@@ -8708,45 +9036,100 @@
     saveCollectionScan();
     console.log(`[Collections] ${found.length} server collections read`);
     setCollectionScanState('done');
-    refreshCollectionChannels();
+    refreshDynamicChannels();
   }
 
-  /** Recomputes the collection list and its channels from the last scan. Cheap; no network. */
-  function refreshCollectionChannels() {
+  /** An item's identity across the pools: its server and its ratingKey, never its URL. */
+  function franchiseItemKey(it) {
+    return `${collectionServerKeyForItem(it)}|${it.ratingKey}`;
+  }
+
+  /**
+   * Makes the franchise channels and the collection channels again from the library, the
+   * last collection scan and the viewer's switches. Cheap; no network.
+   *
+   * The order is the Apple TV's (rebuildFoundFranchises, foldCoveredFranchisesIntoStockPools,
+   * applyFranchiseFolds, materializeDynamicChannels), and it all lives in
+   * scripts/nostalgex-franchise-lineup.js, which scripts/franchise-lineup-golden.json holds to
+   * the Apple TV's answers:
+   *   - the builder groups the library into franchises;
+   *   - while the FRANCHISES package is on, what a classic covers joins that classic's pool;
+   *   - each server collection is classified, FRANCHISES or OTHER COLLECTIONS, and folded away
+   *     when it is the same as a classic or a found franchise;
+   *   - found franchises and franchise collections share CH 310-399, the other collections
+   *     take CH 400-499.
+   */
+  function refreshDynamicChannels() {
     const CL = globalThis.NostalgexCollections;
-    if (!CL || !rawCollections || !allItemsCache.length) return;
+    const FL = globalThis.NostalgexFranchiseLineup;
+    if (!CL || !FL || !allItemsCache.length) return;
 
     // Films and episodes, with episodes grouped by show, so a collection of shows
-    // expands to the episodes already loaded. This indexed films only, which is where
-    // a collection of shows lost every member.
-    // Items no channel may take (Emby Dolby Vision profile 5) are not members either.
-    const indexByServer = CL.indexLibrary(channelFilter().onChannels(allItemsCache, mediaBackend), collectionServerKeyForItem);
-    // What the app compares against (its `allChannels`): every stock channel built with
-    // enough to air, whether or not its bundle is switched on. Fold targets are the
-    // FRANCHISES bundle's channels among them (`availableStockFranchiseChannelIDs`).
+    // expands to the episodes already loaded. Items no channel may take (Emby Dolby
+    // Vision profile 5) are not members, and not franchise films either.
+    const eligible = channelFilter().onChannels(allItemsCache, mediaBackend);
+    const bundleIDs = franchiseBundleChannelIDs();
+    // The classics in the lineup (the app's `allChannels`): built with enough to air,
+    // judged on what their rule passes. Their pools here are the rules' own.
+    const classics = allChannelsUnfiltered
+      .filter(ch => ch.stock && bundleIDs.includes(ch.id))
+      .map(ch => ({ ch, pool: rulePoolOf(ch) }))
+      .filter(({ ch, pool }) => pool.length >= (ch.minItems || 50));
+    // What a collection's name and manifest overlap are compared with: every stock channel
+    // built with enough to air, whether or not its bundle is switched on.
     const staticChannels = allChannelsUnfiltered.filter(ch =>
-      ch.stock && !ch.collection && (ch.itemPool || []).length >= (ch.minItems || 50));
-    const franchiseIDs = new Set((bundles.find(b => b.id === 'franchises') || {}).channelIDs || []);
-    collectionCandidates = CL.buildCandidates(rawCollections, indexByServer, {
-      staticChannels,
-      channelsByID: new Map(allChannelsUnfiltered.map(ch => [ch.id, ch])),
-      franchiseChannels: staticChannels.filter(ch => franchiseIDs.has(ch.id)),
-      itemKey: it => `${collectionServerKeyForItem(it)}|${it.ratingKey}`,
-      enabledKeys: enabledCollectionKeys,
+      ch.stock && (ch.itemPool || []).length >= (ch.minItems || 50));
+
+    const result = FL.build({
+      definitions: franchiseDefinitions,
+      packageOn: franchisePackageOn(),
+      enabledIDs: enabledFranchiseIDs,
+      disabledIDs: disabledFranchiseIDs,
+      items: eligible,
+      stockChannels: classics.map(({ ch, pool }) => ({ id: ch.id, number: ch.number, name: ch.name, itemPool: pool })),
+      bundleChannelIDs: bundleIDs,
+      itemKey: franchiseItemKey,
       manifest: channelMembershipManifest,
+      exclusiveRules,
+      collections: {
+        raw: rawCollections || [],
+        indexByServer: CL.indexLibrary(eligible, collectionServerKeyForItem),
+        staticChannels,
+        channelsByID: new Map(allChannelsUnfiltered.map(ch => [ch.id, ch])),
+        enabledKeys: enabledCollectionKeys,
+      },
     });
-    const folded = collectionCandidates.filter(c => c.foldedInto);
-    if (folded.length) {
-      console.log('[Collections] Folded into stock franchise channels: '
-        + folded.map(c => `${c.title} -> ${c.foldedInto}`).join(', '));
+
+    // The union: a classic's pool is what its rule passes plus what the builder placed on it.
+    for (const { ch, pool } of classics) {
+      const extra = result.stockAdditions.get(ch.id) || [];
+      const keys = new Set(extra.map(franchiseItemKey));
+      const had = ch._franchiseAdded || new Set();
+      if (keys.size === had.size && [...keys].every(k => had.has(k))) continue;
+      ch.itemPool = extra.length ? [...pool, ...extra] : pool;
+      ch._franchiseAdded = keys.size ? keys : null;
+      ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
+      if (ch.enabled) buildChannelSchedule(ch);
     }
 
-    const { channels, overCap } = CL.materialize(collectionCandidates);
-    collectionsOverCap = overCap;
-    for (let i = allChannelsUnfiltered.length - 1; i >= 0; i--) {
-      if (allChannelsUnfiltered[i].collection) allChannelsUnfiltered.splice(i, 1);
+    foundFranchises = result.found;
+    franchiseRows = result.rows;
+    collectionCandidates = result.candidates;
+    collectionsOverCap = result.overCapCustom;
+    franchiseOverCap = result.overCapFound + result.overCapFranchises;
+    const folded = collectionCandidates.filter(c => c.foldedInto);
+    if (folded.length) {
+      console.log('[Collections] Folded into franchises: '
+        + folded.map(c => `${c.title} -> ${c.foldedInto}`).join(', '));
     }
-    for (const ch of channels) {
+    const onAir = result.channels.filter(ch => ch.foundFranchise).length;
+    console.log(`[Franchises] ${foundFranchises.filter(f => f.coveredByChannelID == null).length} found, `
+      + `${onAir} on air, ${result.channels.length - onAir} collection channel(s)`);
+
+    for (let i = allChannelsUnfiltered.length - 1; i >= 0; i--) {
+      if (isRuntimeChannel(allChannelsUnfiltered[i])) allChannelsUnfiltered.splice(i, 1);
+    }
+    for (const ch of result.channels) {
       ch.enabled = ch.itemPool.length >= ch.minItems;
       if (ch.enabled) buildChannelSchedule(ch);
       allChannelsUnfiltered.push(ch);
@@ -8761,15 +9144,44 @@
     }
   }
 
+  /** The collections MY COLLECTIONS lists: not folded into a franchise, not movie series. */
   function visibleCollections() {
-    return collectionCandidates.filter(c => !c.foldedInto);
+    return collectionCandidates.filter(c => !c.foldedInto && c.category !== 'franchises');
+  }
+
+  /** The server's movie-series collections, listed with the franchises. */
+  function franchiseCollections() {
+    return collectionCandidates.filter(c => !c.foldedInto && c.category === 'franchises');
   }
 
   function toggleCollection(id) {
     if (enabledCollectionKeys.has(id)) enabledCollectionKeys.delete(id);
     else enabledCollectionKeys.add(id);
     saveEnabledCollectionKeys();
-    refreshCollectionChannels();
+    refreshDynamicChannels();
+  }
+
+  // ── Franchise switches (AppState+Franchises.swift toggleFranchiseRow, setAllFranchises) ──
+
+  /** One row's switch in the franchise list. A classic takes its channel in or out of the
+   *  guide; a found franchise builds or drops its channel. */
+  function toggleFranchiseRow(row) {
+    recordFranchiseChoice(row.id, !row.enabled);
+    saveFranchiseChoices();
+    refreshDynamicChannels();
+  }
+
+  /** ADD ALL / REMOVE ALL over the whole franchise list: the classics, the found
+   *  franchises, and every franchise collection not already the way asked. */
+  function setAllFranchises(enabled) {
+    for (const row of franchiseRows) recordFranchiseChoice(row.id, enabled);
+    for (const c of franchiseCollections()) {
+      if (c.enabled === enabled) continue;
+      if (enabled) enabledCollectionKeys.add(c.id); else enabledCollectionKeys.delete(c.id);
+    }
+    saveFranchiseChoices();
+    saveEnabledCollectionKeys();
+    refreshDynamicChannels();
   }
 
   // Dispatch to the active backend's loader. Both produce the same item shape and
@@ -9703,10 +10115,8 @@
       }
       // Bundle tab keyboard navigation
       if (configTab === 'bundles') {
-        const visibleBundles = bundles.filter(b => b.id !== 'collections');
-        const collectionRows = visibleCollections();
         if (key === 'ArrowDown') {
-          bundleFocusIndex = Math.min(bundleFocusIndex + 1, visibleBundles.length + collectionRows.length - 1);
+          bundleFocusIndex = Math.min(bundleFocusIndex + 1, bundleTabModel().total - 1);
           renderBundleList();
           e.preventDefault();
           return;
@@ -9718,10 +10128,7 @@
           return;
         }
         if (key === 'Enter' || key === ' ') {
-          const bundle = visibleBundles[bundleFocusIndex];
-          const collection = collectionRows[bundleFocusIndex - visibleBundles.length];
-          if (bundle) toggleBundle(bundle.id);
-          else if (collection) toggleCollection(collection.id);
+          activateBundleTabRow(bundleFocusIndex);
           e.preventDefault();
           return;
         }

@@ -1,6 +1,7 @@
 // Server collections as channels on the web tuner, the way the Apple TV app does it
 // (Nostalgex/Nostalgex/App/AppState+Channels.swift `scanCollections` and
-// `materializeDynamicChannels`, Models/Channel.swift `CollectionCategory`).
+// `materializeDynamicChannels`, Models/Channel.swift `CollectionCategory` and
+// `DynamicChannelBlock`, Services/CollectionClassifier.swift).
 //
 // - Plex: /library/sections/{key}/collections per movie and TV section, then
 //   /library/collections/{key}/children for the ratingKeys.
@@ -15,25 +16,42 @@
 // - A collection becomes a candidate when it resolves to 3+ playable items. A
 //   films-only collection is held to the old "3+ movies" exactly.
 // - Candidates are sorted by upper-cased title (Swift `<` on String, so code-unit
-//   order), and the switched-on ones get CH 400 upward, capped at 100 channels
-//   (CH 400-499), ids from 1,020,000. Anything enabled past the cap is not built.
-//   Until 1.0.29 this block was CH 500-699 with room for 200; HIGH ROTATION took 500.
+//   order). With `ctx.classify` each also gets a category, FRANCHISES (movie series
+//   and sequels) or OTHER COLLECTIONS (everything else), by `classify` below.
+//
+// Numbers, as DynamicChannelBlock (Apple TV 1.0.29, Roku 1.0.8, web tuner 1.0.11):
+// - the stock FRANCHISES package is CH 300-306 (channels.json);
+// - found franchises and the server's franchise collections share one pool, CH 310-399
+//   (90 slots), numbered A to Z by name then stable id. When more are on than fit, the
+//   ones with the most films stay (`keptInDisplayOrder`). Ids stay per kind: found
+//   franchises from 1,000,000, franchise collections from 1,010,000;
+// - other collections take CH 400-499 (100 slots), ids from 1,020,000: the first 100
+//   switched on, in list order. Anything enabled past a cap is not built;
+// - HIGH ROTATION is CH 500 and up (channels.json).
 //
 // Duplicates of a stock channel are flagged the way the app's collections list
-// does ("Exists: CH 12 ACTION", "78% already on CH 101 MARVEL"). A collection that
-// IS a stock franchise channel (ids 100-106) is folded out of the list using the
-// app's cheap signals: that name match, that manifest overlap, or 60%+ of its
-// movies already in the franchise channel's pool. The app's franchise-dictionary
-// signals are not ported here.
+// does ("Exists: CH 12 ACTION", "78% already on CH 101 MARVEL"). Which collections
+// fold into a franchise (FranchiseCollectionFold.swift) is decided in
+// nostalgex-franchise-lineup.js and handed to `buildCandidates` as `ctx.fold`;
+// without it the cheap signals of the original port decide: that name match, that
+// manifest overlap, or 60%+ of its movies already in a stock franchise channel's pool.
 //
-// Not ported: the app's FRANCHISES / OTHER COLLECTIONS split (CollectionClassifier)
-// and found franchises. Every web collection channel sits in the OTHER COLLECTIONS
-// range, CH 400-499; on the Apple TV a franchise collection joins the franchise
-// block at 310-399 instead.
+// scripts/franchise-lineup-golden.json holds `classify` and the numbering to the
+// Apple TV's answers; the Swift and Roku tests read the same file.
 (function (global) {
   'use strict';
 
-  const ID_BASE = 1000000 + 2 * 10000;
+  // ChannelIDSpace.dynamicBase and categoryStride: one id block per kind of runtime channel.
+  const DYNAMIC_BASE = 1000000;
+  const CATEGORY_STRIDE = 10000;
+  const FOUND_ID_BASE = DYNAMIC_BASE;
+  const FRANCHISE_COLLECTION_ID_BASE = DYNAMIC_BASE + CATEGORY_STRIDE;
+  const ID_BASE = DYNAMIC_BASE + 2 * CATEGORY_STRIDE;
+  // Found franchises and franchise collections: one pool, CH 310-399.
+  const FRANCHISE_NUMBER_BASE = 310;
+  const FRANCHISE_NUMBER_END = 399;
+  const FRANCHISE_CAPACITY = FRANCHISE_NUMBER_END - FRANCHISE_NUMBER_BASE + 1;
+  // Other collections: CH 400-499.
   const NUMBER_BASE = 400;
   const NUMBER_END = 499;
   const CAPACITY = NUMBER_END - NUMBER_BASE + 1;
@@ -249,12 +267,260 @@
     return `${plural(movies, 'movie', 'movies')} · ${plural(shows, 'show', 'shows')}`;
   }
 
+  // ── Pure: classification (CollectionClassifier.swift) ──────────────────────
+
+  // Text handling at the Unicode edges, as the franchise builder does it: Swift counts
+  // and compares Characters (grapheme clusters), so these do too.
+  const segmenter =
+    typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+      ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+      : null;
+
+  function graphemes(s) {
+    if (segmenter) return Array.from(segmenter.segment(s), (seg) => seg.segment);
+    return Array.from(s);
+  }
+
+  /** `trimmingCharacters(in: .whitespaces)`: spaces and tabs, not line breaks. */
+  function trimWhitespaces(s) {
+    return s.replace(/^[\t\p{Zs}]+|[\t\p{Zs}]+$/gu, '');
+  }
+
+  /** `trimmingCharacters(in: .punctuationCharacters)`: Unicode category P. */
+  function trimPunctuation(s) {
+    return s.replace(/^\p{P}+|\p{P}+$/gu, '');
+  }
+
+  /** `trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))`. */
+  function trimWhitespacesAndPunctuation(s) {
+    return s.replace(/^[\t\p{Zs}\p{P}]+|[\t\p{Zs}\p{P}]+$/gu, '');
+  }
+
+  // Source names (safe as substrings) of service-generated collections, and the
+  // list and quality phrases that mark one. Phrases, not bare words, so "Top Gun" stays.
+  const GENERATED_SOURCES = [
+    'anilist', 'myanimelist', 'mal ', 'imdb', 'tmdb', 'themoviedb',
+    'letterboxd', 'trakt', 'tvdb', 'rotten tomatoes', 'metacritic',
+  ];
+  const GENERATED_PHRASES = [
+    'popular', 'trending', 'top rated', 'highest rated', 'best rated',
+    'most watched', 'most popular', 'recently added', 'recently released',
+    'newly added', 'new releases', 'favorited', 'recommended', 'watchlist',
+    'top 250', 'top 100', 'top 50', 'top 10',
+  ];
+
+  // Franchises that are hard to detect by name repetition.
+  const KNOWN_FRANCHISES = [
+    'batman', 'superman', 'spider-man', 'spiderman',
+    'wolverine', 'x-men', 'deadpool', 'venom',
+    'wonder woman', 'aquaman', 'the flash',
+    'iron man', 'captain america', 'thor', 'ant-man',
+    'black panther', 'hulk', 'avengers',
+    'guardians of the galaxy',
+    'fantastic four', 'blade',
+    'hellboy', 'spawn', 'the crow',
+    'teenage mutant ninja turtles', 'tmnt',
+    'james bond', '007',
+    'jack ryan', 'jack reacher',
+    'the equalizer',
+    'the conjuring', 'conjuring', 'annabelle',
+    'final destination',
+    'a nightmare on elm street', 'elm street',
+    'friday the 13th',
+    "child's play", 'chucky',
+    'the exorcist', 'the omen',
+    'evil dead',
+    'national lampoon',
+    'monty python',
+    'ocean',
+    'naked gun',
+    'scary movie',
+    'hot shots',
+    'planet of the apes',
+    'the karate kid', 'karate kid',
+    'the chronicles of narnia', 'narnia',
+  ];
+
+  const FRANCHISE_KEYWORDS = ['saga', 'trilogy', 'universe', 'chronicles', 'franchise', 'cinematic'];
+
+  const STOP_WORDS = new Set([
+    'the', 'a', 'an', 'of', 'and', 'in', 'on', 'to', 'for', 'is', 'it',
+    'at', 'by', 'or', 'as', 'no', 'not', 'but', 'be', 'was', 'with', 'from',
+  ]);
+
+  function defaultEnrichmentFor(item) {
+    return item && item.enrichment ? item.enrichment : null;
+  }
+
+  function franchiseIDOf(enrichmentFor, item) {
+    const e = enrichmentFor(item);
+    if (!e) return null;
+    const v = e.franchiseID;
+    if (typeof v === 'number' && Number.isInteger(v)) return v;
+    if (typeof v === 'string' && /^-?\d+$/.test(v.trim())) return Number(v.trim());
+    return null;
+  }
+
+  function isGeneratedListCollection(lower) {
+    return GENERATED_SOURCES.some((s) => lower.includes(s)) || GENERATED_PHRASES.some((p) => lower.includes(p));
+  }
+
+  /** True when 2+ items share the same TMDB collection id. One film alone is not a series. */
+  function sharesFranchiseID(items, enrichmentFor) {
+    const counts = new Map();
+    for (const item of items) {
+      const fid = franchiseIDOf(enrichmentFor, item);
+      if (fid === null) continue;
+      const n = (counts.get(fid) || 0) + 1;
+      counts.set(fid, n);
+      if (n >= 2) return true;
+    }
+    return false;
+  }
+
+  /** The collection's own name in 2+ of its titles ("John Wick" when a sequel is "Parabellum"). */
+  function nameAppearsInTitles(lowerName, items) {
+    if (graphemes(lowerName).length < 3) return false;
+    return items.filter((it) => String(it.title || '').toLowerCase().includes(lowerName)).length >= 2;
+  }
+
+  /** Swift `String.hasPrefix`: Character by Character, after canonical normalization. */
+  function startsWithGraphemes(chars, prefixChars) {
+    if (prefixChars.length > chars.length) return false;
+    for (let i = 0; i < prefixChars.length; i++) if (chars[i] !== prefixChars[i]) return false;
+    return true;
+  }
+
+  /**
+   * hasRepeatingNames: a meaningful word (3+ Characters, not a stop word) in
+   * max(3, 60% of the titles) titles, or a title prefix of 4+ Characters that many
+   * titles start with ("High School Musical" and "... Musical 2").
+   */
+  function hasRepeatingNames(items) {
+    const titles = items.map((it) => String(it.title || '').toLowerCase().normalize('NFC'));
+    const wordHits = new Map();
+    for (const title of titles) {
+      const unique = new Set();
+      for (const part of title.split(' ')) {
+        if (part === '') continue;
+        const word = trimPunctuation(part);
+        if (graphemes(word).length >= 3 && !STOP_WORDS.has(word)) unique.add(word);
+      }
+      for (const word of unique) wordHits.set(word, (wordHits.get(word) || 0) + 1);
+    }
+    const threshold = Math.max(3, Math.floor((items.length * 6) / 10));
+    for (const n of wordHits.values()) if (n >= threshold) return true;
+
+    const chars = titles.map(graphemes);
+    if (!chars.length) return false;
+    let prefix = chars[0];
+    for (const other of chars.slice(1)) {
+      let i = 0;
+      while (i < prefix.length && i < other.length && prefix[i] === other[i]) i++;
+      prefix = prefix.slice(0, i);
+    }
+    const trimmed = trimWhitespacesAndPunctuation(prefix.join(''));
+    if (trimmed === '') return false;
+    const trimmedChars = graphemes(trimmed);
+    if (trimmedChars.length >= 4) {
+      const matches = chars.filter((c) => startsWithGraphemes(c, trimmedChars)).length;
+      if (matches >= threshold) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Which of the two categories a server collection belongs in. Mirrors
+   * `CollectionClassifier.classify`: FRANCHISES ("franchises") is movie series and
+   * sequels, OTHER COLLECTIONS ("custom") is actors, directors and the viewer's own sets.
+   *
+   * `items` are the collection's resolved library items. `enrichmentFor` defaults to
+   * `item.enrichment`; a TMDB `franchiseID` shared by 2+ films is the authoritative
+   * signal, the title rules below it are the fallback for films with no enrichment yet.
+   */
+  function classify(title, items, enrichmentFor) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    const lookup = typeof enrichmentFor === 'function' ? enrichmentFor : defaultEnrichmentFor;
+    // Shows: every episode carries its show's title, so the word rules below would call
+    // any collection of shows a franchise. FRANCHISES is movie series, so the films alone
+    // decide; a collection with no films is the viewer's own set.
+    const films = list.filter((it) => it.type !== 'episode');
+    if (films.length < list.length) {
+      if (!films.length) return 'custom';
+      return classify(title, films, enrichmentFor);
+    }
+
+    const cleaned = trimWhitespaces(
+      String(title == null ? '' : title)
+        .replace(/ collection/gi, '')
+        .replace(/collection/gi, '')
+        .split("'s").join('')
+        .split('’s').join(''),
+    );
+    const lower = cleaned.toLowerCase();
+
+    // 0. Service-generated lists ("IMDb Popular"), before the franchise id so a popular
+    //    list that holds two films of one series still lands in OTHER COLLECTIONS.
+    if (isGeneratedListCollection(lower)) return 'custom';
+    // 0.5 Two or more films sharing a TMDB collection.
+    if (sharesFranchiseID(list, lookup)) return 'franchises';
+    // 1. Known franchise names.
+    if (KNOWN_FRANCHISES.some((name) => lower.includes(name))) return 'franchises';
+    // 2. Franchise keywords.
+    if (FRANCHISE_KEYWORDS.some((word) => lower.includes(word))) return 'franchises';
+    // 3. A word or a title prefix shared by 3 or more titles.
+    if (list.length >= 3 && hasRepeatingNames(list)) return 'franchises';
+    // 4. The collection's own name in 2 or more of its titles.
+    if (nameAppearsInTitles(lower, list)) return 'franchises';
+    // 5. Everything else, actor and director sets included.
+    return 'custom';
+  }
+
+  // ── Pure: the runtime blocks (DynamicChannelBlock.keptInDisplayOrder) ──────
+
+  /** Swift String `<` for these names: NFC-normalized code points. */
+  function compareStrings(a, b) {
+    const x = Array.from(String(a).normalize('NFC'));
+    const y = Array.from(String(b).normalize('NFC'));
+    const n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) {
+      const d = x[i].codePointAt(0) - y[i].codePointAt(0);
+      if (d !== 0) return d < 0 ? -1 : 1;
+    }
+    return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
+  }
+
+  /**
+   * The switched-on entries a block keeps, in the order they are numbered.
+   *
+   * entries: [{ name, stableID, films, ... }]. When more are on than fit, the ones with
+   * the most films stay; ties go to the name, then the stable id, so every platform
+   * drops the same ones. The kept entries are then numbered A to Z (name, then stable
+   * id). Returns { kept, skipped }.
+   */
+  function keptInDisplayOrder(entries, capacity) {
+    const alphabetical = (a, b) => compareStrings(a.name, b.name) || compareStrings(a.stableID, b.stableID);
+    if (entries.length <= capacity) return { kept: entries.slice().sort(alphabetical), skipped: 0 };
+    const kept = entries
+      .slice()
+      .sort((a, b) => (a.films !== b.films ? b.films - a.films : alphabetical(a, b)))
+      .slice(0, capacity);
+    return { kept: kept.sort(alphabetical), skipped: entries.length - capacity };
+  }
+
   // ── Pure: candidates and channels ──────────────────────────────────────────
 
   /**
    * raw: [{ id, title, childKeys, serverKey }]. indexByServer: Map(serverKey -> index),
    * the index from indexLibrary, or a plain Map(ratingKey -> item) of films (the old
    * shape, still accepted). Returns candidates sorted the way the app lists them.
+   *
+   * ctx.classify: true gives each candidate its `category` (see `classify`, reading
+   * ctx.enrichmentFor, default `item.enrichment`). Without it no candidate has one and
+   * `materialize` treats every one as OTHER COLLECTIONS.
+   * ctx.fold: (candidate) => label or null, the franchise fold of
+   * nostalgex-franchise-lineup.js. Without it `foldedInto` comes from the stock
+   * franchise channels in ctx.franchiseChannels alone (`foldTarget`).
    */
   function buildCandidates(raw, indexByServer, ctx = {}) {
     const staticChannels = ctx.staticChannels || [];
@@ -280,7 +546,11 @@
         contentOverlap: contentOverlap(titleRepresentatives(items), ctx.manifest, channelsByID),
         foldedInto: null,
       };
-      candidate.foldedInto = foldTarget(candidate, franchiseChannels, itemKey);
+      // The classifier reads the server's own title, not the upper-cased one.
+      if (ctx.classify === true) candidate.category = classify(c.title, items, ctx.enrichmentFor);
+      candidate.foldedInto = typeof ctx.fold === 'function'
+        ? ctx.fold(candidate)
+        : foldTarget(candidate, franchiseChannels, itemKey);
       out.push(candidate);
     }
     out.sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
@@ -294,38 +564,99 @@
     return null;
   }
 
+  function runtimeChannel(fields, slot, items) {
+    const color = COLORS[slot % COLORS.length];
+    return {
+      color,
+      colorHex: color,
+      rules: null,
+      timeRestrictions: null,
+      minItems: MIN_ITEMS,
+      stock: false,
+      enabled: items.length >= MIN_ITEMS,
+      schedule: [],
+      itemPool: items,
+      ...fields,
+    };
+  }
+
   /**
-   * Swift `materializeDynamicChannels` for one category: enabled, unfolded
-   * candidates in list order take slots 0..199. Returns { channels, overCap }.
+   * Swift `materializeDynamicChannels`: every runtime channel, in number order.
+   *
+   * The franchise pool (CH 310-399): the found franchises in `opts.found` (the switched-on
+   * ones no stock channel covers: { id, name, movies, tvItems }) and the enabled, unfolded
+   * candidates the classifier called FRANCHISES. When more than 90 are on, the ones with
+   * the most films stay, then the kept ones are numbered by name, then stable id (`f:`
+   * found, `c:` collection). Ids stay per kind, in the order the kind is numbered.
+   *
+   * OTHER COLLECTIONS (CH 400-499): the other enabled, unfolded candidates in list order,
+   * the first 100. Anything switched on past a block is not built.
+   *
+   * Without `opts.found` and with no candidate categorised as FRANCHISES this is the
+   * original one-block behaviour.
+   *
+   * Returns { channels, overCap (collections past their block), overCapFranchises,
+   * overCapCustom, overCapFound (found franchises past the franchise block) }.
    */
-  function materialize(candidates) {
-    const channels = [];
-    let overCap = 0;
-    let slot = 0;
+  function materialize(candidates, opts = {}) {
+    const found = Array.isArray(opts.found) ? opts.found : [];
+    const entries = [];
+    for (const f of found) {
+      entries.push({ name: f.name, stableID: `f:${f.id}`, films: (f.movies || []).length, found: f });
+    }
+    const others = [];
     for (const c of candidates) {
       if (!c.enabled || c.foldedInto) continue;
-      if (slot >= CAPACITY) { overCap++; continue; }
-      const color = COLORS[slot % COLORS.length];
-      channels.push({
-        id: ID_BASE + slot,
-        number: NUMBER_BASE + slot,
-        name: c.title,
-        color,
-        colorHex: color,
-        category: 'custom',
-        rules: null,
-        timeRestrictions: null,
-        minItems: MIN_ITEMS,
-        stock: false,
-        collection: true,
-        collectionID: c.id,
-        enabled: c.items.length >= MIN_ITEMS,
-        schedule: [],
-        itemPool: c.items.slice(),
-      });
+      if (c.category === 'franchises') {
+        entries.push({ name: c.title, stableID: `c:${c.id}`, films: c.movieCount || 0, collection: c });
+      } else {
+        others.push(c);
+      }
+    }
+
+    const channels = [];
+    const pool = keptInDisplayOrder(entries, FRANCHISE_CAPACITY);
+    let foundCount = 0;
+    let collectionCount = 0;
+    pool.kept.forEach((e, slot) => {
+      const number = FRANCHISE_NUMBER_BASE + slot;
+      if (e.found) {
+        const f = e.found;
+        const items = [...(f.movies || []), ...(f.tvItems || [])];
+        channels.push(runtimeChannel({
+          id: FOUND_ID_BASE + foundCount++, number, name: f.name, category: 'franchises',
+          collection: false, foundFranchise: true, franchiseID: f.id,
+        }, slot, items));
+      } else {
+        const c = e.collection;
+        channels.push(runtimeChannel({
+          id: FRANCHISE_COLLECTION_ID_BASE + collectionCount++, number, name: c.title, category: 'franchises',
+          collection: true, collectionID: c.id,
+        }, slot, c.items.slice()));
+      }
+    });
+    const keptStable = new Set(pool.kept.map((e) => e.stableID));
+    const waiting = entries.filter((e) => !keptStable.has(e.stableID));
+    const overCapFound = waiting.filter((e) => e.found).length;
+    const overCapFranchises = waiting.length - overCapFound;
+
+    let overCapCustom = 0;
+    let slot = 0;
+    for (const c of others) {
+      if (slot >= CAPACITY) { overCapCustom++; continue; }
+      channels.push(runtimeChannel({
+        id: ID_BASE + slot, number: NUMBER_BASE + slot, name: c.title, category: 'custom',
+        collection: true, collectionID: c.id,
+      }, slot, c.items.slice()));
       slot++;
     }
-    return { channels, overCap };
+    return {
+      channels,
+      overCap: overCapFranchises + overCapCustom,
+      overCapFranchises,
+      overCapCustom,
+      overCapFound,
+    };
   }
 
   // ── Network ────────────────────────────────────────────────────────────────
@@ -415,11 +746,21 @@
   }
 
   const api = {
+    // Runtime blocks (DynamicChannelBlock): ids from FOUND_ID_BASE, one block per kind.
+    DYNAMIC_BASE,
+    FOUND_ID_BASE,
+    FRANCHISE_COLLECTION_ID_BASE,
+    FRANCHISE_NUMBER_BASE,
+    FRANCHISE_NUMBER_END,
+    FRANCHISE_CAPACITY,
     ID_BASE,
     NUMBER_BASE,
     NUMBER_END,
     CAPACITY,
     MIN_MOVIES,
+    classify,
+    keptInDisplayOrder,
+    compareStrings,
     cleanTitle,
     decadeNormalized,
     channelLabel,
