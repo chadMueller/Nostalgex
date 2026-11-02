@@ -11,7 +11,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.**
 - `docker-web-tuner-1-0-1-how-to`: SCREAM is channels 180 to 187, MYSTERY BOX TV 120, CRINGE TV 65, A24 160.
-- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. Drop that commit if a spot has opened.
+- `content/roku.json`: `betaFull` is true and `roku.html` is re-rendered. The hero and the beta section lead with the Discord button, and the add link and access code come off the page. The line under it now reads "The beta is full. Join the Discord for news on spots." (it used to promise "you'll hear first when spots open"), and the has-room state has its own softer hint, so the renderer no longer says the beta is full when it isn't. Drop the `betaFull` commit if a spot has opened.
 
 **Half-done.** The Docker post's three screenshots still show the old numbers (the cover shows CH 137 SCREAM KIDS, the sleep timer CH 140). They are images on R2 and need re-shoots on tuner 1.0.11 or later. The note block at the bottom of the post says so.
 
