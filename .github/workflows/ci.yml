@@ -7,6 +7,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Nightly, so a red job can't hide behind pushes that skip it (the roku job
+  # was red for a day after 4602216 because the next pushes were docs-only).
+  # Runs the channel engine, web, Roku and tvOS jobs in full (the Docker job
+  # stays pull-request only).
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -27,6 +34,7 @@ jobs:
 
       - uses: dorny/paths-filter@v3
         id: filter
+        if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         with:
           filters: |
             web:
@@ -180,7 +188,7 @@ jobs:
   channel-engine:
     name: Channel engine (rule parity, schedule order, docs)
     needs: changes
-    if: ${{ needs.changes.outputs.config == 'true' }}
+    if: ${{ needs.changes.outputs.config == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -208,7 +216,7 @@ jobs:
   web-build:
     name: Web (Vite build)
     needs: changes
-    if: ${{ needs.changes.outputs.web == 'true' }}
+    if: ${{ needs.changes.outputs.web == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -284,7 +292,7 @@ jobs:
   roku:
     name: Roku port (golden vectors, off-device)
     needs: changes
-    if: ${{ needs.changes.outputs.roku == 'true' }}
+    if: ${{ needs.changes.outputs.roku == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -330,7 +338,7 @@ jobs:
   tvos-unit-tests:
     name: tvOS unit tests (NostalgexTests)
     needs: changes
-    if: ${{ needs.changes.outputs.tvos == 'true' }}
+    if: ${{ needs.changes.outputs.tvos == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4

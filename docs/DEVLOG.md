@@ -3,10 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (CI: a nightly run of every test job)
+
+**Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
+
+**Why.** Each job only runs when a push touches its paths. After `4602216` broke the `roku` job, the next
+pushes touched only docs, the relay and a smoke script, so the job was skipped and main looked green for a day.
+A nightly run of every test job (channel engine, web build, Roku port, tvOS unit tests) catches that within a
+day whatever the pushes touch. The Docker job stays pull-request only, as before.
+
+**Changed.** A `schedule` and a `workflow_dispatch` trigger. On those, the path filter step is skipped and the
+channel engine, web, Roku and tvOS jobs run regardless of what changed. Push and pull request runs behave as
+before.
+
 ## 2026-11-03 (Roku: the Jellyfin and Emby scan test follows the web's audioStreams)
 
-**Shipped.** Nothing yet. Branch `roku/mediabrowser-audiostreams-fix`, on `origin/main` at `dd8544b`, not
-pushed. Test code only.
+**Shipped.** On main as `692492a`, 2026-11-03. Test code only.
 
 **Why.** Web tuner 1.0.13 (`4602216`, #176) put `audioStreams` on every Jellyfin and Emby movie and episode.
 `roku/tests/gen-mediabrowser.mjs` writes the web scan's items into the vectors the Roku suite is held to, and
