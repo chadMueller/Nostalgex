@@ -62,6 +62,7 @@ sub Main(args = invalid as Dynamic)
     end if
     if NxTestWants("subtitle") then failures = failures + NxRunSubtitleTests()
     if NxTestWants("guide-nav") then failures = failures + NxRunGuideNavTests()
+    if NxTestWants("cold-boot-seed") then failures = failures + NxRunColdBootSeedTests()
     if NxTestWants("tune-queue") then failures = failures + NxRunTuneQueueTests()
     if NxTestWants("advance") then failures = failures + NxRunAdvanceTests()
     if NxTestWants("fallback") then failures = failures + NxRunFallbackTests()
