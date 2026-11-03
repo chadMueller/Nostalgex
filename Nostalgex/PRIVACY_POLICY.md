@@ -1,16 +1,16 @@
 # Privacy Policy
 
-Effective: November 2, 2026
+Effective: November 3, 2026
 
 Nostalgex turns your own Plex, Jellyfin, or Emby library into live TV channels. We do not host, supply, or stream any media. Everything you watch comes off your own server.
 
-This policy covers three separate things: the Nostalgex app on Apple TV, the Nostalgex app on Roku, and the nostalgex.app website. They collect different things, so they are described separately.
+This policy covers four separate things: the Nostalgex app on Apple TV, the Nostalgex app on Roku, the Nostalgex app on Android TV, and the nostalgex.app website. They collect different things, so they are described separately.
 
 ## Summary
 
 - No accounts. Nothing is sold or rented to anyone.
-- Your server address and login token stay on your Apple TV or Roku.
-- The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku app sends none.
+- Your server address and login token stay on your Apple TV, Roku or Android TV.
+- The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku and Android TV apps send none.
 - The website uses two lightweight analytics scripts to count page visits.
 - Nothing we collect follows you into other companies' apps or across the web.
 
@@ -124,7 +124,7 @@ These lookups use public identifiers and titles for the purpose of matching meta
 
 ## Sign-in
 
-Plex sign-in on the Apple TV runs through Plex's own PIN system. We never see your Plex username or password. Jellyfin and Emby sign-in goes straight from the app to the server you typed in. Tokens are held in the Keychain on your Apple TV and are never sent to us. On Roku, Plex sign-in offers the same PIN code, entered at plex.tv/link, or your Plex email and password typed on the TV, sent straight to plex.tv and never to us; either way only the token plex.tv returns is kept, never your password. Jellyfin and Emby sign-in goes straight from the TV to your server, and tokens are kept in the app's own storage on the TV.
+Plex sign-in on the Apple TV runs through Plex's own PIN system. We never see your Plex username or password. Jellyfin and Emby sign-in goes straight from the app to the server you typed in. Tokens are held in the Keychain on your Apple TV and are never sent to us. On Roku, Plex sign-in offers the same PIN code, entered at plex.tv/link, or your Plex email and password typed on the TV, sent straight to plex.tv and never to us; either way only the token plex.tv returns is kept, never your password. Jellyfin and Emby sign-in goes straight from the TV to your server, and tokens are kept in the app's own storage on the TV. On Android TV, Plex sign-in uses the same PIN code, entered at plex.tv/link or scanned from the QR code on screen, so the TV never sees your Plex password. Jellyfin and Emby sign-in goes straight from the TV to your server, and tokens are kept in the app's own storage on the TV.
 
 ## Playback reporting
 
@@ -153,6 +153,22 @@ The Roku app can report what you are watching back to your own Plex, Jellyfin or
 On the TV it keeps your sign-in (your Plex token, or your Jellyfin or Emby server's address, your user ID there and its access token), a random ID for this install (your server uses it to tell this TV apart in its list of devices), your server list, your channel packages and other settings, and a saved copy of your library and guide so it opens quickly. Signing out in Settings removes the token, the install ID, the server list, the saved library and guide, and the metadata cache. Removing the app removes your sign-in and settings; the saved copies sit in the Roku's own cache, which the Roku clears when it needs the room, so sign out first if you want them gone straight away.
 
 If the TV warns that the app is running low on memory, the app writes a note to the TV's own debug log. Those notes stay on the TV and are not sent anywhere.
+
+## The Android TV app
+
+The Nostalgex app for Android TV works with Plex, Jellyfin and Emby. It does not send usage analytics or crash reports, does not show ads, and does not use Android's advertising ID. It asks only for internet access, to reach your servers and the services below, and not for your location, camera, microphone, contacts or files.
+
+It connects to:
+
+- plex.tv, to sign you in to Plex and to find your servers, using Plex's PIN code, entered at plex.tv/link or scanned from the QR code on screen. The QR code is drawn on the TV itself, so it is not sent to any QR service, and the TV never sees your Plex password. The TV keeps only the token plex.tv returns. Plex also receives a random ID for this install, the app version and your TV's model name, the same kind of details any Plex app sends.
+- Your own Plex server, for your library and for playback. The app tries your home network address first, then a remote HTTPS address, then a remote plain HTTP address, then Plex's relay. It sends your token in a request header and, for playback, in the stream address. When the address is plain HTTP, which is common at home, that traffic is not encrypted.
+- Your own Jellyfin or Emby server, for sign-in, your library and playback. To find it, the app sends a short broadcast on your home network asking which Jellyfin or Emby servers are there (UDP port 7359), which only devices on that network receive. You can also type the server's address. Jellyfin can sign in with a Quick Connect code you approve in Jellyfin. Jellyfin and Emby can both sign in with a username and password, which go straight to your server and are not saved on the TV; the app keeps only the access token your server sends back and your user ID there. Your server also receives a random ID for this install and your TV's model name. The app allows plain HTTP, so on an http address your password and token are not encrypted.
+- The metadata relay on nostalgex.app and the Supabase cache described above, to sort titles onto channels. The app tells the relay only that the request comes from the Android app (a client label, X-Nostalgex-Client: android), and sends only public TMDB and IMDb ids. Metadata it fetches is written back to the cache under the title's TMDB id, the same as the Apple TV app, the Roku app and the web tuner. No library titles, account, server or device details go with it. The Android app does not look up music video genres on MusicBrainz or Deezer.
+- In demo mode, Apple's public sample video, from Apple's servers. No account or server is used.
+
+The Android TV app can report what you are watching back to your own Plex, Jellyfin or Emby server. There are two separate switches, SHOW NOW PLAYING ON and MARK WATCHED ON, each followed by your server's name, in Settings under PLAYBACK & PICTURE, and both are off by default. They work as they do on the Apple TV, described under Playback reporting above: with both off, nothing is reported and nothing in your library changes, and when a switch is on the reports go only to your server. They do not come to us.
+
+On the TV it keeps your sign-in (your Plex account token and each Plex server's address and token, or your Jellyfin or Emby server's address, your user ID there and its access token), a random ID for this install, your channel packages and other settings, a saved copy of your library and guide so it opens quickly, and a cache of the public metadata it fetched. These sit in the app's private storage on the TV, and the app does not add its own encryption to them. Backups are switched off, so none of it is copied to a cloud backup. DISCONNECT in Settings removes your sign-in and the saved library; the install ID, your settings, the saved daily schedule and the metadata cache stay until you remove the app, which removes everything.
 
 ## Tracking
 

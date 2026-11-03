@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (the privacy policy covers the Android TV app)
+
+**Shipped.** `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` have a section for the Android TV app. It goes live on nostalgex.app with the push to main that carries this entry. No tuner file changed and there is no `tuner-v` tag, so the Docker image is untouched.
+
+**Why.** The policy described three things: the Apple TV app, the Roku app and the website. The Android TV app in @owenvoke's PR #151 is a fourth, and it reaches plex.tv, the user's own servers, the relay and the Supabase cache, so a reader needs to see what it sends and keeps.
+
+**Changed.**
+- A new "The Android TV app" section in both files, written from the source of #151 at `6d2ded1`: no analytics, crash reports or ads, no advertising ID, internet access only; Plex sign-in by the PIN code and an on-device QR code; the Plex address order (home, remote HTTPS, remote plain, relay) and the plain-HTTP warning, since `network_security_config.xml` allows cleartext to any address and a Plex stream address carries the token; Jellyfin and Emby sign-in, Quick Connect, the UDP 7359 broadcast and the password never being saved; the relay called as `X-Nostalgex-Client: android` with public TMDB and IMDb ids only, plus the shared Supabase cache; no MusicBrainz or Deezer calls; demo mode playing Apple's sample stream; the two playback reporting switches, both off by default; what is stored on the TV and what DISCONNECT clears (the sign-in and the saved library, not the install ID, settings, saved daily schedule or metadata cache).
+- The lines that named Roku beside Apple TV now name Android TV too: "three separate things" is four, "stay on your Apple TV or Roku" adds Android TV, "The Roku app sends none" is "The Roku and Android TV apps send none", and the Sign-in paragraph gets an Android sentence.
+- The effective date is November 3, 2026 in both files.
+
+**Half-done.** The section is checked against the source of #151, not against a shipped build, and #151 is not merged, so it can drift. The permissions line ("only internet access, not location, camera, microphone, contacts or files") comes from the source manifest. The merged manifest of a built bundle has not been read.
+
+**Next.** Re-read the section against the app when #151 merges. The existing em dashes in `PRIVACY_POLICY.md` (the event lists) are old and were left alone.
+
 ## 2026-11-03 (the relay accepts an Android client)
 
 **Shipped.** `api/tmdb.js` accepts `X-Nostalgex-Client: android`, alongside `tvos`, `web`, `roku` and `selfhost`. It goes live on nostalgex.app with the push to main that carries this entry. The tuner and the Docker image are untouched: no tuner file changed and there is no `tuner-v` tag.
