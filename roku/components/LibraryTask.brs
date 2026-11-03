@@ -510,7 +510,7 @@ sub loadLibrary()
             reuse = invalid
         end if
     end if
-    if built = invalid then built = buildGuide(items, config, manifest, collections, shown, reuse)
+    if built = invalid then built = buildGuide(items, config, manifest, collections, shown, reuse, true)
     ' A library the switched-on packages fill no channel from (a first run is
     ' NOSTALGEX only): every other package with content is switched on and
     ' kept as the viewer's choice, as upstream's autoEnableBundlesWithContent
@@ -523,15 +523,23 @@ sub loadLibrary()
             trial.Append(enabled)
             trial.Append(extra)
             NxSaveEnabledBundles(trial)
-            built = buildGuide(items, config, manifest, collections, shown)
+            built = buildGuide(items, config, manifest, collections, shown, invalid, true)
             keep = NxBundlesWithContent(config.bundles, extra, built.channels)
             final = []
             final.Append(enabled)
             final.Append(keep)
             NxSaveEnabledBundles(final)
             print "library: no channel from the packages on; switched on "; FormatJson(keep)
-            if keep.Count() < extra.Count() then built = buildGuide(items, config, manifest, collections, shown)
+            if keep.Count() < extra.Count() then built = buildGuide(items, config, manifest, collections, shown, invalid, true)
         end if
+    end if
+    ' A background refresh that built no channels under a guide that has some
+    ' is dropped like one that read nothing: the guide on screen stays, and
+    ' the saved library, guide and pools aren't replaced, so the next launch
+    ' shows that guide too.
+    if NxTruthy(built.kept) then
+        keepSavedGuide()
+        return
     end if
     timer.Mark()
     for each s in scanned
@@ -564,7 +572,9 @@ end sub
 ' the guide to the render thread, unless `shown` and it matches what is
 ' already on screen. Returns { ordered, guide, channels } for keepScheduling:
 ' channels is every channel built, those too small for the guide included.
-function buildGuide(items as Object, config as Object, manifest as Object, collections as Object, shown as Boolean, reuse = invalid as Dynamic) as Object
+' keepShown: a guide with no channels doesn't replace one on screen that has
+' some, and isn't saved; the result then also carries kept: true.
+function buildGuide(items as Object, config as Object, manifest as Object, collections as Object, shown as Boolean, reuse = invalid as Dynamic, keepShown = false as Boolean) as Object
     timer = CreateObject("roTimespan")
     ' A library load clears the day schedules, as the web tuner's does. A
     ' package switch (reuse) keeps them, as the Apple TV's
@@ -808,6 +818,11 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     if shown and old <> invalid and FormatJson(guide.channels) = FormatJson(old.channels) and FormatJson(guide.bundles) = FormatJson(old.bundles) and FormatJson(guide.franchises) = FormatJson(old.franchises) and FormatJson(guide.collections) = FormatJson(old.collections) then
         matched = true
         print "library: background refresh matches the saved guide"
+    else if keepShown and shown and old <> invalid and NxList(guide.channels).Count() = 0 and NxList(old.channels).Count() > 0 then
+        ' No channels under a guide that has some: the guide on screen
+        ' stays, as when no server answers (loadLibrary).
+        print "library: background refresh built no channels; the guide on screen stays"
+        return { ordered: ordered, guide: guide, channels: channels, kept: true }
     else
         m.top.fromCache = false
         m.top.guide = guide
