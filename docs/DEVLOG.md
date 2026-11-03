@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Roku: after a power loss, the first channel plays while the library loads, #155)
+
+**Why.** The saved guide, pools and library live in `cachefs:`, which is RAM. A TV that loses power
+comes back to a full scan behind the loading screen, which is what #155's reports describe. Agreed on
+#155: a playable seed, one channel for as many hours as fit in 10 KB, a hand-over to
+the full guide that doesn't restart what's playing, and the loading screen again if it runs out.
+
+**Changed.**
+- `roku/source/guide/ColdBootSeed.brs`: the seed. Each build and each new hour write the first
+  channel's airings from the one on now, as many whole ones as fit in 10,240 bytes, each the guide
+  block less its summary, to registry section `seed`, keyed to the build, only when it changed.
+- `LibraryTask`: a launch with no saved guide and no saved pools plays the seed's channel and loads
+  as a first load (not `shown`), so a failure or a stop is a first load's and its guide is always
+  handed over.
+- `GuideView`: on the seed's guide, SETTINGS and the sidebar say STILL LOADING YOUR LIBRARY, and the
+  seed's last airing ending sets `seedEnded`. `MainScene` then puts the loading screen back; a load
+  error takes the seed's guide down to show it; a launch deep link waits for the full guide; the
+  LaunchGuard marker stays for the seed's load.
+- Sign-out clears the seed with the other caches (`NxClearSeed`). 31 cases in
+  `roku/tests/ColdBootSeedTests.brs`.
+
+**Pressed** on the 43S45 with the lab Emby (5,509 items) and a scratch switch that deleted the
+`cachefs:` files at launch: the seed's channel tuned 1.0 s after the launch, and the full guide went up
+about 25 s later with the same film still playing. The run-out, the load error and the SETTINGS note
+behaved as above. Details in `roku/docs/PORTING.md` § After a power loss.
+
+**Open.** Which channel: neither app remembers the last channel watched, so the seed holds the first
+one, where every launch opens (asked on #155). Not tried: a real power cut, a Plex sign-in, the hourly
+re-save, the sidebar and a deep link on the seed's guide.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
