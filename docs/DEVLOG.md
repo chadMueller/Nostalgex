@@ -3,6 +3,48 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Roku: the Jellyfin and Emby scan test follows the web's audioStreams)
+
+**Shipped.** Nothing yet. Branch `roku/mediabrowser-audiostreams-fix`, on `origin/main` at `dd8544b`, not
+pushed. Test code only.
+
+**Why.** Web tuner 1.0.13 (`4602216`, #176) put `audioStreams` on every Jellyfin and Emby movie and episode.
+`roku/tests/gen-mediabrowser.mjs` writes the web scan's items into the vectors the Roku suite is held to, and
+`MediaBrowserTests.brs` compared every key of a web item with the Roku item's key of the same name. The port has
+no `audioStreams`: it keeps the same tracks as `audioTracks` (index, language, channels, codec), and only for a
+file with two or more. So 222 of the suite's 5,882 mediabrowser cases failed, one per scanned item, all on that
+field. The `roku` job on main failed on `4602216` (it passed on `f083748` before it). The runs after it look
+green because the job was skipped on them: `be6254a` and `72f958e` touch only docs, the relay and a smoke
+script, none of which that job watches. The next push that touches `roku/` or the engine would have shown red.
+
+**Changed.** `roku/tests/MediaBrowserTests.brs`. The web's `audioStreams` is now compared with the port's
+`audioTracks`: the same index, language, channels and codec in the same order for a file with two or more
+tracks, and no `audioTracks` for a file with fewer. The web's `title` and the port's `isDefault` have no
+counterpart and are not read. One more check fails if the vectors hold no item with two or more `audioStreams`,
+so a generator that drops the field cannot turn the comparison into a pass on nothing. The suite reads
+5,883 passed, 0 failed (222 field checks replaced by 222 track checks, plus that one).
+
+**Not changed, on purpose.**
+- `roku/tests/gen-mediabrowser.mjs` still emits `audioStreams`. Android's `MediaBrowserScanTest` (PR #151)
+  reads it from that output and compares it with the Kotlin scan's tracks, and the generator is in that PR's
+  CI filter. Removing the field there would leave that test comparing an empty list with real tracks.
+- The port takes no second copy of the track list. The web measured +26% on the saved library for it (+4.9 MB
+  at 20,000 films), and nothing on Roku would read it. The Roku never had the #176 bug: its AUDIO LANGUAGE pick
+  comes from `audioTracks` (it sends the server stream's `AudioStreamIndex`, or on a direct play names the
+  track to select in the player's list), and FOREIGN AUDIO subtitles read the player's `availableAudioTracks`
+  (`GuideView.brs`). Read from the code, not re-checked on the stick.
+
+**Verified.** Reproduced on `be6254a` first: `mediabrowser cases: 5660 passed, 222 failed`, every failure on
+`audioStreams`. Three deliberate breaks, each restored: a port that reports the wrong channel count, a port that
+keeps single-track files, and vectors with `audioStreams` removed. Each fails the suite. The vectors from
+`gen-vectors.mjs` are byte-identical before and after this change, since the generator, `plex-tuner.html` and
+the fixture are untouched.
+
+**Not verified.** Android's Gradle tests were not run; PR #151 has merge conflicts with main, and its inputs
+(the generator, the fixture, `plex-tuner.html`) are unchanged by this branch.
+
+**Next.** Merge this to turn the `roku` job green on main, then rebase #180 and #181 on it.
+
 ## 2026-11-03 (the privacy policy covers the Android TV app)
 
 **Shipped.** `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` have a section for the Android TV app. It goes live on nostalgex.app with the push to main that carries this entry. No tuner file changed and there is no `tuner-v` tag, so the Docker image is untouched.
@@ -18,6 +60,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Next.** Re-read the section against the app when #151 merges. The existing em dashes in `PRIVACY_POLICY.md` (the event lists) are old and were left alone.
 
+
 ## 2026-11-03 (the relay accepts an Android client)
 
 **Shipped.** `api/tmdb.js` accepts `X-Nostalgex-Client: android`, alongside `tvos`, `web`, `roku` and `selfhost`. It goes live on nostalgex.app with the push to main that carries this entry. The tuner and the Docker image are untouched: no tuner file changed and there is no `tuner-v` tag.
@@ -31,6 +74,7 @@ Commits carry the detail of *what*; this carries the *why*.
 **Not in this change.** His edit to `scripts/vercel-ignore-build.sh` (skip the Vercel build when only `android/` changed) belongs with the rest of #151 and lands when that merges.
 
 **Watch.** OMDb's free tier is 1,000 requests a day across every client together. This is a fourth client population on the same quota. The shared Supabase cache and the 7 day edge cache absorb most of it.
+
 
 ## 2026-11-02 (the site for Apple TV 1.0.29)
 

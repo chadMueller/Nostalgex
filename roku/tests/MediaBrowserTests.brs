@@ -4,6 +4,11 @@
 ' fetchJellyfinLibraryFromServer, and holds it to that function's requests
 ' and items (tests/vectors/mediabrowser.json). Plus hand-written cases for
 ' the date parser and the Emby libraries path. Returns the failure count.
+'
+' The web's audioStreams are held to the port's audioTracks, not to a field of
+' the same name: the port keeps those tracks under its own name and shape
+' (NxMbAudioTracks). The vectors keep audioStreams for the Android scan test,
+' which reads them from the same generator.
 
 function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as Integer
     r = { pass: 0, fail: 0 }
@@ -23,13 +28,26 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
         ' Port-only fields: none reaches the filter or schedule.
         extras = { serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
         n = NxMinInt(got.Count(), NxList(v.items).Count())
+        several = 0
         for i = 0 to n - 1
             want = v.items[i]
             it = got[i]
             label = "item " + i.ToStr() + " " + NxToStr(want.ratingKey)
             for each k in want
-                NxCheck(r, label + " " + k, FormatJson(NxMbJsonValue(it[k])), FormatJson(NxMbJsonValue(want[k])))
+                ' audioStreams is compared as audioTracks, below.
+                if LCase(k) <> "audiostreams" then NxCheck(r, label + " " + k, FormatJson(NxMbJsonValue(it[k])), FormatJson(NxMbJsonValue(want[k])))
             end for
+            ' The web lists every audio track of the best source (index, lang,
+            ' codec, channels, title). The port keeps them as audioTracks only
+            ' for a file with two or more (one is no choice) and has no title:
+            ' so the same tracks in the same order, or none.
+            webTracks = NxList(want.audioStreams)
+            if webTracks.Count() >= 2 then
+                several = several + 1
+                NxCheck(r, label + " audioStreams as audioTracks", NxMbAudioText(it.audioTracks, "language"), NxMbAudioText(webTracks, "lang"))
+            else
+                NxCheck(r, label + " audioStreams under two: no audioTracks", NxToStr(it.audioTracks = invalid), "true")
+            end if
             ' By lowercased name: on a TV an AA literal's keys iterate
             ' lowercased, while ParseJson's keep their case.
             wantKeys = {}
@@ -41,6 +59,9 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
             end for
             NxCheck(r, label + " serverIndex", NxToStr(it.serverIndex), "2")
         end for
+        ' Without this, vectors that lost their audioStreams (a generator that
+        ' strips them) would pass the comparison above on nothing.
+        NxCheck(r, "vectors hold items with two or more audioStreams", NxToStr(several > 0), "true")
         ' The best source's bitrate reaches the airing the player tunes
         ' (NxMbVideoQuery).
         byKey = {}
@@ -430,6 +451,21 @@ function NxMbTracksText(tracks as Dynamic) as String
     out = []
     for each t in NxList(tracks)
         out.Push(NxToStr(t.index) + ":" + NxToStr(t.language) + ":" + NxToStr(t.channels) + ":" + NxToStr(t.codec) + ":" + NxToStr(t.isDefault))
+    end for
+    return out.Join(" ")
+end function
+
+' "index:language:channels:codec" per track, space-separated; "" for none. For
+' the web's audioStreams (langKey "lang") and the port's audioTracks
+' ("language") alike, with the web's fill-ins applied to both: no language or
+' codec is "", no channel count is 0 (its `s.Channels || 0`). The web's title
+' and the port's isDefault have no counterpart, so neither is read.
+function NxMbAudioText(tracks as Dynamic, langKey as String) as String
+    out = []
+    for each t in NxList(tracks)
+        channels = "0"
+        if NxIsNumber(t.channels) then channels = NxToStr(t.channels)
+        out.Push(NxToStr(t.index) + ":" + NxToStr(t[langKey]) + ":" + channels + ":" + NxToStr(t.codec))
     end for
     return out.Join(" ")
 end function
