@@ -27,7 +27,7 @@ All three are free. Not sure? Use the app on a TV and the web tuner everywhere e
 
 <a id="tvos-nostalgex"></a>
 <a id="apple-tv-app"></a>
-## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.28`
+## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.29`
 
 The best way to watch on a TV. Connect one or more servers, then flip channels with the Siri Remote. Needs tvOS 18 or later.
 
