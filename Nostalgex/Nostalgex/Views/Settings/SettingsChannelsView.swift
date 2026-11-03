@@ -280,13 +280,37 @@ private struct ChannelsMissingPage: View {
 
 // MARK: - Franchises
 
+/// What the FRANCHISES page shows for a franchise collection. The FRANCHISES switch gates
+/// every franchise channel, the server's franchise collections included (see
+/// `applyBundleFilter`), so while it is off no collection airs: the page keeps them listed,
+/// greyed out and out of focus's way, and none reads ON. Each collection's own switch is
+/// kept as it was, so turning FRANCHISES back on brings back exactly what was set.
+enum FranchisesPageGate {
+    /// The line under the switch while it is off and collections are listed.
+    static let offNote = "None of these are on the air while FRANCHISES is off."
+
+    /// The row reads ON only when the collection is set on and actually airs.
+    static func collectionReadsOn(_ collection: DiscoveredCollection, franchisesOn: Bool) -> Bool {
+        franchisesOn && collection.enabled
+    }
+
+    /// A collection's switch can be reached and pressed only while FRANCHISES is on.
+    static func collectionSelectable(franchisesOn: Bool) -> Bool { franchisesOn }
+
+    /// The count beside FRANCHISES on the Channels list: what is on and on the air.
+    static func onCount(franchisesOn: Bool, franchiseRowsOn: Int, collections: [DiscoveredCollection]) -> Int {
+        guard franchisesOn else { return 0 }
+        return franchiseRowsOn + collections.filter(\.enabled).count
+    }
+}
+
 /// Every franchise in one place: the FRANCHISES switch on top (the package flag, as on
 /// CHANNEL PACKAGES before), then one alphabetical list of the stock classics, the
 /// franchises found in the library, and the server's franchise collections.
 ///
-/// The switch carries the classics and the found franchises, as the package always has.
-/// Franchise collections air through their own collection switches, so they stay listed
-/// and switchable while it is off.
+/// The switch gates every franchise channel. Off, the classics and the found franchises
+/// leave the list, and the franchise collections stay listed but greyed out, unfocusable
+/// and OFF, under a line that says why (`FranchisesPageGate`). Their own switches are kept.
 private struct ChannelsFranchisesPage: View {
     @Environment(AppState.self) var appState
     let focus: FocusState<SettingsFocus?>.Binding
@@ -304,8 +328,11 @@ private struct ChannelsFranchisesPage: View {
 
     /// What the Channels list shows for FRANCHISES: everything on that is on air.
     static func onCount(_ appState: AppState) -> Int {
-        let rows = packageOn(appState) ? appState.franchiseListRows.filter(\.enabled).count : 0
-        return rows + franchiseCollections(appState).filter(\.enabled).count
+        let on = packageOn(appState)
+        return FranchisesPageGate.onCount(
+            franchisesOn: on,
+            franchiseRowsOn: on ? appState.franchiseListRows.filter(\.enabled).count : 0,
+            collections: franchiseCollections(appState))
     }
 
     /// One row of the merged list.
@@ -355,10 +382,18 @@ private struct ChannelsFranchisesPage: View {
                 }
 
                 if !entries.isEmpty {
+                    if !on {
+                        Text(FranchisesPageGate.offNote)
+                            .font(.custom("DMMono-Regular", size: 20))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 8)
+                    }
                     overCapNotes(on: on)
                     if on { addRemoveAll(entries: entries, collections: collections) }
                     ForEach(entries) { entry in
-                        row(entry)
+                        row(entry, franchisesOn: on)
                     }
                 }
             }
@@ -442,7 +477,7 @@ private struct ChannelsFranchisesPage: View {
     }
 
     @ViewBuilder
-    private func row(_ entry: Entry) -> some View {
+    private func row(_ entry: Entry, franchisesOn: Bool) -> some View {
         switch entry {
         case .franchise(let row):
             SettingsToggleRow(
@@ -457,17 +492,20 @@ private struct ChannelsFranchisesPage: View {
             .settingsRow(entry.id, focus: focus)
         case .collection(let collection):
             let warning = ChannelsCollectionsPage.duplicateWarning(for: collection)
+            let selectable = FranchisesPageGate.collectionSelectable(franchisesOn: franchisesOn)
             SettingsToggleRow(
                 title: collection.title,
                 subtitle: warning ?? collection.memberSummary,
                 detail: "COLLECTION",
-                isOn: collection.enabled,
+                isOn: FranchisesPageGate.collectionReadsOn(collection, franchisesOn: franchisesOn),
                 isFocused: isFocused(entry.id)
             ) {
                 appState.toggleCollection(collection)
             }
+            // Off: listed, but greyed out and never focused, so it can't be switched.
+            .disabled(!selectable)
             .settingsRow(entry.id, focus: focus)
-            .opacity(warning != nil && !collection.enabled ? 0.7 : 1.0)
+            .opacity(!selectable ? 0.45 : (warning != nil && !collection.enabled ? 0.7 : 1.0))
         }
     }
 
