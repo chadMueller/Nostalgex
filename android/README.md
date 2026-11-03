@@ -233,6 +233,15 @@ Gradle downloads the JDK it runs on.
    debugger hooks). Both are signed with this computer's debug key, so either
    installs over the other and keeps the sign-in.
 
+A build for Google Play is signed with the upload key, which stays with whoever
+uploads. Give its keystore as Gradle properties (`-P`, or
+`~/.gradle/gradle.properties`) or as environment variables of the same names:
+`NOSTALGEX_UPLOAD_STORE_FILE`, `NOSTALGEX_UPLOAD_STORE_PASSWORD`,
+`NOSTALGEX_UPLOAD_KEY_ALIAS` and `NOSTALGEX_UPLOAD_KEY_PASSWORD`, then run
+`./gradlew :app:bundleRelease`. A PKCS12 keystore, `keytool`'s default, has one
+password, so the key password is the store password. With any of the four
+missing, the release build is signed with the debug key as above.
+
 3. Nostalgex appears in the apps row.
 
 Enrichment is off unless `local.properties` (which git ignores) turns it on and

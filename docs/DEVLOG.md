@@ -407,6 +407,20 @@ the fixture are untouched.
 
 **Next.** Re-read the section against the app when #151 merges. The existing em dashes in `PRIVACY_POLICY.md` (the event lists) are old and were left alone.
 
+## 2026-11-03 (Android: release signing for Google Play, and version 1.0.0)
+
+**Changed.** Asked for on PR #151 ahead of Play's internal testing track.
+- `android/app/build.gradle.kts` signs the release build with an upload key when all four of `NOSTALGEX_UPLOAD_STORE_FILE`, `NOSTALGEX_UPLOAD_STORE_PASSWORD`, `NOSTALGEX_UPLOAD_KEY_ALIAS` and `NOSTALGEX_UPLOAD_KEY_PASSWORD` are set as Gradle properties or environment variables. Otherwise it uses the debug key, so `installRelease` still sideloads. No key or password is in the repo.
+- The version is `1.0.0`, versionCode 1, for the first Play build. It shows in Settings and in the Plex, Jellyfin and Emby client headers.
+
+Checked with a throwaway keystore:
+- Environment variables signed both the APK and `bundleRelease`'s `.aab` with it.
+- `-P` properties signed the APK with it.
+- No settings, or only one of the four, signed with the debug key.
+
+A PKCS12 keystore (`keytool`'s default) has one password, so the key password has to be the store password.
+
+**Next.** Not tested with the real upload key, which only the maintainer has.
 
 ## 2026-11-03 (the relay accepts an Android client)
 
@@ -500,6 +514,7 @@ are the check.
 **Half-done.** The guide screenshots in those three posts still show the old numbers (images on R2: the slasher guide frame, the channel-surfing cover, the two guide frames and the cover in the franchise post). They need re-shoots on 1.0.29. Still describing the old Settings layout: the iCloud line in the 1.0.26 post (CONNECTION), and "collection Channel Packages" on the Plex, Jellyfin, Emby and support pages.
 
 **Next.** Tag `v1.0.29` on `075b5bc` (the `Apple TV 1.0.29 (53)` commit, already on main, so there is no build-number commit to add) and publish the GitHub release, then push the branch to main.
+
 ## 2026-11-02 (Android: the scan comparison checks audio tracks again, after #176)
 
 **Changed.** `MediaBrowserScanTest` compares each Jellyfin and Emby item's `audioStreams` (index, language, codec, channels, title) with the web tuner's, now that 1.0.13 keeps them on the item. Before, the web's items had none, so the field was skipped. All 222 items in the shared fixture match, two of them with several tracks. Setting Android's channel count to 0 made the test fail, so the check catches a difference. `isDefault` stays Android-only, because the web doesn't keep it. 203 engine tests, 0 failures. `feature/android` is rebased onto `4602216`.
