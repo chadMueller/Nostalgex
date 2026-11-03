@@ -407,6 +407,23 @@ the fixture are untouched.
 
 **Next.** Re-read the section against the app when #151 merges. The existing em dashes in `PRIVACY_POLICY.md` (the event lists) are old and were left alone.
 
+## 2026-11-03 (Android: Back on Android 16 stays in the app, and versionCode 3)
+
+**Why.** Reported by Chad on his Google TV: Back from full screen, or from a Settings page, closed the app instead of going to the guide (as on the Roku) or up a level in Settings. The app targets API 36, and on Android 16 that turns on predictive back. The remote's Back is then never sent to the app as `KEYCODE_BACK`, which every screen's Back handling listened for. It goes to the `OnBackPressedDispatcher`, and with nothing registered there the activity finishes. To confirm the cause, the same build with `android:enableOnBackInvokedCallback="false"` in the manifest went from full screen to the guide on the Android 16 emulator. That opt-out was only a test and was not kept, because a later Android drops it.
+
+**Changed.**
+- `ui/Back.kt` adds `Modifier.onBack(enabled, action)`. It registers a `BackHandler` for Android 16 and keeps the key check for older versions. A key the check consumes never reaches the dispatcher, so only one of the two runs.
+- The guide (full screen, its strip and panel, Settings, the package sidebar, the invite's question, STILL WATCHING?), Settings over a status screen, the connect screens, and START OVER's question all use it. Before, each of these left the app on Android 16.
+- `versionCode` is 3.
+
+Measured in demo mode on Google TV emulators running Android 16 and Android 14, and on a SHIELD running Android 11. The SHIELD used a real library, and on it only the full-screen and Settings steps were checked:
+- Full screen goes to the guide.
+- The STREAM QUALITY picker goes to PLAYBACK & PICTURE, then the Settings menu, then the guide on the live row.
+- Back on the live row leaves the app, as before.
+- On Android 16, CONNECT TO JELLYFIN goes back to the server choice, and Back on the server choice leaves the app.
+
+**Not checked.** Chad has not tried the fix on his Google TV yet. Back from START OVER's question was not pressed on any device.
+
 ## 2026-11-03 (Android: release signing for Google Play, and version 1.0.0)
 
 **Changed.** Asked for on PR #151 ahead of Play's internal testing track.
