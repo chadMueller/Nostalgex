@@ -48,7 +48,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
@@ -84,13 +83,8 @@ fun ConnectScreen(model: AppModel) {
             Row(
                 Modifier
                     .fillMaxSize()
-                    .onPreviewKeyEvent { e ->
-                        if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
-                        // The picker is the first screen: Back there leaves the app.
-                        if (!model.connectCanGoBack) return@onPreviewKeyEvent false
-                        if (e.type == KeyEventType.KeyUp) model.connectBack()
-                        true
-                    }
+                    // The picker is the first screen: Back there leaves the app.
+                    .onBack(model.connectCanGoBack) { model.connectBack() }
                     .padding(horizontal = u(100), vertical = u(60)),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(u(80)),

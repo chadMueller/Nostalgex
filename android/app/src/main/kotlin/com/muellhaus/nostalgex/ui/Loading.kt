@@ -1,6 +1,5 @@
 package com.muellhaus.nostalgex.ui
 
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,11 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.nativeKeyCode
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.tv.material3.Text
@@ -95,12 +89,8 @@ fun LoadingScreen(state: Screen.Loading) = FullScreenFrame {
 fun LibraryLoadScreen(model: AppModel, state: Screen.LibraryLoad) {
     var confirming by remember { mutableStateOf(false) }
     FullScreenFrame(
-        Modifier.onPreviewKeyEvent { e ->
-            // Back closes the question first, as the alert's cancel.
-            if (!confirming || e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
-            if (e.type == KeyEventType.KeyUp) confirming = false
-            true
-        },
+        // Back closes the question first, as the alert's cancel.
+        Modifier.onBack(confirming) { confirming = false },
     ) {
         val n = dots()
         Column(

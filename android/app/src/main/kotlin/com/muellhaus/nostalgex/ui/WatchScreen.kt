@@ -185,9 +185,33 @@ fun WatchScreen(model: AppModel) {
             LaunchedEffect(model.fullScreen) { if (!model.fullScreen) overlay = Overlay.NONE }
             LaunchedEffect(overlay) { if (overlay != Overlay.PANEL) picker = null }
 
+            // Back closes the strip or the panel first (PlayerView's onExitCommand), then leaves full
+            // screen; in the guide it goes to the live row, and from there leaves the app
+            // (GuideExitAction), which is when nothing here takes it.
+            val backTakes = model.sleepGrace || asking != null || model.settingsOpen || sidebarOpen || model.fullScreen ||
+                (focusedId != null && focusedId != model.channel?.id)
+            fun back() {
+                when {
+                    // "STILL WATCHING?" takes the next key, Back included (SleepGracePrompt).
+                    model.sleepGrace -> model.keepAwake()
+                    // The invite's question: Back closes it, focus back on the invite.
+                    asking != null -> { asking = null; focusTarget = SEASONAL_ROW_ID; focusRequest++ }
+                    // Settings steps back one level at a time; from the rail it closes, back to the live row.
+                    model.settingsOpen -> if (!model.settingsBack()) focusLive()
+                    // The package sidebar closes back to the guide (BundleJumpSidebar's onExitCommand).
+                    sidebarOpen -> { sidebarOpen = false; focusLive() }
+                    // An open picker first: dropping out of the panel from inside a list would lose it on a mis-press.
+                    model.fullScreen && picker != null -> picker = null
+                    model.fullScreen && overlay != Overlay.NONE -> overlay = Overlay.NONE
+                    model.fullScreen -> { model.fullScreen = false; focusLive() }
+                    else -> focusLive()
+                }
+            }
+
             Box(
                 Modifier
                     .fillMaxSize()
+                    .onBack(backTakes) { back() }
                     .onPreviewKeyEvent { e ->
                         val code = e.key.nativeKeyCode
                         val up = e.type == KeyEventType.KeyUp
@@ -196,28 +220,7 @@ fun WatchScreen(model: AppModel) {
                             if (up) model.keepAwake()
                             return@onPreviewKeyEvent true
                         }
-                        // The invite's question: Back closes it, focus back on the invite.
-                        if (asking != null && code == AndroidKeyEvent.KEYCODE_BACK) {
-                            if (up) { asking = null; focusTarget = SEASONAL_ROW_ID; focusRequest++ }
-                            return@onPreviewKeyEvent true
-                        }
                         when (code) {
-                            // Back closes the strip or the panel first (PlayerView's onExitCommand), then leaves full screen; in the guide it goes to the live row, and from
-                            // there leaves the app (GuideExitAction). Acted on at release, so the
-                            // release can't reach the next screen.
-                            AndroidKeyEvent.KEYCODE_BACK -> when {
-                                // Settings: a picker page first, then Settings itself, back to the live row.
-                                // Settings steps back one level at a time; from the rail it closes.
-                                model.settingsOpen -> { if (up && !model.settingsBack()) focusLive(); true }
-                                // The package sidebar closes back to the guide (BundleJumpSidebar's onExitCommand).
-                                sidebarOpen -> { if (up) { sidebarOpen = false; focusLive() }; true }
-                                // An open picker first: dropping out of the panel from inside a list would lose it on a mis-press.
-                                model.fullScreen && picker != null -> { if (up) picker = null; true }
-                                model.fullScreen && overlay != Overlay.NONE -> { if (up) overlay = Overlay.NONE; true }
-                                model.fullScreen -> { if (up) { model.fullScreen = false; focusLive() }; true }
-                                focusedId != null && focusedId != model.channel?.id -> { if (up) focusLive(); true }
-                                else -> false
-                            }
                             // Play/Pause goes full screen from the guide, and shows the OSD there.
                             AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                 if (up) { if (model.fullScreen) flashOsd() else if (model.channel != null) model.fullScreen = true }
@@ -1006,13 +1009,7 @@ private fun StatusScreen(model: AppModel, content: @Composable () -> Unit) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .onPreviewKeyEvent { e ->
-                        if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_BACK || !model.settingsOpen) return@onPreviewKeyEvent false
-                        if (e.type == KeyEventType.KeyUp) {
-                            model.settingsBack()
-                        }
-                        true
-                    },
+                    .onBack(model.settingsOpen) { model.settingsBack() },
                 contentAlignment = Alignment.Center,
             ) {
                 if (model.settingsOpen) SettingsPage(model)
