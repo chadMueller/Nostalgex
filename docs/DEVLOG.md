@@ -88,6 +88,18 @@ the fixture are untouched.
 **Watch.** OMDb's free tier is 1,000 requests a day across every client together. This is a fourth client population on the same quota. The shared Supabase cache and the 7 day edge cache absorb most of it.
 
 
+## 2026-11-02 (Roku docs: Emby's transcode restarts were fMP4's, and TS ended them)
+
+**Why.** `roku/docs/JELLYFIN-EMBY.md` still said Emby restarting its transcode on every segment
+after a mid-file join was "not fixed here yet", with a progressive stream as the next thing to
+try. That was measured on 2026-10-19, when the port asked for fMP4 segments. Asked as the port
+asks today, joined 30 minutes into a file whose audio Emby converts, the lab Emby 4.10.1 started
+ffmpeg five times in 15 fMP4 segments (its `hls` muxer) and once over TS (its `segment` muxer).
+The port has asked for TS since 2026-10-22, and nine Roku joins in Emby's logs since 2026-10-31,
+on two TVs, each ran one ffmpeg.
+
+**Changed.** The doc's entry says so. No code change.
+
 ## 2026-11-02 (Roku live tools: a library the loader left part of stops, instead of loading short)
 
 **Why.** `roku/tests/bench/dump-library.mjs` wrote a library without its Movies section (4,635
