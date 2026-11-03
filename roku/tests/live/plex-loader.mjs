@@ -3,9 +3,11 @@
 // modules it calls. Upstream is the Nostalgex repo this port lives in
 // (roku/..), the same tree data/ links to.
 //
-// The loader catches each section's error and warns, on a console silenced
-// here, so a global it calls that isn't in the context below doesn't throw:
-// every section comes back empty. loadLibrary refuses an empty library.
+// The loader catches each section's and each show's error, warns and goes on
+// without it. So loadLibrary keeps those warnings and refuses a library that
+// lost any part: a global it calls that isn't in the context below fails every
+// section, and a page that times out (Node's fetch gives up after 300 s, and
+// the loader sets no limit of its own) loses its whole section.
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -37,7 +39,14 @@ const pageSize = html.match(/const PLEX_PAGE_SIZE = (\d+);/)[1];
 const loaderSource = [`const PLEX_PAGE_SIZE = ${pageSize};`,
   ...["plexLibraryFetchForServer", "fetchPlexSectionPaged", "scanOnePlexServer", "pickBestVersion", "resolutionHeight", "formatDuration"].map(lift),
   "globalThis.scanOnePlexServer = scanOnePlexServer;", "globalThis.plexLibraryFetchForServer = plexLibraryFetchForServer;"].join("\n");
-const quiet = { ...console, log() {}, warn() {} };
+// The loader's warnings, one line each: the error's message and, for a failed
+// fetch, the cause's code (UND_ERR_HEADERS_TIMEOUT or UND_ERR_BODY_TIMEOUT for
+// the 300 s limit).
+const dropped = [];
+const line = (a) => (a && typeof a === "object" && "message" in a
+  ? a.message + (a.cause ? ` (${a.cause.code || a.cause.message})` : "")
+  : String(a));
+const quiet = { ...console, log() {}, warn: (...args) => dropped.push(args.map(line).join(" ")) };
 // Every global the lifted functions call. A new one in plex-tuner.html goes here.
 export const loader = vm.createContext({
   fetch, console: quiet, AbortController, setTimeout, clearTimeout, URLSearchParams,
@@ -54,9 +63,13 @@ const LL = { state: {}, pulsePhase: async () => {}, setPhase: () => {} };
 // The whole library of every server in `list` (plex-env.mjs's servers()).
 export async function loadLibrary(list) {
   let items = [];
+  dropped.length = 0;
   for (const s of list) items = items.concat(await loader.scanOnePlexServer(s, LL, items.length, list.length > 1));
+  if (dropped.length > 0) {
+    throw new Error(`upstream's loader left out part of the library (${items.length} items kept):\n  ${dropped.join("\n  ")}`);
+  }
   if (items.length === 0) {
-    throw new Error("upstream's loader returned no items; check that every global it calls is in plex-loader.mjs's context");
+    throw new Error("upstream's loader returned no items and no errors: no server has a section it reads");
   }
   return items;
 }

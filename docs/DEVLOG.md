@@ -100,6 +100,58 @@ on two TVs, each ran one ffmpeg.
 
 **Changed.** The doc's entry says so. No code change.
 
+## 2026-11-02 (Roku live tools: a library the loader left part of stops, instead of loading short)
+
+**Why.** `roku/tests/bench/dump-library.mjs` wrote a library without its Movies section (4,635
+items of 5,404) and exited 0. Plex's log shows the cause: the first page of Movies took Plex
+317 s, Node's `fetch` had given up at its 300 s default (the loader sets no limit of its own),
+and Plex logged the request as "Completed after connection close". The loader catches each
+section's and each show's error, warns and goes on without it, and
+`roku/tests/live/plex-loader.mjs` silenced those warnings. It refused only an empty library, so a
+library without Movies passed. `compare.mjs` and `collections.mjs` load through the same
+`loadLibrary`.
+
+**Changed.** `loadLibrary` keeps the loader's warnings and stops when there are any, listing each
+one with the fetch error's code. The loader itself is unchanged.
+
+**Measured.** Against a real Plex library: a clean load keeps 5,404 items, and
+`dump-library.mjs` writes them. With the Movies page fetch failing as a timeout does, it stops
+with `Failed to fetch section Movies: fetch failed (UND_ERR_HEADERS_TIMEOUT)` after 4,635 items,
+the short library's count; one show's episodes failing stops it at 5,400; a missing loader
+global stops it at 0. `collections.mjs` still matches upstream. The slow page didn't happen
+again in 15 loads.
+
+## 2026-11-02 (Roku: a background refresh that builds no channels keeps the guide on screen)
+
+**Why.** Left open by #96: a refresh that comes back with no channels while a guide with channels
+is on screen. `GuideView` put up NO CHANNELS FOUND but kept the tuned channel, the airing and the
+clock, so the airing's end crashed the app in `NxAdvancePick` (`Advance.brs` 169, `channels`
+empty). Left/Right in full screen takes a `mod` by the channel count, which is 0 then: a crash
+too, by reading the code.
+
+**Changed.** `LibraryTask` drops that refresh the way it already drops one that reaches no server
+or can't read the library: the guide on screen stays (`keepSavedGuide`), and the saved library,
+guide and pools aren't replaced, so the next launch shows that guide too. Only the background
+refresh's builds do this (the launch refresh, the 15-minute check, RESCAN LIBRARY); a package
+switch is unchanged. The Apple TV differs: an empty channel list replaces its tuner with NO
+CHANNELS FOUND (`Plex90App.swift`). The cost: a dropped refresh is silent, and RESCAN LIBRARY's
+row keeps its old "Last updated" time. Still open, by reading the code: a package switch built in
+place that leaves no channels (the last package on fills nothing) hands `GuideView` an empty list
+the same way.
+
+**Measured.** On our 43" TCL (43S45, Roku OS 16.0.4), test-data builds signed in to the lab Emby
+as a user whose library made one channel (CH 7 VHS VAULT, five 1990 clips), RESCAN LIBRARY after
+the library stopped filling it:
+- Main (`0a810fb`), the five clips taken off the server: the guide said NO CHANNELS FOUND while
+  CH 7 kept playing, and the airing's end crashed the app as above.
+- This branch (`9e85fb3`), the five clips moved to 2026 in Emby (same files and ids): six items
+  read, no channels, `background refresh built no channels; the guide on screen stays`, and no
+  save. CH 7 played on, the airing's end moved to the next clip (picture in 1.0 s), and a
+  relaunch opened on the saved guide's CH 7.
+
+`tests/run.sh` ends in ALL TESTS PASSED; no off-device test runs `LibraryTask`, so the TV runs
+are the check.
+
 ## 2026-11-02 (the site for Apple TV 1.0.29)
 
 **Shipped.** Apple TV 1.0.29 (build 53) is live on the App Store: App Store Connect reads Ready for Sale and the public lookup returns 1.0.29. Nothing is on nostalgex.app yet. Branch `site/1.0.29-live` is rebased onto `origin/main` at `4602216` and not pushed. The site only shows the App Store version, so this was held off main until now.
