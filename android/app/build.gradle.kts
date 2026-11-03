@@ -19,6 +19,20 @@ val localProps = Properties().apply {
 fun localProp(key: String) = localProps.getProperty(key, "").trim()
 fun quoted(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// Release signing for Google Play. The upload key stays with whoever uploads: the keystore's
+// path, alias and passwords come from Gradle properties (-P, or ~/.gradle/gradle.properties) or
+// the environment variables of the same name, never from the repo:
+//   NOSTALGEX_UPLOAD_STORE_FILE, NOSTALGEX_UPLOAD_STORE_PASSWORD,
+//   NOSTALGEX_UPLOAD_KEY_ALIAS, NOSTALGEX_UPLOAD_KEY_PASSWORD
+// With any of them missing, the release build is signed with the local debug key, so
+// `./gradlew :app:installRelease` sideloads it like the debug build.
+fun signingValue(key: String): String? =
+    (providers.gradleProperty(key).orNull ?: providers.environmentVariable(key).orNull)?.trim()?.takeIf { it.isNotEmpty() }
+val uploadSigning = listOf(
+    "NOSTALGEX_UPLOAD_STORE_FILE", "NOSTALGEX_UPLOAD_STORE_PASSWORD",
+    "NOSTALGEX_UPLOAD_KEY_ALIAS", "NOSTALGEX_UPLOAD_KEY_PASSWORD",
+).associateWith(::signingValue).takeIf { values -> values.values.all { it != null } }?.mapValues { it.value!! }
+
 android {
     namespace = "com.muellhaus.nostalgex"
     compileSdk = 37
@@ -29,7 +43,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         val enrichmentOn = localProp("nostalgex.enrichment") == "on"
         buildConfigField("boolean", "ENRICHMENT", enrichmentOn.toString())
@@ -38,14 +52,25 @@ android {
         buildConfigField("String", "RELAY_URL", quoted(if (enrichmentOn) localProp("nostalgex.relayUrl") else ""))
     }
 
+    signingConfigs {
+        if (uploadSigning != null) {
+            create("upload") {
+                storeFile = file(uploadSigning.getValue("NOSTALGEX_UPLOAD_STORE_FILE"))
+                storePassword = uploadSigning.getValue("NOSTALGEX_UPLOAD_STORE_PASSWORD")
+                keyAlias = uploadSigning.getValue("NOSTALGEX_UPLOAD_KEY_ALIAS")
+                keyPassword = uploadSigning.getValue("NOSTALGEX_UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         // A release build runs much faster than a debug one on the TV (no debugger hooks, full
-        // compiler optimisation). Until there is a store listing it is signed with the local
-        // debug key, so `./gradlew :app:installRelease` sideloads it like the debug build.
+        // compiler optimisation). It is signed with the upload key when one is given (above),
+        // and otherwise with the local debug key.
         // Shrinking stays off until R8 rules for kotlinx.serialization are checked on a device.
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (uploadSigning != null) "upload" else "debug")
         }
     }
 
