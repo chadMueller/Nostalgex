@@ -227,6 +227,13 @@ function NxRunFallbackTests() as Integer
     NxCheck(r, "a direct play ends unplayed: hand over", NxFinishedText({ attemptRunning: true, sawPlaying: false, unplayedEnds: 0, rung: "direct", probing: false }), "handover 1")
     NxCheck(r, "ends unplayed while asking: hand over", NxFinishedText({ attemptRunning: true, sawPlaying: false, unplayedEnds: 0, rung: "server", probing: true }), "handover 1")
     NxCheck(r, "a second end without playing: an error", NxFinishedText({ attemptRunning: true, sawPlaying: false, unplayedEnds: 1, rung: "server", probing: false }), "error 2")
+    ' The retry errors and the server is asked (failAttempt's probe), the
+    ' attempt still running: the player's "finished" after that error hands
+    ' over nothing, so the probe's answer decides (channel 2 on the 43S45,
+    ' Plex, 2026-11-03: it handed over every 3.6 s, retry and all).
+    NxCheck(r, "finished while asking after an error: nothing", NxFinishedText({ attemptRunning: true, sawPlaying: false, unplayedEnds: 0, rung: "server", probing: true, probingAfterError: true }), "ignore 0")
+    NxCheck(r, "finished while asking after a played stream's error: nothing", NxFinishedText({ attemptRunning: true, sawPlaying: true, unplayedEnds: 0, rung: "server", probing: true, probingAfterError: true }), "ignore 0")
+    NxCheck(r, "finished while asking after a direct play's error: nothing", NxFinishedText({ attemptRunning: true, sawPlaying: false, unplayedEnds: 0, rung: "direct", probing: true, probingAfterError: true }), "ignore 0")
 
     print "fallback cases (upstream ladder): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
