@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)
+
+**Why.** On #181's merge, the maintainer asked for the two sessions that started ffmpeg twice in
+the entry, which read as if TS never restarts. Emby's own logs still have them, both on 2026-11-01,
+on *Lab Forced Opus*, a 60.03 s clip cut into 2 s segments. In each the TV read segments 0 to 29
+within about 1.5 s, and by then the first ffmpeg, a remux, had finished the file. The TV then
+asked for segment 30, the file's last 0.03 s, and Emby started a second ffmpeg for it ("Starting
+transcoding because currentTranscodingIndex=null", `-ss 00:01:00`). Not a restart mid-file.
+
+**Changed.** `roku/docs/JELLYFIN-EMBY.md` says so beside the nine single-start joins. No code change.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).

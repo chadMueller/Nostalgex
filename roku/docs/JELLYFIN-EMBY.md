@@ -190,7 +190,13 @@ servers, driven over ECP.
   The port has asked for TS since 2026-10-22 (below). In Emby's logs from
   2026-10-31 to 11-02, nine joins by the 43S45 and the 55" TCL (Roku OS
   16.0.4 and 15.3.4), 12 to 79 minutes into that file, each ran one ffmpeg
-  over 23 to 92 segments. The restarts fit the maintainer's 500s ("Error
+  over 23 to 92 segments. Two sessions in the same logs did start ffmpeg
+  twice, both on 2026-11-01 on a 60.03 s Lab clip cut into 2 s segments,
+  but not mid-file: the TV read segments 0 to 29 within about
+  1.5 s, by when the first ffmpeg, a remux, had finished the file. Asked
+  for segment 30, the file's last 0.03 s, Emby started another ("Starting
+  transcoding because currentTranscodingIndex=null", `-ss 00:01:00`).
+  The restarts fit the maintainer's 500s ("Error
   starting ffmpeg") and repeated fetches. `StartTimeTicks` on the playlist is
   dropped from the segment requests, so it was no way round it.
 - **What that restart costs is sync, upstream found** (Discussion #8,
