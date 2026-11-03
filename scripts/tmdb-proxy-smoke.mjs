@@ -101,7 +101,7 @@ check("undefined rejected", upstreamRequest(undefined), null);
 }
 {
   const calls = stubTMDB({ status: 200, body: {} });
-  const r = await call({ query: { path: "movie/603" }, headers: { "x-nostalgex-client": "android" } });
+  const r = await call({ query: { path: "movie/603" }, headers: { "x-nostalgex-client": "crawler" } });
   check("wrong client header 403", r.status, 403);
   check("wrong client header no upstream", calls.length, 0);
 }
@@ -112,6 +112,14 @@ check("undefined rejected", upstreamRequest(undefined), null);
   check("roku client header 200", r.status, 200);
   check("roku client one upstream call", calls.length, 1);
   check("roku client needs no allow-origin", r.headers["Access-Control-Allow-Origin"], undefined);
+}
+{
+  // So is the Android TV port (OkHttp).
+  const calls = stubTMDB({ status: 200, body: { id: 603 } });
+  const r = await call({ query: { path: "movie/603" }, headers: { "x-nostalgex-client": "android" } });
+  check("android client header 200", r.status, 200);
+  check("android client one upstream call", calls.length, 1);
+  check("android client needs no allow-origin", r.headers["Access-Control-Allow-Origin"], undefined);
 }
 {
   const calls = stubTMDB({ status: 200, body: { id: 603 } });

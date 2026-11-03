@@ -22,13 +22,15 @@
  * so clients can tell it from a bad key.
  *
  * `X-Nostalgex-Client: tvos` (the Apple TV app), `web` (the browser tuner),
- * `roku` (the Roku port) or `selfhost` (the tuner in the Docker image) is a cheap
- * filter against stray browsers and crawlers, not security. Nothing about a request
+ * `roku` (the Roku port), `android` (the Android TV port) or `selfhost` (the
+ * tuner in the Docker image) is a cheap filter against stray browsers and
+ * crawlers, not security. Nothing about a request
  * is logged, ids included.
  *
- * Roku needs no CORS: roUrlTransfer is not a browser, so it sends no Origin and
- * reads the body whatever the allow-origin header says. It only has to clear the
- * client filter, and it gets the same path allowlist and the same edge cache.
+ * Roku and Android TV need no CORS: roUrlTransfer and OkHttp are not browsers, so
+ * they send no Origin and read the body whatever the allow-origin header says.
+ * They only have to clear the client filter, and get the same path allowlist and
+ * the same edge cache.
  *
  * CORS. The tuner on nostalgex.app calls this same-origin and needs nothing. A
  * cross-origin page (www vs apex, or the Vite dev server) sends a preflight because
@@ -48,7 +50,7 @@ const TMDB = 'https://api.themoviedb.org/3';
 const OMDB = 'https://www.omdbapi.com/';
 const CLIENT_HEADER = 'x-nostalgex-client';
 const SELFHOST_CLIENT = 'selfhost';
-const CLIENT_VALUES = new Set(['tvos', 'web', 'roku', SELFHOST_CLIENT]);
+const CLIENT_VALUES = new Set(['tvos', 'web', 'roku', 'android', SELFHOST_CLIENT]);
 // A bare http(s) origin: scheme, host, optional port. Rejects "null" (sandboxed
 // frames, file://) and anything with a path.
 const ORIGIN_RE = /^https?:\/\/[^/\s?#]+$/;

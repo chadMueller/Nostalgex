@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (the relay accepts an Android client)
+
+**Shipped.** `api/tmdb.js` accepts `X-Nostalgex-Client: android`, alongside `tvos`, `web`, `roku` and `selfhost`. It goes live on nostalgex.app with the push to main that carries this entry. The tuner and the Docker image are untouched: no tuner file changed and there is no `tuner-v` tag.
+
+**Why.** The Android TV app in @owenvoke's PR #151 asks the relay for TMDB keywords and IMDb ratings, so the genre and network channels can fill. Until the relay knew the value, every one of those requests got a 403 and the app reported "relay refused this client". The change is his, taken from #151 as it stands: the one-line client list, the header comment, and a smoke case for Android. In #151 those two files are now identical to main, so they drop out of his rebase. The only conflict left there is the top of `docs/DEVLOG.md`, where his Android entries and main's newest ones meet.
+
+**Changed.**
+- `api/tmdb.js`: `android` joins `CLIENT_VALUES`. Android is OkHttp, not a browser, so it sends no Origin and needs no CORS, the same as Roku. The path allowlist, the edge cache and the no-logging promise are unchanged.
+- `scripts/tmdb-proxy-smoke.mjs`: the old "wrong client header" case used `android` as its example of a client that must be refused. It now uses `crawler`, and a new case checks that `android` gets a 200, makes one upstream call and gets no allow-origin header. 160 assertions became 163. Run against the old relay, the new case fails with the 403 Android would have seen.
+
+**Not in this change.** His edit to `scripts/vercel-ignore-build.sh` (skip the Vercel build when only `android/` changed) belongs with the rest of #151 and lands when that merges.
+
+**Watch.** OMDb's free tier is 1,000 requests a day across every client together. This is a fourth client population on the same quota. The shared Supabase cache and the 7 day edge cache absorb most of it.
+
 ## 2026-11-02 (the site for Apple TV 1.0.29)
 
 **Shipped.** Apple TV 1.0.29 (build 53) is live on the App Store: App Store Connect reads Ready for Sale and the public lookup returns 1.0.29. Nothing is on nostalgex.app yet. Branch `site/1.0.29-live` is rebased onto `origin/main` at `4602216` and not pushed. The site only shows the App Store version, so this was held off main until now.
