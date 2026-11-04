@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import java.net.URI
 import java.net.URLEncoder
 
 /**
@@ -198,12 +199,20 @@ object PlaybackInfoHandshake {
      * or offers nothing playable, the first answer is used: the film without its forced lines
      * beats no film. Throws only when the first request does. `send` posts a body and returns
      * the answer's text, throwing on an HTTP error.
+     *
+     * A burned stream is chosen only once its first segment is served (`burnedStreamServes`
+     * through `probe`). A server that can't burn says so there, not in PlaybackInfo: Chad's Emby
+     * 4.10.1 serves both playlists, then answers every segment with HTTP 500, and without this
+     * the player only finds out when the startup watchdog gives up. The session refused is
+     * stopped through `stopRefused`, since nothing else will ever see it.
      */
     fun negotiate(
         send: (JsonObject) -> String,
         serverUrl: String, apiKey: String, itemId: String, mediaSourceId: String,
         maxBitrateBps: Long, serverStreamOnly: Boolean, subtitleLanguage: String, audioLanguages: List<String>,
         log: (String) -> Unit = {},
+        probe: Probe? = null,
+        stopRefused: (String) -> Unit = {},
     ): Resolution? {
         val info = parse(send(body(mediaSourceId, maxBitrateBps, serverStreamOnly)))
         fun resolved(i: Response) = resolve(i, serverUrl, apiKey, itemId, mediaSourceId, serverStreamOnly, audioLanguages)
@@ -211,9 +220,50 @@ object PlaybackInfoHandshake {
         if (forced != null) {
             val burned = runCatching { resolved(parse(send(body(mediaSourceId, maxBitrateBps, serverStreamOnly, forced)))) }
                 .onFailure { log("burning forced subtitle $forced failed: $it") }.getOrNull()
-            if (burned != null) return burned
+            if (burned != null) {
+                if (burned.isDirectPlay || probe == null || burnedStreamServes(burned.url, probe)) return burned
+                log("the server refused the burned-in stream's first segment, playing without the forced subtitle")
+                burned.playSessionId?.let(stopRefused)
+            }
         }
         return resolved(info)
+    }
+
+    /** One GET with no header added, as the player asks: the status and the body's text, or null when it timed out or failed. */
+    fun interface Probe {
+        fun get(url: String): Pair<Int, String?>?
+    }
+
+    /** Longest the check waits on one request, as the PlaybackInfo requests: a slow first segment is not a refusal. */
+    const val BURN_PROBE_TIMEOUT_MS = 12_000L
+
+    /**
+     * Fetches what the player fetches first (burnedStreamServes): the master playlist, its first
+     * variant, that playlist's first segment. False only when the server answers one of them
+     * with an HTTP error. A timeout, a dropped connection or a playlist this can't read prove
+     * nothing, so they count as served. URLs are the ones the playlists give, resolved against
+     * the playlist they came from, queries kept.
+     */
+    fun burnedStreamServes(url: String, probe: Probe): Boolean {
+        fun firstEntry(text: String, base: String): String? =
+            text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+                ?.let { runCatching { URI(base).resolve(it).toString() }.getOrNull() }
+        val master = probe.get(url) ?: return true
+        if (master.first !in 200..299) return false
+        val masterText = master.second?.takeIf { it.startsWith("#EXTM3U") } ?: return true
+        var playlistUrl = url
+        var playlistText = masterText
+        if (masterText.contains("#EXT-X-STREAM-INF")) {
+            val variantUrl = firstEntry(masterText, url) ?: return true
+            val variant = probe.get(variantUrl) ?: return true
+            if (variant.first !in 200..299) return false
+            playlistText = variant.second?.takeIf { it.startsWith("#EXTM3U") } ?: return true
+            playlistUrl = variantUrl
+        }
+        if (!playlistText.contains("#EXTINF")) return true
+        val segmentUrl = firstEntry(playlistText, playlistUrl) ?: return true
+        val segment = probe.get(segmentUrl) ?: return true
+        return segment.first in 200..299
     }
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
