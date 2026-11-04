@@ -62,7 +62,7 @@ enum SubtitleSelectionLogic {
     /// The AUDIO LANGUAGE stored in Settings, as stored: a language code, or "__system__"
     /// for AUTO (also when nothing is stored). Not resolved to the device language: AUTO
     /// keeps the transcode track choice it always had (`preferredAudioIndex`).
-    static func currentAudioLanguage(defaults: UserDefaults = .standard) -> String {
+    static func currentAudioLanguage(defaults: UserDefaults = AppDefaults.standard) -> String {
         let stored = defaults.string(forKey: audioLanguageDefaultsKey) ?? ""
         return stored.isEmpty ? "__system__" : stored
     }

@@ -15,13 +15,16 @@ final class JellyfinAudioLanguageTests: XCTestCase {
     private static let key = "nostalgex_audio_language"
     private var saved: String?
 
+    // Through `AppDefaults.standard`, the same store AppState writes and
+    // `currentAudioLanguage()` reads, so on a device run under `HarnessIsolation` these
+    // never touch the TV's real AUDIO LANGUAGE setting. Elsewhere, setUp/tearDown restore it.
     override func setUp() {
         super.setUp()
-        saved = UserDefaults.standard.string(forKey: Self.key)
+        saved = AppDefaults.standard.string(forKey: Self.key)
     }
 
     override func tearDown() {
-        if let saved { UserDefaults.standard.set(saved, forKey: Self.key) } else { UserDefaults.standard.removeObject(forKey: Self.key) }
+        if let saved { AppDefaults.standard.set(saved, forKey: Self.key) } else { AppDefaults.standard.removeObject(forKey: Self.key) }
         super.tearDown()
     }
 
@@ -50,7 +53,7 @@ final class JellyfinAudioLanguageTests: XCTestCase {
 
     /// The `AudioStreamIndex` each service puts on the stream URL with `setting` stored.
     private func askedTrack(setting: String) async throws -> [String: String?] {
-        UserDefaults.standard.set(setting, forKey: Self.key)
+        AppDefaults.standard.set(setting, forKey: Self.key)
         let send: JellyfinPlaybackResolver.PlaybackInfoSend = { request in
             (Data(Self.answer.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
         }
