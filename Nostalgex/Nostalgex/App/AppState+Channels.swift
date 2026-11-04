@@ -869,6 +869,9 @@ extension AppState {
                                                    category: ch.category,
                                                    memberships: memberships, exclusiveRules: rules)
                 let name = ch.name
+                if LibraryLoadProbe.handler != nil {
+                    LibraryLoadProbe.mark("pool:\(ch.number):\(name):\(ch.itemPool.count)")
+                }
                 if ch.itemPool.count >= ch.minItems { out.append(ch) }
                 await MainActor.run { [weak self] in
                     self?.channelBuildIndex += 1
