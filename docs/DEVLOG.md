@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
+
+**Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
+
+**Changed.** `ScreenAwakePolicy` is the one answer RootView writes to tvOS's idle timer: playback, or a foreground
+load (first load, RESCAN) with a sign-in. A background refresh never holds it. Released on the guide, the error
+screen and sign-out. 10 tests. Before, only playback held the timer, so a first load longer than the TV's Sleep
+After setting could end in a sleeping TV: the basement TV is set to 15 minutes and last night's 11-minute cold
+load only just beat it.
+
+**Measured.** The cold Plex harness grew nine Plex-shape knobs and a two-section server, each run alone at
+15,000 movies with the enrichment cache warm, so the pool build is the stage under test: 37 s baseline, 41 s with
+non-ASCII titles, 54 s with 1,500 to 3,000 character summaries (the two Christmas channels read every one), 73 s
+with the library in two sections (30,000 items, since the dedupe only drops a same-server same-ratingKey copy).
+Nothing superlinear, every tick taken by the main actor at once, peak 250 to 383 MB. The build order is
+channels.json order, so "Channel 60 of 142" means CERTIFIED GOLD done and OSCAR WINNERS in flight, about 0.5 s
+here (its 100-entry title list against 15,000 titles). The Plex collections scan does not run for a new user,
+because no collection package is on; franchise discovery does, but after the pool build.
+
+**Not reproduced.** The stall at 60 of 142. After parsing, nothing Plex-shaped makes the pool build stall. If it
+is real on the reporter's Apple TV 4K (2021, A12), it is in something only that device shows: the main actor not
+taking a tick, memory, or thermal. An A12 turns a 37 s build into minutes, not an hour.
+
+**Next.** The reporter's answers (does the counter move, how many sections). The harness through the UI on a real
+Apple TV with the `longSummaries,twoSections` shape, reading tick hops and main-thread blocks. Roku never holds off the
+screensaver during a load; one stick check of a long load under it is owed.
+
 ## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
 
 **Shipped.** Nothing yet. On main since 2026-11-04, pushed together with the web tuner's copy of this fix
