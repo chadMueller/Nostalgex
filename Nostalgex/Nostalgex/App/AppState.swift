@@ -454,6 +454,8 @@ class AppState {
     // MARK: - TMDB Enrichment
 
     let enrichmentService = EnrichmentService()
+    /// The background refill after a snapshot restore found no enrichment rows (I-073).
+    var enrichmentRefillTask: Task<Void, Never>?
     let musicEnrichmentService = MusicEnrichmentService()
 
     // MARK: - Bundles & Exclusivity

@@ -828,6 +828,8 @@ extension AppState {
         // would put them straight back into the guide.
         collectionScanTask?.cancel()
         collectionScanTask = nil
+        enrichmentRefillTask?.cancel()
+        enrichmentRefillTask = nil
         bundleBuildTask?.cancel()
         bundleBuildTask = nil
         pendingBundleBuildIDs = []

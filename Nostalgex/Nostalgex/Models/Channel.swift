@@ -312,6 +312,18 @@ extension ChannelRules {
     /// every field: only the ones a non-technical viewer can read without knowing what
     /// Plex, TMDB or OMDb are. A channel with none of these set (title-list or
     /// manifest-only channels) falls back to one line so the explainer never shows nothing.
+    /// Whether this channel's pool can only be decided with TMDB/OMDb rows in the enrichment
+    /// cache. A build that runs while the cache is empty gets a smaller pool for such a
+    /// channel than the data warrants, which is not evidence the channel should go off the
+    /// air (I-073). Mirrors the fields `AppState.filterItems` reads off `MediaEnrichment`.
+    var dependsOnEnrichment: Bool {
+        if !(keywords ?? []).isEmpty || !(keywordsRequireAll ?? []).isEmpty || !(keywordsExclude ?? []).isEmpty { return true }
+        if !(keywordGatedGenres ?? []).isEmpty { return true }
+        if !(networks ?? []).isEmpty || !(productionCompanies ?? []).isEmpty { return true }
+        if imdbRatingMin != nil || imdbVotesMin != nil || rtScoreMin != nil || metacriticMin != nil || wonOscar { return true }
+        return matchTmdbGenres
+    }
+
     var plainLanguageRequirements: [String] {
         var lines: [String] = []
 

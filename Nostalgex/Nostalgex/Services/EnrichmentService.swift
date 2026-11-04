@@ -61,6 +61,27 @@ class EnrichmentService {
         return cache[tmdbID]
     }
 
+    /// Rows saved by the last pass, inside their 7-day TTL, merged under what is already in
+    /// memory. Called by a snapshot restore before any pool is rebuilt (I-073), so a package
+    /// build after a restore sees the same networks, keywords and scores the first load did.
+    /// Returns how many rows came off disk.
+    @discardableResult
+    func loadDiskCache() -> Int {
+        let rows = EnrichmentCacheStore.load()
+        guard !rows.isEmpty else { return 0 }
+        for (id, row) in rows where cache[id] == nil { cache[id] = row }
+        print("[Enrichment] Loaded \(rows.count) cached rows from disk (\(cache.count) in memory)")
+        return rows.count
+    }
+
+    /// Writes the in-memory cache to disk in the background. Called when a pass ends.
+    func saveDiskCache() {
+        guard !cache.isEmpty else { return }
+        EnrichmentCacheStore.saveInBackground(cache) { bytes in
+            print("[Enrichment] Saved \(bytes / 1024) KB enrichment cache to disk")
+        }
+    }
+
     /// Fixture seam: puts ready-made rows in the in-memory cache without Supabase or
     /// TMDB. Used by the `-uiTestFranchiseFixture` demo so the franchise fields can be
     /// exercised on a simulator before the shared table carries them. Nothing is written
@@ -353,6 +374,7 @@ class EnrichmentService {
         let totalCached = cache.count
         let totalWithOMDB = cache.values.filter { $0.imdbRating != nil }.count
         print("[Enrichment] Complete: \(totalCached) cached total, \(totalWithOMDB) with OMDb data, \(newEnrichments.count) new this session")
+        saveDiskCache()
         statusMessage = ""
         progress = 1
         isEnriching = false

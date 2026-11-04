@@ -977,6 +977,7 @@ extension AppState {
     /// that changed it meanwhile (a collection scan, a franchise switch) is kept.
     func mergeBuiltPackageChannels(_ filtered: [Channel]) {
         var builtStatic = allChannels.filter { $0.rules != nil }
+        let pending = enrichmentPending
         for template in filtered {
             if template.itemPool.count >= template.minItems {
                 if let idx = builtStatic.firstIndex(where: { $0.id == template.id }) {
@@ -984,6 +985,12 @@ extension AppState {
                 } else {
                     builtStatic.append(template)
                 }
+            } else if pending, template.rules?.dependsOnEnrichment == true,
+                      builtStatic.contains(where: { $0.id == template.id }) {
+                // No enrichment row was in memory for this build, and this channel's rule
+                // needs them, so the small pool says nothing about the channel. The last
+                // build, which had the rows, keeps its copy until the cache is back (I-073).
+                print("[Plex90] BUNDLE BUILD: CH \(template.number) \(template.name) kept from the last build (enrichment not loaded)")
             } else {
                 builtStatic.removeAll { $0.id == template.id }
             }
