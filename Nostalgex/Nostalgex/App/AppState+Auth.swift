@@ -21,7 +21,7 @@ extension AppState {
         // Restore the last-load timestamp from UserDefaults so the "loaded < 24h
         // ago" gate works even before any snapshot restore attempt.
         if lastLoadAtUnix == 0 {
-            let saved = UserDefaults.standard.integer(forKey: Self.lastLoadKey)
+            let saved = AppDefaults.standard.integer(forKey: Self.lastLoadKey)
             if saved > 0 { lastLoadAtUnix = saved }
         }
         guard !hasCredentials else { return }
@@ -30,13 +30,13 @@ extension AppState {
 
     func loadCredentials() {
         // Migrate from UserDefaults to Keychain (one-time)
-        if let legacyURL = UserDefaults.standard.string(forKey: "plex_server_url"), !legacyURL.isEmpty {
+        if let legacyURL = AppDefaults.standard.string(forKey: "plex_server_url"), !legacyURL.isEmpty {
             credentialStore.save(key: "plex_server_url", value: Self.normalizePlexServerURL(legacyURL))
-            UserDefaults.standard.removeObject(forKey: "plex_server_url")
+            AppDefaults.standard.removeObject(forKey: "plex_server_url")
         }
-        if let legacyToken = UserDefaults.standard.string(forKey: "plex_token"), !legacyToken.isEmpty {
+        if let legacyToken = AppDefaults.standard.string(forKey: "plex_token"), !legacyToken.isEmpty {
             credentialStore.save(key: "plex_token", value: legacyToken)
-            UserDefaults.standard.removeObject(forKey: "plex_token")
+            AppDefaults.standard.removeObject(forKey: "plex_token")
         }
 
         serverURL = Self.normalizePlexServerURL(credentialStore.load(key: "plex_server_url") ?? "")
@@ -50,10 +50,10 @@ extension AppState {
         // One-time migration: re-save credentials under AfterFirstUnlock (was ThisDeviceOnly,
         // which doesn't survive device restores or tvOS updates). Harmless if already migrated.
         let keychainMigrationKey = "plex90_keychain_v2_migrated"
-        if !token.isEmpty && !UserDefaults.standard.bool(forKey: keychainMigrationKey) {
+        if !token.isEmpty && !AppDefaults.standard.bool(forKey: keychainMigrationKey) {
             credentialStore.save(key: "plex_token", value: token)
             if !serverURL.isEmpty { credentialStore.save(key: "plex_server_url", value: serverURL) }
-            UserDefaults.standard.set(true, forKey: keychainMigrationKey)
+            AppDefaults.standard.set(true, forKey: keychainMigrationKey)
         }
 
         // Load the multi-server selection. Migrate a legacy single server into the list.
@@ -97,7 +97,7 @@ extension AppState {
                 // Sign-ins that predate the marker never got one at sign-in time, so a
                 // later loss on those devices was silent. Any successful launch load is
                 // proof this device held a sign-in.
-                UserDefaults.standard.set(true, forKey: Self.hasHeldSignInMarkerKey)
+                AppDefaults.standard.set(true, forKey: Self.hasHeldSignInMarkerKey)
                 return
             }
             let statuses = KeychainService.lastLoadStatuses()
@@ -108,7 +108,7 @@ extension AppState {
         }
         if !hasCredentials {
             signInLossDiagnostic = Self.signInLossDiagnosis(
-                markerPresent: UserDefaults.standard.bool(forKey: Self.hasHeldSignInMarkerKey),
+                markerPresent: AppDefaults.standard.bool(forKey: Self.hasHeldSignInMarkerKey),
                 statuses: KeychainService.lastLoadStatuses()
             )
             if let diagnostic = signInLossDiagnostic {
@@ -136,8 +136,8 @@ extension AppState {
         InstallDiagnostics.log.notice("save: persisted=\(allPersisted) \(InstallDiagnostics.summary(), privacy: .public)")
         signInLossDiagnostic = nil
         lastSignOutNotice = nil
-        UserDefaults.standard.removeObject(forKey: Self.lastSignOutNoticeKey)
-        UserDefaults.standard.set(true, forKey: Self.hasHeldSignInMarkerKey)
+        AppDefaults.standard.removeObject(forKey: Self.lastSignOutNoticeKey)
+        AppDefaults.standard.set(true, forKey: Self.hasHeldSignInMarkerKey)
         if !allPersisted {
             print("[Plex90] AUTH: credentials could not be persisted — sign-in will be lost on relaunch")
             Analytics.track(.credentialsPersistFailed)
@@ -410,7 +410,7 @@ extension AppState {
     func clearCredentials() {
         // A deliberate sign-out (or a proven-dead token) must not read as "the device lost
         // your sign-in" on the next launch.
-        UserDefaults.standard.removeObject(forKey: Self.hasHeldSignInMarkerKey)
+        AppDefaults.standard.removeObject(forKey: Self.hasHeldSignInMarkerKey)
         signInLossDiagnostic = nil
         credentialStore.delete(key: "plex_server_url")
         credentialStore.delete(key: "plex_token")

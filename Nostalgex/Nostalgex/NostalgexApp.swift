@@ -13,6 +13,11 @@ struct NostalgexApp: App {
     @State private var appState: AppState
 
     init() {
+        #if DEBUG
+        // Before anything reads a setting, a sign-in or a file: a harness run on a real
+        // Apple TV keeps the host app's own launch off the real stores too.
+        HarnessIsolation.activateFromEnvironmentIfRequested()
+        #endif
         Self.registerCustomFonts()
         Self.configureAnalytics()
         // When the viewer has turned sync on, pull synced preferences from iCloud before
@@ -34,7 +39,12 @@ struct NostalgexApp: App {
                 RootView()
                     .environment(appState)
             }
-            .task { TipJar.shared.startListening() }
+            .task {
+                #if DEBUG
+                if HarnessIsolation.isActive { return }
+                #endif
+                TipJar.shared.startListening()
+            }
         }
     }
 

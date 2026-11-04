@@ -96,7 +96,7 @@ struct OMDBBackoff {
     static let defaultsKey = "omdbBlockedUntil"
     let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = AppDefaults.standard) {
         self.defaults = defaults
     }
 

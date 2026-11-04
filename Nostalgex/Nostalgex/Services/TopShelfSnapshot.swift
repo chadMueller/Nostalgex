@@ -33,7 +33,10 @@ enum TopShelfStore {
     private static let filename = "topshelf.json"
 
     static var containerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+        #if DEBUG
+        if let isolated = HarnessIsolation.topShelfContainer { return isolated }
+        #endif
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
     }
 
     /// tvOS refuses writes at the App Group container root (EPERM); Library/Caches inside

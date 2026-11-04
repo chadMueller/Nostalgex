@@ -24,7 +24,10 @@ import XCTest
 /// `bestReachableURI` itself is private and does real networking, so this reproduces
 /// the same TaskGroup shape with synthetic timed outcomes instead of HTTP calls, to
 /// prove the logic behaves correctly in bounded time rather than trusting it by
-/// reading. This is the control-flow pattern copied directly from the real function.
+/// reading. This is the control-flow pattern as it was copied from the real function
+/// on 2026-10-30. Since 2026-11-03 the real function sizes the grace by what is still
+/// pending ahead of the hit, worked out again on every report; that is tested on the
+/// real function itself in PlexDiscoveryDeadLocalHarnessTests.
 final class ConnectionDiscoveryEarlyExitTests: XCTestCase {
 
     private struct Candidate {

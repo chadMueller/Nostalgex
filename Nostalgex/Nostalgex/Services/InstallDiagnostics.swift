@@ -36,7 +36,7 @@ enum InstallDiagnostics {
 
     /// Call once per process launch, before credentials are read.
     static func recordLaunch() {
-        let defaults = UserDefaults.standard
+        let defaults = AppDefaults.standard
         if defaults.object(forKey: firstRunKey) == nil {
             defaults.set(Date().timeIntervalSince1970, forKey: firstRunKey)
         }
@@ -50,7 +50,7 @@ enum InstallDiagnostics {
 
     /// One line for the connect screen and the system log.
     static func summary() -> String {
-        let defaults = UserDefaults.standard
+        let defaults = AppDefaults.standard
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         let firstRun = defaults.object(forKey: firstRunKey) as? Double
         let fileStamp = stampURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) }.flatMap(Double.init)

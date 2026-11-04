@@ -81,6 +81,7 @@
     "test:tuner-isolation:builds": "node scripts/tuner-isolation-check.mjs --builds",
     "test:jellyfin-subtitles": "node scripts/nostalgex-jellyfin-subtitles-smoke.mjs",
     "test:jellyfin-audio:browser": "node scripts/jellyfin-audio-streams-browser-smoke.mjs",
+    "test:jellyfin-music-video:browser": "node scripts/jellyfin-music-video-browser-smoke.mjs",
     "test:language-match": "node scripts/nostalgex-language-match-smoke.mjs",
     "media:measure": "node scripts/measure-media.mjs",
     "test:reporting-controls": "node scripts/playback-reporting-controls-smoke.mjs"

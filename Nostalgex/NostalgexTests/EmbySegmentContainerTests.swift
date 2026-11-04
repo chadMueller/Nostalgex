@@ -192,7 +192,11 @@ final class EmbySegmentContainerTests: XCTestCase {
         var bodies: [[String: Any]] { lock.withLock { recorded } }
 
         func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
-            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
+            // A GET is the check of the burned stream's playlists; an empty playlist passes.
+            guard let httpBody = request.httpBody else {
+                return (Data("#EXTM3U\n".utf8), try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)))
+            }
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: httpBody) as? [String: Any])
             lock.withLock { recorded.append(body) }
             let session = (body["SubtitleStreamIndex"] as? Int) == JellyfinPlaybackResolver.noSubtitleStream ? "plain" : "burned"
             let json = """

@@ -199,10 +199,21 @@ final class PreferenceSync {
     }
 
     static let shared: PreferenceSync = {
-        let underTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        var underTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        #if DEBUG
+        if HarnessIsolation.isActive { underTests = true }
+        #endif
         let store: UbiquitousKeyValueStoring = underTests ? InMemoryKeyValueStore() : NSUbiquitousKeyValueStore.default
-        return PreferenceSync(cloud: store, defaults: .standard, observeNotifications: !underTests)
+        return PreferenceSync(cloud: store, defaults: AppDefaults.standard, observeNotifications: !underTests)
     }()
+
+    #if DEBUG
+    /// For an AppState made while `HarnessIsolation` is active: in-memory iCloud, the
+    /// harness's defaults, and no hold on `shared`, whose applier stays the app's own.
+    static func isolated() -> PreferenceSync {
+        PreferenceSync(cloud: InMemoryKeyValueStore(), defaults: AppDefaults.standard, observeNotifications: false)
+    }
+    #endif
 
     let cloud: UbiquitousKeyValueStoring
     let defaults: UserDefaults
