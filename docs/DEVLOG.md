@@ -5,9 +5,9 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
 
-**Half-done.** On branch `roku/music-video-item-type` (off main `6a2d6df`), not pushed, no pull request. Tested
-off-device and on a Roku stick. It belongs in the same push as the web tuner's copy of this fix
-(`web/1030-fixes`, also not pushed); see Next.
+**Shipped.** Nothing yet. On main since 2026-11-04, pushed together with the web tuner's copy of this fix
+(`web/1030-fixes`) so the `roku` job never went red. Tested off-device and on a Roku stick. Reaches users in the
+next Roku build.
 
 **Why.** Jellyfin and Emby file the videos in a Music Videos library as `MusicVideo`. The Roku scan, like the web
 tuner's and the Apple TV's, asked every library that is not TV for `IncludeItemTypes=Movie`, so such a library
@@ -30,13 +30,11 @@ returns 0 items, `MusicVideo` returns 4.
   HIGH ROTATION through the real filter, that a MusicVideo in a Movies library stays out, the bug as reported
   (a library of MusicVideo items only fills HIGH ROTATION), and 201 clips across two pages.
 
-**The vector comparison.** The web tuner's scan makes the vectors the Roku suite is held to, and on main it still
-asks a music video library for `Movie` alone. So until the web fix is on main the vectors hold no MusicVideo
-clips and ask that library for `Movie`. The suite notices that: it reads the port's `Movie,MusicVideo` request as
-`Movie` and leaves the four clips out of the item-by-item comparison, and says so in its output. Every other
-request and item is held to the vectors as before, and the clips are held to `NxRunMusicVideoTypeTests`. Once the
-vectors do hold the clips, the same loop holds the port to the web's items for them, field by field, with no
-exception. The 22 vector files are byte-identical to main's.
+**The vector comparison.** The web tuner's scan makes the vectors the Roku suite is held to. While this branch
+waited for the web fix, the suite read the port's `Movie,MusicVideo` request as `Movie` and left the four clips
+out of the item-by-item comparison. With both fixes on main the vectors hold the clips, so that allowance came out
+in the same push: the loop holds the port to the web's items for them field by field, and the check "vectors hold
+the MusicVideo clips" fails if a later web change stops asking for them.
 
 **Not changed, on purpose.**
 - HIGH ROTATION's genre channels (#105) stay parked. Only the item type changed.
@@ -57,17 +55,18 @@ exception. The 22 vector files are byte-identical to main's.
   video 110. The four clips match the web scan's field by field.
 - Main plus the web tuner's fix without this change: 616 mediabrowser cases fail. That is the `roku` job going
   red if the web fix merges alone.
+- The pushed main (web fix, this change, the allowance removed): mediabrowser 5,988 passed, 0 failed, music video
+  item type 110 passed.
 
 **Not verified.** Against a live Jellyfin or Emby server: the tests run saved answers, and the 0 and 4 above are
-the contributor's. Android's scan test (PR #151) reads the same vectors; once the web fix is on main they hold the
-four clips, so its scan has to ask a music video library for `MusicVideo` too. Not checked against its code.
+the contributor's. Android's scan test (PR #151) reads the same vectors, which now hold the four clips, so its scan
+has to ask a music video library for `MusicVideo` too or it goes red on rebase. Not checked against its code.
 
-**Next.** Land this with the web tuner's fix in one push, so the `roku` job is never red on main. The branch is
-green alone and green with the web fix. When the web fix is on main, delete the "vectors hold no MusicVideo
-clips" branch in `MediaBrowserTests.brs`.
+**Next.** Ship it in the next Roku build. Check a real Jellyfin or Emby Music Videos library.
+
 ## 2026-11-03 (web: Jellyfin and Emby music video libraries)
 
-**Shipped.** Nothing. One commit on `web/1030-fixes`, cut from main `6a2d6df7`, not pushed, not tagged.
+**Shipped.** The hosted web tuner, with the push to main on 2026-11-04. Docker waits for the next `tuner-v` tag.
 
 **Changed.**
 - **Music video libraries (I-067, issue #172, found by owenvoke on PR #151).** `fetchJellyfinLibraryFromServer` asked every non-TV library for `IncludeItemTypes=Movie`. Jellyfin files a music video library's items as `MusicVideo` (measured on Jellyfin 12.4.0 with four files: `Movie` returns 0, `MusicVideo` returns 4), so the library loaded nothing and HIGH ROTATION stayed empty. A library whose type is `musicvideos` is now asked for `Movie,MusicVideo`; every other library still asks for `Movie`. Jellyfin and Emby share this function, so the web tuner and Docker change together.
@@ -78,13 +77,13 @@ clips" branch in `MediaBrowserTests.brs`.
 
 **Not changed.** Australian ratings (Discussion #41). The AU table already came in with the UK pass (I-040), both spellings included. `M` and `R18+` stay with R on purpose, so kids and family channels keep M films off them.
 
-**Half-done.** Roku asks music video libraries for `Movie` only too (`MediaBrowserLibrary.brs`); its port is not started. Apple TV's fix is on its own branch.
+**Same push.** The Roku port (`roku/music-video-item-type`) and the Apple TV's fix (`appletv/1030-fixes`) landed with it.
 
-**Next.** Roku port. A check of a real Emby music video library. HIGH ROTATION genres (#105, N-016) stay parked.
+**Next.** A check of a real Emby music video library. HIGH ROTATION genres (#105, N-016) stay parked.
+
 ## 2026-11-03 (Apple TV: three fixes and a check for the next build)
 
-**Shipped.** Nothing. Branch `appletv/1030-fixes`, cut from `origin/main` at `6a2d6df`, not pushed. Four
-commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 0 failed, 18 skipped.
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build. Four commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 0 failed, 18 skipped.
 
 **Changed.**
 - **AUDIO LANGUAGE on Jellyfin and Emby transcodes (I-070, #177).** When the server transcoded, the app chose
@@ -131,13 +130,13 @@ commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 
 **Not verified.** The 7.3 s run is not reproduced, because the TV's candidate list was not captured. AUDIO
 LANGUAGE and Music Videos are not checked against a real Jellyfin or Emby server (the lab servers were down).
 
-**Next.** A real Jellyfin Music Videos library. Roku also asks Music Videos libraries for `Movie` only
-(`roku/source/mediabrowser/MediaBrowserLibrary.brs`) and needs the same change; the web tuner's is on
-`web/1030-fixes`.
+**Next.** A real Jellyfin Music Videos library. The Roku and web tuner copies of the Music Videos fix landed in
+the same push.
+
 ## 2026-11-03 (Apple TV: harness isolation, and a cold first load of a 15,000-movie Plex library)
 
-**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed: `915d20a` (isolation), `5b2a0ae`
-(cold Plex harness).
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build: `915d20a` (isolation),
+`5b2a0ae` (cold Plex harness).
 
 **Why.** A 1.0.29 report: a Plex library of about 15,000 movies stops at "Channel 60 of 142" on the loading
 screen and the app closes about an hour later (N-033). The earlier scale harness handed the app a ready library
@@ -176,7 +175,7 @@ a real Plex server's own speed, and artwork, which a load never fetches.
 
 ## 2026-11-03 (Apple TV: a 15,000-movie Emby library no longer reads as a dead server)
 
-**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed.
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build.
 
 **Why.** A #support report on 1.0.29: an Emby library of about 15,000 movies, every one with genres and a TMDB match, never finished loading, and the same library on Plex stopped at "Channel 60 of 142" with the app closing about an hour in.
 
@@ -194,6 +193,7 @@ a real Plex server's own speed, and artwork, which a load never fetches.
 **Not explained.** The Plex half of the report. The Plex scan already reports every page, and the engine builds 142 channels from 15,000 movies in under a minute on the simulator, so "Channel 60 of 142" for an hour is not reproduced. Not measured: the same harness on a real Apple TV 4K (A12) and the enrichment phase on a first load (enrichment is off in these runs; the site's TMDB proxy answered 27 requests a second from a Mac, so 15,000 titles missing from the shared cache would be about 9 minutes). The hour matches the Apple TV's default one-hour sleep, which ends a long load; unverified.
 
 **Next.** Run `MovieLibraryScaleHarness` on the living room Apple TV 4K (needs Chad's OK). Ask the reporter for a photo of the stuck Plex screen and his Apple TV's Sleep After setting. Web tuner and Docker: n/a, no scan watchdog there. Roku: n/a, its stall watch counts every 2xx answer as progress.
+
 ## 2026-11-03 (Apple TV release script: automatic signing with the API key)
 
 **Changed.** `scripts/release-tvos.sh` archives and exports with automatic signing plus
@@ -207,9 +207,10 @@ export never changes the version or build number. Validation and upload still go
 **Not verified.** No archive or export was run for this change (no throwaway archive either, since
 `-allowProvisioningUpdates` can touch the profiles in the developer account). The first real check is
 the 1.0.30 export.
+
 ## 2026-11-03 (N-013: forced subtitles when the server cannot burn them in)
 
-**Changed.** Test code only, on branch `test/n013-emby-forced-sub-burnin`, not pushed. `ForcedSubtitleBurnHarness.swift`
+**Changed.** Test code only, on main since 2026-11-04 (from `test/n013-emby-forced-sub-burnin`). `ForcedSubtitleBurnHarness.swift`
 drives `AppState.loadCurrentItem` and `selectChannel` against a lab Emby or Jellyfin. `scripts/lab-forced-subtitle/`
 holds what it needs: ffmpeg-made films with a forced English track, a script that starts the lab server in colima, a
 logging proxy that can answer HTTP 500 on the burn-in stream only, and an HTTP probe. No product code changed.
@@ -244,8 +245,8 @@ cherry-picked onto this main in a throwaway worktree and run through the same ha
 - Healthy servers: films with no burn are unchanged (0.3 s). Burn films start about 0.1 to 0.4 s later. A 4K burn on
   Jellyfin in a 2-CPU VM starts in 3.5 s against 1.4 s, because the probe waits for the first burned segment.
 
-**Next.** Rebase `fix/forced-burn-probe` onto main for the next Apple TV bundle. It is 354 commits behind and its dev log
-entry conflicts, the code applied cleanly.
+**Done 2026-11-04.** `fix/forced-burn-probe` is on main for the next Apple TV build, applied on top of AUDIO LANGUAGE
+(I-070), which changed the same function: the burned stream keeps the chosen audio language too.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
@@ -3447,9 +3448,10 @@ unchanged.
 **Half-done.** A library where no package has content still ends on the blank screen. The Apple TV and Roku show NO CHANNELS FOUND with an OPEN SETTINGS button there; the web does not yet. Nothing changes what is sent anywhere.
 
 **Next.** Decide whether the web gets that NO CHANNELS FOUND screen.
+
 ## 2026-10-27 (Apple TV: a burned-in forced subtitle the server can't produce no longer costs 20 seconds)
 
-**Shipped.** Nothing. Branch `fix/forced-burn-probe`, held for the next Apple TV bug-fix bundle.
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build.
 
 **Why.** Board item q106. The Roku work found that Chad's Emby 4.10.1 answers every segment of a stream that burns a subtitle into the picture with HTTP 500, and that the Apple TV's own request failed the same way on a film with a forced track. The Apple TV burns a forced track in the viewer's language (2026-10-19). It chooses the burned stream on the strength of PlaybackInfo alone, the playlists come back fine, and the 500s only show on the first segment.
 
