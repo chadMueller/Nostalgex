@@ -211,6 +211,17 @@ taking a tick, memory, or thermal. An A12 turns a 37 s build into minutes, not a
 Apple TV with the `longSummaries,twoSections` shape, reading tick hops and main-thread blocks. Roku never holds off the
 screensaver during a load; one stick check of a long load under it is owed.
 
+## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)
+
+**Why.** On #181's merge, the maintainer asked for the two sessions that started ffmpeg twice in
+the entry, which read as if TS never restarts. Emby's own logs still have them, both on 2026-11-01,
+on *Lab Forced Opus*, a 60.03 s clip cut into 2 s segments. In each the TV read segments 0 to 29
+within about 1.5 s, and by then the first ffmpeg, a remux, had finished the file. The TV then
+asked for segment 30, the file's last 0.03 s, and Emby started a second ffmpeg for it ("Starting
+transcoding because currentTranscodingIndex=null", `-ss 00:01:00`). Not a restart mid-file.
+
+**Changed.** `roku/docs/JELLYFIN-EMBY.md` says so beside the nine single-start joins. No code change.
+
 ## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
 
 **Shipped.** Nothing yet. On main since 2026-11-04, pushed together with the web tuner's copy of this fix
