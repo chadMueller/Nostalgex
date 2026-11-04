@@ -362,6 +362,10 @@ extension AppState {
                 // They stay in the library; ChannelEligibility keeps them out of every pool.
                 print("[Plex90] CHANNELS: \(ChannelEligibility.leftOffCount(merged, backend: backendKind)) Emby Dolby Vision profile 5 item(s) left off channels")
             }
+            // Last use. `allItems` holds the list from here on; this local would keep the
+            // list `applyMusicCacheToLibrary` replaces alive until the load returns (a whole
+            // extra copy of every item through the channel build: 99 MB at 175,000 items).
+            merged = []
             LibraryLoadProbe.mark("merge+dedupe")
 
             if hasAnyCollectionBundle {
