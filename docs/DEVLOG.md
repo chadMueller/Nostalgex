@@ -3,6 +3,46 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Apple TV: harness isolation, and a cold first load of a 15,000-movie Plex library)
+
+**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed: `915d20a` (isolation), `5b2a0ae`
+(cold Plex harness).
+
+**Why.** A 1.0.29 report: a Plex library of about 15,000 movies stops at "Channel 60 of 142" on the loading
+screen and the app closes about an hour later (N-033). The earlier scale harness handed the app a ready library
+and a filled enrichment cache, which skips most of what a new user's first load does on the network, and the
+next measurement has to run on a real Apple TV. The harnesses could not run there: they cleared the app's real
+library snapshot, schedules and settings.
+
+**Changed.**
+- `HarnessIsolation` (DEBUG only): while active, the app's files, settings (every `UserDefaults.standard` now
+  goes through `AppDefaults.standard`, plain `.standard` in a release build), credentials (in memory, never the
+  Keychain), iCloud sync (an in-memory store, and a harness's AppState never takes over the shared one) and HTTP
+  cache stay under `Library/Caches/NostalgexHarness/<name>`. `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` turns it on
+  first thing at launch, so on a device the test host's own launch stays off the real stores too. A Release
+  build carries none of it (checked with `nm` and `strings`).
+- `RealStoreFingerprint` hashes the real stores from their real paths; a harness run compares before and after.
+- `ColdPlexScaleHarness`: the real first load against a fake Plex, a fake Supabase cache, a fake TMDB proxy that
+  rate-limits, and OMDb, with times per stage and per channel, the main actor's delay on each "Channel N of M"
+  tick (a new probe mark, only when a harness listens), memory, threads and requests per endpoint, then an
+  optional soak with the guide up. A 300-movie version runs in the normal suite as the isolation proof.
+
+**Measured (simulator).** 15,000 movies, nothing cached: first load 664.5 s. Plex 42.4 s for 30 pages;
+enrichment 586.1 s (15,000 TMDB requests at about 27 a second, then 75 upserts taking about 28 s); pool build
+34.9 s for 142 channels, slowest 1.8 s, pools 59 to 61 at 158, 158 and 439 ms; the main actor took every tick
+at once; peak 248 MB, 17 threads. Through the UI with a 2-minute soak (2,000 movies): memory flat at 83 MB,
+12 threads, no requests after the first 30 s. Real stores: no difference in any app-owned store in either run.
+Outside them, CFNetwork's `Library/HTTPStorages` database (its rows unchanged) and AVFoundation's
+`tmp/MediaCache` index changed; neither holds the app's data.
+
+**Not reproduced.** The stall at "Channel 60 of 142" and the close after an hour did not happen in the
+simulator, cold or warm. While a cold load enriches, the screen says "Fetching metadata", not "Channel N";
+the channel count only shows during the pool build, which took 35 s here.
+
+**Next.** The same run on the basement Apple TV 4K (3rd generation), through the UI with a 60-minute soak
+(tester). Not covered: Plex collections (no collection package is on in a new lineup, so the scan never ran),
+a real Plex server's own speed, and artwork, which a load never fetches.
+
 ## 2026-11-03 (Apple TV: a 15,000-movie Emby library no longer reads as a dead server)
 
 **Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed.
