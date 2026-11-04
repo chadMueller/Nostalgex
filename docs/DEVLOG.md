@@ -3,6 +3,69 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
+
+**Half-done.** On branch `roku/music-video-item-type` (off main `6a2d6df`), not pushed, no pull request. Tested
+off-device and on a Roku stick. It belongs in the same push as the web tuner's copy of this fix
+(`web/1030-fixes`, also not pushed); see Next.
+
+**Why.** Jellyfin and Emby file the videos in a Music Videos library as `MusicVideo`. The Roku scan, like the web
+tuner's and the Apple TV's, asked every library that is not TV for `IncludeItemTypes=Movie`, so such a library
+came back empty and HIGH ROTATION never filled. A contributor measured it on Jellyfin 12.4.0 (PR #151): `Movie`
+returns 0 items, `MusicVideo` returns 4.
+
+**Changed.**
+- `roku/source/mediabrowser/MediaBrowserLibrary.brs`: new `NxMbItemTypesFor`. A library whose type is
+  `musicvideos` is asked for `Movie,MusicVideo` (a clip someone filed as a film still loads). Movies, mixed
+  (no type), home videos and every other type are asked for `Movie`, as before. TV is unchanged (`Series`, then
+  `Episode`). The second page of a library asks for the same types as the first. The library's type still stamps
+  its items `librarySource: "musicVideo"`, which is what HIGH ROTATION's channel rule reads.
+- `roku/tests/fixtures/mediabrowser-server.json`: four MusicVideo clips in the Music Videos library (one with no
+  genres, one with a year and a play count, one with two genres), and one MusicVideo filed in the Movies library,
+  which must stay off the film channels.
+- `roku/tests/gen-mediabrowser.mjs` and the test's fixture server read `IncludeItemTypes` as a comma list, as
+  the servers do. Before, a request for `Movie,MusicVideo` matched nothing.
+- `roku/tests/MediaBrowserTests.brs`: new `NxRunMusicVideoTypeTests`, 110 cases, run for both Jellyfin and
+  Emby. It checks what each library is asked for, that every clip loads stamped as a music video and passes
+  HIGH ROTATION through the real filter, that a MusicVideo in a Movies library stays out, the bug as reported
+  (a library of MusicVideo items only fills HIGH ROTATION), and 201 clips across two pages.
+
+**The vector comparison.** The web tuner's scan makes the vectors the Roku suite is held to, and on main it still
+asks a music video library for `Movie` alone. So until the web fix is on main the vectors hold no MusicVideo
+clips and ask that library for `Movie`. The suite notices that: it reads the port's `Movie,MusicVideo` request as
+`Movie` and leaves the four clips out of the item-by-item comparison, and says so in its output. Every other
+request and item is held to the vectors as before, and the clips are held to `NxRunMusicVideoTypeTests`. Once the
+vectors do hold the clips, the same loop holds the port to the web's items for them, field by field, with no
+exception. The 22 vector files are byte-identical to main's.
+
+**Not changed, on purpose.**
+- HIGH ROTATION's genre channels (#105) stay parked. Only the item type changed.
+- The title cleanup. `parseTitle` in `scripts/nostalgex-music-brainz.js` leaves `Song ( Music )` for
+  `Song (Official Music Video)` and `Song ( )` for `Song (Official Video)`, and the port matches it. It needs an
+  engine change (JS, Swift and the port together), so it is not folded in here. The new clips avoid the suffix so
+  the tests don't pin it.
+- Plex. The bug is the Jellyfin and Emby item type, which the Plex scan does not use.
+
+**Verified.**
+- `bash roku/tests/run.sh`: ALL TESTS PASSED, 54 parts. mediabrowser 5,883 passed, music video item type 110
+  passed, stall 22 passed.
+- The same suite on the stick (`scripts/deploy.sh --test`): ALL TESTS PASSED, the same three counts.
+- The bug put back (the scan asking `Movie` again, everything else kept): 24 cases fail and 48 pass (the checks
+  that need a loaded clip do not run), among them "a library of MusicVideo items only loads all of them" (0 of 4)
+  and "HIGH ROTATION fills from it" (0 of 4). The 5,883 vector comparisons still pass.
+- Main plus the web tuner's fix plus this change, in a scratch copy: mediabrowser 5,987 passed, 0 failed, music
+  video 110. The four clips match the web scan's field by field.
+- Main plus the web tuner's fix without this change: 616 mediabrowser cases fail. That is the `roku` job going
+  red if the web fix merges alone.
+
+**Not verified.** Against a live Jellyfin or Emby server: the tests run saved answers, and the 0 and 4 above are
+the contributor's. Android's scan test (PR #151) reads the same vectors; once the web fix is on main they hold the
+four clips, so its scan has to ask a music video library for `MusicVideo` too. Not checked against its code.
+
+**Next.** Land this with the web tuner's fix in one push, so the `roku` job is never red on main. The branch is
+green alone and green with the web fix. When the web fix is on main, delete the "vectors hold no MusicVideo
+clips" branch in `MediaBrowserTests.brs`.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
