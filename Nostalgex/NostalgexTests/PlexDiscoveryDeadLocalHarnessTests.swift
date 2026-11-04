@@ -45,12 +45,11 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
     /// One discovery: 8 dead local candidates, then `before` (remote candidates plex.tv lists
     /// ahead of the live one), then the live remote. Returns the URI chosen and the seconds
     /// until `bestReachableURI` returned.
-    private func discover(remoteURI: String, before: [PlexAPIService.ConnectionCandidate] = [],
-                          label: String) async -> (uri: String?, seconds: Double, timeline: String) {
+    private func discover(remoteURI: String, before: [PlexAPIService.ConnectionCandidate] = []) async -> (uri: String?, seconds: Double, timeline: String) {
         let timeline = Timeline()
         let candidates = Self.deadLocals + before + [.init(uri: remoteURI, local: false, relay: false)]
         let start = Date()
-        let uri = await PlexAPIService.bestReachableURI(serverName: label, connections: candidates) { c, patient in
+        let uri = await PlexAPIService.bestReachableURI(connections: candidates) { c, patient in
             timeline.note("start \(c.uri) patient=\(patient)")
             let ok = await PlexAPIService.testReachable(uri: c.uri, token: "t", patient: patient)
             timeline.note("end   \(c.uri) ok=\(ok) cancelled=\(Task.isCancelled)")
@@ -68,7 +67,7 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
         defer { server.stop() }
         var seconds: [Double] = []
         for run in 1...4 {
-            let r = await discover(remoteURI: server.url, label: "run \(run)")
+            let r = await discover(remoteURI: server.url)
             print("[DISCOVERY-HARNESS] run \(run): \(String(format: "%.2f", r.seconds))s -> \(r.uri ?? "nil")\n\(r.timeline)")
             XCTAssertEqual(r.uri, server.url, "run \(run)")
             seconds.append(r.seconds)
@@ -91,7 +90,7 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
         let dead = PlexAPIService.ConnectionCandidate(uri: "https://127.0.0.1:\(closedPort)", local: false, relay: false)
         var seconds: [Double] = []
         for run in 1...2 {
-            let r = await discover(remoteURI: server.url, before: [dead], label: "refused \(run)")
+            let r = await discover(remoteURI: server.url, before: [dead])
             print("[DISCOVERY-HARNESS] refused-remote run \(run): \(String(format: "%.2f", r.seconds))s -> \(r.uri ?? "nil")\n\(r.timeline)")
             XCTAssertEqual(r.uri, server.url, "run \(run)")
             seconds.append(r.seconds)
@@ -110,7 +109,7 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
         let live = PlexAPIService.ConnectionCandidate(uri: "http://192.0.2.200:32400", local: false, relay: false)
         let dead = PlexAPIService.ConnectionCandidate(uri: "https://192.0.2.201:32400", local: false, relay: false)
         let start = Date()
-        let uri = await PlexAPIService.bestReachableURI(serverName: "timed", connections: Self.deadLocals + [dead, live]) { c, _ in
+        let uri = await PlexAPIService.bestReachableURI(connections: Self.deadLocals + [dead, live]) { c, _ in
             let (ms, ok): (UInt64, Bool) = c == live ? (300, true) : c == dead ? (1_000, false) : (12_000, false)
             try? await Task.sleep(nanoseconds: ms * 1_000_000)
             return ok && !Task.isCancelled
@@ -128,7 +127,7 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
         let live = PlexAPIService.ConnectionCandidate(uri: "http://192.0.2.200:32400", local: false, relay: false)
         let slow = PlexAPIService.ConnectionCandidate(uri: "https://192.0.2.201:32400", local: false, relay: false)
         let start = Date()
-        let uri = await PlexAPIService.bestReachableURI(serverName: "timed", connections: [slow, live]) { c, _ in
+        let uri = await PlexAPIService.bestReachableURI(connections: [slow, live]) { c, _ in
             let (ms, ok): (UInt64, Bool) = c == live ? (300, true) : (6_000, true)
             try? await Task.sleep(nanoseconds: ms * 1_000_000)
             return ok && !Task.isCancelled

@@ -1283,7 +1283,6 @@ struct PlexAPIService: MediaBackend {
     /// total time is bounded by the slowest single probe, not the sum of all of them.
     private static func bestReachableURI(for server: PlexResource, token: String) async -> String? {
         await bestReachableURI(
-            serverName: server.name,
             connections: server.connections.map { ConnectionCandidate(uri: $0.uri, local: $0.local, relay: $0.relay) },
             reach: { candidate, patient in await testReachable(uri: candidate.uri, token: token, patient: patient) }
         )
@@ -1300,7 +1299,6 @@ struct PlexAPIService: MediaBackend {
     /// their own, or that one against synthetic addresses) and returns the best one that
     /// answered. `reach` gets the candidate and whether it is `patient` (remote or relay).
     static func bestReachableURI(
-        serverName: String?,
         connections: [ConnectionCandidate],
         reach: @escaping @Sendable (ConnectionCandidate, Bool) async -> Bool
     ) async -> String? {
