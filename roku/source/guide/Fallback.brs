@@ -219,6 +219,31 @@ function NxProbeVerdict(code as Integer) as String
     return "answered"
 end function
 
+' What the server's answer to a probe leads to. p is GuideView's probeFor:
+' finished (asked because the stream ended unplayed), nxt (the rung to try
+' next, or invalid) and failedWhileAsking (the start failed while the server
+' was asked: failAttempt can't act then, a probe being under way). Returns:
+'   "handover": an end, and the server answered: a join past the end of a
+'     file shorter than its slot, so the next airing.
+'   "fail": an end and an answer, but the start failed while it was asked.
+'     That end was the player's, not the file's: Jellyfin and Emby's server
+'     stream ended unplayed, ended again (an error, NxFinishedAction), and
+'     taking the 200 as a short file's end handed over to the next airing,
+'     a fresh start, so a stream the server answers for but the player
+'     can't play went between two airings about once a second and never
+'     reached the card (#184). The ladder goes on from the failed start.
+'   "giveup": refused or unreachable, or nothing left to try: the card.
+'   "stepdown": the next rung, p.nxt.
+function NxProbeAnswerAction(p as Object, verdict as String) as String
+    if verdict <> "answered" then return "giveup"
+    if p.finished = true then
+        if p.failedWhileAsking = true then return "fail"
+        return "handover"
+    end if
+    if p.nxt = invalid then return "giveup"
+    return "stepdown"
+end function
+
 ' Whether a URL is an HLS playlist, by its path.
 function NxIsPlaylistUrl(url as String) as Boolean
     path = url

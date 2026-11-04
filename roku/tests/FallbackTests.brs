@@ -100,6 +100,17 @@ function NxRunFallbackTests() as Integer
     NxCheck(r, "probe couldn't connect", NxProbeVerdict(-7), "unreachable")
     NxCheck(r, "probe timed out", NxProbeVerdict(-28), "unreachable")
     NxCheck(r, "probe not run", NxProbeVerdict(1), "answered")
+    ' What the answer leads to (NxProbeAnswerAction, #184's Jellyfin and Emby way).
+    capped = { rung: "capped", retry: false, fellBack: true }
+    NxCheck(r, "an end, answered: a short file's end", NxProbeAnswerAction({ finished: true, nxt: invalid }, "answered"), "handover")
+    NxCheck(r, "an end, answered, failed meanwhile: the start failed", NxProbeAnswerAction({ finished: true, nxt: invalid, failedWhileAsking: true }, "answered"), "fail")
+    NxCheck(r, "an end, refused: the card", NxProbeAnswerAction({ finished: true, nxt: invalid }, "refused"), "giveup")
+    NxCheck(r, "an end, refused, failed meanwhile: the card", NxProbeAnswerAction({ finished: true, nxt: invalid, failedWhileAsking: true }, "refused"), "giveup")
+    NxCheck(r, "an end, unreachable: the card", NxProbeAnswerAction({ finished: true, nxt: invalid }, "unreachable"), "giveup")
+    NxCheck(r, "an error, answered, a rung left: step down", NxProbeAnswerAction({ finished: false, nxt: capped }, "answered"), "stepdown")
+    NxCheck(r, "an error, answered, failed meanwhile: still step down", NxProbeAnswerAction({ finished: false, nxt: capped, failedWhileAsking: true }, "answered"), "stepdown")
+    NxCheck(r, "an error, answered, nothing left: the card", NxProbeAnswerAction({ finished: false, nxt: invalid }, "answered"), "giveup")
+    NxCheck(r, "an error, refused, a rung left: the card", NxProbeAnswerAction({ finished: false, nxt: capped }, "refused"), "giveup")
     NxCheck(r, "stopped server: can't reach", NxPlaybackFailure({ server: "Emby", event: "nopicture", rung: "direct", probe: -7 }).kind, "serverUnreachable")
     NxCheck(r, "stopped server beats the 1080p verdict", NxPlaybackFailure({ server: "Emby", event: "nopicture", rung: "capped", probe: -28 }).kind, "serverUnreachable")
     NxCheck(r, "probe 404: file missing", NxPlaybackFailure({ server: "Emby", event: "error", rung: "server", errorCode: -3, probe: 404 }).kind, "fileMissing")
