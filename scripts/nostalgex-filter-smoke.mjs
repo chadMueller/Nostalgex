@@ -254,6 +254,31 @@ check("manifest claim: exclude is case-insensitive",
   check("shipped manifest: Iron Man still on MARVEL", passes(item({ tmdbID: 1726, title: "Iron Man", genres: ["Action", "Science Fiction"], studio: "Paramount" }), marvel, { manifest: realManifest }), true);
 }
 
+// The floor on minItems (Chad, 2026-11-04: "the minItems should never be 1"). A
+// channel built from one title airs that title all day: TRUE CRIME looped one
+// documentary six times in a row on the Android build. TRUE CRIME and PREMIERES
+// sat at 1 from 1.0.21 until channels.json v50. Read the shipped file so a new
+// channel, or an edit, can't put one back. A channel with no minItems takes the
+// engines' default of 50, which clears the floor. 0 is caught too: Swift reads it
+// as 0, the web tuner's `|| 50` reads it as 50, and a channel should not be built
+// two ways.
+{
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const root = path.join(path.dirname(require("node:url").fileURLToPath(import.meta.url)), "..");
+  const MIN_ITEMS_FLOOR = 3;
+  const shipped = JSON.parse(fs.readFileSync(path.join(root, "channels.json"), "utf8")).channels;
+  for (const ch of shipped) {
+    if (ch.minItems === undefined) { pass++; continue; }
+    if (Number.isInteger(ch.minItems) && ch.minItems >= MIN_ITEMS_FLOOR) { pass++; continue; }
+    failures.push(
+      `shipped channels.json: ${ch.name} (id ${ch.id}, CH ${ch.number}) has minItems ${JSON.stringify(ch.minItems)}; ` +
+      `the floor is ${MIN_ITEMS_FLOOR}, so a channel never airs from fewer than ${MIN_ITEMS_FLOOR} titles`,
+    );
+  }
+  check("shipped channels.json: the floor check saw every channel", shipped.length > 100, true);
+}
+
 const exclusiveRules = [{ channelIDs: [130], genres: ["Holiday"], titleContains: ["Christmas"], editorialTitles: ["Elf"] }];
 check("exclusiveRules: holiday title blocked from other channels", passes(item({ title: "A Christmas Story" }), plainCh, { exclusiveRules }), false);
 check("exclusiveRules: owner channel keeps it", passes(item({ title: "A Christmas Story", genres: ["Drama"] }), { id: 130, rules: { genres: { include: ["Drama"] } } }, { exclusiveRules }), true);
