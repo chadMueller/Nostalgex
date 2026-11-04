@@ -62,6 +62,7 @@ import com.muellhaus.nostalgex.ConnectStep
 import com.muellhaus.nostalgex.Discovery
 import com.muellhaus.nostalgex.R
 import com.muellhaus.nostalgex.Screen
+import com.muellhaus.nostalgex.plex.PlexServer
 import com.muellhaus.nostalgex.mediabrowser.CheckedServer
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserClient
 import com.muellhaus.nostalgex.mediabrowser.PublicUser
@@ -91,7 +92,15 @@ fun ConnectScreen(model: AppModel) {
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(28))) {
                     Image(painterResource(R.drawable.wordmark), contentDescription = "Nostalgex", modifier = Modifier.widthIn(max = u(440)))
-                    if (model.screen is Screen.ChooseLibraries) {
+                    if (model.screen is Screen.ChooseServers) {
+                        // ServerPickerView's heading and words.
+                        Text("CHOOSE YOUR LIBRARIES", style = font(DMMonoMedium, 40, Color.White.copy(alpha = 0.9f)))
+                        Text(
+                            "Your account can reach more than one Plex server. Pick which libraries Nostalgex should build channels from. You can change this later in Settings.",
+                            style = font(DMMono, 22, Color.White.copy(alpha = 0.45f)),
+                            modifier = Modifier.widthIn(max = u(560)),
+                        )
+                    } else if (model.screen is Screen.ChooseLibraries) {
                         Text("CHOOSE YOUR LIBRARIES", style = font(DMMonoMedium, 40, Color.White.copy(alpha = 0.9f)))
                         Text(
                             "Pick which of your ${model.backendName} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.",
@@ -112,6 +121,7 @@ fun ConnectScreen(model: AppModel) {
                     when (val s = model.screen) {
                         is Screen.SignIn -> key("plex") { PlexCode(model, s) }
                         is Screen.Connect -> key(s.step::class, (s.step as? ConnectStep.Find)?.discovery?.let { it::class }) { Step(model, s) }
+                        is Screen.ChooseServers -> key("servers") { ChooseServers(model, s.servers) }
                         is Screen.ChooseLibraries -> key("libraries") { ChooseLibraries(model, s.sections) }
                         else -> {}
                     }
@@ -330,6 +340,33 @@ private fun ChooseLibraries(model: AppModel, sections: List<LibrarySection>) {
         }
         Box(Modifier.graphicsLayer { alpha = if (included.isEmpty()) 0.35f else 1f }) {
             OnboardingButton("CONTINUE", primary = true, focusFirst = true, fontSize = 34, fullWidth = true) { model.confirmLibraries(included) }
+        }
+    }
+}
+
+/**
+ * ServerPickerView: one row per reachable server. The account's own servers start on (all of
+ * them when it owns none), so the remote starts on CONTINUE and one press goes on.
+ */
+@Composable
+private fun ChooseServers(model: AppModel, servers: List<PlexServer>) {
+    var included by remember {
+        mutableStateOf((servers.filter { it.owned }.ifEmpty { servers }).map { it.machineIdentifier }.toSet())
+    }
+    Column(Modifier.widthIn(max = u(760)), verticalArrangement = Arrangement.spacedBy(u(24))) {
+        Column(
+            Modifier.heightIn(max = u(560)).verticalScroll(rememberScrollState()).padding(vertical = u(12)),
+            verticalArrangement = Arrangement.spacedBy(u(12)),
+        ) {
+            for (server in servers) {
+                val on = server.machineIdentifier in included
+                LibraryRow(server.name, if (server.owned) "Your server" else "Shared with you", on) {
+                    included = if (on) included - server.machineIdentifier else included + server.machineIdentifier
+                }
+            }
+        }
+        Box(Modifier.graphicsLayer { alpha = if (included.isEmpty()) 0.35f else 1f }) {
+            OnboardingButton("CONTINUE", primary = true, focusFirst = true, fontSize = 34, fullWidth = true) { model.confirmServers(included) }
         }
     }
 }

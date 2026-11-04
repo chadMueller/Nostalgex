@@ -77,6 +77,8 @@ import java.time.ZoneId
 sealed interface Screen {
     /** Plex's code, after CONNECT TO PLEX. */
     data class SignIn(val pin: PlexPin?, val error: String? = null) : Screen
+    /** After Plex sign-in, when the account reaches more than one server: which to use (ServerPickerView). */
+    data class ChooseServers(val servers: List<PlexServer>) : Screen
     /** After sign-in, when the servers have more than one library: which to build channels from. */
     data class ChooseLibraries(val sections: List<LibrarySection>) : Screen
     /** The connect screens: the backend picker, then Jellyfin or Emby: find, check and sign in. */
@@ -571,6 +573,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         screen = Screen.Connect(ConnectStep.Picker, error = error)
     }
 
+    /** The plex.tv token while the server picker is open; saved only with the chosen servers. */
+    private var pendingPlexToken: String? = null
+
     /** CONNECT TO PLEX: the plex.tv/link code. */
     fun signIn() {
         signInJob?.cancel()
@@ -585,10 +590,11 @@ class AppModel(private val context: Context) : Playback.Listener {
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
                         mbServer = null
-                        prefs.plexToken = token
                         screen = Screen.Loading("FINDING YOUR SERVERS")
+                        // Every reachable server, shared ones too, as the Apple TV finds them: with
+                        // more than one, the viewer picks (ServerPickerView).
                         val servers = try {
-                            plex.discoverServers(token)
+                            plex.discoverServers(token, includeShared = true)
                         } catch (e: Exception) {
                             Log.w(TAG, "Server discovery failed", e)
                             screen = Screen.Failed("Signed in, but couldn't reach plex.tv to find your servers. Check your connection and Retry.")
@@ -602,8 +608,17 @@ class AppModel(private val context: Context) : Playback.Listener {
                             )
                             return@launch
                         }
-                        prefs.servers = servers
-                        chooseLibrariesOrScan()
+                        Log.i(TAG, "SERVERS ${servers.size} reachable (${servers.count { it.owned }} owned)")
+                        if (servers.size > 1) {
+                            // Held until the picker confirms, as the Apple TV does: the token is
+                            // saved together with the chosen servers.
+                            pendingPlexToken = token
+                            screen = Screen.ChooseServers(servers)
+                        } else {
+                            prefs.plexToken = token
+                            prefs.servers = servers
+                            chooseLibrariesOrScan()
+                        }
                         return@launch
                     }
                 }
@@ -861,6 +876,19 @@ class AppModel(private val context: Context) : Playback.Listener {
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
             if (sections.size > 1) screen = Screen.ChooseLibraries(sections) else loadLibrary()
         }
+    }
+
+    /** CONTINUE on the server picker (confirmServerSelection): the chosen servers, then the libraries. */
+    fun confirmServers(chosen: Set<String>) {
+        val servers = (screen as? Screen.ChooseServers)?.servers ?: return
+        val token = pendingPlexToken ?: return
+        val picked = servers.filter { it.machineIdentifier in chosen }
+        if (picked.isEmpty()) return
+        Log.i(TAG, "SERVERS ${picked.size} of ${servers.size} chosen")
+        pendingPlexToken = null
+        prefs.plexToken = token
+        prefs.servers = picked
+        chooseLibrariesOrScan()
     }
 
     /** CONTINUE on the library-selection screen: the ones left off are never scanned. */

@@ -15,8 +15,10 @@ listing; it installs over `adb`.
   sign in the shortest way the server allows: Quick Connect when Jellyfin
   has it on, WHO'S WATCHING? tiles when the server lists its users, else a
   name and password.
-- Plex reads every owned server (every server if none is owned) into
-  programmes, in library order; Jellyfin and Emby read the one server signed
+- Plex reads the servers chosen at sign-in into programmes, in library
+  order. When the account reaches more than one server, sign-in asks which
+  (the Apple TV's server picker), with your own servers ticked, or every
+  server if you own none. Jellyfin and Emby read the one server signed
   in to, as the web tuner's `fetchJellyfinLibraryFromServer`. The library is
   saved, so a launch opens on it and reads the servers again behind the guide.
 - Builds the channels from the root's `channels.json` and

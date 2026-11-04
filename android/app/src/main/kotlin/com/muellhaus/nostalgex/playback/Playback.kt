@@ -15,6 +15,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -132,6 +133,21 @@ class Playback(
     private var loadedBytes = false
 
     private val main = Handler(Looper.getMainLooper())
+
+    /**
+     * How much the player may buffer, in bytes: a quarter of the Java heap the app may grow to.
+     * Media3's default for a network video is 2,000 x 64 KB (about 128 MB), held as Java byte
+     * arrays, and a high-bitrate file fills it in seconds. Measured on an Android 16 Google TV
+     * emulator, an 80 Mbps file took the heap from 39 MB to 167 MB. With a large library on
+     * top, a Google TV that caps an app at 192 MB ran out of memory 15 seconds into a 4K film.
+     * A quarter is 48 MB at 192 MB (about 5 s of 80 Mbps, 13 s of 30 Mbps), 96 MB at 384 MB and
+     * 128 MB at 512 MB, never more than the default video and audio buffers together.
+     */
+    private fun bufferBytes(): Int {
+        val quarter = Runtime.getRuntime().maxMemory() / 4
+        return quarter.coerceIn(16L * 1024 * 1024, DefaultLoadControl.DEFAULT_VIDEO_BUFFER_SIZE.toLong() + DefaultLoadControl.DEFAULT_AUDIO_BUFFER_SIZE).toInt()
+    }
+
     private var attempt = 0
 
     private val http = DefaultHttpDataSource.Factory()
@@ -140,6 +156,7 @@ class Playback(
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(http).setLoadErrorHandlingPolicy(NoRetryOnHttpError))
+        .setLoadControl(DefaultLoadControl.Builder().setTargetBufferBytes(bufferBytes()).build())
         .build()
         .apply {
             playWhenReady = true
