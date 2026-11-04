@@ -42,6 +42,20 @@ cache alone). The library snapshot's own size and load time are unchanged; the c
 **Not changed.** No studio fallback on the networks rule (it would undo f134d3df). The library snapshot format is
 unchanged; the cache is its own file, read by nothing else.
 
+**From the review.** `dependsOnEnrichment` also counts `ratingMin` (it falls back to the IMDb rating, and on Emby
+the native rating can be null for a whole library, so the 13 ratingMin channels are enrichment-dependent there).
+`loadLibrary` cancels a refill still in flight, and a cancelled pass stops after the Supabase step rather than
+falling through to TMDB for every id; chosen over "skip the refill when the restore is stale" because a stale
+restore's `refreshLibraryIfChanged` may decide not to reload (unchanged, under 24h), which would leave the cache
+empty for the session, the very hole this closes, and because RESCAN and the daily check are loads too.
+
+**Not yet checked.** Persistence of `enrichment_cache_v1.json` on a real Apple TV. The simulator once showed the
+snapshot and the old enrichment cache persisting when the device did not (`LocalStore.swift`); this file goes
+through the same `LocalStore` root, but only a device run proves it.
+
+**Next.** On a TV: restore, delete the file, relaunch, confirm "no cached rows after restore, refilling" and that
+CH 215 stays through the refilter; and a RESCAN while a refill is running, to see the cancel line.
+
 ## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
 
 **Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
