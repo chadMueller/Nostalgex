@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Apple TV: a 15,000-movie Emby library no longer reads as a dead server)
+
+**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed.
+
+**Why.** A #support report on 1.0.29: an Emby library of about 15,000 movies, every one with genres and a TMDB match, never finished loading, and the same library on Plex stopped at "Channel 60 of 142" with the app closing about an hour in.
+
+**Measured.**
+- The channel engine is not slow at this size. `MovieLibraryScaleHarness` (new) drives the real `loadLibrary` with a synthetic movie-only library shaped like the report: every title with a TMDB id and a cached enrichment row, a third of the ids taken from the membership manifest, 15% in a TMDB collection. M4 Pro simulator, Debug build, all 142 channel pools: 2k movies 4.8 s, 5k 12.3 s, 10k 24.2 s, 15k 36.5 s. Linear, about 2.4 ms per movie for the whole lineup. Slowest channels at 15k: CHRISTMAS SPECIALS and KIDS CHRISTMAS TV (1.9 s each, their episode rules read every movie's summary), APPLE TV+ 0.8 s. Peak memory 178 MB (204 MB with every package on). The guide's schedules for 95 channels: 60 ms. Through the real `RootView` (loading screen and guide on screen): first load 39.8 s, guide then sat for 10 minutes at a flat 186 to 191 MB, RESCAN 38.2 s. Nothing near an hour, no growth.
+- The Emby scan was the failure. Against a fake Emby (15,000 movies, 200 a page, 3 s a page) through the real `EmbyAPIService` and the stall watch: the scan's item count stayed at 0 for the whole section, because Emby and Jellyfin only reported progress when a section started (Plex reports every page). STOP WAITING appeared at 65 s and the watch abandoned the scan at 210 s with the server still answering (71 of 75 pages served). The request it cancelled then threw away the 14,200 movies already read, so the load ended on "Your server stopped sending data" with 0 items. Any single Emby or Jellyfin movie library that takes longer than 210 s to page through hits this, however healthy the server is.
+- After the fix, same fake server: 15,000 items in 265.7 s, the count moving every 2 s, no STOP WAITING, guide built.
+
+**Changed.**
+- `EmbyAPIService`, `JellyfinAPIService`: a movie section reports progress after every page, as Plex does, so the stall watch sees a big library arriving. A cancel that lands while a page request is in flight keeps the pages already read (Plex already did), so a stopped scan still builds a guide from them.
+- `MovieSectionScanProgressTests` (new, 2 tests): both backends, 1,000 movies over a local server. Fails on main (one progress event, and a cancel mid-page returns nothing), passes now.
+- `MovieLibraryScaleHarness` (new, off by default): the measurements above. `rebuildStaticChannelPools` marks each channel through `LibraryLoadProbe` when a harness listens (no cost otherwise).
+- NostalgexTests: 1,037 passed, 0 failed.
+
+**Not explained.** The Plex half of the report. The Plex scan already reports every page, and the engine builds 142 channels from 15,000 movies in under a minute on the simulator, so "Channel 60 of 142" for an hour is not reproduced. Not measured: the same harness on a real Apple TV 4K (A12) and the enrichment phase on a first load (enrichment is off in these runs; the site's TMDB proxy answered 27 requests a second from a Mac, so 15,000 titles missing from the shared cache would be about 9 minutes). The hour matches the Apple TV's default one-hour sleep, which ends a long load; unverified.
+
+**Next.** Run `MovieLibraryScaleHarness` on the living room Apple TV 4K (needs Chad's OK). Ask the reporter for a photo of the stuck Plex screen and his Apple TV's Sleep After setting. Web tuner and Docker: n/a, no scan watchdog there. Roku: n/a, its stall watch counts every 2xx answer as progress.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
