@@ -261,6 +261,11 @@ class AppState {
 
     var isConnected: Bool = false
     var isLoading: Bool = false
+    /// The one answer `RootView` writes to tvOS's idle timer: playback or a load the viewer is
+    /// watching holds the TV awake. See `ScreenAwakePolicy`.
+    var keepsScreenAwake: Bool {
+        ScreenAwakePolicy.keepsAwake(playbackState: playbackState, isLoading: isLoading, hasCredentials: hasCredentials)
+    }
 
     /// False until launch has finished reading the Keychain. RootView gates on this so a
     /// signed-in user is never shown the connect screen: credentials are loaded in a

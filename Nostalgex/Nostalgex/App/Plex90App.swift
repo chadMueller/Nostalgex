@@ -62,10 +62,11 @@ struct RootView: View {
             PlayerView()
                 .environment(appState)
         }
-        .onChange(of: appState.playbackState) { _, newState in
-            // Disable tvOS screensaver/idle timer during active playback.
-            // Without this, the Apple TV screensaver fires even while video is running.
-            UIApplication.shared.isIdleTimerDisabled = (newState == .playing)
+        .onChange(of: appState.keepsScreenAwake, initial: true) { _, keep in
+            // tvOS's screensaver and sleep timer, held while video plays and while the viewer
+            // waits on the loading screen (a first load or a RESCAN). One write from one
+            // answer, so playback ending can't wake the timer under a load, or the reverse.
+            UIApplication.shared.isIdleTimerDisabled = keep
         }
         .task {
             if ProcessInfo.processInfo.arguments.contains("-uiTestForceLibrarySelection") {
