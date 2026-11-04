@@ -9,7 +9,7 @@ on:
     branches: [main]
   # Nightly, so a red job can't hide behind pushes that skip it (the roku job
   # was red for a day after 4602216 because the next pushes were docs-only).
-  # Runs the channel engine, web, Roku and tvOS jobs in full (the Docker job
+  # Runs the channel engine, web, Roku, tvOS and Android TV jobs in full (the Docker job
   # stays pull-request only).
   schedule:
     - cron: "0 8 * * *"
@@ -370,7 +370,7 @@ jobs:
   android:
     name: Android TV (engine golden files, debug build)
     needs: changes
-    if: ${{ needs.changes.outputs.android == 'true' }}
+    if: ${{ needs.changes.outputs.android == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
