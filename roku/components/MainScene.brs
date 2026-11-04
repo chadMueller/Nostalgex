@@ -290,7 +290,8 @@ end sub
 
 ' The stall watch over a server's scan (source/util/LoadStall.brs), as
 ' upstream's withLibraryLoadStallWatch: every 2 s while it runs, the scan's
-' progress fields and answers count, compared with the last look. Quiet
+' progress fields and answers count, compared with the last look (a long
+' gap between looks is the app paused, and doesn't count). Quiet
 ' for 60 s, the loading screen offers STOP WAITING; for 210 s, the scan is
 ' stopped. A background refresh, under the guide, says nothing and is only
 ' stopped.
@@ -321,7 +322,10 @@ sub onStallTick()
         stopStallWatch()
         return
     end if
-    verdict = NxStallVerdict(m.stall, stallSample(), m.stallClock.TotalMilliseconds())
+    now = m.stallClock.TotalMilliseconds()
+    paused = NxStallSkipPause(m.stall, now)
+    if paused > 0 then print "library: the app was paused for "; paused \ 1000; " s (the screensaver?); not counted as quiet"
+    verdict = NxStallVerdict(m.stall, stallSample(), now)
     if m.loading <> invalid then m.loading.stalling = verdict <> "progressing"
     if verdict = "stalled" then
         print "library: no scan progress for "; NxStallStopAfterMs() \ 1000; " s, abandoning this scan"
