@@ -43,13 +43,19 @@ commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 
   differ on Jellyfin, Emby, Plex bulk and Plex per-show, packed per channel and packed as a lineup. Control:
   the same items with the shows reordered change 16,962 of 17,280 under the lineup pack.
 
-**Not verified.** None of it has run on an Apple TV. The 12.0 s discovery shape is reproduced; the 7.3 s run
-is not, because the TV's candidate list was not captured. AUDIO LANGUAGE and Music Videos are not checked
-against a real Jellyfin or Emby server (the lab servers were down).
+- Discovery on an Apple TV 4K (tvOS 26.6.1), a debug build of this branch, a real Plex account with its own
+  server and three shared ones: five full discoveries took 3.82, 3.27, 3.32, 3.40 and 3.32 s. The shared server
+  with 8 dead local addresses settled in 3.10 to 3.22 s every run, with all 8 locals cancelled, none waiting out
+  the 12 s timeout. Before the fix it settled at 7.3 s and 12.0 s in 2 of 4 runs. The baseline was
+  intermittent and the unfixed build was not rerun on the TV, so this shows the fix under the failing
+  condition rather than proving it.
 
-**Next.** A device pass with a shared Plex server for discovery timing, and a real Jellyfin Music Videos
-library. The web tuner and Roku also ask Music Videos libraries for `Movie` only (`plex-tuner.html`,
-`roku/source/mediabrowser/MediaBrowserLibrary.brs`), so both need the same change.
+**Not verified.** The 7.3 s run is not reproduced, because the TV's candidate list was not captured. AUDIO
+LANGUAGE and Music Videos are not checked against a real Jellyfin or Emby server (the lab servers were down).
+
+**Next.** A real Jellyfin Music Videos library. Roku also asks Music Videos libraries for `Movie` only
+(`roku/source/mediabrowser/MediaBrowserLibrary.brs`) and needs the same change; the web tuner's is on
+`web/1030-fixes`.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
