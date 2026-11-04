@@ -13,8 +13,9 @@
 '
 ' Jellyfin and Emby answer the same calls here except the libraries list
 ' (NxMbViewsPath). Upstream quirks kept, since the schedule reads the items:
-'   - A music-video library is read for Movie items, as upstream asks, and
-'     its items get type "movie".
+'   - A music-video library is read for Movie and MusicVideo items (Jellyfin and
+'     Emby file its videos as MusicVideo; I-067), and its items get type
+'     "movie". Every other flat library is read for Movie items only.
 '   - Episodes take the show's genres, year, ratings, studio and TMDB id, and
 '     the show's name ("Unknown" without one), never the episode's SeriesName.
 '   - viewCount is UserData.PlayCount, so a title marked played with no count
@@ -39,6 +40,18 @@ end function
 ' One page of items under a parent, with the fields the channel rules read.
 function NxMbItemsPath(userId as String, parentId as String, types as String, start as Integer) as String
     return "/Items?userId=" + NxUrlEncode(userId) + "&ParentId=" + NxUrlEncode(parentId) + "&Recursive=true" + "&IncludeItemTypes=" + types + "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData" + "&StartIndex=" + start.ToStr() + "&Limit=200&SortBy=SortName"
+end function
+
+' What a flat (not TV) library is asked for. Jellyfin and Emby file the videos
+' in a Music Videos library as MusicVideo, so asking it for Movie alone came
+' back empty and HIGH ROTATION never filled (I-067). Movie stays in the list
+' for a clip someone filed there as a film. Every other library is still asked
+' for films only, so a stray music video in a Movies library stays off the
+' film channels. `collectionType` is the library's CollectionType, as the
+' server sends it.
+function NxMbItemTypesFor(collectionType as Dynamic) as String
+    if LCase(NxToStr(collectionType)) = "musicvideos" then return "Movie,MusicVideo"
+    return "Movie"
 end function
 
 ' Items per page, as upstream's Limit=200.
@@ -513,7 +526,8 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                     if NxLoadStopped() then exit for
                 end for
             else
-                items = NxMbMorePages(fetcher, userId, parentId, "Movie", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Movie", 0)))
+                types = NxMbItemTypesFor(ct)
+                items = NxMbMorePages(fetcher, userId, parentId, types, fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0)))
                 for each raw in items
                     if type(raw) = "roAssociativeArray" then
                         it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)

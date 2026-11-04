@@ -439,7 +439,7 @@ struct Channel: Identifiable {
     /// toggle's stored value; tests pass an explicit value for the same reason.
     func filteredPool(
         now: Date = Date(),
-        watershedEnabled: Bool = UserDefaults.standard.bool(forKey: Channel.watershedDefaultsKey)
+        watershedEnabled: Bool = AppDefaults.standard.bool(forKey: Channel.watershedDefaultsKey)
     ) -> [PlexMediaItem] {
         let hour = Calendar.current.component(.hour, from: now)
         var pool = itemPool

@@ -48,7 +48,7 @@ enum LaunchGuard {
     /// Returns true when it cleared something.
     @discardableResult
     static func clearCredentialsLeftByDeletedInstall(store: any CredentialStoring,
-                                                     defaults: UserDefaults = .standard,
+                                                     defaults: UserDefaults = AppDefaults.standard,
                                                      installStampExists: Bool) -> Bool {
         guard isFreshInstall(defaults: defaults, installStampExists: installStampExists) else { return false }
         let leftovers = credentialKeys.filter { store.load(key: $0) != nil }
@@ -66,7 +66,7 @@ enum LaunchGuard {
     static let unfinishedLoadLimit = 2
 
     /// Call once per launch. A marker still set means the previous process died inside a load.
-    static func recordLaunch(defaults: UserDefaults = .standard) {
+    static func recordLaunch(defaults: UserDefaults = AppDefaults.standard) {
         guard defaults.bool(forKey: loadInFlightKey) else { return }
         defaults.removeObject(forKey: loadInFlightKey)
         let count = defaults.integer(forKey: unfinishedLoadsKey) + 1
@@ -82,24 +82,24 @@ enum LaunchGuard {
         !(background && hasChannels)
     }
 
-    static func loadStarted(defaults: UserDefaults = .standard) {
+    static func loadStarted(defaults: UserDefaults = AppDefaults.standard) {
         defaults.set(true, forKey: loadInFlightKey)
     }
 
     /// Any end the process lived to see: success, error, cancel, stop waiting, sign-out.
     /// `resetCount: false` only clears the marker, for a step that proves nothing about
     /// whether the full load can finish.
-    static func loadEnded(resetCount: Bool = true, defaults: UserDefaults = .standard) {
+    static func loadEnded(resetCount: Bool = true, defaults: UserDefaults = AppDefaults.standard) {
         defaults.removeObject(forKey: loadInFlightKey)
         if resetCount { defaults.removeObject(forKey: unfinishedLoadsKey) }
     }
 
-    static func shouldAskBeforeLoading(defaults: UserDefaults = .standard) -> Bool {
+    static func shouldAskBeforeLoading(defaults: UserDefaults = AppDefaults.standard) -> Bool {
         defaults.integer(forKey: unfinishedLoadsKey) >= unfinishedLoadLimit
     }
 
     /// TRY AGAIN: the next load gets the full allowance again.
-    static func resetUnfinishedLoads(defaults: UserDefaults = .standard) {
+    static func resetUnfinishedLoads(defaults: UserDefaults = AppDefaults.standard) {
         defaults.removeObject(forKey: unfinishedLoadsKey)
     }
 }

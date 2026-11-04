@@ -5,6 +5,12 @@
 ' and items (tests/vectors/mediabrowser.json). Plus hand-written cases for
 ' the date parser and the Emby libraries path. Returns the failure count.
 '
+' A music-video library is asked for Movie and MusicVideo items (I-067), by
+' the web tuner's scan and the port alike, so the vectors hold the MusicVideo
+' clips and the loop below holds the port to them like any other item. If the
+' web scan ever stops asking for them, "vectors hold the MusicVideo clips"
+' fails rather than the port being quietly let off.
+'
 ' The web's audioStreams are held to the port's audioTracks, not to a field of
 ' the same name: the port keeps those tracks under its own name and shape
 ' (NxMbAudioTracks). The vectors keep audioStreams for the Android scan test,
@@ -23,15 +29,23 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     got = NxMbScanServer(fetcher, "jellyfin", fx.userId, 2)
     NxCheck(r, "scan returns items", NxToStr(got <> invalid), "true")
     if got <> invalid then
-        NxCheck(r, "requests", fetcher.requests.Join(" | "), NxList(v.requests).Join(" | "))
-        NxCheck(r, "item count", got.Count().ToStr(), NxList(v.items).Count().ToStr())
+        mvIds = NxMbMusicVideoIds(fx)
+        vectorClips = 0
+        for each w in NxList(v.items)
+            if mvIds.DoesExist(NxToStr(w.ratingKey)) then vectorClips = vectorClips + 1
+        end for
+        NxCheck(r, "vectors hold the MusicVideo clips", NxToStr(vectorClips > 0), "true")
+        gotRequests = fetcher.requests
+        gotItems = got
+        NxCheck(r, "requests", gotRequests.Join(" | "), NxList(v.requests).Join(" | "))
+        NxCheck(r, "item count", gotItems.Count().ToStr(), NxList(v.items).Count().ToStr())
         ' Port-only fields: none reaches the filter or schedule.
         extras = { serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
-        n = NxMinInt(got.Count(), NxList(v.items).Count())
+        n = NxMinInt(gotItems.Count(), NxList(v.items).Count())
         several = 0
         for i = 0 to n - 1
             want = v.items[i]
-            it = got[i]
+            it = gotItems[i]
             label = "item " + i.ToStr() + " " + NxToStr(want.ratingKey)
             for each k in want
                 ' audioStreams is compared as audioTracks, below.
@@ -556,8 +570,10 @@ function NxMbFixtureFetcher(fx as Object) as Object
             if base <> "/Items" then return invalid
             if NxHasValue(NxList(m.fx.fail), q.ParentId) then return invalid
             all = []
+            ' IncludeItemTypes is a comma list, as the servers read it.
+            asked = "," + NxToStr(q.IncludeItemTypes) + ","
             for each it in NxList(m.fx.items[q.ParentId])
-                if it.Type = q.IncludeItemTypes then all.Push(it)
+                if Instr(1, asked, "," + NxToStr(it.Type) + ",") > 0 then all.Push(it)
             end for
             start = q.StartIndex.ToInt()
             limit = q.Limit.ToInt()
@@ -575,4 +591,208 @@ function NxMbFixtureFetcher(fx as Object) as Object
             return out
         end function
     }
+end function
+
+' ── I-067: a Music Videos library is asked for its MusicVideo items ──
+
+' Jellyfin and Emby file the videos in a Music Videos library as MusicVideo.
+' The scan asked every flat library for Movie alone, so such a library loaded
+' nothing and HIGH ROTATION stayed empty. These cases hold the port to the fix
+' by themselves, whether or not the web tuner's scan (the vectors) has it yet:
+' what each library is asked for, that the clips arrive stamped as music
+' videos and reach HIGH ROTATION through the real filter, that nothing else is
+' widened, and the bug as reported (a library of MusicVideo items only).
+' Returns the failure count.
+function NxRunMusicVideoTypeTests(fixturePath as String, channelsPath as String, manifestPath as String) as Integer
+    r = { pass: 0, fail: 0 }
+    fx = ParseJson(ReadAsciiFile(fixturePath))
+    config = ParseJson(ReadAsciiFile(channelsPath))
+    manifest = ParseJson(ReadAsciiFile(manifestPath))
+    if fx = invalid or config = invalid or manifest = invalid then
+        print "FAIL cannot read "; fixturePath; ", "; channelsPath; " or "; manifestPath
+        return 1
+    end if
+
+    ' HIGH ROTATION: the channel that takes every music video and nothing else.
+    highRotation = invalid
+    for each def in config.channels
+        if highRotation = invalid and type(def.rules) = "roAssociativeArray" then
+            if def.rules.source = "musicVideo" and def.rules.genres = invalid and def.rules.yearRange = invalid then highRotation = def
+        end if
+    end for
+    NxCheck(r, "channels.json has the HIGH ROTATION channel", NxToStr(highRotation <> invalid), "true")
+    compiled = invalid
+    minItems = 3
+    if highRotation <> invalid then
+        compiled = NxFilterChannel(highRotation)
+        if NxTruthy(highRotation.minItems) then minItems = highRotation.minItems
+    end if
+    exclusive = NxFilterExclusiveRules(config.exclusiveRules)
+    clock = NxFilterClock()
+
+    ' The music video library as a server sends it from 12.4.0: its videos
+    ' are all MusicVideo, so a request for Movie finds none.
+    musicView = invalid
+    for each view in fx.views
+        if LCase(NxToStr(view.CollectionType)) = "musicvideos" then musicView = view
+    end for
+    NxCheck(r, "the fixture has a musicvideos library", NxToStr(musicView <> invalid), "true")
+    if musicView = invalid then return r.fail
+    clipsOnly = []
+    for each it in fx.items[musicView.Id]
+        if it.Type = "MusicVideo" then clipsOnly.Push(it)
+    end for
+    onlyItems = {}
+    onlyItems[musicView.Id] = clipsOnly
+    onlyServer = { userId: fx.userId, views: [musicView], items: onlyItems, fail: [] }
+
+    ' The same library again, past one page (200 items), to show the second
+    ' request asks for the same types as the first.
+    bulk = []
+    for i = 1 to 201
+        bulk.Push({ Id: "bulk-" + i.ToStr(), Name: "Artist - Song " + i.ToStr(), Type: "MusicVideo", RunTimeTicks: clipsOnly[0].RunTimeTicks, Genres: ["Pop"] })
+    end for
+    bulkItems = {}
+    bulkItems[musicView.Id] = bulk
+    bulkServer = { userId: fx.userId, views: [musicView], items: bulkItems, fail: [] }
+
+    for each kind in ["jellyfin", "emby"]
+        ' The shared fixture: a Movies library with a MusicVideo filed in it, a
+        ' show library, the Music Videos library (clips filed as Movie and as
+        ' MusicVideo) and a mixed library.
+        fetcher = NxMbFixtureFetcher(fx)
+        got = NxMbScanServer(fetcher, kind, fx.userId, 1)
+        NxCheck(r, kind + ": the scan returns items", NxToStr(got <> invalid), "true")
+        if got <> invalid then
+            asked = NxMbAskedTypes(fetcher.requests)
+            NxCheck(r, kind + ": the Music Videos library is asked for Movie,MusicVideo", NxToStr(asked[musicView.Id]), "Movie,MusicVideo")
+            NxCheck(r, kind + ": the Movies library is still asked for Movie", NxToStr(asked["v-movies"]), "Movie")
+            NxCheck(r, kind + ": the mixed library is still asked for Movie, on both pages", NxToStr(asked["v-home"]), "Movie")
+            NxCheck(r, kind + ": the show library is still asked for Series", NxToStr(asked["v-shows"]), "Series")
+            NxCheck(r, kind + ": a show is still asked for Episode", NxToStr(asked["s-sparse"]), "Episode")
+
+            byKey = {}
+            for each it in got
+                byKey[NxToStr(it.ratingKey)] = it
+            end for
+            ' Filed as Movie (mv-1, mv-2) or as MusicVideo (mv-3 to mv-6), each
+            ' arrives stamped as a music video, which is what HIGH ROTATION reads.
+            for each id in ["mv-1", "mv-2", "mv-3", "mv-4", "mv-5", "mv-6"]
+                it = byKey[id]
+                NxCheck(r, kind + ": " + id + " loads", NxToStr(it <> invalid), "true")
+                if it <> invalid then
+                    NxCheck(r, kind + ": " + id + " is stamped musicVideo", NxToStr(it.librarySource), "musicVideo")
+                    NxCheck(r, kind + ": " + id + " is a movie-type item", NxToStr(it.type), "movie")
+                    NxCheck(r, kind + ": " + id + " is on serverIndex 1", NxToStr(it.serverIndex), "1")
+                    if compiled <> invalid then NxCheck(r, kind + ": " + id + " passes HIGH ROTATION", NxToStr(NxItemPasses(it, compiled, manifest, exclusive, clock, kind) <> ""), "true")
+                end if
+            end for
+            clip = byKey["mv-3"]
+            if clip <> invalid then
+                NxCheck(r, kind + ": a MusicVideo's artist", NxToStr(clip.artist), "Band Name")
+                NxCheck(r, kind + ": a MusicVideo's title", NxToStr(clip.title), "Hit Single")
+            end if
+            bare = byKey["mv-4"]
+            if bare <> invalid then NxCheck(r, kind + ": a MusicVideo with no genres is given Music Video", NxToStr(NxHasValue(bare.genres, "Music Video")), "true")
+            ' A MusicVideo in a Movies library is not asked for, so it does not
+            ' become a film (or anything else) on a film channel.
+            NxCheck(r, kind + ": a MusicVideo filed in the Movies library stays out", NxToStr(byKey["m-musicvideo"] = invalid), "true")
+            ' Nothing else becomes a music video but the short film with a Music
+            ' genre (m-musicgenre), which the scan has always stamped by its
+            ' genre and length.
+            stray = 0
+            for each it in got
+                if it.librarySource = "musicVideo" and not NxHasValue(["mv-1", "mv-2", "mv-3", "mv-4", "mv-5", "mv-6", "m-musicgenre"], NxToStr(it.ratingKey)) then stray = stray + 1
+            end for
+            NxCheck(r, kind + ": no other item is stamped musicVideo", stray.ToStr(), "0")
+            if compiled <> invalid then
+                pool = NxFilterPool(got, compiled, manifest, exclusive, clock, kind)
+                NxCheck(r, kind + ": HIGH ROTATION holds the six clips and the short Music-genre film", pool.Count().ToStr(), "7")
+            end if
+        end if
+
+        ' The bug as reported: Movie finds none, MusicVideo finds four.
+        fetcher = NxMbFixtureFetcher(onlyServer)
+        got = NxMbScanServer(fetcher, kind, fx.userId, 0)
+        NxCheck(r, kind + ": a library of MusicVideo items only: the scan returns items", NxToStr(got <> invalid), "true")
+        if got <> invalid then
+            NxCheck(r, kind + ": a library of MusicVideo items only loads all of them", got.Count().ToStr(), clipsOnly.Count().ToStr())
+            if compiled <> invalid then
+                pool = NxFilterPool(got, compiled, manifest, exclusive, clock, kind)
+                NxCheck(r, kind + ": HIGH ROTATION fills from it", pool.Count().ToStr(), clipsOnly.Count().ToStr())
+                NxCheck(r, kind + ": and reaches minItems", NxToStr(pool.Count() >= minItems), "true")
+            end if
+        end if
+
+        ' Past one page, the second request asks for the same types.
+        fetcher = NxMbFixtureFetcher(bulkServer)
+        got = NxMbScanServer(fetcher, kind, fx.userId, 0)
+        NxCheck(r, kind + ": 201 MusicVideo items: the scan returns items", NxToStr(got <> invalid), "true")
+        if got <> invalid then
+            NxCheck(r, kind + ": 201 MusicVideo items all load", got.Count().ToStr(), "201")
+            pages = 0
+            for each path in fetcher.requests
+                if Left(path, 7) = "/Items?" then pages = pages + 1
+            end for
+            NxCheck(r, kind + ": 201 MusicVideo items took two pages", pages.ToStr(), "2")
+            NxCheck(r, kind + ": both pages ask for Movie,MusicVideo", NxToStr(NxMbAskedTypes(fetcher.requests)[musicView.Id]), "Movie,MusicVideo")
+        end if
+    end for
+
+    ' What each kind of library is asked for. Only a musicvideos library asks
+    ' for both; a Movies, mixed (no type) or any other library asks for films.
+    libraries = [
+        ["musicvideos", "Movie,MusicVideo"],
+        ["MusicVideos", "Movie,MusicVideo"],
+        ["movies", "Movie"],
+        ["homevideos", "Movie"],
+        ["boxsets", "Movie"],
+        ["music", "Movie"],
+        ["", "Movie"],
+        [invalid, "Movie"]
+    ]
+    for each lib in libraries
+        NxCheck(r, "item types for library type '" + NxToStr(lib[0]) + "'", NxMbItemTypesFor(lib[0]), lib[1])
+    end for
+
+    print "music video item type cases: "; r.pass; " passed,"; r.fail; " failed"
+    return r.fail
+end function
+
+' The ids of the fixture's MusicVideo items, wherever they are filed. The
+' vectors hold them once the web tuner's scan asks a music video library for
+' them; NxRunMediaBrowserTests then holds the port to the vectors on them too,
+' and, until then, on everything else.
+function NxMbMusicVideoIds(fx as Object) as Object
+    ids = {}
+    for each parentId in fx.items
+        for each it in NxList(fx.items[parentId])
+            if NxToStr(it.Type) = "MusicVideo" then ids[NxToStr(it.Id)] = true
+        end for
+    end for
+    return ids
+end function
+
+' What a scan asked each parent for: { <ParentId>: "<IncludeItemTypes>" }, with
+' "a|b" when one parent was asked two ways. Views and other paths are skipped.
+function NxMbAskedTypes(requests as Object) as Object
+    asked = {}
+    for each path in requests
+        cut = Instr(1, path, "?")
+        if cut > 0 and Left(path, cut - 1) = "/Items" then
+            q = {}
+            for each pair in Mid(path, cut + 1).Split("&")
+                eq = Instr(1, pair, "=")
+                if eq > 0 then q[Left(pair, eq - 1)] = Mid(pair, eq + 1)
+            end for
+            parent = NxToStr(q.ParentId)
+            types = NxToStr(q.IncludeItemTypes)
+            if not asked.DoesExist(parent) then
+                asked[parent] = types
+            else if Instr(1, "|" + asked[parent] + "|", "|" + types + "|") = 0 then
+                asked[parent] = asked[parent] + "|" + types
+            end if
+        end if
+    end for
+    return asked
 end function

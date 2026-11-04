@@ -286,8 +286,8 @@ typealias LoadProgress = @Sendable (LoadProgressEvent) -> Void
 ///
 /// Carrying those items out is what lets a stalled load still land the user in a working
 /// guide: an abandoned scan that threw a bare `CancellationError` would discard minutes of
-/// fetched library for nothing. Only sections that finished are included — the section that
-/// was in flight is dropped.
+/// fetched library for nothing. Every backend keeps the pages it had read of the section
+/// that was in flight, too.
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
 }

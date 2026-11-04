@@ -17,7 +17,12 @@ class AppState {
     init(credentialStore: any CredentialStoring = KeychainCredentialStore(),
          preferenceSync: PreferenceSync? = nil) {
         self.credentialStore = credentialStore
+        #if DEBUG
+        // A harness's AppState must not become `shared`'s applier: that is the host app's.
+        self.preferenceSync = preferenceSync ?? (HarnessIsolation.isActive ? .isolated() : .shared)
+        #else
         self.preferenceSync = preferenceSync ?? .shared
+        #endif
         self.preferenceSync.applier = self
         self.iCloudSyncEnabled = self.preferenceSync.isEnabled
 
@@ -27,8 +32,8 @@ class AppState {
             || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow") {
             credentialStore.delete(key: "plex_server_url")
             credentialStore.delete(key: "plex_token")
-            UserDefaults.standard.removeObject(forKey: "plex_server_url")
-            UserDefaults.standard.removeObject(forKey: "plex_token")
+            AppDefaults.standard.removeObject(forKey: "plex_server_url")
+            AppDefaults.standard.removeObject(forKey: "plex_token")
             LibrarySnapshotStore.clear()
         }
 
@@ -256,6 +261,11 @@ class AppState {
 
     var isConnected: Bool = false
     var isLoading: Bool = false
+    /// The one answer `RootView` writes to tvOS's idle timer: playback or a load the viewer is
+    /// watching holds the TV awake. See `ScreenAwakePolicy`.
+    var keepsScreenAwake: Bool {
+        ScreenAwakePolicy.keepsAwake(playbackState: playbackState, isLoading: isLoading, hasCredentials: hasCredentials)
+    }
 
     /// False until launch has finished reading the Keychain. RootView gates on this so a
     /// signed-in user is never shown the connect screen: credentials are loaded in a
@@ -282,12 +292,12 @@ class AppState {
     /// False when the keychain accepted a credential write but could not read it back, which
     /// means this session dies on relaunch. Drives a warning rather than letting the user
     /// discover it by being thrown back to the connect screen.
-    var credentialsArePersistent: Bool = !UserDefaults.standard.bool(forKey: KeychainService.writeVerificationFailedKey)
+    var credentialsArePersistent: Bool = !AppDefaults.standard.bool(forKey: KeychainService.writeVerificationFailedKey)
 
     /// Why the app last signed the user out on purpose, surviving relaunch. Cleared by the
     /// next successful sign-in. The involuntary counterpart, signInLossDiagnostic, covers
     /// credentials the DEVICE lost; this covers credentials the APP destroyed.
-    var lastSignOutNotice: String? = UserDefaults.standard.string(forKey: AppState.lastSignOutNoticeKey)
+    var lastSignOutNotice: String? = AppDefaults.standard.string(forKey: AppState.lastSignOutNoticeKey)
 
     /// Non-nil when a previous session's sign-in vanished without the user disconnecting.
     /// Carries the keychain status code so a lost session reports its own cause from the
@@ -319,7 +329,7 @@ class AppState {
 
     /// First full library setup on this device (show “may take a few minutes”).
     var isFirstLibraryLoad: Bool {
-        !UserDefaults.standard.bool(forKey: Self.initialLoadCompleteKey)
+        !AppDefaults.standard.bool(forKey: Self.initialLoadCompleteKey)
     }
 
     /// Set true between a successful PIN auth and the first successful library load.
@@ -453,7 +463,7 @@ class AppState {
     var channelMemberships: ChannelMemberships = ChannelMembershipsLoader.loadBundled()
     /// Enabled bundle IDs. On first launch (no key saved), only "essentials" is on.
     var enabledBundleIDs: Set<String> = Set(
-        UserDefaults.standard.stringArray(forKey: "nostalgex_enabled_bundles") ?? ["nostalgex"]
+        AppDefaults.standard.stringArray(forKey: "nostalgex_enabled_bundles") ?? ["nostalgex"]
     )
 
     /// Maps enabled bundles to their first visible channel for bundle-jump navigation
@@ -464,12 +474,12 @@ class AppState {
     var isScanning: Bool = false
     var scanningMessage: String = ""
     var lastScanDate: Date? = {
-        let ts = UserDefaults.standard.double(forKey: "nostalgex_last_scan_date")
+        let ts = AppDefaults.standard.double(forKey: "nostalgex_last_scan_date")
         return ts > 0 ? Date(timeIntervalSince1970: ts) : nil
     }()
     var discoveredCollections: [DiscoveredCollection] = []
     var enabledCollectionKeys: Set<String> = Set(
-        UserDefaults.standard.stringArray(forKey: "nostalgex_enabled_collections") ?? []
+        AppDefaults.standard.stringArray(forKey: "nostalgex_enabled_collections") ?? []
     )
 
     // MARK: - Found franchises (see AppState+Franchises)
@@ -481,12 +491,12 @@ class AppState {
     /// the few the dictionary marks `defaultOn`. Kept as a plain string array in
     /// UserDefaults so iCloud sync can carry it as-is.
     var enabledFranchiseIDs: Set<String> = Set(
-        UserDefaults.standard.stringArray(forKey: AppState.enabledFranchisesKey) ?? []
+        AppDefaults.standard.stringArray(forKey: AppState.enabledFranchisesKey) ?? []
     )
     /// Stable franchise ids the viewer switched OFF. Only changes the outcome for a
     /// `defaultOn` franchise: it stays off across launches and rescans once turned off.
     var disabledFranchiseIDs: Set<String> = Set(
-        UserDefaults.standard.stringArray(forKey: AppState.disabledFranchisesKey) ?? []
+        AppDefaults.standard.stringArray(forKey: AppState.disabledFranchisesKey) ?? []
     )
     /// Enabled items per category that did not get a channel because the category's
     /// display range was full (see `DynamicChannelBlock.displayNumberEnd`). Zero normally.
@@ -508,9 +518,9 @@ class AppState {
         }
     }
 
-    var retroMode: Bool = UserDefaults.standard.object(forKey: "nostalgex_retro_mode") as? Bool ?? true {
+    var retroMode: Bool = AppDefaults.standard.object(forKey: "nostalgex_retro_mode") as? Bool ?? true {
         didSet {
-            UserDefaults.standard.set(retroMode, forKey: "nostalgex_retro_mode")
+            AppDefaults.standard.set(retroMode, forKey: "nostalgex_retro_mode")
             preferenceSync.record(PreferenceSync.retroModeKey, value: retroMode)
             if oldValue != retroMode {
                 Analytics.track(.settingChanged(key: "retro_mode", value: retroMode ? "true" : "false"))
@@ -521,10 +531,10 @@ class AppState {
     /// GUIDE TEXT SIZE. Synced through iCloud like RETRO MODE: both are how the guide
     /// looks, not anything about this TV's servers.
     var guideTextSize: GuideTextSize = GuideTextSize(
-        stored: UserDefaults.standard.string(forKey: GuideTextSize.storageKey)
+        stored: AppDefaults.standard.string(forKey: GuideTextSize.storageKey)
     ) {
         didSet {
-            UserDefaults.standard.set(guideTextSize.rawValue, forKey: GuideTextSize.storageKey)
+            AppDefaults.standard.set(guideTextSize.rawValue, forKey: GuideTextSize.storageKey)
             preferenceSync.record(PreferenceSync.guideTextSizeKey, value: guideTextSize.rawValue)
             if oldValue != guideTextSize {
                 Analytics.track(.settingChanged(key: "guide_text_size", value: guideTextSize.rawValue))
@@ -538,9 +548,9 @@ class AppState {
     /// VAULT's own permanent hold already does; see `Channel.filteredPool`. Per-TV, like
     /// `iCloudSyncEnabled` itself: not synced through iCloud, so turning it on or off is
     /// never silently inherited from another Apple TV.
-    var watershedEnabled: Bool = UserDefaults.standard.object(forKey: Channel.watershedDefaultsKey) as? Bool ?? false {
+    var watershedEnabled: Bool = AppDefaults.standard.object(forKey: Channel.watershedDefaultsKey) as? Bool ?? false {
         didSet {
-            UserDefaults.standard.set(watershedEnabled, forKey: Channel.watershedDefaultsKey)
+            AppDefaults.standard.set(watershedEnabled, forKey: Channel.watershedDefaultsKey)
             if oldValue != watershedEnabled {
                 Analytics.track(.settingChanged(key: "watershed", value: watershedEnabled ? "true" : "false"))
             }
@@ -555,9 +565,9 @@ class AppState {
 
     /// Both choices default off. An explicit old Report Playback choice migrates
     /// to both; either new choice, including false, wins over the old value.
-    var showNowPlaying: Bool = PlaybackReportingPreferences.loadAndMigrate(from: .standard).showNowPlaying {
+    var showNowPlaying: Bool = PlaybackReportingPreferences.loadAndMigrate(from: AppDefaults.standard).showNowPlaying {
         didSet {
-            UserDefaults.standard.set(showNowPlaying, forKey: Self.showNowPlayingDefaultsKey)
+            AppDefaults.standard.set(showNowPlaying, forKey: Self.showNowPlayingDefaultsKey)
             preferenceSync.record(PreferenceSync.nowPlayingKey, value: showNowPlaying)
             if oldValue != showNowPlaying {
                 Analytics.track(.settingChanged(key: "show_now_playing", value: showNowPlaying ? "true" : "false"))
@@ -565,9 +575,9 @@ class AppState {
             playbackReportingChoiceChanged()
         }
     }
-    var markWatched: Bool = PlaybackReportingPreferences.loadAndMigrate(from: .standard).markWatched {
+    var markWatched: Bool = PlaybackReportingPreferences.loadAndMigrate(from: AppDefaults.standard).markWatched {
         didSet {
-            UserDefaults.standard.set(markWatched, forKey: Self.markWatchedDefaultsKey)
+            AppDefaults.standard.set(markWatched, forKey: Self.markWatchedDefaultsKey)
             preferenceSync.record(PreferenceSync.markWatchedKey, value: markWatched)
             if oldValue != markWatched {
                 Analytics.track(.settingChanged(key: "mark_watched", value: markWatched ? "true" : "false"))
@@ -596,12 +606,12 @@ class AppState {
         guard !applyingPlaybackReportingPair else { return }
         // Publish the complete pair even when only one row changed. A migrated
         // true choice may not have reached iCloud under its new key yet.
-        UserDefaults.standard.set(showNowPlaying, forKey: Self.showNowPlayingDefaultsKey)
-        UserDefaults.standard.set(markWatched, forKey: Self.markWatchedDefaultsKey)
+        AppDefaults.standard.set(showNowPlaying, forKey: Self.showNowPlayingDefaultsKey)
+        AppDefaults.standard.set(markWatched, forKey: Self.markWatchedDefaultsKey)
         preferenceSync.record(PreferenceSync.nowPlayingKey, value: showNowPlaying)
         preferenceSync.record(PreferenceSync.markWatchedKey, value: markWatched)
         let legacy = showNowPlaying && markWatched
-        UserDefaults.standard.set(legacy, forKey: Self.syncPlexActivityDefaultsKey)
+        AppDefaults.standard.set(legacy, forKey: Self.syncPlexActivityDefaultsKey)
         preferenceSync.record(PreferenceSync.reportPlaybackKey, value: legacy)
         playbackReportingScope.update(showNowPlaying: !isDemoMode && showNowPlaying,
                                       markWatched: !isDemoMode && markWatched)
@@ -612,7 +622,7 @@ class AppState {
     /// Global subtitle language (`__system__` = follow Apple TV language).
     var preferredSubtitleLanguageCode: String = AppState.loadPreferredSubtitleLanguageInitial() {
         didSet {
-            UserDefaults.standard.set(preferredSubtitleLanguageCode, forKey: Self.subtitleLanguageDefaultsKey)
+            AppDefaults.standard.set(preferredSubtitleLanguageCode, forKey: Self.subtitleLanguageDefaultsKey)
             preferenceSync.record(PreferenceSync.subtitleLanguageKey, value: preferredSubtitleLanguageCode)
             applySubtitleSelection()
             if oldValue != preferredSubtitleLanguageCode {
@@ -623,8 +633,8 @@ class AppState {
 
     /// When true, legible tracks are selected only while `isFullScreen` is true.
     var subtitlesInFullscreenEnabled: Bool =
-        UserDefaults.standard.object(forKey: "nostalgex_subtitles_fullscreen") as? Bool ?? false {
-        didSet { UserDefaults.standard.set(subtitlesInFullscreenEnabled, forKey: "nostalgex_subtitles_fullscreen")
+        AppDefaults.standard.object(forKey: "nostalgex_subtitles_fullscreen") as? Bool ?? false {
+        didSet { AppDefaults.standard.set(subtitlesInFullscreenEnabled, forKey: "nostalgex_subtitles_fullscreen")
             preferenceSync.record(PreferenceSync.subtitlesFullscreenKey, value: subtitlesInFullscreenEnabled)
             applySubtitleSelection()
             if oldValue != subtitlesInFullscreenEnabled {
@@ -637,8 +647,8 @@ class AppState {
     /// language (foreign-audio fallback). Bypasses `subtitlesInFullscreenEnabled` only;
     /// the fullscreen gate still applies.
     var autoSubtitlesForForeignAudioEnabled: Bool =
-        UserDefaults.standard.object(forKey: "nostalgex_auto_subs_foreign_audio") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(autoSubtitlesForForeignAudioEnabled, forKey: "nostalgex_auto_subs_foreign_audio")
+        AppDefaults.standard.object(forKey: "nostalgex_auto_subs_foreign_audio") as? Bool ?? true {
+        didSet { AppDefaults.standard.set(autoSubtitlesForForeignAudioEnabled, forKey: "nostalgex_auto_subs_foreign_audio")
             preferenceSync.record(PreferenceSync.autoSubsForeignAudioKey, value: autoSubtitlesForForeignAudioEnabled)
             applySubtitleSelection()
             if oldValue != autoSubtitlesForForeignAudioEnabled {
@@ -650,7 +660,7 @@ class AppState {
     private static let subtitleLanguageDefaultsKey = SubtitleSelectionLogic.subtitleLanguageDefaultsKey
 
     private static func loadPreferredSubtitleLanguageInitial() -> String {
-        if let s = UserDefaults.standard.string(forKey: subtitleLanguageDefaultsKey), !s.isEmpty {
+        if let s = AppDefaults.standard.string(forKey: subtitleLanguageDefaultsKey), !s.isEmpty {
             return s
         }
         return "__system__"
@@ -659,7 +669,7 @@ class AppState {
     /// Global audio language (`__system__` = follow Apple TV language).
     var preferredAudioLanguageCode: String = AppState.loadPreferredAudioLanguageInitial() {
         didSet {
-            UserDefaults.standard.set(preferredAudioLanguageCode, forKey: Self.audioLanguageDefaultsKey)
+            AppDefaults.standard.set(preferredAudioLanguageCode, forKey: Self.audioLanguageDefaultsKey)
             preferenceSync.record(PreferenceSync.audioLanguageKey, value: preferredAudioLanguageCode)
             applyAudioTrackSelection()
             if oldValue != preferredAudioLanguageCode {
@@ -668,10 +678,10 @@ class AppState {
         }
     }
 
-    private static let audioLanguageDefaultsKey = "nostalgex_audio_language"
+    private static let audioLanguageDefaultsKey = SubtitleSelectionLogic.audioLanguageDefaultsKey
 
     private static func loadPreferredAudioLanguageInitial() -> String {
-        if let s = UserDefaults.standard.string(forKey: audioLanguageDefaultsKey), !s.isEmpty {
+        if let s = AppDefaults.standard.string(forKey: audioLanguageDefaultsKey), !s.isEmpty {
             return s
         }
         return "__system__"
@@ -746,7 +756,7 @@ class AppState {
     @ObservationIgnored let ratingNudgeStore = RatingNudgeStore()
     /// The viewer has pressed RATE at some point (banner or Settings). Drives the
     /// Settings tile's thank-you line; persisted in `RatingNudgeStore`.
-    var hasTappedRate: Bool = UserDefaults.standard.bool(forKey: RatingNudgeStore.ratedKey)
+    var hasTappedRate: Bool = AppDefaults.standard.bool(forKey: RatingNudgeStore.ratedKey)
     /// Built when AppState is, which is before RootView's launch analytics writes its
     /// own marker, so the first-launch read is honest.
     @ObservationIgnored var ratingNudgeLaunch = RatingNudgePolicy.Launch(
@@ -850,7 +860,7 @@ class AppState {
     var lastLoadAtUnix: Int = 0 {
         didSet {
             if lastLoadAtUnix > 0 {
-                UserDefaults.standard.set(lastLoadAtUnix, forKey: Self.lastLoadKey)
+                AppDefaults.standard.set(lastLoadAtUnix, forKey: Self.lastLoadKey)
             }
         }
     }
@@ -861,7 +871,7 @@ class AppState {
     /// step-rail loader when we know we loaded today, even if the snapshot file
     /// itself is missing or fails to decode.
     var hasRecentSuccessfulLoad: Bool {
-        let saved = UserDefaults.standard.integer(forKey: Self.lastLoadKey)
+        let saved = AppDefaults.standard.integer(forKey: Self.lastLoadKey)
         guard saved > 0 else { return false }
         let now = Int(Date().timeIntervalSince1970)
         return now - saved < 86400

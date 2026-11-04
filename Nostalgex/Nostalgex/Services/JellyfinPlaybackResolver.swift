@@ -408,16 +408,30 @@ enum JellyfinPlaybackResolver {
     /// channel with no way for the viewer to change it. A retro TV guide has no audio
     /// picker and should not need one; it should just pick the sensible track.
     ///
-    /// Preference order: a track in one of the viewer's languages, most channels first so
-    /// a 5.1 mix wins over a stereo one; then whatever the file calls default; then the
-    /// first audio track there is. Returns nil when there is nothing to choose between,
-    /// which leaves the server's own choice alone.
+    /// Preference order: a track in the AUDIO LANGUAGE the viewer picked in Settings
+    /// (`audioLanguage`, nil or "__system__" for AUTO); then a track in one of the Apple TV's
+    /// languages or English; within either, most channels first so a 5.1 mix wins over a
+    /// stereo one. Then whatever the file calls default; then the first audio track there
+    /// is. Returns nil when there is nothing to choose between, which leaves the server's
+    /// own choice alone.
+    ///
+    /// AUDIO LANGUAGE used to be ignored here (I-070, #177): a viewer who picked German on an
+    /// English Apple TV got the English track whenever Jellyfin or Emby transcoded.
     static func preferredAudioIndex(
         in streams: [PlaybackInfoResponse.MediaStream]?,
+        audioLanguage: String? = nil,
         preferredLanguages: [String] = Locale.preferredLanguages
     ) -> Int? {
         let audio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
         guard audio.count > 1 else { return nil }
+
+        if let audioLanguage, audioLanguage != "__system__",
+           let chosen = SubtitleSelectionLogic.languageKey(audioLanguage),
+           let best = audio
+               .filter({ SubtitleSelectionLogic.languageKey($0.Language) == chosen })
+               .max(by: { ($0.Channels ?? 0) < ($1.Channels ?? 0) }) {
+            return best.Index
+        }
 
         // "en-GB" and "eng" both have to match a track tagged "eng" or "en". Each side is
         // reduced to one code through the ISO 639-2 table and compared exactly; comparing
@@ -488,7 +502,8 @@ enum JellyfinPlaybackResolver {
         apiKey: String,
         itemId: String,
         mediaSourceId: String?,
-        serverStreamOnly: Bool = false
+        serverStreamOnly: Bool = false,
+        audioLanguage: String? = nil
     ) -> PlaybackResolution? {
         let source = source(in: info, mediaSourceId: mediaSourceId)
 
@@ -499,7 +514,7 @@ enum JellyfinPlaybackResolver {
         if let relative = source?.TranscodingUrl, !relative.isEmpty {
             if let url = makeURL(serverURL: serverURL, relativeOrAbsolute: relative, apiKey: apiKey) {
                 let pinned = pinningAudioStream(
-                    url, index: preferredAudioIndex(in: source?.MediaStreams)
+                    url, index: preferredAudioIndex(in: source?.MediaStreams, audioLanguage: audioLanguage)
                 )
                 return PlaybackResolution(url: pinned, playSessionId: info.PlaySessionId, isDirectPlay: false)
             }
@@ -540,7 +555,9 @@ enum JellyfinPlaybackResolver {
         mediaSourceId: String,
         serverStreamOnly: Bool,
         preferredSubtitleLanguage: String,
-        send: PlaybackInfoSend
+        audioLanguage: String? = nil,
+        send: PlaybackInfoSend,
+        stopRefused: @Sendable (String) async -> Void = { _ in }
     ) async throws -> PlaybackResolution? {
         guard let first = request(nil) else { return nil }
         let (data, response) = try await send(first)
@@ -552,11 +569,66 @@ enum JellyfinPlaybackResolver {
            let (data2, response2) = try? await send(second),
            let burnedInfo = try? decodePlaybackInfo(data2, response2),
            let burned = resolve(burnedInfo, serverURL: serverURL, apiKey: apiKey, itemId: itemId,
-                                mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly) {
-            return burned
+                                mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly,
+                                audioLanguage: audioLanguage) {
+            // The playlist of a burned-in stream is served without running the encoder; the
+            // first segment is where a server that cannot burn says so (Chad's Emby 4.10.1
+            // answers HTTP 500 to every one). Without this check the player finds out on its
+            // own, and the startup watchdog gives up on it 20 s later (40 s on a 4K film).
+            let served = burned.isDirectPlay ? true : await burnedStreamServes(burned.url, send: send)
+            if served { return burned }
+            print("[Plex90] BURN-IN: the server refused the burned-in stream's first segment, playing without the forced subtitle")
+            // Nothing else will ever see this session, and the probe may have started an
+            // encode for it (Jellyfin does on the variant request).
+            if let session = burned.playSessionId { await stopRefused(session) }
         }
         return resolve(info, serverURL: serverURL, apiKey: apiKey, itemId: itemId,
-                       mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly)
+                       mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly,
+                       audioLanguage: audioLanguage)
+    }
+
+    /// Longest the check waits on one request. A heavy burn can be slow to produce its first
+    /// segment, and that is not a refusal: past this the burned stream is kept and the player
+    /// carries on with the encode already running. Same as the PlaybackInfo requests.
+    static let burnProbeTimeout: TimeInterval = 12
+
+    /// Fetches what the player fetches first: the master playlist, its first variant, that
+    /// playlist's first segment. False only when the server answers one of them with an HTTP
+    /// error. A timeout, a dropped connection or a playlist this cannot read prove nothing,
+    /// so they count as served and the burned stream plays as it always has. The URLs are
+    /// the ones the playlists give, with no header added, exactly as the player asks.
+    static func burnedStreamServes(_ url: URL, send: PlaybackInfoSend) async -> Bool {
+        func fetch(_ url: URL) async -> (ok: Bool, text: String?) {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = burnProbeTimeout
+            guard let (data, response) = try? await send(request),
+                  let http = response as? HTTPURLResponse else { return (true, nil) }
+            // Only a playlist's text is used; a segment's body is decoded and ignored.
+            let text = data.count < 1_000_000 ? String(data: data, encoding: .utf8) : nil
+            return ((200...299).contains(http.statusCode), text)
+        }
+        /// The first line that is not a tag, resolved against the playlist it came from.
+        func firstEntry(of text: String, relativeTo base: URL) -> URL? {
+            let line = text.split(whereSeparator: \.isNewline).map(String.init)
+                .first { !$0.isEmpty && !$0.hasPrefix("#") }
+            return line.flatMap { URL(string: $0, relativeTo: base)?.absoluteURL }
+        }
+        let master = await fetch(url)
+        guard master.ok else { return false }
+        guard let masterText = master.text, masterText.hasPrefix("#EXTM3U") else { return true }
+        var playlistURL = url
+        var playlistText = masterText
+        if masterText.contains("#EXT-X-STREAM-INF") {
+            guard let variantURL = firstEntry(of: masterText, relativeTo: url) else { return true }
+            let variant = await fetch(variantURL)
+            guard variant.ok else { return false }
+            guard let text = variant.text, text.hasPrefix("#EXTM3U") else { return true }
+            playlistURL = variantURL
+            playlistText = text
+        }
+        guard playlistText.contains("#EXTINF"), let segmentURL = firstEntry(of: playlistText, relativeTo: playlistURL) else { return true }
+        return await fetch(segmentURL).ok
     }
 
     private static func decodePlaybackInfo(_ data: Data, _ response: URLResponse) throws -> PlaybackInfoResponse {

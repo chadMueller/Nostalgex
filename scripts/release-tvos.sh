@@ -12,8 +12,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCHIVE=/tmp/Nostalgex.xcarchive
 EXPORT=/tmp/nostalgex-export
+# altool (validate, upload) reads its key from ~/.appstoreconnect/private_keys.
 KEY_ID=2Y8K8NTUV3
 ISSUER=e9e9d3ec-0c04-4694-bcb9-55e8407672f6
+# xcodebuild signs with automatic signing and this key, so it can fetch or update
+# the App Store profiles with every capability the targets have (iCloud, App
+# Groups). See the comment in Nostalgex/ExportOptions.plist.
+SIGN_KEY_ID=BF3LR5NQQK
+SIGN_KEY_PATH="$HOME/.appstoreconnect/AuthKey_$SIGN_KEY_ID.p8"
+SIGNING=(
+  -allowProvisioningUpdates
+  -authenticationKeyPath "$SIGN_KEY_PATH"
+  -authenticationKeyID "$SIGN_KEY_ID"
+  -authenticationKeyIssuerID "$ISSUER"
+)
+[ -f "$SIGN_KEY_PATH" ] || { echo "missing $SIGN_KEY_PATH"; exit 1; }
 DRY_RUN=${1:-}
 
 VERSION=$(grep -m1 "MARKETING_VERSION = " "$ROOT/Nostalgex/Nostalgex.xcodeproj/project.pbxproj" | sed 's/.*= *//;s/;//')
@@ -27,7 +40,8 @@ xcodebuild archive \
   -project "$ROOT/Nostalgex/Nostalgex.xcodeproj" \
   -scheme Nostalgex \
   -destination 'generic/platform=tvOS' \
-  -archivePath "$ARCHIVE" > /tmp/release-archive.log 2>&1 \
+  -archivePath "$ARCHIVE" \
+  "${SIGNING[@]}" > /tmp/release-archive.log 2>&1 \
   || { echo "archive failed, see /tmp/release-archive.log"; tail -20 /tmp/release-archive.log; exit 1; }
 
 # The app is useless without current channel data, and the copy phase pulls it
@@ -42,7 +56,8 @@ echo "==> Exporting"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT" \
-  -exportOptionsPlist "$ROOT/Nostalgex/ExportOptions.plist" > /tmp/release-export.log 2>&1 \
+  -exportOptionsPlist "$ROOT/Nostalgex/ExportOptions.plist" \
+  "${SIGNING[@]}" > /tmp/release-export.log 2>&1 \
   || { echo "export failed, see /tmp/release-export.log"; grep -E "error:" /tmp/release-export.log | head; exit 1; }
 
 # altool reports failure in its OUTPUT but still exits 0, so `set -e` does not

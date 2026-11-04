@@ -9720,7 +9720,11 @@
             LL.setPhase('scanningLibrary', `${view.Name} · ${episodeCount} eps`);
           }
         } else {
-          const items = await fetchItems(view.Id, 'Movie');
+          // Jellyfin (and Emby) file a music video library's items as MusicVideo, so asking it
+          // for Movie alone returned nothing and HIGH ROTATION stayed empty (I-067). Ask for
+          // both there, since a few libraries file clips as Movie. Every other library keeps
+          // asking for Movie only.
+          const items = await fetchItems(view.Id, isMusicVideoSection ? 'Movie,MusicVideo' : 'Movie');
           items.forEach(jf => {
             const genres = jf.Genres || [];
             if (isMusicVideoSection && !genres.some(g => /music/i.test(g))) genres.push('Music Video');

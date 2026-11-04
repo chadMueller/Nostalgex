@@ -27,7 +27,7 @@ extension AppState: PreferenceSyncApplying {
         let incomingNow = values[PreferenceSync.nowPlayingKey] as? Bool
         let incomingMark = values[PreferenceSync.markWatchedKey] as? Bool
         let old = values[PreferenceSync.reportPlaybackKey] as? Bool
-        let defaults = UserDefaults.standard
+        let defaults = AppDefaults.standard
         let legacyNow = defaults.object(forKey: Self.showNowPlayingDefaultsKey) == nil ? old : nil
         let legacyMark = defaults.object(forKey: Self.markWatchedDefaultsKey) == nil ? old : nil
         if incomingNow != nil || incomingMark != nil || legacyNow != nil || legacyMark != nil {
@@ -113,7 +113,7 @@ extension AppState: PreferenceSyncApplying {
         case "retro=1": retroMode = true
         case "retro=0": retroMode = false
         case "retro=unset-local":
-            UserDefaults.standard.removeObject(forKey: PreferenceSync.retroModeKey)
+            AppDefaults.standard.removeObject(forKey: PreferenceSync.retroModeKey)
             print("[Sync] probe: removed local retro mode")
         case "clear-cloud":
             preferenceSync.debugClearCloud()

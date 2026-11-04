@@ -21,9 +21,9 @@ struct PlexAPIService: MediaBackend {
     }()
 
     static var clientID: String {
-        if let id = UserDefaults.standard.string(forKey: "plex90_client_id") { return id }
+        if let id = AppDefaults.standard.string(forKey: "plex90_client_id") { return id }
         let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "plex90_client_id")
+        AppDefaults.standard.set(id, forKey: "plex90_client_id")
         return id
     }
 
@@ -1282,52 +1282,53 @@ struct PlexAPIService: MediaBackend {
     /// relay). Concurrent so one unreachable/slow connection can't stall the whole login —
     /// total time is bounded by the slowest single probe, not the sum of all of them.
     private static func bestReachableURI(for server: PlexResource, token: String) async -> String? {
-        let ordered: [PlexConnection] =
-            server.connections.filter { $0.local && !$0.relay }
-            + server.connections.filter { !$0.local && !$0.relay && $0.uri.hasPrefix("https://") }
-            + server.connections.filter { !$0.local && !$0.relay && !$0.uri.hasPrefix("https://") }
-            + server.connections.filter { $0.relay }
+        await bestReachableURI(
+            connections: server.connections.map { ConnectionCandidate(uri: $0.uri, local: $0.local, relay: $0.relay) },
+            reach: { candidate, patient in await testReachable(uri: candidate.uri, token: token, patient: patient) }
+        )
+    }
+
+    /// One of a server's connections, as plex.tv lists it.
+    struct ConnectionCandidate: Sendable, Equatable {
+        let uri: String
+        let local: Bool
+        let relay: Bool
+    }
+
+    /// Probes `connections` concurrently with `reach` (the app's is `testReachable`; tests pass
+    /// their own, or that one against synthetic addresses) and returns the best one that
+    /// answered. `reach` gets the candidate and whether it is `patient` (remote or relay).
+    static func bestReachableURI(
+        connections: [ConnectionCandidate],
+        reach: @escaping @Sendable (ConnectionCandidate, Bool) async -> Bool
+    ) async -> String? {
+        let ordered: [ConnectionCandidate] =
+            connections.filter { $0.local && !$0.relay }
+            + connections.filter { !$0.local && !$0.relay && $0.uri.hasPrefix("https://") }
+            + connections.filter { !$0.local && !$0.relay && !$0.uri.hasPrefix("https://") }
+            + connections.filter { $0.relay }
         guard !ordered.isEmpty else { return nil }
 
-        // Which tier won and how long it took, for the debug timing below: the URI alone
-        // (often plex.direct for both local and remote) doesn't say which.
-        let tierStart = Date()
-        func tierName(_ c: PlexConnection) -> String {
-            if c.local && !c.relay { return "local" }
-            if c.relay { return "relay" }
-            return c.uri.hasPrefix("https://") ? "remote-https" : "remote-plain"
-        }
-
-        // Found live, 2026-10-30: sign-in over Plex measured ~45-49s even with the fix
-        // below. Second root cause, found with real timing logs from a live trace: a
-        // shared server with only relay reachability had its relay candidate succeed in
-        // 0.5s, but relay is the lowest-priority tier, so the first version of this fix
-        // (below) correctly waited for the higher-priority remote-HTTPS candidate to
-        // also report before accepting it, since that candidate COULD still outrank
-        // relay if it succeeded. It never succeeds for this server, but still takes its
-        // full patient budget (25s, one retry, up to 50s) to finish failing. One slow
-        // server blocks the whole sign-in: `discoverServers` needs every server's result
-        // to decide whether to show a picker, so the slowest server sets the pace.
+        // Found live, 2026-10-30: sign-in over Plex measured ~45-49s. A shared server whose
+        // only working path was relay (the lowest tier) had its relay answer in 0.5s, but
+        // waited out a higher-ranked remote-HTTPS candidate's full patient budget (25s, one
+        // retry, up to 50s) before taking it. One slow server holds up the whole sign-in:
+        // `discoverServers` needs every server's result before it can show a picker.
         //
-        // Fix: once there is at least one success, give anything still-ranked-higher a
-        // grace window to beat it rather than its full patient budget, instead of
-        // waiting out the full 50s worst case for every server. This must not trade a
-        // slow-but-real connection for a faster-but-worse one, so the grace window is
-        // sized by what is actually still pending, not one flat number:
-        //   - A pending LOCAL candidate answers fast or not at all (existing design,
-        //     see `patient` below), so a short grace is genuinely safe; it is not
-        //     going to succeed slowly.
-        //   - A pending remote-HTTPS/plain/relay candidate is `patient` and can
-        //     legitimately take 10-20s to cold-establish and still succeed, so it gets
-        //     most of its own budget, not a token few seconds, before a faster lower
-        //     tier is allowed to win instead.
-        // Connection timing, for measuring discovery on a real TV (qS8n7gQi). Debug
-        // builds only: a release build never prints server names or addresses.
-        func discoveryTiming(_ message: @autoclosure () -> String) {
-            #if DEBUG
-            print("[Plex90] DISCOVERY TIMING: " + message())
-            #endif
-        }
+        // So once there is a hit, whatever still outranks it gets a grace window rather than
+        // its full budget. It must never trade a slow but real better connection for a faster
+        // worse one, so the window is sized by what is still PENDING ahead of the hit:
+        //   - only local candidates: 3s. Local answers fast or not at all (`patient` below).
+        //   - any remote or relay candidate: 15s. Those can take 10-20s to cold-establish
+        //     and still succeed.
+        // The window runs from the first hit and is worked out again every time a candidate
+        // reports, so it shrinks to 3s as soon as the last patient one ahead has failed.
+        // Measured 2026-10-31 on an Apple TV: a shared server with 8 dead local addresses
+        // settled at 7.3s and 12.0s in 2 of 4 runs although its remote answered in 0.2-0.4s.
+        // The window used to be sized once, by everything ranked ahead of the hit, failed or
+        // not: a remote address ranked ahead that had already failed still counted as
+        // patient, so the window was 15s and the wait ran until the locals timed out (12s).
+        // PlexDiscoveryDeadLocalHarnessTests reproduces that (12.1s) and holds it to 3.4s.
         let graceWhilePatientCandidatesStillPending: TimeInterval = 15
         let graceWhileOnlyLocalCandidatesStillPending: TimeInterval = 3
         let reachableIndices = await withTaskGroup(of: (idx: Int, ok: Bool).self) { group -> [Int] in
@@ -1337,48 +1338,49 @@ struct PlexAPIService: MediaBackend {
                     // (the only paths a shared-library-only user has) are slow to
                     // establish cold, so they get a longer budget and one retry.
                     let patient = !candidate.local || candidate.relay
-                    let ok = await testReachable(uri: candidate.uri, token: token, patient: patient)
+                    let ok = await reach(candidate, patient)
                     return (idx, ok)
                 }
             }
-            // -1 is a sentinel for the grace timer below, never a real candidate index.
+            // -1 is a sentinel for a grace timer, never a real candidate index.
             var reported = Set<Int>()
             var hits: [Int] = []
-            var graceDeadline: Date? = nil
+            var firstHitAt: Date? = nil
+            // The earliest deadline a timer is already set for. The deadline only ever moves
+            // earlier (fewer pending, or a better hit with fewer ahead of it), so a new timer
+            // is needed only when it does.
+            var timerSetFor: Date? = nil
             for await (idx, ok) in group {
-                if idx >= 0 {
-                    let elapsed = String(format: "%.1f", Date().timeIntervalSince(tierStart))
-                    discoveryTiming("'\(server.name ?? "?")' \(tierName(ordered[idx])) (\(ordered[idx].uri)) \(ok ? "OK" : "FAILED") at \(elapsed)s")
-                    reported.insert(idx)
-                    if ok { hits.append(idx) }
-                }
-                guard let best = hits.min() else { continue }
-                if (0..<best).allSatisfy({ reported.contains($0) }) {
-                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (all earlier reported), cancelling the rest")
-                    group.cancelAll()
-                    break
-                }
                 if idx == -1 {
-                    discoveryTiming("'\(server.name ?? "?")' settled on \(tierName(ordered[best])) at \(String(format: "%.1f", Date().timeIntervalSince(tierStart)))s (grace window elapsed), cancelling the rest")
+                    timerSetFor = nil  // that timer is spent; set another below if still waiting
+                } else {
+                    reported.insert(idx)
+                    if ok {
+                        hits.append(idx)
+                        if firstHitAt == nil { firstHitAt = Date() }
+                    }
+                }
+                guard let best = hits.min(), let firstHitAt else { continue }
+                let pendingAhead = (0..<best).filter { !reported.contains($0) }
+                if pendingAhead.isEmpty {
                     group.cancelAll()
                     break
                 }
-                // There is a hit but something higher-priority is still outstanding.
-                // Size the one-time grace window by what actually outranks the current
-                // best hit, not a flat number: if any of it is a patient (remote/relay)
-                // tier, it gets real time to legitimately succeed slowly; only when
-                // everything outranking the hit is local-only is a short grace safe,
-                // since local answers fast or not at all. Scheduled as a real timer
-                // task in this same group: a passive time check here would never fire
-                // on its own, since this loop only wakes up when a task reports.
-                if graceDeadline == nil {
-                    let higherPriorityIncludesPatient = ordered[0..<best].contains { !$0.local || $0.relay }
-                    let grace = higherPriorityIncludesPatient
-                        ? graceWhilePatientCandidatesStillPending
-                        : graceWhileOnlyLocalCandidatesStillPending
-                    graceDeadline = Date().addingTimeInterval(grace)
+                let patientPending = pendingAhead.contains { !ordered[$0].local || ordered[$0].relay }
+                let deadline = firstHitAt.addingTimeInterval(patientPending
+                    ? graceWhilePatientCandidatesStillPending
+                    : graceWhileOnlyLocalCandidatesStillPending)
+                let wait = deadline.timeIntervalSinceNow
+                if wait <= 0.005 {
+                    group.cancelAll()
+                    break
+                }
+                // A timer task in this same group: a passive time check here would never fire
+                // on its own, since this loop only wakes when a task reports.
+                if timerSetFor.map({ deadline < $0 }) ?? true {
+                    timerSetFor = deadline
                     group.addTask {
-                        try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000))
+                        try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                         return (-1, false)
                     }
                 }
@@ -1488,7 +1490,7 @@ struct PlexAPIService: MediaBackend {
     /// often the ONLY path for a user who only has access to a shared remote library. Local
     /// connections stay snappy: on a LAN they answer fast, and waiting on a dead LAN IP only
     /// slows login.
-    private static func testReachable(uri: String, token: String, patient: Bool) async -> Bool {
+    static func testReachable(uri: String, token: String, patient: Bool) async -> Bool {
         let timeout: TimeInterval = patient ? 25 : 12
         let attempts = patient ? 2 : 1
         for attempt in 0..<attempts {
