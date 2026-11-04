@@ -1,5 +1,4 @@
 import XCTest
-import Network
 @testable import Nostalgex
 
 /// A rescan must give the same guide when nothing on the server changed.
@@ -34,8 +33,7 @@ final class EpisodeBatchOrderHarnessTests: XCTestCase {
 
     // MARK: - Fake servers
 
-    /// One response: hold `delayMs`, then send `body` as JSON.
-    private struct Reply { let delayMs: Int; let body: Any }
+    private typealias Reply = LoopbackReply
 
     private static func jellyfinReply(path: String, query: [String: String], shuffled: Bool) -> Reply? {
         if path.hasSuffix("/UserViews") || path.hasSuffix("/Views") {
@@ -92,76 +90,7 @@ final class EpisodeBatchOrderHarnessTests: XCTestCase {
         return nil
     }
 
-    /// A minimal HTTP/1.1 server on 127.0.0.1: one request per connection, then close.
-    private final class FakeServer: @unchecked Sendable {
-        private let listener: NWListener
-        private let queue = DispatchQueue(label: "fake-server", attributes: .concurrent)
-        private let route: @Sendable (String, [String: String]) -> Reply?
-        private(set) var port: UInt16 = 0
-
-        init(route: @escaping @Sendable (String, [String: String]) -> Reply?) throws {
-            self.route = route
-            // Loopback only: nothing off this machine can reach it, and no firewall prompt.
-            let params = NWParameters.tcp
-            params.requiredInterfaceType = .loopback
-            params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
-            listener = try NWListener(using: params)
-        }
-
-        func start() async throws {
-            listener.newConnectionHandler = { [weak self] conn in self?.serve(conn) }
-            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-                var resumed = false
-                listener.stateUpdateHandler = { state in
-                    guard !resumed else { return }
-                    switch state {
-                    case .ready: resumed = true; cont.resume()
-                    case .failed(let e): resumed = true; cont.resume(throwing: e)
-                    default: break
-                    }
-                }
-                listener.start(queue: queue)
-            }
-            port = listener.port?.rawValue ?? 0
-        }
-
-        func stop() { listener.cancel() }
-
-        private func serve(_ conn: NWConnection) {
-            conn.start(queue: queue)
-            read(conn, buffer: Data())
-        }
-
-        private func read(_ conn: NWConnection, buffer: Data) {
-            conn.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, done, error in
-                guard let self else { return }
-                var buf = buffer
-                if let data { buf.append(data) }
-                if let end = buf.range(of: Data("\r\n\r\n".utf8)) {
-                    self.respond(conn, head: String(decoding: buf[..<end.lowerBound], as: UTF8.self))
-                } else if done || error != nil {
-                    conn.cancel()
-                } else {
-                    self.read(conn, buffer: buf)
-                }
-            }
-        }
-
-        private func respond(_ conn: NWConnection, head: String) {
-            let target = head.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
-            let comps = URLComponents(string: "http://x\(target)")
-            var query: [String: String] = [:]
-            for q in comps?.queryItems ?? [] { query[q.name] = q.value ?? "" }
-            let reply = route(comps?.path ?? target, query)
-            let body = (try? JSONSerialization.data(withJSONObject: reply?.body ?? [:])) ?? Data()
-            let status = reply == nil ? "404 Not Found" : "200 OK"
-            var out = Data("HTTP/1.1 \(status)\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8)
-            out.append(body)
-            queue.asyncAfter(deadline: .now() + .milliseconds(reply?.delayMs ?? 0)) {
-                conn.send(content: out, completion: .contentProcessed { _ in conn.cancel() })
-            }
-        }
-    }
+    private typealias FakeServer = LoopbackJSONServer
 
     // MARK: - Loads
 
@@ -210,16 +139,24 @@ final class EpisodeBatchOrderHarnessTests: XCTestCase {
 
     /// What is on air each minute, per channel, over three days. Days are built in order so
     /// "yesterday" exists, as on a TV that was on.
-    private static func minutes(_ items: [PlexMediaItem], fingerprint: String) -> [String] {
+    ///
+    /// `packedAsLineup` registers the four channels as the guide's lineup, so each day is
+    /// packed across all of them (`packLineupDay`, the cross-channel dedupe): the all-shows
+    /// channel shares every show with one of the other three, so programmes give way to each
+    /// other all day. False packs each channel on its own, as before the dedupe.
+    private static func minutes(_ items: [PlexMediaItem], fingerprint: String, packedAsLineup: Bool) -> [String] {
+        let channels = lineup(items)
         DailyManifestStore.clearAll(credentialFingerprint: fingerprint)
         DailyManifestScheduler.invalidateMemo()
+        if packedAsLineup { DailyManifestScheduler.setAdditionalLineup(channels, credentialFingerprint: fingerprint) }
         defer {
+            DailyManifestScheduler.setAdditionalLineup([], credentialFingerprint: fingerprint)
             DailyManifestStore.clearAll(credentialFingerprint: fingerprint)
             DailyManifestScheduler.invalidateMemo()
         }
         let day0 = Date(timeIntervalSince1970: 1_793_491_200) // 2026-11-01 00:00 UTC
         var out: [String] = []
-        for ch in lineup(items) {
+        for ch in channels {
             for d in 0..<3 {
                 let start = day0.addingTimeInterval(TimeInterval(d * 86_400))
                 let blocks = DailyManifestScheduler.blocks(
@@ -245,17 +182,36 @@ final class EpisodeBatchOrderHarnessTests: XCTestCase {
             XCTAssertEqual(Set(inOrder.map(\.id)), Set(shuffled.map(\.id)), "\(backend): the two loads hold different items")
 
             let orderDiffers = inOrder.map(\.id) != shuffled.map(\.id)
-            let a = Self.minutes(inOrder, fingerprint: "batch-order-a-\(backend)")
-            let b = Self.minutes(shuffled, fingerprint: "batch-order-b-\(backend)")
-            let changed = zip(a, b).filter { $0 != $1 }.count
-            let pct = Double(changed) * 100 / Double(max(a.count, 1))
-            let line = "\(backend): item order \(orderDiffers ? "DIFFERS" : "same"), "
-                + "\(changed)/\(a.count) channel-minutes differ (\(String(format: "%.1f", pct))%)"
-            print("[BATCH-ORDER] \(line)")
-            report.append(line)
             XCTAssertFalse(orderDiffers, "\(backend): episode order followed request completion")
-            XCTAssertEqual(changed, 0, line)
+            for packedAsLineup in [false, true] {
+                let mode = packedAsLineup ? "lineup pack" : "per channel"
+                let a = Self.minutes(inOrder, fingerprint: "batch-order-a-\(backend)", packedAsLineup: packedAsLineup)
+                let b = Self.minutes(shuffled, fingerprint: "batch-order-b-\(backend)", packedAsLineup: packedAsLineup)
+                let changed = zip(a, b).filter { $0 != $1 }.count
+                let pct = Double(changed) * 100 / Double(max(a.count, 1))
+                let line = "\(backend) (\(mode)): item order \(orderDiffers ? "DIFFERS" : "same"), "
+                    + "\(changed)/\(a.count) channel-minutes differ (\(String(format: "%.1f", pct))%)"
+                print("[BATCH-ORDER] \(line)")
+                report.append(line)
+                XCTAssertEqual(changed, 0, line)
+            }
         }
         print("[BATCH-ORDER] " + report.joined(separator: " | "))
+    }
+
+    /// Negative control for the lineup pack: the measurement has to be able to see a
+    /// difference there too. The same items with the shows in another order (the order a scan
+    /// used to hand them over in when requests finished out of order) must build a different
+    /// guide, or a zero above would prove nothing.
+    func testTheLineupPackStillSeesAShowOrderChange() async throws {
+        let items = try await load(.jellyfin, shuffled: false)
+        let byShow = Dictionary(grouping: items, by: \.title)
+        let reordered = byShow.keys.sorted(by: >).flatMap { byShow[$0] ?? [] }
+        XCTAssertEqual(Set(reordered.map(\.id)), Set(items.map(\.id)))
+        let a = Self.minutes(items, fingerprint: "batch-order-ctl-a", packedAsLineup: true)
+        let b = Self.minutes(reordered, fingerprint: "batch-order-ctl-b", packedAsLineup: true)
+        let changed = zip(a, b).filter { $0 != $1 }.count
+        print("[BATCH-ORDER] control (lineup pack, shows reordered): \(changed)/\(a.count) channel-minutes differ")
+        XCTAssertGreaterThan(changed, a.count / 10)
     }
 }

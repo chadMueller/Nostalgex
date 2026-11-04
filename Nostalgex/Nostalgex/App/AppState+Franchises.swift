@@ -455,10 +455,10 @@ extension AppState {
 
     func saveFranchisePreferences() {
         let ids = Array(enabledFranchiseIDs).sorted()
-        UserDefaults.standard.set(ids, forKey: Self.enabledFranchisesKey)
+        AppDefaults.standard.set(ids, forKey: Self.enabledFranchisesKey)
         preferenceSync.record(PreferenceSync.enabledFranchisesKey, value: ids)
         let offIDs = Array(disabledFranchiseIDs).sorted()
-        UserDefaults.standard.set(offIDs, forKey: Self.disabledFranchisesKey)
+        AppDefaults.standard.set(offIDs, forKey: Self.disabledFranchisesKey)
         preferenceSync.record(PreferenceSync.disabledFranchisesKey, value: offIDs)
     }
 

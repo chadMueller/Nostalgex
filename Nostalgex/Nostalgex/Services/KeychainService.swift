@@ -22,20 +22,23 @@ enum KeychainService {
 
     @discardableResult
     static func save(key: String, value: String) -> Bool {
+        #if DEBUG
+        if HarnessIsolation.isActive { HarnessIsolation.saveCredential(key: key, value: value); return true }
+        #endif
         let primaryOK = writeInPlace(account: key, value: value,
                                      accessibility: kSecAttrAccessibleAfterFirstUnlock,
                                      label: "AfterFirstUnlock")
         let twinOK = writeInPlace(account: deviceLocalTwin(key), value: value,
                                   accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                                   label: "ThisDeviceOnly twin")
-        UserDefaults.standard.set(value, forKey: mirrorKey(key))
-        let mirrorOK = UserDefaults.standard.string(forKey: mirrorKey(key)) == value
+        AppDefaults.standard.set(value, forKey: mirrorKey(key))
+        let mirrorOK = AppDefaults.standard.string(forKey: mirrorKey(key)) == value
 
         if primaryOK || twinOK || mirrorOK {
-            UserDefaults.standard.removeObject(forKey: writeVerificationFailedKey)
+            AppDefaults.standard.removeObject(forKey: writeVerificationFailedKey)
             return true
         }
-        UserDefaults.standard.set(true, forKey: writeVerificationFailedKey)
+        AppDefaults.standard.set(true, forKey: writeVerificationFailedKey)
         InstallDiagnostics.log.error("keychain: nothing could persist \(key, privacy: .public)")
         return false
     }
@@ -68,6 +71,9 @@ enum KeychainService {
     }
 
     static func load(key: String) -> String? {
+        #if DEBUG
+        if HarnessIsolation.isActive { return HarnessIsolation.loadCredential(key: key) }
+        #endif
         if let value = loadRaw(account: key, recordAs: key) {
             backfillMirror(key: key, value: value)
             return value
@@ -77,7 +83,7 @@ enum KeychainService {
             backfillMirror(key: key, value: twin)
             return twin
         }
-        if let mirror = UserDefaults.standard.string(forKey: mirrorKey(key)) {
+        if let mirror = AppDefaults.standard.string(forKey: mirrorKey(key)) {
             InstallDiagnostics.log.notice("keychain: missing \(key, privacy: .public) entirely, served by mirror")
             return mirror
         }
@@ -87,8 +93,8 @@ enum KeychainService {
     /// Installs that signed in before the mirror existed get one on their next launch, so
     /// the next keychain drop is covered without asking anyone to sign in again.
     private static func backfillMirror(key: String, value: String) {
-        if UserDefaults.standard.string(forKey: mirrorKey(key)) != value {
-            UserDefaults.standard.set(value, forKey: mirrorKey(key))
+        if AppDefaults.standard.string(forKey: mirrorKey(key)) != value {
+            AppDefaults.standard.set(value, forKey: mirrorKey(key))
         }
     }
 
@@ -123,13 +129,13 @@ enum KeychainService {
     static let loadStatusesKey = "nostalgex_keychain_load_statuses"
 
     private static func recordLoadStatus(_ status: OSStatus, for key: String) {
-        var dict = UserDefaults.standard.dictionary(forKey: loadStatusesKey) as? [String: Int] ?? [:]
+        var dict = AppDefaults.standard.dictionary(forKey: loadStatusesKey) as? [String: Int] ?? [:]
         dict[key] = Int(status)
-        UserDefaults.standard.set(dict, forKey: loadStatusesKey)
+        AppDefaults.standard.set(dict, forKey: loadStatusesKey)
     }
 
     static func lastLoadStatuses() -> [String: Int] {
-        UserDefaults.standard.dictionary(forKey: loadStatusesKey) as? [String: Int] ?? [:]
+        AppDefaults.standard.dictionary(forKey: loadStatusesKey) as? [String: Int] ?? [:]
     }
 
     /// Statuses worth retrying shortly after launch rather than concluding the sign-in is
@@ -139,6 +145,9 @@ enum KeychainService {
     }
 
     static func delete(key: String) {
+        #if DEBUG
+        if HarnessIsolation.isActive { HarnessIsolation.deleteCredential(key: key); return }
+        #endif
         for account in [key, deviceLocalTwin(key)] {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
@@ -147,6 +156,6 @@ enum KeychainService {
             ]
             SecItemDelete(query as CFDictionary)
         }
-        UserDefaults.standard.removeObject(forKey: mirrorKey(key))
+        AppDefaults.standard.removeObject(forKey: mirrorKey(key))
     }
 }

@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
+
+**Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
+
+**Changed.** `ScreenAwakePolicy` is the one answer RootView writes to tvOS's idle timer: playback, or a foreground
+load (first load, RESCAN) with a sign-in. A background refresh never holds it. Released on the guide, the error
+screen and sign-out. 10 tests. Before, only playback held the timer, so a first load longer than the TV's Sleep
+After setting could end in a sleeping TV: the basement TV is set to 15 minutes and last night's 11-minute cold
+load only just beat it.
+
+**Measured.** The cold Plex harness grew nine Plex-shape knobs and a two-section server, each run alone at
+15,000 movies with the enrichment cache warm, so the pool build is the stage under test: 37 s baseline, 41 s with
+non-ASCII titles, 54 s with 1,500 to 3,000 character summaries (the two Christmas channels read every one), 73 s
+with the library in two sections (30,000 items, since the dedupe only drops a same-server same-ratingKey copy).
+Nothing superlinear, every tick taken by the main actor at once, peak 250 to 383 MB. The build order is
+channels.json order, so "Channel 60 of 142" means CERTIFIED GOLD done and OSCAR WINNERS in flight, about 0.5 s
+here (its 100-entry title list against 15,000 titles). The Plex collections scan does not run for a new user,
+because no collection package is on; franchise discovery does, but after the pool build.
+
+**Not reproduced.** The stall at 60 of 142. After parsing, nothing Plex-shaped makes the pool build stall. If it
+is real on the reporter's Apple TV 4K (2021, A12), it is in something only that device shows: the main actor not
+taking a tick, memory, or thermal. An A12 turns a 37 s build into minutes, not an hour.
+
+**Next.** The reporter's answers (does the counter move, how many sections). The harness through the UI on a real
+Apple TV with the `longSummaries,twoSections` shape, reading tick hops and main-thread blocks. Roku never holds off the
+screensaver during a load; one stick check of a long load under it is owed.
+
 ## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)
 
 **Why.** On #181's merge, the maintainer asked for the two sessions that started ffmpeg twice in
@@ -13,6 +40,261 @@ asked for segment 30, the file's last 0.03 s, and Emby started a second ffmpeg f
 transcoding because currentTranscodingIndex=null", `-ss 00:01:00`). Not a restart mid-file.
 
 **Changed.** `roku/docs/JELLYFIN-EMBY.md` says so beside the nine single-start joins. No code change.
+
+## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
+
+**Shipped.** Nothing yet. On main since 2026-11-04, pushed together with the web tuner's copy of this fix
+(`web/1030-fixes`) so the `roku` job never went red. Tested off-device and on a Roku stick. Reaches users in the
+next Roku build.
+
+**Why.** Jellyfin and Emby file the videos in a Music Videos library as `MusicVideo`. The Roku scan, like the web
+tuner's and the Apple TV's, asked every library that is not TV for `IncludeItemTypes=Movie`, so such a library
+came back empty and HIGH ROTATION never filled. A contributor measured it on Jellyfin 12.4.0 (PR #151): `Movie`
+returns 0 items, `MusicVideo` returns 4.
+
+**Changed.**
+- `roku/source/mediabrowser/MediaBrowserLibrary.brs`: new `NxMbItemTypesFor`. A library whose type is
+  `musicvideos` is asked for `Movie,MusicVideo` (a clip someone filed as a film still loads). Movies, mixed
+  (no type), home videos and every other type are asked for `Movie`, as before. TV is unchanged (`Series`, then
+  `Episode`). The second page of a library asks for the same types as the first. The library's type still stamps
+  its items `librarySource: "musicVideo"`, which is what HIGH ROTATION's channel rule reads.
+- `roku/tests/fixtures/mediabrowser-server.json`: four MusicVideo clips in the Music Videos library (one with no
+  genres, one with a year and a play count, one with two genres), and one MusicVideo filed in the Movies library,
+  which must stay off the film channels.
+- `roku/tests/gen-mediabrowser.mjs` and the test's fixture server read `IncludeItemTypes` as a comma list, as
+  the servers do. Before, a request for `Movie,MusicVideo` matched nothing.
+- `roku/tests/MediaBrowserTests.brs`: new `NxRunMusicVideoTypeTests`, 110 cases, run for both Jellyfin and
+  Emby. It checks what each library is asked for, that every clip loads stamped as a music video and passes
+  HIGH ROTATION through the real filter, that a MusicVideo in a Movies library stays out, the bug as reported
+  (a library of MusicVideo items only fills HIGH ROTATION), and 201 clips across two pages.
+
+**The vector comparison.** The web tuner's scan makes the vectors the Roku suite is held to. While this branch
+waited for the web fix, the suite read the port's `Movie,MusicVideo` request as `Movie` and left the four clips
+out of the item-by-item comparison. With both fixes on main the vectors hold the clips, so that allowance came out
+in the same push: the loop holds the port to the web's items for them field by field, and the check "vectors hold
+the MusicVideo clips" fails if a later web change stops asking for them.
+
+**Not changed, on purpose.**
+- HIGH ROTATION's genre channels (#105) stay parked. Only the item type changed.
+- The title cleanup. `parseTitle` in `scripts/nostalgex-music-brainz.js` leaves `Song ( Music )` for
+  `Song (Official Music Video)` and `Song ( )` for `Song (Official Video)`, and the port matches it. It needs an
+  engine change (JS, Swift and the port together), so it is not folded in here. The new clips avoid the suffix so
+  the tests don't pin it.
+- Plex. The bug is the Jellyfin and Emby item type, which the Plex scan does not use.
+
+**Verified.**
+- `bash roku/tests/run.sh`: ALL TESTS PASSED, 54 parts. mediabrowser 5,883 passed, music video item type 110
+  passed, stall 22 passed.
+- The same suite on the stick (`scripts/deploy.sh --test`): ALL TESTS PASSED, the same three counts.
+- The bug put back (the scan asking `Movie` again, everything else kept): 24 cases fail and 48 pass (the checks
+  that need a loaded clip do not run), among them "a library of MusicVideo items only loads all of them" (0 of 4)
+  and "HIGH ROTATION fills from it" (0 of 4). The 5,883 vector comparisons still pass.
+- Main plus the web tuner's fix plus this change, in a scratch copy: mediabrowser 5,987 passed, 0 failed, music
+  video 110. The four clips match the web scan's field by field.
+- Main plus the web tuner's fix without this change: 616 mediabrowser cases fail. That is the `roku` job going
+  red if the web fix merges alone.
+- The pushed main (web fix, this change, the allowance removed): mediabrowser 5,988 passed, 0 failed, music video
+  item type 110 passed.
+
+**Not verified.** Against a live Jellyfin or Emby server: the tests run saved answers, and the 0 and 4 above are
+the contributor's. Android's scan test (PR #151) reads the same vectors, which now hold the four clips, so its scan
+has to ask a music video library for `MusicVideo` too or it goes red on rebase. Not checked against its code.
+
+**Next.** Ship it in the next Roku build. Check a real Jellyfin or Emby Music Videos library.
+
+## 2026-11-03 (web: Jellyfin and Emby music video libraries)
+
+**Shipped.** The hosted web tuner, with the push to main on 2026-11-04. Docker waits for the next `tuner-v` tag.
+
+**Changed.**
+- **Music video libraries (I-067, issue #172, found by owenvoke on PR #151).** `fetchJellyfinLibraryFromServer` asked every non-TV library for `IncludeItemTypes=Movie`. Jellyfin files a music video library's items as `MusicVideo` (measured on Jellyfin 12.4.0 with four files: `Movie` returns 0, `MusicVideo` returns 4), so the library loaded nothing and HIGH ROTATION stayed empty. A library whose type is `musicvideos` is now asked for `Movie,MusicVideo`; every other library still asks for `Movie`. Jellyfin and Emby share this function, so the web tuner and Docker change together.
+
+**Measured.**
+- `scripts/jellyfin-music-video-browser-smoke.mjs` (new, headless, against a Jellyfin-shaped and an Emby-shaped mock that answers `IncludeItemTypes` as Jellyfin does): on main 6 of 18 checks fail (only a clip filed as `Movie` loads; HIGH ROTATION gets that one item), with the fix all 18 pass. The Movies library is still asked for `Movie` only and TV for `Series` then `Episode`.
+- Not measured against a real Emby server: none with a music video library was available. The Emby result is from the Emby-shaped mock, and the claim that Emby takes a comma list and files clips as `MusicVideo` is from its API docs, not a measurement.
+
+**Not changed.** Australian ratings (Discussion #41). The AU table already came in with the UK pass (I-040), both spellings included. `M` and `R18+` stay with R on purpose, so kids and family channels keep M films off them.
+
+**Same push.** The Roku port (`roku/music-video-item-type`) and the Apple TV's fix (`appletv/1030-fixes`) landed with it.
+
+**Next.** A check of a real Emby music video library. HIGH ROTATION genres (#105, N-016) stay parked.
+
+## 2026-11-03 (Apple TV: three fixes and a check for the next build)
+
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build. Four commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 0 failed, 18 skipped.
+
+**Changed.**
+- **AUDIO LANGUAGE on Jellyfin and Emby transcodes (I-070, #177).** When the server transcoded, the app chose
+  the `AudioStreamIndex` it asked for from the Apple TV's own languages plus English and never read AUDIO
+  LANGUAGE, so German picked in Settings on an English Apple TV still played the English track. It now prefers
+  a track in the chosen language (most channels first), then falls back to the old order; AUTO, and a language
+  the file lacks, choose as before. Direct play was never affected: the player switches tracks there. The web
+  tuner and Docker got their fix in 1.0.13 (#176). Reported by @owenvoke.
+- **Music Videos libraries on Jellyfin and Emby (I-067).** Both servers file those videos as `MusicVideo`, and
+  the app asked every non-TV library for `Movie`, so the library came back empty and HIGH ROTATION never filled.
+  Music Videos libraries now ask for `Movie,MusicVideo`; other libraries still ask for `Movie` only. HIGH
+  ROTATION's genre work (#105, N-016) is untouched. Found by @owenvoke on PR #151.
+- **Plex discovery and dead local addresses.** A shared server with 8 dead local addresses settled at 7.3 s and
+  12.0 s in 2 of 4 runs on an Apple TV although its remote answered in 0.2 to 0.4 s. The grace window was sized
+  once, at the first hit, from every candidate ranked ahead of it, so a remote address ahead that had already
+  failed still counted as "might succeed slowly" and set a 15 s window; the wait ran on until the locals timed
+  out at 12 s. It is now sized by what is still pending ahead of the hit and worked out again on every report.
+  The debug-only DISCOVERY TIMING prints are gone.
+- **N-011 checked against the cross-channel pack.** The rescan order fix (`3a0efb8`, already on main) was
+  measured before the lineup pack (`89a2f5c`) existed. The harness now measures both ways.
+
+**Measured.**
+- `JellyfinAudioLanguageTests` (both services' real PlaybackInfo exchange, the setting stored where Settings
+  stores it): on main, German and French asked for track 1 (English); now 2 and 3.
+- `MusicVideoItemTypeTests` (each backend's real `loadLibrary` against a loopback server that answers only the
+  types asked for): on main the Music Videos library gave 1 of 4 items; now 4 of 4. The Movies library still
+  asks for `Movie`.
+- `PlexDiscoveryDeadLocalHarnessTests` (the real `bestReachableURI` and `testReachable`, dead addresses in the
+  documentation ranges 192.0.2.x, 198.51.100.x and 203.0.113.x, a loopback server as the remote): 8 dead locals
+  and a live remote, 3.4 s before and after; add a remote ranked ahead that fails at once, 12.08 s and 12.09 s
+  before, 3.39 s and 3.40 s after; a remote ahead that fails 1 s after the hit (timed stand-ins), 12.03 s before,
+  3.34 s after; a slow but working better remote still wins at 6.0 s.
+- `EpisodeBatchOrderHarnessTests`: two scans with different batch completion order, 0 of 17,280 channel-minutes
+  differ on Jellyfin, Emby, Plex bulk and Plex per-show, packed per channel and packed as a lineup. Control:
+  the same items with the shows reordered change 16,962 of 17,280 under the lineup pack.
+
+- Discovery on an Apple TV 4K (tvOS 26.6.1), a debug build of this branch, a real Plex account with its own
+  server and three shared ones: five full discoveries took 3.82, 3.27, 3.32, 3.40 and 3.32 s. The shared server
+  with 8 dead local addresses settled in 3.10 to 3.22 s every run, with all 8 locals cancelled, none waiting out
+  the 12 s timeout. Before the fix it settled at 7.3 s and 12.0 s in 2 of 4 runs. The baseline was
+  intermittent and the unfixed build was not rerun on the TV, so this shows the fix under the failing
+  condition rather than proving it.
+
+**Not verified.** The 7.3 s run is not reproduced, because the TV's candidate list was not captured. AUDIO
+LANGUAGE and Music Videos are not checked against a real Jellyfin or Emby server (the lab servers were down).
+
+**Next.** A real Jellyfin Music Videos library. The Roku and web tuner copies of the Music Videos fix landed in
+the same push.
+
+## 2026-11-03 (Apple TV: harness isolation, and a cold first load of a 15,000-movie Plex library)
+
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build: `915d20a` (isolation),
+`5b2a0ae` (cold Plex harness).
+
+**Why.** A 1.0.29 report: a Plex library of about 15,000 movies stops at "Channel 60 of 142" on the loading
+screen and the app closes about an hour later (N-033). The earlier scale harness handed the app a ready library
+and a filled enrichment cache, which skips most of what a new user's first load does on the network, and the
+next measurement has to run on a real Apple TV. The harnesses could not run there: they cleared the app's real
+library snapshot, schedules and settings.
+
+**Changed.**
+- `HarnessIsolation` (DEBUG only): while active, the app's files, settings (every `UserDefaults.standard` now
+  goes through `AppDefaults.standard`, plain `.standard` in a release build), credentials (in memory, never the
+  Keychain), iCloud sync (an in-memory store, and a harness's AppState never takes over the shared one) and HTTP
+  cache stay under `Library/Caches/NostalgexHarness/<name>`. `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` turns it on
+  first thing at launch, so on a device the test host's own launch stays off the real stores too. A Release
+  build carries none of it (checked with `nm` and `strings`).
+- `RealStoreFingerprint` hashes the real stores from their real paths; a harness run compares before and after.
+- `ColdPlexScaleHarness`: the real first load against a fake Plex, a fake Supabase cache, a fake TMDB proxy that
+  rate-limits, and OMDb, with times per stage and per channel, the main actor's delay on each "Channel N of M"
+  tick (a new probe mark, only when a harness listens), memory, threads and requests per endpoint, then an
+  optional soak with the guide up. A 300-movie version runs in the normal suite as the isolation proof.
+
+**Measured (simulator).** 15,000 movies, nothing cached: first load 664.5 s. Plex 42.4 s for 30 pages;
+enrichment 586.1 s (15,000 TMDB requests at about 27 a second, then 75 upserts taking about 28 s); pool build
+34.9 s for 142 channels, slowest 1.8 s, pools 59 to 61 at 158, 158 and 439 ms; the main actor took every tick
+at once; peak 248 MB, 17 threads. Through the UI with a 2-minute soak (2,000 movies): memory flat at 83 MB,
+12 threads, no requests after the first 30 s. Real stores: no difference in any app-owned store in either run.
+Outside them, CFNetwork's `Library/HTTPStorages` database (its rows unchanged) and AVFoundation's
+`tmp/MediaCache` index changed; neither holds the app's data.
+
+**Not reproduced.** The stall at "Channel 60 of 142" and the close after an hour did not happen in the
+simulator, cold or warm. While a cold load enriches, the screen says "Fetching metadata", not "Channel N";
+the channel count only shows during the pool build, which took 35 s here.
+
+**Fixed before the push (2026-11-04, from the review).**
+- `HarnessIsolationTests` skips when isolation is already on and only turns off what it turned on. Before, a
+  whole-target run on a TV under `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` switched isolation off in this class, and
+  the classes after it alphabetically cleared the TV's real library snapshot and manifests.
+  `HarnessIsolationPreexistingTests` proves an active isolation survives it (all 7 checks fail on the old guard).
+- AUDIO LANGUAGE is read through `AppDefaults.standard`, where Settings writes it, and `JellyfinAudioLanguageTests`
+  uses it too, so a harness run on a TV never touches the real setting. A Release build is unchanged.
+- The unused `serverName` parameter of `PlexAPIService.bestReachableURI` is gone.
+- NostalgexTests: 1,086 tests, 1,060 passed, 0 failed, 26 skipped.
+
+**Next.** The same run on the basement Apple TV 4K (3rd generation), through the UI with a 60-minute soak
+(tester). Not covered: Plex collections (no collection package is on in a new lineup, so the scan never ran),
+a real Plex server's own speed, and artwork, which a load never fetches.
+
+## 2026-11-03 (Apple TV: a 15,000-movie Emby library no longer reads as a dead server)
+
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build.
+
+**Why.** A #support report on 1.0.29: an Emby library of about 15,000 movies, every one with genres and a TMDB match, never finished loading, and the same library on Plex stopped at "Channel 60 of 142" with the app closing about an hour in.
+
+**Measured.**
+- The channel engine is not slow at this size. `MovieLibraryScaleHarness` (new) drives the real `loadLibrary` with a synthetic movie-only library shaped like the report: every title with a TMDB id and a cached enrichment row, a third of the ids taken from the membership manifest, 15% in a TMDB collection. M4 Pro simulator, Debug build, all 142 channel pools: 2k movies 4.8 s, 5k 12.3 s, 10k 24.2 s, 15k 36.5 s. Linear, about 2.4 ms per movie for the whole lineup. Slowest channels at 15k: CHRISTMAS SPECIALS and KIDS CHRISTMAS TV (1.9 s each, their episode rules read every movie's summary), APPLE TV+ 0.8 s. Peak memory 178 MB (204 MB with every package on). The guide's schedules for 95 channels: 60 ms. Through the real `RootView` (loading screen and guide on screen): first load 39.8 s, guide then sat for 10 minutes at a flat 186 to 191 MB, RESCAN 38.2 s. Nothing near an hour, no growth.
+- The Emby scan was the failure. Against a fake Emby (15,000 movies, 200 a page, 3 s a page) through the real `EmbyAPIService` and the stall watch: the scan's item count stayed at 0 for the whole section, because Emby and Jellyfin only reported progress when a section started (Plex reports every page). STOP WAITING appeared at 65 s and the watch abandoned the scan at 210 s with the server still answering (71 of 75 pages served). The request it cancelled then threw away the 14,200 movies already read, so the load ended on "Your server stopped sending data" with 0 items. Any single Emby or Jellyfin movie library that takes longer than 210 s to page through hits this, however healthy the server is.
+- After the fix, same fake server: 15,000 items in 265.7 s, the count moving every 2 s, no STOP WAITING, guide built.
+
+**Changed.**
+- `EmbyAPIService`, `JellyfinAPIService`: a movie section reports progress after every page, as Plex does, so the stall watch sees a big library arriving. A cancel that lands while a page request is in flight keeps the pages already read (Plex already did), so a stopped scan still builds a guide from them.
+- `MovieSectionScanProgressTests` (new, 2 tests): both backends, 1,000 movies over a local server. Fails on main (one progress event, and a cancel mid-page returns nothing), passes now.
+- `MovieLibraryScaleHarness` (new, off by default): the measurements above. `rebuildStaticChannelPools` marks each channel through `LibraryLoadProbe` when a harness listens (no cost otherwise).
+- NostalgexTests: 1,037 passed, 0 failed.
+
+**Not explained.** The Plex half of the report. The Plex scan already reports every page, and the engine builds 142 channels from 15,000 movies in under a minute on the simulator, so "Channel 60 of 142" for an hour is not reproduced. Not measured: the same harness on a real Apple TV 4K (A12) and the enrichment phase on a first load (enrichment is off in these runs; the site's TMDB proxy answered 27 requests a second from a Mac, so 15,000 titles missing from the shared cache would be about 9 minutes). The hour matches the Apple TV's default one-hour sleep, which ends a long load; unverified.
+
+**Next.** Run `MovieLibraryScaleHarness` on the living room Apple TV 4K (needs Chad's OK). Ask the reporter for a photo of the stuck Plex screen and his Apple TV's Sleep After setting. Web tuner and Docker: n/a, no scan watchdog there. Roku: n/a, its stall watch counts every 2xx answer as progress.
+
+## 2026-11-03 (Apple TV release script: automatic signing with the API key)
+
+**Changed.** `scripts/release-tvos.sh` archives and exports with automatic signing plus
+`-allowProvisioningUpdates` and the App Store Connect API key, and `Nostalgex/ExportOptions.plist` asks
+for automatic signing. The manual App Store profiles the plist named predate the iCloud capability, so
+the script could no longer export. 1.0.29 exported on 2026-10-31 with exactly these settings, by hand.
+The plist's old comment said automatic signing fails from the command line; that is true only without
+the API key flags, and the comment now says so. `manageAppVersionAndBuildNumber` is false, so the
+export never changes the version or build number. Validation and upload still go through altool.
+
+**Not verified.** No archive or export was run for this change (no throwaway archive either, since
+`-allowProvisioningUpdates` can touch the profiles in the developer account). The first real check is
+the 1.0.30 export.
+
+## 2026-11-03 (N-013: forced subtitles when the server cannot burn them in)
+
+**Changed.** Test code only, on main since 2026-11-04 (from `test/n013-emby-forced-sub-burnin`). `ForcedSubtitleBurnHarness.swift`
+drives `AppState.loadCurrentItem` and `selectChannel` against a lab Emby or Jellyfin. `scripts/lab-forced-subtitle/`
+holds what it needs: ffmpeg-made films with a forced English track, a script that starts the lab server in colima, a
+logging proxy that can answer HTTP 500 on the burn-in stream only, and an HTTP probe. No product code changed.
+
+**Why.** The app asks the server to burn a forced track into the picture (a second PlaybackInfo with
+`SubtitleStreamIndex` and Encode subtitle profiles). A unit test cannot show whether the app copes when the server
+cannot.
+
+**Measured.** Lab Emby 4.10.1.0 in a Linux container, lab Jellyfin 12.2.0, tvOS 26.1 simulator, main at 6a2d6df7.
+- A healthy server burns the track and the film plays in 0.3 to 0.9 s (a 4K film 1.6 s). The `Key: threads` failure
+  seen on a macOS Emby 4.10.1.0 did not reproduce in the container: 10-bit, HDR10 and burn-in all transcode there.
+- With HTTP 500 injected on the burn stream's segments (master and variant answer 200, as the failing server did),
+  AVPlayer retries the first segment six times in 16 s and never fails the item. At 20.4 s the watchdog asks for a
+  stream with no burn and the film plays at 20.7 to 21.3 s, without its forced lines. Same on Jellyfin's fMP4 with the
+  init segment refused. A channel of such films sat in loading for 20.8 s per programme; the failure count stayed 0.
+- 500 on the burn PlaybackInfo request: the app uses the unburned answer and plays at 0.9 s. 500 on the variant
+  playlist: the error card at 0.9 s.
+- The 4 s fail-fast check never fires in the simulator: the player's error log holds `-16847 HTTP 500` events and no `uri`.
+- On Emby and Jellyfin the watchdog is always 20 s, never the 40 s a UHD source gets, because only the Plex loader sets
+  `videoWidth` and `videoHeight`.
+
+**Half-done.** Not run on a device, so AVPlayer's give-up time (31.5 s in the simulator) and error code on a real Apple
+TV are unknown. Not run against the macOS Emby the bug was seen on; `server-login.py` then `probe-burn.py` is the
+check. Image subtitles (PGS, VobSub) were not tested.
+
+**Fix check.** `fix/forced-burn-probe` (a27928c4, probes the burn stream's first segment before choosing it) was
+cherry-picked onto this main in a throwaway worktree and run through the same harness, nothing committed from it.
+- 500 on the burn segments: the six burn films play in 0.4 to 1.0 s on the plain stream (20.7 to 21.3 s before). The
+  refused session is stopped at +0.16 s. A channel of forced films starts each programme in 0.3 to 1.0 s (20.8 s before).
+- 500 on the variant playlist: plays in 1.0 s (the error card before). On Jellyfin with the init segment refused:
+  0.6 to 1.0 s (20.8 s before).
+- Healthy servers: films with no burn are unchanged (0.3 s). Burn films start about 0.1 to 0.4 s later. A 4K burn on
+  Jellyfin in a 2-CPU VM starts in 3.5 s against 1.4 s, because the probe waits for the first burned segment.
+
+**Done 2026-11-04.** `fix/forced-burn-probe` is on main for the next Apple TV build, applied on top of AUDIO LANGUAGE
+(I-070), which changed the same function: the burned stream keeps the chosen audio language too.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
@@ -3214,6 +3496,20 @@ unchanged.
 **Half-done.** A library where no package has content still ends on the blank screen. The Apple TV and Roku show NO CHANNELS FOUND with an OPEN SETTINGS button there; the web does not yet. Nothing changes what is sent anywhere.
 
 **Next.** Decide whether the web gets that NO CHANNELS FOUND screen.
+
+## 2026-10-27 (Apple TV: a burned-in forced subtitle the server can't produce no longer costs 20 seconds)
+
+**Shipped.** Nothing yet. On main since 2026-11-04 for the next Apple TV build.
+
+**Why.** Board item q106. The Roku work found that Chad's Emby 4.10.1 answers every segment of a stream that burns a subtitle into the picture with HTTP 500, and that the Apple TV's own request failed the same way on a film with a forced track. The Apple TV burns a forced track in the viewer's language (2026-10-19). It chooses the burned stream on the strength of PlaybackInfo alone, the playlists come back fine, and the 500s only show on the first segment.
+
+**What the app did.** Measured on the bedroom Apple TV HD (tvOS 26.6, build 52 code) against a stand-in for that fault: a pass-through to the lab Emby 4.10.1 that answers 500 to every segment of a session whose playlist asked for SubtitleMethod=Encode. AVPlayer retried the first segment for 20 s (HTTP 500, error -16847), the startup watchdog gave up ("retry capped at 1080p after 20s"), the capped retry asked without the burn and played. Picture after 26.6 s (H.264 source) and 25.1 s (HEVC source). Same files with the burn route healthy: 3.6 s and 2.6 s. A 4K film waits 40 s for the watchdog, not 20. The film always played, without its forced lines. Not measured on Chad's real Emby: the bedroom TV has no sign-in.
+
+**Changed.** `JellyfinPlaybackResolver.negotiate`: before choosing the burned stream it fetches what the player fetches first, through the same `send` as PlaybackInfo with no header added, as the player does: the master playlist, its first variant (skipped when the master already lists segments) and the first segment. An HTTP error on any of them means the plain answer already in hand is used, as when the burn request itself fails, and the burned session is stopped (`stopRefused`, which both services point at `stopTranscode`), since nothing else will ever see it and Jellyfin starts an encode on the variant request. A timeout (12 s a request, like PlaybackInfo), a dropped connection or a playlist it can't read proves nothing and keeps the burned stream. A file with no forced track makes no extra request.
+
+**Measured after.** Same device. Refusing stand-in: picture after 3.7 s and 3.1 s, the burned session's ActiveEncodings DELETE sent, log line "BURN-IN: the server refused the burned-in stream's first segment". Healthy burn route with the check on: 4.1 s and 3.7 s, against 3.6 s and 2.6 s without it, one run each, so the check costs about a second on a forced-track tune. NostalgexTests: 0 failures; eight new in `JellyfinPlaybackInfoTests` (probe order, relative URLs with their queries, 500 on the segment and on the playlist, the stop, no stop when accepted, 12 s timeouts, a master that is a media playlist, timeout and unreadable playlist keep the burn, nothing extra without a forced track); the two fakes that answer PlaybackInfo also answer the GETs.
+
+**Half-done.** The cause of the 500 on Chad's server is not found here: the lab Emby 4.10.1 on this Mac burns SRT and PGS forced tracks fine (2026-10-19, and again today on a new SRT file). The check on Chad's own Emby is still to do. Jellyfin was not run on a device (its lab sign-in isn't available to the tester); the Jellyfin side is covered by the unit tests only. A sidecar subtitle instead of a burn (what Roku does) is a larger change and not needed for this.
 
 ## 2026-10-27 (publish how to make Plex feel like cable TV)
 

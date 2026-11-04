@@ -561,6 +561,15 @@
     "Id": "m-wrongtype",
     "Type": "Series",
     "RunTimeTicks": 54000000000
+   },
+   {
+    "Name": "A Music Video In Movies",
+    "Id": "m-musicvideo",
+    "Type": "MusicVideo",
+    "RunTimeTicks": 2400000000,
+    "Genres": [
+     "Pop"
+    ]
    }
   ],
   "v-shows": [
@@ -893,6 +902,51 @@
     "RunTimeTicks": 1800000000,
     "Genres": [
      "Music"
+    ]
+   },
+   {
+    "Name": "Band Name - Hit Single",
+    "Id": "mv-3",
+    "Type": "MusicVideo",
+    "RunTimeTicks": 2150000000,
+    "ProductionYear": 2019,
+    "Genres": [
+     "Pop"
+    ],
+    "Artists": [
+     "Band Name"
+    ],
+    "DateCreated": "2024-03-02T10:15:00.0000000Z"
+   },
+   {
+    "Name": "Another Song",
+    "Id": "mv-4",
+    "Type": "MusicVideo",
+    "RunTimeTicks": 1950000000,
+    "Genres": []
+   },
+   {
+    "Name": "Rapper - Freestyle",
+    "Id": "mv-5",
+    "Type": "MusicVideo",
+    "RunTimeTicks": 1500000000,
+    "ProductionYear": 2021,
+    "Genres": [
+     "Hip-Hop"
+    ],
+    "UserData": {
+     "PlayCount": 2,
+     "Played": true
+    }
+   },
+   {
+    "Name": "Singer - Slow Dance (Live)",
+    "Id": "mv-6",
+    "Type": "MusicVideo",
+    "RunTimeTicks": 2700000000,
+    "Genres": [
+     "R&B",
+     "Soul"
     ]
    }
   ],

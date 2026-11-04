@@ -16,7 +16,7 @@ enum PlaybackDiagnostics {
     private static let keep = 5
 
     /// Record a watchdog or end-of-item decision. `outcome` is what the app did next.
-    static func record(outcome: String, title: String, detail: String, defaults: UserDefaults = .standard) {
+    static func record(outcome: String, title: String, detail: String, defaults: UserDefaults = AppDefaults.standard) {
         defaults.removeObject(forKey: legacyKey)
         let stamp = Self.clock.string(from: Date())
         let line = "\(stamp) \(outcome): \"\(title)\", \(detail)"
@@ -29,18 +29,18 @@ enum PlaybackDiagnostics {
     }
 
     /// Newest first. Empty when playback has never been given up on.
-    static func recent(defaults: UserDefaults = .standard) -> [String] {
+    static func recent(defaults: UserDefaults = AppDefaults.standard) -> [String] {
         defaults.removeObject(forKey: legacyKey)
         return (defaults.stringArray(forKey: key) ?? []).map(redactSensitiveText)
     }
 
     /// The line Settings shows. Short enough to read from the couch, complete enough to
     /// tell a device problem from a server one.
-    static func latestForSettings(defaults: UserDefaults = .standard) -> String? {
+    static func latestForSettings(defaults: UserDefaults = AppDefaults.standard) -> String? {
         recent(defaults: defaults).first
     }
 
-    static func clear(defaults: UserDefaults = .standard) {
+    static func clear(defaults: UserDefaults = AppDefaults.standard) {
         defaults.removeObject(forKey: key)
         defaults.removeObject(forKey: legacyKey)
     }

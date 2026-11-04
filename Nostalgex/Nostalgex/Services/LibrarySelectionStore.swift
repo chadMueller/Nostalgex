@@ -45,10 +45,10 @@ enum LibrarySectionSelectionStore {
     private static let key = "nostalgex_deselected_library_sections"
 
     static func load() -> Set<String> {
-        Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        Set(AppDefaults.standard.stringArray(forKey: key) ?? [])
     }
 
     static func save(_ deselected: Set<String>) {
-        UserDefaults.standard.set(Array(deselected), forKey: key)
+        AppDefaults.standard.set(Array(deselected), forKey: key)
     }
 }

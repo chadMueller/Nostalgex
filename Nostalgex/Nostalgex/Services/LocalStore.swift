@@ -8,6 +8,12 @@ import os
 /// pressure, which costs one rebuild, not correctness.
 enum LocalStore {
     static var rootDirectory: URL? {
+        #if DEBUG
+        if let isolated = HarnessIsolation.localStoreRoot {
+            try? FileManager.default.createDirectory(at: isolated, withIntermediateDirectories: true)
+            return isolated
+        }
+        #endif
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             return nil
         }

@@ -104,7 +104,7 @@ struct NowPlayingPanel: View {
     @State private var focusAfterCollapse: NowPlayingFocus?
 
     @State private var streamQuality = StreamQuality.current
-    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
+    @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
     /// Wide enough for the longest title the panel carries, "AUTO SUBTITLES (FOREIGN
     /// AUDIO)", without truncating its value.

@@ -190,13 +190,21 @@ final class JellyfinPlaybackInfoTests: XCTestCase {
     /// Answers PlaybackInfo like a server: the first request (no subtitle) gets `first`,
     /// a request naming a track gets `burned`, or an error when `burned` is nil.
     private final class FakeServer: @unchecked Sendable {
+        /// What the burned stream's playlists and first segment do when the app fetches them
+        /// before choosing it. A real Emby 4.10.1 serves both playlists and then answers
+        /// every segment of a burned-in stream with HTTP 500.
+        enum Probe { case serves, masterStatus(Int), segmentStatus(Int), segmentTimesOut, unreadablePlaylist, bareMediaPlaylist }
         let first: String
         let burned: String?
+        let probe: Probe
         private let lock = NSLock()
         private(set) var bodies: [[String: Any]] = []
-        init(first: String, burned: String?) { self.first = first; self.burned = burned }
+        private(set) var fetched: [URL] = []
+        private(set) var fetchTimeouts: [TimeInterval] = []
+        init(first: String, burned: String?, probe: Probe = .serves) { self.first = first; self.burned = burned; self.probe = probe }
         func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
-            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any])
+            guard let httpBody = request.httpBody else { return try await fetch(request) }
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: httpBody) as? [String: Any])
             lock.withLock { bodies.append(body) }
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             if (body["SubtitleStreamIndex"] as? Int) == -1 { return (Data(first.utf8), response) }
@@ -204,6 +212,28 @@ final class JellyfinPlaybackInfoTests: XCTestCase {
             return (Data(burned.utf8), response)
         }
         var sentIndexes: [Int] { lock.withLock { bodies.compactMap { $0["SubtitleStreamIndex"] as? Int } } }
+
+        /// A GET of the burned stream: master playlist, variant playlist, segment.
+        private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
+            let url = try XCTUnwrap(request.url)
+            lock.withLock { fetched.append(url); fetchTimeouts.append(request.timeoutInterval) }
+            func reply(_ status: Int, _ text: String) -> (Data, URLResponse) {
+                (Data(text.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+            }
+            if case .unreadablePlaylist = probe { return reply(200, "\u{0}\u{1}") }
+            switch url.path {
+            case let p where p.hasSuffix("/master.m3u8"):
+                if case .masterStatus(let code) = probe { return reply(code, "") }
+                if case .bareMediaPlaylist = probe { return reply(200, "#EXTM3U\n#EXTINF:6.0,\nhls1/main/0.ts?PlaySessionId=burned&api_key=TKN\n") }
+                return reply(200, "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5950020\nmain.m3u8?PlaySessionId=burned\n")
+            case let p where p.hasSuffix("/main.m3u8"):
+                return reply(200, "#EXTM3U\n#EXTINF:6.0,\nhls1/main/0.ts?PlaySessionId=burned\n#EXTINF:6.0,\nhls1/main/1.ts?PlaySessionId=burned\n")
+            default:
+                if case .segmentStatus(let code) = probe { return reply(code, "Internal Server Error") }
+                if case .segmentTimesOut = probe { throw URLError(.timedOut) }
+                return reply(200, "segment")
+            }
+        }
     }
 
     private func answer(session: String, forced: Bool) -> String {
@@ -251,6 +281,117 @@ final class JellyfinPlaybackInfoTests: XCTestCase {
             return Set(profiles.map { $0["Method"] ?? "" })
         }
         XCTAssertEqual(methods, [["External"], ["Encode"], ["External"], ["Encode"]])
+    }
+
+    // MARK: - The burned stream is tried before it is chosen
+
+    func testTheBurnedStreamsFirstSegmentIsFetchedBeforeItIsChosen() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true))
+        for (name, resolution) in await negotiate(server) {
+            XCTAssertEqual(try XCTUnwrap(resolution, name).playSessionId, "burned", name)
+        }
+        let paths = server.fetched.map { $0.path }
+        XCTAssertEqual(paths.count, 6, "master, variant, segment, on each service")
+        XCTAssertEqual(Array(paths.prefix(3)).map { String($0.split(separator: "/").last ?? "") },
+                       ["master.m3u8", "main.m3u8", "0.ts"])
+        XCTAssertEqual(server.fetched[2].path, "/videos/4242/hls1/main/0.ts", "relative to the variant playlist")
+        XCTAssertEqual(server.fetched[2].query, "PlaySessionId=burned", "the playlist's own query, as the player would send it")
+    }
+
+    private actor StopLog { var ids: [String] = []; func add(_ id: String) { ids.append(id) } }
+
+    /// negotiate itself, without a service in front, so the sessions it gives up on can be
+    /// counted without the services' own DELETE going to a made-up host.
+    private func negotiateDirectly(_ server: FakeServer, stops: StopLog) async throws -> PlaybackResolution? {
+        try await JellyfinPlaybackResolver.negotiate(
+            request: { burning in
+                var r = URLRequest(url: URL(string: "http://emby.local:8096/Items/4242/PlaybackInfo")!)
+                r.httpMethod = "POST"
+                r.httpBody = try? JSONEncoder().encode(JellyfinPlaybackResolver.playbackInfoBody(
+                    mediaSourceId: "mediasource_4242", supportsHEVC: true, serverStreamOnly: false, burningSubtitle: burning))
+                return r
+            },
+            serverURL: "http://emby.local:8096", apiKey: "TKN", itemId: "4242", mediaSourceId: "mediasource_4242",
+            serverStreamOnly: false, preferredSubtitleLanguage: "en",
+            send: { try await server.send($0) }, stopRefused: { await stops.add($0) })
+    }
+
+    /// Chad's Emby 4.10.1: playlists fine, every segment of a burned-in stream HTTP 500.
+    /// The film plays on the plain stream at once, not after the startup watchdog gives up,
+    /// and the session that was given up on is stopped.
+    func testAServerThatRefusesTheBurnedSegmentGetsThePlainStream() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true),
+                                probe: .segmentStatus(500))
+        let stops = StopLog()
+        let resolved = try await negotiateDirectly(server, stops: stops)
+        let r = try XCTUnwrap(resolved)
+        XCTAssertEqual(r.playSessionId, "plain")
+        XCTAssertFalse(r.url.absoluteString.contains("burned"))
+        XCTAssertEqual(server.sentIndexes, [-1, 5], "the plain answer was already in hand, no third request")
+        let stopped = await stops.ids
+        XCTAssertEqual(stopped, ["burned"], "nothing else will ever see that session")
+    }
+
+    func testAServerThatRefusesTheBurnedPlaylistGetsThePlainStream() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true),
+                                probe: .masterStatus(500))
+        let stops = StopLog()
+        let resolved = try await negotiateDirectly(server, stops: stops)
+        let r = try XCTUnwrap(resolved)
+        XCTAssertEqual(r.playSessionId, "plain")
+        XCTAssertEqual(server.fetched.count, 1, "it stops at the first refusal")
+        let stopped = await stops.ids
+        XCTAssertEqual(stopped, ["burned"])
+    }
+
+    func testAnAcceptedBurnedStreamIsNotStopped() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true))
+        let stops = StopLog()
+        let resolved = try await negotiateDirectly(server, stops: stops)
+        let r = try XCTUnwrap(resolved)
+        XCTAssertEqual(r.playSessionId, "burned")
+        let stopped = await stops.ids
+        XCTAssertTrue(stopped.isEmpty)
+    }
+
+    /// Longest any one request of the check may wait: a slow first segment is not a refusal,
+    /// and the check must not hold the tune longer than the PlaybackInfo requests do.
+    func testEveryRequestOfTheCheckHasAShortTimeout() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true))
+        _ = try await negotiateDirectly(server, stops: StopLog())
+        XCTAssertEqual(server.fetchTimeouts, [12, 12, 12])
+        XCTAssertEqual(JellyfinPlaybackResolver.burnProbeTimeout, 12)
+    }
+
+    /// A master that is already a media playlist: its own first entry is the segment, so
+    /// there is no variant hop, and the entry's query (session, key) is kept as given.
+    func testAMasterThatIsAMediaPlaylistNeedsNoVariantRequest() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true),
+                                probe: .bareMediaPlaylist)
+        let stops = StopLog()
+        let resolved = try await negotiateDirectly(server, stops: stops)
+        let r = try XCTUnwrap(resolved)
+        XCTAssertEqual(r.playSessionId, "burned")
+        XCTAssertEqual(server.fetched.count, 2)
+        XCTAssertEqual(server.fetched[1].path, "/videos/4242/hls1/main/0.ts")
+        XCTAssertEqual(server.fetched[1].query, "PlaySessionId=burned&api_key=TKN")
+    }
+
+    /// A slow or dropped probe proves nothing about the server, so burned-in subtitles keep
+    /// playing exactly as before this check existed.
+    func testATimeoutOrAnUnreadablePlaylistKeepsTheBurnedStream() async throws {
+        for probe in [FakeServer.Probe.segmentTimesOut, .unreadablePlaylist] {
+            let server = FakeServer(first: answer(session: "plain", forced: true), burned: answer(session: "burned", forced: true), probe: probe)
+            for (name, resolution) in await negotiate(server) {
+                XCTAssertEqual(try XCTUnwrap(resolution, name).playSessionId, "burned", "\(name) \(probe)")
+            }
+        }
+    }
+
+    func testAFileWithNoForcedTrackFetchesNothingExtra() async throws {
+        let server = FakeServer(first: answer(session: "plain", forced: false), burned: nil)
+        _ = await negotiate(server)
+        XCTAssertTrue(server.fetched.isEmpty, "only a burned stream is tried first")
     }
 
     func testAFileWithOnlyADefaultTrackAsksOnce() async throws {

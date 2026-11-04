@@ -47,7 +47,9 @@ code path.
   `/Users/{id}/Views` on Emby. Emby answers 404 to the first.
 - Items: `GET /Items?userId=&ParentId=&Recursive=true&IncludeItemTypes=` with
   the `Fields` list (`ProviderIds,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`),
-  in pages of 200.
+  in pages of 200. A library of type `musicvideos` is asked for
+  `IncludeItemTypes=Movie,MusicVideo`, because both servers file its videos as
+  `MusicVideo`; every other library, mixed ones included, is asked for `Movie`.
 - TV shows: list the series, then each series' episodes, several series at a
   time. Each episode takes its show's genres, TMDB id, year, studio and
   ratings, because the channel rules match on the show.

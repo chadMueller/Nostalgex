@@ -12,7 +12,7 @@ extension AppState {
     // MARK: - Library loading
 
     private func markInitialLibraryLoadComplete() {
-        UserDefaults.standard.set(true, forKey: Self.initialLoadCompleteKey)
+        AppDefaults.standard.set(true, forKey: Self.initialLoadCompleteKey)
     }
 
     func setLibraryPhase(_ phase: LibraryLoadPhase, detail: String = "") {
@@ -692,7 +692,7 @@ extension AppState {
         // snapshot (a toggle that never re-saved it, or a lineup that arrived from another
         // Apple TV through iCloud while this one was off). Read it before the snapshot
         // overwrites it.
-        let storedBundleIDs = UserDefaults.standard.stringArray(forKey: PreferenceSync.enabledBundlesKey)
+        let storedBundleIDs = AppDefaults.standard.stringArray(forKey: PreferenceSync.enabledBundlesKey)
         enabledBundleIDs = Set(snap.enabledBundleIDList)
         bundles = snap.bundleDefinitions.map { def in
             def.toChannelBundle(enabled: enabledBundleIDs.contains(def.id))
