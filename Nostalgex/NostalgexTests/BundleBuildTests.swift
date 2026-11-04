@@ -155,6 +155,90 @@ final class BundleBuildTests: XCTestCase {
     /// Same channels and pools as the full build the launch runs, for real packages from
     /// channels.json over a varied library: the coalesced background build changes when
     /// the work happens, not what it makes.
+    /// I-073 (GitHub #185): CARTOON NETWORK gone after 1.0.29. A snapshot restore brought the
+    /// lineup back with CH 215's 52 Looney Tunes episodes, but the enrichment cache was
+    /// empty until the next scan, and the 6h refresh skips an unchanged library. The first
+    /// package rebuild (a switch, an iCloud lineup) then read `networks` off an empty cache,
+    /// CH 215 came back with 0 of its 5, was dropped, and the dropped lineup was saved.
+    ///
+    /// Restored lineup, empty cache, package rebuild: CH 215 must stay. Fails on main.
+    func testARebuildWithNoEnrichmentKeepsARestoredNetworksChannel() async throws {
+        let config = ChannelConfigLoader.loadBundled()
+        let cartoonNetwork = try XCTUnwrap(config.channels.first { $0.id == 215 })
+        XCTAssertEqual(cartoonNetwork.rules?.networks, ["Cartoon Network"])
+        let package = try XCTUnwrap(config.bundles.first { $0.channelIDs.contains(215) })
+
+        // 52 Looney Tunes episodes, all one TMDB show, as the report's library has them.
+        let episodes: [PlexMediaItem] = (1...52).map { n in
+            PlexMediaItem(
+                id: "lt\(n)", title: "The Looney Tunes Show", artist: nil, episodeTitle: "Episode \(n)",
+                seTag: "S01E\(String(format: "%02d", n))", summary: "", year: 2011, originallyAvailableAt: nil,
+                contentRating: "TV-PG", duration: 22, ratingKey: "lt\(n)", partKey: nil, container: nil,
+                videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil, genres: ["Animation", "Comedy"],
+                rating: 7.5, userRating: 0, type: .episode, thumb: nil, art: nil, viewCount: 0, addedAt: 0,
+                studio: "Warner Bros. Animation", tmdbID: "33917", imdbID: nil, librarySource: .tv)
+        }
+        state.allItems = episodes
+        state.channelConfigChannels = config.channels
+        state.exclusiveRules = config.exclusiveRules
+        state.bundles = config.bundles.map { $0.toChannelBundle(enabled: $0.id == package.id) }
+        state.enabledBundleIDs = [package.id]
+        // What the snapshot restored: the first load had the row, so CH 215 is on the air.
+        var restored = cartoonNetwork
+        restored.itemPool = episodes
+        state.allChannels = [restored]
+        state.applyBundleFilter()
+        XCTAssertTrue(state.channels.contains { $0.id == 215 }, "restored on the air")
+        XCTAssertTrue(state.enrichmentPending, "no row for 33917 in memory, as after a restore")
+
+        // The first rebuild of the package after the restore.
+        state.pendingBundleBuildIDs = [package.id]
+        await state.buildPendingBundles()
+
+        let kept = state.allChannels.first { $0.id == 215 }
+        XCTAssertNotNil(kept, "CH 215 dropped: a build with no enrichment decided a networks channel")
+        XCTAssertEqual(kept?.itemPool.count, 52, "and the last build's pool stays")
+        XCTAssertTrue(state.channels.contains { $0.id == 215 })
+
+        // Once the cache has the row, the same rebuild rebuilds it from the rule.
+        state.enrichmentService.seedCache([MediaEnrichment(
+            tmdbID: "33917", imdbID: nil, mediaType: "tv", keywords: [], networks: ["Cartoon Network"],
+            productionCompanies: [], tmdbGenres: ["Animation"], imdbRating: nil, imdbVotes: nil,
+            rottenTomatoesScore: nil, metacriticScore: nil, awards: nil, fetchedAt: Date())])
+        XCTAssertFalse(state.enrichmentPending)
+        state.pendingBundleBuildIDs = [package.id]
+        await state.buildPendingBundles()
+        XCTAssertEqual(state.allChannels.first { $0.id == 215 }?.itemPool.count, 52)
+    }
+
+    /// The other half of the rule: a channel whose rule needs no enrichment still goes off
+    /// the air when its pool really is too small, cache or no cache.
+    func testARebuildWithNoEnrichmentStillDropsAPlainChannelThatEmptied() async throws {
+        let config = ChannelConfigLoader.loadBundled()
+        let satMorning = try XCTUnwrap(config.channels.first { $0.id == 4 })
+        XCTAssertFalse(satMorning.rules?.dependsOnEnrichment ?? true)
+        let package = try XCTUnwrap(config.bundles.first { $0.channelIDs.contains(4) })
+        // One film with a TMDB id, so enrichment counts as pending; nothing for CH 4.
+        state.allItems = [PlexMediaItem(
+            id: "f", title: "A Film", artist: nil, episodeTitle: nil, seTag: nil, summary: "", year: 2020,
+            originallyAvailableAt: nil, contentRating: "R", duration: 100, ratingKey: "f", partKey: nil,
+            container: nil, videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil, genres: ["Drama"],
+            rating: 6, userRating: 0, type: .movie, thumb: nil, art: nil, viewCount: 0, addedAt: 0, studio: nil,
+            tmdbID: "1", imdbID: nil, librarySource: .movie)]
+        state.channelConfigChannels = config.channels
+        state.exclusiveRules = config.exclusiveRules
+        state.bundles = config.bundles.map { $0.toChannelBundle(enabled: $0.id == package.id) }
+        state.enabledBundleIDs = [package.id]
+        var stale = satMorning
+        stale.itemPool = state.allItems
+        state.allChannels = [stale]
+        XCTAssertTrue(state.enrichmentPending)
+
+        state.pendingBundleBuildIDs = [package.id]
+        await state.buildPendingBundles()
+        XCTAssertNil(state.allChannels.first { $0.id == 4 }, "a genre-rule channel with no content drops as before")
+    }
+
     func testCoalescedBuildMatchesAFullBuild() async {
         let config = ChannelConfigLoader.loadBundled()
         let genres = ["Comedy", "Drama", "Action", "Horror", "Animation", "Family", "Thriller",

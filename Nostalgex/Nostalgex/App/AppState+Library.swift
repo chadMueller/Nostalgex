@@ -94,6 +94,10 @@ extension AppState {
         // viewer is waiting on counts: tvOS ending a suspended app during a background
         // refresh says nothing about whether the library can load.
         let tracksLoad = LaunchGuard.tracksLoad(background: background, hasChannels: !channels.isEmpty)
+        // A load runs its own enrichment pass; a refill still going from a restore would run
+        // a second one beside it (a stale restore's refresh, RESCAN, the daily check).
+        enrichmentRefillTask?.cancel()
+        enrichmentRefillTask = nil
         if tracksLoad { LaunchGuard.loadStarted() }
         defer { if tracksLoad { LaunchGuard.loadEnded() } }
         InstallDiagnostics.note("loadLibrary: background=\(background) channels=\(self.channels.count) servers=\(self.selectedServers.count) lastLoadAge=\(Int(Date().timeIntervalSince1970) - self.lastLoadAtUnix)s")
@@ -645,7 +649,8 @@ extension AppState {
         let fromLegacyFile = found.fromLegacyFile
         applyLibrarySnapshot(&found.snapshot)
         isLibraryStale = isStale
-        InstallDiagnostics.note("snapshot: restored, stale=\(isStale)")
+        InstallDiagnostics.note("snapshot: restored, stale=\(isStale), enrichment rows=\(enrichmentService.cache.count)")
+        refillEnrichmentAfterRestoreIfNeeded()
         if fromLegacyFile {
             // One-time migration: write it back in the chunked format, which removes the
             // legacy file on commit, so the next launch never decodes the big file again.
@@ -668,6 +673,9 @@ extension AppState {
         var restored = Self.dedupingItems(snap.allItems, servers: selectedServers)
         snap.allItems = []
         musicEnrichmentService.loadDiskCache()
+        // Before any pool is rebuilt from this restore (a package switch, an iCloud lineup):
+        // the rows the last pass saved, so networks, keywords and scores are there (I-073).
+        enrichmentService.loadDiskCache()
         restored = musicEnrichmentService.itemsWithDisplayMetadata(restored)
         allItems = restored
         restored = []
@@ -708,8 +716,8 @@ extension AppState {
             Channel.fromSnapshotRow($0, itemLookup: lookup, includePool: true)
         }
         discoveredCollections = snap.discoveredCollectionRows.map { $0.resolve(itemLookup: lookup) }
-        // The enrichment cache is empty until the next scan, so the found list cannot be
-        // rebuilt here; it is restored as saved, with the viewer's current switches applied.
+        // The found list is restored as saved, with the viewer's current switches applied;
+        // `refillEnrichmentAfterRestoreIfNeeded` rebuilds it if the cache has to be refilled.
         foundFranchises = (snap.foundFranchiseRows ?? []).map {
             $0.resolve(itemLookup: lookup, enabledIDs: enabledFranchiseIDs, disabledIDs: disabledFranchiseIDs)
         }
@@ -745,6 +753,43 @@ extension AppState {
             applyEnabledCollectionKeys(enabledCollectionKeys)
         }
         print("[Plex90] Snapshot: restored from disk (no Plex crawl)")
+    }
+
+    /// True while no enrichment row is in memory for a library that has TMDB ids: a pool
+    /// built now cannot see networks, keywords or scores. Clears when the disk cache loads
+    /// or a pass lands.
+    var enrichmentPending: Bool {
+        enrichmentService.cache.isEmpty && allItems.contains { $0.tmdbID != nil }
+    }
+
+    /// The disk cache was missing or past its TTL on this restore, and the 6h refresh will
+    /// skip an unchanged library, so nothing else would fill it this session. Refill it in
+    /// the background (the shared Supabase cache answers nearly all of it) and refilter the
+    /// lineup when it lands, the way the web tuner's `onCacheReady` does. A no-op when
+    /// enrichment is not configured, when the library carries no TMDB ids, or in a UI stub.
+    @discardableResult
+    func refillEnrichmentAfterRestoreIfNeeded() -> Task<Void, Never>? {
+        guard enrichmentPending, !isUITestStubLibrarySuccess else { return nil }
+        guard EnrichmentService.missingConfiguration(
+            tmdbAPIKey: TMDBConfig.tmdbAPIKey, tmdbProxyURL: TMDBConfig.tmdbProxyURL,
+            supabaseURL: TMDBConfig.supabaseURL, supabaseAnonKey: TMDBConfig.supabaseAnonKey).isEmpty else { return nil }
+        let session = librarySessionGeneration
+        let items = allItems
+        let gates = OMDBGate.gates(from: channelConfigChannels.compactMap(\.rules))
+        print("[Plex90] ENRICHMENT: no cached rows after restore, refilling in the background")
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.enrichmentService.enrichItems(items, omdbGates: gates)
+            guard !Task.isCancelled, session == self.librarySessionGeneration, !self.isLoading else { return }
+            guard !self.enrichmentService.cache.isEmpty else { return }
+            self.refilterChannelsWithEnrichment()
+            self.rebuildFoundFranchises()
+            self.materializeDynamicChannels()
+            self.applyBundleFilter()
+            self.saveLibrarySnapshotIfNeeded()
+        }
+        enrichmentRefillTask = task
+        return task
     }
 
     /// Stable, PII-free label for an unexpected library-load failure.

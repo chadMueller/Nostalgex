@@ -3,6 +3,187 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
+
+**Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.
+
+**Why.** Chad's rule: "the minItems should never be 1." A channel's `minItems` is the smallest pool it is built
+from. At 1, a pool of one title fills the whole day with that title back to back: on the Android build, TRUE CRIME
+aired the same documentary six times in a row. The Android app was right to do it, because it reads the same
+`channels.json` and the file said 1. TRUE CRIME (id 40, CH 121) and PREMIERES (id 403, CH 64) had been at 1 since
+1.0.21. Every other channel was already at 3 or more (85 at 3, 45 at 5, 8 at 10, one at 15, one at 50).
+
+**Changed.**
+- `channels.json` v49 to v50: TRUE CRIME and PREMIERES `minItems` 1 to 3. Nothing else in the file moved.
+  `CHANNELS.md`, `public/sitemap.xml` and `scripts/bundle-lastmod.json` regenerated (only the essentials and
+  truecrime bundles re-stamp, because they hold the two channels).
+- A guard so it stays that way. `scripts/nostalgex-filter-smoke.mjs` (part of `npm test`, and of CI's channel-engine
+  job whenever `channels.json` changes) reads the shipped file and fails on any channel whose `minItems` is below 3,
+  naming it: "TRUE CRIME (id 40, CH 121) has minItems 1; the floor is 3". It was run against v49 first and failed on
+  exactly those two. It also catches 0, which the Apple TV reads as 0 while the web tuner, Roku and the Android app
+  read it as 50. A channel with no `minItems` is fine: every engine defaults it to 50.
+- No golden file, fixture or vector pinned either value or the version, so none changed. The filter, schedule,
+  franchise, rating, season and DST goldens and the Roku vectors are as they were. The Swift tests that build
+  channels by hand with `minItems: 1` or 0 are exercising scheduling on small pools and never read `channels.json`,
+  so they stay.
+
+**Checked, one suite at a time.** `npm test` green (the filter smoke is 212 checks, 143 of them the new guard).
+`npm run build` and `npm run build:selfhost` green, and both outputs carry v50. Roku off-device suite (`roku/tests/run.sh`,
+capped at 2 interpreters): 54 of 54 parts passed, `ALL TESTS PASSED`. tvOS `NostalgexTests`: 1,103 tests, 1,077 passed, 26 skipped
+(the opt-in harnesses), 0 failures, run against an app bundle that held v50. Not run: the Android engine tests (no
+Gradle here) and anything on a device.
+
+**What PREMIERES sees.** PREMIERES is every title added to the server in the last 14 days (`addedWithinDays` 14,
+movies and episodes, 29 genres). On a server nobody adds to, its pool is 0 and it is off at 1 or at 3. The change
+only bites when 1 or 2 titles arrived in the fortnight: PREMIERES used to air that one title (or two) all day, and
+is now off the guide until a third arrives. The Apple TV's "why is this channel off the air" line is built from
+`minItems`, so it will read "Needs 3 matching titles. You have 2." (from the string in `SettingsSharedComponents`,
+not seen on a TV). Plex normally stamps `addedAt` at scan time, so a freshly scanned library counts everything as
+new and PREMIERES is on either way for the first 14 days, then follows the trickle; that is from the rule, not
+measured, and how Jellyfin and Emby fill `addedAt` was not checked.
+
+Measured by replaying PREMIERES' real rule through the shared JS filter over a sliding 14-day window of one large
+library's add dates, for the 269 days after its bulk import aged out, then thinning the same history to every 10th,
+50th and 200th title to stand in for libraries that grow that much slower (days on the guide at `minItems` 1, at 3;
+share of days the pool sat at 1 or 2):
+- the full library: 100% and 100%; the pool never fell under 10, so nothing changes;
+- every 10th title: 100% and 75%; 25% of days at 1 or 2;
+- every 50th title: 77% and 30%; 47% of days at 1 or 2;
+- every 200th title: 43% and 3%; 41% of days at 1 or 2.
+So on a small or slow library PREMIERES is now mostly off, and the days it used to show were mostly one title on
+loop. A library that adds a few titles a fortnight, or a server fed in bursts, keeps it. This is one library's
+history thinned, not a survey; the thinning keeps the burst shape.
+
+**Which surface gets it, and when.**
+- Web tuner: `plex-tuner.html` fetches `channels.json` from its own origin, so the hosted tuner has it on the push
+  that carries this, and Docker on the next `tuner-v*` tag (the file is in the image).
+- Apple TV: a build step copies the repo's `channels.json` into the app, so the next build. The app tries
+  `<server>/channels.json` first and falls back to the bundled copy, but a Plex, Jellyfin or Emby server does not
+  serve one, so in practice the bundled file is what runs.
+- Roku: `roku/data/channels.json` is a link to the repo file, so the next package.
+- Android (PR #151): `android/app/src/main/assets/channels.json` is a link to the repo file too, so the next build
+  from a tree that has this commit. The PR's tests do not pin either value, and its demo channels use ids outside the
+  file. The PR branch and this one share the same merge base on main and does not touch `channels.json`; a trial
+  merge of the two conflicts only in this file, where both prepend an entry (keep both).
+
+**Not changed.** The floor is checked in JS only. The Swift and Roku suites read the same file but do not assert
+it; one check on the file is enough, and a second copy of the number in Swift would be one more thing to drift.
+
+**Seen, not touched.** `ci.yml`'s `tvos` filter does not list `channels.json` or `channels-memberships.json`, so a
+push that changes only those skips the tvOS unit tests until the nightly run, though several Swift tests read them
+(`BundleBuildTests`, `FilterGoldenTests`, `ChannelNumberingTests`). The `roku`, `android` and channel-engine
+filters do list them.
+
+**Next.** Chad decides when to push, since the hosted tuner deploys with it, and which Apple TV, Roku and Android
+builds carry v50. If PREMIERES should stay on for slow libraries, the lever is a wider `addedWithinDays`, not a
+lower floor.
+
+## 2026-11-04 (tests: the Plex discovery harness measures the grace window, not the runner)
+
+**Shipped.** Nothing; test code only. Branch `test/discovery-harness-ci` off main `29203c9f`.
+
+**Why.** `PlexDiscoveryDeadLocalHarnessTests.testARemoteThatAlreadyFailedDoesNotStretchTheGrace` failed twice on
+GitHub's macOS runners (runs 41850712310 and 41874032385; 12.9 s for two discoveries that take about 3.3 s each
+here) and passed locally every time. The log carried no timeline, so which candidate held the wait is unknown.
+Measured here: a port opened and closed just before the run refused in 30 ms or less in 30 of 30 tries, ports are
+handed out in sequence (198 of 199 steps were +1, so a freed port is not reused soon), and 192.0.2.1 black-holes
+for the full 12 s local timeout. Two things in the tests depended on the machine: the dead candidates (a closed
+port relies on the OS refusing at once; RFC 5737 addresses can black-hole, refuse or route depending on the
+network) and the bound (total time under 5 s includes how fast the stand-in server answers on a loaded runner,
+which leaves 2 s of headroom over the 3 s grace).
+
+**Changed.**
+- Both tests assert the grace as served: from the first hit to the answer, under 5 s (the failure modes are 12 s
+  and 15 s) and over 2.5 s (the locals still get their 3 s). The failing-remote test also checks its precondition:
+  that remote reported a failure before the grace ran out.
+- Dead candidates that behave the same on any machine: seven locals are stand-ins that take the app's 12 s timeout
+  and honour cancellation; the eighth is a real loopback server that accepts and never answers, so a real
+  URLSession request still has to be cancelled when the grace ends. The failed remote is a loopback server that
+  accepts and closes (`LoopbackSilentServer`), held open for the whole test.
+- Every run's timeline is attached to the result and quoted in every failure message.
+
+**Measured (simulator).** The class 20 times under `-parallel-testing-enabled YES -test-iterations 20`: 80 test runs,
+0 failed; 120 discoveries, grace served 3.00 to 3.10 s every time, first hit at 0.35 s or sooner. With the old bug put
+back (a remote that had already failed still counted as a pending patient candidate) the failing-remote test fails
+both runs with the grace at 11.7 s, and its message carries the timeline. NostalgexTests 1,103 tests, 0 failed.
+
+**Not found.** The cause on GitHub. The new timelines will name the candidate that held the wait if it happens again.
+
+## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
+
+**Shipped.** Nothing yet. Branch `appletv/i073-enrichment-cache` off main `7bc68850`, for 1.0.30 (I-073, GitHub #185:
+CARTOON NETWORK gone after 1.0.29).
+
+**Why.** The networks rule never changed. The TMDB/OMDb enrichment cache was memory only, filled inside
+`enrichItems`. After a snapshot restore it was empty; the 6h refresh skips an unchanged library under 24h, so it
+stayed empty for the session. The first package rebuild after that (a switch in Settings, a lineup from iCloud)
+read `networks` off the empty cache, CH 215 came back with 0 of its 5, `mergeBuiltPackageChannels` dropped it and
+saved the dropped lineup as the snapshot, so it stayed gone across relaunches. 50 of 142 channels carry a rule that
+reads enrichment (networks, keywords, production companies, OMDb scores), so it was a class; 1.0.29's Settings
+explainer made it visible. The web tuner and Roku already persist their caches with a 7-day TTL.
+
+**Changed.**
+- `EnrichmentCacheStore`: one JSON file, `enrichment_cache_v1.json`, under `LocalStore` (Caches; under the harness
+  root when isolation is on), rows keyed by TMDB id, 7-day TTL on `fetched_at` like the web and Roku. Saved in
+  the background when a pass ends; loaded in `applyLibrarySnapshot` before any pool can be rebuilt. Server
+  independent, so a sign-out keeps it.
+- `mergeBuiltPackageChannels`: while `enrichmentPending` (no row in memory for a library with TMDB ids), a channel
+  whose rule `dependsOnEnrichment` and comes back under `minItems` keeps the last build's copy instead of being
+  dropped. The rule is narrower than "never drop below minItems while pending": a plain genre or title channel
+  that emptied still goes, because its pool is evidence; an enrichment channel's small pool from a build that
+  could not see the rows is not.
+- `refillEnrichmentAfterRestoreIfNeeded`: when the disk cache was missing or past its TTL on a restore, a
+  background pass refills it (the shared Supabase cache answers nearly all of it), then
+  `refilterChannelsWithEnrichment` (never called before), the found-franchise rebuild and a snapshot save, the
+  way the web tuner's `onCacheReady` does. Cancelled by a sign-out.
+- Tests: `EnrichmentCacheStoreTests` (5: harness root, TTL, broken file, merge under memory, the 12,000-row
+  cost); `BundleBuildTests` gains the report's case (restored lineup, empty cache, package rebuild keeps CH 215
+  with its 52 episodes; fails on main) and its counterpart (a genre channel that emptied still drops).
+
+**Measured (simulator, `EnrichmentCacheStoreTests.testTwelveThousandRowsCost`).** 12,000 rows shaped like the
+shared table (6 to 15 keywords, companies, genres, half with OMDb scores): 5.4 MB on disk, 90 ms to encode and
+write, 112 ms to read and decode on a restore, 18 MB of footprint for the test's two copies (about 9 MB for the
+cache alone). The library snapshot's own size and load time are unchanged; the cache is a separate file.
+
+**Not changed.** No studio fallback on the networks rule (it would undo f134d3df). The library snapshot format is
+unchanged; the cache is its own file, read by nothing else.
+
+**From the review.** `dependsOnEnrichment` also counts `ratingMin` (it falls back to the IMDb rating, and on Emby
+the native rating can be null for a whole library, so the 13 ratingMin channels are enrichment-dependent there).
+`loadLibrary` cancels a refill still in flight, and a cancelled pass stops after the Supabase step rather than
+falling through to TMDB for every id; chosen over "skip the refill when the restore is stale" because a stale
+restore's `refreshLibraryIfChanged` may decide not to reload (unchanged, under 24h), which would leave the cache
+empty for the session, the very hole this closes, and because RESCAN and the daily check are loads too.
+
+**Not yet checked.** Persistence of `enrichment_cache_v1.json` on a real Apple TV. The simulator once showed the
+snapshot and the old enrichment cache persisting when the device did not (`LocalStore.swift`); this file goes
+through the same `LocalStore` root, but only a device run proves it.
+
+**Next.** On a TV: restore, delete the file, relaunch, confirm "no cached rows after restore, refilling" and that
+CH 215 stays through the refilter; and a RESCAN while a refill is running, to see the cancel line.
+
+## 2026-11-04 (CI: every GitHub Action on its latest major version)
+
+**Changed.** `.github/workflows/ci.yml` and `docker.yml` used versions one to three majors behind. Each is now on its latest major, as a major tag rather than a pinned commit:
+- `actions/checkout` v4 to v7
+- `actions/setup-node` v4 to v7
+- `actions/setup-java` v4 to v6
+- `actions/attest-build-provenance` v2 to v4
+- `docker/build-push-action` v6 to v7
+- `docker/login-action`, `docker/setup-buildx-action` and `docker/setup-qemu-action` v3 to v4
+- `docker/metadata-action` v5 to v6
+- `dorny/paths-filter` v3 to v4
+
+Most majors in between move the action to the Node 24 runtime, which GitHub-hosted runners have. None of the inputs these workflows use was removed. Two needed a closer look:
+- `setup-node` v5 caches automatically when `package.json` names a package manager. Ours doesn't, so the Roku job, which has no `cache:`, behaves as before.
+- `attest-build-provenance` v4 is a wrapper over `actions/attest` and keeps `subject-name`, `subject-digest` and `push-to-registry`.
+
+Branch `ci/bump-actions`, cut from `main` at `6a2d6df`.
+
+**Half-done.** No workflow has run on the new versions yet. `actionlint` wasn't available locally; both files parse as YAML. The Docker workflow runs only on a `tuner-v*` tag, so it won't be exercised until the next release. The Android TV job on PR #151 still uses `checkout@v4` and `setup-java@v4`.
+
+**Next.** Pinning to commit SHAs, and Dependabot to keep them current, are for Chad to decide.
+
 ## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
 
 **Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
@@ -59,6 +240,17 @@ behaved as above. Details in `roku/docs/PORTING.md` § After a power loss.
 **Open.** Which channel: neither app remembers the last channel watched, so the seed holds the first
 one, where every launch opens (asked on #155). Not tried: a real power cut, a Plex sign-in, the hourly
 re-save, the sidebar and a deep link on the seed's guide.
+
+## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)
+
+**Why.** On #181's merge, the maintainer asked for the two sessions that started ffmpeg twice in
+the entry, which read as if TS never restarts. Emby's own logs still have them, both on 2026-11-01,
+on *Lab Forced Opus*, a 60.03 s clip cut into 2 s segments. In each the TV read segments 0 to 29
+within about 1.5 s, and by then the first ffmpeg, a remux, had finished the file. The TV then
+asked for segment 30, the file's last 0.03 s, and Emby started a second ffmpeg for it ("Starting
+transcoding because currentTranscodingIndex=null", `-ss 00:01:00`). Not a restart mid-file.
+
+**Changed.** `roku/docs/JELLYFIN-EMBY.md` says so beside the nine single-start joins. No code change.
 
 ## 2026-11-03 (Roku: a Music Videos library on Jellyfin or Emby loads its MusicVideo items)
 
@@ -1299,6 +1491,7 @@ in it. They use `fileURLToPath` now.
   them out of the guide with it.
 
 **Next.** Review of the branch. Chad's go for a push (hosted) and a `tuner-v` tag (Docker).
+
 ## 2026-10-31 (Roku live tools: the shared loader gets the web tuner's UTF-8 repair)
 
 **Why.** Since `e66be04` (#125) the web tuner's Plex loader reads every server answer
@@ -2489,6 +2682,7 @@ unverified.
 **Next.** Chad's go to merge. If a real device look turns up a problem with the
 accordion's focus order inside the Channel Packages list, fix before merge rather than
 after.
+
 ## 2026-10-30 (Docker post: full-size header.webp as the page hero)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys the uncropped header on `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
@@ -2675,6 +2869,7 @@ the toggle is not built; Roku is out of scope for this pass.
 
 **Next.** Chad's go to run NostalgexTests, then merge/push when he's ready. Web tuner:
 add the Settings control. Roku: a later parity pass.
+
 ## 2026-10-29 (three 80s channels, additive)
 
 **Shipped.** Nothing yet. Branch `feature/80s-channels`, cut from `main` at
@@ -2750,6 +2945,7 @@ real numbers are now `140...147` and `148...155`, and updated both
 assertions to match. No other test file hardcodes a static channel number;
 the franchise/collection numbering tests read `channels.json` live for their
 disjointness check. Full `NostalgexTests` suite now green.
+
 ## 2026-10-29 (ratingMin falls back to OMDb when Emby's CommunityRating is null)
 
 **Shipped.** Nothing. Branch `fix/emby-rating-fallback`, cut from `main` at
@@ -2874,6 +3070,7 @@ data-only fix.
 question, not decided here: should SLIME TV carry a year range (roughly
 90s/00s, matching its nostalgic identity) or stay any-era like it is today?
 Not added either way in this fix.
+
 ## 2026-10-29 (ANIME: the same second claim path, with its own guard, branch only)
 
 **Shipped.** Nothing. Branch `fix/standup-missing-specials`, on top of the
@@ -3073,6 +3270,7 @@ tracked as the next Roku parity item, not done here.
 `keywordGatedGenres: ["Animation"]` and opt it in, with its own test pass);
 the Roku port; consider scheduling `discover-standup.mjs` to rerun
 periodically so new TMDB-tagged specials keep reaching the manifest path too.
+
 ## 2026-10-29 (library selection, Apple TV reference implementation, branch only)
 
 **Shipped.** Nothing. Branch `feature/library-selection`, cut from `main` at
@@ -3166,6 +3364,7 @@ other two settles the pattern.
 
 **Next.** Chad reviews the branch and tries the screen and the Settings row
 on the simulator; once approved, port to the web tuner.
+
 ## 2026-10-29 (Apple TV: channel overlay stuck on after a stall, branch only)
 
 **Shipped.** Nothing. Branch `fix/channel-overlay-stuck`, cut from `origin/main`
@@ -3430,6 +3629,7 @@ unchanged.
 **Half-done.** Not run against a real Plex or Emby server: the Plex parameters are the four the Apple TV sends, checked as URLs only. The resolution cap on Jellyfin and Emby is the fallback URL's `MaxWidth` and the server's own scaling for the bitrate; the test files were 360p, so a downscale was not seen. No iCloud-style sync of the choice, as the web has none for any setting.
 
 **Next.** Roku #65 follows with the same golden file. Decide whether the web's Auto should match the Apple TV's. Nothing changes what is sent anywhere beyond request parameters to the viewer's own server.
+
 ## 2026-10-27 (Roku: `tests/pr-check.sh`, the mechanical review checks in one command)
 
 **Shipped.** Nothing until this lands on main. Branch `roku/pr-check`, off main `8f994d8`. Test tooling only under `roku/tests/` and one CI step; none of it is in the channel package (`stage.sh` packs only manifest, source, components, images, data and fonts, and the script proves that on every run).
@@ -3496,6 +3696,7 @@ unchanged.
 **Half-done.** Jellyfin and Emby are not touched: both send valid UTF-8. plex.tv's server list and the Continue Watching read still use `res.json()`: plex.tv sends valid UTF-8, and a replacement character there cannot stop a cleanup, which only reads ids. Not run against a real Plex server; the server in the test is a stand-in that returns the bytes Plex was measured to return (see the 2026-10-16 entry). The repair guesses Windows-1252 for any stray byte, so a name in another single-byte encoding loads with the wrong accented letter, the same as on the Apple TV.
 
 **Next.** Roku #121 follows with the same golden file. Nothing changes what is sent anywhere.
+
 ## 2026-10-27 (web tuner: a small library no longer opens on a blank screen)
 
 **Shipped.** Nothing until the PR for #124 lands on main. Branch `web/empty-lineup-124`, off main `ab60b31`.
@@ -3917,6 +4118,7 @@ unchanged.
 - Not on the web: disc-stacked Jellyfin and Emby movies (the Apple TV schedules the whole runtime and plays disc 2), and runtime franchise and collection channels.
 
 **Next.** Push main and tag `tuner-v1.0.7`. Roku ports the same answers against `scripts/schedule-parity-golden.json`. Chad decides on the history and the Jellyfin order (board item q36).
+
 ## 2026-10-23 (the site for Apple TV 1.0.28)
 
 **Shipped.** Nothing until this lands on main. Branch `site/1.0.28`. Apple TV 1.0.28 has been on the App Store (Ready for Sale) since this morning.
@@ -5836,6 +6038,7 @@ are. The homepage lineup still does not link to the bundle pages.
 
 **Next.** Chad reads the 14 intros and the legal flags. After merge, request
 indexing for /channels in Search Console.
+
 ## 2026-10-13 (1.0.26 (48) cut)
 
 **Shipped.** main pushed, which deploys the site and web tuner. Build 1.0.26 (48) archived
@@ -6489,6 +6692,7 @@ order: `franchise-data`, `franchise-channels`, `franchise-ui`.
 **Half-done.** Unknown part lengths retain the existing offset fallback; this does not infer missing server metadata. Real multi-version and multi-file direct/HLS playback still needs hardware acceptance. Codec policy, heartbeat reporting and unrelated recovery fixes are excluded.
 
 **Next.** Upstream review on `fix/preserve-plex-media-parts`; verify recognizable multi-version and three-part files on hardware before treating playback acceptance as complete.
+
 ## 2026-10-11 (Plex heartbeat-only activity)
 
 **Shipped.** Prepared on `feature/plex-heartbeat-only` against upstream `c2f32e6`. No release, store upload or upstream merge.
