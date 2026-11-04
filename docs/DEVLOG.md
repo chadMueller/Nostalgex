@@ -169,6 +169,16 @@ Outside them, CFNetwork's `Library/HTTPStorages` database (its rows unchanged) a
 simulator, cold or warm. While a cold load enriches, the screen says "Fetching metadata", not "Channel N";
 the channel count only shows during the pool build, which took 35 s here.
 
+**Fixed before the push (2026-11-04, from the review).**
+- `HarnessIsolationTests` skips when isolation is already on and only turns off what it turned on. Before, a
+  whole-target run on a TV under `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` switched isolation off in this class, and
+  the classes after it alphabetically cleared the TV's real library snapshot and manifests.
+  `HarnessIsolationPreexistingTests` proves an active isolation survives it (all 7 checks fail on the old guard).
+- AUDIO LANGUAGE is read through `AppDefaults.standard`, where Settings writes it, and `JellyfinAudioLanguageTests`
+  uses it too, so a harness run on a TV never touches the real setting. A Release build is unchanged.
+- The unused `serverName` parameter of `PlexAPIService.bestReachableURI` is gone.
+- NostalgexTests: 1,086 tests, 1,060 passed, 0 failed, 26 skipped.
+
 **Next.** The same run on the basement Apple TV 4K (3rd generation), through the UI with a 60-minute soak
 (tester). Not covered: Plex collections (no collection package is on in a new lineup, so the scan never ran),
 a real Plex server's own speed, and artwork, which a load never fetches.
