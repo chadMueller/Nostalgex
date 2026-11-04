@@ -65,7 +65,7 @@ enum SeasonalPrompt {
     static func isSilenced(
         bundleID: String,
         now: Date,
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults = AppDefaults.standard,
         calendar: Calendar = .current
     ) -> Bool {
         if defaults.bool(forKey: neverKey(bundleID)) { return true }
@@ -79,7 +79,7 @@ enum SeasonalPrompt {
         _ answer: Answer,
         bundleID: String,
         now: Date,
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults = AppDefaults.standard,
         calendar: Calendar = .current
     ) -> Bool {
         switch answer {

@@ -21,9 +21,9 @@ struct PlexAPIService: MediaBackend {
     }()
 
     static var clientID: String {
-        if let id = UserDefaults.standard.string(forKey: "plex90_client_id") { return id }
+        if let id = AppDefaults.standard.string(forKey: "plex90_client_id") { return id }
         let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "plex90_client_id")
+        AppDefaults.standard.set(id, forKey: "plex90_client_id")
         return id
     }
 

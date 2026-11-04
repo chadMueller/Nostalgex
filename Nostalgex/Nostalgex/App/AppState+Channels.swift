@@ -315,7 +315,7 @@ extension AppState {
     /// collection categories, auto-enable, migrations), and pushing those let each TV's
     /// launch overwrite the other's lineup (seen on hardware, 2026-10-13).
     func saveBundlePreferences(byViewer: Bool = false) {
-        UserDefaults.standard.set(Array(enabledBundleIDs), forKey: "nostalgex_enabled_bundles")
+        AppDefaults.standard.set(Array(enabledBundleIDs), forKey: "nostalgex_enabled_bundles")
         if byViewer {
             preferenceSync.record(PreferenceSync.enabledBundlesKey, value: Array(enabledBundleIDs))
         }
@@ -531,7 +531,7 @@ extension AppState {
         isScanning = false
         let now = Date()
         lastScanDate = now
-        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: "nostalgex_last_scan_date")
+        AppDefaults.standard.set(now.timeIntervalSince1970, forKey: "nostalgex_last_scan_date")
         if discoveredCollections.isEmpty {
             scanningMessage = "No collections found"
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -753,7 +753,7 @@ extension AppState {
     static let retiredActorsBundleID = "collections-actors"
 
     func saveCollectionPreferences() {
-        UserDefaults.standard.set(Array(enabledCollectionKeys), forKey: "nostalgex_enabled_collections")
+        AppDefaults.standard.set(Array(enabledCollectionKeys), forKey: "nostalgex_enabled_collections")
         preferenceSync.record(PreferenceSync.enabledCollectionsKey, value: Array(enabledCollectionKeys))
     }
 

@@ -155,19 +155,22 @@ final class MovieLibraryScaleHarness: XCTestCase {
         guard let raw = ProcessInfo.processInfo.environment["NOSTALGEX_MOVIELIB_N"], let n = Int(raw), n > 0 else {
             throw XCTSkip("set TEST_RUNNER_NOSTALGEX_MOVIELIB_N to run the movie-library scale harness")
         }
+        // The app's real stores stay untouched; see HarnessIsolation.
+        let isolation = HarnessScope.begin("testMovieLibraryScale")
+        defer { isolation.end() }
         let serverID = "7c1e5a3b9d2f4e6a8b0c1d2e3f4a5b6c7d8e9f01"
         let server = AppState.ServerRef(machineIdentifier: serverID, name: "Vault", baseURL: "http://127.0.0.1:9", owned: true, token: "srv")
 
         LibrarySnapshotStore.clear()
         DailyManifestStore.clearAll()
         DailyManifestScheduler.invalidateMemo()
-        UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
-        UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
+        AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
         defer {
             LibrarySnapshotStore.clear()
             DailyManifestStore.clearAll()
             DailyManifestScheduler.invalidateMemo()
-            UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
             LibraryLoadProbe.handler = nil
         }
         UIApplication.shared.isIdleTimerDisabled = true
@@ -220,10 +223,10 @@ final class MovieLibraryScaleHarness: XCTestCase {
 
         if ProcessInfo.processInfo.environment["NOSTALGEX_MOVIELIB_ALLBUNDLES"] == "1" {
             let ids = ChannelConfigLoader.loadBundled().bundles.map(\.id)
-            UserDefaults.standard.set(ids, forKey: "nostalgex_enabled_bundles")
+            AppDefaults.standard.set(ids, forKey: "nostalgex_enabled_bundles")
             emit("enabledBundles=all(\(ids.count))")
         }
-        defer { UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles") }
+        defer { AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles") }
         let state = AppState(credentialStore: InMemoryStore())
         state.enrichmentService.seedCache(fixture.enrichments)
         state.backendOverride = { _ in backend }
@@ -305,20 +308,23 @@ final class MovieLibraryScaleHarness: XCTestCase {
         guard let raw = ProcessInfo.processInfo.environment["NOSTALGEX_MOVIELIB_UI_N"], let n = Int(raw), n > 0 else {
             throw XCTSkip("set TEST_RUNNER_NOSTALGEX_MOVIELIB_UI_N to run the UI scale harness")
         }
+        // The app's real stores stay untouched; see HarnessIsolation.
+        let isolation = HarnessScope.begin("testMovieLibraryScaleThroughUI")
+        defer { isolation.end() }
         let sit = Double(ProcessInfo.processInfo.environment["NOSTALGEX_MOVIELIB_SIT"] ?? "60") ?? 60
         let serverID = "7c1e5a3b9d2f4e6a8b0c1d2e3f4a5b6c7d8e9f01"
         let server = AppState.ServerRef(machineIdentifier: serverID, name: "Vault", baseURL: "http://127.0.0.1:9", owned: true, token: "srv")
         LibrarySnapshotStore.clear()
         DailyManifestStore.clearAll()
         DailyManifestScheduler.invalidateMemo()
-        UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
-        UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
+        AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
         LaunchGuard.resetUnfinishedLoads()
         defer {
             LibrarySnapshotStore.clear()
             DailyManifestStore.clearAll()
             DailyManifestScheduler.invalidateMemo()
-            UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
             LaunchGuard.resetUnfinishedLoads()
             LibraryLoadProbe.handler = nil
         }
@@ -346,10 +352,10 @@ final class MovieLibraryScaleHarness: XCTestCase {
 
         if ProcessInfo.processInfo.environment["NOSTALGEX_MOVIELIB_ALLBUNDLES"] == "1" {
             let ids = ChannelConfigLoader.loadBundled().bundles.map(\.id)
-            UserDefaults.standard.set(ids, forKey: "nostalgex_enabled_bundles")
+            AppDefaults.standard.set(ids, forKey: "nostalgex_enabled_bundles")
             emit("enabledBundles=all(\(ids.count))")
         }
-        defer { UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles") }
+        defer { AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles") }
         let state = AppState(credentialStore: InMemoryStore())
         state.enrichmentService.seedCache(fixture.enrichments)
         state.backendOverride = { _ in backend }
@@ -426,15 +432,18 @@ final class MovieLibraryScaleHarness: XCTestCase {
               let n = Int(ProcessInfo.processInfo.environment["NOSTALGEX_FAKEEMBY_N"] ?? "") else {
             throw XCTSkip("set TEST_RUNNER_NOSTALGEX_FAKEEMBY_URL and _N to run against a fake Emby")
         }
+        // The app's real stores stay untouched; see HarnessIsolation.
+        let isolation = HarnessScope.begin("testEmbyMovieScanUnderStallWatch")
+        defer { isolation.end() }
         LibrarySnapshotStore.clear()
         DailyManifestStore.clearAll()
         DailyManifestScheduler.invalidateMemo()
-        UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
-        UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
+        AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
         defer {
             LibrarySnapshotStore.clear()
             DailyManifestStore.clearAll()
-            UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
         }
         var out: [String] = []
         func emit(_ s: String) {

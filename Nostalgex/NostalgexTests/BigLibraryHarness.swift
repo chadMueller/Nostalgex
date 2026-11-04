@@ -77,7 +77,8 @@ final class BigLibraryHarness: XCTestCase {
 
         init() {
             segStart = 0
-            let path = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            // Under the harness root when isolated, so the trail never lands in the real Caches.
+            let path = (HarnessIsolation.root ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0])
                 .appendingPathComponent("biglib-trail.txt").path
             FileManager.default.createFile(atPath: path, contents: nil)
             trail = FileHandle(forWritingAtPath: path)
@@ -357,18 +358,21 @@ final class BigLibraryHarness: XCTestCase {
         guard let raw = ProcessInfo.processInfo.environment["NOSTALGEX_BIGLIB_N"], let n = Int(raw), n > 0 else {
             throw XCTSkip("set TEST_RUNNER_NOSTALGEX_BIGLIB_N to run the big-library harness")
         }
+        // The app's real stores stay untouched; see HarnessIsolation.
+        let isolation = HarnessScope.begin("testBigLibraryPipeline")
+        defer { isolation.end() }
         let serverID = "4f0c2b9e8a7d6c5b4a39281706f5e4d3c2b1a090"
         let server = AppState.ServerRef(machineIdentifier: serverID, name: "Vault", baseURL: "http://127.0.0.1:9", owned: true, token: "srv")
 
         LibrarySnapshotStore.clear()
         DailyManifestStore.clearAll()
         DailyManifestScheduler.invalidateMemo()
-        UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
-        UserDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")   // app default: ["nostalgex"]
+        AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")   // app default: ["nostalgex"]
         defer {
             LibrarySnapshotStore.clear()
             DailyManifestStore.clearAll()
-            UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
         }
 
         // A run takes longer than the Apple TV's sleep timer; sleeping kills the runner.

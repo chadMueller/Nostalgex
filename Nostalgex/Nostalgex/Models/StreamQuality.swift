@@ -22,11 +22,11 @@ enum StreamQuality: String, CaseIterable, Identifiable, Sendable {
     /// can't sustain it. Nothing had that behaviour before.
     static var current: StreamQuality {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: storageKey),
+            guard let raw = AppDefaults.standard.string(forKey: storageKey),
                   let quality = StreamQuality(rawValue: raw) else { return .auto }
             return quality
         }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: storageKey) }
+        set { AppDefaults.standard.set(newValue.rawValue, forKey: storageKey) }
     }
 
     var displayName: String {
@@ -131,7 +131,7 @@ enum LocalPlexOriginalQuality {
     static let requestCeilingKbps = 100_000
     static let detail = "Keep supported local 4K video unchanged, up to 100 Mbps. Audio may convert to 5.1. Other playback keeps your capped quality. Applies on the next tune."
     static var enabled: Bool {
-        get { UserDefaults.standard.bool(forKey: storageKey) }
-        set { UserDefaults.standard.set(newValue, forKey: storageKey) }
+        get { AppDefaults.standard.bool(forKey: storageKey) }
+        set { AppDefaults.standard.set(newValue, forKey: storageKey) }
     }
 }

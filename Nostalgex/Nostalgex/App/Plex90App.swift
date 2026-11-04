@@ -158,7 +158,7 @@ struct RootView: View {
     private func emitLaunchAnalyticsIfNeeded() {
         guard !Self.launchReported else { return }
         Self.launchReported = true
-        let defaults = UserDefaults.standard
+        let defaults = AppDefaults.standard
         let kind: AnalyticsLaunchKind = defaults.bool(forKey: Self.firstLaunchRecordedKey)
             ? .returning
             : .first
