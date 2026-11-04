@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (N-013: forced subtitles when the server cannot burn them in)
+
+**Changed.** Test code only, on branch `test/n013-emby-forced-sub-burnin`, not pushed. `ForcedSubtitleBurnHarness.swift`
+drives `AppState.loadCurrentItem` and `selectChannel` against a lab Emby or Jellyfin. `scripts/lab-forced-subtitle/`
+holds what it needs: ffmpeg-made films with a forced English track, a script that starts the lab server in colima, a
+logging proxy that can answer HTTP 500 on the burn-in stream only, and an HTTP probe. No product code changed.
+
+**Why.** The app asks the server to burn a forced track into the picture (a second PlaybackInfo with
+`SubtitleStreamIndex` and Encode subtitle profiles). A unit test cannot show whether the app copes when the server
+cannot.
+
+**Measured.** Lab Emby 4.10.1.0 in a Linux container, lab Jellyfin 12.2.0, tvOS 26.1 simulator, main at 6a2d6df7.
+- A healthy server burns the track and the film plays in 0.3 to 0.9 s (a 4K film 1.6 s). The `Key: threads` failure
+  seen on a macOS Emby 4.10.1.0 did not reproduce in the container: 10-bit, HDR10 and burn-in all transcode there.
+- With HTTP 500 injected on the burn stream's segments (master and variant answer 200, as the failing server did),
+  AVPlayer retries the first segment six times in 16 s and never fails the item. At 20.4 s the watchdog asks for a
+  stream with no burn and the film plays at 20.7 to 21.3 s, without its forced lines. Same on Jellyfin's fMP4 with the
+  init segment refused. A channel of such films sat in loading for 20.8 s per programme; the failure count stayed 0.
+- 500 on the burn PlaybackInfo request: the app uses the unburned answer and plays at 0.9 s. 500 on the variant
+  playlist: the error card at 0.9 s.
+- The 4 s fail-fast check never fires in the simulator: the player's error log holds `-16847 HTTP 500` events and no `uri`.
+- On Emby and Jellyfin the watchdog is always 20 s, never the 40 s a UHD source gets, because only the Plex loader sets
+  `videoWidth` and `videoHeight`.
+
+**Half-done.** Not run on a device, so AVPlayer's give-up time (31.5 s in the simulator) and error code on a real Apple
+TV are unknown. Not run against the macOS Emby the bug was seen on; `server-login.py` then `probe-burn.py` is the
+check. Image subtitles (PGS, VobSub) were not tested.
+
+**Next.** A refused burn stream should fall back to the unburned answer at once, not after the 20 s watchdog.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
