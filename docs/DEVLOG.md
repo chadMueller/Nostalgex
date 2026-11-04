@@ -65,6 +65,22 @@ four clips, so its scan has to ask a music video library for `MusicVideo` too. N
 **Next.** Land this with the web tuner's fix in one push, so the `roku` job is never red on main. The branch is
 green alone and green with the web fix. When the web fix is on main, delete the "vectors hold no MusicVideo
 clips" branch in `MediaBrowserTests.brs`.
+## 2026-11-03 (web: Jellyfin and Emby music video libraries)
+
+**Shipped.** Nothing. One commit on `web/1030-fixes`, cut from main `6a2d6df7`, not pushed, not tagged.
+
+**Changed.**
+- **Music video libraries (I-067, issue #172, found by owenvoke on PR #151).** `fetchJellyfinLibraryFromServer` asked every non-TV library for `IncludeItemTypes=Movie`. Jellyfin files a music video library's items as `MusicVideo` (measured on Jellyfin 12.4.0 with four files: `Movie` returns 0, `MusicVideo` returns 4), so the library loaded nothing and HIGH ROTATION stayed empty. A library whose type is `musicvideos` is now asked for `Movie,MusicVideo`; every other library still asks for `Movie`. Jellyfin and Emby share this function, so the web tuner and Docker change together.
+
+**Measured.**
+- `scripts/jellyfin-music-video-browser-smoke.mjs` (new, headless, against a Jellyfin-shaped and an Emby-shaped mock that answers `IncludeItemTypes` as Jellyfin does): on main 6 of 18 checks fail (only a clip filed as `Movie` loads; HIGH ROTATION gets that one item), with the fix all 18 pass. The Movies library is still asked for `Movie` only and TV for `Series` then `Episode`.
+- Not measured against a real Emby server: none with a music video library was available. The Emby result is from the Emby-shaped mock, and the claim that Emby takes a comma list and files clips as `MusicVideo` is from its API docs, not a measurement.
+
+**Not changed.** Australian ratings (Discussion #41). The AU table already came in with the UK pass (I-040), both spellings included. `M` and `R18+` stay with R on purpose, so kids and family channels keep M films off them.
+
+**Half-done.** Roku asks music video libraries for `Movie` only too (`MediaBrowserLibrary.brs`); its port is not started. Apple TV's fix is on its own branch.
+
+**Next.** Roku port. A check of a real Emby music video library. HIGH ROTATION genres (#105, N-016) stay parked.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
