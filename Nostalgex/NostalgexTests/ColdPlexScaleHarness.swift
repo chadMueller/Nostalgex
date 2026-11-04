@@ -51,6 +51,9 @@ final class ColdPlexScaleHarness: XCTestCase {
         var ui = false
         var soakSeconds = 0
         var allBundles = false
+        /// Plex-shaped differences fed into the fixture one at a time (N-033: the same films
+        /// load on Emby and stop at "Channel 60 of 142" on Plex). See `Shape`.
+        var shape: Set<Shape> = []
 
         static func fromEnvironment(n: Int) -> Config {
             let env = ProcessInfo.processInfo.environment
@@ -69,8 +72,38 @@ final class ColdPlexScaleHarness: XCTestCase {
             c.ui = env["NOSTALGEX_COLDPLEX_UI"] == "1"
             if let v = int("SOAK") { c.soakSeconds = v }
             c.allBundles = env["NOSTALGEX_COLDPLEX_ALLBUNDLES"] == "1"
+            if let raw = env["NOSTALGEX_COLDPLEX_SHAPE"] {
+                c.shape = Set(raw.split(separator: ",").compactMap { Shape(rawValue: String($0)) })
+            }
             return c
         }
+    }
+
+    /// What a Plex item can carry that an Emby item for the same film does not, after
+    /// `parseMovieItem` / Emby's parser have both run. Each one is a knob so a run can add
+    /// them one at a time (`TEST_RUNNER_NOSTALGEX_COLDPLEX_SHAPE=a,b`).
+    enum Shape: String, CaseIterable {
+        /// Plex's TMDB agent appends " (YYYY)" to disambiguate; 40% of titles.
+        case yearSuffix
+        /// Diacritics, curly apostrophes and en dashes in 25% of titles (Léon, Amélie,
+        /// Schindler’s List): `titleContainsWordLower` searches these through Foundation.
+        case unicodeTitles
+        /// 1,500 to 3,000 character summaries on every film.
+        case longSummaries
+        /// Plex's `rating` is the critic score; most films sit above 7.5. Emby's
+        /// CommunityRating is TMDB's vote average. The ratingMin pools (59, 60) grow.
+        case criticRatings
+        /// 15% of films from a legacy agent: no tmdb:// guid, imdb:// only.
+        case noTmdb
+        /// Plex lists two or three genres a film; Emby every TMDB genre. Cap at 2.
+        case fewGenres
+        /// Two versions of every film (1080p and 4K), two parts each.
+        case multiVersion
+        /// Director, Writer, Role, Country and Collection tags on every film: the JSON a
+        /// real Plex page carries, 10 to 30 entries a film.
+        case richTags
+        /// The same films in two movie sections (Movies, 4K Movies), distinct ratingKeys.
+        case twoSections
     }
 
     struct Outcome {
@@ -87,14 +120,17 @@ final class ColdPlexScaleHarness: XCTestCase {
         guard let raw = ProcessInfo.processInfo.environment["NOSTALGEX_COLDPLEX_N"], let n = Int(raw), n > 0 else {
             throw XCTSkip("set TEST_RUNNER_NOSTALGEX_COLDPLEX_N to run the cold Plex harness")
         }
-        let outcome = try await Self.run(Self.Config.fromEnvironment(n: n), testCase: self)
+        let config = Self.Config.fromEnvironment(n: n)
+        let outcome = try await Self.run(config, testCase: self)
+        print(outcome.report.map { "[COLDPLEX] " + $0 }.joined(separator: "\n"))
         let attachment = XCTAttachment(string: outcome.report.joined(separator: "\n"))
         attachment.name = "coldplex-report.txt"
         attachment.lifetime = .keepAlways
         add(attachment)
         let diff = outcome.realStoresBefore.differences(from: outcome.realStoresAfter)
         XCTAssertEqual(diff.app, [], "the harness changed the app's real stores")
-        XCTAssertEqual(outcome.itemCount, n)
+        // Two sections hold the same films under their own ratingKeys: both copies load.
+        XCTAssertEqual(outcome.itemCount, config.shape.contains(.twoSections) ? 2 * n : n)
     }
 
     /// The whole cold first load, small: fake Plex, fake Supabase and TMDB proxy, pools,
@@ -145,14 +181,26 @@ final class ColdPlexScaleHarness: XCTestCase {
                             trail: root.appendingPathComponent("coldplex-trail.txt"))
         report.emit("N=\(config.n) cachedFraction=\(config.cachedFraction) collections=\(config.collections.map(String.init) ?? "all") "
                     + "plexPage=\(config.plexBaseDelayMs)ms+\(config.plexPerItemMicros)us/item tmdb=\(config.tmdbDelayMs)ms@\(config.tmdbPerSecond)/s "
-                    + "supabase=\(config.supabaseDelayMs)ms omdb=\(config.omdbDelayMs)ms ui=\(config.ui) soak=\(config.soakSeconds)s")
+                    + "supabase=\(config.supabaseDelayMs)ms omdb=\(config.omdbDelayMs)ms ui=\(config.ui) soak=\(config.soakSeconds)s "
+                    + "shape=\(config.shape.isEmpty ? "none" : config.shape.map(\.rawValue).sorted().joined(separator: ","))")
         report.emit("isolation root=\(root.lastPathComponent) activatedHere=\(activatedHere) realStores: \(realBefore.summary)")
 
         // Fixture: the same movie library MovieLibraryScaleHarness builds, served as Plex.
         let serverID = "c01d91e5a3b9d2f4e6a8b0c1d2e3f4a5b6c7d8e9"
         let fixture = MovieLibraryScaleHarness.makeMovieLibrary(count: config.n, serverID: serverID)
         report.emit(fixture.mix)
-        let plexItems = fixture.items.map(Self.plexJSON)
+        let plexItems = fixture.items.map { Self.plexJSON($0, shape: config.shape) }
+        // A second section holding the same films under their own ratingKeys, as a Plex
+        // server with a 4K library beside the main one does.
+        let secondSection = config.shape.contains(.twoSections)
+        let plexItems2: [[String: Any]] = secondSection ? plexItems.map { d in
+            var d = d
+            let rk = (d["ratingKey"] as? String).flatMap(Int.init) ?? 0
+            d["ratingKey"] = String(rk + 1_000_000)
+            d["key"] = "/library/metadata/\(rk + 1_000_000)"
+            d["librarySectionID"] = 2
+            return d
+        } : []
         let enrichByTMDB = Dictionary(fixture.enrichments.map { ($0.tmdbID, $0) }, uniquingKeysWith: { a, _ in a })
         var collectionsByFranchise: [Int: [String]] = [:]
         for (item, e) in zip(fixture.items, fixture.enrichments) {
@@ -170,15 +218,21 @@ final class ColdPlexScaleHarness: XCTestCase {
             case "/identity":
                 return .json(["MediaContainer": ["machineIdentifier": serverID, "friendlyName": "Vault"]], label: "plex.identity")
             case "/library/sections":
-                return .json(["MediaContainer": ["Directory": [["key": "1", "title": "Movies", "type": "movie",
-                                                                 "scannedAt": 1_790_000_000, "updatedAt": 1_790_000_000,
-                                                                 "contentChangedAt": 1_790_000_000]]]],
-                             label: "plex.sections", delayMs: 40)
-            case "/library/sections/1/all":
+                var sections: [[String: Any]] = [["key": "1", "title": "Movies", "type": "movie",
+                                                  "scannedAt": 1_790_000_000, "updatedAt": 1_790_000_000,
+                                                  "contentChangedAt": 1_790_000_000]]
+                if secondSection {
+                    sections.append(["key": "2", "title": "4K Movies", "type": "movie",
+                                     "scannedAt": 1_790_000_000, "updatedAt": 1_790_000_000,
+                                     "contentChangedAt": 1_790_000_000])
+                }
+                return .json(["MediaContainer": ["Directory": sections]], label: "plex.sections", delayMs: 40)
+            case "/library/sections/1/all", "/library/sections/2/all":
+                let source = req.path.hasPrefix("/library/sections/2/") ? plexItems2 : plexItems
                 let start = Int(req.query["X-Plex-Container-Start"] ?? "0") ?? 0
                 let size = Int(req.query["X-Plex-Container-Size"] ?? "500") ?? 500
-                let page = Array(plexItems.dropFirst(start).prefix(size))
-                return .json(["MediaContainer": ["totalSize": plexItems.count, "size": page.count, "Metadata": page]],
+                let page = Array(source.dropFirst(start).prefix(size))
+                return .json(["MediaContainer": ["totalSize": source.count, "size": page.count, "Metadata": page]],
                              label: "plex.page", delayMs: config.plexBaseDelayMs + page.count * config.plexPerItemMicros / 1000)
             case "/library/sections/1/collections":
                 return .json(["MediaContainer": ["Metadata": collections.map {
@@ -338,13 +392,47 @@ final class ColdPlexScaleHarness: XCTestCase {
 
     // MARK: - Plex JSON for a fixture item
 
-    nonisolated static func plexJSON(_ i: PlexMediaItem) -> [String: Any] {
+    nonisolated static func plexJSON(_ i: PlexMediaItem, shape: Set<Shape> = []) -> [String: Any] {
+        // Per-film, the same on every run.
+        let h = Int(i.ratingKey.hashValueStable % 1_000)
+        var title = i.title
+        if shape.contains(.unicodeTitles), h % 4 == 0 {
+            let flavours = ["’s Révenge", ": Édition Spéciale", " – Part II", " (Amélie’s Cut)"]
+            title += flavours[(h / 4) % flavours.count]
+        }
+        if shape.contains(.yearSuffix), h % 10 < 4, let y = i.year {
+            title += " (\(y))"
+        }
+        var summary = i.summary
+        if shape.contains(.longSummaries) {
+            let want = 1_500 + (h % 1_500)
+            while summary.utf8.count < want { summary += " " + i.summary }
+        }
+        var rating = i.rating
+        if shape.contains(.criticRatings), h % 10 < 6 {
+            rating = 7.5 + Double(h % 24) / 10
+        }
+        var genres = i.genres
+        if shape.contains(.fewGenres) { genres = Array(genres.prefix(2)) }
         var d: [String: Any] = [
             "ratingKey": i.ratingKey, "key": "/library/metadata/\(i.ratingKey)", "type": "movie",
-            "title": i.title, "summary": i.summary, "duration": i.duration * 60_000,
-            "rating": i.rating, "addedAt": i.addedAt, "viewCount": i.viewCount,
-            "Genre": i.genres.map { ["tag": $0] },
+            "title": title, "summary": summary, "duration": i.duration * 60_000,
+            "rating": rating, "addedAt": i.addedAt, "viewCount": i.viewCount,
+            "Genre": genres.map { ["tag": $0] },
         ]
+        if shape.contains(.criticRatings) { d["audienceRating"] = i.rating }
+        if shape.contains(.richTags) {
+            let n = 10 + (h % 21)
+            d["Director"] = (0..<2).map { ["tag": "Director \(h + $0)"] }
+            d["Writer"] = (0..<3).map { ["tag": "Writer \(h + $0)"] }
+            d["Role"] = (0..<n).map { ["tag": "Actor \(h + $0)", "role": "Character \($0)", "thumb": "/library/metadata/\(i.ratingKey)/role/\($0)"] }
+            d["Country"] = [["tag": "United States of America"]]
+            d["Collection"] = [["tag": "Collection \(h % 400)"]]
+            d["tagline"] = "A tagline for \(i.title)."
+            d["originalTitle"] = i.title
+            d["audienceRatingImage"] = "rottentomatoes://image.rating.upright"
+            d["ratingImage"] = "rottentomatoes://image.rating.ripe"
+        }
         if let y = i.year { d["year"] = y }
         if let a = i.originallyAvailableAt { d["originallyAvailableAt"] = a }
         if let r = i.contentRating { d["contentRating"] = r }
@@ -352,16 +440,27 @@ final class ColdPlexScaleHarness: XCTestCase {
         if let t = i.thumb { d["thumb"] = t }
         if let a = i.art { d["art"] = a }
         var guids: [[String: String]] = []
-        if let t = i.tmdbID { guids.append(["id": "tmdb://\(t)"]) }
+        let dropTmdb = shape.contains(.noTmdb) && h % 100 < 15
+        if let t = i.tmdbID, !dropTmdb { guids.append(["id": "tmdb://\(t)"]) }
         if let m = i.imdbID { guids.append(["id": "imdb://\(m)"]) }
+        if shape.contains(.richTags) { guids.append(["id": "tvdb://\(100_000 + h)"]) }
         d["Guid"] = guids
-        d["Media"] = [[
+        let part: [String: Any] = ["key": i.partKey ?? "/library/parts/0/file.mkv", "container": i.container ?? "mkv",
+                                   "duration": i.duration * 60_000]
+        let media: [String: Any] = [
             "container": i.container ?? "mkv", "videoCodec": i.videoCodec ?? "h264", "audioCodec": i.audioCodec ?? "ac3",
             "videoProfile": i.videoProfile ?? "high", "videoResolution": "1080", "bitrate": i.bitrate ?? 8_000,
             "width": 1920, "height": 1080,
-            "Part": [["key": i.partKey ?? "/library/parts/0/file.mkv", "container": i.container ?? "mkv",
-                      "duration": i.duration * 60_000]],
-        ]]
+            "Part": shape.contains(.multiVersion) ? [part, part] : [part],
+        ]
+        if shape.contains(.multiVersion) {
+            var uhd = media
+            uhd["videoResolution"] = "4k"; uhd["width"] = 3840; uhd["height"] = 2160
+            uhd["bitrate"] = (i.bitrate ?? 8_000) * 3; uhd["videoCodec"] = "hevc"; uhd["videoProfile"] = "main 10"
+            d["Media"] = [media, uhd]
+        } else {
+            d["Media"] = [media]
+        }
         return d
     }
 
