@@ -77,6 +77,36 @@ filters do list them.
 **Next.** Chad decides when to push, since the hosted tuner deploys with it, and which Apple TV, Roku and Android
 builds carry v50. If PREMIERES should stay on for slow libraries, the lever is a wider `addedWithinDays`, not a
 lower floor.
+## 2026-11-04 (tests: the Plex discovery harness measures the grace window, not the runner)
+
+**Shipped.** Nothing; test code only. Branch `test/discovery-harness-ci` off main `29203c9f`.
+
+**Why.** `PlexDiscoveryDeadLocalHarnessTests.testARemoteThatAlreadyFailedDoesNotStretchTheGrace` failed twice on
+GitHub's macOS runners (runs 41850712310 and 41874032385; 12.9 s for two discoveries that take about 3.3 s each
+here) and passed locally every time. The log carried no timeline, so which candidate held the wait is unknown.
+Measured here: a port opened and closed just before the run refused in 30 ms or less in 30 of 30 tries, ports are
+handed out in sequence (198 of 199 steps were +1, so a freed port is not reused soon), and 192.0.2.1 black-holes
+for the full 12 s local timeout. Two things in the tests depended on the machine: the dead candidates (a closed
+port relies on the OS refusing at once; RFC 5737 addresses can black-hole, refuse or route depending on the
+network) and the bound (total time under 5 s includes how fast the stand-in server answers on a loaded runner,
+which leaves 2 s of headroom over the 3 s grace).
+
+**Changed.**
+- Both tests assert the grace as served: from the first hit to the answer, under 5 s (the failure modes are 12 s
+  and 15 s) and over 2.5 s (the locals still get their 3 s). The failing-remote test also checks its precondition:
+  that remote reported a failure before the grace ran out.
+- Dead candidates that behave the same on any machine: seven locals are stand-ins that take the app's 12 s timeout
+  and honour cancellation; the eighth is a real loopback server that accepts and never answers, so a real
+  URLSession request still has to be cancelled when the grace ends. The failed remote is a loopback server that
+  accepts and closes (`LoopbackSilentServer`), held open for the whole test.
+- Every run's timeline is attached to the result and quoted in every failure message.
+
+**Measured (simulator).** The class 20 times under `-parallel-testing-enabled YES -test-iterations 20`: 80 test runs,
+0 failed; 120 discoveries, grace served 3.00 to 3.10 s every time, first hit at 0.35 s or sooner. With the old bug put
+back (a remote that had already failed still counted as a pending patient candidate) the failing-remote test fails
+both runs with the grace at 11.7 s, and its message carries the timeline. NostalgexTests 1,103 tests, 0 failed.
+
+**Not found.** The cause on GitHub. The new timelines will name the candidate that held the wait if it happens again.
 
 ## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
 
