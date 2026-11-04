@@ -364,6 +364,21 @@ clips, on this build:
   clock stopped; no BrightScript was running). It came back after Emby was
   started again, and didn't recur in the later runs.
 
+A server stream whose retry errors too (issue #184, 2026-11-04). After the
+retry's error the server is asked (`failAttempt`), and Roku's player says
+`finished` right after. That `finished` used to hand over to the next
+airing, a fresh start with its own retry, so the answer was dropped and a
+stream the server answers for but the player can't play went from
+programme to programme with no card. A `finished` while the server is
+asked after an error (`probingAfterError`) is now ignored, as one after the
+card is. Measured on the 43S45 against Plex (5,470 items), with a scratch
+launch switch that broke the player's copy of channel 2's server stream
+and left the probe's: main, in 40 s, 21 tunes, 10 hand-overs, no card; this
+build, in 40 s, 9 tunes and four cards, each "1 in a row" up to 4, and the
+fifth at 42 s stopped the channel with its card up, nothing tried in the
+next 29 s. Jellyfin and Emby go another way (the stream ends unplayed, and
+the server's answer is read as a short file's end), not changed here.
+
 **A stream that starves after its picture** (issue #59, after upstream's
 `PlaybackStarvation` and `handleStarvation`). Once a start has played, the
 playhead is read once a second: under 0.25 s of progress for 3 s is a stall,
