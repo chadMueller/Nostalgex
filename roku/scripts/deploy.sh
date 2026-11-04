@@ -97,10 +97,13 @@ for host in $ROKU_HOSTS; do
         # itself, so killing it closes the console. A cat left as bash's
         # child held the TV's one console connection for hours (2026-10-21).
         log=out/$mode-"$host".log
-        timeout "$((wait_s + 10))" bash -c 'exec 3<>"/dev/tcp/$0/8085" && exec cat <&3' "$host" >"$log" 2>&1 &
+        # macOS has no GNU timeout: perl's alarm survives the exec into bash and cat.
+        if command -v timeout >/dev/null; then limit=(timeout "$((wait_s + 10))")
+        else limit=(perl -e 'alarm shift; exec @ARGV' "$((wait_s + 10))"); fi
+        "${limit[@]}" bash -c 'exec 3<>"/dev/tcp/$0/8085" && exec cat <&3' "$host" >"$log" 2>&1 &
         listener=$!
         sleep 3
-        mark=$(stat -c %s "$log")
+        mark=$(wc -c <"$log" | tr -d ' ')
     fi
     code=$(curl -s -o out/install-"$host".html -w '%{http_code}' --digest \
         -u "rokudev:$ROKU_DEV_PASSWORD" -F mysubmit=Install \
