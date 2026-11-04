@@ -352,6 +352,10 @@ jobs:
           xcrun simctl list devices available "tvOS" | head -40
 
       - name: Run NostalgexTests
+        # TEST_RUNNER_ vars reach the test host without the prefix. The two Plex
+        # discovery timing tests skip on these shared runners (N-037); they run locally.
+        env:
+          TEST_RUNNER_NOSTALGEX_SKIP_TIMING: "1"
         run: |
           set -eo pipefail
           xcodebuild test \

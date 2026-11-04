@@ -127,6 +127,8 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
     /// pending the grace is 3 s, so the answer comes 3 s after the hit: not at once (the locals
     /// still get their window) and never at the locals' 12 s timeout.
     func testDeadLocalAddressesDoNotHoldUpAFastRemote() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["NOSTALGEX_SKIP_TIMING"] != nil,
+                      "timing test: skipped on shared CI runners (N-037), runs locally")
         let server = try await remote(delayMs: 150)
         defer { server.stop() }
         let blackHole = try await LoopbackSilentServer.start(mode: .neverAnswer)
@@ -152,6 +154,8 @@ final class PlexDiscoveryDeadLocalHarnessTests: XCTestCase {
     /// say, an address the network refuses). Once it has failed, only local candidates still
     /// outrank the live remote, so the 3 s grace applies, not the 15 s one for a pending remote.
     func testARemoteThatAlreadyFailedDoesNotStretchTheGrace() async throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["NOSTALGEX_SKIP_TIMING"] != nil,
+                      "timing test: skipped on shared CI runners (N-037), runs locally")
         let server = try await remote(delayMs: 150)
         defer { server.stop() }
         let refusing = try await LoopbackSilentServer.start(mode: .closeAtOnce)
