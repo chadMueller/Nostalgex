@@ -31,7 +31,17 @@ cannot.
 TV are unknown. Not run against the macOS Emby the bug was seen on; `server-login.py` then `probe-burn.py` is the
 check. Image subtitles (PGS, VobSub) were not tested.
 
-**Next.** A refused burn stream should fall back to the unburned answer at once, not after the 20 s watchdog.
+**Fix check.** `fix/forced-burn-probe` (a27928c4, probes the burn stream's first segment before choosing it) was
+cherry-picked onto this main in a throwaway worktree and run through the same harness, nothing committed from it.
+- 500 on the burn segments: the six burn films play in 0.4 to 1.0 s on the plain stream (20.7 to 21.3 s before). The
+  refused session is stopped at +0.16 s. A channel of forced films starts each programme in 0.3 to 1.0 s (20.8 s before).
+- 500 on the variant playlist: plays in 1.0 s (the error card before). On Jellyfin with the init segment refused:
+  0.6 to 1.0 s (20.8 s before).
+- Healthy servers: films with no burn are unchanged (0.3 s). Burn films start about 0.1 to 0.4 s later. A 4K burn on
+  Jellyfin in a 2-CPU VM starts in 3.5 s against 1.4 s, because the probe waits for the first burned segment.
+
+**Next.** Rebase `fix/forced-burn-probe` onto main for the next Apple TV bundle. It is 354 commits behind and its dev log
+entry conflicts, the code applied cleanly.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
