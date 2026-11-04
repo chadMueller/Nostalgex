@@ -1,8 +1,9 @@
-' The VERSION line on the connect screen and at the end of Settings, as the
-' Apple TV app's (SettingsView connectScreenVersionLabel, BundleManagerView
-' appVersionLabel): the version, then the build in brackets. The build here
-' is the hash scripts/deploy.sh and release.sh write into the manifest as
-' `nx_build`; a zip without one shows the version alone.
+' The VERSION line on the connect screen and the VERSION row of Settings'
+' ABOUT tab, as the Apple TV app's (SettingsView connectScreenVersionLabel,
+' Views/Settings/SettingsAboutView appVersionLabel): the version, then the
+' build in brackets. The build here is the hash scripts/deploy.sh and
+' release.sh write into the manifest as `nx_build`; a zip without one shows
+' the version alone.
 '
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 
@@ -11,6 +12,14 @@ function NxVersionLabel() as String
     label = NxFormatVersionLabel(info.GetValue("major_version"), info.GetValue("minor_version"), info.GetValue("build_version"), info.GetValue("nx_build"))
     ' A test build keeps its own data (NxDataSpace) and says so.
     if NxDataSpace() <> "" then label = label + " TEST DATA"
+    return label
+end function
+
+' The VERSION row's value: the line without its first word, which the row's
+' title says.
+function NxVersionValue() as String
+    label = NxVersionLabel()
+    if Left(label, 8) = "VERSION " then return Mid(label, 9)
     return label
 end function
 

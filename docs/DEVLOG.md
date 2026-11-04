@@ -3,6 +3,41 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Roku: Settings is the Apple TV's rail and detail pane, the first of #188's two PRs)
+
+**Shipped.** Nothing yet. Branch `roku-settings-rail` off main `456a511`, not pushed.
+
+**Why.** #188: on the Apple TV, Settings has a rail of five tabs down the left and the open tab's rows on the
+right; on the Roku it was one long list under one title, and SIGN OUT or the version line took a press through
+all of it. The maintainer asked for two PRs: the rail and the five tabs first, then the CHANNELS & BUNDLES link
+rows and their pages. This is the first.
+
+**Changed.**
+- `roku/source/guide/SettingsRail.brs`: the rules, from `SettingsCategory.swift` and `SettingsContainerView.swift`.
+  The five tabs in the rail's order with SUPPORT NOSTALGEX pinned and the hero lines word for word; which tab a
+  row kind sits in (the two reporting switches move from CONNECTION to PLAYBACK & PICTURE's WATCH HISTORY, as
+  there); the first focusable row of a tab (none on SUPPORT NOSTALGEX, so focus stays on the rail); and what a
+  key does on the rail (Up and Down swap the pane with no press, Right or OK go in, Back leaves) and in the rows
+  (Left or Back go to the rail, an open language or quality list folding first). 62 cases in
+  `roku/tests/SettingsRailTests.brs`.
+- `roku/components/SettingsView.brs`: builds every tab's rows and shows the selected tab's; draws the rail at the
+  Apple TV's sizes (bars 4, 6 and 8; a 22% tint and 3 px border on the focused tab, a 6% fill on the selected
+  one) and the pane's hero (the Apple TV's 96 px icons, copied to `roku/images/look/settings_hero_*.png`, title
+  34, line 20) pinned above a divider with only the rows scrolling. The accent is Settings' cyan. The CONNECTION
+  heading and the footer line are gone. ABOUT has VERSION as a row and LINKS with GITHUB (focusable, nothing to
+  press, as there). CHANNELS & BUNDLES keeps CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS in one scroll until
+  the second PR. Leaving Settings saves and rebuilds as before; moving between tabs does neither, and a package
+  still building reads BUILDING when its tab is opened again.
+- `roku/components/GuideView.brs`: the playing channel is muted while Settings is open, as the Apple TV's
+  `SettingsContainerView` does.
+- `roku/source/util/AppVersion.brs`: `NxVersionValue`, the VERSION row's value, one case in `VersionTests.brs`.
+- Comments that cited `BundleManagerView.swift` (deleted by N-028) point at `Views/Settings/`; `PORTING.md`
+  § Settings as a rail and a pane says what is left out (icons, glow, scanlines, the fade under the hero, rounded
+  corners, the cross-fade).
+
+**Not yet.** Pressed on a TV: the measurements #188 asks for (a key press to the new screen, memory, presses
+from the guide to SIGN OUT, RESCAN LIBRARY and a franchise switch, before and after) and the sound check.
+
 ## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
 
 **Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.

@@ -92,6 +92,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("bad-byte") then failures = failures + NxRunUtf8RepairTests("pkg:/tests/vectors/utf8-repair-golden.json")
     if NxTestWants("cross-channel") then failures = failures + NxRunCrossChannelTests()
     if NxTestWants("settings-channels") then failures = failures + NxRunSettingsChannelsTests("pkg:/data/channels.json")
+    if NxTestWants("settings-rail") then failures = failures + NxRunSettingsRailTests()
     if failures = 0 then print "ALL TESTS PASSED" else print "TESTS FAILED"
 end sub
 
