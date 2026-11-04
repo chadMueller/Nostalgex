@@ -77,6 +77,7 @@ filters do list them.
 **Next.** Chad decides when to push, since the hosted tuner deploys with it, and which Apple TV, Roku and Android
 builds carry v50. If PREMIERES should stay on for slow libraries, the lever is a wider `addedWithinDays`, not a
 lower floor.
+
 ## 2026-11-04 (tests: the Plex discovery harness measures the grace window, not the runner)
 
 **Shipped.** Nothing; test code only. Branch `test/discovery-harness-ci` off main `29203c9f`.
@@ -182,6 +183,7 @@ Branch `ci/bump-actions`, cut from `main` at `6a2d6df`.
 **Half-done.** No workflow has run on the new versions yet. `actionlint` wasn't available locally; both files parse as YAML. The Docker workflow runs only on a `tuner-v*` tag, so it won't be exercised until the next release. The Android TV job on PR #151 still uses `checkout@v4` and `setup-java@v4`.
 
 **Next.** Pinning to commit SHAs, and Dependabot to keep them current, are for Chad to decide.
+
 ## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
 
 **Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
@@ -1448,6 +1450,7 @@ in it. They use `fileURLToPath` now.
   them out of the guide with it.
 
 **Next.** Review of the branch. Chad's go for a push (hosted) and a `tuner-v` tag (Docker).
+
 ## 2026-10-31 (Roku live tools: the shared loader gets the web tuner's UTF-8 repair)
 
 **Why.** Since `e66be04` (#125) the web tuner's Plex loader reads every server answer
@@ -2638,6 +2641,7 @@ unverified.
 **Next.** Chad's go to merge. If a real device look turns up a problem with the
 accordion's focus order inside the Channel Packages list, fix before merge rather than
 after.
+
 ## 2026-10-30 (Docker post: full-size header.webp as the page hero)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys the uncropped header on `https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to`.
@@ -2824,6 +2828,7 @@ the toggle is not built; Roku is out of scope for this pass.
 
 **Next.** Chad's go to run NostalgexTests, then merge/push when he's ready. Web tuner:
 add the Settings control. Roku: a later parity pass.
+
 ## 2026-10-29 (three 80s channels, additive)
 
 **Shipped.** Nothing yet. Branch `feature/80s-channels`, cut from `main` at
@@ -2899,6 +2904,7 @@ real numbers are now `140...147` and `148...155`, and updated both
 assertions to match. No other test file hardcodes a static channel number;
 the franchise/collection numbering tests read `channels.json` live for their
 disjointness check. Full `NostalgexTests` suite now green.
+
 ## 2026-10-29 (ratingMin falls back to OMDb when Emby's CommunityRating is null)
 
 **Shipped.** Nothing. Branch `fix/emby-rating-fallback`, cut from `main` at
@@ -3023,6 +3029,7 @@ data-only fix.
 question, not decided here: should SLIME TV carry a year range (roughly
 90s/00s, matching its nostalgic identity) or stay any-era like it is today?
 Not added either way in this fix.
+
 ## 2026-10-29 (ANIME: the same second claim path, with its own guard, branch only)
 
 **Shipped.** Nothing. Branch `fix/standup-missing-specials`, on top of the
@@ -3222,6 +3229,7 @@ tracked as the next Roku parity item, not done here.
 `keywordGatedGenres: ["Animation"]` and opt it in, with its own test pass);
 the Roku port; consider scheduling `discover-standup.mjs` to rerun
 periodically so new TMDB-tagged specials keep reaching the manifest path too.
+
 ## 2026-10-29 (library selection, Apple TV reference implementation, branch only)
 
 **Shipped.** Nothing. Branch `feature/library-selection`, cut from `main` at
@@ -3315,6 +3323,7 @@ other two settles the pattern.
 
 **Next.** Chad reviews the branch and tries the screen and the Settings row
 on the simulator; once approved, port to the web tuner.
+
 ## 2026-10-29 (Apple TV: channel overlay stuck on after a stall, branch only)
 
 **Shipped.** Nothing. Branch `fix/channel-overlay-stuck`, cut from `origin/main`
@@ -3579,6 +3588,7 @@ unchanged.
 **Half-done.** Not run against a real Plex or Emby server: the Plex parameters are the four the Apple TV sends, checked as URLs only. The resolution cap on Jellyfin and Emby is the fallback URL's `MaxWidth` and the server's own scaling for the bitrate; the test files were 360p, so a downscale was not seen. No iCloud-style sync of the choice, as the web has none for any setting.
 
 **Next.** Roku #65 follows with the same golden file. Decide whether the web's Auto should match the Apple TV's. Nothing changes what is sent anywhere beyond request parameters to the viewer's own server.
+
 ## 2026-10-27 (Roku: `tests/pr-check.sh`, the mechanical review checks in one command)
 
 **Shipped.** Nothing until this lands on main. Branch `roku/pr-check`, off main `8f994d8`. Test tooling only under `roku/tests/` and one CI step; none of it is in the channel package (`stage.sh` packs only manifest, source, components, images, data and fonts, and the script proves that on every run).
@@ -3645,6 +3655,7 @@ unchanged.
 **Half-done.** Jellyfin and Emby are not touched: both send valid UTF-8. plex.tv's server list and the Continue Watching read still use `res.json()`: plex.tv sends valid UTF-8, and a replacement character there cannot stop a cleanup, which only reads ids. Not run against a real Plex server; the server in the test is a stand-in that returns the bytes Plex was measured to return (see the 2026-10-16 entry). The repair guesses Windows-1252 for any stray byte, so a name in another single-byte encoding loads with the wrong accented letter, the same as on the Apple TV.
 
 **Next.** Roku #121 follows with the same golden file. Nothing changes what is sent anywhere.
+
 ## 2026-10-27 (web tuner: a small library no longer opens on a blank screen)
 
 **Shipped.** Nothing until the PR for #124 lands on main. Branch `web/empty-lineup-124`, off main `ab60b31`.
@@ -4066,6 +4077,7 @@ unchanged.
 - Not on the web: disc-stacked Jellyfin and Emby movies (the Apple TV schedules the whole runtime and plays disc 2), and runtime franchise and collection channels.
 
 **Next.** Push main and tag `tuner-v1.0.7`. Roku ports the same answers against `scripts/schedule-parity-golden.json`. Chad decides on the history and the Jellyfin order (board item q36).
+
 ## 2026-10-23 (the site for Apple TV 1.0.28)
 
 **Shipped.** Nothing until this lands on main. Branch `site/1.0.28`. Apple TV 1.0.28 has been on the App Store (Ready for Sale) since this morning.
@@ -5985,6 +5997,7 @@ are. The homepage lineup still does not link to the bundle pages.
 
 **Next.** Chad reads the 14 intros and the legal flags. After merge, request
 indexing for /channels in Search Console.
+
 ## 2026-10-13 (1.0.26 (48) cut)
 
 **Shipped.** main pushed, which deploys the site and web tuner. Build 1.0.26 (48) archived
@@ -6638,6 +6651,7 @@ order: `franchise-data`, `franchise-channels`, `franchise-ui`.
 **Half-done.** Unknown part lengths retain the existing offset fallback; this does not infer missing server metadata. Real multi-version and multi-file direct/HLS playback still needs hardware acceptance. Codec policy, heartbeat reporting and unrelated recovery fixes are excluded.
 
 **Next.** Upstream review on `fix/preserve-plex-media-parts`; verify recognizable multi-version and three-part files on hardware before treating playback acceptance as complete.
+
 ## 2026-10-11 (Plex heartbeat-only activity)
 
 **Shipped.** Prepared on `feature/plex-heartbeat-only` against upstream `c2f32e6`. No release, store upload or upstream merge.
