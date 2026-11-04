@@ -876,6 +876,11 @@ extension AppState {
                 await MainActor.run { [weak self] in
                     self?.channelBuildIndex += 1
                     self?.setLibraryPhase(.buildingChannels, detail: name)
+                    // When the main actor took the tick: the gap from the pool mark above
+                    // is how long the loading screen's "Channel N of M" waited for it.
+                    if LibraryLoadProbe.handler != nil {
+                        LibraryLoadProbe.mark("tick:\(self?.channelBuildIndex ?? -1)")
+                    }
                 }
             }
             return out
