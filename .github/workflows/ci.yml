@@ -67,6 +67,8 @@ jobs:
             tvos:
               - '.github/workflows/ci.yml'
               - 'Nostalgex/**'
+              - 'channels.json'
+              - 'channels-memberships.json'
               - 'franchises.json'
               - 'scripts/franchise-golden.json'
               - 'scripts/franchise-lineup-golden.json'
