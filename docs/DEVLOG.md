@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Roku: an end the server answers for, after the start failed while it was asked, isn't a short file's end, #184's Jellyfin and Emby way)
+
+**Why.** #184: on Jellyfin and Emby the server stream ended unplayed, so the server was asked. The player ended
+again (an error), which `failAttempt` dropped with the probe under way, and the server's 200 was read as a join
+past the end of a file shorter than its slot, so the next airing started fresh, and the card never came.
+
+**Changed.** `roku/components/GuideView.brs`: `failAttempt` marks a probe it can't act on
+(`probeFor.failedWhileAsking`). `roku/source/guide/Fallback.brs`: new `NxProbeAnswerAction` decides what an answer
+leads to; an end, an answer and that failure is a failed start (the next rung, or the card). An end and an answer
+with no failure still hands over. 9 cases in `roku/tests/FallbackTests.brs`.
+
+**Pressed** on the 43S45 (Roku OS 16.0.4) against the lab Emby as `nxlab`, with a scratch launch switch that broke
+the player's copy of every stream of channel 7. Main at `456a511`, 40 s: 106 tunes, 53 hand-overs, no card (26 this
+way, 27 the Plex way). This change alone: the ends the server answered went down the ladder, and the hand-overs
+that were left came the Plex way (41). With #199 too: 12 tunes, five cards, the fifth at 31 s, then nothing tuned.
+On the lab Jellyfin with both: five cards in 41 s.
+
+**Open.** The loop ends on this rig only with #199. Not tried: a real file a Roku can't play.
+
 ## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
 
 **Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.
