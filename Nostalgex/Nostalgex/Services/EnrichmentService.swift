@@ -45,12 +45,13 @@ class EnrichmentService {
     var enrichedCount: Int = 0
     var totalToEnrich: Int = 0
 
-    private let tmdb = TMDBService(apiKey: TMDBConfig.tmdbAPIKey)
-    private let omdb = OMDBService(apiKey: TMDBConfig.omdbAPIKey)
-    private let supabase = SupabaseService(
-        projectURL: TMDBConfig.supabaseURL,
-        anonKey: TMDBConfig.supabaseAnonKey
-    )
+    // Read when a pass starts, not when the service is made, so a DEBUG harness that sets
+    // `TMDBConfig.harnessEndpoints` reaches its stand-ins. In the app the values never change.
+    private var tmdb: TMDBService { TMDBService(apiKey: TMDBConfig.tmdbAPIKey) }
+    private var omdb: OMDBService { OMDBService(apiKey: TMDBConfig.omdbAPIKey) }
+    private var supabase: SupabaseService {
+        SupabaseService(projectURL: TMDBConfig.supabaseURL, anonKey: TMDBConfig.supabaseAnonKey)
+    }
 
     // MARK: - Public API
 

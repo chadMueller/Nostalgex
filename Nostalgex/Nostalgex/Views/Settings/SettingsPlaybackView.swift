@@ -7,7 +7,7 @@ struct SettingsPlaybackView: View {
     let focus: FocusState<SettingsFocus?>.Binding
 
     @State private var streamQuality = StreamQuality.current
-    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
+    @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
     @State private var showStreamQualityPicker = false
     @State private var showSubtitleLanguagePicker = false
     @State private var showAudioLanguagePicker = false

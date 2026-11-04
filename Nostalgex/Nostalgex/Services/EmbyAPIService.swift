@@ -158,8 +158,20 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
+                    // One event per page, as the Plex scan does. Without it the item
+                    // count stood still for the whole section, so the stall watch read a
+                    // big movie library that was still arriving as a dead server: a
+                    // 15,000-movie section at 3 s a page (75 pages) was abandoned at 210 s
+                    // with the server still answering (MovieLibraryScaleHarness).
                     let raw = try await fetchAllItems(
-                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type))
+                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type)
+                    ) { loaded, _ in
+                        progress?(LoadProgressEvent(
+                            sectionIndex: i, totalSections: sections.count,
+                            sectionTitle: section.title, sectionType: section.type,
+                            itemsLoadedSoFar: baseItemCount + loaded, showsCompleted: nil, totalShows: nil
+                        ))
+                    }
                     items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
@@ -186,7 +198,12 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         return allItems
     }
 
-    private func fetchAllItems(parentId: String, includeItemTypes: String) async throws -> [JellyfinItem] {
+    /// `onPage` gets (items read so far, the server's total) after every page.
+    private func fetchAllItems(
+        parentId: String,
+        includeItemTypes: String,
+        onPage: (@Sendable (_ loadedSoFar: Int, _ total: Int) -> Void)? = nil
+    ) async throws -> [JellyfinItem] {
         var collected: [JellyfinItem] = []
         var start = 0
         while true {
@@ -206,12 +223,24 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             guard let req = request(path: "/Items", queryItems: queryItems) else {
                 throw PlexAPIService.APIError.invalidResponse
             }
-            let (data, response) = try await Self.session.data(for: req)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await Self.session.data(for: req)
+            } catch {
+                // Cancelled while a page request is in flight (the stall watch, STOP
+                // WAITING): keep the pages already read, as the Plex scan does. This used
+                // to throw them away with the request, so an abandoned first section
+                // came back with nothing at all.
+                if Task.isCancelled, !collected.isEmpty { break }
+                throw error
+            }
             let page = try Self.decode(EmbyItemsResponse.self, data: data, response: response)
             let items = page.Items ?? []
             collected.append(contentsOf: items)
             let total = page.TotalRecordCount ?? collected.count
             start += items.count
+            onPage?(collected.count, total)
             // Cancelled part-way through a section (stall watchdog, or the user
             // leaving): stop paging and keep the pages already read. The caller turns
             // this into a LibraryScanInterrupted. Without it, a stall inside the FIRST

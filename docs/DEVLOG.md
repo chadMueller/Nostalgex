@@ -134,6 +134,66 @@ LANGUAGE and Music Videos are not checked against a real Jellyfin or Emby server
 **Next.** A real Jellyfin Music Videos library. Roku also asks Music Videos libraries for `Movie` only
 (`roku/source/mediabrowser/MediaBrowserLibrary.brs`) and needs the same change; the web tuner's is on
 `web/1030-fixes`.
+## 2026-11-03 (Apple TV: harness isolation, and a cold first load of a 15,000-movie Plex library)
+
+**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed: `915d20a` (isolation), `5b2a0ae`
+(cold Plex harness).
+
+**Why.** A 1.0.29 report: a Plex library of about 15,000 movies stops at "Channel 60 of 142" on the loading
+screen and the app closes about an hour later (N-033). The earlier scale harness handed the app a ready library
+and a filled enrichment cache, which skips most of what a new user's first load does on the network, and the
+next measurement has to run on a real Apple TV. The harnesses could not run there: they cleared the app's real
+library snapshot, schedules and settings.
+
+**Changed.**
+- `HarnessIsolation` (DEBUG only): while active, the app's files, settings (every `UserDefaults.standard` now
+  goes through `AppDefaults.standard`, plain `.standard` in a release build), credentials (in memory, never the
+  Keychain), iCloud sync (an in-memory store, and a harness's AppState never takes over the shared one) and HTTP
+  cache stay under `Library/Caches/NostalgexHarness/<name>`. `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` turns it on
+  first thing at launch, so on a device the test host's own launch stays off the real stores too. A Release
+  build carries none of it (checked with `nm` and `strings`).
+- `RealStoreFingerprint` hashes the real stores from their real paths; a harness run compares before and after.
+- `ColdPlexScaleHarness`: the real first load against a fake Plex, a fake Supabase cache, a fake TMDB proxy that
+  rate-limits, and OMDb, with times per stage and per channel, the main actor's delay on each "Channel N of M"
+  tick (a new probe mark, only when a harness listens), memory, threads and requests per endpoint, then an
+  optional soak with the guide up. A 300-movie version runs in the normal suite as the isolation proof.
+
+**Measured (simulator).** 15,000 movies, nothing cached: first load 664.5 s. Plex 42.4 s for 30 pages;
+enrichment 586.1 s (15,000 TMDB requests at about 27 a second, then 75 upserts taking about 28 s); pool build
+34.9 s for 142 channels, slowest 1.8 s, pools 59 to 61 at 158, 158 and 439 ms; the main actor took every tick
+at once; peak 248 MB, 17 threads. Through the UI with a 2-minute soak (2,000 movies): memory flat at 83 MB,
+12 threads, no requests after the first 30 s. Real stores: no difference in any app-owned store in either run.
+Outside them, CFNetwork's `Library/HTTPStorages` database (its rows unchanged) and AVFoundation's
+`tmp/MediaCache` index changed; neither holds the app's data.
+
+**Not reproduced.** The stall at "Channel 60 of 142" and the close after an hour did not happen in the
+simulator, cold or warm. While a cold load enriches, the screen says "Fetching metadata", not "Channel N";
+the channel count only shows during the pool build, which took 35 s here.
+
+**Next.** The same run on the basement Apple TV 4K (3rd generation), through the UI with a 60-minute soak
+(tester). Not covered: Plex collections (no collection package is on in a new lineup, so the scan never ran),
+a real Plex server's own speed, and artwork, which a load never fetches.
+
+## 2026-11-03 (Apple TV: a 15,000-movie Emby library no longer reads as a dead server)
+
+**Shipped.** Nothing. Branch `appletv/large-library-guide`, not pushed.
+
+**Why.** A #support report on 1.0.29: an Emby library of about 15,000 movies, every one with genres and a TMDB match, never finished loading, and the same library on Plex stopped at "Channel 60 of 142" with the app closing about an hour in.
+
+**Measured.**
+- The channel engine is not slow at this size. `MovieLibraryScaleHarness` (new) drives the real `loadLibrary` with a synthetic movie-only library shaped like the report: every title with a TMDB id and a cached enrichment row, a third of the ids taken from the membership manifest, 15% in a TMDB collection. M4 Pro simulator, Debug build, all 142 channel pools: 2k movies 4.8 s, 5k 12.3 s, 10k 24.2 s, 15k 36.5 s. Linear, about 2.4 ms per movie for the whole lineup. Slowest channels at 15k: CHRISTMAS SPECIALS and KIDS CHRISTMAS TV (1.9 s each, their episode rules read every movie's summary), APPLE TV+ 0.8 s. Peak memory 178 MB (204 MB with every package on). The guide's schedules for 95 channels: 60 ms. Through the real `RootView` (loading screen and guide on screen): first load 39.8 s, guide then sat for 10 minutes at a flat 186 to 191 MB, RESCAN 38.2 s. Nothing near an hour, no growth.
+- The Emby scan was the failure. Against a fake Emby (15,000 movies, 200 a page, 3 s a page) through the real `EmbyAPIService` and the stall watch: the scan's item count stayed at 0 for the whole section, because Emby and Jellyfin only reported progress when a section started (Plex reports every page). STOP WAITING appeared at 65 s and the watch abandoned the scan at 210 s with the server still answering (71 of 75 pages served). The request it cancelled then threw away the 14,200 movies already read, so the load ended on "Your server stopped sending data" with 0 items. Any single Emby or Jellyfin movie library that takes longer than 210 s to page through hits this, however healthy the server is.
+- After the fix, same fake server: 15,000 items in 265.7 s, the count moving every 2 s, no STOP WAITING, guide built.
+
+**Changed.**
+- `EmbyAPIService`, `JellyfinAPIService`: a movie section reports progress after every page, as Plex does, so the stall watch sees a big library arriving. A cancel that lands while a page request is in flight keeps the pages already read (Plex already did), so a stopped scan still builds a guide from them.
+- `MovieSectionScanProgressTests` (new, 2 tests): both backends, 1,000 movies over a local server. Fails on main (one progress event, and a cancel mid-page returns nothing), passes now.
+- `MovieLibraryScaleHarness` (new, off by default): the measurements above. `rebuildStaticChannelPools` marks each channel through `LibraryLoadProbe` when a harness listens (no cost otherwise).
+- NostalgexTests: 1,037 passed, 0 failed.
+
+**Not explained.** The Plex half of the report. The Plex scan already reports every page, and the engine builds 142 channels from 15,000 movies in under a minute on the simulator, so "Channel 60 of 142" for an hour is not reproduced. Not measured: the same harness on a real Apple TV 4K (A12) and the enrichment phase on a first load (enrichment is off in these runs; the site's TMDB proxy answered 27 requests a second from a Mac, so 15,000 titles missing from the shared cache would be about 9 minutes). The hour matches the Apple TV's default one-hour sleep, which ends a long load; unverified.
+
+**Next.** Run `MovieLibraryScaleHarness` on the living room Apple TV 4K (needs Chad's OK). Ask the reporter for a photo of the stuck Plex screen and his Apple TV's Sleep After setting. Web tuner and Docker: n/a, no scan watchdog there. Roku: n/a, its stall watch counts every 2xx answer as progress.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 

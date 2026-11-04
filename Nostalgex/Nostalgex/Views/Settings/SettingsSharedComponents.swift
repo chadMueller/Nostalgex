@@ -571,7 +571,7 @@ struct LanguagePickerSheet: View {
 struct StreamQualityPickerSheet: View {
     let selected: StreamQuality
     let allowsOriginal: Bool
-    @AppStorage(LocalPlexOriginalQuality.storageKey) private var localOriginalVideo = false
+    @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
     let onSelect: (StreamQuality) -> Void
 
     @Environment(\.dismiss) private var dismiss

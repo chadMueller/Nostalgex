@@ -168,12 +168,12 @@ struct TipThankLedger {
         return true
     }
 
-    static func load(from defaults: UserDefaults = .standard) -> TipThankLedger {
+    static func load(from defaults: UserDefaults = AppDefaults.standard) -> TipThankLedger {
         let stored = defaults.array(forKey: defaultsKey) as? [String] ?? []
         return TipThankLedger(ids: stored.compactMap(UInt64.init))
     }
 
-    func save(to defaults: UserDefaults = .standard) {
+    func save(to defaults: UserDefaults = AppDefaults.standard) {
         defaults.set(ids.map(String.init), forKey: Self.defaultsKey)
     }
 }
@@ -211,7 +211,7 @@ final class TipJar {
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = AppDefaults.standard) {
         self.defaults = defaults
         self.ledger = TipThankLedger.load(from: defaults)
     }

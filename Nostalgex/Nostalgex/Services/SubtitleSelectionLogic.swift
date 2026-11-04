@@ -51,7 +51,7 @@ enum SubtitleSelectionLogic {
     static let subtitleLanguageDefaultsKey = "nostalgex_subtitle_language"
 
     /// The subtitle language the viewer chose, resolved the way `AppState` resolves it.
-    static func currentSubtitleLanguage(defaults: UserDefaults = .standard, locale: Locale = .current) -> String {
+    static func currentSubtitleLanguage(defaults: UserDefaults = AppDefaults.standard, locale: Locale = .current) -> String {
         let stored = defaults.string(forKey: subtitleLanguageDefaultsKey) ?? ""
         return resolvedLanguageCode(storedCode: stored.isEmpty ? "__system__" : stored, locale: locale)
     }

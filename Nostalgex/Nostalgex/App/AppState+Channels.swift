@@ -315,7 +315,7 @@ extension AppState {
     /// collection categories, auto-enable, migrations), and pushing those let each TV's
     /// launch overwrite the other's lineup (seen on hardware, 2026-10-13).
     func saveBundlePreferences(byViewer: Bool = false) {
-        UserDefaults.standard.set(Array(enabledBundleIDs), forKey: "nostalgex_enabled_bundles")
+        AppDefaults.standard.set(Array(enabledBundleIDs), forKey: "nostalgex_enabled_bundles")
         if byViewer {
             preferenceSync.record(PreferenceSync.enabledBundlesKey, value: Array(enabledBundleIDs))
         }
@@ -531,7 +531,7 @@ extension AppState {
         isScanning = false
         let now = Date()
         lastScanDate = now
-        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: "nostalgex_last_scan_date")
+        AppDefaults.standard.set(now.timeIntervalSince1970, forKey: "nostalgex_last_scan_date")
         if discoveredCollections.isEmpty {
             scanningMessage = "No collections found"
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -753,7 +753,7 @@ extension AppState {
     static let retiredActorsBundleID = "collections-actors"
 
     func saveCollectionPreferences() {
-        UserDefaults.standard.set(Array(enabledCollectionKeys), forKey: "nostalgex_enabled_collections")
+        AppDefaults.standard.set(Array(enabledCollectionKeys), forKey: "nostalgex_enabled_collections")
         preferenceSync.record(PreferenceSync.enabledCollectionsKey, value: Array(enabledCollectionKeys))
     }
 
@@ -869,10 +869,18 @@ extension AppState {
                                                    category: ch.category,
                                                    memberships: memberships, exclusiveRules: rules)
                 let name = ch.name
+                if LibraryLoadProbe.handler != nil {
+                    LibraryLoadProbe.mark("pool:\(ch.number):\(name):\(ch.itemPool.count)")
+                }
                 if ch.itemPool.count >= ch.minItems { out.append(ch) }
                 await MainActor.run { [weak self] in
                     self?.channelBuildIndex += 1
                     self?.setLibraryPhase(.buildingChannels, detail: name)
+                    // When the main actor took the tick: the gap from the pool mark above
+                    // is how long the loading screen's "Channel N of M" waited for it.
+                    if LibraryLoadProbe.handler != nil {
+                        LibraryLoadProbe.mark("tick:\(self?.channelBuildIndex ?? -1)")
+                    }
                 }
             }
             return out
