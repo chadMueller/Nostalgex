@@ -237,8 +237,16 @@ the full guide that doesn't restart what's playing, and the loading screen again
 about 25 s later with the same film still playing. The run-out, the load error and the SETTINGS note
 behaved as above. Details in `roku/docs/PORTING.md` § After a power loss.
 
-**Open.** Which channel: neither app remembers the last channel watched, so the seed holds the first
-one, where every launch opens (asked on #155). Not tried: a real power cut, a Plex sign-in, the hourly
+**Registry room** (asked on #182). A throwaway build on the 43S45 filled its own registry sections
+with a heavy setup: 5 Plex servers and the picker's copy, 40 bundles, 100 franchises on and 100 off, and
+300 collections on (15,001 bytes of ids). Space is charged at far less than a value's length (those ids
+took 1,656), so values look stored compressed. From 32,273 bytes free, the setup took 3,593 and a
+10,211-byte seed of random hex text 2,864, leaving 25,816. With the seed in
+place, 3,000 collections (about 150 KB of ids) still wrote, with 12,026 free. A real seed wasn't on hand
+to measure, but even stored uncompressed it would leave about 18 KB here, so the seed has no reserve check.
+
+**Open.** The seed holds the first channel, where every launch opens (Chad on #182: opening on the last
+channel watched is a separate decision). Not tried: a real power cut, a Plex sign-in, the hourly
 re-save, the sidebar and a deep link on the seed's guide.
 
 ## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)

@@ -534,6 +534,15 @@ Not tried: a real power cut, which also brings the network up from cold; a
 Plex sign-in; the hourly re-save on a TV left on; Left for the sidebar, and a
 launch deep link, on the seed's guide.
 
+Registry room (2026-11-04, the 43S45). Registry space is charged at far
+less than a value's length, as if stored compressed. A throwaway build filled
+its own sections with a heavy setup (5 Plex servers and the picker's copy,
+40 bundles, 100 franchises on and 100 off, 300 collections on: 15,001 bytes
+of ids, which took 1,656). From 32,273 bytes free, the setup took 3,593 and
+a 10,211-byte seed of random hex text 2,864, leaving 25,816. With the seed in place, 3,000 collections
+still wrote. Stored uncompressed, a 10 KB seed would still leave about 18 KB
+on that setup, so the seed writes without a reserve check.
+
 ## The connect screens
 
 Ported from upstream's sign-in redesign: the same screens, order, focus
