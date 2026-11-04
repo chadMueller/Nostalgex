@@ -23,7 +23,7 @@ and already pinned to the Apple TV.
 | `ServerPickerView` (`Plex90App.swift`): CHOOSE YOUR LIBRARIES after sign-in when the account lists more than one server; owned servers on, all of them when none is owned | `components/ServerPickerView.*`, `source/plex/ServerChoice.brs`, Settings › CONNECTION | ported; cases in `tests/ServerChoiceTests.brs`. Not yet seen on a TV (one-server account). Unlike upstream, no server is checked before it, as the maintainer asked |
 | `PlexAPIService.bestReachableURI`: one verified address per server, best of local, remote, relay | `source/plex/ServerResolve.brs` | ported for the servers on, every address at once, an answer counting only if `/identity` names that server; saved, not re-checked on later launches. Cases in `tests/ServerResolveTests.brs` |
 | `LoadingView`, `LibraryLoadStepRail`, `LibraryLoadPhase` (`Plex90App.swift`) | `components/LoadingView.*`, phases from `components/LibraryTask.brs` | ported; Collections is always a step, as every scan reads them |
-| `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby |
+| `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby; the screensaver held off while loading and a paused app's time left out (not in upstream's watch) |
 | `LaunchGuard.swift` (unfinished loads), `startOverButton` and `UnfinishedLoadsView` (`Plex90App.swift`), `AppState.startOver()` (#150) | `source/util/LaunchGuard.brs`, START OVER in `components/LoadingView.*`, LOADING DIDN'T FINISH and the keys in `components/MainScene.brs` | ported; the reinstall check isn't needed, since deleting the channel cleared its registry on a TV (differences in [A way out of a load](#a-way-out-of-a-load)); cases in `tests/LaunchGuardTests.brs`; pressed on a 43S45 against Emby |
 | `SettingsPageView` order and `CollectionAccordionHeaderRow` (`BundleManagerView.swift`); `toggleBundle`, `rebuildLineupAfterBundleChange` (`AppState+Channels.swift`) | `components/SettingsView.*`, `rebuildForBundles` in `components/LibraryTask.brs` | ported; no rating, tips or stream quality rows. SUBTITLE LANGUAGE and AUDIO LANGUAGE (#62) open their list in place, as MY COLLECTIONS does, where upstream opens a picker sheet. A package switch builds only its own channels, behind Settings; its pools matched a full rebuild's on the 43S45 |
 | RESCAN LIBRARY under CONNECTION (`BundleManagerView.swift`), `rescanLibrary` (`AppState+Auth.swift`), `LibraryDiagnostics.summary`, `PlaybackDiagnostics` (issue #66) | `components/SettingsView.*`, `onRescanRequest` in `components/MainScene.brs`, `source/util/RescanInfo.brs`, `source/util/PlaybackVerdict.brs` | ported; the row reads every server again behind the guide, as the launch refresh does, so the guide changes only if the pools did (upstream also clears its day schedules). The summary counts are taken when a load ends and kept with the sign-in; the last verdict is a given-up programme's only (upstream also logs its fallbacks). Cases in `tests/RescanTests.brs`, passing on device; pressed on a Streaming Stick Plus against Emby |
@@ -438,6 +438,20 @@ the Lab library's 16 films:
   items a page): no STOP WAITING in screenshots every 6 s.
 - Not exercised on a TV: Plex, Jellyfin, a stop between two servers, and
   the 210 s stop with nothing loaded.
+
+Under the screensaver (2026-11-04). The Roku pauses the whole app while
+its screensaver runs: no requests, no timers, no output. Its clock keeps
+counting. On the 43S45 (wait 10 min) a slowed Jellyfin load sat paused
+39 min, and the first look after a button woke the TV read it as 210 s
+of quiet and stopped the scan with 4 items read: NO CHANNELS FOUND. So:
+- The loading screen holds the screensaver off with a hidden `Video`
+  node's `disableScreenSaver` (`LoadingView.xml`). The same slowed load
+  then ran 23.8 min, 25.5 min without a key and no screensaver, and
+  finished with every item.
+- `NxStallSkipPause` (`source/util/LoadStall.brs`): a look 20 s or more
+  after the last one is a pause, and the gap isn't counted as quiet.
+  Upstream's watch compares wall-clock `Date()`s and has no such check.
+  Cases only; no pause has happened on a TV since the hold.
 
 ## A way out of a load
 

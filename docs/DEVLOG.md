@@ -3,6 +3,32 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Roku: the loading screen holds the screensaver off; a paused app isn't a stalled server)
+
+**Why.** The 2026-11-04 entry on the Apple TV staying awake owed "one stick check of a long load under" the
+Roku screensaver. Measured on our 43S45 (Roku OS 16.0.4, screensaver wait 10 min) with main at `29203c9`: the
+screensaver came on over the loading screen, and the Roku paused the whole app under it. For 39 min no request
+went out, nothing printed and the loading dots stopped. The first stall look after a button woke the TV read
+that as 210 s with no progress: "abandoning this scan" with 4 items read, and the guide came up NO CHANNELS
+FOUND and was saved.
+
+**Changed.**
+- `roku/components/LoadingView.xml`: a hidden `Video` node with `disableScreenSaver`, Roku's switch for
+  this, for as long as the loading screen is up. It never gets content. The Apple TV's counterpart is
+  `isIdleTimerDisabled` while loading (`ScreenAwakePolicy.swift`).
+- `roku/source/util/LoadStall.brs`: `NxStallSkipPause`, which `MainScene`'s watch calls before every verdict.
+  A look 20 s or more after the last one (they are 2 s apart) means the app was paused, and that gap doesn't
+  count as quiet. It covers a pause the hold doesn't prevent. 12 new checks in `roku/tests/StallTests.brs`.
+
+**Pressed** on the 43S45 with the lab Jellyfin behind a proxy that made the load slow but never stalled: one
+item per page with the real total, each answer held 28 s, and two 500s before each, so 84 s per page. Main:
+the screensaver at 10 min, then the stop and NO CHANNELS FOUND above. This branch: no screensaver in 25.5 min
+without a key, and the load finished after 23.8 min with all 13 items, the same 36 channels and pools
+fingerprint as an unslowed load.
+
+**Open.** Not seen on a TV: `NxStallSkipPause` itself, since with the hold no pause happened. A Plex load, a
+stick, and a long load behind #182's seed channel.
+
 ## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
 
 **Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.
