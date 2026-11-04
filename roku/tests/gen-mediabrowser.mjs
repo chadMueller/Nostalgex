@@ -5,9 +5,10 @@
 //
 // The answers in tests/fixtures/mediabrowser-server.json are trimmed from a
 // Jellyfin 12.2 test server (the fields the scan reads, no file paths) plus
-// made-up cases: paging past 200, a music-video library, several sources,
-// missing fields, an episode list that fails, air dates, and Emby Dolby Vision
-// subtypes (ExtendedVideoSubType). Called by tests/gen-vectors.mjs,
+// made-up cases: paging past 200, a music-video library (clips filed as Movie
+// and as MusicVideo, the type Jellyfin and Emby give them, I-067), several
+// sources, missing fields, an episode list that fails, air dates, and Emby
+// Dolby Vision subtypes (ExtendedVideoSubType). Called by tests/gen-vectors.mjs,
 // which owns the output.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -42,7 +43,9 @@ export function serveFixture(fx, url) {
   if (u.pathname.endsWith("/Items")) {
     const parent = u.searchParams.get("ParentId");
     if ((fx.fail || []).includes(parent)) return { status: 500, body: {} };
-    const all = (fx.items[parent] || []).filter((it) => it.Type === u.searchParams.get("IncludeItemTypes"));
+    // IncludeItemTypes is a comma list, as Jellyfin and Emby read it: "Movie,MusicVideo" is both.
+    const asked = String(u.searchParams.get("IncludeItemTypes")).split(",");
+    const all = (fx.items[parent] || []).filter((it) => asked.includes(it.Type));
     const start = Number(u.searchParams.get("StartIndex") || 0);
     const limit = Number(u.searchParams.get("Limit") || all.length);
     return { status: 200, body: { Items: all.slice(start, start + limit), TotalRecordCount: all.length } };
