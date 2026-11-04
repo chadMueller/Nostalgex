@@ -338,6 +338,45 @@ cherry-picked onto this main in a throwaway worktree and run through the same ha
 **Done 2026-11-04.** `fix/forced-burn-probe` is on main for the next Apple TV build, applied on top of AUDIO LANGUAGE
 (I-070), which changed the same function: the burned stream keeps the chosen audio language too.
 
+## 2026-11-04 (Android: the 4K out-of-memory crash, and the Plex server picker)
+
+**Why.** Chad tested release 3 on a Google TV (PR #151). Two of his findings are fixed here.
+- A 4K HDR film played for about 15 seconds, then the app ran out of memory. The TV caps an app's Java heap at 192 MB.
+- After Plex sign-in, the app never asked which server to use. The Apple TV asks when the account reaches more than one.
+
+**Changed.**
+- **The player's buffer is capped at a quarter of the heap the app may use** (`Playback.bufferBytes`), and the manifest asks for `largeHeap`.
+  - Media3's default for a network video is 2,000 x 64 KB, about 128 MB, held as Java byte arrays in the same heap as the library.
+  - A quarter is 48 MB at 192 MB, 96 MB at 384 MB and 128 MB at 512 MB.
+  - Measured on an Android 16 Google TV emulator (192 MB heap, 384 MB with `largeHeap`) with an 80 Mbps test file in demo mode, the library a few demo items:
+
+    | Build | Peak Java heap |
+    |---|---|
+    | Default buffer | 169 MB of 192 |
+    | Cap alone | 72 MB of 192 |
+    | Cap with `largeHeap` | 124 MB of 384 |
+
+  - On a SHIELD with a library of about 11,400 titles, the Java heap is 45 MB with nothing playing and about 70 MB while a 1080p film plays in the guide.
+- **Stalls, measured.** With 300 Mbps and an 8-second dropout every 30 seconds, on the same file:
+
+  | Build | Stalls |
+  |---|---|
+  | Default buffer | none |
+  | Cap with `largeHeap` (96 MB) | none |
+  | Cap alone (48 MB) | one per dropout |
+
+  So the small buffer only applies on a TV that refuses `largeHeap`, where the choice is a stall on a long Wi-Fi dropout or running out of memory.
+- **Plex sign-in finds every reachable server, owned and shared, as the Apple TV does.** Before, it looked only for owned servers (the Roku port's rule) and used all of them without asking. With more than one, it shows the Apple TV's `ServerPickerView`:
+  - the same heading, words and rows ("Your server" or "Shared with you", INCLUDED or OFF);
+  - owned servers ticked, or all of them if none is owned;
+  - focus on CONTINUE.
+
+  The plex.tv token is saved only with the chosen servers, as on the Apple TV. Checked on the emulator with an account that reaches two servers: both ticked, and turning one off gave a library choice from the other alone.
+
+**Not checked.** The fix has not been run against Chad's film or on his TV, and the crash itself was not reproduced, only the memory it ran out of. The library's own memory still grows with its size; trimming what is kept per title needs a heap dump from a debug build first.
+
+**Next.** TRUE CRIME playing one title over and over, Chad's third finding, is not a threshold difference. Its `minItems` has been 1 since 1.0.21, all three apps check `itemPool.count >= minItems`, and Android passes all 148 `filter-golden.json` cases, 36 of them with keywords. So the Android build found a match that the Apple TV didn't for the same library. That needs the title's genres and keywords from Chad, and whether his Android build has enrichment on.
+
 ## 2026-11-04 (Android: the Android TV job runs nightly and on demand too)
 
 **Changed.** In `.github/workflows/ci.yml`, the Android TV job now also runs on `schedule` and `workflow_dispatch`, like every other test job since the nightly run was added. Without that, the rebase onto it would have left the Android job skipped every night, since the change filter doesn't run on those events.
