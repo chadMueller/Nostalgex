@@ -5,12 +5,11 @@
 ' and items (tests/vectors/mediabrowser.json). Plus hand-written cases for
 ' the date parser and the Emby libraries path. Returns the failure count.
 '
-' A music-video library is asked for Movie and MusicVideo items (I-067). The
-' web tuner's scan, which makes the vectors, asks it for Movie alone until
-' web/1030-fixes is on main, so until the vectors hold the MusicVideo clips
-' this holds the port to them for every other item and request, and
-' NxRunMusicVideoTypeTests holds it to the clips themselves. Once they do, the
-' same loop holds the clips to the web's too (see NxMbMusicVideoIds).
+' A music-video library is asked for Movie and MusicVideo items (I-067), by
+' the web tuner's scan and the port alike, so the vectors hold the MusicVideo
+' clips and the loop below holds the port to them like any other item. If the
+' web scan ever stops asking for them, "vectors hold the MusicVideo clips"
+' fails rather than the port being quietly let off.
 '
 ' The web's audioStreams are held to the port's audioTracks, not to a field of
 ' the same name: the port keeps those tracks under its own name and shape
@@ -30,27 +29,14 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     got = NxMbScanServer(fetcher, "jellyfin", fx.userId, 2)
     NxCheck(r, "scan returns items", NxToStr(got <> invalid), "true")
     if got <> invalid then
-        ' The MusicVideo clips: held to the vectors when they hold them, else
-        ' left to NxRunMusicVideoTypeTests, with the request that asks for them
-        ' read as the web's Movie.
         mvIds = NxMbMusicVideoIds(fx)
-        vectorsHoldClips = false
+        vectorClips = 0
         for each w in NxList(v.items)
-            if mvIds.DoesExist(NxToStr(w.ratingKey)) then vectorsHoldClips = true
+            if mvIds.DoesExist(NxToStr(w.ratingKey)) then vectorClips = vectorClips + 1
         end for
+        NxCheck(r, "vectors hold the MusicVideo clips", NxToStr(vectorClips > 0), "true")
         gotRequests = fetcher.requests
         gotItems = got
-        if not vectorsHoldClips then
-            print "  mediabrowser: the vectors hold no MusicVideo clips (the web tuner still asks a music video library for Movie alone); those are held to NxRunMusicVideoTypeTests"
-            gotRequests = []
-            for each p in fetcher.requests
-                gotRequests.Push(p.Replace("IncludeItemTypes=Movie,MusicVideo&", "IncludeItemTypes=Movie&"))
-            end for
-            gotItems = []
-            for each it in got
-                if not mvIds.DoesExist(NxToStr(it.ratingKey)) then gotItems.Push(it)
-            end for
-        end if
         NxCheck(r, "requests", gotRequests.Join(" | "), NxList(v.requests).Join(" | "))
         NxCheck(r, "item count", gotItems.Count().ToStr(), NxList(v.items).Count().ToStr())
         ' Port-only fields: none reaches the filter or schedule.
