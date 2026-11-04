@@ -408,16 +408,30 @@ enum JellyfinPlaybackResolver {
     /// channel with no way for the viewer to change it. A retro TV guide has no audio
     /// picker and should not need one; it should just pick the sensible track.
     ///
-    /// Preference order: a track in one of the viewer's languages, most channels first so
-    /// a 5.1 mix wins over a stereo one; then whatever the file calls default; then the
-    /// first audio track there is. Returns nil when there is nothing to choose between,
-    /// which leaves the server's own choice alone.
+    /// Preference order: a track in the AUDIO LANGUAGE the viewer picked in Settings
+    /// (`audioLanguage`, nil or "__system__" for AUTO); then a track in one of the Apple TV's
+    /// languages or English; within either, most channels first so a 5.1 mix wins over a
+    /// stereo one. Then whatever the file calls default; then the first audio track there
+    /// is. Returns nil when there is nothing to choose between, which leaves the server's
+    /// own choice alone.
+    ///
+    /// AUDIO LANGUAGE used to be ignored here (I-070, #177): a viewer who picked German on an
+    /// English Apple TV got the English track whenever Jellyfin or Emby transcoded.
     static func preferredAudioIndex(
         in streams: [PlaybackInfoResponse.MediaStream]?,
+        audioLanguage: String? = nil,
         preferredLanguages: [String] = Locale.preferredLanguages
     ) -> Int? {
         let audio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
         guard audio.count > 1 else { return nil }
+
+        if let audioLanguage, audioLanguage != "__system__",
+           let chosen = SubtitleSelectionLogic.languageKey(audioLanguage),
+           let best = audio
+               .filter({ SubtitleSelectionLogic.languageKey($0.Language) == chosen })
+               .max(by: { ($0.Channels ?? 0) < ($1.Channels ?? 0) }) {
+            return best.Index
+        }
 
         // "en-GB" and "eng" both have to match a track tagged "eng" or "en". Each side is
         // reduced to one code through the ISO 639-2 table and compared exactly; comparing
@@ -488,7 +502,8 @@ enum JellyfinPlaybackResolver {
         apiKey: String,
         itemId: String,
         mediaSourceId: String?,
-        serverStreamOnly: Bool = false
+        serverStreamOnly: Bool = false,
+        audioLanguage: String? = nil
     ) -> PlaybackResolution? {
         let source = source(in: info, mediaSourceId: mediaSourceId)
 
@@ -499,7 +514,7 @@ enum JellyfinPlaybackResolver {
         if let relative = source?.TranscodingUrl, !relative.isEmpty {
             if let url = makeURL(serverURL: serverURL, relativeOrAbsolute: relative, apiKey: apiKey) {
                 let pinned = pinningAudioStream(
-                    url, index: preferredAudioIndex(in: source?.MediaStreams)
+                    url, index: preferredAudioIndex(in: source?.MediaStreams, audioLanguage: audioLanguage)
                 )
                 return PlaybackResolution(url: pinned, playSessionId: info.PlaySessionId, isDirectPlay: false)
             }
@@ -540,6 +555,7 @@ enum JellyfinPlaybackResolver {
         mediaSourceId: String,
         serverStreamOnly: Bool,
         preferredSubtitleLanguage: String,
+        audioLanguage: String? = nil,
         send: PlaybackInfoSend
     ) async throws -> PlaybackResolution? {
         guard let first = request(nil) else { return nil }
@@ -552,11 +568,13 @@ enum JellyfinPlaybackResolver {
            let (data2, response2) = try? await send(second),
            let burnedInfo = try? decodePlaybackInfo(data2, response2),
            let burned = resolve(burnedInfo, serverURL: serverURL, apiKey: apiKey, itemId: itemId,
-                                mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly) {
+                                mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly,
+                                audioLanguage: audioLanguage) {
             return burned
         }
         return resolve(info, serverURL: serverURL, apiKey: apiKey, itemId: itemId,
-                       mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly)
+                       mediaSourceId: mediaSourceId, serverStreamOnly: serverStreamOnly,
+                       audioLanguage: audioLanguage)
     }
 
     private static func decodePlaybackInfo(_ data: Data, _ response: URLResponse) throws -> PlaybackInfoResponse {

@@ -81,6 +81,59 @@ clips" branch in `MediaBrowserTests.brs`.
 **Half-done.** Roku asks music video libraries for `Movie` only too (`MediaBrowserLibrary.brs`); its port is not started. Apple TV's fix is on its own branch.
 
 **Next.** Roku port. A check of a real Emby music video library. HIGH ROTATION genres (#105, N-016) stay parked.
+## 2026-11-03 (Apple TV: three fixes and a check for the next build)
+
+**Shipped.** Nothing. Branch `appletv/1030-fixes`, cut from `origin/main` at `6a2d6df`, not pushed. Four
+commits, one per item. NostalgexTests on the branch: 1,064 tests, 1,046 passed, 0 failed, 18 skipped.
+
+**Changed.**
+- **AUDIO LANGUAGE on Jellyfin and Emby transcodes (I-070, #177).** When the server transcoded, the app chose
+  the `AudioStreamIndex` it asked for from the Apple TV's own languages plus English and never read AUDIO
+  LANGUAGE, so German picked in Settings on an English Apple TV still played the English track. It now prefers
+  a track in the chosen language (most channels first), then falls back to the old order; AUTO, and a language
+  the file lacks, choose as before. Direct play was never affected: the player switches tracks there. The web
+  tuner and Docker got their fix in 1.0.13 (#176). Reported by @owenvoke.
+- **Music Videos libraries on Jellyfin and Emby (I-067).** Both servers file those videos as `MusicVideo`, and
+  the app asked every non-TV library for `Movie`, so the library came back empty and HIGH ROTATION never filled.
+  Music Videos libraries now ask for `Movie,MusicVideo`; other libraries still ask for `Movie` only. HIGH
+  ROTATION's genre work (#105, N-016) is untouched. Found by @owenvoke on PR #151.
+- **Plex discovery and dead local addresses.** A shared server with 8 dead local addresses settled at 7.3 s and
+  12.0 s in 2 of 4 runs on an Apple TV although its remote answered in 0.2 to 0.4 s. The grace window was sized
+  once, at the first hit, from every candidate ranked ahead of it, so a remote address ahead that had already
+  failed still counted as "might succeed slowly" and set a 15 s window; the wait ran on until the locals timed
+  out at 12 s. It is now sized by what is still pending ahead of the hit and worked out again on every report.
+  The debug-only DISCOVERY TIMING prints are gone.
+- **N-011 checked against the cross-channel pack.** The rescan order fix (`3a0efb8`, already on main) was
+  measured before the lineup pack (`89a2f5c`) existed. The harness now measures both ways.
+
+**Measured.**
+- `JellyfinAudioLanguageTests` (both services' real PlaybackInfo exchange, the setting stored where Settings
+  stores it): on main, German and French asked for track 1 (English); now 2 and 3.
+- `MusicVideoItemTypeTests` (each backend's real `loadLibrary` against a loopback server that answers only the
+  types asked for): on main the Music Videos library gave 1 of 4 items; now 4 of 4. The Movies library still
+  asks for `Movie`.
+- `PlexDiscoveryDeadLocalHarnessTests` (the real `bestReachableURI` and `testReachable`, dead addresses in the
+  documentation ranges 192.0.2.x, 198.51.100.x and 203.0.113.x, a loopback server as the remote): 8 dead locals
+  and a live remote, 3.4 s before and after; add a remote ranked ahead that fails at once, 12.08 s and 12.09 s
+  before, 3.39 s and 3.40 s after; a remote ahead that fails 1 s after the hit (timed stand-ins), 12.03 s before,
+  3.34 s after; a slow but working better remote still wins at 6.0 s.
+- `EpisodeBatchOrderHarnessTests`: two scans with different batch completion order, 0 of 17,280 channel-minutes
+  differ on Jellyfin, Emby, Plex bulk and Plex per-show, packed per channel and packed as a lineup. Control:
+  the same items with the shows reordered change 16,962 of 17,280 under the lineup pack.
+
+- Discovery on an Apple TV 4K (tvOS 26.6.1), a debug build of this branch, a real Plex account with its own
+  server and three shared ones: five full discoveries took 3.82, 3.27, 3.32, 3.40 and 3.32 s. The shared server
+  with 8 dead local addresses settled in 3.10 to 3.22 s every run, with all 8 locals cancelled, none waiting out
+  the 12 s timeout. Before the fix it settled at 7.3 s and 12.0 s in 2 of 4 runs. The baseline was
+  intermittent and the unfixed build was not rerun on the TV, so this shows the fix under the failing
+  condition rather than proving it.
+
+**Not verified.** The 7.3 s run is not reproduced, because the TV's candidate list was not captured. AUDIO
+LANGUAGE and Music Videos are not checked against a real Jellyfin or Emby server (the lab servers were down).
+
+**Next.** A real Jellyfin Music Videos library. Roku also asks Music Videos libraries for `Movie` only
+(`roku/source/mediabrowser/MediaBrowserLibrary.brs`) and needs the same change; the web tuner's is on
+`web/1030-fixes`.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 

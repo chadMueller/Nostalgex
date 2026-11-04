@@ -158,7 +158,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
-                    let raw = try await fetchAllItems(parentId: section.key, includeItemTypes: "Movie")
+                    let raw = try await fetchAllItems(
+                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type))
                     items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
@@ -525,6 +526,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         for item: PlexMediaItem,
         serverStreamOnly: Bool,
         preferredSubtitleLanguage: String,
+        audioLanguage: String = SubtitleSelectionLogic.currentAudioLanguage(),
         send: JellyfinPlaybackResolver.PlaybackInfoSend
     ) async -> PlaybackResolution? {
         let msid = item.partKey ?? item.ratingKey
@@ -532,7 +534,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             return try await JellyfinPlaybackResolver.negotiate(
                 request: { playbackInfoRequest(for: item, serverStreamOnly: serverStreamOnly, burningSubtitle: $0) },
                 serverURL: serverURL, apiKey: accessToken, itemId: item.ratingKey, mediaSourceId: msid,
-                serverStreamOnly: serverStreamOnly, preferredSubtitleLanguage: preferredSubtitleLanguage, send: send
+                serverStreamOnly: serverStreamOnly, preferredSubtitleLanguage: preferredSubtitleLanguage,
+                audioLanguage: audioLanguage, send: send
             ) ?? fallbackResolution(for: item)
         } catch {
             print("[Emby] PlaybackInfo failed for \(item.ratingKey): \(error) — falling back to hand-built URL")

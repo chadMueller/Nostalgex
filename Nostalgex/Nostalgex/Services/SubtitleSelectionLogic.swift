@@ -56,6 +56,17 @@ enum SubtitleSelectionLogic {
         return resolvedLanguageCode(storedCode: stored.isEmpty ? "__system__" : stored, locale: locale)
     }
 
+    /// Settings key for AUDIO LANGUAGE, the same one `AppState` writes.
+    static let audioLanguageDefaultsKey = "nostalgex_audio_language"
+
+    /// The AUDIO LANGUAGE stored in Settings, as stored: a language code, or "__system__"
+    /// for AUTO (also when nothing is stored). Not resolved to the device language: AUTO
+    /// keeps the transcode track choice it always had (`preferredAudioIndex`).
+    static func currentAudioLanguage(defaults: UserDefaults = .standard) -> String {
+        let stored = defaults.string(forKey: audioLanguageDefaultsKey) ?? ""
+        return stored.isEmpty ? "__system__" : stored
+    }
+
     /// ISO 639-2 to ISO 639-1, both the terminology codes ("deu") and the twenty
     /// bibliographic ones Matroska files often carry ("ger"). The string is the Roku app's
     /// `NxIso639Table` (roku/source/subtitles/SubtitleSettings.brs, issue #119) character
