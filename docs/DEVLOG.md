@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Apple TV release script: automatic signing with the API key)
+
+**Changed.** `scripts/release-tvos.sh` archives and exports with automatic signing plus
+`-allowProvisioningUpdates` and the App Store Connect API key, and `Nostalgex/ExportOptions.plist` asks
+for automatic signing. The manual App Store profiles the plist named predate the iCloud capability, so
+the script could no longer export. 1.0.29 exported on 2026-10-31 with exactly these settings, by hand.
+The plist's old comment said automatic signing fails from the command line; that is true only without
+the API key flags, and the comment now says so. `manageAppVersionAndBuildNumber` is false, so the
+export never changes the version or build number. Validation and upload still go through altool.
+
+**Not verified.** No archive or export was run for this change (no throwaway archive either, since
+`-allowProvisioningUpdates` can touch the profiles in the developer account). The first real check is
+the 1.0.30 export.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
