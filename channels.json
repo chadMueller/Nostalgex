@@ -1,5 +1,5 @@
 {
-  "version": 49,
+  "version": 50,
   "exclusiveRules": [
     {
       "channelIDs": [
@@ -2987,7 +2987,7 @@
       "name": "TRUE CRIME",
       "colorHex": "#7B241C",
       "category": "truecrime",
-      "minItems": 1,
+      "minItems": 3,
       "rules": {
         "genres": {
           "include": [
@@ -5586,7 +5586,7 @@
       "name": "PREMIERES",
       "colorHex": "#F72585",
       "category": "essentials",
-      "minItems": 1,
+      "minItems": 3,
       "isPremiereChannel": true,
       "rules": {
         "addedWithinDays": 14,
