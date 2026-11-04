@@ -56,6 +56,27 @@ through the same `LocalStore` root, but only a device run proves it.
 **Next.** On a TV: restore, delete the file, relaunch, confirm "no cached rows after restore, refilling" and that
 CH 215 stays through the refilter; and a RESCAN while a refill is running, to see the cancel line.
 
+## 2026-11-04 (CI: every GitHub Action on its latest major version)
+
+**Changed.** `.github/workflows/ci.yml` and `docker.yml` used versions one to three majors behind. Each is now on its latest major, as a major tag rather than a pinned commit:
+- `actions/checkout` v4 to v7
+- `actions/setup-node` v4 to v7
+- `actions/setup-java` v4 to v6
+- `actions/attest-build-provenance` v2 to v4
+- `docker/build-push-action` v6 to v7
+- `docker/login-action`, `docker/setup-buildx-action` and `docker/setup-qemu-action` v3 to v4
+- `docker/metadata-action` v5 to v6
+- `dorny/paths-filter` v3 to v4
+
+Most majors in between move the action to the Node 24 runtime, which GitHub-hosted runners have. None of the inputs these workflows use was removed. Two needed a closer look:
+- `setup-node` v5 caches automatically when `package.json` names a package manager. Ours doesn't, so the Roku job, which has no `cache:`, behaves as before.
+- `attest-build-provenance` v4 is a wrapper over `actions/attest` and keeps `subject-name`, `subject-digest` and `push-to-registry`.
+
+Branch `ci/bump-actions`, cut from `main` at `6a2d6df`.
+
+**Half-done.** No workflow has run on the new versions yet. `actionlint` wasn't available locally; both files parse as YAML. The Docker workflow runs only on a `tuner-v*` tag, so it won't be exercised until the next release. The Android TV job on PR #151 still uses `checkout@v4` and `setup-java@v4`.
+
+**Next.** Pinning to commit SHAs, and Dependabot to keep them current, are for Chad to decide.
 ## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
 
 **Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
