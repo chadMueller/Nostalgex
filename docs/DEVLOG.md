@@ -3304,6 +3304,10 @@ cherry-picked onto this main in a throwaway worktree and run through the same ha
 **Done 2026-11-04.** `fix/forced-burn-probe` is on main for the next Apple TV build, applied on top of AUDIO LANGUAGE
 (I-070), which changed the same function: the burned stream keeps the chosen audio language too.
 
+## 2026-11-04 (Android: the Android TV job runs nightly and on demand too)
+
+**Changed.** In `.github/workflows/ci.yml`, the Android TV job now also runs on `schedule` and `workflow_dispatch`, like every other test job since the nightly run was added. Without that, the rebase onto it would have left the Android job skipped every night, since the change filter doesn't run on those events.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
