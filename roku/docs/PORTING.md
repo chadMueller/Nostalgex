@@ -451,7 +451,8 @@ closed inside the load, crashed or sent Home. Two in a row, and the launch
 shows LOADING DIDN'T FINISH instead of a third load: OK tries again with the
 count reset, * starts over. A refresh behind a guide on screen carries no
 marker; a saved guide shown first, or a load the app stops (a rejected Plex
-sign-in drops it), clears it without resetting the count.
+sign-in drops it), clears it without resetting the count. The channel played
+from the cold-boot seed (below) is no guide: its load keeps the marker.
 
 Where it differs:
 - The Roku has no focusable button on the loading screen (MainScene holds
@@ -486,6 +487,61 @@ off so each launch waited on its load:
 - Before one review change: a load the app stops (`releaseLibrary`) clears
   the marker too. None of the steps above stopped a load that way except
   START OVER, whose sign-out clears it anyway.
+
+## After a power loss
+
+The Roku's own (#155); the Apple TV app has nothing like it to port. The
+saved guide, pools and library live in `cachefs:`, which is RAM, so a TV that
+lost power came back to a full scan behind the loading screen. Each build,
+and each new hour on a TV left on, also writes the next airings of the
+channel a launch opens on, the first in the guide, to the registry
+(`source/guide/ColdBootSeed.brs`, section `seed`): as many whole airings as
+fit in 10 KB from the one on now, each the guide block less its summary.
+It is written only when it changed, and keyed to the build, as the saved
+filter results are.
+
+A launch with no saved guide and no saved pools, on the build that wrote the
+seed, shows a guide of that one channel and plays it while the library loads
+as a first load would: its errors and stops are a first load's, and the
+LaunchGuard marker stays. When that load's guide goes up, the tuned airing
+carries on if the guide airs the same programme on the channel
+(`GuideView.onGuide`'s refresh check) and is retuned otherwise. Until then SETTINGS and the sidebar say
+STILL LOADING YOUR LIBRARY, since the seed has no packages to list, and a
+launch deep link waits for the full guide as before. When the seed's last
+airing ends first, the loading screen comes back; a load that fails takes
+the seed's guide down and shows its error. Sign-out clears the seed with the
+other caches.
+
+Pressed on the 43S45 (OS 16.0.4, 2026-11-03), a test-data build of this work
+on main `84bac18` signed in to the lab Emby (5,509 items, 30 channels), with a
+scratch launch switch that deleted the `cachefs:` files a power loss takes
+and kept the registry:
+- A full load saved 10,195 bytes for CH 3, the first channel; the wiped
+  launch found 18 of its airings still to come.
+- After the wipe, CH 3 tuned 1.0 s after the launch, at its place in the
+  airing. The load took about 25 s more, and its guide went up with no
+  second tune: the same film went on playing.
+- With the seed cut to one airing joined near its file's end and the load
+  held for 120 to 150 s by a scratch switch, the file finished and the
+  loading screen came back, then the full guide when the load ended (three
+  runs; on the first, two screenshots came back black while the node tree
+  held the loading screen, and both later runs' screenshots showed it).
+- With the load failing 15 s after the seed went up, the error screen
+  replaced the seed's guide and the player closed.
+- OK on SETTINGS showed STILL LOADING YOUR LIBRARY.
+
+Not tried: a real power cut, which also brings the network up from cold; a
+Plex sign-in; the hourly re-save on a TV left on; Left for the sidebar, and a
+launch deep link, on the seed's guide.
+
+Registry room (2026-11-04, the 43S45). Registry space is charged at far
+less than a value's length, as if stored compressed. A throwaway build filled
+its own sections with a heavy setup (5 Plex servers and the picker's copy,
+40 bundles, 100 franchises on and 100 off, 300 collections on: 15,001 bytes
+of ids, which took 1,656). From 32,273 bytes free, the setup took 3,593 and
+a 10,211-byte seed of random hex text 2,864, leaving 25,816. With the seed in place, 3,000 collections
+still wrote. Stored uncompressed, a 10 KB seed would still leave about 18 KB
+on that setup, so the seed writes without a reserve check.
 
 ## The connect screens
 
