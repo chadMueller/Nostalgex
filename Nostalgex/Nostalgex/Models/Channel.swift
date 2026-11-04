@@ -317,10 +317,13 @@ extension ChannelRules {
     /// channel than the data warrants, which is not evidence the channel should go off the
     /// air (I-073). Mirrors the fields `AppState.filterItems` reads off `MediaEnrichment`.
     var dependsOnEnrichment: Bool {
-        if !(keywords ?? []).isEmpty || !(keywordsRequireAll ?? []).isEmpty || !(keywordsExclude ?? []).isEmpty { return true }
+        if !(keywords ?? []).isEmpty || !(keywordsExclude ?? []).isEmpty { return true }
         if !(keywordGatedGenres ?? []).isEmpty { return true }
         if !(networks ?? []).isEmpty || !(productionCompanies ?? []).isEmpty { return true }
         if imdbRatingMin != nil || imdbVotesMin != nil || rtScoreMin != nil || metacriticMin != nil || wonOscar { return true }
+        // ratingMin falls back to the IMDb rating when neither native rating clears the bar,
+        // and on Emby the native rating can be null for a whole library.
+        if ratingMin != nil { return true }
         return matchTmdbGenres
     }
 

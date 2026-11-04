@@ -94,6 +94,10 @@ extension AppState {
         // viewer is waiting on counts: tvOS ending a suspended app during a background
         // refresh says nothing about whether the library can load.
         let tracksLoad = LaunchGuard.tracksLoad(background: background, hasChannels: !channels.isEmpty)
+        // A load runs its own enrichment pass; a refill still going from a restore would run
+        // a second one beside it (a stale restore's refresh, RESCAN, the daily check).
+        enrichmentRefillTask?.cancel()
+        enrichmentRefillTask = nil
         if tracksLoad { LaunchGuard.loadStarted() }
         defer { if tracksLoad { LaunchGuard.loadEnded() } }
         InstallDiagnostics.note("loadLibrary: background=\(background) channels=\(self.channels.count) servers=\(self.selectedServers.count) lastLoadAge=\(Int(Date().timeIntervalSince1970) - self.lastLoadAtUnix)s")

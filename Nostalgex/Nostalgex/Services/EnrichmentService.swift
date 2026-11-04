@@ -210,6 +210,14 @@ class EnrichmentService {
         } catch {
             print("[Enrichment] Supabase cache check failed: \(error)")
         }
+        // A cancelled pass (a load started while a restore's refill ran) stops here: a
+        // cancelled Supabase fetch throws, and carrying on would ask TMDB for every id.
+        if Task.isCancelled {
+            print("[Enrichment] Pass cancelled after the cache check")
+            statusMessage = ""
+            isEnriching = false
+            return
+        }
 
         // Step 3: TMDB for every id with no cache row. OMDb is decided afterwards, once
         // the keywords that say whether a title could land on a gated channel are known.
