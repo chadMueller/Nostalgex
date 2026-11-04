@@ -1393,7 +1393,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     /**
      * Every library but those switched off, under the stall watch, one server at a time.
      * `foreground` is a load the viewer is watching: it says when the scan goes quiet and
-     * offers STOP WAITING. A server whose scan is abandoned keeps the libraries it read whole;
+     * offers STOP WAITING. A server whose scan is abandoned keeps the libraries it read whole,
+     * and on Jellyfin and Emby the pages of a movie library it was part way through;
      * one with none counts as failed, and if every server failed that way the load fails with
      * the Apple TV's words.
      */
@@ -1466,7 +1467,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     val quiet = (verdict as? LibraryLoadStallDetector.Verdict.Stalled)?.secondsWithoutProgress
                         ?: (verdict as? LibraryLoadStallDetector.Verdict.Slow)?.secondsWithoutProgress ?: 0.0
                     Log.i(TAG, "STALL ${if (user) "viewer stopped waiting on" else "no progress from"} $label after ${quiet.toInt()} s quiet; " +
-                        "${kept.size} items from the libraries read whole")
+                        "${kept.size} items kept from what was read")
                     if (kept.isEmpty()) throw LoadStalled(user)
                     return kept to true
                 }

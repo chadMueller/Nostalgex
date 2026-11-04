@@ -39,7 +39,8 @@ class MediaBrowserScanTest {
             val parent = q["ParentId"]
             if ((fixture["fail"] as? JsonArray)?.any { it.jsonPrimitive.content == parent } == true) return 500 to null
             val all = (fixture["items"]!!.jsonObject[parent] as? JsonArray ?: JsonArray(emptyList()))
-                .filter { it.jsonObject["Type"]?.jsonPrimitive?.content == q["IncludeItemTypes"] }
+                // A comma list, as the servers read it (Movie,MusicVideo for a music video library).
+                .filter { it.jsonObject["Type"]?.jsonPrimitive?.content in (q["IncludeItemTypes"] ?: "").split(',') }
             val start = q["StartIndex"]?.toInt() ?: 0
             val limit = q["Limit"]?.toInt() ?: all.size
             return 200 to JsonObject(mapOf("Items" to JsonArray(all.drop(start).take(limit)), "TotalRecordCount" to JsonPrimitive(all.size)))

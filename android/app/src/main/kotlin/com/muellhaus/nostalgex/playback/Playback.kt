@@ -407,6 +407,8 @@ class Playback(
                     maxBitrateBps = q.maxBitrateKbps * 1000L, serverStreamOnly = serverStreamOnly,
                     subtitleLanguage = subtitleLanguage, audioLanguages = languages,
                     log = { Log.i(TAG, "PLAYBACK INFO ${describe(item)}: $it") },
+                    probe = { url -> mediaBrowser.probe(url) },
+                    stopRefused = { session -> mediaBrowser.stopEncoding(mb, session) },
                 )
             }
             main.post {

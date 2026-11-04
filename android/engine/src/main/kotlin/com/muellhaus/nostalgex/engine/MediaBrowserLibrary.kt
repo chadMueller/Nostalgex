@@ -119,62 +119,80 @@ class MediaBrowserLibrary(
                         progress.update(ScanProgress(index, viewList.size, name, type, out.size, done + 1, shows.size))
                     }
                 } else {
-                    for (jf in fetchItems(view.str("Id") ?: "", "Movie")) {
-                        val genres = jf.strings("Genres").toMutableList()
-                        if (isMusicVideoSection && genres.none { MUSIC.containsMatchIn(it) }) genres += "Music Video"
-                        val minutes = DailyManifest.minutesFromTicks(jf.long("RunTimeTicks"))
-                        if (minutes <= 0) continue
-                        // A music-video library, or a short item tagged Music (10 minutes keeps musicals out).
-                        val isMusicVideo = isMusicVideoSection || (minutes <= 10 && genres.any { MUSIC.containsMatchIn(it) })
-                        val mi = mediaInfo(jf)
-                        var title = jf.str("Name")?.ifEmpty { null } ?: "Unknown"
-                        var artist: String? = null
-                        if (isMusicVideo) {
-                            val (song, a) = MusicTitle.musicVideo(title, jf.str("parentTitle"), jf.str("grandparentTitle"))
-                            title = song
-                            artist = a
+                    // A music video library also holds MusicVideo items, which a request for Movie
+                    // never returns (I-067, #172); a clip filed as a film still loads.
+                    val types = if (isMusicVideoSection) "Movie,MusicVideo" else "Movie"
+                    // Each page goes in as it arrives, with its progress, as Plex does: a big library
+                    // keeps the stall watch seeing it arrive, and a stopped scan keeps the pages
+                    // read (EmbyAPIService and JellyfinAPIService, N-033).
+                    fetchItems(view.str("Id") ?: "", types) { page ->
+                        val pageStart = out.size
+                        for (jf in page) {
+                            val genres = jf.strings("Genres").toMutableList()
+                            if (isMusicVideoSection && genres.none { MUSIC.containsMatchIn(it) }) genres += "Music Video"
+                            val minutes = DailyManifest.minutesFromTicks(jf.long("RunTimeTicks"))
+                            if (minutes <= 0) continue
+                            // A music-video library, or a short item tagged Music (10 minutes keeps musicals out).
+                            val isMusicVideo = isMusicVideoSection || (minutes <= 10 && genres.any { MUSIC.containsMatchIn(it) })
+                            val mi = mediaInfo(jf)
+                            var title = jf.str("Name")?.ifEmpty { null } ?: "Unknown"
+                            var artist: String? = null
+                            if (isMusicVideo) {
+                                val (song, a) = MusicTitle.musicVideo(title, jf.str("parentTitle"), jf.str("grandparentTitle"))
+                                title = song
+                                artist = a
+                            }
+                            out += MediaItem(
+                                ratingKey = jf.str("Id") ?: "",
+                                title = title,
+                                type = "movie",
+                                duration = minutes,
+                                addedAt = DailyManifest.unixSecondsFromISO(jf.str("DateCreated")),
+                                artist = artist,
+                                summary = jf.str("Overview") ?: "",
+                                year = jf.long("ProductionYear")?.toInt()?.takeIf { it != 0 },
+                                contentRating = jf.str("OfficialRating") ?: "",
+                                genres = genres,
+                                rating = jf.num("CommunityRating"),
+                                viewCount = jf.obj("UserData")?.long("PlayCount")?.toInt() ?: 0,
+                                studio = jf.arr("Studios").firstOrNull()?.str("Name") ?: "",
+                                librarySource = if (isMusicVideo) "musicVideo" else "movie",
+                                tmdbID = tmdbFromProviderIds(jf.obj("ProviderIds")),
+                                doviProfile = mi.doviProfile,
+                                audioStreams = mi.audioStreams,
+                                videoWidth = mi.width,
+                                videoHeight = mi.height,
+                                partKey = mi.msid,
+                                container = mi.container,
+                                videoCodec = mi.videoCodec,
+                                audioCodec = mi.audioCodec,
+                                bitrate = mi.bitrate,
+                            )
                         }
-                        out += MediaItem(
-                            ratingKey = jf.str("Id") ?: "",
-                            title = title,
-                            type = "movie",
-                            duration = minutes,
-                            addedAt = DailyManifest.unixSecondsFromISO(jf.str("DateCreated")),
-                            artist = artist,
-                            summary = jf.str("Overview") ?: "",
-                            year = jf.long("ProductionYear")?.toInt()?.takeIf { it != 0 },
-                            contentRating = jf.str("OfficialRating") ?: "",
-                            genres = genres,
-                            rating = jf.num("CommunityRating"),
-                            viewCount = jf.obj("UserData")?.long("PlayCount")?.toInt() ?: 0,
-                            studio = jf.arr("Studios").firstOrNull()?.str("Name") ?: "",
-                            librarySource = if (isMusicVideo) "musicVideo" else "movie",
-                            tmdbID = tmdbFromProviderIds(jf.obj("ProviderIds")),
-                            doviProfile = mi.doviProfile,
-                            audioStreams = mi.audioStreams,
-                            videoWidth = mi.width,
-                            videoHeight = mi.height,
-                            partKey = mi.msid,
-                            container = mi.container,
-                            videoCodec = mi.videoCodec,
-                            audioCodec = mi.audioCodec,
-                            bitrate = mi.bitrate,
-                        )
+                        onSection(out.subList(pageStart, out.size).toList())
+                        progress.update(ScanProgress(index, viewList.size, name, type, out.size))
                     }
                     progress.update(ScanProgress(index, viewList.size, name, type, out.size))
                 }
-                onSection(out.subList(sectionStart, out.size).toList())
+                // A TV library goes in whole; a movie library already went in page by page.
+                if (type == "show") onSection(out.subList(sectionStart, out.size).toList())
             } catch (e: ScanCancelled) {
                 throw e
             } catch (e: Exception) {
-                // One library that fails leaves the others, as the web tuner's per-view catch.
+                // One library that fails leaves the others, as the web tuner's per-view catch, and
+                // leaves none of its own items: the web reads a library whole before it keeps any.
+                // (Only a stop keeps a movie library's pages, through onSection.)
+                while (out.size > sectionStart) out.removeAt(out.lastIndex)
             }
         }
         return out
     }
 
-    /** Every item of a type under a parent, 200 at a time, with the fields the channel rules read. */
-    private fun fetchItems(parentId: String, types: String): List<JsonObject> {
+    /**
+     * Every item of a type (or a comma list of types) under a parent, 200 at a time, with the
+     * fields the channel rules read. `onPage` sees each page as it arrives.
+     */
+    private fun fetchItems(parentId: String, types: String, onPage: (List<JsonObject>) -> Unit = {}): List<JsonObject> {
         val all = ArrayList<JsonObject>()
         var start = 0
         while (true) {
@@ -186,6 +204,7 @@ class MediaBrowserLibrary(
             val d = body as? JsonObject ?: JsonObject(emptyMap())
             val items = d.arr("Items")
             all += items
+            onPage(items)
             val total = d.long("TotalRecordCount")?.toInt() ?: all.size
             start += items.size
             if (items.isEmpty() || all.size >= total) break

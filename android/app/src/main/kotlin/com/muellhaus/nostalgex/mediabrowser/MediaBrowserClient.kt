@@ -299,6 +299,21 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         }
     }
 
+    private val probeClient = http.newBuilder()
+        .callTimeout(com.muellhaus.nostalgex.engine.PlaybackInfoHandshake.BURN_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS).build()
+
+    /**
+     * One GET of a burned stream's playlist or segment, as the player asks for it: the URL as
+     * given, no header added. The status, and the text of a playlist under 1 MB; a segment's
+     * body is not read. Null when it timed out or failed, which proves nothing about the server.
+     */
+    fun probe(url: String): Pair<Int, String?>? = runCatching {
+        probeClient.newCall(Request.Builder().url(url).build()).execute().use { res ->
+            val playlist = url.substringBefore('?').endsWith(".m3u8") && (res.body.contentLength() in -1 until 1_000_000)
+            res.code to (if (res.isSuccessful && playlist) res.body.string() else null)
+        }
+    }.getOrNull()
+
     private fun enqueue(req: Request) = http.newCall(req).enqueue(object : okhttp3.Callback {
         override fun onFailure(call: okhttp3.Call, e: IOException) {}
         override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) = response.close()

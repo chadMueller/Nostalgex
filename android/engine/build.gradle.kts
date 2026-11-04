@@ -99,7 +99,9 @@ val genResolveVectors = tasks.register<Exec>("genResolveVectors") {
 }
 
 tasks.test {
-    dependsOn(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors, genWatchVectors, genResolveVectors)
+    // The generated vectors are inputs, not only dependencies: a change to the web tuner or a Roku
+    // fixture changes them, and the tests have to run again (not report the last result).
+    inputs.files(genMediaBrowserVectors, genEnrichmentVectors, genFranchiseVectors, genCollectionsVectors, genWatchVectors, genResolveVectors)
     systemProperty("nostalgex.resolveVectors", layout.buildDirectory.file("vectors/resolve.json").get().asFile.absolutePath)
     systemProperty("nostalgex.watchVectors", layout.buildDirectory.file("vectors/watch.json").get().asFile.absolutePath)
     systemProperty("nostalgex.collectionsVectors", layout.buildDirectory.file("vectors/collections.json").get().asFile.absolutePath)

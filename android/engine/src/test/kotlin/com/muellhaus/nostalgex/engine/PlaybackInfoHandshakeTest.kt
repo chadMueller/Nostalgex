@@ -218,4 +218,79 @@ class PlaybackInfoHandshakeTest {
     fun aFailedFirstRequestThrowsSoTheCallerUsesItsOwnStream() {
         h.negotiate({ throw IOException("refused") }, server, "TKN", "4242", "m", 1, false, "en", listOf("en"))
     }
+
+    // ── negotiate: the burned stream's first segment (JellyfinPlaybackInfoTests, q106) ──
+
+    /**
+     * The burned stream's playlists and first segment, as the probe fetches them. `answers` maps a
+     * path's last part to a status and body; a missing entry is a timeout (null).
+     */
+    private class FakeStream(val answers: Map<String, Pair<Int, String?>>) : PlaybackInfoHandshake.Probe {
+        val fetched = ArrayList<String>()
+        override fun get(url: String): Pair<Int, String?>? {
+            fetched += url
+            return answers[url.substringBefore('?').substringAfterLast('/')]
+        }
+    }
+
+    private val masterText = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=20000000\nmain.m3u8?PlaySessionId=burned\n"
+    private val variantText = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nhls1/main/0.ts?PlaySessionId=burned\n#EXT-X-ENDLIST\n"
+
+    private fun burnNegotiate(stream: FakeStream, stopped: MutableList<String>) =
+        h.negotiate(FakeServer(answer("plain", true), answer("burned", true))::send, server, "TKN", "4242", "mediasource_4242",
+            20_000_000, false, "en", listOf("en"), probe = stream, stopRefused = { stopped += it })
+
+    @Test fun theBurnedStreamsFirstSegmentIsFetchedBeforeItIsChosen() {
+        val stream = FakeStream(mapOf("master.m3u8" to (200 to masterText), "main.m3u8" to (200 to variantText), "0.ts" to (200 to null)))
+        val stopped = ArrayList<String>()
+        assertEquals("burned", burnNegotiate(stream, stopped)!!.playSessionId)
+        assertEquals(3, stream.fetched.size)
+        assertTrue(stream.fetched[0], stream.fetched[0].startsWith("$server/videos/4242/master.m3u8?"))
+        assertEquals("the variant, relative to the master", "$server/videos/4242/main.m3u8?PlaySessionId=burned", stream.fetched[1])
+        assertEquals("the segment, relative to the variant, its own query kept", "$server/videos/4242/hls1/main/0.ts?PlaySessionId=burned", stream.fetched[2])
+        assertTrue("an accepted burned stream is not stopped", stopped.isEmpty())
+    }
+
+    /** Chad's Emby 4.10.1: playlists fine, every segment of a burned-in stream HTTP 500. */
+    @Test fun aServerThatRefusesTheBurnedSegmentGetsThePlainStream() {
+        val stream = FakeStream(mapOf("master.m3u8" to (200 to masterText), "main.m3u8" to (200 to variantText), "0.ts" to (500 to null)))
+        val stopped = ArrayList<String>()
+        val r = burnNegotiate(stream, stopped)!!
+        assertEquals("plain", r.playSessionId)
+        assertTrue(!r.url.contains("burned"))
+        assertEquals("nothing else will ever see that session", listOf("burned"), stopped)
+    }
+
+    @Test fun aServerThatRefusesTheBurnedPlaylistGetsThePlainStream() {
+        val stream = FakeStream(mapOf("master.m3u8" to (500 to null)))
+        val stopped = ArrayList<String>()
+        assertEquals("plain", burnNegotiate(stream, stopped)!!.playSessionId)
+        assertEquals("it stops at the first refusal", 1, stream.fetched.size)
+        assertEquals(listOf("burned"), stopped)
+    }
+
+    /** A master that is already a media playlist: its own first entry is the segment, no variant hop. */
+    @Test fun aMasterThatIsAMediaPlaylistNeedsNoVariantRequest() {
+        val stream = FakeStream(mapOf("master.m3u8" to (200 to "#EXTM3U\n#EXTINF:6.0,\nhls1/main/0.ts?PlaySessionId=burned&api_key=TKN\n"), "0.ts" to (200 to null)))
+        assertEquals("burned", burnNegotiate(stream, ArrayList())!!.playSessionId)
+        assertEquals(2, stream.fetched.size)
+        assertEquals("$server/videos/4242/hls1/main/0.ts?PlaySessionId=burned&api_key=TKN", stream.fetched[1])
+    }
+
+    /** A slow or dropped probe, or a playlist it can't read, proves nothing: the burned-in subtitles stay. */
+    @Test fun aTimeoutOrAnUnreadablePlaylistKeepsTheBurnedStream() {
+        val stopped = ArrayList<String>()
+        assertEquals("burned", burnNegotiate(FakeStream(emptyMap()), stopped)!!.playSessionId)
+        assertEquals("burned", burnNegotiate(FakeStream(mapOf("master.m3u8" to (200 to "not a playlist"))), stopped)!!.playSessionId)
+        assertEquals("burned", burnNegotiate(FakeStream(mapOf("master.m3u8" to (200 to masterText), "main.m3u8" to (200 to variantText))), stopped)!!.playSessionId)
+        assertTrue(stopped.isEmpty())
+        assertEquals(12_000L, PlaybackInfoHandshake.BURN_PROBE_TIMEOUT_MS)
+    }
+
+    @Test fun aFileWithNoForcedTrackMakesNoExtraRequest() {
+        val stream = FakeStream(emptyMap())
+        val s = FakeServer(answer("plain", false), null)
+        assertEquals("plain", h.negotiate(s::send, server, "TKN", "4242", "mediasource_4242", 20_000_000, false, "en", listOf("en"), probe = stream)!!.playSessionId)
+        assertTrue(stream.fetched.isEmpty())
+    }
 }

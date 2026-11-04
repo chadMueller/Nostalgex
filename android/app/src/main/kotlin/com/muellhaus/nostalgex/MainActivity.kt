@@ -1,8 +1,10 @@
 package com.muellhaus.nostalgex
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.LaunchedEffect
 import com.muellhaus.nostalgex.ui.LibraryLoadScreen
 import com.muellhaus.nostalgex.ui.LoadingScreen
 import com.muellhaus.nostalgex.ui.UnfinishedLoadsScreen
@@ -18,6 +20,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         model = AppModel(applicationContext)
         setContent {
+            // ScreenAwakePolicy: a load the viewer is sitting in front of keeps the TV awake, so a
+            // long first load can't end in a sleeping TV. Playback holds it through the player's
+            // own view (WatchScreen), so neither can release the other's hold; a refresh behind
+            // the guide never shows these screens.
+            val loading = model.screen is Screen.Loading || model.screen is Screen.LibraryLoad
+            LaunchedEffect(loading) {
+                if (loading) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
             when (val s = model.screen) {
                 is Screen.SignIn, is Screen.Connect, is Screen.ChooseServers, is Screen.ChooseLibraries -> ConnectScreen(model)
                 is Screen.Loading -> LoadingScreen(s)

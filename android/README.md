@@ -31,8 +31,9 @@ listing; it installs over `adb`.
   device. On Jellyfin and Emby the server is asked how to stream it first
   (PlaybackInfo, as on the Apple TV): it copies or re-encodes the video, burns
   in a forced subtitle track in your SUBTITLE LANGUAGE, and the stream carries
-  the audio track in your AUDIO LANGUAGE. The hand-built stream is used if it
-  fails to answer in 12 s. The stream carries no start time and the player
+  the audio track in your AUDIO LANGUAGE. A burned-in stream is used only once
+  its first segment is served; a server that refuses it gets the film without
+  the forced lines. The hand-built stream is used if it fails to answer in 12 s. The stream carries no start time and the player
   seeks, as on the Apple TV.
 - Opens on the Apple TV's tuner, at its measurements: the info panel for the
   focused channel, the picture in a 4:3 box, and the timeline guide below
@@ -80,7 +81,9 @@ listing; it installs over `adb`.
   row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY
   AGAIN or START OVER. A scan that goes quiet for a minute offers STOP WAITING,
   and one quiet for 210 s is abandoned on its own; either way the libraries
-  already read whole make the guide, and with none the load says why.
+  already read whole make the guide, with the pages already read of a Jellyfin
+  or Emby movie library (which reports after every page, as Plex does), and
+  with none the load says why. The TV stays awake on the loading screen.
 - WATCH HISTORY under PLAYBACK & PICTURE, both off by default: SHOW NOW
   PLAYING ON PLEX (or Jellyfin, Emby) tells the server what is on, and MARK
   WATCHED counts a programme tuned in during its first 15% and 75% watched.

@@ -2898,6 +2898,29 @@ both runs with the grace at 11.7 s, and its message carries the timeline. Nostal
 
 **Not found.** The cause on GitHub. The new timelines will name the candidate that held the wait if it happens again.
 
+## 2026-11-04 (Android: the 1.0.30 fixes from main, ported)
+
+**Why.** Four of the Apple TV, web and Roku fixes that landed on main on 2026-11-04 apply to Android. `feature/android` is rebased onto `29203c9`.
+
+**Changed.**
+- **Music Videos libraries on Jellyfin and Emby (I-067, #172).** A library typed `musicvideos` is asked for `Movie,MusicVideo`; every other library still asks for `Movie`. `MediaBrowserScanTest` reads the web tuner's vectors, which now hold four clips, and its fake server reads `IncludeItemTypes` as a comma list. Putting `Movie` back makes it fail. Against the test Jellyfin 12.4.0, CH 500 HIGH ROTATION and CH 501 POP filled from its Music Videos library.
+- **Big Jellyfin and Emby movie libraries (N-033).** A movie library reports progress after every 200-item page, as Plex does, so the stall watch sees it arriving. A scan stopped mid-library keeps the pages already read. A library that fails with an error, rather than being stopped, still leaves none of its items, as the web tuner's per-view catch. `MovieSectionScanProgressTest` (new, 3 tests, both backends, 1,000 films): the old scan reported once and kept nothing from a stop at the fourth page; now it reports 0, 200, 400, 600, 800 and 1,000, and keeps 600.
+- **A burned-in forced subtitle the server can't produce (q106).** `PlaybackInfoHandshake.negotiate` fetches the burned stream's master playlist, its first variant and the first segment before choosing it, as `JellyfinPlaybackResolver.negotiate` does. An HTTP error on any of them means the plain answer is used and the refused session is stopped. A timeout, a dropped connection or a playlist it can't read keep the burned stream.
+  - 6 new cases in `PlaybackInfoHandshakeTest`; 4 fail with the check turned off.
+  - Measured on an Android 16 Google TV emulator against the test Jellyfin behind `scripts/lab-forced-subtitle/logproxy.py` in `segments` mode, which answers 500 to the burned stream's segments as Chad's Emby 4.10.1 does:
+    - With the check: the first segment refused, the session stopped 0.13 s later, and the film playing without its forced lines 1.0 s after the handshake.
+    - Without it, Android was worse off than the Apple TV's 20 s wait. ExoPlayer fails on the first HTTP 500, so the programme counted as one that wouldn't start, and the film never played.
+    - With the route healthy, the burned stream is still chosen; the check waited 552 ms for the first segment.
+- **The TV stays awake on the loading screen (N-033, `ScreenAwakePolicy`).** `FLAG_KEEP_SCREEN_ON` is held on the window while the screen is a load (`Loading` or `LibraryLoad`) and released anywhere else. Playback keeps its own hold through the player's view, so neither releases the other. A refresh behind the guide never shows these screens. Checked on the emulator with the server paused mid-load: the flag was on throughout the load and off on the library choice before it.
+- `engine/build.gradle.kts`: the generated vectors are inputs to the test task, not only dependencies. Before, a change to `plex-tuner.html` or a Roku fixture left the test task up to date, and it reported the last result. That is how the music video change first looked like it passed after the rebase.
+
+**Not needed.**
+- **Plex discovery's grace window.** Android's `ServerResolve` is the web tuner's module, which works the outcome out again on every report.
+- **AUDIO LANGUAGE on transcodes (#177).** Android already does this.
+- **Saving the enrichment cache across launches (I-073).** Android keeps its cache in a file with the web's 7-day TTL, and builds the lineup from the saved library on every launch, so there is no saved lineup to lose a channel from.
+
+**Not checked.** A real Emby with the burn-in fault. A movie library big enough to be slow on a real server. Most of the test Jellyfin's films are gone from disk, so only the films still there were played.
+
 ## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
 
 **Shipped.** Nothing yet. Branch `appletv/i073-enrichment-cache` off main `7bc68850`, for 1.0.30 (I-073, GitHub #185:
