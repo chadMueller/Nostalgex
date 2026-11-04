@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Manual signing on purpose.
+  Automatic signing. scripts/release-tvos.sh runs the export with
+  -allowProvisioningUpdates and the App Store Connect API key
+  (-authenticationKeyPath / -authenticationKeyID / -authenticationKeyIssuerID),
+  which lets xcodebuild fetch or update the App Store profiles itself, with
+  every capability the targets have (App Groups, iCloud). That is how 1.0.29
+  exported on 2026-10-31.
 
-  Automatic ("cloud") signing fails from the CLI with "Cloud signing permission
-  error": the App Store Connect API key cannot create signing assets, so
-  xcodebuild falls back to a stale cached Xcode-managed profile that predates
-  the Top Shelf extension and the App Groups capability.
+  The old manual profiles ("Nostalgex tvOS App Store", "Nostalgex TopShelf tvOS
+  App Store") predate the iCloud capability, so a manual export with them
+  fails. Without the API key flags, automatic signing from the command line
+  can fall back to a stale cached Xcode-managed profile: always run the export
+  through the script, or pass the same flags.
 
-  The two profiles below were created through the API and are installed in
-  ~/Library/MobileDevice/Provisioning Profiles. Both, and the Apple Distribution
-  certificate, expire 2027-09-05. Regenerate them (and re-download) if a target
-  or capability is added, or if signing starts failing after that date.
+  destination is "export": the script validates and uploads the .ipa with
+  altool afterwards, so --dry-run can stop after validation.
 -->
 <plist version="1.0">
 <dict>
   <key>method</key><string>app-store-connect</string>
   <key>teamID</key><string>KK5V95295A</string>
   <key>uploadSymbols</key><true/>
-  <key>signingStyle</key><string>manual</string>
-  <key>signingCertificate</key><string>Apple Distribution</string>
-  <key>provisioningProfiles</key>
-  <dict>
-    <key>com.muellhaus.nostalgex</key><string>Nostalgex tvOS App Store</string>
-    <key>com.muellhaus.nostalgex.TopShelf</key><string>Nostalgex TopShelf tvOS App Store</string>
-  </dict>
+  <key>signingStyle</key><string>automatic</string>
+  <key>destination</key><string>export</string>
+  <key>manageAppVersionAndBuildNumber</key><false/>
 </dict>
 </plist>

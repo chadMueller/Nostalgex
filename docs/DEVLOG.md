@@ -194,6 +194,19 @@ a real Plex server's own speed, and artwork, which a load never fetches.
 **Not explained.** The Plex half of the report. The Plex scan already reports every page, and the engine builds 142 channels from 15,000 movies in under a minute on the simulator, so "Channel 60 of 142" for an hour is not reproduced. Not measured: the same harness on a real Apple TV 4K (A12) and the enrichment phase on a first load (enrichment is off in these runs; the site's TMDB proxy answered 27 requests a second from a Mac, so 15,000 titles missing from the shared cache would be about 9 minutes). The hour matches the Apple TV's default one-hour sleep, which ends a long load; unverified.
 
 **Next.** Run `MovieLibraryScaleHarness` on the living room Apple TV 4K (needs Chad's OK). Ask the reporter for a photo of the stuck Plex screen and his Apple TV's Sleep After setting. Web tuner and Docker: n/a, no scan watchdog there. Roku: n/a, its stall watch counts every 2xx answer as progress.
+## 2026-11-03 (Apple TV release script: automatic signing with the API key)
+
+**Changed.** `scripts/release-tvos.sh` archives and exports with automatic signing plus
+`-allowProvisioningUpdates` and the App Store Connect API key, and `Nostalgex/ExportOptions.plist` asks
+for automatic signing. The manual App Store profiles the plist named predate the iCloud capability, so
+the script could no longer export. 1.0.29 exported on 2026-10-31 with exactly these settings, by hand.
+The plist's old comment said automatic signing fails from the command line; that is true only without
+the API key flags, and the comment now says so. `manageAppVersionAndBuildNumber` is false, so the
+export never changes the version or build number. Validation and upload still go through altool.
+
+**Not verified.** No archive or export was run for this change (no throwaway archive either, since
+`-allowProvisioningUpdates` can touch the profiles in the developer account). The first real check is
+the 1.0.30 export.
 
 ## 2026-11-03 (CI: a nightly run of every test job)
 
