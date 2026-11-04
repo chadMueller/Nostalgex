@@ -3,6 +3,81 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
+
+**Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.
+
+**Why.** Chad's rule: "the minItems should never be 1." A channel's `minItems` is the smallest pool it is built
+from. At 1, a pool of one title fills the whole day with that title back to back: on the Android build, TRUE CRIME
+aired the same documentary six times in a row. The Android app was right to do it, because it reads the same
+`channels.json` and the file said 1. TRUE CRIME (id 40, CH 121) and PREMIERES (id 403, CH 64) had been at 1 since
+1.0.21. Every other channel was already at 3 or more (85 at 3, 45 at 5, 8 at 10, one at 15, one at 50).
+
+**Changed.**
+- `channels.json` v49 to v50: TRUE CRIME and PREMIERES `minItems` 1 to 3. Nothing else in the file moved.
+  `CHANNELS.md`, `public/sitemap.xml` and `scripts/bundle-lastmod.json` regenerated (only the essentials and
+  truecrime bundles re-stamp, because they hold the two channels).
+- A guard so it stays that way. `scripts/nostalgex-filter-smoke.mjs` (part of `npm test`, and of CI's channel-engine
+  job whenever `channels.json` changes) reads the shipped file and fails on any channel whose `minItems` is below 3,
+  naming it: "TRUE CRIME (id 40, CH 121) has minItems 1; the floor is 3". It was run against v49 first and failed on
+  exactly those two. It also catches 0, which the Apple TV reads as 0 while the web tuner, Roku and the Android app
+  read it as 50. A channel with no `minItems` is fine: every engine defaults it to 50.
+- No golden file, fixture or vector pinned either value or the version, so none changed. The filter, schedule,
+  franchise, rating, season and DST goldens and the Roku vectors are as they were. The Swift tests that build
+  channels by hand with `minItems: 1` or 0 are exercising scheduling on small pools and never read `channels.json`,
+  so they stay.
+
+**Checked, one suite at a time.** `npm test` green (the filter smoke is 212 checks, 143 of them the new guard).
+`npm run build` and `npm run build:selfhost` green, and both outputs carry v50. Roku off-device suite (`roku/tests/run.sh`,
+capped at 2 interpreters): 54 of 54 parts passed, `ALL TESTS PASSED`. tvOS `NostalgexTests`: 1,103 tests, 1,077 passed, 26 skipped
+(the opt-in harnesses), 0 failures, run against an app bundle that held v50. Not run: the Android engine tests (no
+Gradle here) and anything on a device.
+
+**What PREMIERES sees.** PREMIERES is every title added to the server in the last 14 days (`addedWithinDays` 14,
+movies and episodes, 29 genres). On a server nobody adds to, its pool is 0 and it is off at 1 or at 3. The change
+only bites when 1 or 2 titles arrived in the fortnight: PREMIERES used to air that one title (or two) all day, and
+is now off the guide until a third arrives. The Apple TV's "why is this channel off the air" line is built from
+`minItems`, so it will read "Needs 3 matching titles. You have 2." (from the string in `SettingsSharedComponents`,
+not seen on a TV). Plex normally stamps `addedAt` at scan time, so a freshly scanned library counts everything as
+new and PREMIERES is on either way for the first 14 days, then follows the trickle; that is from the rule, not
+measured, and how Jellyfin and Emby fill `addedAt` was not checked.
+
+Measured by replaying PREMIERES' real rule through the shared JS filter over a sliding 14-day window of one large
+library's add dates, for the 269 days after its bulk import aged out, then thinning the same history to every 10th,
+50th and 200th title to stand in for libraries that grow that much slower (days on the guide at `minItems` 1, at 3;
+share of days the pool sat at 1 or 2):
+- the full library: 100% and 100%; the pool never fell under 10, so nothing changes;
+- every 10th title: 100% and 75%; 25% of days at 1 or 2;
+- every 50th title: 77% and 30%; 47% of days at 1 or 2;
+- every 200th title: 43% and 3%; 41% of days at 1 or 2.
+So on a small or slow library PREMIERES is now mostly off, and the days it used to show were mostly one title on
+loop. A library that adds a few titles a fortnight, or a server fed in bursts, keeps it. This is one library's
+history thinned, not a survey; the thinning keeps the burst shape.
+
+**Which surface gets it, and when.**
+- Web tuner: `plex-tuner.html` fetches `channels.json` from its own origin, so the hosted tuner has it on the push
+  that carries this, and Docker on the next `tuner-v*` tag (the file is in the image).
+- Apple TV: a build step copies the repo's `channels.json` into the app, so the next build. The app tries
+  `<server>/channels.json` first and falls back to the bundled copy, but a Plex, Jellyfin or Emby server does not
+  serve one, so in practice the bundled file is what runs.
+- Roku: `roku/data/channels.json` is a link to the repo file, so the next package.
+- Android (PR #151): `android/app/src/main/assets/channels.json` is a link to the repo file too, so the next build
+  from a tree that has this commit. The PR's tests do not pin either value, and its demo channels use ids outside the
+  file. The PR branch and this one share the same merge base on main and does not touch `channels.json`; a trial
+  merge of the two conflicts only in this file, where both prepend an entry (keep both).
+
+**Not changed.** The floor is checked in JS only. The Swift and Roku suites read the same file but do not assert
+it; one check on the file is enough, and a second copy of the number in Swift would be one more thing to drift.
+
+**Seen, not touched.** `ci.yml`'s `tvos` filter does not list `channels.json` or `channels-memberships.json`, so a
+push that changes only those skips the tvOS unit tests until the nightly run, though several Swift tests read them
+(`BundleBuildTests`, `FilterGoldenTests`, `ChannelNumberingTests`). The `roku`, `android` and channel-engine
+filters do list them.
+
+**Next.** Chad decides when to push, since the hosted tuner deploys with it, and which Apple TV, Roku and Android
+builds carry v50. If PREMIERES should stay on for slow libraries, the lever is a wider `addedWithinDays`, not a
+lower floor.
+
 ## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
 
 **Shipped.** Nothing yet. Branch `appletv/i073-enrichment-cache` off main `7bc68850`, for 1.0.30 (I-073, GitHub #185:
