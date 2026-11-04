@@ -158,7 +158,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
-                    let raw = try await fetchAllItems(parentId: section.key, includeItemTypes: "Movie")
+                    let raw = try await fetchAllItems(
+                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type))
                     items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {

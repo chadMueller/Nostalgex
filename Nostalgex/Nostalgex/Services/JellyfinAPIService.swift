@@ -113,6 +113,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         }
     }
 
+    /// What a flat (non-TV) library is asked for. Jellyfin and Emby file the videos in a
+    /// Music Videos library as `MusicVideo`, so asking it for `Movie` alone came back empty
+    /// and HIGH ROTATION never filled (I-067, found by @owenvoke). `Movie` stays in the list
+    /// for a film someone filed there. Every other library still asks for films only.
+    static func itemTypes(forSectionType type: String) -> String {
+        type == "musicvideo" ? "Movie,MusicVideo" : "Movie"
+    }
+
     // MARK: - Library loading
 
     private static let pageSize = 200
@@ -144,7 +152,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
-                    let raw = try await fetchAllItems(parentId: section.key, includeItemTypes: "Movie")
+                    let raw = try await fetchAllItems(
+                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type))
                     items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
