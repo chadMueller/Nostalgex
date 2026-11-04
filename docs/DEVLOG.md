@@ -3,6 +3,45 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
+
+**Shipped.** Nothing yet. Branch `appletv/i073-enrichment-cache` off main `7bc68850`, for 1.0.30 (I-073, GitHub #185:
+CARTOON NETWORK gone after 1.0.29).
+
+**Why.** The networks rule never changed. The TMDB/OMDb enrichment cache was memory only, filled inside
+`enrichItems`. After a snapshot restore it was empty; the 6h refresh skips an unchanged library under 24h, so it
+stayed empty for the session. The first package rebuild after that (a switch in Settings, a lineup from iCloud)
+read `networks` off the empty cache, CH 215 came back with 0 of its 5, `mergeBuiltPackageChannels` dropped it and
+saved the dropped lineup as the snapshot, so it stayed gone across relaunches. 50 of 142 channels carry a rule that
+reads enrichment (networks, keywords, production companies, OMDb scores), so it was a class; 1.0.29's Settings
+explainer made it visible. The web tuner and Roku already persist their caches with a 7-day TTL.
+
+**Changed.**
+- `EnrichmentCacheStore`: one JSON file, `enrichment_cache_v1.json`, under `LocalStore` (Caches; under the harness
+  root when isolation is on), rows keyed by TMDB id, 7-day TTL on `fetched_at` like the web and Roku. Saved in
+  the background when a pass ends; loaded in `applyLibrarySnapshot` before any pool can be rebuilt. Server
+  independent, so a sign-out keeps it.
+- `mergeBuiltPackageChannels`: while `enrichmentPending` (no row in memory for a library with TMDB ids), a channel
+  whose rule `dependsOnEnrichment` and comes back under `minItems` keeps the last build's copy instead of being
+  dropped. The rule is narrower than "never drop below minItems while pending": a plain genre or title channel
+  that emptied still goes, because its pool is evidence; an enrichment channel's small pool from a build that
+  could not see the rows is not.
+- `refillEnrichmentAfterRestoreIfNeeded`: when the disk cache was missing or past its TTL on a restore, a
+  background pass refills it (the shared Supabase cache answers nearly all of it), then
+  `refilterChannelsWithEnrichment` (never called before), the found-franchise rebuild and a snapshot save, the
+  way the web tuner's `onCacheReady` does. Cancelled by a sign-out.
+- Tests: `EnrichmentCacheStoreTests` (5: harness root, TTL, broken file, merge under memory, the 12,000-row
+  cost); `BundleBuildTests` gains the report's case (restored lineup, empty cache, package rebuild keeps CH 215
+  with its 52 episodes; fails on main) and its counterpart (a genre channel that emptied still drops).
+
+**Measured (simulator, `EnrichmentCacheStoreTests.testTwelveThousandRowsCost`).** 12,000 rows shaped like the
+shared table (6 to 15 keywords, companies, genres, half with OMDb scores): 5.4 MB on disk, 90 ms to encode and
+write, 112 ms to read and decode on a restore, 18 MB of footprint for the test's two copies (about 9 MB for the
+cache alone). The library snapshot's own size and load time are unchanged; the cache is a separate file.
+
+**Not changed.** No studio fallback on the networks rule (it would undo f134d3df). The library snapshot format is
+unchanged; the cache is its own file, read by nothing else.
+
 ## 2026-11-04 (Apple TV: the TV stays awake on the loading screen; what Plex changes at 15,000 movies, measured)
 
 **Shipped.** Nothing yet. Branch `appletv/n033-load-awake` off main `66fd72c9`, for the next Apple TV build (N-033).
