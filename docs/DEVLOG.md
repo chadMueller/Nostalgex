@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (web tuner and Docker 1.0.14 prepared, not tagged)
+
+**Prepared.** Branch `web/release-1014`: `tunerVersion` 1.0.14 in `package.json`, the README headings and the Latest line
+to match. Not pushed and not tagged: a push to `main` deploys nostalgex.app, which will read `WEB TUNER 1.0.14` from the
+bump on, and the image is published by the `tuner-v1.0.14` tag, which needs Chad's go. Nothing in this entry is live yet.
+
+**In it, since `tuner-v1.0.13`** (web and Docker): the library line in Settings and the console COVERAGE line; a playlist,
+song, album, artist or collection no longer airs as a film on Jellyfin and Emby; Emby's content rating and star rating are
+read (#204); a Plex section or a Jellyfin or Emby library that fails keeps the rest and is not cached, and a scan that
+reads nothing is an error; Plex list reads send a page size and are read to the end (N-038); Jellyfin and Emby music
+video libraries load their MusicVideo items (I-067); `channels.json` v50 (no channel under 3 titles). On the hosted
+tuner only: the Deezer genre lookup is allowed through the site CSP (N-012); the image never makes that lookup.
+
+**Checked on the branch.** `npm test`, `npm run build`, `npm run build:selfhost`, `npm run test:tuner-version:builds`
+and `npm run test:tuner-isolation:builds`, and the Roku off-device suite (`roku/tests/run.sh`).
+
 ## 2026-11-05 (web tuner: a library line in Settings, how many titles sit on a channel; Apple TV 1.0.30 parity)
 
 **Why.** The Apple TV 1.0.30 says, under RESCAN LIBRARY, how many loaded titles sit on a channel, how many sit on none,
