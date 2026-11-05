@@ -286,7 +286,8 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
                     at = entries.Count()
                     entries.Push(own)
                 else
-                    lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour), NxPoolMemo(lc, day.hour))
+                    ws = NxWatershedSet()
+                    lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour, ws), NxPoolMemo(lc, day.hour, ws))
                     if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp })
                 end if
             end if

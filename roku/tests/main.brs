@@ -21,6 +21,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("filter-golden") then failures = failures + NxRunFilterGoldenTests("pkg:/tests/vectors/filter-golden.json", "pkg:/data/channels.json", "pkg:/data/channels-memberships.json")
     if NxTestWants("rating-golden") then failures = failures + NxRunRatingGoldenTests("pkg:/tests/vectors/rating-golden.json")
     if NxTestWants("watershed-golden") then failures = failures + NxRunWatershedGoldenTests("pkg:/tests/vectors/watershed-golden.json")
+    if NxTestWants("watershed-gate") then failures = failures + NxRunWatershedGateTests()
     timer.Mark()
     if NxTestWants("lineup") then
         failures = failures + NxRunLineupTests("pkg:/tests/vectors/lineup.json")
