@@ -69,6 +69,9 @@ struct LibrarySnapshotV1: Codable {
     /// Franchises found in the library at scan time. Optional so older snapshots decode;
     /// absent reads as "nothing found yet".
     var foundFranchiseRows: [StoredFoundFranchise]? = nil
+    /// Which scan request made these items (`LibrarySnapshotStore.scanFieldsVersion`). Optional
+    /// so snapshots written before it existed decode, as "the old request".
+    var scanFieldsVersion: Int? = nil
 }
 
 // MARK: - On-disk format v3 (chunked)
@@ -116,6 +119,8 @@ struct LibrarySnapshotMetaV3: Codable {
     var foundFranchiseRows: [StoredFoundFranchise]? = nil
     var foundFranchiseMovieItems: [[Int32]]? = nil
     var foundFranchiseTVItems: [[Int32]]? = nil
+    /// See `LibrarySnapshotV1.scanFieldsVersion`.
+    var scanFieldsVersion: Int? = nil
 }
 
 /// current.json. Small, written last, replaced atomically.
@@ -136,6 +141,19 @@ enum LibrarySnapshotStore {
     static let refreshAfterSeconds = 6 * 3600
     /// Past this age a scan runs even if the library reports no change.
     static let forceRefreshAfterSeconds = 24 * 3600
+
+    /// 1 = the scan asks the server for `OfficialRating` and `CommunityRating` (#204). A snapshot
+    /// without it was read by a request that Emby 4.10 answered without either, so none of its
+    /// titles carries a certificate or a star rating.
+    static let scanFieldsVersion = 1
+
+    /// True when a snapshot has to be refreshed because the scan that made it did not ask for the
+    /// rating fields and this backend does not send them unasked. Emby only: Jellyfin sent both
+    /// anyway and Plex always has. Refreshing is a scan, so it is done once: a scan stamps the
+    /// current version, and so does the snapshot saved after it.
+    static func scanNeedsRatingFields(backend: MediaBackendKind, savedVersion: Int?) -> Bool {
+        backend == .emby && (savedVersion ?? 0) < scanFieldsVersion
+    }
 
     /// Bump only when an older file can no longer decode or would decode into something
     /// wrong. A bump clears every user's snapshot and forces a full rescan on next launch.
@@ -238,6 +256,7 @@ enum LibrarySnapshotStore {
         let franchiseRows: [StoredFoundFranchise]
         let franchiseMovies: [[PlexMediaItem]]
         let franchiseTV: [[PlexMediaItem]]
+        let scanFieldsVersion: Int?
     }
 
     static func makePayload(
@@ -252,7 +271,8 @@ enum LibrarySnapshotStore {
         enabledBundleIDs: Set<String>,
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
-        foundFranchises: [FoundFranchise] = []
+        foundFranchises: [FoundFranchise] = [],
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion
     ) -> Payload {
         Payload(
             fingerprint: fingerprint(identity: identity),
@@ -274,7 +294,8 @@ enum LibrarySnapshotStore {
             collectionItems: discoveredCollections.map(\.items),
             franchiseRows: foundFranchises.map { StoredFoundFranchise.from($0, includeItemKeys: false) },
             franchiseMovies: foundFranchises.map(\.movies),
-            franchiseTV: foundFranchises.map(\.tvItems)
+            franchiseTV: foundFranchises.map(\.tvItems),
+            scanFieldsVersion: scanFieldsVersion
         )
     }
 
@@ -306,14 +327,15 @@ enum LibrarySnapshotStore {
         enabledBundleIDs: Set<String>,
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
-        foundFranchises: [FoundFranchise] = []
+        foundFranchises: [FoundFranchise] = [],
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion
     ) throws {
         let payload = makePayload(
             identity: identity, serverName: serverName, librarySignature: librarySignature,
             lastLoadAtUnix: lastLoadAtUnix, allItems: allItems, channelConfigChannels: channelConfigChannels,
             allChannels: allChannels, bundles: bundles, enabledBundleIDs: enabledBundleIDs,
             exclusiveRules: exclusiveRules, discoveredCollections: discoveredCollections,
-            foundFranchises: foundFranchises)
+            foundFranchises: foundFranchises, scanFieldsVersion: scanFieldsVersion)
         let e = nextEpoch()
         try writeQueue.sync { try write(payload, epoch: e) }
     }
@@ -379,7 +401,8 @@ enum LibrarySnapshotStore {
             discoveredCollectionItems: p.collectionItems.map(indexes),
             foundFranchiseRows: p.franchiseRows,
             foundFranchiseMovieItems: p.franchiseMovies.map(indexes),
-            foundFranchiseTVItems: p.franchiseTV.map(indexes)
+            foundFranchiseTVItems: p.franchiseTV.map(indexes),
+            scanFieldsVersion: p.scanFieldsVersion
         )
         indexByID = [:]
         try autoreleasepool {
@@ -552,7 +575,8 @@ enum LibrarySnapshotStore {
             exclusiveRuleJSON: meta.exclusiveRuleJSON,
             discoveredCollectionRows: collectionRows,
             librarySignature: meta.librarySignature,
-            foundFranchiseRows: franchiseRows
+            foundFranchiseRows: franchiseRows,
+            scanFieldsVersion: meta.scanFieldsVersion
         )
     }
 

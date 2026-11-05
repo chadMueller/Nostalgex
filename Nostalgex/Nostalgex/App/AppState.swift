@@ -285,6 +285,9 @@ class AppState {
     var isLibraryStale: Bool = false
     /// Change signature of the library as of the last full scan; nil when unknown.
     var librarySignature: String?
+    /// The `LibrarySnapshotStore.scanFieldsVersion` of the request that read `allItems`: the
+    /// current one after a scan, the saved one after a restore. What the next snapshot writes.
+    var libraryScanFieldsVersion: Int?
     /// Last time the library was asked whether it changed, so the 15-minute tick does not
     /// re-ask every time once the 6h mark has passed.
     var lastLibraryCheckAtUnix: Int = 0

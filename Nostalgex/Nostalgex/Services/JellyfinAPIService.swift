@@ -213,7 +213,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 .init(name: "ParentId", value: parentId),
                 .init(name: "Recursive", value: "true"),
                 .init(name: "IncludeItemTypes", value: includeItemTypes),
-                .init(name: "Fields", value: "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData"),
+                .init(name: "Fields", value: Self.scanFields),
                 .init(name: "StartIndex", value: "\(start)"),
                 .init(name: "Limit", value: "\(Self.pageSize)"),
                 .init(name: "SortBy", value: "SortName"),
@@ -393,6 +393,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     }
 
     /// Jellyfin runtimes are in 100-ns ticks. 600,000,000 ticks == 1 minute.
+    /// What a library scan asks the server for, on Jellyfin and on Emby (which reads it from
+    /// here). Emby 4.10 leaves `OfficialRating` and `CommunityRating` out of an Items answer
+    /// unless they are named; Jellyfin 12.2 sends them anyway. Every channel rule that reads a
+    /// certificate or a star rating (kids channels, the 9 PM hold, the `ratingMin` gate) needs
+    /// them, so they are named for both (#204). The web tuner, the Roku and the Android app
+    /// send the same list.
+    static let scanFields = "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating"
+
     static func minutes(fromTicks ticks: Int64?) -> Int {
         guard let ticks else { return 0 }
         return Int(ticks / 600_000_000)

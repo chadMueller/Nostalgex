@@ -844,6 +844,7 @@ extension AppState {
         buildingBundleIDs = []
         discoveredCollections = []
         isLibraryStale = false
+        libraryScanFieldsVersion = nil
         // Today's schedules for the outgoing sign-in go with it. Computed before
         // clearCredentials resets the backend, or this would name the wrong directory.
         DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
