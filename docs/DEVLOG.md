@@ -3,6 +3,41 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (a docs page on how channels get sorted, I-045)
+
+**Shipped.** The new /how-channels-work page and the /support wording fix, on nostalgex.app.
+
+**Why.** Trello I-045. People keep asking why a title isn't on the channel they expected (I-004 had four askers,
+and there was a Reddit thread on Jellyfin). The only public answer was a short list on /support. 1.0.29's Settings
+now says which channels are missing and what each one looks for, but nothing says what to change on the server.
+
+**Changed.**
+- `how-channels-work.html` (new, /how-channels-work): the fields a server hands over that a channel reads (genres,
+  studio, content rating, year, star rating, title, the TMDB match), how a channel decides (ways in versus limits,
+  the seven locked genres), three worked examples from `channels.json` v50 (ROM COMS, DIZNEY TOONS, 90S SITCOMS),
+  collections and franchises, why a channel stays off the air, and the titles locked to a home channel. No
+  per-channel rule dump and no internal field names; CHANNELS.md is linked for anyone who wants the rules.
+- Wiring like the other doc pages: Vite input, `vercel.json` rewrite, sitemap, `llms.txt`, README help line.
+- `styles.css`: one block under `.page-howchannels`, built on the `.doc-*` layout from /support.
+- `support.html`: the channels section said a title has to clear every rule. It doesn't: a genre, studio,
+  keyword, network or title-list match each get a title in alone, and only the limits (years, ratings, runtime,
+  required and excluded genres) all have to pass. Reworded, with a link to the new page.
+
+**Checked.** Every claim on the page against `AppState+Channels.swift` (`filterItems`, the genre locks,
+`ExclusiveRule`, the `minItems` cut) and by running synthetic titles through `scripts/nostalgex-channel-filter.cjs`
+with the shipped `channels.json`: 98 checks, the examples above among them. Filter golden (148) and filter smoke
+(212) pass. `tuner-isolation --builds` (105 tuner files hash the same), the dist asset check, the leak guard and the
+generated-region checks pass. Headless Chrome at 1440 and 390 wide, night and day: no horizontal overflow, no
+console errors, the phone menu opens.
+
+**Open.** Two things the page deliberately doesn't say. The IMDb fallback for a missing star rating reads OMDb
+values, which the web tuner only has when an Apple TV already wrote them to the shared cache, so the page says
+"when it has one". And the Apple TV missing-channels card says "Plex star rating" for every server, where
+Jellyfin and Emby read Community Rating.
+
+**Next.** Nothing blocked. The "Plex star rating" wording on the Apple TV missing-channels card is a small copy
+fix for the next Apple TV build.
+
 ## 2026-11-04 (Roku: the loading screen holds the screensaver off; a paused app isn't a stalled server)
 
 **Why.** The 2026-11-04 entry on the Apple TV staying awake owed "one stick check of a long load under" the

@@ -226,7 +226,7 @@ Each film series in your library (Star Wars, Rocky, whatever you own) gets its o
 <a id="other-platforms"></a>
 - **Bugs and feature requests:** [GitHub Issues](https://github.com/chadMueller/Nostalgex/issues). Include your server (Plex, Jellyfin or Emby), its version, and your Apple TV model.
 - **Email:** support@nostalgex.app
-- **Help pages:** [support](https://www.nostalgex.app/support), [Docker container guide](https://www.nostalgex.app/self-host) and [docs/FAQ.md](docs/FAQ.md).
+- **Help pages:** [support](https://www.nostalgex.app/support), [how channels get sorted](https://www.nostalgex.app/how-channels-work), [Docker container guide](https://www.nostalgex.app/self-host) and [docs/FAQ.md](docs/FAQ.md).
 
 **Other devices:** a Roku port by [tydude001](https://github.com/tydude001) is in the works ([discussion #8](https://github.com/chadMueller/Nostalgex/discussions/8)); it installs by sideloading for now. A Fire TV fork by [WSINTRA](https://github.com/WSINTRA) exists; it's unofficial and I don't support it. For a supported option on a TV today, use the Apple TV app, or the Docker container in a TV browser.
 

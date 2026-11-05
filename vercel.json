@@ -30,6 +30,7 @@
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/support", "destination": "/support.html" },
+    { "source": "/how-channels-work", "destination": "/how-channels-work.html" },
     { "source": "/self-host", "destination": "/self-host.html" },
     { "source": "/apple-tv", "destination": "/apple-tv.html" },
     { "source": "/web-tuner", "destination": "/web-tuner.html" },
