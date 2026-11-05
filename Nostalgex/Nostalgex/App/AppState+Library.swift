@@ -165,6 +165,7 @@ extension AppState {
         // and abandon this one on its first poll.
         loadCancelRequested = false
         isLoadStalling = false
+        lostSectionsLastLoad = []
 
         if isBackground {
             isBackgroundRefreshing = true
@@ -302,6 +303,12 @@ extension AppState {
                     if !interrupted.partialItems.isEmpty { successCount += 1 }
                     scanWasAbandoned = true
                     lastError = interrupted
+                    if !interrupted.failedSections.isEmpty {
+                        // Not a cancel: these sections' requests failed for good. The guide is
+                        // built from the rest, and the report says which ones are missing.
+                        lostSectionsLastLoad += interrupted.failedSections.map { multiServer ? "\(serverLabel): \($0)" : $0 }
+                        InstallDiagnostics.note("LOAD: server '\(serverLabel)' lost section(s) \(interrupted.failedSections.joined(separator: ", ")), kept \(interrupted.partialItems.count) items from the others")
+                    }
                 } catch let stalled as LibraryLoadStalled {
                     print("[Plex90] LOAD: server '\(serverLabel)' stalled (userInitiated=\(stalled.userInitiated))")
                     scanWasAbandoned = true
@@ -326,7 +333,7 @@ extension AppState {
                 // Distinguish "user tapped stop waiting" from "watchdog gave up" so the
                 // dashboard can tell frustration from unreliability.
                 let userInitiated = (lastError as? LibraryLoadStalled)?.userInitiated == true
-                    || (lastError as? LibraryScanInterrupted) != nil
+                    || (lastError as? LibraryScanInterrupted).map({ $0.failedSections.isEmpty }) == true
                 Analytics.track(.libraryLoadAbandoned(
                     background: isBackground,
                     itemsFound: merged.count,
@@ -531,7 +538,7 @@ extension AppState {
                 Analytics.track(.libraryRefreshBackgroundFailed(reason: reason))
             } else {
                 Analytics.track(.libraryLoadFailed(reason: reason, background: false))
-                errorMessage = Self.userFacingLoadLibraryError(error, backend: backendKind)
+                errorMessage = Self.userFacingLoadLibraryError(error, backend: backendKind, serverURL: serverURL)
                 let host = URL(string: serverURL)?.host ?? "?"
                 if let stalled = error as? LibraryLoadStalled {
                     lastFailureDiagnostic = "\(host) · stalled \(Int(stalled.secondsWithoutProgress))s"

@@ -611,7 +611,10 @@ extension AppState {
         }
     }
 
-    static func userFacingLoadLibraryError(_ error: Error, backend: MediaBackendKind = .plex) -> String {
+    /// `serverURL` is the address the load used: the message names the viewer's own network
+    /// only for a server that is on it. A remote server (or an address that isn't known) is
+    /// told to check the server, not the Apple TV's network.
+    static func userFacingLoadLibraryError(_ error: Error, backend: MediaBackendKind = .plex, serverURL: String = "") -> String {
         if let apiErr = error as? PlexAPIService.APIError {
             return userFacingPlexAPIServiceError(apiErr, backend: backend)
         }
@@ -632,7 +635,12 @@ extension AppState {
             case .timedOut:
                 return "Timed out loading your library. Large libraries can need a second attempt, so press RETRY. If it keeps timing out, use Settings to pick a closer server address."
             case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost:
-                return "Can't reach the server address saved on this device. Open Settings and reconnect while on the same network as your server."
+                if PlexAPIService.isLikelyLocalAddress(serverURL) {
+                    return "Can't reach the server address saved on this device. Open Settings and reconnect while on the same network as your server."
+                }
+                return urlErr.code == .networkConnectionLost
+                    ? "The connection to your server dropped while the library was loading. Check that the server is online, then Retry."
+                    : "Can't reach your server from here. Check that it is online and that remote access is turned on, then Retry."
             case .notConnectedToInternet:
                 return "No internet connection. Check Wi‑Fi, then Retry."
             case .cancelled:

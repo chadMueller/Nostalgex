@@ -223,6 +223,7 @@ struct PlexAPIService: MediaBackend {
         print("[Plex90] LINK: probe \(String(format: "%.2f", probeSeconds))s -> \(isSlowLink ? "slow" : "normal"), page size \(pageSize)")
 
         var allItems: [PlexMediaItem] = []
+        var failures = SectionFailures(backend: "Plex90")
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
                 sectionIndex: i,
@@ -254,6 +255,8 @@ struct PlexAPIService: MediaBackend {
                 if Task.isCancelled, !allItems.isEmpty {
                     throw LibraryScanInterrupted(partialItems: allItems)
                 }
+                // A section that fails for good costs that section, not the scan.
+                if failures.absorb(error, section: section.title) { continue }
                 throw error
             }
             allItems.append(contentsOf: items)
@@ -265,6 +268,7 @@ struct PlexAPIService: MediaBackend {
                 throw LibraryScanInterrupted(partialItems: allItems)
             }
         }
+        try failures.finish(items: allItems)
         return allItems
     }
 
@@ -643,8 +647,12 @@ struct PlexAPIService: MediaBackend {
     /// still shows a private address in the host. A private/link-local address means there
     /// is effectively unlimited bandwidth and no reason to cap direct play; anything else
     /// (public address or relay) is treated as remote.
-    var isLikelyLocalServer: Bool {
-        guard let host = URL(string: serverURL)?.host?.lowercased() else { return false }
+    var isLikelyLocalServer: Bool { Self.isLikelyLocalAddress(serverURL) }
+
+    /// The same test for any server address (the load error message names the network only
+    /// when the server is on it).
+    static func isLikelyLocalAddress(_ address: String) -> Bool {
+        guard let host = URL(string: address)?.host?.lowercased() else { return false }
         if host == "localhost" || host.hasSuffix(".local") { return true }
         // plex.direct encodes the address with dashes: 192-168-1-50.abc.plex.direct
         let normalized = host.replacingOccurrences(of: "-", with: ".")

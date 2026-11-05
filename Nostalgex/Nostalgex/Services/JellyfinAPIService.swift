@@ -132,6 +132,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         // and discarded.
         let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
         var allItems: [PlexMediaItem] = []
+        var failures = SectionFailures(backend: "Jellyfin")
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
                 sectionIndex: i, totalSections: sections.count,
@@ -174,6 +175,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 if Task.isCancelled, !allItems.isEmpty {
                     throw LibraryScanInterrupted(partialItems: allItems)
                 }
+                // A section that fails for good costs that section, not the scan (N-039).
+                if failures.absorb(error, section: section.title) { continue }
                 throw error
             }
             allItems.append(contentsOf: items)
@@ -185,6 +188,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 throw LibraryScanInterrupted(partialItems: allItems)
             }
         }
+        try failures.finish(items: allItems)
 
         // TMDB-manifest channels (franchises, anime, stand-up) only match when items carry
         // tmdbID. Log coverage so a low number flags a server whose metadata isn't scraped yet.

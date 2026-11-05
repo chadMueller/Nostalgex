@@ -138,6 +138,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         // and discarded.
         let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
         var allItems: [PlexMediaItem] = []
+        var failures = SectionFailures(backend: "Emby")
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
                 sectionIndex: i, totalSections: sections.count,
@@ -180,6 +181,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 if Task.isCancelled, !allItems.isEmpty {
                     throw LibraryScanInterrupted(partialItems: allItems)
                 }
+                // A section that fails for good costs that section, not the scan (N-039).
+                if failures.absorb(error, section: section.title) { continue }
                 throw error
             }
             allItems.append(contentsOf: items)
@@ -191,6 +194,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 throw LibraryScanInterrupted(partialItems: allItems)
             }
         }
+        try failures.finish(items: allItems)
 
         let withTmdb = allItems.filter { $0.tmdbID != nil }.count
         print("[Emby] LIBRARY: \(allItems.count) items, \(withTmdb) with tmdbID (\(allItems.isEmpty ? 0 : withTmdb * 100 / allItems.count)%)")
