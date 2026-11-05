@@ -3,6 +3,66 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: issue #146 second round, STOP WAITING on the first-run path, and what a big first load costs in memory)
+
+**Shipped.** Nothing yet. Branch `fix/first-load-memory` off main `5d880dd9`, for 1.0.30.
+
+**Why.** After 1.0.29 the reporter still reaches the Apple TV home screen: Plex 1.43.5, a remote server, a 105k-movie
+library that stalls, a 1k library that crashes too, stuck in onboarding. Later: every server worked when added on its
+own, "adding them all sequentially, during onboarding" may hit a memory limit.
+
+**Looked for a crash log first.** App Store Connect has none: 0 TestFlight crash submissions, no hang or launch
+diagnostics for 1.0.29 (53) or 52. Production crashes are Xcode Organizer only, not in the API.
+
+**Not reproduced (simulator).** `StopWaitingFirstRunHarnessTests` drives the first run the way the app takes it
+(`confirmServerSelection`, the section list, `confirmLibrarySelection`, then the scan) with `RootView` mounted, against
+a fake remote Plex whose sections never answer, stall mid-body, trickle, or drop the connection (the retry ladder runs),
+with and without the slow-link page size, 1k to 105k movies, one or two servers, STOP WAITING pressed in onboarding, right
+after confirming, at random moments, on a faulted section, whenever the scan sits still, repeatedly while the guide is
+built, and from the real button after a minute of quiet. 96 iterations plus the four-server runs below: no crash, no
+crash report. The simulator does not kill an app for memory, which is the one thing it cannot show.
+
+**The three 105k "hangs" were a slow build, not a stuck press.** The same iteration run alone with a 25-minute limit
+finished in 229 s (105,500 items, the channel build at about 0.7 channels a second). The 85 s limit was the bug.
+
+**The eight error-screen loads in the first 40-iteration run.** Five are the designed ending: nothing had come back
+before the press, so "Stopped waiting. Nothing had come back from your server". Three are different (iterations 2, 26,
+27): a connection dropped mid-section (`reset`), the retry ladder ran out, and the whole server's scan was thrown away,
+four finished sections included, with "Can't reach the server address saved on this device. Open Settings and reconnect
+while on the same network as your server." Only a cancellation keeps partial results (PlexAPIService.swift, the catch in
+`loadLibrary`); a transport error after the retries drops everything read so far, and the message tells a remote
+viewer to move to their own network. Not changed here. Not the crash.
+
+**Memory, the reporter's second message.** `testMultiServerOnboardingMemory`: four servers (105k, 50k, 10k, 10k movies)
+in one onboarding, a realistic library (titles, genres and studios the channel rules match), process footprint sampled
+every 0.25 s. Scanning does not accumulate: peaks 508, 535, 557, 571 MB, growing only by the items (the baseline of 296 MB
+is the test's own fixture). The channel build is where it goes: peak 1,282 MB, about 986 MB above baseline, 337 s.
+Inside it: the music-cache step makes a second full copy of every item (+99 MB) that the local `merged` in `loadLibrary`
+then keeps alive to the end of the load; the filter cache copies every item again (+172 MB); and the pools hold whole
+592-byte items by value: 91 channels, 573,333 items in 800,305 slots (451 MB allocated, 323 MB used), while the guide
+shows 13 channels with 77,270 pooled items, so about 87% of the pooled items belong to channels nobody is watching.
+`compactMap` grows its result in steps (1,328, 5,313, 21,254, 85,019 slots for items this size), so a pool just past a
+step carries up to four times what it uses. A single 105k server on the plainer fixture peaked at 589 MB. Where the
+tvOS limit sits for each model is not something the simulator or any file here tells; the TV's own
+`os_proc_available_memory()` does, and the cold harness already logs it.
+
+**Changed.**
+- `loadLibrary` drops `merged` after its last use, so the pre-music-cache list is freed when `applyMusicCacheToLibrary`
+  replaces it (the music-cache step: 596 MB after, 694 MB before).
+- `AppState.trimmed`: `filterItems` hands back a pool with no more slots than it needs (within an eighth); one exact-fit
+  copy per pool that has more.
+- Same four-server run after: peak 1,164 MB (-118 MB), pools 588,320 slots / 332 MB allocated (-119 MB), load end 981 MB
+  (-104 MB). What is held once the load has settled barely moves (966 MB vs 977 MB): freed pages stay in the process.
+- `FirstLoadMemoryTests` (2): a 5,400-item pool had 10,627 slots on main; it fails there and passes now.
+- `StopWaitingFirstRunHarnessTests` (opt-in, 2 tests): the soak and the memory run.
+- NostalgexTests: 1,107 tests, 1,079 passed, 0 failed, 28 skipped (the two new opt-in tests).
+
+**Not shown.** That memory is what takes the reporter's app down. It fits (the sum of their servers, a kill on STOP
+WAITING because that is when the build starts, individual servers fine) and is not proven: no crash log, no device
+run, model unknown. The cut here is about 10% of the peak; it does not change the order of magnitude. The bigger ones:
+build and keep pools only for channels in enabled bundles, and pools that hold indexes instead of items. Both touch what
+the schedule and the guide read, so they are a decision, not a drive-by.
+
 ## 2026-11-04 (Apple TV: a section that fails for good no longer takes the scan with it; Jellyfin and Emby too)
 
 **Shipped.** Nothing yet. Branch `fix/scan-keeps-sections` off main `9e2c945d`, for 1.0.30 (issue #146 follow-up, Trello N-039).
