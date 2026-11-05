@@ -77,6 +77,7 @@
     "test:jellyfin-urls": "node scripts/nostalgex-jellyfin-urls-smoke.mjs",
     "test:jellyfin-quick-connect": "node scripts/nostalgex-jellyfin-quick-connect-smoke.mjs",
     "test:signin": "node scripts/nostalgex-signin-smoke.mjs",
+    "test:deezer-csp": "node scripts/deezer-csp-browser-smoke.mjs",
     "test:tuner-isolation": "node scripts/tuner-isolation-check.mjs",
     "test:tuner-isolation:builds": "node scripts/tuner-isolation-check.mjs --builds",
     "test:jellyfin-subtitles": "node scripts/nostalgex-jellyfin-subtitles-smoke.mjs",
