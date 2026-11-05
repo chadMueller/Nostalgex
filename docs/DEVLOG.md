@@ -38,8 +38,15 @@ behind the guide (Emby for the missing ratings, Jellyfin and Emby for playlists 
   `scripts/release-tvos.sh` do. Version 1.0.30, build 54 on the app and TopShelf; ASC's highest uploaded build was 53.
   Entitlements on the app: iCloud key-value store `KK5V95295A.com.muellhaus.nostalgex`, app group
   `group.com.muellhaus.nostalgex`, `get-task-allow` 0; TopShelf has the app group and `get-task-allow` 0. Bundled
-  channels.json v50, memberships and franchises identical to the repo. TelemetryDeck, Supabase URL and anon key are in the
-  Info.plist. `altool --validate-app`: VERIFY SUCCEEDED with no errors. IPA `7ae6903a9ab1cf5e1d2641e8add8a922`, 6,754,608 bytes.
+  channels.json v50, memberships and franchises identical to the repo. The Supabase URL, the anon key and the TelemetryDeck id are non-empty in the
+  Info.plist (lengths checked, values not printed). `altool --validate-app`: VERIFY SUCCEEDED with no errors. IPA `348e9842dc17c2764f32cf322be55a85`, 6,754,831 bytes.
+
+**A miss, caught and fixed.** The first archive (md5 `7ae6903a...`) had EMPTY `SupabaseURL` and `SupabaseAnonKey`. The keys come from
+the gitignored `Nostalgex/Secrets.xcconfig`, a fresh worktree does not have it, and `Config.xcconfig` falls back to empty strings so the
+build is green and the enrichment layer is silently off (`[Enrichment] Skipping: missing supabase url, anon key` in the console of the
+Debug build put on the living room TV). That would have shipped a TestFlight build with no TMDB enrichment, which is the 50 of 142
+channels of #185. The check had printed `<set>` for every key whatever its value. Rebuilt with `Secrets.xcconfig` copied in; the
+new IPA's lengths are 40, 208 and 36. `scripts/release-tvos.sh` now stops when any of the three is empty after the archive.
 
 **Open.** Not uploaded, not tagged, not pushed. Nothing here has run on a real Apple TV: the simulator and loopback servers
 only. The Emby, Jellyfin and playlist fixes are not measured on a real server.
