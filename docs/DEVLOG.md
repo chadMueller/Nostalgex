@@ -24,6 +24,108 @@ tunes, 10 hand-overs, no card. This branch, 40 s: 9 tunes and four cards, "1 in 
 **Open.** Jellyfin and Emby go another way (the stream ends unplayed, then the server's 200 is read as a
 short file's end), a second PR per Chad on #184, with the same 40 s check on a TV.
 
+## 2026-11-04 (Web tuner: every Plex list request sends X-Plex-Container-Size, and long lists are read whole)
+
+**Why.** A Plex server log from a Roku first load said "Missing X-Plex-Container-Size header, will fail with
+status 400 in the future" (Trello N-038, Roku issue #189). The web tuner sent no size on four Plex list reads:
+`/library/sections`, `/library/sections/{key}/collections`, `/library/collections/{id}/children` and
+`/library/metadata/{id}/allLeaves` (every show's episodes). Only the paged section fetch did. Measured with a fake
+Plex that answers 400 to a list request with no size: `main` loads nothing at all from it, the first request
+(`/library/sections`) is refused and the library never loads. So the day Plex starts refusing, the web tuner and
+the Docker image stop at the first request. A size alone is not the fix: Plex answers it with the first window
+only, and a collection of 650 films would come back as 300.
+
+**Changed.**
+- `scripts/nostalgex-collections.js`: `fetchPlexPaged` reads a Plex list in windows of 300 until `totalSize`, or
+  until the first short page when the server sends no total. The next window starts where the last one ended, so a
+  server that caps the window below 300 loses nothing. A server that ignores the window ends the walk instead of
+  looping. A failed window throws, so a caller never keeps half a list: a half-read collection is dropped, as a
+  failed one already was. The window travels as the second argument of the caller's getter
+  (`getJSON(path, { start, size })`, turned into the request by `plexWindowPath`), so the path the engine asks for
+  is still the bare endpoint. The Roku golden vectors (`roku/tests/gen-collections.mjs`) record those paths and are
+  unchanged.
+- `plex-tuner.html`: the section list, each show's episode list and the collection scan page through it. The
+  episode list now checks the HTTP status before it parses, as the other reads do.
+- `scripts/nostalgex-plex-paging-smoke.mjs` (`npm run test:plex-paging`, in `npm test`): the fetchers against a fake
+  Plex that refuses a list with no size and returns only the window asked for, in four server shapes (totalSize
+  sent, left out, window capped at 100, window ignored), plus a failed second window and a 750-episode show, and a
+  read of `plex-tuner.html` that every getter sends the window. 33 checks pass here; run against `main`'s code 24
+  fail (and 5 pass). A version that sends the size and never pages fails 12.
+- `scripts/plex-container-size-browser-smoke.mjs` (`npm run test:plex-container-size`, headless, not in `npm test`
+  like the other browser smokes): the real page against the same kind of server. 7 of 8 checks fail on `main`, all
+  8 pass here: 13 list requests, none without a size, the 750-episode show in three windows, the 650-film
+  collection whole.
+
+**Open.** Not run against a real Plex server: the window parameters are the ones the section fetch has always
+sent, but no real server has been asked for `/library/sections` or `allLeaves` with them from this change. Which of
+the four endpoints Plex warns about is also unknown; all four now send a size. Roku (#189) and the Apple TV
+(`PlexAPIService.loadCollections`, `loadCollectionItems`) still send none. The engine change is the web side only.
+
+## 2026-11-04 (Web tuner: the Deezer genre lookup was blocked by the site CSP; one-source fix)
+
+**Why.** Found by reading the code on 2026-10-26 (Trello N-012), confirmed today. `scripts/nostalgex-music-brainz.js`
+asks Deezer for music video genres by JSONP, because api.deezer.com sends no CORS headers: it adds a
+`<script src="https://api.deezer.com/...?callback=...">`. That load is governed by `script-src`, and `vercel.json`
+allowed only `'self'`, `'unsafe-inline'`, `cdn.jsdelivr.net` and `statsngraphs.lol`.
+
+**Measured** with headless Chromium, calling `NostalgexMusicBrainz.deezerResolve("Smells Like Teen Spirit",
+"Nirvana")` on the live `https://nostalgex.app/plex-tuner`: the browser refuses the script (a `script-src-elem`
+violation on `https://api.deezer.com/search`), and the call rejects with "Deezer script error" after 4 ms. The same
+page with the CSP header removed in flight resolves in 822 ms with the album genre (Rock) and year. A local copy
+served with `vercel.json`'s header behaves like the live page; with `https://api.deezer.com` added to `script-src`
+it resolves. The live header and `vercel.json` match.
+
+**Changed.**
+- `vercel.json`: `https://api.deezer.com` added to `script-src`. It is the site-wide header (`/(.*)`), so it also
+  applies to the marketing pages.
+- `scripts/tuner-isolation-check.mjs`: the CSP check now lists `https://api.deezer.com` among what the tuner needs,
+  so a later edit cannot drop it unnoticed.
+- `scripts/deezer-csp-browser-smoke.mjs` (`npm run test:deezer-csp`, headless): the real page with the CSP read
+  from `vercel.json`, Deezer answered by a stub, so no network. 3 of its 6 checks fail on `main`'s header, all 6
+  pass with the change; a header without the host is refused, which is the negative control.
+
+**Docker is not affected.** The image sets `<meta name="nostalgex-build" content="selfhost">`, so `lookupsEnabled()` is
+false and `deezerJSONP` rejects before it makes a script. Its nginx CSP never listed Deezer and does not need to.
+
+**Open.** A failed lookup is cached as checked: `withDeezerGenres` stamps `deezerCheckedAt` even when Deezer threw,
+and `isSettled` counts that as done until the entry is 90 days old. After the header changes, music videos a browser
+already tried will not ask Deezer again on their own. That needs its own change (stamp only on an answer).
+
+## 2026-11-04 (a docs page on how channels get sorted, I-045)
+
+**Shipped.** The new /how-channels-work page and the /support wording fix, on nostalgex.app.
+
+**Why.** Trello I-045. People keep asking why a title isn't on the channel they expected (I-004 had four askers,
+and there was a Reddit thread on Jellyfin). The only public answer was a short list on /support. 1.0.29's Settings
+now says which channels are missing and what each one looks for, but nothing says what to change on the server.
+
+**Changed.**
+- `how-channels-work.html` (new, /how-channels-work): the fields a server hands over that a channel reads (genres,
+  studio, content rating, year, star rating, title, the TMDB match), how a channel decides (ways in versus limits,
+  the seven locked genres), three worked examples from `channels.json` v50 (ROM COMS, DIZNEY TOONS, 90S SITCOMS),
+  collections and franchises, why a channel stays off the air, and the titles locked to a home channel. No
+  per-channel rule dump and no internal field names; CHANNELS.md is linked for anyone who wants the rules.
+- Wiring like the other doc pages: Vite input, `vercel.json` rewrite, sitemap, `llms.txt`, README help line.
+- `styles.css`: one block under `.page-howchannels`, built on the `.doc-*` layout from /support.
+- `support.html`: the channels section said a title has to clear every rule. It doesn't: a genre, studio,
+  keyword, network or title-list match each get a title in alone, and only the limits (years, ratings, runtime,
+  required and excluded genres) all have to pass. Reworded, with a link to the new page.
+
+**Checked.** Every claim on the page against `AppState+Channels.swift` (`filterItems`, the genre locks,
+`ExclusiveRule`, the `minItems` cut) and by running synthetic titles through `scripts/nostalgex-channel-filter.cjs`
+with the shipped `channels.json`: 98 checks, the examples above among them. Filter golden (148) and filter smoke
+(212) pass. `tuner-isolation --builds` (105 tuner files hash the same), the dist asset check, the leak guard and the
+generated-region checks pass. Headless Chrome at 1440 and 390 wide, night and day: no horizontal overflow, no
+console errors, the phone menu opens.
+
+**Open.** Two things the page deliberately doesn't say. The IMDb fallback for a missing star rating reads OMDb
+values, which the web tuner only has when an Apple TV already wrote them to the shared cache, so the page says
+"when it has one". And the Apple TV missing-channels card says "Plex star rating" for every server, where
+Jellyfin and Emby read Community Rating.
+
+**Next.** Nothing blocked. The "Plex star rating" wording on the Apple TV missing-channels card is a small copy
+fix for the next Apple TV build.
+
 ## 2026-11-04 (Roku: the loading screen holds the screensaver off; a paused app isn't a stalled server)
 
 **Why.** The 2026-11-04 entry on the Apple TV staying awake owed "one stick check of a long load under" the
