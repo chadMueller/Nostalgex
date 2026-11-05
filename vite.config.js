@@ -130,6 +130,7 @@ export default defineConfig(({ mode }) => {
           privacy: resolve(__dirname, 'privacy.html'),
           terms: resolve(__dirname, 'terms.html'),
           support: resolve(__dirname, 'support.html'),
+          'how-channels-work': resolve(__dirname, 'how-channels-work.html'),
           'self-host': resolve(__dirname, 'self-host.html'),
           plex: resolve(__dirname, 'plex.html'),
           jellyfin: resolve(__dirname, 'jellyfin.html'),

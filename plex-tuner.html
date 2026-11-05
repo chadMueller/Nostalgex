@@ -9333,7 +9333,7 @@
       for (const server of servers) {
         const serverKey = server.machineIdentifier || 'plex';
         try {
-          const list = await CL.fetchPlexCollections(serverKey, (path) => plexLibraryFetchForServer(path, server), progress);
+          const list = await CL.fetchPlexCollections(serverKey, (path, win) => plexLibraryFetchForServer(CL.plexWindowPath(path, win), server), progress);
           found = found.concat(list);
           anyOK = true;
         } catch (err) {
@@ -9930,8 +9930,10 @@
 
   // Scan one Plex server and return its items, each tagged with serverUrl + serverToken.
   async function scanOnePlexServer(server, LL, baseItemCount, multiServer) {
-    const sectionsData = await plexLibraryFetchForServer('/library/sections', server);
-    const sections = sectionsData.MediaContainer.Directory || [];
+    // Sends X-Plex-Container-Size like the section pages below (Trello N-038); the helper pages.
+    const NC = globalThis.NostalgexCollections;
+    const sections = await NC.fetchPlexPaged(
+      (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
     const serverPrefix = multiServer ? `${server.name} · ` : '';
 
     LL.state.scanTotalSections = sections.length;
@@ -9970,11 +9972,14 @@
                 const showTmdb = channelFilter() ? channelFilter().parseTmdbIdFromPlex(show, false) : null;
 
                 try {
-                  const epRes = await fetch(`${server.url}/library/metadata/${show.ratingKey}/allLeaves`, {
-                    headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
-                  });
-                  const epData = await NostalgexUTF8Repair.json(epRes, `allLeaves ${show.ratingKey}`);
-                  const episodes = epData.MediaContainer.Metadata || [];
+                  // Paged, so a long show is read whole and Plex gets the size header (N-038).
+                  const episodes = await NC.fetchPlexPaged(async (path, win) => {
+                    const epRes = await fetch(`${server.url}${NC.plexWindowPath(path, win)}`, {
+                      headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+                    });
+                    if (!epRes.ok) throw new Error(`allLeaves ${show.ratingKey} returned HTTP ${epRes.status}`);
+                    return NostalgexUTF8Repair.json(epRes, `allLeaves ${show.ratingKey}`);
+                  }, `/library/metadata/${show.ratingKey}/allLeaves`, 'Metadata');
 
                   return episodes.map(ep => {
                     const durationMin = NostalgexDailyManifest.minutesFromPlexMs(ep.duration);

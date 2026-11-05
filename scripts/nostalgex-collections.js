@@ -674,19 +674,87 @@
     return out;
   }
 
+  // Plex list endpoints take their window as X-Plex-Container-Start and X-Plex-Container-Size.
+  // A request with no size makes Plex log "Missing X-Plex-Container-Size header, will fail with
+  // status 400 in the future" (Trello N-038). A size alone would cut a long list off at the
+  // first window, so every Plex list is read through fetchPlexPaged.
+  //
+  // The window travels beside the path, not inside it: `getJSON(path, { start, size })`. The
+  // getter turns it into the request with plexWindowPath. That keeps `path` the bare endpoint,
+  // which is what the Roku golden vectors (roku/tests/gen-collections.mjs) record and compare.
+  const PLEX_PAGE_SIZE = 300;
+  // A server that ignores the window and keeps answering with the same full page cannot loop
+  // forever: a page with nothing new in it ends the walk, and so does this many pages
+  // (60,000 entries).
+  const PLEX_MAX_PAGES = 200;
+
   /**
-   * Plex. `getJSON(path)` fetches one server path and returns parsed JSON.
+   * `path` with the window as query parameters, the way fetchSectionItemsPaged in plex-tuner.html
+   * and PlexAPIService.fetchSectionItemsPaged send it (a query string keeps the request free of
+   * extra CORS headers). Without a window the path comes back as it was.
+   */
+  function plexWindowPath(path, win) {
+    if (!win) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}X-Plex-Container-Start=${win.start}&X-Plex-Container-Size=${win.size}`;
+  }
+
+  /**
+   * Every entry of one Plex list endpoint, read in windows. `getJSON(path, { start, size })`
+   * returns the parsed JSON and must send the window (plexWindowPath); `listKey` is the array on
+   * the MediaContainer ('Metadata' for items, 'Directory' for library sections). The walk ends at
+   * `totalSize`, or at the first short page when the server sends no total. A failed page
+   * throws, so a caller never holds half a list.
+   */
+  async function fetchPlexPaged(getJSON, path, listKey, pageSize = PLEX_PAGE_SIZE) {
+    const all = [];
+    const earlier = new Set();
+    let start = 0;
+    for (let n = 0; n < PLEX_MAX_PAGES; n++) {
+      const data = await getJSON(path, { start, size: pageSize });
+      const container = (data && data.MediaContainer) || {};
+      const page = Array.isArray(container[listKey]) ? container[listKey] : [];
+      const idOf = (entry) => {
+        const id = entry && (entry.ratingKey != null ? entry.ratingKey : entry.key);
+        return id == null ? null : String(id);
+      };
+      // The first page is kept as the server sent it. Later pages drop what an earlier page
+      // already gave, so a server that ignores `start` adds nothing and the walk ends.
+      const fresh = n === 0 ? page : page.filter((entry) => {
+        const id = idOf(entry);
+        return id == null || !earlier.has(id);
+      });
+      for (const entry of page) {
+        const id = idOf(entry);
+        if (id != null) earlier.add(id);
+      }
+      all.push(...fresh);
+      if (page.length === 0 || fresh.length === 0) break;
+      const total = container.totalSize;
+      if (typeof total === 'number') {
+        if (start + page.length >= total) break;
+      } else if (page.length < pageSize) {
+        break;
+      }
+      // By what came back, not by what was asked: a server may cap the window below the size.
+      start += page.length;
+    }
+    return all;
+  }
+
+  /**
+   * Plex. `getJSON(path, window)` fetches one server path and returns parsed JSON; it sends the
+   * window with plexWindowPath (see fetchPlexPaged).
    * Returns [{ id, title, childKeys, serverKey }].
    */
   async function fetchPlexCollections(serverKey, getJSON, onProgress) {
-    const sections = ((await getJSON('/library/sections')).MediaContainer || {}).Directory || [];
+    const sections = await fetchPlexPaged(getJSON, '/library/sections', 'Directory');
     const list = [];
     const seen = new Set();
     // TV sections too: a Plex collection of shows lives in the TV library.
     for (const section of sections.filter((s) => s.type === 'movie' || s.type === 'show')) {
       try {
-        const data = await getJSON(`/library/sections/${section.key}/collections`);
-        for (const c of (data.MediaContainer || {}).Metadata || []) {
+        const found = await fetchPlexPaged(getJSON, `/library/sections/${section.key}/collections`, 'Metadata');
+        for (const c of found) {
           if (c && c.ratingKey != null && !seen.has(String(c.ratingKey))) {
             seen.add(String(c.ratingKey));
             list.push(c);
@@ -700,8 +768,8 @@
     const out = await mapLimit(list, 4, async (c) => {
       let childKeys = [];
       try {
-        const data = await getJSON(`/library/collections/${c.ratingKey}/children`);
-        childKeys = ((data.MediaContainer || {}).Metadata || []).map((m) => String(m.ratingKey));
+        const kids = await fetchPlexPaged(getJSON, `/library/collections/${c.ratingKey}/children`, 'Metadata');
+        childKeys = kids.map((m) => String(m.ratingKey));
       } catch (err) {
         childKeys = null;
       }
@@ -775,6 +843,9 @@
     buildCandidates,
     duplicateWarning,
     materialize,
+    PLEX_PAGE_SIZE,
+    plexWindowPath,
+    fetchPlexPaged,
     fetchPlexCollections,
     fetchBoxSetCollections,
   };
