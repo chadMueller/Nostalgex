@@ -3,6 +3,47 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Apple TV 1.0.30 (54): the TestFlight candidate, integrated, archived, validated, not uploaded)
+
+**Shipped.** Nothing. Branch `integrate/1030-testflight` (not pushed), archived from `45ec480a`. The IPA is validated and
+waits on Chad's go for the upload.
+
+**What is in it.** origin/main `2fb4625f` (which already carried I-073 the enrichment cache, N-033 the TV staying awake and the
+cold Plex harness, harness isolation, AUDIO LANGUAGE on transcodes, Music Videos on Jellyfin and Emby, the Plex discovery
+grace window, the forced-subtitle probe, the cross-channel pack, TRUE CRIME and PREMIERES at three titles) plus, in this order:
+N-038 Plex collection container size; N-036 iCloud turn-on hold; N-039 a failed section no longer takes the scan (with the
+#146 round); #146 first-load memory; #204 Emby rating fields; Settings library counts; the rating hint and links
+(`appletv/rate-deeplink`); N-032 the FRANCHISES page greying; and, as its own commit, the Jellyfin and Emby playlist fix
+(#205, #206), with `scripts/jellyfin-library-golden.json` copied from `web/jellyfin-playlist-leak`.
+
+**Conflicts.** Only `docs/DEVLOG.md` (every branch adds an entry at the top; both kept) and the snapshot fields. The library
+counts branch and the Emby ratings branch each added an optional field to `LibrarySnapshotV1`, `LibrarySnapshotMetaV3`,
+`Payload`, `makePayload` and `save`, and to `AppState+Library.swift`'s save call. Both are kept, in one order everywhere
+(`scanFieldsVersion`, then `skippedNoRuntime`), because Swift's memberwise inits and labelled arguments are
+order-sensitive. Nothing else needed hand work.
+
+**One rule, not two.** `scanFieldsVersion` is now 2 and the saved-library refresh is `LibrarySnapshotStore.scanNeedsRefresh`:
+a Jellyfin or Emby snapshot with no number or a number under 2 restores, is stale, loses its signature and refreshes once
+behind the guide (Emby for the missing ratings, Jellyfin and Emby for playlists scanned as films). Plex never refreshes on it.
+
+**Checked.**
+- `SnapshotUpgradePathTests`: a library saved with both fields is made to look like 1.0.29's file (neither field). It
+  restores with every title and channel, `skippedNoRuntimeCount` reads 0, the scan version reads as the old one, the guide
+  is stale with no signature, a save before the refresh does not stamp it as new, the refresh stamps version 2 and counts
+  what it skipped, and the next launch is fresh and does not refresh again.
+- `JellyfinPlaylistLeakTests` failed before the port on both backends (nine non-film titles scanned and on channels) and
+  passes after; `JellyfinLibraryGoldenTests` holds the Swift side to the golden file.
+- Full NostalgexTests on `45ec480a`: 1,168 tests, 1,139 passed, 0 failed, 29 skipped (the opt-in harnesses).
+- Archive and export with automatic signing, `-allowProvisioningUpdates` and the API key (`BF3LR5NQQK`), as 1.0.29 and
+  `scripts/release-tvos.sh` do. Version 1.0.30, build 54 on the app and TopShelf; ASC's highest uploaded build was 53.
+  Entitlements on the app: iCloud key-value store `KK5V95295A.com.muellhaus.nostalgex`, app group
+  `group.com.muellhaus.nostalgex`, `get-task-allow` 0; TopShelf has the app group and `get-task-allow` 0. Bundled
+  channels.json v50, memberships and franchises identical to the repo. TelemetryDeck, Supabase URL and anon key are in the
+  Info.plist. `altool --validate-app`: VERIFY SUCCEEDED with no errors. IPA `7ae6903a9ab1cf5e1d2641e8add8a922`, 6,754,608 bytes.
+
+**Open.** Not uploaded, not tagged, not pushed. Nothing here has run on a real Apple TV: the simulator and loopback servers
+only. The Emby, Jellyfin and playlist fixes are not measured on a real server.
+
 ## 2026-11-05 (Apple TV: Jellyfin and Emby playlists, music and collections stay out of the guide, #205 #206)
 
 **Why.** A Jellyfin Playlists view answers any items request with its playlists (`PlaylistsFolder` overwrites
