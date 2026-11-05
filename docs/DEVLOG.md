@@ -3,6 +3,57 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Apple TV: the Emby scan asks for OfficialRating and CommunityRating, #204)
+
+**Why.** tydude001 measured it on Emby 4.10.1.0: an Items answer carries neither `OfficialRating` nor `CommunityRating`
+unless `Fields` names them (0 of 200 with the apps' list, 195 and 197 of 200 with them added). Jellyfin 12.2 sends both
+either way. The scan never named them, so on Emby every title read as unrated: SAT MORNING CARTOONS (allows unrated)
+aired South Park and Family Guy, VHS VAULT's 9 PM hold held nothing, WATERSHED held nothing, and the 13 `ratingMin`
+channels saw no star rating. The old comment at `AppState+Channels.swift` blamed the server ("CommunityRating came back
+null for 100% of a 500-title sample"); it was the request.
+
+**Changed.**
+- One list, `JellyfinAPIService.scanFields`, now ends `...,UserData,OfficialRating,CommunityRating` and both services
+  use it. Every title read goes through `fetchAllItems` (sections, series, each show's episodes, collection members), so
+  this is the only request that changed. Collections ask `Fields=ChildCount` for BoxSets and need nothing. Episodes take
+  the show's certificate and score (`show.OfficialRating ?? ep.OfficialRating`, `show.CommunityRating`), so the series
+  request is the one that matters for TV.
+- Jellyfin gets the names too, one shared list. Jellyfin's `ItemFields` has no `OfficialRating` or `CommunityRating`
+  value, and the scan has always sent `UserData`, which it does not have either, so unknown names are already tolerated;
+  tydude's run on 12.2.0 with the field added read the same 196 of 200. Not measured on an older Jellyfin.
+- A library saved before this has no ratings on any Emby title, and `shouldSkipRefresh` holds a rescan for up to 24 hours
+  while the server says nothing changed. The snapshot now carries `scanFieldsVersion` (optional, so an older file reads as
+  none); on Emby a restore of one older than 1 is marked stale and loses its signature, so the background refresh that
+  already runs after a stale restore scans. The guide comes up from the snapshot first, as it does now. Jellyfin and Plex
+  are untouched. `libraryScanFieldsVersion` tracks what is in memory, so a save before the refresh finishes does not stamp
+  old items as new.
+- The `ratingMin` comment now says what happened. The OMDb fallback stays: it is an alternative to the native rating
+  (`nativeOk || omdbOk`), so a native rating can only add titles, and titles the server gives no score (3 of 200 on tydude's
+  Emby) and Plex titles with none still need it.
+
+**Checked.** `EmbyRatingFieldsTests` (10) runs the real Emby and Jellyfin scan against a loopback server that answers as
+Emby 4.10 does (a rating is in an item only when `Fields` names it), then the app's own stock pool build. Fails on the old
+request (7 of 10: TV-MA on SAT MORNING CARTOONS, R titles in VHS VAULT at 3 PM, certificates and scores unread, WATERSHED
+and ratingMin channels empty), passes on the new one. Full suite: 1,113 tests, 1,087 passed, 0 failed, 26 skipped.
+
+**Effect on what an existing Emby user sees,** measured on a synthetic library (400 films, 25 shows, certificates and
+scores spread like a real one, cold enrichment) read with the fields withheld and then asked for:
+- the 12 `ratingMin` channels that the test library can fill go from 0 titles (no OMDb data) to 15 to 81 each; with OMDb
+  data in, the fallback was already filling some, and the result can only be larger than before;
+- SAT MORNING CARTOONS, AFTER SCHOOL TV, 80S AFTER SCHOOL TV, RETRO TOONS, Y2K TOONS, FAMILY HOUR, FAMILY TV and ANIMATION
+  lose their TV-14, TV-MA, R and unrated-adult titles: 42 to 0, 56 to 28, 42 to 14, 21 to 5, 14 to 0, 75 to 46, 14 to 0,
+  32 to 25. A kids channel with too few real kids' shows falls under its minimum and leaves the guide (SAT MORNING CARTOONS,
+  FAMILY TV, Y2K TOONS here);
+- R RATED COMEDY goes from 0 to 18: its rating list has no "allow unrated", so it was empty on Emby until now.
+  21 of 142 channels moved. The numbers are the shape of the change, not a prediction for a library.
+Not run against a real Emby from here (the lab servers on this Mac were not up); the fake follows tydude's measurements.
+
+**Open.** The web tuner (`plex-tuner.html:9576`), the Roku (`roku/source/mediabrowser/MediaBrowserLibrary.brs:42`) and the
+Android app (`MediaBrowserLibrary.kt:200` on owen's branch) send the same list; `scripts/nostalgex-emby-dolby-vision-smoke.mjs:257`
+pins it. Not changed here.
+
+**Next.** Release timing is Chad's call (see the report).
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
