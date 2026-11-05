@@ -3,6 +3,40 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: turning iCloud sync on waits for iCloud's first download before it pushes, N-036)
+
+**Shipped.** Nothing yet. Branch `appletv/n036-sync-turnon-hold` off main `9e2c945d`, for 1.0.30.
+
+**Why.** `NSUbiquitousKeyValueStore` is a local copy that iCloud fills in the background, so on a TV that has not
+finished its first download it reads empty even when the household has a lineup in iCloud. `setEnabled(true)` read that
+empty copy, found no value in the cloud for any key it held a value for, and pushed them all: a new TV's first-load
+defaults (the default package, Retro Mode on) became the latest write, and every other TV took them. Launch already held
+its push for a brand-new TV; turn-on did not. The Settings row comment said turn-on "pushes this TV's lineup first", which
+was the bug written down.
+
+**Measured first.** `PreferenceSyncTurnOnTests` runs two TVs on a fake iCloud that behaves the way that matters: a
+server, and a local copy per TV that stays empty until its first download, uploads on `synchronize()`, last write wins,
+and tells the TVs that have downloaded. On main the new TV turns sync on before its download arrives and: iCloud's
+`enabled_bundles` becomes `["nostalgex"]` where the household had four packages, the other TV's lineup becomes
+`["nostalgex"]` and its Retro Mode flips from off to on, and the new TV never joins the household. Three of the
+tests fail on main (the overwrite, the held push, turning off during the hold).
+
+**Changed.**
+- `setEnabled(true)`: when iCloud shows nothing and there is something to push, the push is held (`startHolding()`,
+  the launch mechanism) for up to `holdTimeout` (30 s; injectable). The first download, or any change from another TV,
+  ends the wait: what arrives is adopted (cloud wins) and only the keys iCloud still lacks are pushed. If nothing
+  ever arrives, the wait ends by itself and this TV seeds iCloud. Turning sync off during the wait pushes nothing. When
+  iCloud already shows values the download has arrived: nothing waits, the household wins, and only a key iCloud lacks
+  goes up at once (the existing behaviour, tested).
+- The Settings row comment now says that.
+- Tests (5): the overwrite; the first TV seeds an empty iCloud once its download comes back empty; turning off during
+  the hold; the wait ends on its own; no wait when the download is already here. NostalgexTests: 1,108 tests, 1,082
+  passed, 0 failed, 26 skipped.
+
+**Not changed.** `saveBundlePreferences` (`AppState+Channels.swift`): only a change the viewer made goes to
+iCloud, so first-load auto-enable never pushes. The seeding wait is a cost for the first TV only (up to 30 s before
+iCloud has its lineup). Not run on a real pair of TVs.
+
 ## 2026-11-04 (Apple TV: Plex collection requests send a container size and read every page, N-038)
 
 **Shipped.** Nothing yet. Branch `appletv/n038-collection-container-size` off main `9e2c945d`, for 1.0.30.
