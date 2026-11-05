@@ -35,8 +35,28 @@ rows and their pages. This is the first.
   § Settings as a rail and a pane says what is left out (icons, glow, scanlines, the fade under the hero, rounded
   corners, the cross-fade).
 
-**Not yet.** Pressed on a TV: the measurements #188 asks for (a key press to the new screen, memory, presses
-from the guide to SIGN OUT, RESCAN LIBRARY and a franchise switch, before and after) and the sound check.
+**Pressed** on the 43" TCL (43S45, Roku OS 16.0.4), test-data builds signed in to the lab Emby as a user who
+sees 5,516 items (795 films, 4,721 episodes, one collection; #188 asks for over a hundred collections, which
+no lab server has), FRANCHISES on, 43 channels. Keys were sent over ECP one at a time and focus read from the
+SceneGraph debug server after each, since screenshots go black while a film plays. Main `456a511` against this
+branch merged onto #182, #191 and #199, with a scratch print in `openSettings` (not in the PR) for the times:
+
+| | main | this branch |
+|---|---|---|
+| Settings, key press to drawn | 1.11 s | 1.12 s |
+| memory at open (`roAppMemoryMonitor`) | 40% to 40% | 40% to 41% |
+| presses from the guide to RESCAN LIBRARY | 3 | 7 |
+| presses to SIGN OUT | 6 | 8 |
+| presses to the first franchise switch | 28 | 20 |
+
+The rail's presses are Up to SETTINGS, OK, Down to the tab, Right, then Down; main's are Up, OK and Down
+through the one list. Every key rule in `SettingsRailTests.brs` held on the TV: Right on SUPPORT NOSTALGEX stays
+on the rail; Down swaps the hero through the five tabs and stops at ABOUT; Right into a tab lands on its first
+row; OK on VERSION and GITHUB does nothing; STREAM QUALITY's list opens on the level in use, the first Left folds
+it and the second reaches the rail; Back from a row goes to the rail; Down then Up on the rail and Right re-enters
+on the first row; Back on the rail leaves. `scripts/deploy.sh --settings-tour` shows the rail and every tab.
+One bug found there and fixed: Right from the rail went back to the row last left (GITHUB), not the tab's first
+row. Not checked here: the sound, which the debug server doesn't show.
 
 ## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
 
