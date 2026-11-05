@@ -8993,6 +8993,13 @@
   // 3: items carry a bitrate (kbps) for STREAM QUALITY's direct-play ceiling. A version-2 cache
   // has none, and at LOW a 20 Mbps MP4 would direct play for up to a day, so it is refused once.
   const LIBRARY_CACHE_VERSION = 3;
+  // What the scan reads from the server, as a number. A saved library made by an older scan is
+  // restored at once and then read again in the background, once, instead of waiting out the
+  // 24 hours (the Apple TV's scanFieldsVersion). 2: Jellyfin and Emby ratings (#204), no playlists
+  // or other non-video items, and the count of titles skipped for no runtime. Without it a
+  // library saved before this release would keep a playlist on the guide and every Emby title
+  // unrated until the day was up.
+  const LIBRARY_SCAN_REVISION = 2;
 
   // IndexedDB (scripts/nostalgex-storage.js), not localStorage and not sessionStorage.
   //
@@ -9010,7 +9017,7 @@
     items = items.map(it => (it && it.enrichment ? { ...it, enrichment: undefined } : it));
     // skippedNoRuntime rides along so the library line in Settings survives a reload (an
     // older cache without it reads as 0, no version bump needed).
-    const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items, skippedNoRuntime: librarySkippedNoRuntime };
+    const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items, skippedNoRuntime: librarySkippedNoRuntime, scanRevision: LIBRARY_SCAN_REVISION };
     // Not awaited: the guide builds while this writes. It never throws; when it cannot cache,
     // the next visit reads the library from the server, which is what happened before the
     // cache persisted at all.
@@ -9085,7 +9092,7 @@
       const { ts, url, items } = parsed;
       if (parsed.v !== LIBRARY_CACHE_VERSION) return null;
       if (url !== plexServerUrl) return null;
-      const stale = Date.now() - ts > LIBRARY_CACHE_TTL;
+      const stale = Date.now() - ts > LIBRARY_CACHE_TTL || parsed.scanRevision !== LIBRARY_SCAN_REVISION;
       if (stale && !allowStale) return null;
       return { items, ts, stale, skippedNoRuntime: Number(parsed.skippedNoRuntime) || 0 };
     } catch (e) {

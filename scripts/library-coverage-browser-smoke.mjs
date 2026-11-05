@@ -187,6 +187,23 @@ const reloaded = await page.evaluate(() => ({ line: document.getElementById("cfg
 check("after a reload the skipped count is still there", reloaded.skipped === skippedTitles, String(reloaded.skipped));
 check("after a reload the line is back", reloaded.line === state.line, JSON.stringify([reloaded.line, state.line]));
 
+// A library saved by an older scan (no scanRevision) is restored and read again; a current one is not stale.
+const staleness = await page.evaluate(async () => {
+  const saved = await NostalgexStorage.libraryCache.load();
+  const items = saved.items;
+  const url = saved.url;
+  const current = { v: saved.v, ts: Date.now(), url, items, skippedNoRuntime: 0, scanRevision: saved.scanRevision };
+  const older = { v: saved.v, ts: Date.now(), url, items, skippedNoRuntime: 0 };
+  await NostalgexStorage.libraryCache.save(current);
+  const a = await loadLibraryCache(true);
+  await NostalgexStorage.libraryCache.save(older);
+  const b = await loadLibraryCache(true);
+  const c = await loadLibraryCache(false);
+  return { currentRevision: saved.scanRevision, currentStale: a && a.stale, olderStale: b && b.stale, olderKeptWithoutAllowStale: c };
+});
+check("a library saved by this scan is current", staleness.currentRevision >= 1 && staleness.currentStale === false, JSON.stringify(staleness));
+check("a library saved by an older scan is restored, then read again", staleness.olderStale === true && staleness.olderKeptWithoutAllowStale === null, JSON.stringify(staleness));
+
 // Sign out: the line goes.
 const afterSignOut = await page.evaluate(() => { signOut(); return { line: document.getElementById("cfg-library-coverage").textContent, shown: document.getElementById("cfg-library-coverage-wrap").style.display !== "none", cov: libraryCoverage }; });
 check("signing out takes the line away", afterSignOut.line === "" && afterSignOut.shown === false && afterSignOut.cov === null, JSON.stringify(afterSignOut));

@@ -16,6 +16,10 @@ reads nothing is an error; Plex list reads send a page size and are read to the 
 video libraries load their MusicVideo items (I-067); `channels.json` v50 (no channel under 3 titles). On the hosted
 tuner only: the Deezer genre lookup is allowed through the site CSP (N-012); the image never makes that lookup.
 
+**Saved libraries refresh once.** A library cached by an older scan (no `scanRevision`, now 2) is restored at once and read
+again in the background, as the Apple TV does with `scanFieldsVersion`. Without it the playlist would stay on the guide
+and Emby titles would stay unrated for up to a day after the update. A cache from this scan is not stale.
+
 **Checked on the branch.** `npm test`, `npm run build`, `npm run build:selfhost`, `npm run test:tuner-version:builds`
 and `npm run test:tuner-isolation:builds`, and the Roku off-device suite (`roku/tests/run.sh`).
 
