@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Web tuner: the Deezer genre lookup was blocked by the site CSP; one-source fix)
+
+**Why.** Found by reading the code on 2026-10-26 (Trello N-012), confirmed today. `scripts/nostalgex-music-brainz.js`
+asks Deezer for music video genres by JSONP, because api.deezer.com sends no CORS headers: it adds a
+`<script src="https://api.deezer.com/...?callback=...">`. That load is governed by `script-src`, and `vercel.json`
+allowed only `'self'`, `'unsafe-inline'`, `cdn.jsdelivr.net` and `statsngraphs.lol`.
+
+**Measured** with headless Chromium, calling `NostalgexMusicBrainz.deezerResolve("Smells Like Teen Spirit",
+"Nirvana")` on the live `https://nostalgex.app/plex-tuner`: the browser refuses the script (a `script-src-elem`
+violation on `https://api.deezer.com/search`), and the call rejects with "Deezer script error" after 4 ms. The same
+page with the CSP header removed in flight resolves in 822 ms with the album genre (Rock) and year. A local copy
+served with `vercel.json`'s header behaves like the live page; with `https://api.deezer.com` added to `script-src`
+it resolves. The live header and `vercel.json` match.
+
+**Changed.**
+- `vercel.json`: `https://api.deezer.com` added to `script-src`. It is the site-wide header (`/(.*)`), so it also
+  applies to the marketing pages.
+- `scripts/tuner-isolation-check.mjs`: the CSP check now lists `https://api.deezer.com` among what the tuner needs,
+  so a later edit cannot drop it unnoticed.
+- `scripts/deezer-csp-browser-smoke.mjs` (`npm run test:deezer-csp`, headless): the real page with the CSP read
+  from `vercel.json`, Deezer answered by a stub, so no network. 3 of its 6 checks fail on `main`'s header, all 6
+  pass with the change; a header without the host is refused, which is the negative control.
+
+**Docker is not affected.** The image sets `<meta name="nostalgex-build" content="selfhost">`, so `lookupsEnabled()` is
+false and `deezerJSONP` rejects before it makes a script. Its nginx CSP never listed Deezer and does not need to.
+
+**Open.** A failed lookup is cached as checked: `withDeezerGenres` stamps `deezerCheckedAt` even when Deezer threw,
+and `isSettled` counts that as done until the entry is 90 days old. After the header changes, music videos a browser
+already tried will not ask Deezer again on their own. That needs its own change (stamp only on an answer).
+
 ## 2026-11-04 (a docs page on how channels get sorted, I-045)
 
 **Shipped.** The new /how-channels-work page and the /support wording fix, on nostalgex.app.
