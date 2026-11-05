@@ -937,9 +937,12 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
         else if type(msg) = "roSGNodeEvent" and hourKeyNow() <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
             lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet())
+            t = CreateObject("roTimespan")
             setLineup(ordered)
             channels = NxScheduleGuide(ordered, nowSec&)
             guide.watershed = NxWatershedSet()
+            ' What the re-check costs: about 120 channels took a core for 9 to 10 s.
+            print "library: rescheduled "; channels.Count(); " channels in "; t.TotalMilliseconds(); " ms; memory "; NxMemoryLine()
             now = FormatJson(channels)
             if now <> last then
                 last = now
