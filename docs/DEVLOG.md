@@ -5,7 +5,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-04 (a docs page on how channels get sorted, I-045)
 
-**Shipped.** Nothing yet. Branch `site/i045-how-channels-work` off main `9e2c945d`, not pushed.
+**Shipped.** The new /how-channels-work page and the /support wording fix, on nostalgex.app.
 
 **Why.** Trello I-045. People keep asking why a title isn't on the channel they expected (I-004 had four askers,
 and there was a Reddit thread on Jellyfin). The only public answer was a short list on /support. 1.0.29's Settings
@@ -35,7 +35,8 @@ values, which the web tuner only has when an Apple TV already wrote them to the 
 "when it has one". And the Apple TV missing-channels card says "Plex star rating" for every server, where
 Jellyfin and Emby read Community Rating.
 
-**Next.** A push to main deploys the page, so it waits for Chad's go.
+**Next.** Nothing blocked. The "Plex star rating" wording on the Apple TV missing-channels card is a small copy
+fix for the next Apple TV build.
 
 ## 2026-11-04 (Roku: the loading screen holds the screensaver off; a paused app isn't a stalled server)
 
