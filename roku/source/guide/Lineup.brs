@@ -25,12 +25,60 @@ function NxToInt32(x as LongInteger) as LongInteger
     return r
 end function
 
-' Mirrors getTimeFilteredPool at a local hour (0-23).
-function NxTimeFilteredPool(channel as Object, pool as Object, hour as Integer) as Object
-    tr = channel.timeRestrictions
-    if type(tr) <> "roAssociativeArray" then return pool
-    out = pool
+' The local hour the WATERSHED gate holds its ratings until: 9 PM, the window
+' VHS VAULT's own blockRatings uses (Channel.watershedHour).
+function NxWatershedHour() as Integer
+    return 21
+end function
 
+' The US labels WATERSHED holds (Channel.watershedRatings). GB-15 and GB-18
+' read as R or TV-MA through NxUsContentRating, so they aren't listed.
+function NxWatershedRatings() as Object
+    return ["R", "NC-17", "TV-MA"]
+end function
+
+' Mirrors getTimeFilteredPool at a local hour (0-23). watershed is the
+' Settings switch (WATERSHED): with it on, a channel without blockRatings of
+' its own drops its R, NC-17 and TV-MA titles before 9 PM, after its own rules
+' and with no fallback, so a channel may go empty (Channel.filteredPool).
+function NxTimeFilteredPool(channel as Object, pool as Object, hour as Integer, watershed = false as Boolean) as Object
+    out = pool
+    tr = channel.timeRestrictions
+    if type(tr) = "roAssociativeArray" then
+        out = NxOwnTimeRules(tr, out, hour)
+        if out = invalid then return []
+    end if
+    if watershed and not NxHasOwnBlockRatings(channel) and hour < NxWatershedHour() then
+        held = NxWatershedRatings()
+        kept = []
+        for each it in out
+            if not NxHasValue(held, NxUsContentRating(it.contentRating, it.type)) then kept.Push(it)
+        end for
+        out = kept
+    end if
+    return out
+end function
+
+' Whether the channel's pool is empty at this hour only because WATERSHED
+' took every title, not because it has none (Channel.isWatershedHold).
+function NxIsWatershedHold(channel as Object, pool as Object, hour as Integer, watershed as Boolean) as Boolean
+    if not watershed or pool = invalid then return false
+    if pool.Count() = 0 or NxHasOwnBlockRatings(channel) then return false
+    if hour >= NxWatershedHour() then return false
+    return NxTimeFilteredPool(channel, pool, hour, watershed).Count() = 0
+end function
+
+' VHS VAULT's shape: blockRatings of its own, which WATERSHED leaves alone.
+function NxHasOwnBlockRatings(channel as Object) as Boolean
+    tr = channel.timeRestrictions
+    if type(tr) <> "roAssociativeArray" then return false
+    return type(tr.blockRatings) = "roAssociativeArray"
+end function
+
+' A channel's own timeRestrictions at a local hour; invalid when
+' onlyAfterHour takes the channel off the air.
+function NxOwnTimeRules(tr as Object, pool as Object, hour as Integer) as Dynamic
+    out = pool
     br = tr.blockRatings
     if type(br) = "roAssociativeArray" then
         blocked = false
@@ -61,7 +109,7 @@ function NxTimeFilteredPool(channel as Object, pool as Object, hour as Integer) 
     end if
 
     if tr.onlyAfterHour <> invalid then
-        if hour < tr.onlyAfterHour then return []
+        if hour < tr.onlyAfterHour then return invalid
     end if
     return out
 end function
