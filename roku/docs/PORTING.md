@@ -23,7 +23,7 @@ and already pinned to the Apple TV.
 | `ServerPickerView` (`Plex90App.swift`): CHOOSE YOUR LIBRARIES after sign-in when the account lists more than one server; owned servers on, all of them when none is owned | `components/ServerPickerView.*`, `source/plex/ServerChoice.brs`, Settings › SERVERS & ACCOUNTS | ported; cases in `tests/ServerChoiceTests.brs`. Not yet seen on a TV (one-server account). Unlike upstream, no server is checked before it, as the maintainer asked |
 | `PlexAPIService.bestReachableURI`: one verified address per server, best of local, remote, relay | `source/plex/ServerResolve.brs` | ported for the servers on, every address at once, an answer counting only if `/identity` names that server; saved, not re-checked on later launches. Cases in `tests/ServerResolveTests.brs` |
 | `LoadingView`, `LibraryLoadStepRail`, `LibraryLoadPhase` (`Plex90App.swift`) | `components/LoadingView.*`, phases from `components/LibraryTask.brs` | ported; Collections is always a step, as every scan reads them |
-| `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby |
+| `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby; the screensaver held off while loading and a paused app's time left out (not in upstream's watch) |
 | `LaunchGuard.swift` (unfinished loads), `startOverButton` and `UnfinishedLoadsView` (`Plex90App.swift`), `AppState.startOver()` (#150) | `source/util/LaunchGuard.brs`, START OVER in `components/LoadingView.*`, LOADING DIDN'T FINISH and the keys in `components/MainScene.brs` | ported; the reinstall check isn't needed, since deleting the channel cleared its registry on a TV (differences in [A way out of a load](#a-way-out-of-a-load)); cases in `tests/LaunchGuardTests.brs`; pressed on a 43S45 against Emby |
 | Settings as a rail and a detail pane (N-028, `Views/Settings/`: `SettingsRailView`, `SettingsContainerView`, `SettingsCategory`, the five tabs' views); `toggleBundle`, `rebuildLineupAfterBundleChange` (`AppState+Channels.swift`) | `components/SettingsView.*`, `source/guide/SettingsRail.brs`, `rebuildForBundles` in `components/LibraryTask.brs` | ported ([Settings as a rail and a pane](#settings-as-a-rail-and-a-pane)); no rating or tips, the QR card instead. SUBTITLE LANGUAGE and AUDIO LANGUAGE (#62) open their list in place, as MY COLLECTIONS does, where upstream opens a picker sheet. A package switch builds only its own channels, behind Settings; its pools matched a full rebuild's on the 43S45 |
 | RESCAN LIBRARY under SERVERS & ACCOUNTS (`Views/Settings/SettingsServersView.swift`), `rescanLibrary` (`AppState+Auth.swift`), `LibraryDiagnostics.summary`, `PlaybackDiagnostics` (issue #66) | `components/SettingsView.*`, `onRescanRequest` in `components/MainScene.brs`, `source/util/RescanInfo.brs`, `source/util/PlaybackVerdict.brs` | ported; the row reads every server again behind the guide, as the launch refresh does, so the guide changes only if the pools did (upstream also clears its day schedules). The summary counts are taken when a load ends and kept with the sign-in; the last verdict is a given-up programme's only (upstream also logs its fallbacks). Cases in `tests/RescanTests.brs`, passing on device; pressed on a Streaming Stick Plus against Emby |
@@ -488,6 +488,20 @@ the Lab library's 16 films:
 - Not exercised on a TV: Plex, Jellyfin, a stop between two servers, and
   the 210 s stop with nothing loaded.
 
+Under the screensaver (2026-11-04). The Roku pauses the whole app while
+its screensaver runs: no requests, no timers, no output. Its clock keeps
+counting. On the 43S45 (wait 10 min) a slowed Jellyfin load sat paused
+39 min, and the first look after a button woke the TV read it as 210 s
+of quiet and stopped the scan with 4 items read: NO CHANNELS FOUND. So:
+- The loading screen holds the screensaver off with a hidden `Video`
+  node's `disableScreenSaver` (`LoadingView.xml`). The same slowed load
+  then ran 23.8 min, 25.5 min without a key and no screensaver, and
+  finished with every item.
+- `NxStallSkipPause` (`source/util/LoadStall.brs`): a look 20 s or more
+  after the last one is a pause, and the gap isn't counted as quiet.
+  Upstream's watch compares wall-clock `Date()`s and has no such check.
+  Cases only; no pause has happened on a TV since the hold.
+
 ## A way out of a load
 
 After upstream's #150. START OVER is under every load the viewer waits on,
@@ -500,7 +514,8 @@ closed inside the load, crashed or sent Home. Two in a row, and the launch
 shows LOADING DIDN'T FINISH instead of a third load: OK tries again with the
 count reset, * starts over. A refresh behind a guide on screen carries no
 marker; a saved guide shown first, or a load the app stops (a rejected Plex
-sign-in drops it), clears it without resetting the count.
+sign-in drops it), clears it without resetting the count. The channel played
+from the cold-boot seed (below) is no guide: its load keeps the marker.
 
 Where it differs:
 - The Roku has no focusable button on the loading screen (MainScene holds
@@ -535,6 +550,61 @@ off so each launch waited on its load:
 - Before one review change: a load the app stops (`releaseLibrary`) clears
   the marker too. None of the steps above stopped a load that way except
   START OVER, whose sign-out clears it anyway.
+
+## After a power loss
+
+The Roku's own (#155); the Apple TV app has nothing like it to port. The
+saved guide, pools and library live in `cachefs:`, which is RAM, so a TV that
+lost power came back to a full scan behind the loading screen. Each build,
+and each new hour on a TV left on, also writes the next airings of the
+channel a launch opens on, the first in the guide, to the registry
+(`source/guide/ColdBootSeed.brs`, section `seed`): as many whole airings as
+fit in 10 KB from the one on now, each the guide block less its summary.
+It is written only when it changed, and keyed to the build, as the saved
+filter results are.
+
+A launch with no saved guide and no saved pools, on the build that wrote the
+seed, shows a guide of that one channel and plays it while the library loads
+as a first load would: its errors and stops are a first load's, and the
+LaunchGuard marker stays. When that load's guide goes up, the tuned airing
+carries on if the guide airs the same programme on the channel
+(`GuideView.onGuide`'s refresh check) and is retuned otherwise. Until then SETTINGS and the sidebar say
+STILL LOADING YOUR LIBRARY, since the seed has no packages to list, and a
+launch deep link waits for the full guide as before. When the seed's last
+airing ends first, the loading screen comes back; a load that fails takes
+the seed's guide down and shows its error. Sign-out clears the seed with the
+other caches.
+
+Pressed on the 43S45 (OS 16.0.4, 2026-11-03), a test-data build of this work
+on main `84bac18` signed in to the lab Emby (5,509 items, 30 channels), with a
+scratch launch switch that deleted the `cachefs:` files a power loss takes
+and kept the registry:
+- A full load saved 10,195 bytes for CH 3, the first channel; the wiped
+  launch found 18 of its airings still to come.
+- After the wipe, CH 3 tuned 1.0 s after the launch, at its place in the
+  airing. The load took about 25 s more, and its guide went up with no
+  second tune: the same film went on playing.
+- With the seed cut to one airing joined near its file's end and the load
+  held for 120 to 150 s by a scratch switch, the file finished and the
+  loading screen came back, then the full guide when the load ended (three
+  runs; on the first, two screenshots came back black while the node tree
+  held the loading screen, and both later runs' screenshots showed it).
+- With the load failing 15 s after the seed went up, the error screen
+  replaced the seed's guide and the player closed.
+- OK on SETTINGS showed STILL LOADING YOUR LIBRARY.
+
+Not tried: a real power cut, which also brings the network up from cold; a
+Plex sign-in; the hourly re-save on a TV left on; Left for the sidebar, and a
+launch deep link, on the seed's guide.
+
+Registry room (2026-11-04, the 43S45). Registry space is charged at far
+less than a value's length, as if stored compressed. A throwaway build filled
+its own sections with a heavy setup (5 Plex servers and the picker's copy,
+40 bundles, 100 franchises on and 100 off, 300 collections on: 15,001 bytes
+of ids, which took 1,656). From 32,273 bytes free, the setup took 3,593 and
+a 10,211-byte seed of random hex text 2,864, leaving 25,816. With the seed in place, 3,000 collections
+still wrote. Stored uncompressed, a 10 KB seed would still leave about 18 KB
+on that setup, so the seed writes without a reserve check.
 
 ## The connect screens
 

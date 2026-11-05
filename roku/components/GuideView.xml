@@ -24,10 +24,15 @@
          the row says UPDATING. -->
     <field id="rescanRequest" type="boolean" alwaysNotify="true" />
     <field id="libraryBusy" type="boolean" value="false" onChange="onLibraryBusy" />
+    <!-- A guide from the cold-boot seed (source/guide/ColdBootSeed.brs) ran
+         out of airings before the library finished loading: MainScene puts
+         the loading screen back. -->
+    <field id="seedEnded" type="boolean" alwaysNotify="true" />
     <!-- The id of the channel tuned, as a string, or "" (resumeId's source). -->
     <function name="tunedChannelId" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/ColdBootSeed.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/StreamQuality.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideNav.brs" />

@@ -2,6 +2,8 @@
 
 sub init()
     m.top.functionName = "loadLibrary"
+    ' The seed text last written (saveSeed).
+    m.savedSeed = ""
 end sub
 
 ' The saved guide: the last build's output, shown at launch while it is for
@@ -314,6 +316,19 @@ sub loadLibrary()
                 m.shownGuide = fromPools.guide
                 m.top.status = "ready"
                 print "library: tomorrow scheduled and handed over in "; t.TotalMilliseconds(); " ms"
+            end if
+        end if
+        ' Neither: cachefs: was cleared, as a power loss does. The seed's
+        ' channel plays while the library loads as it would with nothing to
+        ' show (#155). Not `shown`: the load is a first one, so it fails
+        ' and stops as one would, and its guide is always handed over.
+        if not shown then
+            seed = NxSeedGuide(NxSeedRead(), clock0.nowSec, NxBuildKey(), NxEnabledBundles())
+            if seed <> invalid then
+                m.top.fromCache = true
+                m.top.guide = seed
+                m.top.status = "ready"
+                print "library: playing the saved channel ("; seed.channels[0].blocks.Count(); " airings) while the library loads, after "; timer.TotalMilliseconds(); " ms"
             end if
         end if
     end if
@@ -845,6 +860,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         m.savedGuideKey = guideKey
         print "library: saved the guide in "; timer.TotalMilliseconds(); " ms"
     end if
+    saveSeed(guide.channels)
     timer.Mark()
     poolsKey = NxPoolCacheKey(NxSeasonKey(guide.bundles, clock), guide.enabledBundles)
     if matched and sameSchedule and reuse <> invalid and m.savedPoolsKey = poolsKey and m.savedPoolsFingerprint = fingerprint and fs.Exists(NxPoolCachePath()) then
@@ -927,8 +943,25 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
                 m.top.status = "ready"
                 print "library: schedules changed (new day or time restriction)"
             end if
+            ' Each hour, so the seed keeps its budget for hours still to come
+            ' on a TV left on, not ones that have aired.
+            saveSeed(guide.channels)
         end if
     end while
+end sub
+
+' The cold-boot seed (source/guide/ColdBootSeed.brs) for the channel a launch
+' opens on, written when it changed: a registry write is a flash write, and
+' an unchanged hour gives the same text.
+sub saveSeed(channels as Object)
+    text = NxSeedFrom(NxSeedChannel(channels), CreateObject("roDateTime").AsSeconds(), NxBuildKey(), NxSeedBudget())
+    ' Each launch starts a task, so the first save compares with the registry.
+    if m.savedSeed = "" then m.savedSeed = NxSeedRead()
+    if text = "" or text = m.savedSeed then return
+    if NxSeedWrite(text) then
+        m.savedSeed = text
+        print "library: saved the first channel's next airings for a cold start ("; NxUtf8Bytes(text); " bytes)"
+    end if
 end sub
 
 ' Takes the bundleRequest events waiting on the port, and returns how many.
@@ -986,6 +1019,7 @@ sub keepSavedGuide()
                 m.top.status = "ready"
                 print "library: saved guide rescheduled from the saved pools (new day or time restriction)"
             end if
+            saveSeed(guide.channels)
         end if
     end while
 end sub
