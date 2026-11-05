@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-03 (Apple TV: franchise collections grey out while FRANCHISES is off)
+
+**Shipped.** Nothing yet. Branch `appletv/franchises-page-gate`, not pushed, for the next Apple TV build.
+
+**Why.** Since `d7f6aa3` (1.0.29) the FRANCHISES switch gates every franchise channel, the server's franchise
+collections included. The Settings FRANCHISES page still listed those collections with live switches while
+FRANCHISES was off, and its own comment said they aired through their own switches. Found by the Roku port
+reading the code, then measured on the tvOS simulator (demo mode plus the franchise fixture, THREE FLAVOURS
+CORNETTO switched on, then FRANCHISES off): the row kept focus and read On, the collection stayed `enabled`,
+and its channel was not in the guide. The Channels list also counted it, so FRANCHISES read "1 ON" with
+nothing of it on the air.
+
+**Changed.** `SettingsChannelsView.swift` only; what the switch gates is untouched.
+- FRANCHISES off: the franchise collections stay listed, greyed out, can't take focus, and read OFF. One line
+  above them says "None of these are on the air while FRANCHISES is off."
+- Each collection's own switch is kept (the page only stops showing it), so FRANCHISES on again brings back
+  exactly what was set. Measured: CORNETTO back On and on the air.
+- The FRANCHISES count on the Channels list is 0 (reads OFF) while the switch is off.
+- The page comment now says what the code does. The rules sit in `FranchisesPageGate` so tests can reach them.
+
+**Tests.** `FranchisesPageGateTests` (unit, the real fixture and real switches: ON on the page means on the
+air, for every franchise collection, with FRANCHISES on, off and on again) and `FranchisesPageGateUITests`
+(focus walk under the switch while it is off; failed on main with focus reaching CORNETTO reading On, passes
+on the branch). `SettingsChannelsDrilldownTests` still passes. NostalgexTests on the Apple TV 4K simulator:
+1,021 passed, 18 skipped, 0 failed.
+
+**Next.** Chad tries the page in Xcode. Roku copies this page and needs the same change. The web tuner hides
+the whole franchise list while FRANCHISES is off, so it never shows a collection ON that isn't airing; it
+just looks different from the Apple TV now.
+
 ## 2026-11-04 (Apple TV: the App Store rating funnel, measured on the living room TV)
 
 **Shipped.** Nothing yet. Branch `appletv/rate-deeplink` off main `5971d065`, for 1.0.30.
