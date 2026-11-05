@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
+
+**Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
+section of the privacy policy now covers the power-loss start in Roku 1.0.12, with the effective date November 5,
+2026. No tuner file changed and there is no `tuner-v` tag, so the Docker image is untouched.
+
+**Why.** @tydude001's #182 saves the first channel's airings to the Roku registry so the app can play something
+right after a power loss, while the library loads again. The saved library and guide sit in the Roku's cache, which a
+power loss or the Roku's own clean-up takes. The seed is in the registry, so it survives both. The Roku section's "On
+the TV it keeps" paragraph has to say so.
+
+**Changed.** One sentence group in "The Roku app" section, in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md`, the
+same words in both:
+- the list of what the app keeps adds "the titles, times and file details of your first channel for the next few
+  hours, so it can start playing right away after the TV loses power";
+- sign-out now lists "those saved hours" among what it removes (it clears the seed with the other caches);
+- removing the app removes "your sign-in, settings and those saved hours", and the cache sentence now says "the saved
+  library and guide sit in the Roku's own cache", because the seed does not;
+- the Effective date moves from November 3 to November 5, 2026, the day it went live.
+
+**Checked.** Against the 1.0.12 source on main (`2b71559f`), not just the PR. `source/guide/ColdBootSeed.brs` holds the
+first channel's id, number, name and colour and its airings from the one on now, each with its times, title, episode,
+year, rating, part key, container, codecs, audio and subtitle tracks, duration, size and server index, and no summary,
+inside a 10 KB budget. `LibraryTask.saveSeed` writes it to the registry and nothing in the seed code makes a request,
+so nothing new is sent. `NxClearAccountCaches` deletes it on sign-out, and on a fresh sign-in over caches another
+account left. It holds no token and no server address. The first draft said "titles and times"; it now says "file
+details" too, because the part key and the codecs are in it.
+
+**Open.** Nothing.
+
+**Next.** Nothing for the site from this change.
+
 ## 2026-11-04 (Roku: an end the server answers for, after the start failed while it was asked, isn't a short file's end, #184's Jellyfin and Emby way)
 
 **Why.** #184: on Jellyfin and Emby the server stream ended unplayed, so the server was asked. The player ended
