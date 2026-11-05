@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: Plex collection requests send a container size and read every page, N-038)
+
+**Shipped.** Nothing yet. Branch `appletv/n038-collection-container-size` off main `9e2c945d`, for 1.0.30.
+
+**Why.** Plex logs "Missing X-Plex-Container-Size header, will fail with status 400 in the future" for the
+collection requests: only the section item fetch sent a size. When Plex makes good on the warning the collection
+scan would stop silently, because its callers swallow the error (`try?` on the list of collections, `continue` on a
+collection's children) and an empty result reads as "this server has no collections". The per-show `allLeaves`
+crawl (the fallback for a server that ignores `type=4`) had the same bare request.
+
+**Changed.** `loadCollections`, `loadCollectionItems` and the per-show `allLeaves` read through one helper,
+`fetchAllPages`, with `X-Plex-Container-Start` / `-Size` as the section fetch does (300 a page). It moves on by the
+rows the server says a page holds (`size`) and stops at the server's `totalSize`, or at a short page when there is
+none, so a server that sends fewer than asked, or a row that fails to decode, neither skips nor repeats rows. A
+response with more rows than asked is a server that ignores paging and sent everything: it stops there. A ceiling of
+5,000 pages keeps a server that never says it is done from looping us. `/library/sections` and `/identity` are
+single small directory responses and are unchanged; not checked against a real server's log.
+
+**Tests.** `PlexContainerSizeTests` (5): a fake Plex that answers 400 to a list request with no container size and
+never sends more than 100 rows a response, with 318 collections (the I-068 case), a 1,250-item collection, a
+250-episode show through the per-show crawl, and a legacy server that ignores paging. Four fail on main (400, or
+only the first page), all pass now. NostalgexTests: 1,108 tests, 1,082 passed, 0 failed, 26 skipped.
+
+**Not done.** The web tuner (the web agent's branch) and Roku (#189, tydude001).
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
