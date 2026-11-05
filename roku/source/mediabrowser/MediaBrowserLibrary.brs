@@ -39,7 +39,7 @@ end function
 
 ' One page of items under a parent, with the fields the channel rules read.
 function NxMbItemsPath(userId as String, parentId as String, types as String, start as Integer) as String
-    return "/Items?userId=" + NxUrlEncode(userId) + "&ParentId=" + NxUrlEncode(parentId) + "&Recursive=true" + "&IncludeItemTypes=" + types + "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData" + "&StartIndex=" + start.ToStr() + "&Limit=200&SortBy=SortName"
+    return "/Items?userId=" + NxUrlEncode(userId) + "&ParentId=" + NxUrlEncode(parentId) + "&Recursive=true" + "&IncludeItemTypes=" + types + "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating" + "&StartIndex=" + start.ToStr() + "&Limit=200&SortBy=SortName"
 end function
 
 ' What a flat (not TV) library is asked for. Jellyfin and Emby file the videos
