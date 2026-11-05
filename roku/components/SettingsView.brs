@@ -953,9 +953,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if action = "tabDown" then
         selectTab(m.tabIndex + 1)
     else if action = "enter" then
-        ' A tab with nothing to focus (SUPPORT NOSTALGEX) leaves focus on the rail.
+        ' Into the tab's first row (each view's firstRowID), not the row last
+        ' left. A tab with nothing to focus (SUPPORT NOSTALGEX) leaves focus on
+        ' the rail.
         if m.focus >= 0 then
             m.where = "rows"
+            m.focus = NxSettingsFirstFocusable(m.rows)
+            m.scroll = 0
             render()
         end if
     else if action = "leave" then
