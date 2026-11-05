@@ -824,6 +824,11 @@ extension AppState {
         channels = []
         allChannels = []
         allItems = []
+        skippedNoRuntimeCount = 0
+        libraryCoverageTask?.cancel()
+        libraryCoverageTask = nil
+        libraryCoverageKey = nil
+        libraryCoverage = nil
         // Collection rows hold resolved items from the old server; a later materialise
         // would put them straight back into the guide.
         collectionScanTask?.cancel()

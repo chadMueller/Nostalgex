@@ -57,6 +57,11 @@ protocol MediaBackend: Sendable {
     /// Item identifiers belonging to a collection.
     func loadCollectionItems(collectionKey: String) async throws -> [String]
 
+    /// How many movies and episodes the last `loadLibrary` read from the server and then
+    /// dropped because their runtime was under one minute (or missing): the loader cannot
+    /// schedule an item with no length. Shown under RESCAN LIBRARY as "N SKIPPED (NO RUNTIME)".
+    var skippedNoRuntime: Int { get }
+
     /// Direct-play URL (raw file) when the container/codecs are AVPlayer-native; else nil.
     func buildDirectPlayURL(for item: PlexMediaItem) -> URL?
 
@@ -288,6 +293,24 @@ typealias LoadProgress = @Sendable (LoadProgressEvent) -> Void
 /// guide: an abandoned scan that threw a bare `CancellationError` would discard minutes of
 /// fetched library for nothing. Every backend keeps the pages it had read of the section
 /// that was in flight, too.
+extension MediaBackend {
+    /// A backend that never drops an item for its runtime reports none.
+    var skippedNoRuntime: Int { 0 }
+}
+
+/// Counts what a scan drops for having no runtime. One per service value, shared by every
+/// copy of it (a class), safe to add to from the concurrent episode fetches.
+final class ScanSkipCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+
+    var count: Int { lock.lock(); defer { lock.unlock() }; return n }
+    func add() { lock.lock(); n += 1; lock.unlock() }
+    func reset() { lock.lock(); n = 0; lock.unlock() }
+    /// Takes back what was added after `mark`, for a section that is read a second way.
+    func rewind(to mark: Int) { lock.lock(); n = min(n, mark); lock.unlock() }
+}
+
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
 }

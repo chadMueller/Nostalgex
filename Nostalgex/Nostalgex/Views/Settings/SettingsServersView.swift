@@ -73,11 +73,18 @@ struct SettingsServersView: View {
                     // What the app is actually holding, so a support report can say it in
                     // one screenshot. See LibraryDiagnostics.
                     let held = LibraryDiagnostics.summary(appState.allItems)
+                    // How many of those sit on a channel with every package on, how many on
+                    // none, and how many the scan had to drop for having no runtime. See
+                    // LibraryDiagnostics.coverageLine.
+                    let coverage = LibraryDiagnostics.coverageLine(
+                        appState.libraryCoverage,
+                        skippedNoRuntime: appState.skippedNoRuntimeCount
+                    ).map { "\n\($0)" } ?? ""
                     let base = "Pull a fresh copy of your \(appState.backendDisplayName) library after adding content"
                     // The last time the app gave up on a stream, and exactly why. Reads
                     // "device" or "server" without a debugger. See PlaybackDiagnostics.
                     let verdict = PlaybackDiagnostics.latestForSettings().map { "\nLast playback failure: \($0)" } ?? ""
-                    return "\(held)\nLast updated \(updated). \(base)\(verdict)"
+                    return "\(held)\(coverage)\nLast updated \(updated). \(base)\(verdict)"
                 }(),
                 isOn: true,
                 isFocused: isFocused("rescan"),
@@ -122,6 +129,11 @@ struct SettingsServersView: View {
             // redraw the rows above.
             EnrichmentStatusView(enrichmentService: appState.enrichmentService)
         }
+        // The coverage line under RESCAN LIBRARY is counted when this page opens, and again
+        // when a scan changes the library.
+        .task { appState.ensureLibraryCoverage() }
+        .onChange(of: appState.allItems.count) { _, _ in appState.ensureLibraryCoverage() }
+        .onChange(of: appState.lastLoadAtUnix) { _, _ in appState.ensureLibraryCoverage() }
     }
 
     private func isFocused(_ id: String) -> Bool {
