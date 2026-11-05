@@ -2977,3 +2977,127 @@ sup.tm { font-size: 0.32em; vertical-align: top; position: relative; top: 0.35em
 }
 .page-home .hero-servers-logos a:hover { background: var(--feature-hover); }
 .page-home .hero-servers .server-mark { width: 30px; height: 30px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   HOW CHANNELS WORK  (/how-channels-work)
+   A docs page on the .doc-* layout from the support page. Everything
+   here is what that layout doesn't have, scoped under
+   .page-howchannels: the ways-in and limits pair, the locked-genre
+   chips and the worked-example cards. Colours come from the site
+   variables, so day and night modes come for free.
+   ══════════════════════════════════════════════════════════════════ */
+
+.page-howchannels .hc-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin: 8px 0 24px;
+}
+.page-howchannels .hc-box {
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper-deep);
+  padding: 18px 20px 6px;
+}
+.page-howchannels .hc-box--in { box-shadow: 5px 5px 0 var(--cyan); }
+.page-howchannels .hc-box--limits { box-shadow: 5px 5px 0 var(--pink); }
+.page-howchannels .doc-section .hc-box h3 { margin: 0 0 2px; font-size: 19px; }
+.page-howchannels .doc-section .hc-box .hc-sub {
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+}
+.page-howchannels .doc-section .hc-box ul { margin: 0 0 12px; max-width: none; }
+
+/* The locked genres, as chips rather than a sentence of commas. */
+.page-howchannels .doc-section .hc-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  max-width: none;
+}
+.page-howchannels .hc-chips li {
+  margin: 0;
+  padding: 6px 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper-deep);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Worked examples: what the channel asks for, then titles that are in and out. */
+.page-howchannels .hc-example {
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper-deep);
+  box-shadow: 5px 5px 0 var(--cyan);
+  padding: 20px 22px 6px;
+  margin: 0 0 30px;
+}
+.page-howchannels .doc-section .hc-example h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.page-howchannels .doc-section .hc-example .hc-ask { margin: 0 0 14px; max-width: none; }
+.page-howchannels .doc-section .hc-cases {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-width: none;
+}
+.page-howchannels .hc-cases li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  margin: 0;
+  padding: 9px 0;
+  border-top: 1px solid var(--hairline);
+}
+.page-howchannels .hc-pill {
+  display: block;
+  padding: 3px 0;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.page-howchannels .hc-pill--in { color: var(--cyan); }
+.page-howchannels .hc-pill--out { color: var(--pink); }
+/* Cyan on cream is too pale to read as text in day mode; darken just the text. */
+:root[data-theme="light"] .page-howchannels .hc-pill--in { color: #0a7a9e; }
+:root[data-theme="light"] .page-howchannels .hc-pill--out { color: #c1137d; }
+.page-howchannels .doc-section .hc-example .hc-fix {
+  margin: 0 0 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+  max-width: none;
+}
+
+@media (max-width: 720px) {
+  .page-howchannels .hc-split { grid-template-columns: 1fr; gap: 18px; }
+  .page-howchannels .hc-box,
+  .page-howchannels .hc-example { padding-left: 16px; padding-right: 16px; }
+  .page-howchannels .hc-box--in,
+  .page-howchannels .hc-box--limits,
+  .page-howchannels .hc-example { box-shadow: 3px 3px 0 var(--cyan); }
+  .page-howchannels .hc-box--limits { box-shadow: 3px 3px 0 var(--pink); }
+  .page-howchannels .hc-cases li { grid-template-columns: 46px minmax(0, 1fr); gap: 12px; }
+}
