@@ -211,6 +211,7 @@ extension AppState {
             let multiServer = apisToScan.count > 1
 
             var merged: [PlexMediaItem] = []
+            var skippedNoRuntime = 0
             var successCount = 0
             var lastError: Error?
             // Set when a scan was abandoned rather than finishing. What follows is built
@@ -295,11 +296,13 @@ extension AppState {
                     )
                     merged.append(contentsOf: items)
                     successCount += 1
+                    skippedNoRuntime += scanAPI.skippedNoRuntime
                 } catch let interrupted as LibraryScanInterrupted {
                     // Abandoned partway, but whole sections came back. Those count as a
                     // success: a reduced guide beats an error screen.
                     print("[Plex90] LOAD: server '\(serverLabel)' abandoned with \(interrupted.partialItems.count) items already fetched")
                     merged.append(contentsOf: interrupted.partialItems)
+                    skippedNoRuntime += scanAPI.skippedNoRuntime
                     if !interrupted.partialItems.isEmpty { successCount += 1 }
                     scanWasAbandoned = true
                     lastError = interrupted
@@ -363,6 +366,7 @@ extension AppState {
             allItems = merged
             libraryScanFieldsVersion = LibrarySnapshotStore.scanFieldsVersion
             scanItemsFound = merged.count
+            skippedNoRuntimeCount = skippedNoRuntime
             let withTMDB = merged.filter { $0.tmdbID != nil }.count
             let withIMDB = merged.filter { $0.imdbID != nil }.count
             print("[Plex90] Library: \(merged.count) items from \(successCount) server(s), \(withTMDB) with TMDB IDs, \(withIMDB) with IMDb IDs")
@@ -717,6 +721,7 @@ extension AppState {
         errorMessage = nil
         lastLoadAtUnix = snap.lastLoadAtUnix
         librarySignature = snap.librarySignature
+        skippedNoRuntimeCount = snap.skippedNoRuntime ?? 0
 
         // The bundle list in UserDefaults is the latest choice, and may be newer than the
         // snapshot (a toggle that never re-saved it, or a lineup that arrived from another
@@ -844,7 +849,8 @@ extension AppState {
             exclusiveRules: exclusiveRules,
             discoveredCollections: discoveredCollections,
             foundFranchises: foundFranchises,
-            scanFieldsVersion: libraryScanFieldsVersion
+            scanFieldsVersion: libraryScanFieldsVersion,
+            skippedNoRuntime: skippedNoRuntimeCount
         )
         LibraryLoadProbe.mark("snapshot.capture")
         LibrarySnapshotStore.saveInBackground(payload)

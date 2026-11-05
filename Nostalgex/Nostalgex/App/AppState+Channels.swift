@@ -1287,13 +1287,56 @@ extension AppState {
         return result
     }
 
+    /// Libraries past this many titles get no coverage count: it runs every channel's rules
+    /// over the whole library, about 2 ms a title on a Mac and several times that on an Apple TV.
+    static let coverageItemCap = 30_000
+
+    /// Counts where the loaded titles land with every package on, once per library: the
+    /// answer does not move when a package is switched on or off, only when the library, the
+    /// enrichment cache or the built collection channels do. Off the main actor at utility
+    /// priority; the filter cache is read here (it needs the enrichment services), the rest
+    /// runs away from it. Logs the count and the first titles that no channel takes.
+    func ensureLibraryCoverage() {
+        guard !allItems.isEmpty, allItems.count <= Self.coverageItemCap, !channelConfigChannels.isEmpty else {
+            if allItems.count > Self.coverageItemCap { libraryCoverage = nil }
+            return
+        }
+        let dynamicChannels = allChannels.filter { $0.rules == nil }
+        let key = "\(allItems.count)|\(lastLoadAtUnix)|\(enrichmentService.cache.count)|\(channelConfigChannels.count)|"
+            + dynamicChannels.map { "\($0.id):\($0.itemPool.count)" }.joined(separator: ",")
+        guard key != libraryCoverageKey else { return }
+        libraryCoverageKey = key
+        libraryCoverageTask?.cancel()
+
+        let items = allItems
+        let cache = makeFilterCache(items)
+        let staticChannels = channelConfigChannels
+        let dynamicPools = dynamicChannels.map(\.itemPool)
+        let memberships = channelMemberships
+        let rules = exclusiveRules
+        let session = librarySessionGeneration
+        libraryCoverageTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                LibraryDiagnostics.coverage(items: items, cache: cache, staticChannels: staticChannels,
+                                            dynamicPools: dynamicPools, memberships: memberships, exclusiveRules: rules)
+            }.value
+            guard !Task.isCancelled, let self, self.librarySessionGeneration == session,
+                  self.libraryCoverageKey == key else { return }
+            self.libraryCoverage = result
+            let report = LibraryDiagnostics.orphanReport(
+                result, onEnabledChannels: self.titlesOnChannelsCount ?? LibraryDiagnostics.titlesOnChannels(in: self.channels))
+            print("[Plex90] \(report)")
+            InstallDiagnostics.note(String(report.prefix { $0 != "." }))
+        }
+    }
+
     /// Build a snapshot cache for a set of items. Called once per filter pass —
     /// per `loadLibrary`, per `buildPendingBundles`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later
     /// asynchronous enrichment landings don't make the cache inconsistent
     /// mid-build (build loop is single-threaded on MainActor; rebuild is the
     /// re-snapshot point).
-    private func makeFilterCache(_ items: [PlexMediaItem]) -> [FilterCache] {
+    func makeFilterCache(_ items: [PlexMediaItem]) -> [FilterCache] {
         items.map { item in
             FilterCache(
                 item: item,

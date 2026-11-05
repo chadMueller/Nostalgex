@@ -72,6 +72,9 @@ struct LibrarySnapshotV1: Codable {
     /// Which scan request made these items (`LibrarySnapshotStore.scanFieldsVersion`). Optional
     /// so snapshots written before it existed decode, as "the old request".
     var scanFieldsVersion: Int? = nil
+    /// Movies and episodes the scan dropped for having no runtime. Optional so older
+    /// snapshots decode; absent reads as none.
+    var skippedNoRuntime: Int? = nil
 }
 
 // MARK: - On-disk format v3 (chunked)
@@ -121,6 +124,8 @@ struct LibrarySnapshotMetaV3: Codable {
     var foundFranchiseTVItems: [[Int32]]? = nil
     /// See `LibrarySnapshotV1.scanFieldsVersion`.
     var scanFieldsVersion: Int? = nil
+    /// Movies and episodes the scan dropped for having no runtime (optional: absent in older files).
+    var skippedNoRuntime: Int? = nil
 }
 
 /// current.json. Small, written last, replaced atomically.
@@ -257,6 +262,7 @@ enum LibrarySnapshotStore {
         let franchiseMovies: [[PlexMediaItem]]
         let franchiseTV: [[PlexMediaItem]]
         let scanFieldsVersion: Int?
+        let skippedNoRuntime: Int
     }
 
     static func makePayload(
@@ -272,7 +278,8 @@ enum LibrarySnapshotStore {
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
         foundFranchises: [FoundFranchise] = [],
-        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion,
+        skippedNoRuntime: Int = 0
     ) -> Payload {
         Payload(
             fingerprint: fingerprint(identity: identity),
@@ -295,7 +302,8 @@ enum LibrarySnapshotStore {
             franchiseRows: foundFranchises.map { StoredFoundFranchise.from($0, includeItemKeys: false) },
             franchiseMovies: foundFranchises.map(\.movies),
             franchiseTV: foundFranchises.map(\.tvItems),
-            scanFieldsVersion: scanFieldsVersion
+            scanFieldsVersion: scanFieldsVersion,
+            skippedNoRuntime: skippedNoRuntime
         )
     }
 
@@ -328,14 +336,15 @@ enum LibrarySnapshotStore {
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
         foundFranchises: [FoundFranchise] = [],
-        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion,
+        skippedNoRuntime: Int = 0
     ) throws {
         let payload = makePayload(
             identity: identity, serverName: serverName, librarySignature: librarySignature,
             lastLoadAtUnix: lastLoadAtUnix, allItems: allItems, channelConfigChannels: channelConfigChannels,
             allChannels: allChannels, bundles: bundles, enabledBundleIDs: enabledBundleIDs,
             exclusiveRules: exclusiveRules, discoveredCollections: discoveredCollections,
-            foundFranchises: foundFranchises, scanFieldsVersion: scanFieldsVersion)
+            foundFranchises: foundFranchises, scanFieldsVersion: scanFieldsVersion, skippedNoRuntime: skippedNoRuntime)
         let e = nextEpoch()
         try writeQueue.sync { try write(payload, epoch: e) }
     }
@@ -402,7 +411,8 @@ enum LibrarySnapshotStore {
             foundFranchiseRows: p.franchiseRows,
             foundFranchiseMovieItems: p.franchiseMovies.map(indexes),
             foundFranchiseTVItems: p.franchiseTV.map(indexes),
-            scanFieldsVersion: p.scanFieldsVersion
+            scanFieldsVersion: p.scanFieldsVersion,
+            skippedNoRuntime: p.skippedNoRuntime
         )
         indexByID = [:]
         try autoreleasepool {
@@ -576,7 +586,8 @@ enum LibrarySnapshotStore {
             discoveredCollectionRows: collectionRows,
             librarySignature: meta.librarySignature,
             foundFranchiseRows: franchiseRows,
-            scanFieldsVersion: meta.scanFieldsVersion
+            scanFieldsVersion: meta.scanFieldsVersion,
+            skippedNoRuntime: meta.skippedNoRuntime
         )
     }
 

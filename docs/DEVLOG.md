@@ -3,6 +3,47 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Apple TV: RESCAN LIBRARY says how many titles are on a channel, on none, and skipped)
+
+**Why.** A user's Jellyfin library showed 484 titles for a library they put at about 600, and nothing in the app said
+where the rest went. Two answers were missing: how many titles the scan threw away for having no runtime, and how many
+of the ones it kept never land on any channel. Chad approved both numbers, with the second defined as titles in the
+pool of a channel that would show if its package were on, whether or not the package is on.
+
+**Changed.** The line under the library summary in Settings > Servers > RESCAN LIBRARY, in the same style:
+`11,633 OF 11,809 ON CHANNELS · 176 ON NO CHANNEL (4 MOVIES, 172 EPISODES) · 12 SKIPPED (NO RUNTIME)`. A part is left
+out at zero, the split in brackets shows only when more than one kind has titles on no channel, and the first two wait
+until counted.
+- Skipped: the six runtime guards (Plex, Jellyfin, Emby, movie and episode each) count what they drop through a
+  `ScanSkipCounter` on the backend. A Plex section read that falls back from the bulk read to the per-show read rewinds
+  the counter to where the bulk read began, so a title is counted once. The number is saved with the library snapshot
+  (`skippedNoRuntime`, optional, so an older snapshot reads as none) and reset on disconnect.
+- On a channel: `LibraryDiagnostics.coverage` runs every channel in channels.json through the same `filterItems` the
+  guide uses, keeps those whose pool reaches `minItems`, and adds the built collection and franchise pools. It cannot be
+  read off `allChannels`: the first load builds every channel, every later load (RESCAN, the six-hour refresh) builds
+  the enabled packages only. So it runs on demand when Settings > Servers opens, off the main actor, once per library
+  (keyed on item count, load time, enrichment count, channel set), and not at all above 30,000 titles.
+- The count for the channels in the guide as it is now is kept beside it (`titlesOnChannelsCount`, debounced on
+  `channels`), for the log and for contrast. It moves when a package is toggled; the all-packages number does not.
+- One log line, `COVERAGE: ...`, with the counts and the first 25 titles on no channel (year, certificate, rating,
+  genres, studio, runtime, TMDB or not). The titles go to the console only; the device log gets the counts.
+
+**Checked.** Tests: a fake server per backend with zero, short and just-long-enough runtimes (movies and episodes)
+proves the skipped count, once-only on the Plex fallback and across a relaunch; a lineup test proves the on-channels
+number ignores a package toggle while the in-guide number follows it. The full suite: 1,118 tests, 1,091 passed, 0 failed, 27 skipped (the opt-in harnesses), 14 of them new.
+`scripts/qa/library-coverage.mjs` runs the web tuner's copy of the filter over the same items and compares per kind and
+per channel. On a library the size of Chad's (1,792 movies, 8,891 episodes, 1,126 music videos, synthetic, cold
+enrichment) episodes and music videos agree exactly, and movies differ by 6 titles, all on the four channels with a
+`productionCompanies` rule: the web filter matches the Plex studio when a title has no enrichment record, the Apple TV
+needs the record (`nostalgex-channel-filter.cjs:698-709`, on purpose). The count took 16 to 19 seconds in a Debug build
+on the simulator on a busy Mac. Not measured on a TV, and not on Chad's real library.
+
+**Open.** The cost on a real Apple TV (the 4K 1st gen and the HD are the slow ones); a Release-build figure; Chad's own
+numbers from his library. A list screen for the titles on no channel was not built (cost given to Chad first).
+Roku and Android ports are drafted in `projects/nostalgex-internal/docs/issue-drafts/` and not filed.
+
+**Next.** Chad's call on whether to carry per-kind figures on screen, and on the list screen.
+
 ## 2026-11-05 (Apple TV: the Emby scan asks for OfficialRating and CommunityRating, #204)
 
 **Why.** tydude001 measured it on Emby 4.10.1.0: an Items answer carries neither `OfficialRating` nor `CommunityRating`

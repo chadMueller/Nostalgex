@@ -14,6 +14,9 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     let accessToken: String
     let userId: String
     var serverID: String = ""
+    /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
+    let scanSkips = ScanSkipCounter()
+    var skippedNoRuntime: Int { scanSkips.count }
 
     /// Stable per-install device id. Reuses the same UUID Plex uses so the value is
     /// consistent across backends on a device.
@@ -126,6 +129,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     private static let pageSize = 200
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        scanSkips.reset()
         let allSections = try await loadSections()
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
@@ -283,7 +287,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             let showGenres = show.Genres ?? []
             return episodes.compactMap { ep -> PlexMediaItem? in
                 let durationMin = Self.minutes(fromTicks: ep.RunTimeTicks)
-                guard durationMin > 0 else { return nil }
+                guard durationMin > 0 else { scanSkips.add(); return nil }
                 let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
                 let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
                 let source = JellyfinItem.bestMediaSource(ep.MediaSources)
@@ -329,7 +333,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
 
     func parseMovieItem(_ item: JellyfinItem, isMusicSection: Bool) -> PlexMediaItem? {
         let durationMin = Self.minutes(fromTicks: item.RunTimeTicks)
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         var genres = item.Genres ?? []
         if isMusicSection && !genres.contains(where: { $0.lowercased().contains("music") }) {
             genres.append("Music Video")

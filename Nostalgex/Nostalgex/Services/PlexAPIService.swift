@@ -10,6 +10,9 @@ struct PlexAPIService: MediaBackend {
     /// Carries playback reports (timeline, scrobble, Continue Watching cleanup). Tests
     /// replace it with a recorder.
     var reportTransport: any ReportTransport = URLSessionReportTransport.shared
+    /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
+    let scanSkips = ScanSkipCounter()
+    var skippedNoRuntime: Int { scanSkips.count }
 
     /// URLSession with timeout configured for Plex API calls
     private static let session: URLSession = {
@@ -205,6 +208,7 @@ struct PlexAPIService: MediaBackend {
     // `LoadProgressEvent` / `LoadProgress` now live in MediaBackend.swift (shared by all backends).
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        scanSkips.reset()
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
         // handful of rows, so its duration is essentially pure round-trip latency.
@@ -341,6 +345,7 @@ struct PlexAPIService: MediaBackend {
             // Show list pages are small (one entry per show); episodes come from a single
             // bulk sweep below.
             let shows = try await fetchSectionItemsPaged(section, pageSize: pageSize)
+            let skipsBeforeBulk = scanSkips.count
             let bulk = try await fetchEpisodesBulk(
                 section: section,
                 shows: shows,
@@ -351,6 +356,9 @@ struct PlexAPIService: MediaBackend {
             // per-show crawl rather than silently reporting an empty TV library.
             if bulk.isEmpty, !shows.isEmpty {
                 print("[Plex90] BULK EPISODES: section '\(section.title)' returned 0 — falling back to per-show fetch")
+                // The bulk pass may have dropped every episode for its runtime; the crawl
+                // reads the same ones again, so count them once.
+                scanSkips.rewind(to: skipsBeforeBulk)
                 return try await fetchEpisodesPerShow(from: shows, onBatch: onShowBatch)
             }
             return bulk
@@ -448,7 +456,7 @@ struct PlexAPIService: MediaBackend {
     /// Shared by the bulk sweep and the per-show fallback so both produce identical items.
     private func makeEpisodeItem(_ ep: PlexRawItem, show: PlexRawItem) -> PlexMediaItem? {
         let durationMin = (ep.duration ?? 0) / 60000
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         let s = ep.parentIndex.map { "S\(String(format: "%02d", $0))" } ?? ""
         let e = ep.index.map { "E\(String(format: "%02d", $0))" } ?? ""
         let media = ep.bestMedia
@@ -516,7 +524,7 @@ struct PlexAPIService: MediaBackend {
 
     func parseMovieItem(_ item: PlexRawItem, isMusicSection: Bool) -> PlexMediaItem? {
         let durationMin = (item.duration ?? 0) / 60000
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         var genres = (item.Genre ?? []).map(\.tag)
         if isMusicSection && !genres.contains(where: { $0.lowercased().contains("music") }) {
             genres.append("Music Video")
