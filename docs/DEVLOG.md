@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (web tuner: a scan that loses part of the server keeps the rest; one that loses all of it is an error)
+
+**Why.** Parity with the Apple TV's 1.0.30 rule (`SectionFailures`, N-039, found while measuring #146). The web already
+skipped a Plex section or a Jellyfin library that threw, and went on to the next, so the "keep the rest" half was
+there. Three things were not. A scan where every section failed ended in the "no content" screen, which says the
+server has nothing, and saved an empty library. The Jellyfin and Emby scan read every `/Items` answer as JSON without
+looking at its status, so a 401 or a 500 was an empty library and an expired sign-in never reached the "session
+ended" line. And a library that lost a section was saved for 24 hours as if it were whole.
+
+**Changed.**
+- `plex-tuner.html`, Plex (`fetchPlexSectionPaged`, `scanOnePlexServer`, `fetchPlexLibraryFromServer`): a section
+  page that answers 401 or 403 ends the scan with `plexStatus`, as the section list already did. Any other failed
+  section is skipped and named (`lost N section(s), ...; kept M items from the others`). A server whose every section
+  failed throws its last error, so the page shows its error line. A library that lost a section is not saved
+  (`skipCacheSave`), so the next visit reads it whole.
+- `plex-tuner.html`, Jellyfin and Emby (`fetchItems`): checks the status. 401 and 403 end the scan; another failure
+  loses the library, but pages already read are kept; every library lost throws; a lost library is named and the result
+  is not cached.
+- `scripts/nostalgex-scan-failures-smoke.mjs` (`npm run test:scan-failures`, in `npm test`): the real Jellyfin loader
+  over a stub that fails on request. 18 checks; 9 fail without the change.
+- `scripts/plex-section-failures-browser-smoke.mjs` (`npm run test:plex-section-failures`, headless): the real page
+  against a stub Plex. 12 checks; 7 fail without the change (an all-sections failure showed the empty screen and was
+  saved; a sign-in refused on a section page did the same).
+
+**Not changed.** The page does not tell the viewer which section was lost; it names it in the console. The Apple
+TV names it in its install log too, and shows nothing more.
+
 ## 2026-11-05 (Emby: the library scan asks for each title's rating and star rating)
 
 **Why.** GitHub #204, measured by tydude001 on the Roku against an Emby 4.10.1.0 test server. Emby leaves

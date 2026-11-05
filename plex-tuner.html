@@ -9566,6 +9566,12 @@
     LL.state.scanSectionIndex = 0;
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
 
+    // Libraries the server did not answer for, by name. A scan that lost some keeps the rest
+    // and is not cached; one that lost everything is a failure, not an empty library.
+    const lostViews = [];
+    let scanningViewName = 'Library';
+    let lastViewError = null;
+
     // Paginated /Items fetch under a parent, requesting the fields channel rules need.
     // OfficialRating and CommunityRating are named because Emby 4.10 leaves both out of an
     // answer unless Fields asks for them (Jellyfin sends them either way), and every rating
@@ -9580,6 +9586,16 @@
           + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
           + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
         const r = await fetch(url, { headers });
+        if (!r.ok) {
+          // A refused sign-in ends the scan, as it does on Plex. Any other failure loses the
+          // library; pages already read are kept, as the Apple TV keeps them.
+          const e = new Error(`HTTP ${r.status} from ${scanningViewName}`);
+          if (r.status === 401 || r.status === 403) { e.plexStatus = r.status; throw e; }
+          if (collected.length === 0) throw e;
+          lostViews.push(scanningViewName);
+          lastViewError = e;
+          break;
+        }
         const d = await r.json();
         const items = d.Items || [];
         collected.push(...items);
@@ -9657,6 +9673,7 @@
       // Collections, Photos and the like) is never asked for items (scripts/nostalgex-jellyfin-urls.js, 12).
       const type = NostalgexJellyfinUrls.sectionType(view.CollectionType);
       if (type === 'other') continue;
+      scanningViewName = view.Name || 'Library';
       const isMusicVideoSection = type === 'musicvideo';
       LL.state.scanSectionIndex = vi;
       LL.setPhase('scanningLibrary', view.Name || 'Library');
@@ -9791,7 +9808,16 @@
         }
       } catch (err) {
         console.warn(`Failed to fetch Jellyfin view ${view.Name}:`, err);
+        if (err && err.plexStatus) throw err;
+        lostViews.push(view.Name || 'Library');
+        lastViewError = err;
       }
+    }
+
+    if (lostViews.length) {
+      console.warn(`[${backendDisplayName()}] lost ${lostViews.length} library(ies), ${lostViews.join(', ')}; kept ${allItems.length} items from the others`);
+      // Nothing read at all is a failure, not an empty library with a "no content" screen.
+      if (allItems.length === 0) throw lastViewError || new Error('Every library failed to load');
     }
 
     const withTmdb = allItems.filter(i => i.tmdbID).length;
@@ -9805,6 +9831,8 @@
     allItems = await finalizeLibraryWithMusicBrainz(allItems, {
       buildAllChannels: buildAll,
       skipMarkComplete: background,
+      // A library that lost a view is not saved as the whole library: the next visit reads it again.
+      skipCacheSave: lostViews.length > 0,
     });
 
     if (!background) {
@@ -9921,7 +9949,11 @@
       const res = await fetch(url, {
         headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
       });
-      if (!res.ok) throw new Error(`Section ${section.title} returned HTTP ${res.status}`);
+      if (!res.ok) {
+        const e = new Error(`Section ${section.title} returned HTTP ${res.status}`);
+        if (res.status === 401 || res.status === 403) e.plexStatus = res.status;   // ends the scan, not just the section
+        throw e;
+      }
       const data = await NostalgexUTF8Repair.json(res, `${section.key} page ${start}`);
       const container = (data && data.MediaContainer) || {};
       const page = container.Metadata || [];
@@ -9938,7 +9970,8 @@
   }
 
   // Scan one Plex server and return its items, each tagged with serverUrl + serverToken.
-  async function scanOnePlexServer(server, LL, baseItemCount, multiServer) {
+  async function scanOnePlexServer(server, LL, baseItemCount, multiServer, lostSections = []) {
+    let lastSectionError = null;
     // Sends X-Plex-Container-Size like the section pages below (Trello N-038); the helper pages.
     const NC = globalThis.NostalgexCollections;
     const sections = await NC.fetchPlexPaged(
@@ -10148,9 +10181,14 @@
         });
       } catch (err) {
         console.warn(`Failed to fetch section ${section.title}:`, err);
+        if (err && err.plexStatus) throw err;   // a refused sign-in ends the scan
+        lostSections.push(multiServer ? `${server.name} · ${section.title}` : section.title);
+        lastSectionError = err;
       }
     }
 
+    // Every section failing is a failure of the scan, not a library with nothing in it.
+    if (serverItems.length === 0 && lostSections.length > 0 && lastSectionError) throw lastSectionError;
     return serverItems;
   }
 
@@ -10196,11 +10234,12 @@
     const multiServer = servers.length > 1;
     let merged = [];
     let successCount = 0;
+    const lostSections = [];   // sections the server did not answer for: named below, and the library is not cached
 
     for (const server of servers) {
       await LL.pulsePhase('scanningLibrary', multiServer ? `Connecting to ${server.name}` : 'Connecting to Plex');
       try {
-        const items = await scanOnePlexServer(server, LL, merged.length, multiServer);
+        const items = await scanOnePlexServer(server, LL, merged.length, multiServer, lostSections);
         merged = merged.concat(items);
         successCount++;
         console.log(`[Nostalgex] ${server.name}: ${items.length} items`);
@@ -10211,10 +10250,15 @@
     }
 
     if (successCount === 0) throw new Error('All servers failed to scan');
+    if (lostSections.length) {
+      console.warn(`[Nostalgex] lost ${lostSections.length} section(s), ${lostSections.join(', ')}; kept ${merged.length} items from the others`);
+    }
 
     let allItems = await finalizeLibraryWithMusicBrainz(merged, {
       buildAllChannels: buildAll,
       skipMarkComplete: background,
+      // A library that lost a section is not saved as the whole library: the next visit reads it again.
+      skipCacheSave: lostSections.length > 0,
     });
 
     console.log('[Nostalgex] Channel population results:');
