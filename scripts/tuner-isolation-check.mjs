@@ -93,7 +93,8 @@ function staticChecks(root) {
   const csp = JSON.parse(read("vercel.json")).headers.flatMap((h) => h.headers).find((h) => h.key === "Content-Security-Policy")?.value || "";
   const directive = (name) => (new RegExp(`(?:^|;)\\s*${name}\\s+([^;]*)`).exec(csp)?.[1] || "").split(/\s+/);
   const need = {
-    "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+    // api.deezer.com: the music video genre lookup loads its answer as a script (JSONP).
+    "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://api.deezer.com"],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     "font-src": ["'self'", "https://fonts.gstatic.com"],
     "connect-src": ["'self'", "https:", "wss:"],

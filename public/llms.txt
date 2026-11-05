@@ -20,6 +20,7 @@ Nostalgex is made by Chad Mueller (Muell Haus Inc.). It is not affiliated with P
 ## Help
 
 - [Support: setup, https and CORS, how channels pick your library](https://www.nostalgex.app/support)
+- [How Nostalgex sorts your library into channels: genres, studios, ratings, years and collections, with examples](https://www.nostalgex.app/how-channels-work)
 - [Privacy policy](https://www.nostalgex.app/privacy)
 - [Terms of use](https://www.nostalgex.app/terms)
 - [Source code on GitHub](https://github.com/chadMueller/Nostalgex)
