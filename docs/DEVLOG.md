@@ -3,6 +3,43 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Web tuner: every Plex list request sends X-Plex-Container-Size, and long lists are read whole)
+
+**Why.** A Plex server log from a Roku first load said "Missing X-Plex-Container-Size header, will fail with
+status 400 in the future" (Trello N-038, Roku issue #189). The web tuner sent no size on four Plex list reads:
+`/library/sections`, `/library/sections/{key}/collections`, `/library/collections/{id}/children` and
+`/library/metadata/{id}/allLeaves` (every show's episodes). Only the paged section fetch did. Measured with a fake
+Plex that answers 400 to a list request with no size: `main` loads nothing at all from it, the first request
+(`/library/sections`) is refused and the library never loads. So the day Plex starts refusing, the web tuner and
+the Docker image stop at the first request. A size alone is not the fix: Plex answers it with the first window
+only, and a collection of 650 films would come back as 300.
+
+**Changed.**
+- `scripts/nostalgex-collections.js`: `fetchPlexPaged` reads a Plex list in windows of 300 until `totalSize`, or
+  until the first short page when the server sends no total. The next window starts where the last one ended, so a
+  server that caps the window below 300 loses nothing. A server that ignores the window ends the walk instead of
+  looping. A failed window throws, so a caller never keeps half a list: a half-read collection is dropped, as a
+  failed one already was. The window travels as the second argument of the caller's getter
+  (`getJSON(path, { start, size })`, turned into the request by `plexWindowPath`), so the path the engine asks for
+  is still the bare endpoint. The Roku golden vectors (`roku/tests/gen-collections.mjs`) record those paths and are
+  unchanged.
+- `plex-tuner.html`: the section list, each show's episode list and the collection scan page through it. The
+  episode list now checks the HTTP status before it parses, as the other reads do.
+- `scripts/nostalgex-plex-paging-smoke.mjs` (`npm run test:plex-paging`, in `npm test`): the fetchers against a fake
+  Plex that refuses a list with no size and returns only the window asked for, in four server shapes (totalSize
+  sent, left out, window capped at 100, window ignored), plus a failed second window and a 750-episode show, and a
+  read of `plex-tuner.html` that every getter sends the window. 33 checks pass here; run against `main`'s code 24
+  fail (and 5 pass). A version that sends the size and never pages fails 12.
+- `scripts/plex-container-size-browser-smoke.mjs` (`npm run test:plex-container-size`, headless, not in `npm test`
+  like the other browser smokes): the real page against the same kind of server. 7 of 8 checks fail on `main`, all
+  8 pass here: 13 list requests, none without a size, the 750-episode show in three windows, the 650-film
+  collection whole.
+
+**Open.** Not run against a real Plex server: the window parameters are the ones the section fetch has always
+sent, but no real server has been asked for `/library/sections` or `allLeaves` with them from this change. Which of
+the four endpoints Plex warns about is also unknown; all four now send a size. Roku (#189) and the Apple TV
+(`PlexAPIService.loadCollections`, `loadCollectionItems`) still send none. The engine change is the web side only.
+
 ## 2026-11-04 (Web tuner: the Deezer genre lookup was blocked by the site CSP; one-source fix)
 
 **Why.** Found by reading the code on 2026-10-26 (Trello N-012), confirmed today. `scripts/nostalgex-music-brainz.js`
