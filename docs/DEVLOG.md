@@ -3,6 +3,47 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Jellyfin and Emby: a playlist is no longer scanned as a film)
+
+**Why.** A report from a Docker web tuner on Jellyfin: a workout playlist of eight songs aired on CH 7 VHS VAULT
+as a 33 minute programme, and tuning it answered "Jellyfin answered HTTP 500 before it started sending video".
+Not seen on a real server here; this is rebuilt on a stub and the cause is read from Jellyfin's source.
+
+**The path.** `fetchJellyfinLibraryFromServer` read `/UserViews`, called every view that was not TV or Music
+Videos a movie library, and asked it for `IncludeItemTypes=Movie`. The Playlists view (CollectionType `playlists`)
+is one of those. Jellyfin's `PlaylistsFolder.GetItemsInternal` (Emby.Server.Implementations/Playlists/PlaylistsFolder.cs)
+sets `query.Recursive = true; query.IncludeItemTypes = [Playlist]` over whatever the client sent, so the answer to
+"Movie" under that view is its playlists. The loader mapped any row to `type: 'movie'`. The playlist came out as
+`type movie, duration 33, year '', genres [], contentRating '', partKey null` (it has no media source). The year
+rule lets an item with no year through (`passesYearRange`), so by the real filter it entered CH 7 VHS VAULT (type
+movie, 1980 to 1999), CH 16 DVD SHELF (2000 to 2009) and CH 51 FLICKS (type movie, genre excludes only).
+
+**The 500.** Measured in the real page with the real hls.js against a stub: tuning the playlist sends
+`POST /Items/{id}/PlaybackInfo`, then `GET /Videos/{id}/master.m3u8`, and with HTTP 500 on both the page shows
+the card word for word. That the real server answers 500 for a playlist id is not measured. A raw
+`GET /Items/{id}` and the status of those two requests from the reporter's server would settle it.
+
+**Changed.**
+- `scripts/nostalgex-jellyfin-urls.js` (point 12): `sectionType(collectionType)` returns `'other'` for Music,
+  Playlists, Collections, Books, Photos, Home Videos, Live TV, Trailers, Folders and Channels, and the scan never asks
+  those for items. `itemTypes` and `hasAskedType` give what a section is asked for and drop any row whose `Type`
+  was not asked for (a row with no `Type` is kept), for a server that answers with more than it was asked.
+  `scripts/jellyfin-library-golden.json` pins both, for the other apps to port; the urls smoke reads it.
+- `plex-tuner.html`: the scan calls them. Movies is still asked for `Movie`, Music Videos for `Movie,MusicVideo`
+  (I-067), TV for `Series` then `Episode`. The Roku vectors (`roku/tests/gen-mediabrowser.mjs` runs this loader over
+  a fixture) are unchanged.
+- `scripts/nostalgex-jellyfin-library-smoke.mjs` (`npm run test:jellyfin-library`, in `npm test`): the real loader and
+  the real filter over a stub library with a playlist, songs, an album, an artist and a collection, answered as
+  Jellyfin does and by a server that ignores `IncludeItemTypes`. On `main` 16 of its 28 checks fail; the playlist is
+  in the library and in three channels' pools. Here all 28 pass.
+- `scripts/jellyfin-non-video-items-browser-smoke.mjs` (`npm run test:jellyfin-non-video:browser`, headless): the real
+  page on Jellyfin and Emby. On `main` 14 of 22 checks fail and it prints what playing the playlist showed.
+
+**Open.** A library cached before this change keeps the playlist until the 24 hour cache is refreshed. Not checked on a
+real Jellyfin or Emby; whether Emby's Playlists view answers like Jellyfin's is not known. Apple TV
+(`JellyfinAPIService.sectionType`, `EmbyAPIService`), Roku (`NxMbItemTypesFor`) and Android (`MediaBrowserLibrary.kt`)
+read the same views the same way and have no `Type` check; none is changed here.
+
 ## 2026-11-04 (Web tuner: every Plex list request sends X-Plex-Container-Size, and long lists are read whole)
 
 **Why.** A Plex server log from a Roku first load said "Missing X-Plex-Container-Size header, will fail with
