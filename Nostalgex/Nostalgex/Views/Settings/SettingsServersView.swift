@@ -92,8 +92,10 @@ struct SettingsServersView: View {
             .accessibilityLabel("Rescan library")
             .padding(.top, 8)
 
-            // Off by default and per-TV. Turning it on pushes this TV's lineup and
-            // settings to iCloud first, then listens.
+            // Off by default and per-TV. Turning it on takes the lineup and settings iCloud
+            // already holds (another TV's), and pushes this TV's only for what iCloud lacks.
+            // With nothing in iCloud it waits for the first download before seeding it, so a
+            // new TV's defaults never land on top of the other TVs' lineup.
             SettingsToggleRow(
                 title: "SYNC WITH MY OTHER APPLE TVS",
                 subtitle: appState.iCloudSyncEnabled
