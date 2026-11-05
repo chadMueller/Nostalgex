@@ -252,9 +252,9 @@ await check("Emby scan: every file is in the library, with Emby's profile", () =
     [5, 5, 8, 7, null, null, null, 5, 8, null], "doviProfile (f-dv5 f-dv5mp4 f-dv81 f-dv76 f-hdr10 f-sdr f-unknown e-dv5 e-dv81 e-sdr)");
 });
 
-await check("Emby scan asks for nothing new", () => {
+await check("Emby scan asks for nothing new for Dolby Vision (the two rating fields are from #204)", () => {
   const fields = new Set(emby.server.requests.filter((u) => u.pathname === "/Items").map((u) => u.searchParams.get("Fields")));
-  same([...fields], ["ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData"], "Fields");
+  same([...fields], ["ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating"], "Fields");
 });
 
 await check("Emby scan logs one count line, no titles", () => {

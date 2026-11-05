@@ -3,6 +3,35 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Emby: the library scan asks for each title's rating and star rating)
+
+**Why.** GitHub #204, measured by tydude001 on the Roku against an Emby 4.10.1.0 test server. Emby leaves
+`OfficialRating` and `CommunityRating` out of an `/Items` answer unless `Fields` names them (0 of 200 films carried
+either; 195 and 197 of 200 with them named). Jellyfin sends both either way. The web scan, like the Apple TV and the
+Roku, never named them, so on Emby every title read as unrated. `SAT MORNING CARTOONS` (an allow-list of TV-Y, TV-Y7,
+TV-G and G, plus unrated) took a TV-MA cartoon, because an unrated title passes it. `VHS VAULT`'s 9 PM hold on R and
+NC-17, and WATERSHED, held nothing. The 13 `ratingMin` channels saw no star rating.
+
+**Changed.**
+- `plex-tuner.html` (`fetchItems` in `fetchJellyfinLibraryFromServer`, the one Items request the scan makes for films,
+  shows and episodes): `Fields` now ends `...UserData,OfficialRating,CommunityRating`. The normaliser already read
+  both (`contentRating` and `rating`).
+- `scripts/nostalgex-emby-ratings-smoke.mjs` (`npm run test:emby-ratings`, in `npm test`): the real loader as an Emby
+  sign-in over a stub that withholds both fields unless `Fields` names them, then the real filter and the page's own
+  `getTimeFilteredPool` at 8 PM and 9 PM. On `main` 9 of its 11 checks fail: the TV-MA cartoon is on SAT MORNING
+  CARTOONS, VHS VAULT's pool keeps its R films at 8 PM, WATERSHED holds nothing, ALL TIME GREATS sees no stars. All 11 pass here.
+
+**What changes for an Emby viewer, from the next library read** (the saved library lasts up to 24 hours): the channels
+with an allow-list and no unrated pass stop being empty, kids and family channels lose their TV-MA, R and PG-13 titles
+(titles with no rating still pass), VHS VAULT, WATERSHED and the 9 PM hold start holding R and TV-MA, and `ratingMin`
+channels judge by Emby's own star rating instead of the OMDb fallback. Their lineups for the day move with the pools.
+
+**Open.** The Roku's vectors (`roku/tests/gen-mediabrowser.mjs` runs this loader and records its request paths) change
+in 9 request lines: the Roku job goes red until `roku/source/mediabrowser/MediaBrowserLibrary.brs:42` names the same two
+fields, so the two land together. The Apple TV (`EmbyAPIService.swift:218`, `JellyfinAPIService.swift:212`) and Android
+(`MediaBrowserLibrary.kt:200`, PR #151) send the same list and are not changed here. Not run against a real Emby; the
+Jellyfin side relies on #204's 12.2.0 measurement and on Jellyfin's Fields binder skipping a name it does not know.
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
