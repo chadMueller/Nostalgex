@@ -104,24 +104,64 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         }
         let (data, response) = try await Self.session.data(for: req)
         let views = try Self.decode(ItemsResponse.self, data: data, response: response).Items ?? []
-        return views.map { PlexSection(key: $0.Id, title: $0.Name ?? "Library", type: Self.sectionType(for: $0.CollectionType)) }
+        return Self.videoSections(from: views)
     }
 
-    /// Maps a Jellyfin `CollectionType` to the section type strings the loader branches on.
-    static func sectionType(for collectionType: String?) -> String {
-        switch collectionType?.lowercased() {
-        case "tvshows": return "show"
-        case "musicvideos": return "musicvideo"
-        default: return "movie"   // movies + anything else treated as flat item lists
+    /// The views a scan reads: every view except the ones that hold no videos. Those are not
+    /// scanned and not offered in library selection.
+    static func videoSections(from views: [JellyfinItem]) -> [PlexSection] {
+        views.compactMap { view in
+            let type = sectionType(for: view.CollectionType)
+            return type == "other" ? nil : PlexSection(key: view.Id, title: view.Name ?? "Library", type: type)
         }
     }
 
-    /// What a flat (non-TV) library is asked for. Jellyfin and Emby file the videos in a
-    /// Music Videos library as `MusicVideo`, so asking it for `Movie` alone came back empty
-    /// and HIGH ROTATION never filled (I-067, found by @owenvoke). `Movie` stays in the list
-    /// for a film someone filed there. Every other library still asks for films only.
-    static func itemTypes(forSectionType type: String) -> String {
-        type == "musicvideo" ? "Movie,MusicVideo" : "Movie"
+    /// CollectionTypes with no videos in them (#205, #206). Same list as the web tuner's
+    /// `NostalgexJellyfinUrls.sectionType`, pinned by scripts/jellyfin-library-golden.json.
+    private static let nonVideoCollectionTypes: Set<String> = [
+        "playlists", "music", "boxsets", "books", "audiobooks", "photos", "homevideos",
+        "livetv", "trailers", "folders", "channels",
+    ]
+
+    /// Maps a Jellyfin `CollectionType` to the section type strings the loader branches on:
+    /// "show", "musicvideo", "other" (a view with no videos in it, never read), or "movie".
+    ///
+    /// A Playlists view answers any items request with its playlists, whatever
+    /// `IncludeItemTypes` says (Jellyfin's `PlaylistsFolder` overwrites it), so asking it for
+    /// films returned its playlists and the scan filed each as a film: a 33 minute workout mix
+    /// aired on VHS VAULT. Music, Collections, Books, Photos, Home Videos, Live TV, Trailers,
+    /// Folders and Channels are the same kind of view. A view with no CollectionType, or one
+    /// this does not know, is mixed content and still a film view.
+    static func sectionType(for collectionType: String?) -> String {
+        guard let kind = collectionType?.lowercased() else { return "movie" }
+        switch kind {
+        case "tvshows": return "show"
+        case "musicvideos": return "musicvideo"
+        case _ where nonVideoCollectionTypes.contains(kind): return "other"
+        default: return "movie"   // movies, mixed content, anything unknown
+        }
+    }
+
+    /// What a section is asked for, or nil for one that is not read. Jellyfin and Emby file the
+    /// videos in a Music Videos library as `MusicVideo`, so asking it for `Movie` alone came
+    /// back empty and HIGH ROTATION never filled (I-067, found by @owenvoke). `Movie` stays in
+    /// the list for a film someone filed there.
+    static func itemTypes(forSectionType type: String) -> String? {
+        switch type {
+        case "show": return "Series"
+        case "musicvideo": return "Movie,MusicVideo"
+        case "other": return nil
+        default: return "Movie"
+        }
+    }
+
+    /// True when a row the server sent is one of the types the scan asked for. A row with no
+    /// `Type` is kept. Case does not matter. Backstop for a view that answers with something
+    /// else than it was asked for (Playlists does; others might).
+    static func isAskedType(_ type: String?, asked: String) -> Bool {
+        guard let type, !type.isEmpty else { return true }
+        let wanted = type.lowercased()
+        return asked.split(separator: ",").contains { $0.lowercased() == wanted }
     }
 
     // MARK: - Library loading
@@ -157,13 +197,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
+                    let asked = JellyfinAPIService.itemTypes(forSectionType: section.type) ?? "Movie"
                     // One event per page, as the Plex scan does. Without it the item
                     // count stood still for the whole section, so the stall watch read a
                     // big movie library that was still arriving as a dead server: a
                     // 15,000-movie section at 3 s a page (75 pages) was abandoned at 210 s
                     // with the server still answering (MovieLibraryScaleHarness).
                     let raw = try await fetchAllItems(
-                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type)
+                        parentId: section.key, includeItemTypes: asked
                     ) { loaded, _ in
                         progress?(LoadProgressEvent(
                             sectionIndex: i, totalSections: sections.count,
@@ -171,7 +212,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                             itemsLoadedSoFar: baseItemCount + loaded, showsCompleted: nil, totalShows: nil
                         ))
                     }
-                    items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
+                    items = raw.filter { JellyfinAPIService.isAskedType($0.itemType, asked: asked) }
+                        .compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
                 // Cancelled with sections already read: hand those back rather than losing
@@ -259,6 +301,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     /// rarely carry their own TMDB id, and channel rules key off the series).
     private func fetchShowsSection(_ section: PlexSection, onBatch: PlexAPIService.ShowProgress? = nil) async throws -> [PlexMediaItem] {
         let series = try await fetchAllItems(parentId: section.key, includeItemTypes: "Series")
+            .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Series") }
         var results: [PlexMediaItem] = []
         let batchSize = 10
         for batchStart in stride(from: 0, to: series.count, by: batchSize) {
@@ -284,6 +327,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     private func fetchEpisodes(for show: JellyfinItem) async throws -> [PlexMediaItem] {
         do {
             let episodes = try await fetchAllItems(parentId: show.Id, includeItemTypes: "Episode")
+                .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Episode") }
             let showGenres = show.Genres ?? []
             return episodes.compactMap { ep -> PlexMediaItem? in
                 let durationMin = Self.minutes(fromTicks: ep.RunTimeTicks)
@@ -890,6 +934,15 @@ struct JellyfinItem: Decodable {
     let MediaSources: [MediaSource]?
     let ImageTags: [String: String]?
     let UserData: UserData?
+    /// "Movie", "Series", "Episode", "MusicVideo", "Playlist", "Audio", "BoxSet" and so on.
+    let itemType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case Id, Name, SeriesName, Overview, ProductionYear, PremiereDate, DateCreated, ChildCount
+        case OfficialRating, CommunityRating, RunTimeTicks, Genres, CollectionType, ParentIndexNumber
+        case IndexNumber, ProviderIds, Studios, MediaSources, ImageTags, UserData
+        case itemType = "Type"
+    }
 
     struct Studio: Decodable { let Name: String? }
     struct UserData: Decodable {

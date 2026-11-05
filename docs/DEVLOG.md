@@ -3,6 +3,40 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Apple TV: Jellyfin and Emby playlists, music and collections stay out of the guide, #205 #206)
+
+**Why.** A Jellyfin Playlists view answers any items request with its playlists (`PlaylistsFolder` overwrites
+`IncludeItemTypes`), and the scan treated every view that was not TV or Music Videos as a film library, so each
+playlist became a film. A playlist has no year and the year rule lets that through: a 33 minute workout mix aired on
+VHS VAULT, DVD SHELF and FLICKS on the web tuner. The Apple TV had the same hole (read, then reproduced on a loopback
+server). The web fix is on `web/jellyfin-playlist-leak`; this is the Apple TV port, to the same contract.
+
+**Changed.**
+- `JellyfinAPIService.sectionType(for:)` returns "other" for Playlists, Music, Collections, Books, Audiobooks, Photos,
+  Home Videos, Live TV, Trailers, Folders and Channels. Those views are not sections at all: never asked for items, not
+  offered in library selection. A view with no CollectionType, or one the app does not know, stays a film view.
+- `itemTypes(forSectionType:)` is now `Series` for TV, `Movie,MusicVideo` for Music Videos (I-067 keeps working) and
+  `Movie` for the rest, nil for "other".
+- A row whose `Type` was not asked for is dropped, case aside; a row with no `Type` is kept (`isAskedType`). Applied to
+  the film views, the series list and each show's episodes, in both services. Not applied to collection members: Emby
+  answers `Movie,Series` with episodes there on purpose.
+- `JellyfinItem` reads `Type` (`itemType`).
+- `scripts/jellyfin-library-golden.json` is copied byte for byte from the web branch (`724941e6`); the Swift tests read
+  it the way `FilterGoldenTests` reads its file. If the web branch changes it before merging, expect a trivial conflict.
+- The saved-library refresh from #204 is now one rule for Emby and Jellyfin: `scanFieldsVersion` is 2 (1 = names the two
+  rating fields, 2 = also reads only video views and the types asked for), and a Jellyfin or Emby snapshot older than 2
+  restores, is stale, loses its signature and refreshes once behind the guide. Plex is untouched.
+
+**Checked.** `JellyfinPlaylistLeakTests` runs the real Jellyfin and Emby scans against a loopback server whose Playlists,
+Music and Collections views answer with their own rows whatever is asked, plus a Home Videos view and a no-CollectionType
+view holding a film, a playlist and a clip. Before the port both fail (nine non-film titles scanned, on channels); after,
+none loads, none of those views is asked for items, the six real films fill VHS VAULT, the MusicVideo rows load as music
+videos, the filed film and the mixed-view film load. `JellyfinLibraryGoldenTests` holds the Swift side to the golden file.
+
+**Open.** Home Videos is a view some people keep films in; it is no longer read (the web does the same, by the golden
+file). Emby's `games` CollectionType is not in the golden list; its rows are `Game`, so the type check drops them.
+Not measured on a real Jellyfin or Emby.
+
 ## 2026-11-03 (Apple TV: franchise collections grey out while FRANCHISES is off)
 
 **Shipped.** Nothing yet. Branch `appletv/franchises-page-gate`, not pushed, for the next Apple TV build.

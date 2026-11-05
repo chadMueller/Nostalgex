@@ -108,7 +108,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         }
         let (data, response) = try await Self.session.data(for: req)
         let views = try Self.decode(EmbyItemsResponse.self, data: data, response: response).Items ?? []
-        return views.map { PlexSection(key: $0.Id, title: $0.Name ?? "Library", type: JellyfinAPIService.sectionType(for: $0.CollectionType)) }
+        return JellyfinAPIService.videoSections(from: views)
     }
 
     // MARK: - Library loading
@@ -163,13 +163,14 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
+                    let asked = JellyfinAPIService.itemTypes(forSectionType: section.type) ?? "Movie"
                     // One event per page, as the Plex scan does. Without it the item
                     // count stood still for the whole section, so the stall watch read a
                     // big movie library that was still arriving as a dead server: a
                     // 15,000-movie section at 3 s a page (75 pages) was abandoned at 210 s
                     // with the server still answering (MovieLibraryScaleHarness).
                     let raw = try await fetchAllItems(
-                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type)
+                        parentId: section.key, includeItemTypes: asked
                     ) { loaded, _ in
                         progress?(LoadProgressEvent(
                             sectionIndex: i, totalSections: sections.count,
@@ -177,7 +178,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                             itemsLoadedSoFar: baseItemCount + loaded, showsCompleted: nil, totalShows: nil
                         ))
                     }
-                    items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
+                    items = raw.filter { JellyfinAPIService.isAskedType($0.itemType, asked: asked) }
+                        .compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
                 // Cancelled with sections already read: hand those back rather than losing
@@ -264,6 +266,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
 
     private func fetchShowsSection(_ section: PlexSection, onBatch: PlexAPIService.ShowProgress? = nil) async throws -> [PlexMediaItem] {
         let series = try await fetchAllItems(parentId: section.key, includeItemTypes: "Series")
+            .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Series") }
         var results: [PlexMediaItem] = []
         let batchSize = 10
         for batchStart in stride(from: 0, to: series.count, by: batchSize) {
@@ -289,6 +292,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
     private func fetchEpisodes(for show: JellyfinItem) async throws -> [PlexMediaItem] {
         do {
             let episodes = try await fetchAllItems(parentId: show.Id, includeItemTypes: "Episode")
+                .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Episode") }
             let showGenres = show.Genres ?? []
             return episodes.compactMap { ep -> PlexMediaItem? in
                 let durationMin = JellyfinAPIService.minutes(fromTicks: ep.RunTimeTicks)

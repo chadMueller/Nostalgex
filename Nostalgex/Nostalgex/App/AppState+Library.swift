@@ -666,13 +666,14 @@ extension AppState {
         let savedScanFields = found.snapshot.scanFieldsVersion
         applyLibrarySnapshot(&found.snapshot)
         libraryScanFieldsVersion = savedScanFields
-        if LibrarySnapshotStore.scanNeedsRatingFields(backend: backendKind, savedVersion: savedScanFields) {
-            // Read before the scan asked for ratings: Emby left them out, so no title here has a
-            // certificate or a star rating. The guide stays up from the snapshot; the refresh
-            // that follows must not be skipped on "the server says nothing changed" (#204).
+        if LibrarySnapshotStore.scanNeedsRefresh(backend: backendKind, savedVersion: savedScanFields) {
+            // Read by the old scan: on Emby no title here has a certificate or a star rating
+            // (#204), and on either a playlist or a track may be in as a film (#205, #206). The
+            // guide stays up from the snapshot; the refresh that follows must not be skipped on
+            // "the server says nothing changed".
             isStale = true
             librarySignature = nil
-            InstallDiagnostics.note("snapshot: read before the scan asked for ratings, refreshing in background")
+            InstallDiagnostics.note("snapshot: read by an older scan (version \(savedScanFields ?? 0)), refreshing in background")
         }
         isLibraryStale = isStale
         InstallDiagnostics.note("snapshot: restored, stale=\(isStale), enrichment rows=\(enrichmentService.cache.count)")

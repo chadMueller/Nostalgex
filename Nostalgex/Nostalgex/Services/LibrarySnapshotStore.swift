@@ -147,17 +147,24 @@ enum LibrarySnapshotStore {
     /// Past this age a scan runs even if the library reports no change.
     static let forceRefreshAfterSeconds = 24 * 3600
 
-    /// 1 = the scan asks the server for `OfficialRating` and `CommunityRating` (#204). A snapshot
-    /// without it was read by a request that Emby 4.10 answered without either, so none of its
-    /// titles carries a certificate or a star rating.
-    static let scanFieldsVersion = 1
+    /// What the scan that read a snapshot's items asked for and kept, for Jellyfin and Emby:
+    /// 1 = it names `OfficialRating` and `CommunityRating` (#204; Emby 4.10 sends neither
+    /// unasked, so no title carried a certificate or a star rating before);
+    /// 2 = it also reads only the views that hold videos and drops a row whose `Type` it did not
+    /// ask for (#205, #206; a playlist, a track or a box set was a "film" before).
+    /// A snapshot with no number was read by the first scan.
+    static let scanFieldsVersion = 2
 
-    /// True when a snapshot has to be refreshed because the scan that made it did not ask for the
-    /// rating fields and this backend does not send them unasked. Emby only: Jellyfin sent both
-    /// anyway and Plex always has. Refreshing is a scan, so it is done once: a scan stamps the
-    /// current version, and so does the snapshot saved after it.
-    static func scanNeedsRatingFields(backend: MediaBackendKind, savedVersion: Int?) -> Bool {
-        backend == .emby && (savedVersion ?? 0) < scanFieldsVersion
+    /// True when a snapshot has to be refreshed because the scan that made it read the library
+    /// the old way, and what it holds is wrong on this backend: Emby (no ratings, playlists as
+    /// films) and Jellyfin (playlists as films). Plex's scan never had either problem. The guide
+    /// comes up from the snapshot and the refresh runs behind it, once: a scan stamps the current
+    /// version, and so does the snapshot saved after it.
+    static func scanNeedsRefresh(backend: MediaBackendKind, savedVersion: Int?) -> Bool {
+        switch backend {
+        case .emby, .jellyfin: return (savedVersion ?? 0) < scanFieldsVersion
+        case .plex: return false
+        }
     }
 
     /// Bump only when an older file can no longer decode or would decode into something

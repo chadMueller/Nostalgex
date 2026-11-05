@@ -303,13 +303,17 @@ final class EmbyRatingFieldsTests: XCTestCase {
 
     /// A library saved before the scan asked for ratings has none on any Emby title, and the
     /// 24-hour hold on "the server says nothing changed" would keep it that way. It is stale
-    /// and its signature is dropped, so the background refresh scans. Jellyfin and Plex are
-    /// untouched, and a snapshot the new scan wrote is not stale.
+    /// and its signature is dropped, so the background refresh scans. Jellyfin has the same
+    /// refresh for the playlist fix, Plex is untouched, and a snapshot the current scan wrote is
+    /// not stale.
     func testASavedEmbyLibraryFromBeforeTheFieldsRefreshesOnce() async throws {
-        XCTAssertTrue(LibrarySnapshotStore.scanNeedsRatingFields(backend: .emby, savedVersion: nil))
-        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRatingFields(backend: .emby, savedVersion: LibrarySnapshotStore.scanFieldsVersion))
-        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRatingFields(backend: .jellyfin, savedVersion: nil))
-        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRatingFields(backend: .plex, savedVersion: nil))
+        let current = LibrarySnapshotStore.scanFieldsVersion
+        XCTAssertTrue(LibrarySnapshotStore.scanNeedsRefresh(backend: .emby, savedVersion: nil))
+        XCTAssertTrue(LibrarySnapshotStore.scanNeedsRefresh(backend: .emby, savedVersion: 1))
+        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRefresh(backend: .emby, savedVersion: current))
+        XCTAssertTrue(LibrarySnapshotStore.scanNeedsRefresh(backend: .jellyfin, savedVersion: nil))
+        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRefresh(backend: .jellyfin, savedVersion: current))
+        XCTAssertFalse(LibrarySnapshotStore.scanNeedsRefresh(backend: .plex, savedVersion: nil))
     }
 
     private final class Memory: Nostalgex.CredentialStoring, @unchecked Sendable {
