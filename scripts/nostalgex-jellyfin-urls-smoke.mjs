@@ -6,6 +6,7 @@
  * Run: `npm run test:jellyfin-urls`
  */
 import { strictEqual } from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import "./nostalgex-jellyfin-urls.js";
 
 const JU = globalThis.NostalgexJellyfinUrls;
@@ -138,6 +139,21 @@ check("stream URLs carry no backend switch: Emby and Jellyfin get the same direc
   strictEqual(direct("mp4"), `${S}/Videos/abc/stream.mp4?Static=true&MediaSourceId=ms%201&api_key=TOK`);
   strictEqual(new URL(fb({ playSessionId: "p" })).pathname, "/Videos/abc/master.m3u8");
 });
+
+// ── Which views a scan reads, and what it keeps (point 12; scripts/jellyfin-library-golden.json) ──
+const libraryGolden = JSON.parse(readFileSync(new URL("./jellyfin-library-golden.json", import.meta.url), "utf8"));
+for (const c of libraryGolden.sections) {
+  check(`library view ${JSON.stringify(c.collectionType)} is a ${c.sectionType} section`, () => {
+    strictEqual(JU.sectionType(c.collectionType), c.sectionType);
+    strictEqual(JU.itemTypes(JU.sectionType(c.collectionType)), c.itemTypes);
+  });
+}
+check("a view with no CollectionType key at all is a film view", () => strictEqual(JU.sectionType(undefined), "movie"));
+for (const c of libraryGolden.types) {
+  check(`a ${JSON.stringify(c.item.Type)} row asked for ${c.asked} is ${c.kept ? "kept" : "dropped"}`, () =>
+    strictEqual(JU.hasAskedType(c.item, c.asked), c.kept));
+}
+check("hasAskedType tolerates no item", () => strictEqual(JU.hasAskedType(null, "Movie"), true));
 
 if (failures.length) {
   console.error(`jellyfin-urls: ${failures.length} failed, ${passed} passed`);

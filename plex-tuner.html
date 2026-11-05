@@ -9583,7 +9583,10 @@
         start += items.length;
         if (items.length === 0 || collected.length >= total) break;
       }
-      return collected;
+      // Only the types that were asked for. A server may answer with more (the Playlists view
+      // always answers with playlists, whatever the request says), and a playlist or a song is
+      // not a programme. Paging above counts the rows the server sent, so this comes last.
+      return collected.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
     }
 
     function tmdbFromProviderIds(ids) {
@@ -9646,15 +9649,17 @@
     let allItems = [];
     for (let vi = 0; vi < views.length; vi++) {
       const view = views[vi];
-      const ct = (view.CollectionType || '').toLowerCase();
-      const type = ct === 'tvshows' ? 'show' : (ct === 'musicvideos' ? 'musicvideo' : 'movie');
+      // 'show', 'musicvideo', 'movie', or 'other': a view with no videos in it (Playlists, Music,
+      // Collections, Photos and the like) is never asked for items (scripts/nostalgex-jellyfin-urls.js, 12).
+      const type = NostalgexJellyfinUrls.sectionType(view.CollectionType);
+      if (type === 'other') continue;
       const isMusicVideoSection = type === 'musicvideo';
       LL.state.scanSectionIndex = vi;
       LL.setPhase('scanningLibrary', view.Name || 'Library');
 
       try {
         if (type === 'show') {
-          const series = await fetchItems(view.Id, 'Series');
+          const series = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
           const BATCH_SIZE = 5;
           let episodeCount = 0;
           for (let b = 0; b < series.length; b += BATCH_SIZE) {
@@ -9724,7 +9729,7 @@
           // for Movie alone returned nothing and HIGH ROTATION stayed empty (I-067). Ask for
           // both there, since a few libraries file clips as Movie. Every other library keeps
           // asking for Movie only.
-          const items = await fetchItems(view.Id, isMusicVideoSection ? 'Movie,MusicVideo' : 'Movie');
+          const items = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
           items.forEach(jf => {
             const genres = jf.Genres || [];
             if (isMusicVideoSection && !genres.some(g => /music/i.test(g))) genres.push('Music Video');
