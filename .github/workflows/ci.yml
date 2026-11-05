@@ -104,6 +104,10 @@ jobs:
               - 'scripts/nostalgex-franchise-builder.js'
               - 'scripts/nostalgex-collections.js'
               - 'scripts/nostalgex-collections-smoke.mjs'
+              # The library line in Settings: the count and its wording, and the loaders it reads.
+              - 'scripts/nostalgex-library-coverage.js'
+              - 'scripts/nostalgex-library-coverage-smoke.mjs'
+              - 'scripts/nostalgex-scan-failures-smoke.mjs'
               - 'scripts/nostalgex-franchise-smoke.mjs'
               - 'scripts/nostalgex-franchise-lineup.js'
               - 'scripts/nostalgex-franchise-lineup-smoke.mjs'

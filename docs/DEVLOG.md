@@ -3,6 +3,45 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (web tuner: a library line in Settings, how many titles sit on a channel; Apple TV 1.0.30 parity)
+
+**Why.** The Apple TV 1.0.30 says, under RESCAN LIBRARY, how many loaded titles sit on a channel, how many sit on none,
+and how many the scan skipped for having no runtime (`appletv/library-coverage-counts`, `LibraryDiagnostics`). The web
+had one console line (`LIBRARY: N items, M with tmdbID`) and nothing on screen, so a reader who saw a title missing
+from every channel had no way to tell "no channel takes it" from "it did not load".
+
+**Changed.**
+- `scripts/nostalgex-library-coverage.js`: the count and the wording, from the Apple TV's definitions. **On a channel:**
+  in the pool of at least one channels.json channel whose pool reaches its `minItems`, whether or not its package is
+  on (seasonal ones count), or in a collection or franchise channel already built. **On no channel:** every other
+  title, split by kind (MOVIES, EPISODES, MUSIC VIDEOS) when more than one kind has some. **Skipped:** movies and
+  episodes the loaders drop on `durationMin <= 0`. Example:
+  `11,633 OF 11,809 ON CHANNELS · 176 ON NO CHANNEL (4 MOVIES, 172 EPISODES) · 12 SKIPPED (NO RUNTIME)`.
+  It tests each title against each channel with `itemPasses` (no pools are built), in slices of about 12 ms that give
+  the page back between them, and stops at once when a newer library replaces the one it reads.
+- `plex-tuner.html`: the line sits under LIBRARY in Settings, SERVER tab, in a quiet grey, and is empty until counted
+  or when signed out. The four loaders count the skipped titles (once each, reset at the start of a scan) and the
+  count is saved with the library cache, so the line survives a reload. The count starts 2.5 s after the pools are
+  built, again after enrichment re-filters and after the collections are read, and a console `COVERAGE:` line carries
+  the first 25 titles on no channel (year, certificate, rating, genres, studio, runtime, TMDB), console only.
+- `scripts/nostalgex-library-coverage-smoke.mjs` (`npm run test:library-coverage`, in `npm test`): 25 checks. The
+  wording, the numbers against a plain loop over the real `channels.json` and filter, the slicing, the cancel, a channel
+  short of its minimum, a built collection channel, package switches not moving the number.
+- `scripts/library-coverage-browser-smoke.mjs` (`npm run test:library-coverage:browser`, headless): the real page against
+  a stub Plex with a synthetic library. 10 checks: the line in the Apple TV's wording, the numbers against a plain loop
+  over the library the page holds, the skipped count, the line after a reload, the console line, sign-out.
+
+**Measured** in headless Chromium against a stub Plex, synthetic titles (not a real library):
+- 11,800 titles: the count takes 6.7 s; the page's longest stretch busy while it ran was 25 ms (a heartbeat every
+  10 ms), no task over 50 ms.
+- 100,000 titles: the count takes 74 s, longest stretch busy 24 ms, no task over 50 ms, JS heap 99 MB before and after.
+  The first load, including building all 142 channels and then the count, shows the line at 131 s. The JS heap peaked
+  at 341 MB while loading.
+
+**Not done.** A real Plex library was not run; the 11.8k figures are synthetic. The Apple TV needs the enrichment
+record for a `productionCompanies` rule and the web matches the Plex studio without one (known, on purpose), so on a
+library with no enrichment the web's on-a-channel figure is a little higher.
+
 ## 2026-11-05 (web tuner: a scan that loses part of the server keeps the rest; one that loses all of it is an error)
 
 **Why.** Parity with the Apple TV's 1.0.30 rule (`SectionFailures`, N-039, found while measuring #146). The web already
