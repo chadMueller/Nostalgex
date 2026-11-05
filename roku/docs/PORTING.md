@@ -950,7 +950,8 @@ at `6f05937` with 5,363 items on one server:
   hides this. Text that has to match upstream goes through
   `NxFranchiseLower`, and upper-cased text through `NxFranchiseUpper`, since
   `UCase` is taken to be the same (not yet measured on a TV).
-- `step` is a reserved word, like `pos`. `run` passes the off-device
+- `step` and `tab` are reserved words, like `pos` (`tab` as a variable
+  stopped every component parsing, 2026-11-04). `run` passes the off-device
   interpreter but not a TV, which takes it for the builtin `Run()`: a
   parameter of that name stopped a 43S45 compiling the app ("Builtin
   function call expected"). `tests/run.sh` fails on it.
