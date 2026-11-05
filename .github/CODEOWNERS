@@ -2,5 +2,9 @@
 # GitHub only requests review from owners with write access to this repo, so
 # a contributor listed here without it is never asked.
 
+# Everything: Chad approves every pull request into main, including those from
+# collaborators (branch protection requires a code owner's approval).
+* @chadMueller
+
 # The Roku port. Contributed through pull requests from forks.
 /roku/ @chadMueller

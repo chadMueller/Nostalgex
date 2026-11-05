@@ -22,7 +22,7 @@ end function
 
 ' A watch starting from `sample` at nowMs.
 function NxStallStart(sample as String, nowMs as Integer) as Object
-    return { sample: sample, changedAt: nowMs }
+    return { sample: sample, changedAt: nowMs, lookedAt: nowMs }
 end function
 
 ' "progressing", "slow" (tell the viewer) or "stalled" (abandon the scan).
@@ -36,4 +36,32 @@ function NxStallVerdict(watch as Object, sample as String, nowMs as Integer) as 
     if idle >= NxStallStopAfterMs() then return "stalled"
     if idle >= NxStallWarnAfterMs() then return "slow"
     return "progressing"
+end function
+
+' A look this long after the last one (the watch looks every 2 s) means the
+' app was paused, not the server quiet: the Roku stops the whole app while
+' its screensaver runs, timers and requests too, and roTimespan keeps
+' counting (43S45, Roku OS 16.0.4, 2026-11-04: 39 min paused, then the
+' first look after waking read it as 210 s with no progress and stopped the
+' scan). The loading screen holds the screensaver off (LoadingView.xml);
+' this covers any other pause. Upstream's watch has no such check: it
+' compares wall-clock Date()s (LibraryLoadStallWatch.swift).
+function NxStallPauseGapMs() as Integer
+    return 20000
+end function
+
+' Called on every look before NxStallVerdict: a gap of NxStallPauseGapMs or
+' more since the last look isn't counted as quiet. Returns the gap skipped,
+' 0 when there was none.
+function NxStallSkipPause(watch as Object, nowMs as Integer) as Integer
+    skipped = 0
+    if watch.lookedAt <> invalid then
+        gap = nowMs - watch.lookedAt
+        if gap >= NxStallPauseGapMs() then
+            watch.changedAt = watch.changedAt + gap
+            skipped = gap
+        end if
+    end if
+    watch.lookedAt = nowMs
+    return skipped
 end function

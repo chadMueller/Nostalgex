@@ -10,6 +10,7 @@
 ' header here.
 
 sub init()
+    m.seeded = false
     m.colX = 220
     m.slotWidth = 425
     m.rowPitch = 81
@@ -179,6 +180,10 @@ sub onGuide()
     previous = m.channels
     m.channels = m.top.guide.channels
     m.gaveWay = invalid
+    ' One channel from the cold-boot seed while the library loads (#155):
+    ' no packages behind it, so SETTINGS and the sidebar wait for the guide.
+    m.seeded = NxTruthy(m.top.guide.seed)
+    if not m.seeded and m.top.FindNode("notice").text = NxSeedWaitNote() then m.top.FindNode("notice").text = ""
     ' No channel at all (libraries that build none): the time header and
     ' ChannelGuideView's NO CHANNELS AVAILABLE, and Up still reaches SETTINGS.
     ' Nothing reads a channel while the list is empty (#93).
@@ -874,6 +879,9 @@ sub startTune(idx as Integer)
         stopTracker()
         m.playing = invalid
         m.video.control = "stop"
+        ' The seed's last airing has ended and the library is still loading:
+        ' the loading screen, not a black one (#155).
+        if m.seeded then m.top.seedEnded = true
         return
     end if
     stream = NxStreamContent(b, offset&, rung)
@@ -2066,6 +2074,7 @@ end sub
 ' ── Packages sidebar (Left on the live slot), as the Apple TV app's ─────────
 
 sub openSidebar()
+    if seedWait() then return
     m.sideTargets = [{ name: "SETTINGS", channel: -1, color: "#FFE500" }]
     m.sideTargets.Append(NxGuideJumpTargets(m.top.guide.bundles, m.top.guide.enabledBundles, m.top.guide.jumps, m.channels))
     m.sideFocus = 1
@@ -2169,7 +2178,16 @@ sub giveSettingsOnAir()
     m.settings.builtBundles = built
 end sub
 
+' On a guide from the cold-boot seed there are no packages, franchises or
+' collections to show yet: SETTINGS and the sidebar say so and wait.
+function seedWait() as Boolean
+    if not m.seeded then return false
+    m.top.FindNode("notice").text = NxSeedWaitNote()
+    return true
+end function
+
 sub openSettings()
+    if seedWait() then return
     m.settings = CreateObject("roSGNode", "SettingsView")
     m.settings.bundles = m.top.guide.bundles
     giveSettingsOnAir()

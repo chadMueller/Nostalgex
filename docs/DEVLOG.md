@@ -24,6 +24,32 @@ tunes, 10 hand-overs, no card. This branch, 40 s: 9 tunes and four cards, "1 in 
 **Open.** Jellyfin and Emby go another way (the stream ends unplayed, then the server's 200 is read as a
 short file's end), a second PR per Chad on #184, with the same 40 s check on a TV.
 
+## 2026-11-04 (Roku: the loading screen holds the screensaver off; a paused app isn't a stalled server)
+
+**Why.** The 2026-11-04 entry on the Apple TV staying awake owed "one stick check of a long load under" the
+Roku screensaver. Measured on our 43S45 (Roku OS 16.0.4, screensaver wait 10 min) with main at `29203c9`: the
+screensaver came on over the loading screen, and the Roku paused the whole app under it. For 39 min no request
+went out, nothing printed and the loading dots stopped. The first stall look after a button woke the TV read
+that as 210 s with no progress: "abandoning this scan" with 4 items read, and the guide came up NO CHANNELS
+FOUND and was saved.
+
+**Changed.**
+- `roku/components/LoadingView.xml`: a hidden `Video` node with `disableScreenSaver`, Roku's switch for
+  this, for as long as the loading screen is up. It never gets content. The Apple TV's counterpart is
+  `isIdleTimerDisabled` while loading (`ScreenAwakePolicy.swift`).
+- `roku/source/util/LoadStall.brs`: `NxStallSkipPause`, which `MainScene`'s watch calls before every verdict.
+  A look 20 s or more after the last one (they are 2 s apart) means the app was paused, and that gap doesn't
+  count as quiet. It covers a pause the hold doesn't prevent. 12 new checks in `roku/tests/StallTests.brs`.
+
+**Pressed** on the 43S45 with the lab Jellyfin behind a proxy that made the load slow but never stalled: one
+item per page with the real total, each answer held 28 s, and two 500s before each, so 84 s per page. Main:
+the screensaver at 10 min, then the stop and NO CHANNELS FOUND above. This branch: no screensaver in 25.5 min
+without a key, and the load finished after 23.8 min with all 13 items, the same 36 channels and pools
+fingerprint as an unslowed load.
+
+**Open.** Not seen on a TV: `NxStallSkipPause` itself, since with the hold no pause happened. A Plex load, a
+stick, and a long load behind #182's seed channel.
+
 ## 2026-11-04 (channels.json v50: no channel is built from fewer than three titles)
 
 **Shipped.** Nothing yet. Branch `rules/min-items-floor` off main `29203c9f`, not pushed.
@@ -231,6 +257,44 @@ taking a tick, memory, or thermal. An A12 turns a 37 s build into minutes, not a
 **Next.** The reporter's answers (does the counter move, how many sections). The harness through the UI on a real
 Apple TV with the `longSummaries,twoSections` shape, reading tick hops and main-thread blocks. Roku never holds off the
 screensaver during a load; one stick check of a long load under it is owed.
+
+## 2026-11-03 (Roku: after a power loss, the first channel plays while the library loads, #155)
+
+**Why.** The saved guide, pools and library live in `cachefs:`, which is RAM. A TV that loses power
+comes back to a full scan behind the loading screen, which is what #155's reports describe. Agreed on
+#155: a playable seed, one channel for as many hours as fit in 10 KB, a hand-over to
+the full guide that doesn't restart what's playing, and the loading screen again if it runs out.
+
+**Changed.**
+- `roku/source/guide/ColdBootSeed.brs`: the seed. Each build and each new hour write the first
+  channel's airings from the one on now, as many whole ones as fit in 10,240 bytes, each the guide
+  block less its summary, to registry section `seed`, keyed to the build, only when it changed.
+- `LibraryTask`: a launch with no saved guide and no saved pools plays the seed's channel and loads
+  as a first load (not `shown`), so a failure or a stop is a first load's and its guide is always
+  handed over.
+- `GuideView`: on the seed's guide, SETTINGS and the sidebar say STILL LOADING YOUR LIBRARY, and the
+  seed's last airing ending sets `seedEnded`. `MainScene` then puts the loading screen back; a load
+  error takes the seed's guide down to show it; a launch deep link waits for the full guide; the
+  LaunchGuard marker stays for the seed's load.
+- Sign-out clears the seed with the other caches (`NxClearSeed`). 31 cases in
+  `roku/tests/ColdBootSeedTests.brs`.
+
+**Pressed** on the 43S45 with the lab Emby (5,509 items) and a scratch switch that deleted the
+`cachefs:` files at launch: the seed's channel tuned 1.0 s after the launch, and the full guide went up
+about 25 s later with the same film still playing. The run-out, the load error and the SETTINGS note
+behaved as above. Details in `roku/docs/PORTING.md` § After a power loss.
+
+**Registry room** (asked on #182). A throwaway build on the 43S45 filled its own registry sections
+with a heavy setup: 5 Plex servers and the picker's copy, 40 bundles, 100 franchises on and 100 off, and
+300 collections on (15,001 bytes of ids). Space is charged at far less than a value's length (those ids
+took 1,656), so values look stored compressed. From 32,273 bytes free, the setup took 3,593 and a
+10,211-byte seed of random hex text 2,864, leaving 25,816. With the seed in
+place, 3,000 collections (about 150 KB of ids) still wrote, with 12,026 free. A real seed wasn't on hand
+to measure, but even stored uncompressed it would leave about 18 KB here, so the seed has no reserve check.
+
+**Open.** The seed holds the first channel, where every launch opens (Chad on #182: opening on the last
+channel watched is a separate decision). Not tried: a real power cut, a Plex sign-in, the hourly
+re-save, the sidebar and a deep link on the seed's guide.
 
 ## 2026-11-03 (Roku docs: the two sessions where TS started Emby's ffmpeg twice)
 

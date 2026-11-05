@@ -25,5 +25,14 @@
     <Rectangle width="1920" height="1080" color="0x000000FF" />
     <Group id="content" />
     <Group id="startOver" />
+    <!-- Holds the screensaver off for as long as the loading screen is up.
+         The Roku pauses the whole app under its screensaver, the scan with
+         it: a load longer than the TV's wait (10 min on our 43S45, Roku OS
+         16.0.4) sat paused, and the stall watch stopped it on waking
+         (2026-11-04). A Video node's
+         disableScreenSaver is the Roku's switch for it; this one never gets
+         content, as upstream's isIdleTimerDisabled while loading
+         (ScreenAwakePolicy.swift). -->
+    <Video id="screensaverHold" visible="false" width="0" height="0" disableScreenSaver="true" />
   </children>
 </component>

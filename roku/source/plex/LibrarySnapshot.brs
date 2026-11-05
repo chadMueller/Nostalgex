@@ -224,6 +224,17 @@ sub NxClearAccountCaches(root = "" as String)
     DeleteFile(root + "/nostalgex-enrichment.json")
     DeleteFile(NxCacheOwnerPath(root))
     NxClearPlaybackVerdicts()
+    NxClearSeed()
+end sub
+
+' The cold-boot seed (source/guide/ColdBootSeed.brs) is the account's
+' schedule too, and it lives in the registry, which outlasts the files above.
+sub NxClearSeed()
+    reg = NxRegSection("seed")
+    ' The off-TV interpreter has no registry.
+    if reg = invalid then return
+    reg.Delete("seed")
+    reg.Flush()
 end sub
 
 ' The last playback failures Settings shows under RESCAN LIBRARY

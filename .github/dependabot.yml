@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # GitHub Actions only, grouped into one monthly pull request.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"

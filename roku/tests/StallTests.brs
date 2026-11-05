@@ -24,6 +24,39 @@ function NxRunStallTests(fixturePath as String) as Integer
     end for
     NxCheck(r, "slow but moving for 10 min", verdict, "progressing")
 
+    ' The app paused under the screensaver: a look long after the last one
+    ' isn't quiet (NxStallSkipPause, called before every verdict).
+    w = NxStallStart("a", 0)
+    for t = 2000 to 100000 step 2000
+        skipped = NxStallSkipPause(w, t)
+        verdict = NxStallVerdict(w, "a", t)
+    end for
+    NxCheck(r, "looks 2 s apart skip nothing", skipped.ToStr(), "0")
+    NxCheck(r, "quiet 100 s", verdict, "slow")
+    woke = 100000 + 2340000
+    NxCheck(r, "39 min paused is skipped", NxStallSkipPause(w, woke).ToStr(), "2340000")
+    NxCheck(r, "after the pause, still only slow", NxStallVerdict(w, "a", woke), "slow")
+    for t = woke + 2000 to woke + 108000 step 2000
+        skipped = skipped + NxStallSkipPause(w, t)
+        verdict = NxStallVerdict(w, "a", t)
+    end for
+    NxCheck(r, "quiet 208 s, pause left out", verdict, "slow")
+    NxStallSkipPause(w, woke + 110000)
+    NxCheck(r, "quiet 210 s, pause left out", NxStallVerdict(w, "a", woke + 110000), "stalled")
+    w = NxStallStart("a", 0)
+    NxCheck(r, "a 19.9 s gap is quiet", NxStallSkipPause(w, 19999).ToStr(), "0")
+    NxCheck(r, "a 20 s gap is a pause", NxStallSkipPause(w, 39999).ToStr(), "20000")
+    w = NxStallStart("a", 0)
+    NxCheck(r, "paused before the first look", NxStallSkipPause(w, 600000).ToStr(), "600000")
+    NxCheck(r, "and not stalled for it", NxStallVerdict(w, "a", 600000), "progressing")
+    w = NxStallStart("a", 0)
+    NxStallSkipPause(w, 2000)
+    NxStallVerdict(w, "b", 2000)
+    NxStallSkipPause(w, 1000000)
+    NxCheck(r, "a change after a pause is progress", NxStallVerdict(w, "c", 1000000), "progressing")
+    NxStallSkipPause(w, 1002000)
+    NxCheck(r, "the clock restarts at it", NxStallVerdict(w, "c", 1002000), "progressing")
+
     ' Outside a scan nothing is stopped, and a wait is a plain Wait.
     m.nxLoadWatch = invalid
     NxCheck(r, "no scan, not stopped", NxLoadStopped().ToStr(), "false")
