@@ -9567,13 +9567,17 @@
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
 
     // Paginated /Items fetch under a parent, requesting the fields channel rules need.
+    // OfficialRating and CommunityRating are named because Emby 4.10 leaves both out of an
+    // answer unless Fields asks for them (Jellyfin sends them either way), and every rating
+    // rule reads them: contentRatings allow-lists, the kids gate, the 9 PM hold, WATERSHED
+    // and ratingMin (GitHub #204).
     async function fetchItems(parentId, includeItemTypes) {
       let collected = [], start = 0;
       while (true) {
         const url = `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
           + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
           + `&IncludeItemTypes=${includeItemTypes}`
-          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`
+          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
           + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
         const r = await fetch(url, { headers });
         const d = await r.json();
