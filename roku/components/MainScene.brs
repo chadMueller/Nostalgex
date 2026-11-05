@@ -8,6 +8,8 @@
 
 sub init()
     m.libraryBusy = false
+    ' The guide on screen is the cold-boot seed's one channel (#155).
+    m.seeded = false
     m.unfinished = false
     m.prompt = m.top.FindNode("prompt")
     m.hint = m.top.FindNode("hint")
@@ -290,7 +292,8 @@ end sub
 
 ' The stall watch over a server's scan (source/util/LoadStall.brs), as
 ' upstream's withLibraryLoadStallWatch: every 2 s while it runs, the scan's
-' progress fields and answers count, compared with the last look. Quiet
+' progress fields and answers count, compared with the last look (a long
+' gap between looks is the app paused, and doesn't count). Quiet
 ' for 60 s, the loading screen offers STOP WAITING; for 210 s, the scan is
 ' stopped. A background refresh, under the guide, says nothing and is only
 ' stopped.
@@ -321,7 +324,10 @@ sub onStallTick()
         stopStallWatch()
         return
     end if
-    verdict = NxStallVerdict(m.stall, stallSample(), m.stallClock.TotalMilliseconds())
+    now = m.stallClock.TotalMilliseconds()
+    paused = NxStallSkipPause(m.stall, now)
+    if paused > 0 then print "library: the app was paused for "; paused \ 1000; " s (the screensaver?); not counted as quiet"
+    verdict = NxStallVerdict(m.stall, stallSample(), now)
     if m.loading <> invalid then m.loading.stalling = verdict <> "progressing"
     if verdict = "stalled" then
         print "library: no scan progress for "; NxStallStopAfterMs() \ 1000; " s, abandoning this scan"
@@ -367,16 +373,31 @@ sub onLibraryStatus()
     if status = "error" then
         NxLoadEnded(NxLaunchGuardRegistry())
         setLibraryBusy(false)
-        if m.guide <> invalid then return
+        ' A seed's channel isn't a guide to keep: the load was a first one,
+        ' and its error is what to show.
+        if m.guide <> invalid and not m.seeded then return
+        if m.seeded then removeSeedGuide()
         closeLoading()
         m.signedInClock = invalid
         m.prompt.text = m.library.message
         m.hint.text = "Press OK to try again, or * to sign out of " + NxKindName(NxSignedInKind()) + " on this TV."
         launchComplete()
     else if status = "ready" then
+        ' Read once: each read copies the whole guide out of the task.
+        g = m.library.guide
+        seed = NxTruthy(g.seed)
+        ' A launch deep link names a channel the seed's one channel likely
+        ' isn't, and the seed's guide would take the link: it waits for the
+        ' real guide behind the loading screen, as before the seed.
+        if seed and m.guide = invalid and m.pendingLink <> invalid then
+            print "library: a deep link is waiting; not playing the saved channel"
+            return
+        end if
         ' A saved guide shown first proves nothing about the full load, which
-        ' goes on behind it uncounted (onLibraryRefreshed ends it).
-        NxLoadEnded(NxLaunchGuardRegistry(), not m.library.fromCache)
+        ' goes on behind it uncounted (onLibraryRefreshed ends it). The seed
+        ' is no guide: its load is a first one, and stays counted until the
+        ' guide it builds goes up.
+        if not seed then NxLoadEnded(NxLaunchGuardRegistry(), not m.library.fromCache)
         closeLoading()
         m.prompt.text = ""
         m.hint.text = ""
@@ -391,6 +412,7 @@ sub onLibraryStatus()
             m.guide.ObserveField("action", "onGuideAction")
             m.guide.ObserveField("bundleRequest", "onBundleRequest")
             m.guide.ObserveField("rescanRequest", "onRescanRequest")
+            m.guide.ObserveField("seedEnded", "onSeedEnded")
             m.guide.libraryBusy = m.libraryBusy
             if m.pendingLink <> invalid then m.guide.deepLink = m.pendingLink
             m.pendingLink = invalid
@@ -398,7 +420,8 @@ sub onLibraryStatus()
             m.resumeId = invalid
             m.top.AppendChild(m.guide)
         end if
-        m.guide.guide = m.library.guide
+        m.guide.guide = g
+        m.seeded = seed
         if first then m.guide.SetFocus(true)
         launchComplete()
         if m.scheduleTimer = invalid then
@@ -410,6 +433,25 @@ sub onLibraryStatus()
         end if
         startDailyRefresh()
     end if
+end sub
+
+' The seed's last airing ended before the library finished loading (#155):
+' the loading screen comes back, as it is on a launch with nothing saved, and
+' the guide goes up when the load ends.
+sub onSeedEnded()
+    if not m.seeded then return
+    print "library: the saved channel ran out before the library finished; back to the loading screen"
+    removeSeedGuide()
+    onLibraryPhase()
+end sub
+
+' Takes the seed's guide down, leaving the library task running.
+sub removeSeedGuide()
+    m.top.RemoveChild(m.guide)
+    m.guide = invalid
+    m.seeded = false
+    m.top.FindNode("title").visible = true
+    m.top.SetFocus(true)
 end sub
 
 ' The 15-minute check behind a TV left on (#67, source/util/DailyRefresh.brs).
@@ -490,6 +532,7 @@ end sub
 sub dropGuide()
     releaseLibrary()
     closeLoading()
+    m.seeded = false
     if m.guide <> invalid then
         m.top.RemoveChild(m.guide)
         m.guide = invalid
