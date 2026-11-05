@@ -354,6 +354,7 @@ extension AppState {
                 merged = merged.filter { itemBelongsToConnectedServers($0) }
             }
             allItems = merged
+            libraryScanFieldsVersion = LibrarySnapshotStore.scanFieldsVersion
             scanItemsFound = merged.count
             let withTMDB = merged.filter { $0.tmdbID != nil }.count
             let withIMDB = merged.filter { $0.imdbID != nil }.count
@@ -645,9 +646,19 @@ extension AppState {
             DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
             return false
         }
-        let isStale = found.isStale
+        var isStale = found.isStale
         let fromLegacyFile = found.fromLegacyFile
+        let savedScanFields = found.snapshot.scanFieldsVersion
         applyLibrarySnapshot(&found.snapshot)
+        libraryScanFieldsVersion = savedScanFields
+        if LibrarySnapshotStore.scanNeedsRatingFields(backend: backendKind, savedVersion: savedScanFields) {
+            // Read before the scan asked for ratings: Emby left them out, so no title here has a
+            // certificate or a star rating. The guide stays up from the snapshot; the refresh
+            // that follows must not be skipped on "the server says nothing changed" (#204).
+            isStale = true
+            librarySignature = nil
+            InstallDiagnostics.note("snapshot: read before the scan asked for ratings, refreshing in background")
+        }
         isLibraryStale = isStale
         InstallDiagnostics.note("snapshot: restored, stale=\(isStale), enrichment rows=\(enrichmentService.cache.count)")
         refillEnrichmentAfterRestoreIfNeeded()
@@ -821,7 +832,8 @@ extension AppState {
             enabledBundleIDs: enabledBundleIDs,
             exclusiveRules: exclusiveRules,
             discoveredCollections: discoveredCollections,
-            foundFranchises: foundFranchises
+            foundFranchises: foundFranchises,
+            scanFieldsVersion: libraryScanFieldsVersion
         )
         LibraryLoadProbe.mark("snapshot.capture")
         LibrarySnapshotStore.saveInBackground(payload)

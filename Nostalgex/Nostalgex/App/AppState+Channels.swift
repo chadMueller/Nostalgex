@@ -1756,9 +1756,14 @@ extension AppState {
             // is built from) came back null for 100% of a 500-title sample measured
             // against Chad's own server, so treating a missing native rating as an
             // automatic fail silently emptied the 13 channels that use a plain
-            // ratingMin gate. When neither native rating clears the bar, fall back
-            // to the same OMDb-enriched rating used by the imdbRatingMin gate above,
-            // at the same threshold, before rejecting.
+            // ratingMin gate. The cause was the scan, not the server: Emby 4.10 sends
+            // CommunityRating only when `Fields` names it, and the scan did not
+            // (#204; it does now, and 197 of 200 titles on a lab Emby carry it). A
+            // title the server still gives no score, and a Plex title without a
+            // critic score, can have none, so the fallback stays: when neither native
+            // rating clears the bar, use the same OMDb-enriched rating as the
+            // imdbRatingMin gate above, at the same threshold, before rejecting. The
+            // two are alternatives, so a native rating can only add titles here.
             if let ratingMin = rules.ratingMin {
                 let nativeOk = item.rating >= ratingMin || item.userRating >= ratingMin
                 if !nativeOk {

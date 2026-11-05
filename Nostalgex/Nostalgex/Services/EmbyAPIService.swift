@@ -214,8 +214,10 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 .init(name: "IncludeItemTypes", value: includeItemTypes),
                 // DateCreated is what parseMovieItem reads for addedAt. Without it in
                 // this list Emby items all came back with addedAt 0, so the schedule's
-                // premiere promotion could never fire on an Emby server.
-                .init(name: "Fields", value: "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData"),
+                // premiere promotion could never fire on an Emby server. OfficialRating
+                // and CommunityRating are the same story (#204): Emby 4.10 sends them
+                // only when named, and every title read as unrated without them.
+                .init(name: "Fields", value: JellyfinAPIService.scanFields),
                 .init(name: "StartIndex", value: "\(start)"),
                 .init(name: "Limit", value: "\(Self.pageSize)"),
                 .init(name: "SortBy", value: "SortName"),
