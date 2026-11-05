@@ -521,7 +521,11 @@ LaunchGuard marker stays. When that load's guide goes up, the tuned airing
 carries on if the guide airs the same programme on the channel
 (`GuideView.onGuide`'s refresh check) and is retuned otherwise. Until then SETTINGS and the sidebar say
 STILL LOADING YOUR LIBRARY, since the seed has no packages to list, and a
-launch deep link waits for the full guide as before. When the seed's last
+launch deep link waits for the full guide as before. So does a deep link that
+arrives while the seed's guide is up and names any channel but the seed's own
+(#203, `NxDeepLinkWaits`): MainScene keeps it and hands it to the full guide
+when that replaces the seed's. A link for the seed's own channel goes to the
+seed's guide at once. When the seed's last
 airing ends first, the loading screen comes back; a load that fails takes
 the seed's guide down and shows its error. Sign-out clears the seed with the
 other caches.
@@ -543,6 +547,18 @@ and kept the registry:
 - With the load failing 15 s after the seed went up, the error screen
   replaced the seed's guide and the player closed.
 - OK on SETTINGS showed STILL LOADING YOUR LIBRARY.
+
+Deep links on the seed's guide (#203), pressed on the 43S45 (OS 16.0.4,
+2026-11-05) with this work on main `2b71559`, signed in to the lab Jellyfin
+(17 channels, the seed CH 3), with the same wipe switch. Times from the
+launch:
+- A link for CH 14 sent at 2.3 s and again, on a second launch, at 16.0 s:
+  "waiting for the full guide", CH 3 stayed tuned, and CH 14 tuned 0.5 s after
+  the full guide went up (24.4 s and 24.7 s).
+- A link for CH 7 after the full guide was up tuned it 0.2 s later.
+- A launch link for CH 14: the loading screen, no CH 3, and CH 14 at 24.3 s.
+- A link for CH 3, the seed's own, went to the seed's guide at once, with no
+  wait and no retune.
 
 Not tried: a real power cut, which also brings the network up from cold; a
 Plex sign-in; the hourly re-save on a TV left on; Left for the sidebar, and a
