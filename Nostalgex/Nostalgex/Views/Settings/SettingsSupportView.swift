@@ -62,7 +62,12 @@ struct SettingsSupportView: View {
     private func rateTapped() {
         Analytics.track(.rateTapped)
         appState.recordRatingTapped()
-        openURL(AppStoreLink.productPage)
+        let variant = AppStoreLink.activeVariant
+        let url = variant.url
+        openURL(url) { accepted in
+            print("[Plex90] Settings: RATE opened variant=\(variant.rawValue) \(url.absoluteString) accepted=\(accepted)")
+            Analytics.track(.rateOpened(accepted: accepted, variant: variant.rawValue))
+        }
     }
 
     /// RATE plus the three tips as one row of four equal tiles.
@@ -78,6 +83,7 @@ struct SettingsSupportView: View {
                 art: PixelIcons.star,
                 title: "RATE NOSTALGEX",
                 caption: appState.hasTappedRate ? "Thanks for rating" : "Leave a star rating",
+                hint: RatingNudgePolicy.showsScrollHint ? RatingNudgePolicy.scrollHint : nil,
                 isFocused: isFocused("rate")
             ) {
                 rateTapped()

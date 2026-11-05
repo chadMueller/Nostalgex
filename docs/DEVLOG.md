@@ -3,6 +3,47 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: the App Store rating funnel, measured on the living room TV)
+
+**Shipped.** Nothing yet. Branch `appletv/rate-deeplink` off main `5971d065`, for 1.0.30.
+
+**Why.** TelemetryDeck, 30 days (Oct 5 to Nov 4): the rating nudge showed to 152 users, 20 pressed RATE on it and
+30 more pressed RATE in Settings. The App Store has zero ratings. The thresholds were not the bottleneck; the
+tap destination was. On an Apple TV the product page opens with focus on the download button and the rating stars
+below the fold, and nobody scrolls. Nothing recorded whether the App Store open worked.
+
+**Measured (living room Apple TV 4K, Debug 1.0.29 (53) over the store build, container kept; Chad pressing RATE).**
+The same RATE press with a DEBUG launch argument (`-NostalgexRateLinkVariant`) swapping the link:
+- (a) `itms-apps://apps.apple.com/app/id6762563534`, what every build opened: product page, focus on the
+  download button, stars below the fold.
+- (b) the same with `?action=write-review`: accepted=true, same page, same focus.
+- (c) `https://apps.apple.com/app/id6762563534?action=write-review`, the form Apple documents (StoreKit,
+  "Requesting App Store reviews" and `RequestReviewAction`; neither page lists tvOS): accepted=true, same page.
+- (d) the legacy `itms-apps://itunes.apple.com/app/viewContentsUserReviews?id=...&action=write-review`:
+  accepted=true, same page.
+- (e) `?see-all=reviews` was not tried: Apple documents nothing for tvOS beyond `action=write-review`.
+tvOS accepts every one of them and the App Store ignores the review action on an Apple TV.
+
+**Changed.**
+- Shipped link stays the plain product page. `AppStoreLink.RateLinkVariant` and the launch argument stay,
+  DEBUG only (a release build always opens `RateLinkVariant.shipped`).
+- The hint is on: "Then scroll down to the stars" as a second line on the banner and under the Settings RATE
+  tile; the banner's auto-dismiss is 12 s with the hint (8 s without), `RatingNudgePolicy.showsScrollHint`.
+  Thresholds unchanged.
+- Two signals, `rating_nudge.opened` and `rate.opened`, with `accepted` and `variant`, from the banner and the
+  Settings tile. Gated like the taps (once per window). The variant letter is always `a` in a release build.
+- Tests: `RateLinkTests` (links, launch-argument parsing, both events' parameters and gating, the hint and its
+  timing, thresholds unchanged).
+- NostalgexTests: 1,112 tests, 1,086 passed, 0 failed, 26 skipped (1,103 before; 9 new).
+
+**Not done.** Whether the hint raises ratings. The next readout is the answer: rating_nudge.tapped against
+App Store Connect ratings after 1.0.30. The stars may be hidden from a developer account on iPhone (unconfirmed);
+on the Apple TV they are on the page for Chad.
+
+**Left on the living room TV.** The Debug build 1.0.29 (53) from this branch's variants commit, installed over the
+store build, relaunched with no launch arguments. The presses set the rated flag on that install, so the nudge
+will not show there again and the Settings tile reads "Thanks for rating" until the app is deleted.
+
 ## 2026-11-05 (Apple TV: RESCAN LIBRARY says how many titles are on a channel, on none, and skipped)
 
 **Why.** A user's Jellyfin library showed 484 titles for a library they put at about 600, and nothing in the app said

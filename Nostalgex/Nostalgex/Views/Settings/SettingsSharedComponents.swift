@@ -166,6 +166,8 @@ struct SupportTile: View {
     let caption: String
     /// A price reads in the title weight so it stays legible from the couch.
     var captionIsPrice: Bool = false
+    /// A third line under the caption, when there is something to say after the press.
+    var hint: String? = nil
     let isFocused: Bool
     let action: () -> Void
 
@@ -186,6 +188,13 @@ struct SupportTile: View {
                         .foregroundStyle(.white.opacity(captionIsPrice ? 0.85 : 0.75))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                    if let hint {
+                        Text(hint)
+                            .font(.custom("DMMono-Regular", size: 18))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
