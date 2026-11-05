@@ -3,7 +3,7 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-## 2026-11-04 (Web tuner: the Deezer genre lookup is blocked by the site CSP; one-source fix, not shipped)
+## 2026-11-04 (Web tuner: the Deezer genre lookup was blocked by the site CSP; one-source fix)
 
 **Why.** Found by reading the code on 2026-10-26 (Trello N-012), confirmed today. `scripts/nostalgex-music-brainz.js`
 asks Deezer for music video genres by JSONP, because api.deezer.com sends no CORS headers: it adds a
@@ -17,7 +17,7 @@ page with the CSP header removed in flight resolves in 822 ms with the album gen
 served with `vercel.json`'s header behaves like the live page; with `https://api.deezer.com` added to `script-src`
 it resolves. The live header and `vercel.json` match.
 
-**Changed (branch `web/n012-deezer-csp`, not pushed).**
+**Changed.**
 - `vercel.json`: `https://api.deezer.com` added to `script-src`. It is the site-wide header (`/(.*)`), so it also
   applies to the marketing pages.
 - `scripts/tuner-isolation-check.mjs`: the CSP check now lists `https://api.deezer.com` among what the tuner needs,
