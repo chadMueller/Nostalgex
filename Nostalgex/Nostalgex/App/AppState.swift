@@ -367,6 +367,11 @@ class AppState {
     /// guide if anything was fetched, clear error if not).
     var loadCancelRequested: Bool = false
 
+    /// Sections the last load went on without because their requests failed for good (a
+    /// dropped connection, a server error), named "Server: Section" when more than one
+    /// server was read. Empty when every section was read. The guide is built from the rest.
+    var lostSectionsLastLoad: [String] = []
+
     /// The user's way out of a scan that has gone quiet. Resolution is deliberately the
     /// same path as an automatic stall, so there is only one behaviour to reason about.
     func stopWaitingForLibraryScan() {

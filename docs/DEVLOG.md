@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-04 (Apple TV: a section that fails for good no longer takes the scan with it; Jellyfin and Emby too)
+
+**Shipped.** Nothing yet. Branch `fix/scan-keeps-sections` off main `9e2c945d`, for 1.0.30 (issue #146 follow-up, Trello N-039).
+
+**Why.** Found while measuring #146: a fake remote Plex that dropped the connection in the fifth of five sections
+threw away the whole server's scan once the retries ran out (0 items, four finished sections included), and the viewer
+read "Can't reach the server address saved on this device. Open Settings and reconnect while on the same network as
+your server", for a server that was not on their network. Only a cancel kept the sections already read. Jellyfin and
+Emby had the identical catch, so N-039 (one erroring section fails the whole scan) is the same rule in two more files.
+
+**Changed.**
+- A section whose requests fail for good (a transport error after the retries, or an HTTP error status) is skipped; the
+  scan goes on with the next section and ends by handing back what it read as a `LibraryScanInterrupted` that names
+  the lost sections. One shared helper, `SectionFailures`, used by the Plex, Jellyfin and Emby loops. A cancel still
+  keeps its pages; a 401/403 or an unexpected payload still ends the scan; a scan that read nothing at all is still a
+  failure, with the original error.
+- `loadLibrary` builds the guide from what was read, marks the library stale (a later refresh fills the section in),
+  and names the lost sections in `lostSectionsLastLoad` and the install log: "server 'X' lost section(s) Documentaries,
+  kept 450 items from the others". A background refresh that loses a section is still thrown away, as an abandoned one
+  is. The "abandoned by the viewer" analytics flag no longer counts a lost section as the viewer's doing.
+- The message follows the address: `PlexAPIService.isLikelyLocalAddress` (private ranges, `.local`, a plex.direct name
+  that encodes a LAN address) keeps the "same network" advice. A remote or unknown address reads "The connection to
+  your server dropped while the library was loading. Check that the server is online, then Retry." or "Can't reach
+  your server from here. Check that it is online and that remote access is turned on, then Retry."
+- `SectionFailureScanTests` (6): a fake server that drops one of three sections; Plex, Jellyfin and Emby each fail on
+  main with the connection error and keep the other 450 movies now; every section failing is still a failure; the
+  load through `AppState` builds a guide with no error and names the section; the three message cases.
+- NostalgexTests: 1,109 tests, 1,083 passed, 0 failed, 26 skipped.
+
+**Not changed.** Roku, the web tuner and Android. Roku's Plex scan already skips a failed section
+(`PlexLibrary.brs`, "skipped a section that failed to load") without telling the viewer which.
+
 ## 2026-11-04 (Apple TV: turning iCloud sync on waits for iCloud's first download before it pushes, N-036)
 
 **Shipped.** Nothing yet. Branch `appletv/n036-sync-turnon-hold` off main `9e2c945d`, for 1.0.30.

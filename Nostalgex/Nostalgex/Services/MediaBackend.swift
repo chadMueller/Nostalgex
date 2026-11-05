@@ -290,6 +290,51 @@ typealias LoadProgress = @Sendable (LoadProgressEvent) -> Void
 /// that was in flight, too.
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
+    /// Sections that failed for good while the others were read (a connection that dropped
+    /// until the retries ran out, a server error). Empty for a cancel.
+    var failedSections: [String] = []
+}
+
+/// What a scan does about a section whose requests fail for good: carry on without that
+/// section and keep the rest. Before this a dropped connection in the fifth section threw
+/// away the four already read, and the viewer was told to move to their own network (#146,
+/// Trello N-039 for Jellyfin and Emby). A cancel keeps the pages read as before; a failure
+/// that says something is wrong with the whole server (401/403, an unexpected payload) still
+/// ends the scan; and a scan that read nothing at all is still a failure.
+struct SectionFailures {
+    let backend: String
+    private(set) var titles: [String] = []
+    private var first: Error?
+
+    init(backend: String) { self.backend = backend }
+
+    /// A transport error (the connection dropped or timed out) or an HTTP error status.
+    static func isSkippable(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError { return false }
+        if let api = error as? PlexAPIService.APIError {
+            if case .httpFailure = api { return true }
+            return false
+        }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code != NSURLErrorCancelled
+    }
+
+    /// True when the scan should go on without this section.
+    mutating func absorb(_ error: Error, section: String) -> Bool {
+        guard Self.isSkippable(error) else { return false }
+        print("[\(backend)] LOAD: section '\(section)' failed after its retries (\(error)), carrying on without it")
+        titles.append(section)
+        if first == nil { first = error }
+        return true
+    }
+
+    /// Ends the scan: fine when nothing failed; the first error when nothing was read; else
+    /// the sections that were read, with the ones that were lost named.
+    func finish(items: [PlexMediaItem]) throws {
+        guard !titles.isEmpty else { return }
+        if items.isEmpty, let first { throw first }
+        throw LibraryScanInterrupted(partialItems: items, failedSections: titles)
+    }
 }
 
 
