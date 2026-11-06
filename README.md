@@ -35,7 +35,7 @@ The best way to watch on a TV. Connect one or more servers, then flip channels w
 
 <a id="web-tuner-web-tunerhtml--plex-tunerhtml"></a>
 <a id="web-tuner"></a>
-## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.13`
+## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.14`
 
 Nothing to install. Works on computers and phones.
 
@@ -43,7 +43,7 @@ Nothing to install. Works on computers and phones.
 
 <a id="run-it-on-your-server"></a>
 <a id="docker-container"></a>
-## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.13`
+## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.14`
 
 The same web tuner, packaged as a Docker container that runs on a computer at home, so it can reach servers the website can't. Most Plex users don't need it.
 
@@ -55,7 +55,7 @@ docker run -d --name nostalgex -p 8080:8080 --restart unless-stopped ghcr.io/cha
 
 Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker container guide](https://www.nostalgex.app/self-host).
 
-**Latest: `tuner-v1.0.13`.** WATERSHED, the Apple TV's 9 PM hold for R, 18 and TV-MA titles (off until you switch it on, in Settings), GUIDE TEXT SIZE for a bigger guide, and a faster Plex connect at home. Also fixed: the same title almost never on two channels at once, the card that says why something won't play now shows in the split view, two Plex servers sharing an address no longer load the wrong library, and AUDIO LANGUAGE works on Jellyfin and Emby. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.13). Already running it? `docker compose pull && docker compose up -d`.
+**Latest: `tuner-v1.0.14`.** A library line in Settings that says how many of your titles are on a channel, on none, and skipped for having no runtime. Playlists and other non-video items no longer air as films on Jellyfin and Emby, Emby's content ratings and star ratings are read (kids channels, the 9 PM hold and WATERSHED work there), a library section that fails no longer takes the rest of the library with it, and Plex lists are read a page at a time. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.14). Already running it? `docker compose pull && docker compose up -d`.
 
 <a id="whats-new-in-1029"></a>
 ## What's new in 1.0.29
