@@ -25,6 +25,7 @@
 <script src="scripts/nostalgex-season.js"></script>
 <script src="scripts/nostalgex-enrichment.js"></script>
 <script src="scripts/nostalgex-collections.js"></script>
+<script src="scripts/nostalgex-library-coverage.js"></script>
 <script src="scripts/nostalgex-franchise-builder.js"></script>
 <script src="scripts/nostalgex-franchise-lineup.js"></script>
 <script src="scripts/nostalgex-watch-state.js"></script>
@@ -3732,6 +3733,10 @@
           <button class="plex-btn" id="cfg-plex-btn" style="font-size: 10px; padding: 12px 20px;" onclick="if(plexConnected){signOut()}else{startPlexAuth()}">CONNECT WITH PLEX</button>
         </div>
       </div>
+      <div id="cfg-library-coverage-wrap" style="display:none; margin: -8px 0 24px; padding: 0 20px;">
+        <div class="config-section-label" style="margin-bottom:6px;">LIBRARY</div>
+        <div id="cfg-library-coverage" style="font-size: 20px; color: rgba(255,255,255,0.4); letter-spacing: 1px; line-height: 1.5;"></div>
+      </div>
       <div id="cfg-server-list" style="display:none">
         <div class="config-section-label" style="margin-bottom:12px;">SERVERS</div>
         <div id="cfg-server-list-items"></div>
@@ -4676,6 +4681,12 @@
   let appState = 'connect'; // 'connect' | 'player' | 'guide' | 'config'
   let discoveredGenres = {}; // { genreName: itemCount }
   let allItemsCache = []; // cached items for populating new channels
+  // Library coverage state (the code is under LIBRARY COVERAGE below; declared here so renderConfig can read it at any time).
+  let librarySkippedNoRuntime = 0;   // movies and episodes the last scan dropped for having no runtime
+  let scanSkippedNoRuntime = 0;      // this scan's count, reset when a scan starts
+  let libraryCoverage = null;        // { loaded, onChannels, ... } or null until counted
+  let libraryCoverageGen = 0;        // a newer library or a sign-out cancels the count in flight
+  let libraryCoverageTimer = null;
   let guideLayout = localStorage.getItem('plex90_guide_layout') || 'side';
   let configTab = 'channels'; // 'channels' | 'help' | 'server'
   let activeSuggestedTab = 'movie'; // 'general' | 'movie' | 'tv' | 'music'
@@ -5325,6 +5336,7 @@
   // RENDER CONFIG
   // ══════════════════════════════════════
   function renderConfig() {
+    renderLibraryCoverage();
     const container = document.getElementById('config-channels');
     container.innerHTML = '';
 
@@ -8838,6 +8850,12 @@
     try { localStorage.removeItem(COLLECTION_SCAN_KEY); } catch (e) {}
     libraryExtrasGeneration++;
     rawCollections = null;
+    // The count belongs to the library that just went.
+    libraryCoverageGen++;
+    clearTimeout(libraryCoverageTimer);
+    libraryCoverage = null;
+    librarySkippedNoRuntime = 0;
+    renderLibraryCoverage();
     collectionCandidates = [];
     foundFranchises = [];
     franchiseRows = [];
@@ -8975,6 +8993,13 @@
   // 3: items carry a bitrate (kbps) for STREAM QUALITY's direct-play ceiling. A version-2 cache
   // has none, and at LOW a 20 Mbps MP4 would direct play for up to a day, so it is refused once.
   const LIBRARY_CACHE_VERSION = 3;
+  // What the scan reads from the server, as a number. A saved library made by an older scan is
+  // restored at once and then read again in the background, once, instead of waiting out the
+  // 24 hours (the Apple TV's scanFieldsVersion). 2: Jellyfin and Emby ratings (#204), no playlists
+  // or other non-video items, and the count of titles skipped for no runtime. Without it a
+  // library saved before this release would keep a playlist on the guide and every Emby title
+  // unrated until the day was up.
+  const LIBRARY_SCAN_REVISION = 2;
 
   // IndexedDB (scripts/nostalgex-storage.js), not localStorage and not sessionStorage.
   //
@@ -8990,7 +9015,9 @@
     // Enrichment has its own cache (IndexedDB, see nostalgex-enrichment.js); keep it
     // out of this one so it is not stored twice.
     items = items.map(it => (it && it.enrichment ? { ...it, enrichment: undefined } : it));
-    const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items };
+    // skippedNoRuntime rides along so the library line in Settings survives a reload (an
+    // older cache without it reads as 0, no version bump needed).
+    const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items, skippedNoRuntime: librarySkippedNoRuntime, scanRevision: LIBRARY_SCAN_REVISION };
     // Not awaited: the guide builds while this writes. It never throws; when it cannot cache,
     // the next visit reads the library from the server, which is what happened before the
     // cache persisted at all.
@@ -9001,6 +9028,63 @@
     NostalgexStorage.libraryCache.clear();
   }
 
+  // ══════════════════════════════════════
+  // LIBRARY COVERAGE
+  // Where the loaded titles land: on a channel (with every package on), on none, and how many the
+  // scan skipped for having no runtime. The line in Settings, SERVER tab, and a COVERAGE line in
+  // the console. Mirrors LibraryDiagnostics on the Apple TV; the counting and the wording are in
+  // scripts/nostalgex-library-coverage.js. The count runs in slices behind the guide.
+  // ══════════════════════════════════════
+
+  function renderLibraryCoverage() {
+    const LC = globalThis.NostalgexLibraryCoverage;
+    const wrap = document.getElementById('cfg-library-coverage-wrap');
+    const el = document.getElementById('cfg-library-coverage');
+    if (!LC || !wrap || !el) return;
+    const line = plexConnected ? LC.formatLine(libraryCoverage, librarySkippedNoRuntime) : null;
+    el.textContent = line || '';
+    wrap.style.display = line ? '' : 'none';
+  }
+
+  /** Counts again a moment after the last thing that moves it (a library, enrichment, collections). */
+  function scheduleLibraryCoverage(delayMs = 2500) {
+    clearTimeout(libraryCoverageTimer);
+    libraryCoverageTimer = setTimeout(runLibraryCoverage, delayMs);
+  }
+
+  async function runLibraryCoverage() {
+    const LC = globalThis.NostalgexLibraryCoverage;
+    const CF = channelFilter();
+    const gen = ++libraryCoverageGen;
+    const items = allItemsCache;
+    if (!LC || !CF || !items || !items.length) {
+      libraryCoverage = null;
+      renderLibraryCoverage();
+      return;
+    }
+    const started = performance.now();
+    // The same test filterItems makes for a channel's pool, without building the pool.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const passes = (item, channel) => CF.itemPasses(item, channel, {
+      manifest: channelMembershipManifest, exclusiveRules, backend: mediaBackend, nowSec,
+    }) !== false;
+    const channels = allChannelsUnfiltered
+      .filter(ch => ch.rules && !isRuntimeChannel(ch))
+      .map(ch => ({ id: ch.id, rules: ch.rules, category: ch.category, minItems: ch.minItems }));
+    const dynamicPools = allChannelsUnfiltered.filter(isRuntimeChannel).map(ch => ch.itemPool || []);
+    const result = await LC.compute({
+      items, channels, passes, dynamicPools, keyOf: poolMemberKey,
+      isCancelled: () => gen !== libraryCoverageGen || items !== allItemsCache,
+    });
+    if (!result || gen !== libraryCoverageGen) return;
+    libraryCoverage = result;
+    renderLibraryCoverage();
+    // Titles in the guide now: those in the pool of a channel that is on.
+    const onAir = new Set();
+    for (const ch of CHANNELS) if (ch.enabled) for (const it of (ch.itemPool || [])) onAir.add(poolMemberKey(it));
+    console.log(`[Nostalgex] ${LC.orphanReport(result, onAir.size)} (counted in ${Math.round(performance.now() - started)} ms)`);
+  }
+
   async function loadLibraryCache(allowStale = false) {
     try {
       const parsed = await NostalgexStorage.libraryCache.load();
@@ -9008,9 +9092,9 @@
       const { ts, url, items } = parsed;
       if (parsed.v !== LIBRARY_CACHE_VERSION) return null;
       if (url !== plexServerUrl) return null;
-      const stale = Date.now() - ts > LIBRARY_CACHE_TTL;
+      const stale = Date.now() - ts > LIBRARY_CACHE_TTL || parsed.scanRevision !== LIBRARY_SCAN_REVISION;
       if (stale && !allowStale) return null;
-      return { items, ts, stale };
+      return { items, ts, stale, skippedNoRuntime: Number(parsed.skippedNoRuntime) || 0 };
     } catch (e) {
       return null;
     }
@@ -9081,6 +9165,8 @@
     autoGenerateChannels(allItems);
     if (buildAll) autoEnableBundlesWithContent();
     renderConfig();
+    // Counted behind the guide once the pools are built, so it never competes with the build.
+    scheduleLibraryCoverage();
 
     if (!options.skipMarkComplete) LL.markInitialLibraryLoadComplete();
     LL.setPhase('finishing');
@@ -9248,6 +9334,7 @@
     renderConfig();
     if (guideVisible) renderActiveGuide();
     if (configVisible && configTab === 'bundles') renderBundleList();
+    scheduleLibraryCoverage();
     return changed.length;
   }
 
@@ -9352,6 +9439,7 @@
     console.log(`[Collections] ${found.length} server collections read`);
     setCollectionScanState('done');
     refreshDynamicChannels();
+    scheduleLibraryCoverage();
   }
 
   /** An item's identity across the pools: its server and its ratingKey, never its URL. */
@@ -9538,6 +9626,7 @@
   async function fetchJellyfinLibraryFromServer(options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
     const background = options.background === true;
+    scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
 
     if (!background) LL.show();
@@ -9566,16 +9655,36 @@
     LL.state.scanSectionIndex = 0;
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
 
+    // Libraries the server did not answer for, by name. A scan that lost some keeps the rest
+    // and is not cached; one that lost everything is a failure, not an empty library.
+    const lostViews = [];
+    let scanningViewName = 'Library';
+    let lastViewError = null;
+
     // Paginated /Items fetch under a parent, requesting the fields channel rules need.
+    // OfficialRating and CommunityRating are named because Emby 4.10 leaves both out of an
+    // answer unless Fields asks for them (Jellyfin sends them either way), and every rating
+    // rule reads them: contentRatings allow-lists, the kids gate, the 9 PM hold, WATERSHED
+    // and ratingMin (GitHub #204).
     async function fetchItems(parentId, includeItemTypes) {
       let collected = [], start = 0;
       while (true) {
         const url = `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
           + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
           + `&IncludeItemTypes=${includeItemTypes}`
-          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`
+          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
           + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
         const r = await fetch(url, { headers });
+        if (!r.ok) {
+          // A refused sign-in ends the scan, as it does on Plex. Any other failure loses the
+          // library; pages already read are kept, as the Apple TV keeps them.
+          const e = new Error(`HTTP ${r.status} from ${scanningViewName}`);
+          if (r.status === 401 || r.status === 403) { e.plexStatus = r.status; throw e; }
+          if (collected.length === 0) throw e;
+          lostViews.push(scanningViewName);
+          lastViewError = e;
+          break;
+        }
         const d = await r.json();
         const items = d.Items || [];
         collected.push(...items);
@@ -9583,7 +9692,10 @@
         start += items.length;
         if (items.length === 0 || collected.length >= total) break;
       }
-      return collected;
+      // Only the types that were asked for. A server may answer with more (the Playlists view
+      // always answers with playlists, whatever the request says), and a playlist or a song is
+      // not a programme. Paging above counts the rows the server sent, so this comes last.
+      return collected.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
     }
 
     function tmdbFromProviderIds(ids) {
@@ -9646,15 +9758,18 @@
     let allItems = [];
     for (let vi = 0; vi < views.length; vi++) {
       const view = views[vi];
-      const ct = (view.CollectionType || '').toLowerCase();
-      const type = ct === 'tvshows' ? 'show' : (ct === 'musicvideos' ? 'musicvideo' : 'movie');
+      // 'show', 'musicvideo', 'movie', or 'other': a view with no videos in it (Playlists, Music,
+      // Collections, Photos and the like) is never asked for items (scripts/nostalgex-jellyfin-urls.js, 12).
+      const type = NostalgexJellyfinUrls.sectionType(view.CollectionType);
+      if (type === 'other') continue;
+      scanningViewName = view.Name || 'Library';
       const isMusicVideoSection = type === 'musicvideo';
       LL.state.scanSectionIndex = vi;
       LL.setPhase('scanningLibrary', view.Name || 'Library');
 
       try {
         if (type === 'show') {
-          const series = await fetchItems(view.Id, 'Series');
+          const series = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
           const BATCH_SIZE = 5;
           let episodeCount = 0;
           for (let b = 0; b < series.length; b += BATCH_SIZE) {
@@ -9667,7 +9782,7 @@
                 const episodes = await fetchItems(show.Id, 'Episode');
                 return episodes.map(ep => {
                   const durationMin = NostalgexDailyManifest.minutesFromTicks(ep.RunTimeTicks);
-                  if (durationMin <= 0) return null;
+                  if (durationMin <= 0) { scanSkippedNoRuntime++; return null; }
                   const mi = mediaInfo(ep);
                   const sNum = ep.ParentIndexNumber ? `S${String(ep.ParentIndexNumber).padStart(2, '0')}` : '';
                   const eNum = ep.IndexNumber ? `E${String(ep.IndexNumber).padStart(2, '0')}` : '';
@@ -9724,13 +9839,13 @@
           // for Movie alone returned nothing and HIGH ROTATION stayed empty (I-067). Ask for
           // both there, since a few libraries file clips as Movie. Every other library keeps
           // asking for Movie only.
-          const items = await fetchItems(view.Id, isMusicVideoSection ? 'Movie,MusicVideo' : 'Movie');
+          const items = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
           items.forEach(jf => {
             const genres = jf.Genres || [];
             if (isMusicVideoSection && !genres.some(g => /music/i.test(g))) genres.push('Music Video');
             genres.forEach(g => { discoveredGenres[g] = (discoveredGenres[g] || 0) + 1; });
             const durationMin = NostalgexDailyManifest.minutesFromTicks(jf.RunTimeTicks);
-            if (durationMin <= 0) return;
+            if (durationMin <= 0) { scanSkippedNoRuntime++; return; }
             // Dedicated music-video library is primary; fall back to a short item
             // tagged with a Music genre so users can route videos into HIGH ROTATION
             // without a separate library. 10-min cap excludes musicals/biopics.
@@ -9782,7 +9897,16 @@
         }
       } catch (err) {
         console.warn(`Failed to fetch Jellyfin view ${view.Name}:`, err);
+        if (err && err.plexStatus) throw err;
+        lostViews.push(view.Name || 'Library');
+        lastViewError = err;
       }
+    }
+
+    if (lostViews.length) {
+      console.warn(`[${backendDisplayName()}] lost ${lostViews.length} library(ies), ${lostViews.join(', ')}; kept ${allItems.length} items from the others`);
+      // Nothing read at all is a failure, not an empty library with a "no content" screen.
+      if (allItems.length === 0) throw lastViewError || new Error('Every library failed to load');
     }
 
     const withTmdb = allItems.filter(i => i.tmdbID).length;
@@ -9793,9 +9917,12 @@
       console.log(`[Emby] CHANNELS: ${leftOff} Dolby Vision profile 5 item(s) left off channels`);
     }
 
+    librarySkippedNoRuntime = scanSkippedNoRuntime;
     allItems = await finalizeLibraryWithMusicBrainz(allItems, {
       buildAllChannels: buildAll,
       skipMarkComplete: background,
+      // A library that lost a view is not saved as the whole library: the next visit reads it again.
+      skipCacheSave: lostViews.length > 0,
     });
 
     if (!background) {
@@ -9912,7 +10039,11 @@
       const res = await fetch(url, {
         headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
       });
-      if (!res.ok) throw new Error(`Section ${section.title} returned HTTP ${res.status}`);
+      if (!res.ok) {
+        const e = new Error(`Section ${section.title} returned HTTP ${res.status}`);
+        if (res.status === 401 || res.status === 403) e.plexStatus = res.status;   // ends the scan, not just the section
+        throw e;
+      }
       const data = await NostalgexUTF8Repair.json(res, `${section.key} page ${start}`);
       const container = (data && data.MediaContainer) || {};
       const page = container.Metadata || [];
@@ -9929,7 +10060,8 @@
   }
 
   // Scan one Plex server and return its items, each tagged with serverUrl + serverToken.
-  async function scanOnePlexServer(server, LL, baseItemCount, multiServer) {
+  async function scanOnePlexServer(server, LL, baseItemCount, multiServer, lostSections = []) {
+    let lastSectionError = null;
     // Sends X-Plex-Container-Size like the section pages below (Trello N-038); the helper pages.
     const NC = globalThis.NostalgexCollections;
     const sections = await NC.fetchPlexPaged(
@@ -9983,7 +10115,7 @@
 
                   return episodes.map(ep => {
                     const durationMin = NostalgexDailyManifest.minutesFromPlexMs(ep.duration);
-                    if (durationMin <= 0) return null;
+                    if (durationMin <= 0) { scanSkippedNoRuntime++; return null; }
 
                     let partKey = null;
                     let container = null;
@@ -10069,7 +10201,7 @@
           genres.forEach(g => { discoveredGenres[g] = (discoveredGenres[g] || 0) + 1; });
 
           const durationMin = NostalgexDailyManifest.minutesFromPlexMs(item.duration);
-          if (durationMin <= 0) return;
+          if (durationMin <= 0) { scanSkippedNoRuntime++; return; }
 
           // Dedicated music-video library is primary; fall back to a short item
           // tagged with a Music genre so users can route videos into HIGH ROTATION
@@ -10139,9 +10271,14 @@
         });
       } catch (err) {
         console.warn(`Failed to fetch section ${section.title}:`, err);
+        if (err && err.plexStatus) throw err;   // a refused sign-in ends the scan
+        lostSections.push(multiServer ? `${server.name} · ${section.title}` : section.title);
+        lastSectionError = err;
       }
     }
 
+    // Every section failing is a failure of the scan, not a library with nothing in it.
+    if (serverItems.length === 0 && lostSections.length > 0 && lastSectionError) throw lastSectionError;
     return serverItems;
   }
 
@@ -10170,6 +10307,7 @@
   async function fetchPlexLibraryFromServer(options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
     const background = options.background === true;
+    scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
 
     if (!background) LL.show();
@@ -10187,11 +10325,12 @@
     const multiServer = servers.length > 1;
     let merged = [];
     let successCount = 0;
+    const lostSections = [];   // sections the server did not answer for: named below, and the library is not cached
 
     for (const server of servers) {
       await LL.pulsePhase('scanningLibrary', multiServer ? `Connecting to ${server.name}` : 'Connecting to Plex');
       try {
-        const items = await scanOnePlexServer(server, LL, merged.length, multiServer);
+        const items = await scanOnePlexServer(server, LL, merged.length, multiServer, lostSections);
         merged = merged.concat(items);
         successCount++;
         console.log(`[Nostalgex] ${server.name}: ${items.length} items`);
@@ -10202,10 +10341,16 @@
     }
 
     if (successCount === 0) throw new Error('All servers failed to scan');
+    if (lostSections.length) {
+      console.warn(`[Nostalgex] lost ${lostSections.length} section(s), ${lostSections.join(', ')}; kept ${merged.length} items from the others`);
+    }
 
+    librarySkippedNoRuntime = scanSkippedNoRuntime;
     let allItems = await finalizeLibraryWithMusicBrainz(merged, {
       buildAllChannels: buildAll,
       skipMarkComplete: background,
+      // A library that lost a section is not saved as the whole library: the next visit reads it again.
+      skipCacheSave: lostSections.length > 0,
     });
 
     console.log('[Nostalgex] Channel population results:');
@@ -10271,6 +10416,7 @@
       const cached = await loadLibraryCache(true);
       if (cached && cached.items && cached.items.length > 0) {
         errorSource = 'cache-restore';
+        librarySkippedNoRuntime = cached.skippedNoRuntime || 0;
         LL.show();
         LL.refreshStepRail(false);
         LL.setPhase('preparing', cached.stale ? 'Cached library' : 'Loading cache');
