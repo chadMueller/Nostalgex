@@ -72,6 +72,7 @@ function NxRunCollectionTests(vectorsPath as String, configPath as String, dicti
     NxClSwiftCases(r, config, defs)
     NxClClassifierCases(r)
     NxClSplitCases(r)
+    NxClPagingCases(r)
 
     print "collection cases (upstream vectors and Swift tests): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
@@ -711,7 +712,7 @@ end function
 function NxClStubFetcher(docs as Object) as Object
     return {
         docs: docs, calls: [],
-        getJSON: function(path as String) as Dynamic
+        getJSON: function(path as String, win = invalid as Dynamic) as Dynamic
             m.calls.Push(path)
             if m.docs.DoesExist(path) then return m.docs[path]
             return invalid
@@ -785,4 +786,155 @@ function NxClRaw(list as Object) as String
         out.Push(NxToStr(c.id) + "=" + NxToStr(c.title) + "@" + NxToStr(c.serverKey) + "[" + NxClJoin(c.childKeys) + "]")
     end for
     return out.Join(";")
+end function
+
+' ── Plex paging (#189) ───────────────────────────────────────────────────────
+
+' A server that answers each list in windows, from saved full answers
+' (lists: path -> array of rows, listKey per path). It caps a window at `cap`
+' when set, as a server may, sends totalSize unless noTotal, ignores the
+' start when ignoreStart, and fails the window starting at failAt[path].
+' It records every request with its window, and whether it came bare.
+function NxClPagingServer(lists as Object, opts as Object) as Object
+    return {
+        lists: lists, opts: opts, calls: [], bare: 0, sizes: {},
+        getJSON: function(path as String, win = invalid as Dynamic) as Dynamic
+            if win = invalid then
+                m.bare = m.bare + 1
+                m.calls.Push(path)
+            else
+                m.calls.Push(path + " " + NxToStr(win.start) + "+" + NxToStr(win.size))
+                m.sizes[path] = win.size
+            end if
+            if not m.lists.DoesExist(path) then return invalid
+            rows = m.lists[path].rows
+            if win = invalid then return NxClPagingDoc(m.lists[path].key, rows, rows.Count(), m.opts)
+            if m.opts.failAt <> invalid then
+                if m.opts.failAt[path] <> invalid then
+                    if m.opts.failAt[path] = win.start then return invalid
+                end if
+            end if
+            size = win.size
+            if m.opts.cap <> invalid then
+                if size > m.opts.cap then size = m.opts.cap
+            end if
+            start = win.start
+            if m.opts.ignoreStart = true then start = 0
+            page = []
+            for i = start to start + size - 1
+                if i < rows.Count() then page.Push(rows[i])
+            end for
+            return NxClPagingDoc(m.lists[path].key, page, rows.Count(), m.opts)
+        end function,
+        getMany: function(paths as Object, win = invalid as Dynamic) as Object
+            out = []
+            for each p in paths
+                out.Push(m.getJSON(p, win))
+            end for
+            return out
+        end function
+    }
+end function
+
+function NxClPagingDoc(key as String, page as Object, total as Integer, opts as Object) as Object
+    mc = { size: page.Count() }
+    mc[key] = page
+    if opts.noTotal <> true then mc.totalSize = total
+    return { MediaContainer: mc }
+end function
+
+' A movie section with `nCollections` collections; collection 1 has
+' `bigKids` children, the rest 3 each.
+function NxClPagingLists(nCollections as Integer, bigKids as Integer) as Object
+    lists = {}
+    lists["/library/sections"] = { key: "Directory", rows: [{ key: "1", type: "movie" }, { key: "2", type: "artist" }] }
+    cols = []
+    for i = 1 to nCollections
+        cols.Push({ ratingKey: (1000 + i).ToStr(), title: "Collection " + i.ToStr() })
+        kids = []
+        n = 3
+        if i = 1 then n = bigKids
+        for k = 1 to n
+            kids.Push({ ratingKey: (i * 10000 + k).ToStr() })
+        end for
+        lists["/library/collections/" + (1000 + i).ToStr() + "/children"] = { key: "Metadata", rows: kids }
+    end for
+    lists["/library/sections/1/collections"] = { key: "Metadata", rows: cols }
+    return lists
+end function
+
+function NxClPagingCases(r as Object)
+    ' 650 collections, one with 700 children: the same result as a server
+    ' that answers every list whole, every request sized, no size over the
+    ' measured caps.
+    lists = NxClPagingLists(650, 700)
+    whole = NxCollectionsFetchPlex("mid", NxClStubFetcher(NxClWholeDocs(lists)))
+    srv = NxClPagingServer(lists, {})
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "paged: same collections as a whole answer", NxClRaw(got), NxClRaw(whole))
+    NxCheck(r, "paged: 650 collections", NxToStr(got.Count()), "650")
+    NxCheck(r, "paged: 700 children kept", NxToStr(got[0].childKeys.Count()), "700")
+    NxCheck(r, "paged: no request without a size", NxToStr(srv.bare), "0")
+    NxCheck(r, "paged: children read 120 at a time", NxToStr(srv.sizes["/library/collections/1001/children"]), "120")
+    NxCheck(r, "paged: collections read 300 at a time", NxToStr(srv.sizes["/library/sections/1/collections"]), "300")
+    NxCheck(r, "paged: collection windows", NxClCallsFor(srv.calls, "/library/sections/1/collections "), "/library/sections/1/collections 0+300,/library/sections/1/collections 300+300,/library/sections/1/collections 600+300")
+    NxCheck(r, "paged: 700 children in 6 windows", NxToStr(NxClCountFor(srv.calls, "/library/collections/1001/children ")), "6")
+    NxCheck(r, "paged: a small collection in one window", NxToStr(NxClCountFor(srv.calls, "/library/collections/1002/children ")), "1")
+
+    ' A server that caps the window below the size: the walk starts each
+    ' window where the last ended, and still reads everything.
+    srv = NxClPagingServer(lists, { cap: 50 })
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "capped: same collections", NxClRaw(got), NxClRaw(whole))
+    NxCheck(r, "capped: children windows start by what came back", NxClCallsFor(srv.calls, "/library/collections/1001/children ").Split(",")[1], "/library/collections/1001/children 50+120")
+
+    ' No totalSize: a short page ends the walk.
+    srv = NxClPagingServer(lists, { noTotal: true })
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "no total: same collections", NxClRaw(got), NxClRaw(whole))
+    NxCheck(r, "no total: 700 children in 6 windows", NxToStr(NxClCountFor(srv.calls, "/library/collections/1001/children ")), "6")
+
+    ' A server that ignores the start answers the first window again: nothing
+    ' new, so the walk ends after two windows and keeps no duplicate.
+    srv = NxClPagingServer(lists, { ignoreStart: true })
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "ignores start: 300 collections, no duplicate", NxToStr(got.Count()), "300")
+    NxCheck(r, "ignores start: two collection windows", NxToStr(NxClCountFor(srv.calls, "/library/sections/1/collections ")), "2")
+    NxCheck(r, "ignores start: 120 children, no duplicate", NxToStr(got[0].childKeys.Count()), "120")
+
+    ' A failed later window drops the collection, never keeps it short.
+    srv = NxClPagingServer(lists, { failAt: { "/library/collections/1001/children": 240 } })
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "failed window: the collection is dropped", NxToStr(got.Count()), "649")
+    NxCheck(r, "failed window: the others kept", got[0].id, "mid:1002")
+
+    ' A failed later window of a section's collections skips the section.
+    srv = NxClPagingServer(lists, { failAt: { "/library/sections/1/collections": 300 } })
+    got = NxCollectionsFetchPlex("mid", srv)
+    NxCheck(r, "failed collections window: the section is skipped", NxToStr(got.Count()), "0")
+end function
+
+' Each list as one whole answer, as a server that ignores the window would.
+function NxClWholeDocs(lists as Object) as Object
+    docs = {}
+    for each path in lists
+        docs[path] = NxClPagingDoc(lists[path].key, lists[path].rows, lists[path].rows.Count(), {})
+    end for
+    return docs
+end function
+
+function NxClCallsFor(calls as Object, prefix as String) as String
+    out = []
+    for each c in calls
+        if Left(c, prefix.Len()) = prefix then out.Push(c)
+    end for
+    return out.Join(",")
+end function
+
+function NxClCountFor(calls as Object, prefix as String) as Integer
+    n = 0
+    for each c in calls
+        if Left(c, prefix.Len()) = prefix then n = n + 1
+    end for
+    return n
 end function
