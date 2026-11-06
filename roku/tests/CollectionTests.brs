@@ -873,7 +873,7 @@ function NxClPagingCases(r as Object)
     got = NxCollectionsFetchPlex("mid", srv)
     NxCheck(r, "paged: same collections as a whole answer", NxClRaw(got), NxClRaw(whole))
     NxCheck(r, "paged: 650 collections", NxToStr(got.Count()), "650")
-    NxCheck(r, "paged: 700 children kept", NxToStr(got[0].childKeys.Count()), "700")
+    NxCheck(r, "paged: 700 children kept", NxToStr(NxClFirstKids(got)), "700")
     NxCheck(r, "paged: no request without a size", NxToStr(srv.bare), "0")
     NxCheck(r, "paged: children read 120 at a time", NxToStr(srv.sizes["/library/collections/1001/children"]), "120")
     NxCheck(r, "paged: collections read 300 at a time", NxToStr(srv.sizes["/library/sections/1/collections"]), "300")
@@ -886,7 +886,10 @@ function NxClPagingCases(r as Object)
     srv = NxClPagingServer(lists, { cap: 50 })
     got = NxCollectionsFetchPlex("mid", srv)
     NxCheck(r, "capped: same collections", NxClRaw(got), NxClRaw(whole))
-    NxCheck(r, "capped: children windows start by what came back", NxClCallsFor(srv.calls, "/library/collections/1001/children ").Split(",")[1], "/library/collections/1001/children 50+120")
+    windows = NxClCallsFor(srv.calls, "/library/collections/1001/children ").Split(",")
+    second = ""
+    if windows.Count() > 1 then second = windows[1]
+    NxCheck(r, "capped: children windows start by what came back", second, "/library/collections/1001/children 50+120")
 
     ' No totalSize: a short page ends the walk.
     srv = NxClPagingServer(lists, { noTotal: true })
@@ -900,18 +903,29 @@ function NxClPagingCases(r as Object)
     got = NxCollectionsFetchPlex("mid", srv)
     NxCheck(r, "ignores start: 300 collections, no duplicate", NxToStr(got.Count()), "300")
     NxCheck(r, "ignores start: two collection windows", NxToStr(NxClCountFor(srv.calls, "/library/sections/1/collections ")), "2")
-    NxCheck(r, "ignores start: 120 children, no duplicate", NxToStr(got[0].childKeys.Count()), "120")
+    NxCheck(r, "ignores start: 120 children, no duplicate", NxToStr(NxClFirstKids(got)), "120")
 
     ' A failed later window drops the collection, never keeps it short.
     srv = NxClPagingServer(lists, { failAt: { "/library/collections/1001/children": 240 } })
     got = NxCollectionsFetchPlex("mid", srv)
     NxCheck(r, "failed window: the collection is dropped", NxToStr(got.Count()), "649")
-    NxCheck(r, "failed window: the others kept", got[0].id, "mid:1002")
+    firstID = ""
+    if got <> invalid then
+        if got.Count() > 0 then firstID = got[0].id
+    end if
+    NxCheck(r, "failed window: the others kept", firstID, "mid:1002")
 
     ' A failed later window of a section's collections skips the section.
     srv = NxClPagingServer(lists, { failAt: { "/library/sections/1/collections": 300 } })
     got = NxCollectionsFetchPlex("mid", srv)
     NxCheck(r, "failed collections window: the section is skipped", NxToStr(got.Count()), "0")
+end function
+
+' The first collection's child count, or -1 when there is none.
+function NxClFirstKids(got as Dynamic) as Integer
+    if got = invalid then return -1
+    if got.Count() = 0 then return -1
+    return got[0].childKeys.Count()
 end function
 
 ' Each list as one whole answer, as a server that ignores the window would.

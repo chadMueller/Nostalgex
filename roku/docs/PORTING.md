@@ -98,6 +98,14 @@ pools and is asked to re-check schedules every 30 seconds, as upstream's
 they would upstream; it schedules again only when the local hour or day has
 moved, the only inputs besides the pools.
 
+Plex's collection lists are read in windows (`NxPlexPaged`, upstream's
+`fetchPlexPaged`, #189): the section list and each section's collections 300
+at a time, each collection's children 120 at a time. Plex 1.43.5 logs a
+warning for a `/collections` or `/children` read with no size, and for a
+`/children` size over 120, saying both will fail with status 400 in the
+future. A sized `/children`
+answer is slower, about 4 s instead of 2 s for 69 collections on the 55R617.
+
 A launch whose servers all come from their saves reuses the last build's
 filter results (kept in the saved pools file), as a package switch does,
 except for channels whose rules read the clock to the day
