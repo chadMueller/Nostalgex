@@ -3,6 +3,121 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (web tuner and Docker 1.0.14 prepared, not tagged)
+
+**Prepared.** Branch `web/release-1014`: `tunerVersion` 1.0.14 in `package.json`, the README headings and the Latest line
+to match. Not pushed and not tagged: a push to `main` deploys nostalgex.app, which will read `WEB TUNER 1.0.14` from the
+bump on, and the image is published by the `tuner-v1.0.14` tag, which needs Chad's go. Nothing in this entry is live yet.
+
+**In it, since `tuner-v1.0.13`** (web and Docker): the library line in Settings and the console COVERAGE line; a playlist,
+song, album, artist or collection no longer airs as a film on Jellyfin and Emby; Emby's content rating and star rating are
+read (#204); a Plex section or a Jellyfin or Emby library that fails keeps the rest and is not cached, and a scan that
+reads nothing is an error; Plex list reads send a page size and are read to the end (N-038); Jellyfin and Emby music
+video libraries load their MusicVideo items (I-067); `channels.json` v50 (no channel under 3 titles). On the hosted
+tuner only: the Deezer genre lookup is allowed through the site CSP (N-012); the image never makes that lookup.
+
+**Saved libraries refresh once.** A library cached by an older scan (no `scanRevision`, now 2) is restored at once and read
+again in the background, as the Apple TV does with `scanFieldsVersion`. Without it the playlist would stay on the guide
+and Emby titles would stay unrated for up to a day after the update. A cache from this scan is not stale.
+
+**Checked on the branch.** `npm test`, `npm run build`, `npm run build:selfhost`, `npm run test:tuner-version:builds`
+and `npm run test:tuner-isolation:builds`, and the Roku off-device suite (`roku/tests/run.sh`).
+
+## 2026-11-05 (web tuner: a library line in Settings, how many titles sit on a channel; Apple TV 1.0.30 parity)
+
+**Why.** The Apple TV 1.0.30 says, under RESCAN LIBRARY, how many loaded titles sit on a channel, how many sit on none,
+and how many the scan skipped for having no runtime (`appletv/library-coverage-counts`, `LibraryDiagnostics`). The web
+had one console line (`LIBRARY: N items, M with tmdbID`) and nothing on screen, so a reader who saw a title missing
+from every channel had no way to tell "no channel takes it" from "it did not load".
+
+**Changed.**
+- `scripts/nostalgex-library-coverage.js`: the count and the wording, from the Apple TV's definitions. **On a channel:**
+  in the pool of at least one channels.json channel whose pool reaches its `minItems`, whether or not its package is
+  on (seasonal ones count), or in a collection or franchise channel already built. **On no channel:** every other
+  title, split by kind (MOVIES, EPISODES, MUSIC VIDEOS) when more than one kind has some. **Skipped:** movies and
+  episodes the loaders drop on `durationMin <= 0`. Example:
+  `11,633 OF 11,809 ON CHANNELS · 176 ON NO CHANNEL (4 MOVIES, 172 EPISODES) · 12 SKIPPED (NO RUNTIME)`.
+  It tests each title against each channel with `itemPasses` (no pools are built), in slices of about 12 ms that give
+  the page back between them, and stops at once when a newer library replaces the one it reads.
+- `plex-tuner.html`: the line sits under LIBRARY in Settings, SERVER tab, in a quiet grey, and is empty until counted
+  or when signed out. The four loaders count the skipped titles (once each, reset at the start of a scan) and the
+  count is saved with the library cache, so the line survives a reload. The count starts 2.5 s after the pools are
+  built, again after enrichment re-filters and after the collections are read, and a console `COVERAGE:` line carries
+  the first 25 titles on no channel (year, certificate, rating, genres, studio, runtime, TMDB), console only.
+- `scripts/nostalgex-library-coverage-smoke.mjs` (`npm run test:library-coverage`, in `npm test`): 25 checks. The
+  wording, the numbers against a plain loop over the real `channels.json` and filter, the slicing, the cancel, a channel
+  short of its minimum, a built collection channel, package switches not moving the number.
+- `scripts/library-coverage-browser-smoke.mjs` (`npm run test:library-coverage:browser`, headless): the real page against
+  a stub Plex with a synthetic library. 10 checks: the line in the Apple TV's wording, the numbers against a plain loop
+  over the library the page holds, the skipped count, the line after a reload, the console line, sign-out.
+
+**Measured** in headless Chromium against a stub Plex, synthetic titles (not a real library):
+- 11,800 titles: the count takes 6.7 s; the page's longest stretch busy while it ran was 25 ms (a heartbeat every
+  10 ms), no task over 50 ms.
+- 100,000 titles: the count takes 74 s, longest stretch busy 24 ms, no task over 50 ms, JS heap 99 MB before and after.
+  The first load, including building all 142 channels and then the count, shows the line at 131 s. The JS heap peaked
+  at 341 MB while loading.
+
+**Not done.** A real Plex library was not run; the 11.8k figures are synthetic. The Apple TV needs the enrichment
+record for a `productionCompanies` rule and the web matches the Plex studio without one (known, on purpose), so on a
+library with no enrichment the web's on-a-channel figure is a little higher.
+
+## 2026-11-05 (web tuner: a scan that loses part of the server keeps the rest; one that loses all of it is an error)
+
+**Why.** Parity with the Apple TV's 1.0.30 rule (`SectionFailures`, N-039, found while measuring #146). The web already
+skipped a Plex section or a Jellyfin library that threw, and went on to the next, so the "keep the rest" half was
+there. Three things were not. A scan where every section failed ended in the "no content" screen, which says the
+server has nothing, and saved an empty library. The Jellyfin and Emby scan read every `/Items` answer as JSON without
+looking at its status, so a 401 or a 500 was an empty library and an expired sign-in never reached the "session
+ended" line. And a library that lost a section was saved for 24 hours as if it were whole.
+
+**Changed.**
+- `plex-tuner.html`, Plex (`fetchPlexSectionPaged`, `scanOnePlexServer`, `fetchPlexLibraryFromServer`): a section
+  page that answers 401 or 403 ends the scan with `plexStatus`, as the section list already did. Any other failed
+  section is skipped and named (`lost N section(s), ...; kept M items from the others`). A server whose every section
+  failed throws its last error, so the page shows its error line. A library that lost a section is not saved
+  (`skipCacheSave`), so the next visit reads it whole.
+- `plex-tuner.html`, Jellyfin and Emby (`fetchItems`): checks the status. 401 and 403 end the scan; another failure
+  loses the library, but pages already read are kept; every library lost throws; a lost library is named and the result
+  is not cached.
+- `scripts/nostalgex-scan-failures-smoke.mjs` (`npm run test:scan-failures`, in `npm test`): the real Jellyfin loader
+  over a stub that fails on request. 18 checks; 9 fail without the change.
+- `scripts/plex-section-failures-browser-smoke.mjs` (`npm run test:plex-section-failures`, headless): the real page
+  against a stub Plex. 12 checks; 7 fail without the change (an all-sections failure showed the empty screen and was
+  saved; a sign-in refused on a section page did the same).
+
+**Not changed.** The page does not tell the viewer which section was lost; it names it in the console. The Apple
+TV names it in its install log too, and shows nothing more.
+
+## 2026-11-05 (Emby: the library scan asks for each title's rating and star rating)
+
+**Why.** GitHub #204, measured by tydude001 on the Roku against an Emby 4.10.1.0 test server. Emby leaves
+`OfficialRating` and `CommunityRating` out of an `/Items` answer unless `Fields` names them (0 of 200 films carried
+either; 195 and 197 of 200 with them named). Jellyfin sends both either way. The web scan, like the Apple TV and the
+Roku, never named them, so on Emby every title read as unrated. `SAT MORNING CARTOONS` (an allow-list of TV-Y, TV-Y7,
+TV-G and G, plus unrated) took a TV-MA cartoon, because an unrated title passes it. `VHS VAULT`'s 9 PM hold on R and
+NC-17, and WATERSHED, held nothing. The 13 `ratingMin` channels saw no star rating.
+
+**Changed.**
+- `plex-tuner.html` (`fetchItems` in `fetchJellyfinLibraryFromServer`, the one Items request the scan makes for films,
+  shows and episodes): `Fields` now ends `...UserData,OfficialRating,CommunityRating`. The normaliser already read
+  both (`contentRating` and `rating`).
+- `scripts/nostalgex-emby-ratings-smoke.mjs` (`npm run test:emby-ratings`, in `npm test`): the real loader as an Emby
+  sign-in over a stub that withholds both fields unless `Fields` names them, then the real filter and the page's own
+  `getTimeFilteredPool` at 8 PM and 9 PM. On `main` 9 of its 11 checks fail: the TV-MA cartoon is on SAT MORNING
+  CARTOONS, VHS VAULT's pool keeps its R films at 8 PM, WATERSHED holds nothing, ALL TIME GREATS sees no stars. All 11 pass here.
+
+**What changes for an Emby viewer, from the next library read** (the saved library lasts up to 24 hours): the channels
+with an allow-list and no unrated pass stop being empty, kids and family channels lose their TV-MA, R and PG-13 titles
+(titles with no rating still pass), VHS VAULT, WATERSHED and the 9 PM hold start holding R and TV-MA, and `ratingMin`
+channels judge by Emby's own star rating instead of the OMDb fallback. Their lineups for the day move with the pools.
+
+**Open.** The Roku's vectors (`roku/tests/gen-mediabrowser.mjs` runs this loader and records its request paths) change
+in 9 request lines: the Roku job goes red until `roku/source/mediabrowser/MediaBrowserLibrary.brs:42` names the same two
+fields, so the two land together. The Apple TV (`EmbyAPIService.swift:218`, `JellyfinAPIService.swift:212`) and Android
+(`MediaBrowserLibrary.kt:200`, PR #151) send the same list and are not changed here. Not run against a real Emby; the
+Jellyfin side relies on #204's 12.2.0 measurement and on Jellyfin's Fields binder skipping a name it does not know.
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
@@ -34,6 +149,47 @@ details" too, because the part key and the codecs are in it.
 **Open.** Nothing.
 
 **Next.** Nothing for the site from this change.
+
+## 2026-11-05 (Jellyfin and Emby: a playlist is no longer scanned as a film)
+
+**Why.** A report from a Docker web tuner on Jellyfin: a workout playlist of eight songs aired on CH 7 VHS VAULT
+as a 33 minute programme, and tuning it answered "Jellyfin answered HTTP 500 before it started sending video".
+Not seen on a real server here; this is rebuilt on a stub and the cause is read from Jellyfin's source.
+
+**The path.** `fetchJellyfinLibraryFromServer` read `/UserViews`, called every view that was not TV or Music
+Videos a movie library, and asked it for `IncludeItemTypes=Movie`. The Playlists view (CollectionType `playlists`)
+is one of those. Jellyfin's `PlaylistsFolder.GetItemsInternal` (Emby.Server.Implementations/Playlists/PlaylistsFolder.cs)
+sets `query.Recursive = true; query.IncludeItemTypes = [Playlist]` over whatever the client sent, so the answer to
+"Movie" under that view is its playlists. The loader mapped any row to `type: 'movie'`. The playlist came out as
+`type movie, duration 33, year '', genres [], contentRating '', partKey null` (it has no media source). The year
+rule lets an item with no year through (`passesYearRange`), so by the real filter it entered CH 7 VHS VAULT (type
+movie, 1980 to 1999), CH 16 DVD SHELF (2000 to 2009) and CH 51 FLICKS (type movie, genre excludes only).
+
+**The 500.** Measured in the real page with the real hls.js against a stub: tuning the playlist sends
+`POST /Items/{id}/PlaybackInfo`, then `GET /Videos/{id}/master.m3u8`, and with HTTP 500 on both the page shows
+the card word for word. That the real server answers 500 for a playlist id is not measured. A raw
+`GET /Items/{id}` and the status of those two requests from the reporter's server would settle it.
+
+**Changed.**
+- `scripts/nostalgex-jellyfin-urls.js` (point 12): `sectionType(collectionType)` returns `'other'` for Music,
+  Playlists, Collections, Books, Photos, Home Videos, Live TV, Trailers, Folders and Channels, and the scan never asks
+  those for items. `itemTypes` and `hasAskedType` give what a section is asked for and drop any row whose `Type`
+  was not asked for (a row with no `Type` is kept), for a server that answers with more than it was asked.
+  `scripts/jellyfin-library-golden.json` pins both, for the other apps to port; the urls smoke reads it.
+- `plex-tuner.html`: the scan calls them. Movies is still asked for `Movie`, Music Videos for `Movie,MusicVideo`
+  (I-067), TV for `Series` then `Episode`. The Roku vectors (`roku/tests/gen-mediabrowser.mjs` runs this loader over
+  a fixture) are unchanged.
+- `scripts/nostalgex-jellyfin-library-smoke.mjs` (`npm run test:jellyfin-library`, in `npm test`): the real loader and
+  the real filter over a stub library with a playlist, songs, an album, an artist and a collection, answered as
+  Jellyfin does and by a server that ignores `IncludeItemTypes`. On `main` 16 of its 28 checks fail; the playlist is
+  in the library and in three channels' pools. Here all 28 pass.
+- `scripts/jellyfin-non-video-items-browser-smoke.mjs` (`npm run test:jellyfin-non-video:browser`, headless): the real
+  page on Jellyfin and Emby. On `main` 14 of 22 checks fail and it prints what playing the playlist showed.
+
+**Open.** A library cached before this change keeps the playlist until the 24 hour cache is refreshed. Not checked on a
+real Jellyfin or Emby; whether Emby's Playlists view answers like Jellyfin's is not known. Apple TV
+(`JellyfinAPIService.sectionType`, `EmbyAPIService`), Roku (`NxMbItemTypesFor`) and Android (`MediaBrowserLibrary.kt`)
+read the same views the same way and have no `Type` check; none is changed here.
 
 ## 2026-11-04 (Roku: Settings is the Apple TV's rail and detail pane, the first of #188's two PRs)
 
