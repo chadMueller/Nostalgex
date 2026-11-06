@@ -355,7 +355,11 @@ function NxMbMovieItem(jf as Object, isMusicVideoSection as Boolean, musicGenre 
         hasMusicGenre = true
     end if
     durationMin = NxMbMinutes(jf.RunTimeTicks)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
     ' A music-video library, or a short item tagged with a Music genre (the
     ' 10-minute cap keeps musicals and biopics out).
     isMusicVideo = isMusicVideoSection or (durationMin <= 10 and hasMusicGenre)
@@ -407,7 +411,11 @@ end function
 ' An episode, with its show's fields; invalid when it has no running time.
 function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, showTmdb as Dynamic, isMusicVideoSection as Boolean) as Dynamic
     durationMin = NxMbMinutes(ep.RunTimeTicks)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
     mi = NxMbMediaInfo(ep)
     librarySource = "tv"
     if isMusicVideoSection then librarySource = "musicVideo"

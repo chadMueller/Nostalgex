@@ -85,6 +85,30 @@ function NxRelativeAgo(ago as LongInteger) as String
     return n&.ToStr() + " " + name + " ago"
 end function
 
+' The library line (#207; source/util/LibraryCoverage.brs counts it), or ""
+' when there is nothing to say. "ON NO CHANNEL" and "SKIPPED" are left out at
+' zero; the split by kind shows only when more than one kind has titles on no
+' channel. `cov` may be invalid (not counted yet):
+' then only the skipped part shows.
+function NxCoverageLine(cov as Dynamic, skipped as Integer) as String
+    parts = []
+    if type(cov) = "roAssociativeArray" and NxNumberOr0(cov.totalLoaded) > 0 then
+        parts.Push(NxGroupedInt(cov.totalOnChannels) + " OF " + NxGroupedInt(cov.totalLoaded) + " ON CHANNELS")
+        if NxNumberOr0(cov.totalOnNoChannel) > 0 then
+            orphans = NxGroupedInt(cov.totalOnNoChannel) + " ON NO CHANNEL"
+            byKind = []
+            for each k in [["movie", "MOVIES"], ["episode", "EPISODES"], ["musicVideo", "MUSIC VIDEOS"]]
+                n = NxNumberOr0(cov.loaded[k[0]]) - NxNumberOr0(cov.onChannels[k[0]])
+                if n > 0 then byKind.Push(NxGroupedInt(n) + " " + k[1])
+            end for
+            if byKind.Count() > 1 then orphans = orphans + " (" + byKind.Join(", ") + ")"
+            parts.Push(orphans)
+        end if
+    end if
+    if skipped > 0 then parts.Push(NxGroupedInt(skipped) + " SKIPPED (NO RUNTIME)")
+    return parts.Join(" · ")
+end function
+
 ' ── What the registry keeps ─────────────────────────────────────────────────
 
 ' After each load, with the sign-in, so a sign-out clears it as upstream's
@@ -95,7 +119,21 @@ sub NxSaveLibraryHeld(counts as Object, nowSec as LongInteger)
     reg.Flush()
 end sub
 
-' { counts, at } from the last load, or invalid before one.
+' The coverage count (source/util/LibraryCoverage.brs) for the load saved at
+' `at`, once it is counted, without its sample of titles. A newer load saved
+' since keeps its own record: its count is still to come.
+sub NxSaveLibraryCoverage(cov as Object, at as LongInteger)
+    held = NxLibraryHeld()
+    if held = invalid then return
+    heldAt& = held.at
+    if heldAt& <> at then return
+    held.coverage = { loaded: cov.loaded, onChannels: cov.onChannels, totalLoaded: cov.totalLoaded, totalOnChannels: cov.totalOnChannels, totalOnNoChannel: cov.totalOnNoChannel }
+    reg = NxPlexRegistry()
+    reg.Write("libraryHeld", FormatJson(held))
+    reg.Flush()
+end sub
+
+' { counts, at, coverage? } from the last load, or invalid before one.
 function NxLibraryHeld() as Dynamic
     ' ParseJson("") logs an error to the console, so an empty read is checked.
     raw = NxPlexRegistry().Read("libraryHeld")
@@ -129,17 +167,24 @@ function NxLastPlaybackVerdict() as String
     return NxToStr(rows[0])
 end function
 
-' The row's three lines, as its subtitle: what is held; when it last loaded,
-' and what the row does; the last verdict, when there is one.
+' The row's lines, as its subtitle: what is held; where it lands, once
+' counted or when the scan skipped any (#207); when it last loaded, and what
+' the row does; the last verdict, when there is one.
 function NxRescanLines(held as Dynamic, kindName as String, verdict as String, nowSec as LongInteger) as Object
     counts = invalid
+    coverage = ""
     updated = "Never"
     if held <> invalid then
         counts = held.counts
+        skipped = 0
+        if type(counts) = "roAssociativeArray" then skipped = NxNumberOr0(counts.skipped)
+        coverage = NxCoverageLine(held.coverage, skipped)
         at& = held.at
         updated = NxRelativeAgo(nowSec - at&)
     end if
-    lines = [NxLibrarySummaryText(counts), "Last updated " + updated + ". Pull a fresh copy of your " + kindName + " library after adding content"]
+    lines = [NxLibrarySummaryText(counts)]
+    if coverage <> "" then lines.Push(coverage)
+    lines.Push("Last updated " + updated + ". Pull a fresh copy of your " + kindName + " library after adding content")
     if verdict <> "" then lines.Push("Last playback failure: " + verdict)
     return lines
 end function
