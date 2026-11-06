@@ -82,6 +82,23 @@
 //    else ("Hdr10", "None", missing) is null, an unknown profile. embyDoviProfile reads it;
 //    the channel filter's isLeftOffChannels keeps profile 5 off every channel on Emby.
 //
+// WHAT A LIBRARY SCAN READS. Mirrors JellyfinAPIService.sectionType and .itemTypes on Apple TV.
+//
+// 12. Only videos reach the guide. The scan once treated every view that was not TV or Music
+//    Videos as a film library and asked it for IncludeItemTypes=Movie. The Playlists view is one
+//    of those, and Jellyfin's PlaylistsFolder.GetItemsInternal overwrites the request with
+//    `Recursive = true; IncludeItemTypes = [Playlist]`, so the answer to "Movie" under it was
+//    the playlists. A playlist of eight songs (33 minutes, no year, no genre) went on the guide
+//    as a film and passed every rule that says only "a movie" and "1980 to 1999 or no year":
+//    CH 7 VHS VAULT, CH 16 DVD SHELF, CH 51 FLICKS. Playing it answered HTTP 500, because the
+//    server has no video to send for a playlist. Now: sectionType gives 'other' for a view that
+//    holds no videos (Music, Playlists, Collections, Books, Photos, Home Videos, Live TV,
+//    Trailers, Folders), and the scan never asks it for items. For the rest, itemTypes is what
+//    to ask for ('Movie', or 'Movie,MusicVideo' for Music Videos, I-067), and hasAskedType drops
+//    any row whose Type was not asked for, for a server that answers with more than it was asked.
+//    A row with no Type is kept. A view with no CollectionType (mixed content) is a film view.
+//    scripts/jellyfin-library-golden.json pins both functions, for the other apps to port.
+//
 // Same on both, so shared: the MediaBrowser Authorization header (Emby 4.10 accepts it on every
 // call the tuner makes), AuthenticateByName with { Username, Pw }, /Items, PlaybackInfo, the
 // static stream, subtitle VTT, /Users/{id}/... watch state, and DELETE /Videos/ActiveEncodings,
@@ -101,6 +118,9 @@
 //   JU.subtitleProfiles(method);  JU.NO_SUBTITLE_STREAM;  JU.isTextSubtitle(codec);
 //   JU.forcedSubtitleToBurn(subtitles, matchesViewerLanguage);   // a subtitle, or null
 //   JU.embyDoviProfile(extendedVideoSubType);   // 5, 8, 7, or null
+//   JU.sectionType(collectionType);   // 'show', 'musicvideo', 'movie' or 'other' (see 12)
+//   JU.itemTypes(sectionType);   // 'Series', 'Movie', 'Movie,MusicVideo', or null for 'other'
+//   JU.hasAskedType(item, includeItemTypes);   // false for a row of a type that was not asked for
 
 (function (global) {
   'use strict';
@@ -235,12 +255,45 @@
     return m ? Number(m[1].slice(0, -1)) : null;
   }
 
+  // Views that hold no videos (see 12 above). Anything else, including no CollectionType at all
+  // (mixed content), is read as films.
+  const NON_VIDEO_VIEWS = new Set([
+    'music', 'playlists', 'boxsets', 'books', 'audiobooks', 'photos', 'homevideos', 'livetv', 'trailers', 'folders', 'channels',
+  ]);
+
+  // A view's CollectionType as the kind of section the scan branches on.
+  function sectionType(collectionType) {
+    const ct = String(collectionType || '').toLowerCase();
+    if (ct === 'tvshows') return 'show';
+    if (ct === 'musicvideos') return 'musicvideo';
+    if (NON_VIDEO_VIEWS.has(ct)) return 'other';
+    return 'movie';
+  }
+
+  // IncludeItemTypes for a section. A music video library holds MusicVideo items, so it is asked
+  // for those and for Movie (a few libraries file their clips as Movie). null: do not ask.
+  function itemTypes(section) {
+    if (section === 'show') return 'Series';
+    if (section === 'musicvideo') return 'Movie,MusicVideo';
+    if (section === 'movie') return 'Movie';
+    return null;
+  }
+
+  // False for a row whose Type is not among the types that were asked for. A row with no Type
+  // is kept: every Jellyfin and Emby answer carries one, and a test double may not.
+  function hasAskedType(item, includeItemTypes) {
+    const type = item && item.Type;
+    if (type == null || type === '') return true;
+    return String(includeItemTypes || '').toLowerCase().split(',').includes(String(type).toLowerCase());
+  }
+
   const api = {
     isMp4Family, staticStreamUrl, withApiKey, newPlaySessionId, fallbackHlsUrl,
     isMediaBrowser, userViewsPath, serverStreamOnlyFields, serverKindFromPublicInfo,
     quickConnectInitiateRetriesWithGet, quickConnectInitiate,
     subtitleProfiles, isTextSubtitle, forcedSubtitleToBurn, NO_SUBTITLE_STREAM,
     embyDoviProfile,
+    sectionType, itemTypes, hasAskedType,
   };
 
   global.NostalgexJellyfinUrls = api;
