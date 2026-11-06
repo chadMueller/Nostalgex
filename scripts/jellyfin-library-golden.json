@@ -1,0 +1,50 @@
+{
+  "_about": [
+    "Shared vectors for which Jellyfin and Emby library views a scan reads, and what it asks them for. The contract is the web tuner's NostalgexJellyfinUrls.sectionType, .itemTypes and .hasAskedType (scripts/nostalgex-jellyfin-urls.js, point 12); the Apple TV's JellyfinAPIService.sectionType and .itemTypes, the Roku's NxMbItemTypesFor and the Android MediaBrowserLibrary.sectionType are to match it.",
+    "Read by scripts/nostalgex-jellyfin-urls-smoke.mjs (npm run test:jellyfin-urls).",
+    "`sections`: a view's CollectionType (null, or missing, is mixed content) gives a sectionType and the IncludeItemTypes to ask for. sectionType 'other' is a view with no videos in it: the scan never asks it for items, because Jellyfin's PlaylistsFolder answers any request with its playlists, whatever IncludeItemTypes says.",
+    "`types`: a row the server sent, the types that were asked for, and whether the scan keeps the row. A row with no Type is kept."
+  ],
+  "sections": [
+    { "collectionType": "movies", "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "Movies", "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "tvshows", "sectionType": "show", "itemTypes": "Series" },
+    { "collectionType": "musicvideos", "sectionType": "musicvideo", "itemTypes": "Movie,MusicVideo" },
+    { "collectionType": null, "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "", "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "mixed", "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "unknown", "sectionType": "movie", "itemTypes": "Movie" },
+    { "collectionType": "playlists", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "music", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "boxsets", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "books", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "audiobooks", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "photos", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "homevideos", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "livetv", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "trailers", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "folders", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "channels", "sectionType": "other", "itemTypes": null },
+    { "collectionType": "Playlists", "sectionType": "other", "itemTypes": null }
+  ],
+  "types": [
+    { "item": { "Type": "Movie" }, "asked": "Movie", "kept": true },
+    { "item": { "Type": "movie" }, "asked": "Movie", "kept": true },
+    { "item": { "Type": "MusicVideo" }, "asked": "Movie,MusicVideo", "kept": true },
+    { "item": { "Type": "Movie" }, "asked": "Movie,MusicVideo", "kept": true },
+    { "item": { "Type": "Series" }, "asked": "Series", "kept": true },
+    { "item": { "Type": "Episode" }, "asked": "Episode", "kept": true },
+    { "item": {}, "asked": "Movie", "kept": true },
+    { "item": { "Type": "" }, "asked": "Movie", "kept": true },
+    { "item": { "Type": "Playlist" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "Audio" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "MusicAlbum" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "MusicArtist" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "BoxSet" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "Folder" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "Video" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "MusicVideo" }, "asked": "Movie", "kept": false },
+    { "item": { "Type": "Episode" }, "asked": "Series", "kept": false },
+    { "item": { "Type": "Playlist" }, "asked": "Movie,MusicVideo", "kept": false }
+  ]
+}
