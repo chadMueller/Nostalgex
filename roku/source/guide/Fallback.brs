@@ -53,7 +53,12 @@ end function
 '     "finished" right after an error, while the retry waits or the card is
 '     up; that isn't the file's end, and handing over on it started the
 '     next film from its beginning, skipping the retry, the card and the
-'     count (CH 12, Soldier, a server stream joined 54 minutes in).
+'     count (CH 12, Soldier, a server stream joined 54 minutes in). The
+'     same while the server is asked after an error (probingAfterError,
+'     failAttempt's probe): handing over there started the next airing as
+'     a fresh start, with its own retry, so a stream the server answers
+'     for but the player can't play went from programme to programme
+'     every few seconds, never reaching the card or the five-in-a-row stop.
 '   "error": a second end in a row without playing is a failed start.
 '   "probe": a server stream that ended without playing: ask the server
 '     first, as a file gone from disk ends this way too.
@@ -62,6 +67,7 @@ end function
 function NxFinishedAction(ctx as Object) as Object
     ends = ctx.unplayedEnds
     if ctx.attemptRunning <> true then return { action: "ignore", unplayedEnds: ends }
+    if ctx.probingAfterError = true then return { action: "ignore", unplayedEnds: ends }
     if ctx.sawPlaying = true then return { action: "handover", unplayedEnds: ends }
     ends = ends + 1
     if ends >= 2 then return { action: "error", unplayedEnds: ends }

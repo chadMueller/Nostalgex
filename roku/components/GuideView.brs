@@ -1141,7 +1141,7 @@ sub onVideoState()
     if state = "finished" then
         rung = ""
         if m.attempt <> invalid then rung = m.attempt.rung
-        fin = NxFinishedAction({ attemptRunning: m.attempt <> invalid, sawPlaying: m.sawPlaying, unplayedEnds: m.unplayedEnds, rung: rung, probing: m.probing })
+        fin = NxFinishedAction({ attemptRunning: m.attempt <> invalid, sawPlaying: m.sawPlaying, unplayedEnds: m.unplayedEnds, rung: rung, probing: m.probing, probingAfterError: m.probing = true and m.probeFor <> invalid and m.probeFor.finished <> true })
         m.unplayedEnds = fin.unplayedEnds
         if fin.action = "ignore" then
             print "player: finished after the start failed; its retry or card goes on"

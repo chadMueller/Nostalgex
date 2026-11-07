@@ -612,6 +612,26 @@ real Jellyfin or Emby; whether Emby's Playlists view answers like Jellyfin's is 
 (`JellyfinAPIService.sectionType`, `EmbyAPIService`), Roku (`NxMbItemTypesFor`) and Android (`MediaBrowserLibrary.kt`)
 read the same views the same way and have no `Type` check; none is changed here.
 
+## 2026-11-04 (Roku: a "finished" while the server is asked after an error hands over nothing, #184's Plex way)
+
+**Why.** #184: on the Roku, a stream the server answers for but the player can't play never reached the
+playback card or the five-in-a-row stop. On Plex the server stream errors, its retry errors too,
+`failAttempt` asks the server with the attempt still running, and Roku's player then says `finished`.
+`NxFinishedAction` took that as the file's end and handed over to the next airing, a fresh start with its
+own retry, so the server's answer was dropped.
+
+**Changed.** `roku/source/guide/Fallback.brs`: a probe started by an error (`probeFor.finished` not true)
+passes `probingAfterError`, and a `finished` then is ignored, as one after the card or while a retry waits
+already is (`components/GuideView.brs` passes it). The existing case for a probe started by an end is
+unchanged. Three cases in `roku/tests/FallbackTests.brs`.
+
+**Pressed** on the 43S45 (Roku OS 16.0.4) against Plex (5,470 items), with a scratch launch switch that
+broke the player's copy of channel 2's server stream and left the probe's. Main at `5971d06`, 40 s: 21
+tunes, 10 hand-overs, no card. This branch, 40 s: 9 tunes and four cards, "1 in a row" up to 4; run for
+70 s, the fifth card at 42 s stopped the channel, and nothing was tried in the next 29 s.
+
+**Open.** Jellyfin and Emby go another way (the stream ends unplayed, then the server's 200 is read as a
+short file's end), a second PR per Chad on #184, with the same 40 s check on a TV.
 
 ## 2026-11-04 (Web tuner: every Plex list request sends X-Plex-Container-Size, and long lists are read whole)
 
