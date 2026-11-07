@@ -514,6 +514,48 @@ fields, so the two land together. The Apple TV (`EmbyAPIService.swift:218`, `Jel
 (`MediaBrowserLibrary.kt:200`, PR #151) send the same list and are not changed here. Not run against a real Emby; the
 Jellyfin side relies on #204's 12.2.0 measurement and on Jellyfin's Fields binder skipping a name it does not know.
 
+## 2026-11-05 (Roku: WATERSHED, the 9 PM hold, its switch and its card, #190)
+
+**Why.** #190: the Apple TV and the web tuner have a WATERSHED switch that holds R, NC-17 and TV-MA titles until
+9 PM on every channel without its own `blockRatings`. The Roku had none, so those titles aired all day.
+
+**Changed.**
+- `roku/source/guide/Lineup.brs`: `NxTimeFilteredPool` takes the switch and applies the global pass after the
+  channel's own rules, with no fallback, as `Channel.filteredPool` does. `NxIsWatershedHold` mirrors
+  `isWatershedHold`. Held to `scripts/watershed-golden.json` by `roku/tests/WatershedGoldenTests.brs` (13 cases, pool
+  and hold), and `run.sh` runs `nostalgex-watershed-smoke.mjs` on the file first, as for the other goldens.
+- `roku/source/guide/Watershed.brs`: the switch (registry `player`, `watershed`, off by default, sent nowhere) and the
+  Apple TV's words for the guide row and the card.
+- `roku/source/guide/GuideSchedule.brs`, `roku/components/LibraryTask.brs`: the library task reads the switch before
+  every schedule. The re-check's key and each channel's pool memo carry the gate, so the switch, 9 PM and midnight
+  reschedule, and a guide built under the other setting isn't reused (`sameSchedule` compares it too). Each
+  scheduled channel says whether the gate is closed on it and whether it alone emptied it. The re-check prints its
+  time and memory. 13 checks on this wiring in `WatershedGoldenTests.brs`.
+- `roku/components/GuideView.brs`: a held channel's row reads BROADCASTS RESUME AT 9 PM, and tuning it puts up the
+  card in place of a failure, counting none. A programme playing when the gate moves is kept until it ends, through
+  later refreshes too. Closing Settings asks for the re-check at once.
+- `roku/components/SettingsView.brs`: WATERSHED, after MY COLLECTIONS until #188's rail moves it.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin (17 channels, 18 with the collection below).
+- The #190 build (`1a0af9c`): the switch rescheduled about 1.3 s after Settings closed. With a lab collection of six
+  R films switched on (CH 400), WATERSHED on before 9 PM put BROADCASTS RESUME AT 9 PM in its row. A deep link to
+  CH 400 put up the card, which stayed with nothing retried. Switching it off cleared the card, and CH 400 played
+  (picture in 3.7 s).
+- A diagnostic build (`1a0af9c` with the gate at 10 AM and pool counts printed), switched on at 9:47: R, NC-17 and
+  TV-MA titles went to 0 in each of the 10 pools it printed, e.g. CH 14's from 50 to 21 and CH 13's from 20 to 5.
+  VHS VAULT's pool was 25 either way. The 66 titles on screen had none of those ratings. At 10:00 the re-check put
+  them back (CH 14 at 50), and 8 on screen had them. CH 3 stayed tuned through the switch and the 10:00 change, with
+  no retune. Whether the kept-programme path was what held it is not known.
+- The re-check of 18 channels, forced every minute in throwaway builds: main 149 to 164 ms, this branch with the
+  switch off 163 to 170 ms, with it on 257 to 270 ms, and 832 ms for the one that follows switching it on (every
+  day repacked). Memory 25 to 26% throughout. By the code, the ~100 ms with the switch on is each pool filtered again
+  for today, tomorrow and the hold check; on a TV the re-check runs once an hour.
+
+On Emby nothing is held: its scan never asks for `OfficialRating`, so no title is rated (#204).
+
+**Open.** Not seen on a TV: the real 9 PM and midnight, a launch deep link onto a held channel, the golden suite
+through `deploy.sh --test`, a Plex sign-in and a stick.
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku

@@ -17,16 +17,20 @@ end sub
 ' todayOnly leaves tomorrow out, for a launch that needs the guide up first;
 ' tomorrow is packed from today's schedule either way, so scheduling it
 ' afterwards gives the same blocks.
+' Each channel also says whether the WATERSHED gate is closed on it now
+' (watershed) and whether that gate alone has emptied it (held), for the
+' guide row, the card and a programme the gate must not cut off.
 function NxScheduleGuide(ordered as Object, nowSec as LongInteger, todayOnly = false as Boolean) as Object
     day = NxLocalDay(nowSec)
     ' A day is 23 to 25 hours long, so 26 hours on is always tomorrow.
     tomorrowAt& = NxLocalDay(day.dayStartSec + 26 * 3600).dayStartSec + 60
     tomorrowHour = NxLocalDay(tomorrowAt&).hour
+    ws = NxWatershedSet()
     out = []
     for each ch in ordered
-        today = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, day.hour), nowSec, NxPoolMemo(ch, day.hour))
+        today = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, day.hour, ws), nowSec, NxPoolMemo(ch, day.hour, ws))
         tomorrow = []
-        if not todayOnly then tomorrow = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, tomorrowHour), tomorrowAt&, NxPoolMemo(ch, tomorrowHour))
+        if not todayOnly then tomorrow = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, tomorrowHour, ws), tomorrowAt&, NxPoolMemo(ch, tomorrowHour, ws))
         blocks = []
         for each b in today
             blocks.Push(NxGuideBlock(b))
@@ -34,27 +38,53 @@ function NxScheduleGuide(ordered as Object, nowSec as LongInteger, todayOnly = f
         for each b in tomorrow
             blocks.Push(NxGuideBlock(b))
         end for
-        out.Push({ id: ch.id, number: NxChNum(ch), name: ch.name, color: ch.colorHex, blocks: blocks })
+        out.Push({
+            id: ch.id, number: NxChNum(ch), name: ch.name, color: ch.colorHex, blocks: blocks,
+            watershed: NxWatershedClosed(ch, day.hour, ws), held: NxIsWatershedHold(ch, NxList(ch.pool), day.hour, ws)
+        })
     end for
     return out
 end function
 
-' The local day and hour, the only things besides the pools that
-' NxScheduleGuide's result depends on.
-function NxScheduleHourKey(nowSec as LongInteger) as String
+' The WATERSHED switch every schedule in this thread is built with. The
+' library task sets it from the registry before it schedules; invalid, as in
+' the off-device tests, is off.
+sub NxSetWatershed(on as Boolean)
+    GetGlobalAA().nxWatershed = on
+end sub
+
+function NxWatershedSet() as Boolean
+    return GetGlobalAA().nxWatershed = true
+end function
+
+' Whether the gate holds this channel's R, NC-17 and TV-MA titles at a local
+' hour: the switch is on, it is before 9 PM, and the channel has no
+' blockRatings of its own.
+function NxWatershedClosed(ch as Object, hour as Integer, watershed as Boolean) as Boolean
+    return watershed and hour < NxWatershedHour() and not NxHasOwnBlockRatings(ch)
+end function
+
+' The local day and hour, and whether the WATERSHED switch is on: the only
+' things besides the pools that NxScheduleGuide's result depends on. The
+' gate itself opens at 9 PM and closes at midnight, on an hour.
+function NxScheduleHourKey(nowSec as LongInteger, watershed = false as Boolean) as String
     day = NxLocalDay(nowSec)
-    return day.dayKey + " " + day.hour.ToStr()
+    key = day.dayKey + " " + day.hour.ToStr()
+    if watershed then key = key + " watershed"
+    return key
 end function
 
 ' The channel's NxManifestBlocks memo for its pool at a local hour. A
-' channel without time restrictions has one pool all day; one with them
-' keeps a memo per hour, the last few only. Lives on the channel, so it goes
+' channel without time restrictions has one pool all day, or two with
+' WATERSHED on (the gate closed and open); one with them keeps a memo per
+' hour and gate, the last few only. Lives on the channel, so it goes
 ' when a build replaces the channel or its pool (ch.pool is never changed in
 ' place once scheduled).
-function NxPoolMemo(ch as Object, hour as Integer) as Object
+function NxPoolMemo(ch as Object, hour as Integer, watershed = false as Boolean) as Object
     if ch.nxMemo = invalid then ch.nxMemo = {}
     key = "all"
     if type(ch.timeRestrictions) = "roAssociativeArray" then key = hour.ToStr()
+    if NxWatershedClosed(ch, hour, watershed) then key = key + " watershed"
     memo = ch.nxMemo[key]
     if memo = invalid then
         if ch.nxMemo.Count() >= 4 then ch.nxMemo = {}

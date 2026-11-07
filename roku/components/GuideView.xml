@@ -12,6 +12,9 @@
     <!-- A package switched in Settings, saved: MainScene asks the library
          task to build for it, and hands back bundleBuilt (see LibraryTask). -->
     <field id="bundleRequest" type="boolean" alwaysNotify="true" />
+    <!-- Settings closed: MainScene asks the library task for its re-check
+         now, so a WATERSHED switch reschedules at once (LibraryTask.reschedule). -->
+    <field id="reschedule" type="boolean" alwaysNotify="true" />
     <field id="bundleBuilt" type="string" alwaysNotify="true" onChange="onBundleBuilt" />
     <!-- A deep link from MainScene ({ contentId, mediaType }): tune that
          channel fullscreen, or in a sideloaded build play "item:<id>". -->
@@ -44,6 +47,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/SleepTimer.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
