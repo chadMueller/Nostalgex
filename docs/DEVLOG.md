@@ -3,6 +3,39 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
+
+**Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
+was, because `NxGuideCacheKey` had no switch in it. With the switch turned on since, that guide aired R, NC-17 and
+TV-MA titles before 9 PM until the full build replaced it. The guide file is written only after a full load, so a
+switch in Settings reschedules the running app but leaves the file as it was.
+
+**Changed.** `NxGuideKeyRest` (`source/util/SavedKey.brs`) builds the key after the build, and adds `|watershed` when
+the switch is on. Off adds nothing, so a guide saved before the switch existed still shows on the first launch after
+an update. The launch reads the switch from the registry; the save uses the guide's own `watershed`. Five cases in
+`VersionTests.brs`.
+
+**Not changed.** The other half of the review, that the saved-pools launch (`NxGuideFromSavedPools` and the
+tomorrow schedule after it) schedules with the switch off: both call `setLineup` first, which sets the switch from
+the registry, so those schedules are held. The TV runs below agree.
+
+**Pressed** on the 43S45 (OS 16.0.4), build `6ce57c1` (test data), between 12:03 and 12:58 PM. Each read took the
+first 22 channels of the guide over the about two hours the grid shows, matched against each server's ratings as read
+on 11-05 (1 to 4 titles a read unmatched by name). A read runs about 70 s, past the full load behind the launch; on each
+relaunch that load kept the launch guide's schedules.
+- Lab Jellyfin, `nxtest` (5,492 titles): switch off, guide saved. Switch on, relaunch: the saved guide was skipped,
+  the saved pools were scheduled and shown in 4.5 s, 0 of 79 titles on screen R, NC-17 or TV-MA, and the full load
+  kept those schedules ("its schedules stand", which compares the switch). Relaunch with it on: the saved guide
+  showed in 1.3 s, 0 of 79. Switch off, relaunch: pools again, and 11 of 81 held-rated titles back on screen.
+- Lab Emby, `nxtest` (5,578 titles, main's `Fields` from #204): switch off, 10 of 79 held-rated titles on screen.
+  Switch on, relaunch: the saved pools were shown in 3.5 s, 0 of 78.
+
+**Open.** As before: the real 9 PM and midnight, a launch deep link onto a held channel, the golden suite through
+`deploy.sh --test`, a Plex sign-in, a stick, the channels past the first 22, and the first launch after an update onto
+a guide the old build saved (the cases only). The power-loss seed's key has no switch either; closing Settings
+runs the re-check at once, which saves it again, so only a power loss with Settings still open would play a seed from
+the other setting.
+
 ## 2026-11-05 (Apple TV 1.0.30 (54): the TestFlight candidate, integrated, archived, validated, not uploaded)
 
 **Shipped.** Nothing. Branch `integrate/1030-testflight` (not pushed), archived from `45ec480a`. The IPA is validated and
