@@ -3,6 +3,32 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-07 (Roku: the filter's cache is dropped under both spellings, #215)
+
+**Why.** #215: `NxFilterItem` sets its cache as `item.nxFilter`, and in an item read back with `ParseJson`, a
+case-sensitive AA on a TV, that key is `nxfilter`, so `Delete("nxFilter")` left it. Three of the four deletes only
+freed memory. The fourth, in `NxEnrichAttach`, is what lets a title the remote enrichment step fills in be filtered
+with its record on the rebuild; when it missed, the rebuild read the view from before the record arrived.
+
+**Changed.** `NxFilterForget` (`source/filter/ChannelFilter.brs`) deletes both spellings and `NxFilterHeld` checks
+both. They replace the deletes in `NxFilterPoolsByServer`, `loadLibrary`, `rebuildForBundles`, `NxEnrichAttach` and
+the coverage count, and the delete and the leak check in `MultiServerFilterTests.brs`, whose `DoesExist("nxFilter")`
+would also have missed the lower-case key on a TV. New cases there: the fixture read back with `ParseJson` leaves no
+cache after `NxFilterPoolsByServer`; `NxFilterForget` clears a `ParseJson` item and a literal one; and a `ParseJson`
+title that SPY GAMES misses is taken by keyword once `NxEnrichAttach` gives it its record. The suite prints, as
+information, whether `Delete("nxFilter")` leaves the cache on that runtime.
+
+**Pressed** with `deploy.sh --test` on the 43S45 (OS 16.0.4), build `7e86c5f`: the print read `true` on the TV
+(`false` in the off-TV interpreter; the old fixture's literal items aren't case-sensitive anywhere), and every case kept
+in the pull request passed there. That build had one more case, comparing the
+`ParseJson` fixture's pools with the original's; it failed on the TV (132 of 142 channels the same) for a separate
+reason, so the next commit takes it out: on a TV the keys `FormatJson` writes are lower case, and `NxEnriched` reads
+`imdbRating` and other camelCase fields by their mixed-case name. The TV printed only the count; off the TV, lower-cased
+case-sensitive copies of the fixture differ in 10 channels too, all `ratingMin`.
+
+**Open.** The camelCase reads, as their own issue. A real title through `loadLibrary` and the remote step on a TV:
+our sideloads run with enrichment off (no relay or Supabase keys).
+
 ## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
 
 **Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
