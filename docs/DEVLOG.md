@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-07 (Roku: Settings rail, Chad's review of #201)
+
+**Why.** Chad's review: `selectTab` rebuilt every tab's rows (`buildRows`) on each Up or Down on the rail, which with
+a few hundred franchises or collections is a lot to redo per press on a stick; a row kind `NxSettingsTabOf` doesn't
+know is in no tab and never shows, and #211 adds `watershed`; and the sound while Settings is open had not been run.
+
+**Changed.**
+- `NxSettingsRowsInTab` (`source/guide/SettingsRail.brs`) picks one tab's rows from every tab's. `buildRows` ends in
+  it, and `selectTab` now calls only it (`pickTab`), unless a list is open, which `NxSettingsKeyAction` folds before
+  focus can reach the rail, so that rebuild is only a guard. `refreshRows` still rebuilds.
+- `watershed` is in the CHANNELS list now, before #211's row exists, so its tab doesn't depend on which of the two
+  lands first. On the Apple TV the switch is on the channels page. The rest of that merge is still by hand: #211's head
+  merged onto this one conflicts in `SettingsView.brs`, at `buildRows` (where the row goes) and `pressRow`.
+- Seven cases in `SettingsRailTests.brs` (69 there now).
+
+**The sound, read from the code.** `GuideView` mutes in `openSettings` and unmutes in `onSettingsResult`. SettingsView
+leaves only by setting `result` (`signOut` from its row, `rebuild` or `close` from `leave`), and `onSettingsResult` is
+the only place Settings is removed, with the unmute on the line after, so every way out unmutes. Not heard: the TV's volume stays at 0 for tests, and
+neither ECP nor the node tree reports `mute`.
+
+**Pressed** on the 43S45 (OS 16.0.4), build `4a1a987` (test data), lab Emby as `nxtest`, with 120 three-film
+collections made on the test Emby for the run and deleted after it. The server sent 121 (with the one it had);
+the app listed 108, 12 folded into franchises, and OTHER COLLECTIONS showed 96 FOUND · 12 UNDER FRANCHISES.
+- Rail presses, each timed from the ECP key to the new tab's title in the node tree (a tree read is about 0.14 s of
+  it): 0.19 to 0.63 s with OTHER COLLECTIONS folded, 0.15 to 0.31 s with its 96 rows open.
+- After those presses, a lab collection's row in CHANNELS & BUNDLES switched ON and OFF again. Back twice closed
+  Settings: SettingsView left the node tree, which only `onSettingsResult` does, and the guide took focus.
+
+**Open.** Not measured: the old build's press time for comparison, a stick, a library of a few hundred franchises,
+the second half (#188's CHANNELS & BUNDLES link rows and pages).
+
 ## 2026-11-07 (Roku 1.0.12: the release record joins main)
 
 **Shipped.** Roku 1.0.12, signed 2026-11-05 and uploaded to the beta (channel 888351) and to the public app's update, which is scheduled for Mon Nov 9. Package md5 `28894c7c1ec950ccbf8ab3ae8f44e970` (in `roku/releases.tsv`). The release commit is `19ec96a6`, tagged `roku-v1.0.12`: main `9e2c945d` (tydude001's #182, the first channel plays while the library loads after a power loss, and #191, the loading screen holds the screensaver off) plus the `build_version=12` bump and nothing else.
