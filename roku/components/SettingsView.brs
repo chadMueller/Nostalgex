@@ -1,11 +1,22 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 
 sub init()
-    m.focus = 0
+    ' Settings' cyan, the Apple TV's BrandCyan, for the rail and the rows.
+    m.accent = "0x00D4FF"
+    ' The rail down the left (SettingsRailView: 470 wide, rows 76 high), and
+    ' the pane beside it: the hero pinned at the top, the rows under a divider.
+    m.railW = 470
+    m.paneX = 550
+    m.rowW = 1290
+    ' The rows' window in the pane, under the hero and its divider.
+    m.listTop = 224
+    m.listH = 776
+    ' Where focus is: on the "rail", or in the tab's "rows".
+    m.where = "rail"
+    m.tabs = NxSettingsTabs()
+    m.tabIndex = 0
+    m.focus = -1
     m.scroll = 0
-    ' The list's height on the page, under the SETTINGS title.
-    m.listTop = 100
-    m.listH = 800
     ' The site, as upstream's user agents give it; SUPPORT NOSTALGEX's QR code.
     m.supportUrl = "https://www.nostalgex.app"
     m.fonts = {}
@@ -80,15 +91,18 @@ end sub
 ' The guide was rebuilt while Settings is open: rows follow its franchise and
 ' collection lists, and focus stays on the same row.
 sub refreshRows(unused = invalid as Dynamic)
-    keep = rowKey(m.rows[m.focus])
+    keep = ""
+    if m.focus >= 0 then keep = rowKey(m.rows[m.focus])
     buildRows()
-    for i = 0 to rowCount() - 1
-        if rowKey(m.rows[i]) = keep then
-            m.focus = i
-            exit for
-        end if
-    end for
-    if m.focus > rowCount() - 1 or not focusable(m.rows[m.focus]) then m.focus = nextFocusable(-1, 1)
+    m.focus = NxSettingsFirstFocusable(m.rows)
+    if keep <> "" then
+        for i = 0 to rowCount() - 1
+            if rowKey(m.rows[i]) = keep then
+                m.focus = i
+                exit for
+            end if
+        end for
+    end if
     render()
 end sub
 
@@ -135,9 +149,8 @@ function newRect(x as Float, y as Float, w as Float, h as Float, color as String
     return r
 end function
 
-' Rows: every package but FRANCHISES, then FRANCHISES on its own (upstream's
-' ChannelsFranchisesPage), then RETRO MODE and subtitles (its PLAYBACK
-' section), then sign-out.
+' Settings opens on the rail at SUPPORT NOSTALGEX, as the Apple TV's does
+' (SettingsContainerView). The saved choices are read once here.
 sub open(unused = invalid as Dynamic)
     ' The saved packages, not the guide's: with a build still queued behind
     ' the one that landed, the guide's would bring back a package just
@@ -158,61 +171,64 @@ sub open(unused = invalid as Dynamic)
     ' Which MY COLLECTIONS categories are open, by category.
     m.collectionsOpen = {}
     m.languageOpen = ""
+    m.tabIndex = 0
+    m.where = "rail"
     buildRows()
-    m.focus = nextFocusable(-1, 1)
+    m.focus = NxSettingsFirstFocusable(m.rows)
     m.scroll = 0
     m.top.SetFocus(true)
     render()
 end sub
 
-' The row list, in the order of upstream's SettingsPageView
-' (Views/BundleManagerView.swift): SUPPORT NOSTALGEX, CONNECTION (the servers,
-' then sign-out), PLAYBACK, CHANNEL PACKAGES, FRANCHISES, then MY COLLECTIONS,
-' its category folded closed behind a SHOW/HIDE row, as upstream's
-' CollectionAccordionHeaderRow. Kinds:
+' Every row of every tab, then the selected tab's (source/guide/SettingsRail.brs
+' says which tab a row kind sits in; a text row takes its section's). The
+' tabs follow the Apple TV's Views/Settings/ (N-028):
+'   SUPPORT NOSTALGEX: the QR card, never focused.
+'   PLAYBACK & PICTURE (SettingsPlaybackView): RETRO MODE, GUIDE TEXT SIZE,
+'   STREAM QUALITY, SUBTITLES, the languages, then WATCH HISTORY with the two
+'   reporting switches.
+'   CHANNELS & BUNDLES (SettingsChannelsView): until its link rows and pages
+'   are ported, the three sections in one scroll: CHANNEL PACKAGES (every
+'   package but FRANCHISES), FRANCHISES (its switch heading its own section,
+'   then one A to Z list of the classics, the found franchises and the
+'   server's franchise collections) and MY COLLECTIONS (the viewer's own,
+'   folded closed behind a SHOW/HIDE row, as upstream's accordion).
+'   SERVERS & ACCOUNTS (SettingsServersView): the servers, RESCAN LIBRARY,
+'   SIGN OUT.
+'   ABOUT (SettingsAboutView): VERSION, then LINKS with GITHUB.
+' Kinds:
 '   header, subheader, info: text only, never focused
-'   support, server, signOut, retro, guideText (GUIDE TEXT SIZE), quality
-'   (STREAM QUALITY),
-'   qualityChoice, subtitles, language (SUBTITLE or AUDIO LANGUAGE),
-'   languageChoice, bundle, franchiseAll, franchise, franchiseCollection,
-'   collectionsToggle, collection: rows
-' FRANCHISES is not among the packages: its switch heads its own section, as it
-' heads the Apple TV's FRANCHISES page (N-028), and below it comes one A to Z
-' list of the classics, the found franchises and the server's franchise
-' collections. The franchise rows are the last guide build's, so they show once
-' the package was on for a build. MY COLLECTIONS holds the viewer's own
-' collections only (OTHER COLLECTIONS), shown only when it has a row.
+'   support: the QR card, never focused
+'   server, rescan, signOut, retro, guideText (GUIDE TEXT SIZE), quality
+'   (STREAM QUALITY), qualityChoice, subtitles, language (SUBTITLE or AUDIO
+'   LANGUAGE), languageChoice, reportNowPlaying, reportMarkWatched, bundle,
+'   franchiseAll, franchise, franchiseCollection, collectionsToggle,
+'   collection, version, github: rows
+' The franchise rows are the last guide build's, so they show once the package
+' was on for a build. MY COLLECTIONS holds the viewer's own collections only
+' (OTHER COLLECTIONS), shown only when it has a row.
 sub buildRows()
-    m.rows = []
+    m.all = []
     ' Which channels are on air, for the count on a package short of content.
     m.onAir = NxOnAirSet(m.top.onAirIds)
-    m.rows.Push({ kind: "header", title: "SUPPORT NOSTALGEX", subtitle: "News, help and the Apple TV app are on its site" })
+
     ' Text and a QR code, never focused: scanning it is the action (#147).
-    m.rows.Push({ kind: "support" })
+    add({ kind: "support" })
 
-    m.rows.Push({ kind: "header", title: "CONNECTION", subtitle: "" })
-    m.rows.Push({ kind: "subheader", text: "SERVERS" })
-    for i = 0 to m.servers.Count() - 1
-        m.rows.Push({ kind: "server", index: i })
-    end for
-    ' Upstream's RESCAN LIBRARY, after the servers.
-    m.rows.Push({ kind: "rescan" })
-    ' Upstream's two reporting switches, after the server, both off by
-    ' default (issue #72, source/guide/PlaybackReport.brs).
-    m.rows.Push({ kind: "reportNowPlaying" })
-    m.rows.Push({ kind: "reportMarkWatched" })
-    m.rows.Push({ kind: "signOut" })
-
-    m.rows.Push({ kind: "header", title: "PLAYBACK", subtitle: "Picture and subtitles" })
-    m.rows.Push({ kind: "retro" })
-    m.rows.Push({ kind: "guideText" })
+    add({ kind: "retro" })
+    add({ kind: "guideText" })
     pushQuality()
-    m.rows.Push({ kind: "subtitles" })
+    add({ kind: "subtitles" })
     ' SUBTITLE LANGUAGE only while subtitles can show, as upstream's.
     if m.subs.always or m.subs.foreign then pushLanguage("subsLanguage")
     pushLanguage("audioLanguage")
+    ' Upstream's two reporting switches, both off by default (issue #72,
+    ' source/guide/PlaybackReport.brs), under WATCH HISTORY as on the Apple TV.
+    add({ kind: "header", title: "WATCH HISTORY", subtitle: "What " + NxKindName(NxSignedInKind()) + " is told about what you watch" }, "playback")
+    add({ kind: "reportNowPlaying" })
+    add({ kind: "reportMarkWatched" })
 
-    m.rows.Push({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" })
+    add({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" }, "channels")
     franchisesAt = -1
     for i = 0 to m.top.bundles.Count() - 1
         if m.top.bundles[i].id = NxFranchisesBundleID() then
@@ -222,25 +238,49 @@ sub buildRows()
         end if
     end for
     if franchisesAt >= 0 then pushFranchises(franchisesAt)
-
-    m.rows.Push({ kind: "header", title: "MY COLLECTIONS", subtitle: "Turn the server collections you want into channels" })
+    add({ kind: "header", title: "MY COLLECTIONS", subtitle: "Turn the server collections you want into channels" }, "channels")
     note = NxCollectionsNote(m.top.collections)
-    if note <> "" then m.rows.Push({ kind: "info", text: note })
+    if note <> "" then add({ kind: "info", text: note }, "channels")
     ' The franchise collections are on the FRANCHISES page; only OTHER
     ' COLLECTIONS is left here.
     category = "custom"
     rows = collectionRows(category)
     if rows.Count() > 0 then
-        m.rows.Push({ kind: "collectionsToggle", category: category })
+        add({ kind: "collectionsToggle", category: category })
         full = collectionsFullNote(category)
-        if full <> "" then m.rows.Push({ kind: "info", text: full })
+        if full <> "" then add({ kind: "info", text: full }, "channels")
         if m.collectionsOpen[category] = true then
             for each row in rows
-                m.rows.Push({ kind: "collection", collection: row })
+                add({ kind: "collection", collection: row })
             end for
         end if
     end if
-    m.rows.Push({ kind: "version", text: NxVersionLabel() })
+
+    add({ kind: "subheader", text: "SERVERS" }, "servers")
+    for i = 0 to m.servers.Count() - 1
+        add({ kind: "server", index: i })
+    end for
+    ' Upstream's RESCAN LIBRARY, after the servers.
+    add({ kind: "rescan" })
+    add({ kind: "signOut" })
+
+    add({ kind: "version" })
+    add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
+    add({ kind: "github" })
+
+    m.rows = []
+    tabId = m.tabs[m.tabIndex].id
+    for each row in m.all
+        if row.inTab = tabId then m.rows.Push(row)
+    end for
+end sub
+
+' One row into the full list, in its tab: the rule's for a row with something
+' to press, the section's (`tabId`) for a text row.
+sub add(row as Object, tabId = "" as String)
+    if tabId = "" then tabId = NxSettingsTabOf(row.kind)
+    row.inTab = tabId
+    m.all.Push(row)
 end sub
 
 ' A package's row, with how many of its channels are on air counted once here,
@@ -249,7 +289,7 @@ end sub
 sub pushPackage(i as Integer)
     b = m.top.bundles[i]
     row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
-    m.rows.Push(row)
+    add(row)
 end sub
 
 ' The FRANCHISES section (ChannelsFranchisesPage): the package's switch, then
@@ -260,23 +300,23 @@ end sub
 sub pushFranchises(at as Integer)
     id = m.top.bundles[at].id
     on = NxHasValue(m.enabled, id)
-    m.rows.Push({ kind: "header", title: "FRANCHISES", subtitle: "" })
-    m.rows.Push({ kind: "bundle", index: at })
+    add({ kind: "header", title: "FRANCHISES", subtitle: "" }, "channels")
+    add({ kind: "bundle", index: at })
     entries = NxFranchisePageEntries(m.top.franchises, collectionRows("franchises"), on)
     if entries.Count() = 0 then
-        if on and not m.building.DoesExist(id) then m.rows.Push({ kind: "info", text: "Franchises you own show up here once your library has been enriched." })
+        if on and not m.building.DoesExist(id) then add({ kind: "info", text: "Franchises you own show up here once your library has been enriched." }, "channels")
         return
     end if
     if on then
         full = franchisesFullNote()
-        if full <> "" then m.rows.Push({ kind: "info", text: full })
-        m.rows.Push({ kind: "franchiseAll" })
+        if full <> "" then add({ kind: "info", text: full }, "channels")
+        add({ kind: "franchiseAll" })
     end if
     for each e in entries
         if e.kind = "franchise" then
-            m.rows.Push({ kind: "franchise", franchise: e.franchise })
+            add({ kind: "franchise", franchise: e.franchise })
         else
-            m.rows.Push({ kind: "franchiseCollection", collection: e.collection })
+            add({ kind: "franchiseCollection", collection: e.collection })
         end if
     end for
 end sub
@@ -284,21 +324,21 @@ end sub
 ' A language row, and the presets under it while it is open, as upstream's
 ' picker sheet lists them.
 sub pushLanguage(key as String)
-    m.rows.Push({ kind: "language", key: key })
+    add({ kind: "language", key: key })
     if m.languageOpen <> key then return
     for each p in NxLanguagePresets()
-        m.rows.Push({ kind: "languageChoice", key: key, code: p.code, label: p.label })
+        add({ kind: "languageChoice", key: key, code: p.code, label: p.label })
     end for
 end sub
 
 ' STREAM QUALITY, and while it is open the Apple TV's picker sheet in place:
 ' its line, then the five levels, each with its detail.
 sub pushQuality()
-    m.rows.Push({ kind: "quality" })
+    add({ kind: "quality" })
     if m.languageOpen <> "streamQuality" then return
-    m.rows.Push({ kind: "info", text: "Lower quality uses less bandwidth. Auto adjusts as your connection changes." })
+    add({ kind: "info", text: "Lower quality uses less bandwidth. Auto adjusts as your connection changes." }, "playback")
     for each l in NxSqLevels()
-        m.rows.Push({ kind: "qualityChoice", key: "streamQuality", code: l.id, label: l.name, detail: l.detail })
+        add({ kind: "qualityChoice", key: "streamQuality", code: l.id, label: l.name, detail: l.detail })
     end for
 end sub
 
@@ -321,7 +361,7 @@ sub foldLanguage()
 end sub
 
 function focusable(row as Object) as Boolean
-    return row.kind <> "header" and row.kind <> "subheader" and row.kind <> "info" and row.kind <> "support" and row.kind <> "version"
+    return NxSettingsRowFocusable(row.kind)
 end function
 
 ' The next row focus can land on from i, going d (1 or -1); i if none.
@@ -340,7 +380,6 @@ function rowHeight(row as Object) as Integer
         return 112
     end if
     if row.kind = "subheader" or row.kind = "info" then return 44
-    if row.kind = "version" then return 56
     if row.kind = "support" then return 184
     if row.kind = "rescan" then return 126
     ' Upstream's subtitle in two lines.
@@ -424,7 +463,7 @@ function anyFranchiseOff() as Boolean
     return false
 end function
 
-' Upstream's SUBTITLES row (BundleManagerView): one setting for both flags.
+' Upstream's SUBTITLES row (SettingsPlaybackView): one setting for both flags.
 function subtitleModeLabel() as String
     if m.subs.always then return "ALWAYS"
     if m.subs.foreign then return "FOREIGN AUDIO"
@@ -451,9 +490,73 @@ sub cycleSubtitleMode()
 end sub
 
 sub render()
-    page = m.top.FindNode("page")
+    renderRail()
+    renderPane()
+end sub
+
+' The rail (SettingsRailView): SETTINGS, the pinned tab, a divider, the four
+' others. A tab's bar is 4 wide, 6 on the selected tab and 8 on the focused one;
+' the focused tab has a 22% tint and a 3 px border, and the selected one keeps a
+' 6% white fill while focus is in the rows. No icons, glow or scanlines here.
+sub renderRail()
+    rail = m.top.FindNode("rail")
+    rail.RemoveChildrenIndex(rail.GetChildCount(), 0)
+    rail.AppendChild(newRect(0, 0, m.railW, 1080, "0x080814F2"))
+    rail.AppendChild(newRect(m.railW, 0, 1, 1080, "0xFFFFFF1A"))
+    rail.AppendChild(newLabel("SETTINGS", "VT323-Regular", 44, "0xFFFFFF99", 40, 70))
+    y = 138
+    for i = 0 to m.tabs.Count() - 1
+        t = m.tabs[i]
+        drawTab(rail, i, t, y)
+        y = y + 80
+        if t.pinned then
+            rail.AppendChild(newRect(48, y + 14, m.railW - 96, 1, "0xFFFFFF1A"))
+            y = y + 33
+        end if
+    end for
+end sub
+
+sub drawTab(rail as Object, i as Integer, t as Object, y as Float)
+    selected = (i = m.tabIndex)
+    focused = selected and m.where = "rail"
+    w = m.railW - 40
+    if focused then
+        rail.AppendChild(newRect(20, y, w, 76, m.accent + "38"))
+    else if selected then
+        rail.AppendChild(newRect(20, y, w, 76, "0xFFFFFF0F"))
+    end if
+    barW = 4
+    if selected then barW = 6
+    if focused then barW = 8
+    barColor = m.accent + "4D"
+    if selected then barColor = m.accent + "FF"
+    rail.AppendChild(newRect(20, y, barW, 76, barColor))
+    if focused then
+        rail.AppendChild(newRect(20, y, w, 3, m.accent + "FF"))
+        rail.AppendChild(newRect(20, y + 73, w, 3, m.accent + "FF"))
+        rail.AppendChild(newRect(20, y, 3, 76, m.accent + "FF"))
+        rail.AppendChild(newRect(20 + w - 3, y, 3, 76, m.accent + "FF"))
+    end if
+    tc = "0xFFFFFFB3"
+    if selected then tc = "0xFFFFFFFF"
+    rail.AppendChild(newLabel(t.title, "DMMono-Medium", 24, tc, 20 + barW + 18, y + 22))
+end sub
+
+' The pane (SettingsContainerView's detailPane): the tab's 96 px icon, title
+' and line pinned at the top, a divider, then only the rows scroll under it.
+sub renderPane()
+    page = m.top.FindNode("pane")
     page.RemoveChildrenIndex(page.GetChildCount(), 0)
-    page.AppendChild(newLabel("SETTINGS", "VT323-Regular", 56, "0xFFE500FF", 0, 0))
+    t = m.tabs[m.tabIndex]
+    icon = CreateObject("roSGNode", "Poster")
+    icon.uri = "pkg:/images/look/settings_hero_" + t.hero + ".png"
+    icon.translation = [0, 60]
+    icon.width = 96
+    icon.height = 96
+    page.AppendChild(icon)
+    page.AppendChild(newLabel(t.title, "DMMono-Medium", 34, "0xFFFFFFFF", 124, 72))
+    page.AppendChild(newLabel(t.line, "DMMono-Regular", 20, "0xFFFFFFB3", 124, 119))
+    page.AppendChild(newRect(0, 176, m.rowW, 1, "0xFFFFFF0F"))
 
     ' Where each row sits in the whole list, then a scroll that keeps the
     ' focused row in view, with the headings just above it when they fit.
@@ -463,21 +566,23 @@ sub render()
         tops.Push(y)
         y = y + rowHeight(row)
     end for
-    top = tops[m.focus]
-    bottom = top + rowHeight(m.rows[m.focus])
-    k = m.focus - 1
-    while k >= 0 and not focusable(m.rows[k]) and bottom - tops[k] <= m.listH
-        top = tops[k]
-        k = k - 1
-    end while
-    ' At the last row focus can reach, the lines after it (the VERSION line)
-    ' come into view too, as the end of upstream's scroll does.
-    if nextFocusable(m.focus, 1) = m.focus then
-        last = rowCount() - 1
-        if tops[last] + rowHeight(m.rows[last]) - top <= m.listH then bottom = tops[last] + rowHeight(m.rows[last])
+    if m.focus >= 0 then
+        top = tops[m.focus]
+        bottom = top + rowHeight(m.rows[m.focus])
+        k = m.focus - 1
+        while k >= 0 and not focusable(m.rows[k]) and bottom - tops[k] <= m.listH
+            top = tops[k]
+            k = k - 1
+        end while
+        ' At the last row focus can reach, the lines after it come into view
+        ' too, as the end of upstream's scroll does.
+        if nextFocusable(m.focus, 1) = m.focus then
+            last = rowCount() - 1
+            if tops[last] + rowHeight(m.rows[last]) - top <= m.listH then bottom = tops[last] + rowHeight(m.rows[last])
+        end if
+        if top < m.scroll then m.scroll = top
+        if bottom > m.scroll + m.listH then m.scroll = bottom - m.listH
     end if
-    if top < m.scroll then m.scroll = top
-    if bottom > m.scroll + m.listH then m.scroll = bottom - m.listH
 
     for i = 0 to rowCount() - 1
         row = m.rows[i]
@@ -486,7 +591,7 @@ sub render()
             y = m.listTop + rt - m.scroll
             if row.kind = "header" then
                 ' A thin divider between sections, as settingsDivider.
-                if i > 0 then page.AppendChild(newRect(0, y + 8, 1680, 1, "0xFFFFFF0F"))
+                if i > 0 then page.AppendChild(newRect(0, y + 8, m.rowW, 1, "0xFFFFFF0F"))
                 page.AppendChild(newLabel(row.title, "DMMono-Medium", 28, "0xFFFFFFCC", 0, y + 28))
                 if row.subtitle <> "" then page.AppendChild(newLabel(row.subtitle, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 68))
             else if row.kind = "subheader" or row.kind = "info" then
@@ -500,18 +605,12 @@ sub render()
                 page.AppendChild(qr)
                 page.AppendChild(newLabel("NOSTALGEX.APP", "DMMono-Medium", 24, "0xFFFFFFBF", 220, y + 58))
                 page.AppendChild(newLabel("Scan with a phone camera to open it", "VT323-Regular", 24, "0xFFFFFF80", 220, y + 88))
-                page.AppendChild(newRect(0, y, 4, 176, "0xFFE50066"))
-            else if row.kind = "version" then
-                version = newLabel(row.text, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 20)
-                version.width = 1680
-                version.horizAlign = "center"
-                page.AppendChild(version)
+                page.AppendChild(newRect(0, y, 4, 176, m.accent + "66"))
             else
                 drawRow(page, i, row, y)
             end if
         end if
     end for
-    page.AppendChild(newLabel("OK toggles · BACK returns to the guide", "DMMono-Regular", 20, "0xFFFFFF59", 0, m.listTop + m.listH + 24))
 end sub
 
 function serversOnCount() as Integer
@@ -523,13 +622,16 @@ function serversOnCount() as Integer
 end function
 
 sub drawRow(page as Object, i as Integer, row as Object, y as Float)
-    focused = i = m.focus
-    accent = "0xFFE500"
+    focused = (i = m.focus) and m.where = "rows"
+    accent = m.accent
     extra = []
     indent = 0
     faded = false
     ' The amber count on a package short of content, or invalid.
     badge = invalid
+    ' The state's width: 380, or 760 for a value that is a line of its own
+    ' (ABOUT's version and address).
+    stateW = 380
     if row.kind = "bundle" then
         b = m.top.bundles[row.index]
         on = NxHasValue(m.enabled, b.id)
@@ -560,7 +662,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if on then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
         if on and m.building.DoesExist(b.id) then
             n = b.channelIDs.Count()
@@ -577,7 +679,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         detail = "Every franchise below at once"
         state = "REMOVE ALL"
         if anyFranchiseOff() then state = "ADD ALL"
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
     else if row.kind = "franchise" then
         indent = 40
         f = row.franchise
@@ -588,7 +690,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if franchiseOn(f) then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
     else if row.kind = "collectionsToggle" then
         label = NxCollectionCategoryName(row.category)
@@ -596,7 +698,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         if m.collectionsChanged then detail = "Changes air when you go back to the guide · " + collectionsOnAir(row.category)
         state = "SHOW"
         if m.collectionsOpen[row.category] = true then state = "HIDE"
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
     else if row.kind = "collection" or row.kind = "franchiseCollection" then
         indent = 40
         cr = row.collection
@@ -610,7 +712,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if collectionOn(cr) then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         else if cr.warned = true then
             ' Upstream dims a row that is off and already on another channel.
             faded = true
@@ -626,7 +728,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if m.serversOn[row.index] then
             state = "INCLUDED"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
             if serversOnCount() <= 1 then
                 detail = detail + " · only connected server"
                 state = ""
@@ -642,7 +744,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         extra = [lines[1]]
         if lines.Count() > 2 then extra.Push(lines[2])
         state = ""
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
         if m.top.rescanning then state = "UPDATING…"
     else if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" then
         kind = NxSignedInKind()
@@ -666,7 +768,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if isOn then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
     else if row.kind = "retro" then
         label = "RETRO MODE"
@@ -675,7 +777,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if NxRetroMode() then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
@@ -685,27 +787,27 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if NxGuideTextLarge() then
             state = "LARGE"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
     else if row.kind = "quality" then
         label = "STREAM QUALITY"
         detail = "Lower this when your connection is slow or shared"
         state = NxSqLevel(NxSqCurrent()).name
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
     else if row.kind = "qualityChoice" then
         ' The Apple TV's sheet marks the level in use ACTIVE.
         indent = 40
         label = row.label
         detail = row.detail
         state = ""
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
         if NxSqCurrent() = row.code then state = "ACTIVE"
     else if row.kind = "subtitles" then
         label = "SUBTITLES"
         detail = subtitleModeExplanation()
         state = subtitleModeLabel()
         stateColor = "0xFFFFFF59"
-        if state <> "OFF" then stateColor = "0xFFE500FF"
+        if state <> "OFF" then stateColor = m.accent + "FF"
     else if row.kind = "language" then
         ' Upstream's SUBTITLE LANGUAGE and AUDIO LANGUAGE rows.
         if row.key = "subsLanguage" then
@@ -716,14 +818,28 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             detail = "When the video has multiple audio tracks, prefer this language"
         end if
         state = NxLanguageLabel(NxSavedLanguage(row.key))
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
     else if row.kind = "languageChoice" then
         indent = 40
         label = row.label
         detail = ""
         state = ""
-        stateColor = "0xFFE500FF"
+        stateColor = m.accent + "FF"
         if NxSavedLanguage(row.key) = row.code then state = "SELECTED"
+    else if row.kind = "version" then
+        ' The Apple TV's VERSION row: focusable, select does nothing.
+        label = "VERSION"
+        detail = "The build number tells two submissions of one version apart"
+        state = NxVersionValue()
+        stateColor = "0xFFFFFFFF"
+        stateW = 760
+    else if row.kind = "github" then
+        ' tvOS has no browser and nor has a Roku: an address to read, not a link.
+        label = "GITHUB"
+        detail = "Source code and issues. Open it on a phone or computer."
+        state = "github.com/chadMueller/Nostalgex"
+        stateColor = "0xFFFFFFFF"
+        stateW = 760
     else
         kindName = NxKindName(NxSignedInKind())
         label = "SIGN OUT OF " + UCase(kindName)
@@ -737,7 +853,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         accent = "0xFF6B6B"
     end if
     h = rowHeight(row) - 2
-    if focused then page.AppendChild(newRect(indent, y, 1680 - indent, h, accent + "52"))
+    if focused then page.AppendChild(newRect(indent, y, m.rowW - indent, h, accent + "52"))
     if focused then
         page.AppendChild(newRect(indent, y, 8, h, accent + "FF"))
     else
@@ -761,22 +877,22 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         ly = y + 66
         for each text in extra
             lbl = newLabel(text, "VT323-Regular", 24, "0xFFFFFF80", indent + 30, ly)
-            lbl.width = 1600
+            lbl.width = m.rowW - 80
             page.AppendChild(lbl)
             ly = ly + 26
         end for
     end if
     stateWidth = 0
     if state <> "" then
-        stateLabel = newLabel(state, "DMMono-Medium", 24, stateColor, 1260, y + 22)
-        stateLabel.width = 380
+        stateLabel = newLabel(state, "DMMono-Medium", 24, stateColor, m.rowW - 40 - stateW, y + 22)
+        stateLabel.width = stateW
         stateLabel.horizAlign = "right"
         page.AppendChild(stateLabel)
         stateWidth = Len(state) * advanceOf("DMMono-Medium", 24)
     end if
     ' The amber count sits left of the state, as the Apple TV's sits left of
     ' the switch.
-    if badge <> invalid then drawBadge(page, badge, y, 1640 - stateWidth - 20)
+    if badge <> invalid then drawBadge(page, badge, y, m.rowW - 60 - stateWidth)
 end sub
 
 ' Upstream's AlertCountBadge: an amber capsule, at least a 34 px circle, with
@@ -810,189 +926,229 @@ function advanceOf(font as String, size as Integer) as Float
     return m.advance[key]
 end function
 
+' Up and Down on the rail swap the tab, and with it the hero and the rows, with
+' no press. An open list folds when its tab is left; the MY COLLECTIONS
+' accordion and a package still building stay as they were. Each tab opens
+' scrolled to the top. Nothing is saved or rebuilt here.
+sub selectTab(i as Integer)
+    if i < 0 or i > m.tabs.Count() - 1 or i = m.tabIndex then return
+    m.tabIndex = i
+    m.languageOpen = ""
+    m.signOutArmed = false
+    buildRows()
+    m.focus = NxSettingsFirstFocusable(m.rows)
+    m.scroll = 0
+    render()
+end sub
+
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
     if m.signOutArmed and key <> "OK" then
         m.signOutArmed = false
         render()
     end if
-    if key = "down" or key = "up" then
+    action = NxSettingsKeyAction(m.where, key, m.languageOpen <> "")
+    if action = "tabUp" then
+        selectTab(m.tabIndex - 1)
+    else if action = "tabDown" then
+        selectTab(m.tabIndex + 1)
+    else if action = "enter" then
+        ' Into the tab's first row (each view's firstRowID), not the row last
+        ' left. A tab with nothing to focus (SUPPORT NOSTALGEX) leaves focus on
+        ' the rail.
+        if m.focus >= 0 then
+            m.where = "rows"
+            m.focus = NxSettingsFirstFocusable(m.rows)
+            m.scroll = 0
+            render()
+        end if
+    else if action = "leave" then
+        leave()
+    else if action = "move" then
         d = 1
         if key = "up" then d = -1
         m.focus = nextFocusable(m.focus, d)
         ' Up from the first row shows the headings above it again.
         if key = "up" and nextFocusable(m.focus, -1) = m.focus then m.scroll = 0
         render()
-        return true
+    else if action = "press" then
+        pressRow()
+    else if action = "fold" then
+        foldLanguage()
+    else if action = "toRail" then
+        m.where = "rail"
+        render()
     end if
-    if key = "OK" then
-        row = m.rows[m.focus]
-        if row.kind = "bundle" then
-            id = m.top.bundles[row.index].id
-            kept = []
-            found = false
-            for each x in m.enabled
-                if x = id then found = true else kept.Push(x)
-            end for
-            ' The last package on stays on, as upstream's toggleBundle keeps one.
-            if found and kept.Count() = 0 then return true
-            if not found then kept.Push(id)
-            m.enabled = kept
-            ' Saved now and built behind Settings: only the switched-on
-            ' package's channels are built, and the guide updates when done.
-            reg = NxRegSection("guide")
-            reg.Write("bundles", FormatJson(m.enabled))
-            reg.Flush()
-            if not found then
-                m.building[id] = true
-                m.dotTimer.control = "start"
-            else
-                m.building.Delete(id)
+    return true
+end function
+
+' OK on the focused row.
+sub pressRow()
+    row = m.rows[m.focus]
+    if row.kind = "bundle" then
+        id = m.top.bundles[row.index].id
+        kept = []
+        found = false
+        for each x in m.enabled
+            if x = id then found = true else kept.Push(x)
+        end for
+        ' The last package on stays on, as upstream's toggleBundle keeps one.
+        if found and kept.Count() = 0 then return
+        if not found then kept.Push(id)
+        m.enabled = kept
+        ' Saved now and built behind Settings: only the switched-on
+        ' package's channels are built, and the guide updates when done.
+        reg = NxRegSection("guide")
+        reg.Write("bundles", FormatJson(m.enabled))
+        reg.Flush()
+        if not found then
+            m.building[id] = true
+            m.dotTimer.control = "start"
+        else
+            m.building.Delete(id)
+        end if
+        if found then print "settings: package "; id; " switched off" else print "settings: package "; id; " switched on"
+        m.top.bundleChange = true
+        buildRows()
+        if m.focus > rowCount() - 1 then m.focus = rowCount() - 1
+        if not focusable(m.rows[m.focus]) then m.focus = nextFocusable(m.focus, -1)
+        render()
+    else if row.kind = "franchiseAll" then
+        ' setAllFranchises: one explicit choice for every row, and every
+        ' franchise collection not already the way asked (setAll).
+        turnOn = anyFranchiseOff()
+        for each f in m.top.franchises
+            NxFranchiseRecordChoice(m.choices, f.id, turnOn)
+        end for
+        if m.top.franchises.Count() > 0 then m.franchisesChanged = true
+        for each cr in collectionRows("franchises")
+            if collectionOn(cr) <> turnOn then
+                if turnOn then m.collectionKeys[cr.id] = true else m.collectionKeys.Delete(cr.id)
+                m.collectionsChanged = true
             end if
-            if found then print "settings: package "; id; " switched off" else print "settings: package "; id; " switched on"
-            m.top.bundleChange = true
-            buildRows()
-            if m.focus > rowCount() - 1 then m.focus = rowCount() - 1
-            if not focusable(m.rows[m.focus]) then m.focus = nextFocusable(m.focus, -1)
+        end for
+        render()
+    else if row.kind = "franchise" then
+        NxFranchiseRecordChoice(m.choices, row.franchise.id, not franchiseOn(row.franchise))
+        m.franchisesChanged = true
+        render()
+    else if row.kind = "collection" or row.kind = "franchiseCollection" then
+        ' toggleCollection: switch one on and it airs from CH 310 (a franchise) or 400.
+        id = row.collection.id
+        if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true
+        m.collectionsChanged = true
+        render()
+    else if row.kind = "collectionsToggle" then
+        m.collectionsOpen[row.category] = not (m.collectionsOpen[row.category] = true)
+        buildRows()
+        render()
+    else if row.kind = "server" then
+        ' The last server on stays on, as upstream's picker keeps one.
+        if not m.serversOn[row.index] or serversOnCount() > 1 then
+            m.serversOn[row.index] = not m.serversOn[row.index]
+            m.serversChanged = true
             render()
-        else if row.kind = "franchiseAll" then
-            ' setAllFranchises: one explicit choice for every row, and every
-            ' franchise collection not already the way asked (setAll).
-            turnOn = anyFranchiseOff()
-            for each f in m.top.franchises
-                NxFranchiseRecordChoice(m.choices, f.id, turnOn)
-            end for
-            if m.top.franchises.Count() > 0 then m.franchisesChanged = true
-            for each cr in collectionRows("franchises")
-                if collectionOn(cr) <> turnOn then
-                    if turnOn then m.collectionKeys[cr.id] = true else m.collectionKeys.Delete(cr.id)
-                    m.collectionsChanged = true
-                end if
-            end for
-            render()
-        else if row.kind = "franchise" then
-            NxFranchiseRecordChoice(m.choices, row.franchise.id, not franchiseOn(row.franchise))
-            m.franchisesChanged = true
-            render()
-        else if row.kind = "collection" or row.kind = "franchiseCollection" then
-            ' toggleCollection: switch one on and it airs from CH 310 (a franchise) or 400.
-            id = row.collection.id
-            if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true
-            m.collectionsChanged = true
-            render()
-        else if row.kind = "collectionsToggle" then
-            m.collectionsOpen[row.category] = not (m.collectionsOpen[row.category] = true)
-            buildRows()
-            render()
-        else if row.kind = "server" then
-            ' The last server on stays on, as upstream's picker keeps one.
-            if not m.serversOn[row.index] or serversOnCount() > 1 then
-                m.serversOn[row.index] = not m.serversOn[row.index]
-                m.serversChanged = true
-                render()
-            end if
-        else if row.kind = "rescan" then
-            if not m.top.rescanning then m.top.rescan = true
-        else if row.kind = "reportNowPlaying" then
-            m.report.nowPlaying = not (m.report.nowPlaying = true)
-            NxSaveReportPrefs(m.report)
-            print "settings: show now playing "; m.report.nowPlaying
-            render()
-        else if row.kind = "reportMarkWatched" then
-            m.report.markWatched = not (m.report.markWatched = true)
-            NxSaveReportPrefs(m.report)
-            print "settings: mark watched "; m.report.markWatched
-            render()
-        else if row.kind = "retro" then
-            NxSaveRetroMode(not NxRetroMode())
-            render()
-        else if row.kind = "guideText" then
-            NxSaveGuideTextLarge(not NxGuideTextLarge())
-            print "settings: guide text size "; NxGuideTextLarge()
-            render()
-        else if row.kind = "subtitles" then
-            cycleSubtitleMode()
-            ' SUBTITLE LANGUAGE comes and goes with it.
-            m.languageOpen = ""
-            buildRows()
-            m.focus = rowIndex("subtitles")
-            render()
-        else if row.kind = "language" then
-            ' Opens its list on the saved choice; OK again folds it.
-            if m.languageOpen = row.key then
-                foldLanguage()
-            else
-                m.languageOpen = row.key
-                buildRows()
-                m.focus = rowIndex("languageChoice", row.key, NxSavedLanguage(row.key))
-                if m.focus < 0 then m.focus = rowIndex("language", row.key)
-                render()
-            end if
-        else if row.kind = "languageChoice" then
-            NxSaveLanguage(row.key, row.code)
-            print "settings: "; row.key; " set to "; row.code
+        end if
+    else if row.kind = "rescan" then
+        if not m.top.rescanning then m.top.rescan = true
+    else if row.kind = "reportNowPlaying" then
+        m.report.nowPlaying = not (m.report.nowPlaying = true)
+        NxSaveReportPrefs(m.report)
+        print "settings: show now playing "; m.report.nowPlaying
+        render()
+    else if row.kind = "reportMarkWatched" then
+        m.report.markWatched = not (m.report.markWatched = true)
+        NxSaveReportPrefs(m.report)
+        print "settings: mark watched "; m.report.markWatched
+        render()
+    else if row.kind = "retro" then
+        NxSaveRetroMode(not NxRetroMode())
+        render()
+    else if row.kind = "guideText" then
+        NxSaveGuideTextLarge(not NxGuideTextLarge())
+        print "settings: guide text size "; NxGuideTextLarge()
+        render()
+    else if row.kind = "subtitles" then
+        cycleSubtitleMode()
+        ' SUBTITLE LANGUAGE comes and goes with it.
+        m.languageOpen = ""
+        buildRows()
+        m.focus = rowIndex("subtitles")
+        render()
+    else if row.kind = "language" then
+        ' Opens its list on the saved choice; OK again folds it.
+        if m.languageOpen = row.key then
             foldLanguage()
-        else if row.kind = "quality" then
-            ' As a language row: opens on the saved level, OK again folds it.
-            if m.languageOpen = "streamQuality" then
-                foldLanguage()
-            else
-                m.languageOpen = "streamQuality"
-                buildRows()
-                m.focus = rowIndex("qualityChoice", "streamQuality", NxSqCurrent())
-                render()
-            end if
-        else if row.kind = "qualityChoice" then
-            NxSqSave(row.code)
-            print "settings: stream quality set to "; row.code
+        else
+            m.languageOpen = row.key
+            buildRows()
+            m.focus = rowIndex("languageChoice", row.key, NxSavedLanguage(row.key))
+            if m.focus < 0 then m.focus = rowIndex("language", row.key)
+            render()
+        end if
+    else if row.kind = "languageChoice" then
+        NxSaveLanguage(row.key, row.code)
+        print "settings: "; row.key; " set to "; row.code
+        foldLanguage()
+    else if row.kind = "quality" then
+        ' As a language row: opens on the saved level, OK again folds it.
+        if m.languageOpen = "streamQuality" then
             foldLanguage()
-        else if m.signOutArmed then
+        else
+            m.languageOpen = "streamQuality"
+            buildRows()
+            m.focus = rowIndex("qualityChoice", "streamQuality", NxSqCurrent())
+            render()
+        end if
+    else if row.kind = "qualityChoice" then
+        NxSqSave(row.code)
+        print "settings: stream quality set to "; row.code
+        foldLanguage()
+    else if row.kind = "signOut" then
+        if m.signOutArmed then
             m.top.result = "signOut"
         else
             m.signOutArmed = true
             render()
         end if
-        return true
     end if
-    if (key = "back" or key = "left") and m.languageOpen <> "" then
-        foldLanguage()
-        return true
+    ' VERSION and GITHUB: nothing to press, as on the Apple TV.
+end sub
+
+' Back on the rail: the server, franchise and collection choices are saved once
+' here and the guide rebuilt as needed, as they were when Settings was one page.
+sub leave()
+    if m.serversChanged then m.serversChanged = FormatJson(m.serversOn) <> m.serversOnAtOpen
+    if m.serversChanged then
+        ' Every server's switch is saved, so a later default can't move it.
+        choices = {}
+        for i = 0 to m.servers.Count() - 1
+            choices[NxToStr(m.servers[i].machineIdentifier)] = m.serversOn[i]
+        end for
+        plex = NxPlexRegistry()
+        plex.Write("serverChoices", FormatJson(choices))
+        plex.Flush()
     end if
-    if key = "back" or key = "left" then
-        if m.serversChanged then m.serversChanged = FormatJson(m.serversOn) <> m.serversOnAtOpen
-        if m.serversChanged then
-            ' Every server's switch is saved, so a later default can't move it.
-            choices = {}
-            for i = 0 to m.servers.Count() - 1
-                choices[NxToStr(m.servers[i].machineIdentifier)] = m.serversOn[i]
-            end for
-            plex = NxPlexRegistry()
-            plex.Write("serverChoices", FormatJson(choices))
-            plex.Flush()
+    if m.franchisesChanged or m.collectionsChanged then
+        reg = NxRegSection("guide")
+        if m.franchisesChanged then
+            lists = NxFranchiseChoiceLists(m.choices)
+            reg.Write("franchisesOn", FormatJson(lists.enabled))
+            reg.Write("franchisesOff", FormatJson(lists.disabled))
         end if
-        if m.franchisesChanged or m.collectionsChanged then
-            reg = NxRegSection("guide")
-            if m.franchisesChanged then
-                lists = NxFranchiseChoiceLists(m.choices)
-                reg.Write("franchisesOn", FormatJson(lists.enabled))
-                reg.Write("franchisesOff", FormatJson(lists.disabled))
-            end if
-            reg.Flush()
-            if m.collectionsChanged then NxSaveCollectionKeys(m.collectionKeys)
-        end if
-        if m.needRebuild or m.serversChanged then
-            print "settings: rebuilding the guide on the way out: packages "; m.needRebuild; ", franchises "; m.franchisesChanged; ", collections "; m.collectionsChanged; ", servers "; m.serversChanged
-            m.top.result = "rebuild"
-        else if m.franchisesChanged or m.collectionsChanged then
-            ' Built behind the guide from the library in memory, as a package
-            ' switch is: the guide and the channel on stay up.
-            print "settings: building in place on the way out: franchises "; m.franchisesChanged; ", collections "; m.collectionsChanged
-            m.top.bundleChange = true
-            m.top.result = "close"
-        else
-            m.top.result = "close"
-        end if
-        return true
+        reg.Flush()
+        if m.collectionsChanged then NxSaveCollectionKeys(m.collectionKeys)
     end if
-    return true
-end function
+    if m.needRebuild or m.serversChanged then
+        print "settings: rebuilding the guide on the way out: packages "; m.needRebuild; ", franchises "; m.franchisesChanged; ", collections "; m.collectionsChanged; ", servers "; m.serversChanged
+        m.top.result = "rebuild"
+    else if m.franchisesChanged or m.collectionsChanged then
+        ' Built behind the guide from the library in memory, as a package
+        ' switch is: the guide and the channel on stay up.
+        print "settings: building in place on the way out: franchises "; m.franchisesChanged; ", collections "; m.collectionsChanged
+        m.top.bundleChange = true
+        m.top.result = "close"
+    else
+        m.top.result = "close"
+    end if
+end sub

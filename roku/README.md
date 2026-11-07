@@ -101,7 +101,7 @@ curl -d '' "http://<tv>:8060/input?contentId=item%3A50929&mediaType=movie"
   cleared; only the access token the server returns is kept. Server requests
   follow the same rule as Plex: HTTPS, or plain HTTP to a home-network
   address only, with the token in a header.
-- **Read-only unless you turn reporting on.** Settings > CONNECTION has
+- **Read-only unless you turn reporting on.** Settings > PLAYBACK & PICTURE > WATCH HISTORY has
   SHOW NOW PLAYING ON <SERVER> and MARK WATCHED ON <SERVER>, both off. With
   both off the app never reports playback and never changes watch status or
   anything else in your library. Turned on, they work as the Apple TV app's

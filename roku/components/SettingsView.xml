@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings, in the order of the Apple TV app's SettingsPageView: support,
-     the Plex servers to read and signing out, RETRO MODE and subtitles,
-     channel packages (an amber count on one short of content), FRANCHISES
-     (its switch, then the classics, the found franchises and the franchise
-     collections in one A to Z list), then the viewer's own collections under
-     MY COLLECTIONS, folded closed, and the VERSION line.
+<!-- Settings as the Apple TV app's rail and pane (N-028, Views/Settings/):
+     a rail down the left with five tabs, SUPPORT NOSTALGEX pinned above a
+     divider, then PLAYBACK & PICTURE, CHANNELS & BUNDLES, SERVERS & ACCOUNTS
+     and ABOUT; beside it the open tab's hero (icon, title, one line) pinned
+     at the top and its rows scrolling under a divider. Up and Down on the
+     rail swap the pane with no press; Right or OK goes into the rows; Left
+     or Back comes back to the rail; Back on the rail leaves. The rules are
+     source/guide/SettingsRail.brs.
      Choices are saved on the TV. A package switch is built at once, behind
      Settings, building only that package's channels; a franchise,
-     collection or server change rebuilds the guide when Settings closes. -->
+     collection or server change rebuilds the guide when Settings closes.
+     Moving between tabs saves and rebuilds nothing. -->
 <component name="SettingsView" extends="Group">
   <interface>
     <field id="bundles" type="array" />
@@ -45,6 +48,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SettingsChannels.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/SettingsRail.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />
@@ -59,6 +63,8 @@
   <script type="text/brightscript" uri="pkg:/components/SettingsView.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0B1CFF" />
-    <Group id="page" translation="[120,80]" />
+    <!-- The rail (0 to 470) and the pane's content, 80 in from its edge. -->
+    <Group id="rail" />
+    <Group id="pane" translation="[550,0]" />
   </children>
 </component>
