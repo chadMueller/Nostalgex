@@ -268,11 +268,12 @@ sub buildRows()
     add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
     add({ kind: "github" })
 
-    m.rows = []
-    tabId = m.tabs[m.tabIndex].id
-    for each row in m.all
-        if row.inTab = tabId then m.rows.Push(row)
-    end for
+    pickTab()
+end sub
+
+' The current tab's rows from every tab's (m.all), as buildRows left them.
+sub pickTab()
+    m.rows = NxSettingsRowsInTab(m.all, m.tabs[m.tabIndex].id)
 end sub
 
 ' One row into the full list, in its tab: the rule's for a row with something
@@ -941,9 +942,18 @@ end function
 sub selectTab(i as Integer)
     if i < 0 or i > m.tabs.Count() - 1 or i = m.tabIndex then return
     m.tabIndex = i
-    m.languageOpen = ""
     m.signOutArmed = false
-    buildRows()
+    ' Only the tab changes, so its rows are picked from the ones built, not
+    ' built again: with a few hundred franchises or collections a rebuild on
+    ' each press of the rail was a lot of work on a stick (#201 review). An
+    ' open list is folded before focus reaches the rail (NxSettingsKeyAction),
+    ' so this rebuild is only a guard.
+    if m.languageOpen <> "" then
+        m.languageOpen = ""
+        buildRows()
+    else
+        pickTab()
+    end if
     m.focus = NxSettingsFirstFocusable(m.rows)
     m.scroll = 0
     render()

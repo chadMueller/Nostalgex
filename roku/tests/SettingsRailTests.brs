@@ -35,6 +35,7 @@ function NxRunSettingsRailTests() as Integer
     end for
     NxCheck(r, "tab of: the version line is an ABOUT row", NxSettingsTabOf("version"), "about")
     NxCheck(r, "tab of: GITHUB", NxSettingsTabOf("github"), "about")
+    NxCheck(r, "tab of: WATERSHED (#211's row) is a CHANNELS row", NxSettingsTabOf("watershed"), "channels")
     NxCheck(r, "tab of: a text row has none of its own", NxSettingsTabOf("header"), "")
     NxCheck(r, "tab of: an unknown kind", NxSettingsTabOf("nothing"), "")
 
@@ -71,6 +72,18 @@ function NxRunSettingsRailTests() as Integer
     NxCheck(r, "open list: Back folds it first", NxSettingsKeyAction("rows", "back", true), "fold")
     NxCheck(r, "open list: OK still presses", NxSettingsKeyAction("rows", "OK", true), "press")
     NxCheck(r, "open list: Up still moves", NxSettingsKeyAction("rows", "up", true), "move")
+
+    ' ── One tab's rows from every tab's ─────────────────────────────────────
+    all = [{ kind: "support", inTab: "support" }, { kind: "retro", inTab: "playback" }, { kind: "header", inTab: "channels" }, { kind: "bundle", inTab: "channels", index: 0 }, { kind: "bundle", inTab: "channels", index: 1 }, { kind: "signOut", inTab: "servers" }]
+    NxCheck(r, "rows in tab: CHANNELS's, in order", NxRailRowKinds(NxSettingsRowsInTab(all, "channels")), "header|bundle0|bundle1")
+    NxCheck(r, "rows in tab: one row", NxRailRowKinds(NxSettingsRowsInTab(all, "servers")), "signOut")
+    NxCheck(r, "rows in tab: a tab with none", NxSettingsRowsInTab(all, "about").Count().ToStr(), "0")
+    NxCheck(r, "rows in tab: a row in no tab is in none", NxSettingsRowsInTab([{ kind: "nothing", inTab: "" }], "channels").Count().ToStr(), "0")
+    picked = NxSettingsRowsInTab(all, "playback")
+    picked[0].marked = "yes"
+    NxCheck(r, "rows in tab: the rows themselves, not copies", NxToStr(all[1].marked), "yes")
+    NxCheck(r, "rows in tab: no list", NxSettingsRowsInTab(invalid, "channels").Count().ToStr(), "0")
+
     print "settings rail cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
@@ -95,6 +108,17 @@ function NxRailPinned(tabs as Object) as String
     out = []
     for each t in tabs
         if t.pinned then out.Push(t.id)
+    end for
+    return out.Join("|")
+end function
+
+' Kinds joined with "|", a bundle's index after it.
+function NxRailRowKinds(rows as Object) as String
+    out = []
+    for each row in rows
+        k = row.kind
+        if row.index <> invalid then k = k + row.index.ToStr()
+        out.Push(k)
     end for
     return out.Join("|")
 end function

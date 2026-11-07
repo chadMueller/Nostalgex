@@ -32,7 +32,10 @@ end function
 ' returns "" for them and for a kind it doesn't know.
 function NxSettingsTabOf(kind as String) as String
     playback = ["retro", "guideText", "quality", "qualityChoice", "subtitles", "language", "languageChoice", "reportNowPlaying", "reportMarkWatched"]
-    channels = ["bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection"]
+    ' WATERSHED is #211's row (SettingsChannelsView on the Apple TV). It is
+    ' listed here before that row exists, so neither pull request has to land
+    ' first: a kind missing from these lists is in no tab and never shows.
+    channels = ["bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed"]
     servers = ["server", "rescan", "signOut"]
     about = ["version", "github"]
     if kind = "support" then return "support"
@@ -41,6 +44,18 @@ function NxSettingsTabOf(kind as String) as String
     if NxHasValue(servers, kind) then return "servers"
     if NxHasValue(about, kind) then return "about"
     return ""
+end function
+
+' The rows of `all` in the tab `tabId`, in order. SettingsView builds every
+' tab's rows once and picks one tab's from them on each rail press, so Up and
+' Down on the rail don't rebuild the franchise and collection lists.
+function NxSettingsRowsInTab(all as Dynamic, tabId as String) as Object
+    rows = []
+    if type(all) <> "roArray" then return rows
+    for each row in all
+        if type(row) = "roAssociativeArray" and row.inTab = tabId then rows.Push(row)
+    end for
+    return rows
 end function
 
 ' ── Focus ───────────────────────────────────────────────────────────────────
