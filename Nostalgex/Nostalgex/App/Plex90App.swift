@@ -87,6 +87,9 @@ struct RootView: View {
                     LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "1", title: "Movies", type: "movie"),
                     LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "2", title: "TV Shows", type: "show"),
                 ]
+                if let kind = DemoData.rescanRowFixture {
+                    DemoData.installRescanRowFixture(kind, into: appState)
+                }
                 return
             }
             if forceSettings { appState.didAttemptCredentialHydration = true; return }

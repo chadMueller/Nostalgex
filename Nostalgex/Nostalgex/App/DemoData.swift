@@ -365,3 +365,65 @@ enum DemoData {
         return FranchiseFixture(items: items, enrichment: rows, collections: collections)
     }
 }
+
+// MARK: - RESCAN LIBRARY row fixture (test only)
+
+extension DemoData {
+    /// `-uiTestRescanRowFixture plain|split|clear`, with `-uiTestForceSettingsPage`: holds a test
+    /// library of 444 movies and 3,639 episodes from 55 shows (every title with genres and a
+    /// TMDB id) and a coverage count, so the RESCAN LIBRARY row can be
+    /// seen at its longest on a simulator with no server. The summary line comes from
+    /// `LibraryDiagnostics.summary` over the items, not a canned string. Never set in a
+    /// shipping run.
+    static var rescanRowFixture: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "-uiTestRescanRowFixture"), flag + 1 < args.count else { return nil }
+        return args[flag + 1]
+    }
+
+    @MainActor
+    static func installRescanRowFixture(_ kind: String, into appState: AppState) {
+        // `clear`: the UI test's teardown. The other kinds leave a fake last-load time and a
+        // fake playback verdict in the simulator's defaults; this takes them back out.
+        if kind == "clear" {
+            PlaybackDiagnostics.clear()
+            AppDefaults.standard.removeObject(forKey: AppState.lastLoadKey)
+            return
+        }
+        func make(_ id: String, title: String, episode: Bool) -> PlexMediaItem {
+            PlexMediaItem(
+                id: id, title: title, artist: nil, episodeTitle: episode ? "Fixture Episode" : nil,
+                seTag: episode ? "S01E01" : nil, summary: "Fixture.",
+                year: 2001, originallyAvailableAt: nil, contentRating: nil, duration: 45,
+                ratingKey: id, partKey: nil,
+                container: nil, videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil,
+                genres: ["Drama"], rating: 7, userRating: 0,
+                type: episode ? .episode : .movie,
+                thumb: nil, art: nil, viewCount: 0, addedAt: 0, studio: nil,
+                tmdbID: "1", imdbID: nil,
+                librarySource: episode ? .tv : .movie
+            )
+        }
+        let movies = (0..<444).map { make("fx-m\($0)", title: "Fixture Movie \($0)", episode: false) }
+        let episodes = (0..<3_639).map { make("fx-e\($0)", title: "Fixture Show \($0 % 55)", episode: true) }
+        appState.allItems = movies + episodes
+        appState.lastLoadAtUnix = Int(Date().timeIntervalSince1970) - 2 * 3_600
+
+        var coverage = LibraryDiagnostics.Coverage()
+        coverage.loaded = [.movie: movies.count, .episode: episodes.count]
+        if kind == "split" {
+            // Titles on no channel, from both kinds, and scan skips: the longest coverage line.
+            coverage.onChannels = [.movie: movies.count - 31, .episode: episodes.count - 51]
+            appState.skippedNoRuntimeCount = 12
+            PlaybackDiagnostics.record(
+                outcome: "gave up", title: "Fixture Movie 7",
+                detail: "ready=false, playhead moved 0.0s, no frame decoded, 3 segments, 2 stalls, HLS -12889")
+        } else {
+            coverage.onChannels = coverage.loaded
+            appState.skippedNoRuntimeCount = 0
+            // No failure line, so this variant reads the same whatever the simulator held before.
+            PlaybackDiagnostics.clear()
+        }
+        appState.libraryCoverage = coverage
+    }
+}

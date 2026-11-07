@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-07 (Apple TV: RESCAN LIBRARY shows every line of its counts)
+
+**Why.** A Jellyfin report of a library coming up short asked for the "X OF Y ON CHANNELS" line under RESCAN LIBRARY
+in SERVERS & ACCOUNTS to be read back, and the row showed only two lines, the second ending in an ellipsis.
+`SettingsToggleRow` cut every subtitle at two lines, and that row's subtitle is the library summary, the coverage
+line, "Last updated ...", and the last playback failure, one per line. In the Settings pane the summary alone (98
+characters for a library of 444 movies and 3,639 episodes from 55 shows) wraps onto a second line, so the coverage
+line was the third and was never drawn. "Last updated" and the playback failure line were cut the same way.
+
+**Changed.** `SettingsToggleRow` takes `subtitleLineLimit`, default 2, so every other row is as it was. RESCAN
+LIBRARY passes nil and shows everything it is given. Reproduced before the fix on the tvOS simulator at 1920 x 1080
+with a test library of that size: two lines ending "matched to TMDB...". After: every line shows, the row sits above
+SYNC WITH MY OTHER APPLE TVS with nothing clipped, and focus and scrolling through SYNC and DISCONNECT and back land
+where they did.
+
+**Test.** `SettingsRescanRowTests` (UI target) opens the page with the real focus engine and a fixture library
+(`-uiTestForceSettingsPage -uiTestRescanRowFixture plain|split`), reads the screen back with text recognition and
+asserts the summary, the coverage line, "Last updated" and, in the split case, the split-by-kind, skipped and
+playback failure lines are on screen. Both cases fail on the old code (the coverage line is missing) and pass on the
+new. A teardown relaunches with `clear` so the fake last-load time and playback verdict do not stay in the
+simulator's defaults. No unit test: this is layout, and the wording of the line is already covered in
+`LibraryCoverageTests`.
+
+**Not changed.** Other rows keep the two-line limit. Checked every Settings subtitle by length, and on screen for the
+longest on PLAYBACK & PICTURE: MARK WATCHED (132 characters) fits in two full lines on a Plex server; the next longest
+is 109. Nothing else is built with a line break.
+
+**Half-done.** Branch `appletv/rescan-row-full-text`, not pushed, no build cut. Verified on the simulator only; not
+looked at on an Apple TV.
+
 ## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
 
 **Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
