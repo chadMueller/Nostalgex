@@ -26,6 +26,11 @@ struct RatingNudgeBanner: View {
                 Text("A star rating helps other people find it. Back brings you right here.")
                     .font(.custom("DMMono-Regular", size: 20))
                     .foregroundStyle(.white.opacity(0.8))
+                if RatingNudgePolicy.showsScrollHint {
+                    Text(RatingNudgePolicy.scrollHint)
+                        .font(.custom("DMMono-Regular", size: 20))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
             }
 
             Spacer(minLength: 24)
@@ -33,10 +38,12 @@ struct RatingNudgeBanner: View {
             HStack(spacing: 16) {
                 choiceButton("RATE", choice: .rate) {
                     appState.ratingNudgeRateTapped()
-                    let url = AppStoreLink.productPage
+                    let variant = AppStoreLink.activeVariant
+                    let url = variant.url
                     openURL(url) { accepted in
-                        print("[Plex90] Rating nudge: RATE opened \(url.absoluteString) accepted=\(accepted)")
-                        Self.log.notice("RATE opened \(url.absoluteString, privacy: .public) accepted=\(accepted, privacy: .public)")
+                        print("[Plex90] Rating nudge: RATE opened variant=\(variant.rawValue) \(url.absoluteString) accepted=\(accepted)")
+                        Self.log.notice("RATE opened variant=\(variant.rawValue, privacy: .public) \(url.absoluteString, privacy: .public) accepted=\(accepted, privacy: .public)")
+                        Analytics.track(.ratingNudgeOpened(accepted: accepted, variant: variant.rawValue))
                     }
                 }
                 .accessibilityIdentifier("ratingNudgeRate")

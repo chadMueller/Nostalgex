@@ -3,6 +3,402 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-05 (Apple TV 1.0.30 (54): the TestFlight candidate, integrated, archived, validated, not uploaded)
+
+**Shipped.** Nothing. Branch `integrate/1030-testflight` (not pushed), archived from `45ec480a`. The IPA is validated and
+waits on Chad's go for the upload.
+
+**What is in it.** origin/main `2fb4625f` (which already carried I-073 the enrichment cache, N-033 the TV staying awake and the
+cold Plex harness, harness isolation, AUDIO LANGUAGE on transcodes, Music Videos on Jellyfin and Emby, the Plex discovery
+grace window, the forced-subtitle probe, the cross-channel pack, TRUE CRIME and PREMIERES at three titles) plus, in this order:
+N-038 Plex collection container size; N-036 iCloud turn-on hold; N-039 a failed section no longer takes the scan (with the
+#146 round); #146 first-load memory; #204 Emby rating fields; Settings library counts; the rating hint and links
+(`appletv/rate-deeplink`); N-032 the FRANCHISES page greying; and, as its own commit, the Jellyfin and Emby playlist fix
+(#205, #206), with `scripts/jellyfin-library-golden.json` copied from `web/jellyfin-playlist-leak`.
+
+**Conflicts.** Only `docs/DEVLOG.md` (every branch adds an entry at the top; both kept) and the snapshot fields. The library
+counts branch and the Emby ratings branch each added an optional field to `LibrarySnapshotV1`, `LibrarySnapshotMetaV3`,
+`Payload`, `makePayload` and `save`, and to `AppState+Library.swift`'s save call. Both are kept, in one order everywhere
+(`scanFieldsVersion`, then `skippedNoRuntime`), because Swift's memberwise inits and labelled arguments are
+order-sensitive. Nothing else needed hand work.
+
+**One rule, not two.** `scanFieldsVersion` is now 2 and the saved-library refresh is `LibrarySnapshotStore.scanNeedsRefresh`:
+a Jellyfin or Emby snapshot with no number or a number under 2 restores, is stale, loses its signature and refreshes once
+behind the guide (Emby for the missing ratings, Jellyfin and Emby for playlists scanned as films). Plex never refreshes on it.
+
+**Checked.**
+- `SnapshotUpgradePathTests`: a library saved with both fields is made to look like 1.0.29's file (neither field). It
+  restores with every title and channel, `skippedNoRuntimeCount` reads 0, the scan version reads as the old one, the guide
+  is stale with no signature, a save before the refresh does not stamp it as new, the refresh stamps version 2 and counts
+  what it skipped, and the next launch is fresh and does not refresh again.
+- `JellyfinPlaylistLeakTests` failed before the port on both backends (nine non-film titles scanned and on channels) and
+  passes after; `JellyfinLibraryGoldenTests` holds the Swift side to the golden file.
+- Full NostalgexTests on `45ec480a`: 1,168 tests, 1,139 passed, 0 failed, 29 skipped (the opt-in harnesses).
+- Archive and export with automatic signing, `-allowProvisioningUpdates` and the API key (`BF3LR5NQQK`), as 1.0.29 and
+  `scripts/release-tvos.sh` do. Version 1.0.30, build 54 on the app and TopShelf; ASC's highest uploaded build was 53.
+  Entitlements on the app: iCloud key-value store `KK5V95295A.com.muellhaus.nostalgex`, app group
+  `group.com.muellhaus.nostalgex`, `get-task-allow` 0; TopShelf has the app group and `get-task-allow` 0. Bundled
+  channels.json v50, memberships and franchises identical to the repo. The Supabase URL, the anon key and the TelemetryDeck id are non-empty in the
+  Info.plist (lengths checked, values not printed). `altool --validate-app`: VERIFY SUCCEEDED with no errors. IPA `348e9842dc17c2764f32cf322be55a85`, 6,754,831 bytes.
+
+**A miss, caught and fixed.** The first archive (md5 `7ae6903a...`) had EMPTY `SupabaseURL` and `SupabaseAnonKey`. The keys come from
+the gitignored `Nostalgex/Secrets.xcconfig`, a fresh worktree does not have it, and `Config.xcconfig` falls back to empty strings so the
+build is green and the enrichment layer is silently off (`[Enrichment] Skipping: missing supabase url, anon key` in the console of the
+Debug build put on the living room TV). That would have shipped a TestFlight build with no TMDB enrichment, which is the 50 of 142
+channels of #185. The check had printed `<set>` for every key whatever its value. Rebuilt with `Secrets.xcconfig` copied in; the
+new IPA's lengths are 40, 208 and 36. `scripts/release-tvos.sh` now stops when any of the three is empty after the archive.
+
+**Open.** Not uploaded, not tagged, not pushed. Nothing here has run on a real Apple TV: the simulator and loopback servers
+only. The Emby, Jellyfin and playlist fixes are not measured on a real server.
+
+## 2026-11-05 (Apple TV: Jellyfin and Emby playlists, music and collections stay out of the guide, #205 #206)
+
+**Why.** A Jellyfin Playlists view answers any items request with its playlists (`PlaylistsFolder` overwrites
+`IncludeItemTypes`), and the scan treated every view that was not TV or Music Videos as a film library, so each
+playlist became a film. A playlist has no year and the year rule lets that through: a 33 minute workout mix aired on
+VHS VAULT, DVD SHELF and FLICKS on the web tuner. The Apple TV had the same hole (read, then reproduced on a loopback
+server). The web fix is on `web/jellyfin-playlist-leak`; this is the Apple TV port, to the same contract.
+
+**Changed.**
+- `JellyfinAPIService.sectionType(for:)` returns "other" for Playlists, Music, Collections, Books, Audiobooks, Photos,
+  Home Videos, Live TV, Trailers, Folders and Channels. Those views are not sections at all: never asked for items, not
+  offered in library selection. A view with no CollectionType, or one the app does not know, stays a film view.
+- `itemTypes(forSectionType:)` is now `Series` for TV, `Movie,MusicVideo` for Music Videos (I-067 keeps working) and
+  `Movie` for the rest, nil for "other".
+- A row whose `Type` was not asked for is dropped, case aside; a row with no `Type` is kept (`isAskedType`). Applied to
+  the film views, the series list and each show's episodes, in both services. Not applied to collection members: Emby
+  answers `Movie,Series` with episodes there on purpose.
+- `JellyfinItem` reads `Type` (`itemType`).
+- `scripts/jellyfin-library-golden.json` is copied byte for byte from the web branch (`724941e6`); the Swift tests read
+  it the way `FilterGoldenTests` reads its file. If the web branch changes it before merging, expect a trivial conflict.
+- The saved-library refresh from #204 is now one rule for Emby and Jellyfin: `scanFieldsVersion` is 2 (1 = names the two
+  rating fields, 2 = also reads only video views and the types asked for), and a Jellyfin or Emby snapshot older than 2
+  restores, is stale, loses its signature and refreshes once behind the guide. Plex is untouched.
+
+**Checked.** `JellyfinPlaylistLeakTests` runs the real Jellyfin and Emby scans against a loopback server whose Playlists,
+Music and Collections views answer with their own rows whatever is asked, plus a Home Videos view and a no-CollectionType
+view holding a film, a playlist and a clip. Before the port both fail (nine non-film titles scanned, on channels); after,
+none loads, none of those views is asked for items, the six real films fill VHS VAULT, the MusicVideo rows load as music
+videos, the filed film and the mixed-view film load. `JellyfinLibraryGoldenTests` holds the Swift side to the golden file.
+
+**Open.** Home Videos is a view some people keep films in; it is no longer read (the web does the same, by the golden
+file). Emby's `games` CollectionType is not in the golden list; its rows are `Game`, so the type check drops them.
+Not measured on a real Jellyfin or Emby.
+
+## 2026-11-03 (Apple TV: franchise collections grey out while FRANCHISES is off)
+
+**Shipped.** Nothing yet. Branch `appletv/franchises-page-gate`, not pushed, for the next Apple TV build.
+
+**Why.** Since `d7f6aa3` (1.0.29) the FRANCHISES switch gates every franchise channel, the server's franchise
+collections included. The Settings FRANCHISES page still listed those collections with live switches while
+FRANCHISES was off, and its own comment said they aired through their own switches. Found by the Roku port
+reading the code, then measured on the tvOS simulator (demo mode plus the franchise fixture, THREE FLAVOURS
+CORNETTO switched on, then FRANCHISES off): the row kept focus and read On, the collection stayed `enabled`,
+and its channel was not in the guide. The Channels list also counted it, so FRANCHISES read "1 ON" with
+nothing of it on the air.
+
+**Changed.** `SettingsChannelsView.swift` only; what the switch gates is untouched.
+- FRANCHISES off: the franchise collections stay listed, greyed out, can't take focus, and read OFF. One line
+  above them says "None of these are on the air while FRANCHISES is off."
+- Each collection's own switch is kept (the page only stops showing it), so FRANCHISES on again brings back
+  exactly what was set. Measured: CORNETTO back On and on the air.
+- The FRANCHISES count on the Channels list is 0 (reads OFF) while the switch is off.
+- The page comment now says what the code does. The rules sit in `FranchisesPageGate` so tests can reach them.
+
+**Tests.** `FranchisesPageGateTests` (unit, the real fixture and real switches: ON on the page means on the
+air, for every franchise collection, with FRANCHISES on, off and on again) and `FranchisesPageGateUITests`
+(focus walk under the switch while it is off; failed on main with focus reaching CORNETTO reading On, passes
+on the branch). `SettingsChannelsDrilldownTests` still passes. NostalgexTests on the Apple TV 4K simulator:
+1,021 passed, 18 skipped, 0 failed.
+
+**Next.** Chad tries the page in Xcode. Roku copies this page and needs the same change. The web tuner hides
+the whole franchise list while FRANCHISES is off, so it never shows a collection ON that isn't airing; it
+just looks different from the Apple TV now.
+
+## 2026-11-04 (Apple TV: the App Store rating funnel, measured on the living room TV)
+
+**Shipped.** Nothing yet. Branch `appletv/rate-deeplink` off main `5971d065`, for 1.0.30.
+
+**Why.** TelemetryDeck, 30 days (Oct 5 to Nov 4): the rating nudge showed to 152 users, 20 pressed RATE on it and
+30 more pressed RATE in Settings. The App Store has zero ratings. The thresholds were not the bottleneck; the
+tap destination was. On an Apple TV the product page opens with focus on the download button and the rating stars
+below the fold, and nobody scrolls. Nothing recorded whether the App Store open worked.
+
+**Measured (living room Apple TV 4K, Debug 1.0.29 (53) over the store build, container kept; Chad pressing RATE).**
+The same RATE press with a DEBUG launch argument (`-NostalgexRateLinkVariant`) swapping the link:
+- (a) `itms-apps://apps.apple.com/app/id6762563534`, what every build opened: product page, focus on the
+  download button, stars below the fold.
+- (b) the same with `?action=write-review`: accepted=true, same page, same focus.
+- (c) `https://apps.apple.com/app/id6762563534?action=write-review`, the form Apple documents (StoreKit,
+  "Requesting App Store reviews" and `RequestReviewAction`; neither page lists tvOS): accepted=true, same page.
+- (d) the legacy `itms-apps://itunes.apple.com/app/viewContentsUserReviews?id=...&action=write-review`:
+  accepted=true, same page.
+- (e) `?see-all=reviews` was not tried: Apple documents nothing for tvOS beyond `action=write-review`.
+tvOS accepts every one of them and the App Store ignores the review action on an Apple TV.
+
+**Changed.**
+- Shipped link stays the plain product page. `AppStoreLink.RateLinkVariant` and the launch argument stay,
+  DEBUG only (a release build always opens `RateLinkVariant.shipped`).
+- The hint is on: "Then scroll down to the stars" as a second line on the banner and under the Settings RATE
+  tile; the banner's auto-dismiss is 12 s with the hint (8 s without), `RatingNudgePolicy.showsScrollHint`.
+  Thresholds unchanged.
+- Two signals, `rating_nudge.opened` and `rate.opened`, with `accepted` and `variant`, from the banner and the
+  Settings tile. Gated like the taps (once per window). The variant letter is always `a` in a release build.
+- Tests: `RateLinkTests` (links, launch-argument parsing, both events' parameters and gating, the hint and its
+  timing, thresholds unchanged).
+- NostalgexTests: 1,112 tests, 1,086 passed, 0 failed, 26 skipped (1,103 before; 9 new).
+
+**Not done.** Whether the hint raises ratings. The next readout is the answer: rating_nudge.tapped against
+App Store Connect ratings after 1.0.30. The stars may be hidden from a developer account on iPhone (unconfirmed);
+on the Apple TV they are on the page for Chad.
+
+**Left on the living room TV.** The Debug build 1.0.29 (53) from this branch's variants commit, installed over the
+store build, relaunched with no launch arguments. The presses set the rated flag on that install, so the nudge
+will not show there again and the Settings tile reads "Thanks for rating" until the app is deleted.
+
+## 2026-11-05 (Apple TV: RESCAN LIBRARY says how many titles are on a channel, on none, and skipped)
+
+**Why.** A user's Jellyfin library showed 484 titles for a library they put at about 600, and nothing in the app said
+where the rest went. Two answers were missing: how many titles the scan threw away for having no runtime, and how many
+of the ones it kept never land on any channel. Chad approved both numbers, with the second defined as titles in the
+pool of a channel that would show if its package were on, whether or not the package is on.
+
+**Changed.** The line under the library summary in Settings > Servers > RESCAN LIBRARY, in the same style:
+`11,633 OF 11,809 ON CHANNELS · 176 ON NO CHANNEL (4 MOVIES, 172 EPISODES) · 12 SKIPPED (NO RUNTIME)`. A part is left
+out at zero, the split in brackets shows only when more than one kind has titles on no channel, and the first two wait
+until counted.
+- Skipped: the six runtime guards (Plex, Jellyfin, Emby, movie and episode each) count what they drop through a
+  `ScanSkipCounter` on the backend. A Plex section read that falls back from the bulk read to the per-show read rewinds
+  the counter to where the bulk read began, so a title is counted once. The number is saved with the library snapshot
+  (`skippedNoRuntime`, optional, so an older snapshot reads as none) and reset on disconnect.
+- On a channel: `LibraryDiagnostics.coverage` runs every channel in channels.json through the same `filterItems` the
+  guide uses, keeps those whose pool reaches `minItems`, and adds the built collection and franchise pools. It cannot be
+  read off `allChannels`: the first load builds every channel, every later load (RESCAN, the six-hour refresh) builds
+  the enabled packages only. So it runs on demand when Settings > Servers opens, off the main actor, once per library
+  (keyed on item count, load time, enrichment count, channel set), and not at all above 30,000 titles.
+- The count for the channels in the guide as it is now is kept beside it (`titlesOnChannelsCount`, debounced on
+  `channels`), for the log and for contrast. It moves when a package is toggled; the all-packages number does not.
+- One log line, `COVERAGE: ...`, with the counts and the first 25 titles on no channel (year, certificate, rating,
+  genres, studio, runtime, TMDB or not). The titles go to the console only; the device log gets the counts.
+
+**Checked.** Tests: a fake server per backend with zero, short and just-long-enough runtimes (movies and episodes)
+proves the skipped count, once-only on the Plex fallback and across a relaunch; a lineup test proves the on-channels
+number ignores a package toggle while the in-guide number follows it. The full suite: 1,118 tests, 1,091 passed, 0 failed, 27 skipped (the opt-in harnesses), 14 of them new.
+`scripts/qa/library-coverage.mjs` runs the web tuner's copy of the filter over the same items and compares per kind and
+per channel. On a library the size of Chad's (1,792 movies, 8,891 episodes, 1,126 music videos, synthetic, cold
+enrichment) episodes and music videos agree exactly, and movies differ by 6 titles, all on the four channels with a
+`productionCompanies` rule: the web filter matches the Plex studio when a title has no enrichment record, the Apple TV
+needs the record (`nostalgex-channel-filter.cjs:698-709`, on purpose). The count took 16 to 19 seconds in a Debug build
+on the simulator on a busy Mac. Not measured on a TV, and not on Chad's real library.
+
+**Open.** The cost on a real Apple TV (the 4K 1st gen and the HD are the slow ones); a Release-build figure; Chad's own
+numbers from his library. A list screen for the titles on no channel was not built (cost given to Chad first).
+Roku and Android ports are drafted in `projects/nostalgex-internal/docs/issue-drafts/` and not filed.
+
+**Next.** Chad's call on whether to carry per-kind figures on screen, and on the list screen.
+
+## 2026-11-05 (Apple TV: the Emby scan asks for OfficialRating and CommunityRating, #204)
+
+**Why.** tydude001 measured it on Emby 4.10.1.0: an Items answer carries neither `OfficialRating` nor `CommunityRating`
+unless `Fields` names them (0 of 200 with the apps' list, 195 and 197 of 200 with them added). Jellyfin 12.2 sends both
+either way. The scan never named them, so on Emby every title read as unrated: SAT MORNING CARTOONS (allows unrated)
+aired South Park and Family Guy, VHS VAULT's 9 PM hold held nothing, WATERSHED held nothing, and the 13 `ratingMin`
+channels saw no star rating. The old comment at `AppState+Channels.swift` blamed the server ("CommunityRating came back
+null for 100% of a 500-title sample"); it was the request.
+
+**Changed.**
+- One list, `JellyfinAPIService.scanFields`, now ends `...,UserData,OfficialRating,CommunityRating` and both services
+  use it. Every title read goes through `fetchAllItems` (sections, series, each show's episodes, collection members), so
+  this is the only request that changed. Collections ask `Fields=ChildCount` for BoxSets and need nothing. Episodes take
+  the show's certificate and score (`show.OfficialRating ?? ep.OfficialRating`, `show.CommunityRating`), so the series
+  request is the one that matters for TV.
+- Jellyfin gets the names too, one shared list. Jellyfin's `ItemFields` has no `OfficialRating` or `CommunityRating`
+  value, and the scan has always sent `UserData`, which it does not have either, so unknown names are already tolerated;
+  tydude's run on 12.2.0 with the field added read the same 196 of 200. Not measured on an older Jellyfin.
+- A library saved before this has no ratings on any Emby title, and `shouldSkipRefresh` holds a rescan for up to 24 hours
+  while the server says nothing changed. The snapshot now carries `scanFieldsVersion` (optional, so an older file reads as
+  none); on Emby a restore of one older than 1 is marked stale and loses its signature, so the background refresh that
+  already runs after a stale restore scans. The guide comes up from the snapshot first, as it does now. Jellyfin and Plex
+  are untouched. `libraryScanFieldsVersion` tracks what is in memory, so a save before the refresh finishes does not stamp
+  old items as new.
+- The `ratingMin` comment now says what happened. The OMDb fallback stays: it is an alternative to the native rating
+  (`nativeOk || omdbOk`), so a native rating can only add titles, and titles the server gives no score (3 of 200 on tydude's
+  Emby) and Plex titles with none still need it.
+
+**Checked.** `EmbyRatingFieldsTests` (10) runs the real Emby and Jellyfin scan against a loopback server that answers as
+Emby 4.10 does (a rating is in an item only when `Fields` names it), then the app's own stock pool build. Fails on the old
+request (7 of 10: TV-MA on SAT MORNING CARTOONS, R titles in VHS VAULT at 3 PM, certificates and scores unread, WATERSHED
+and ratingMin channels empty), passes on the new one. Full suite: 1,113 tests, 1,087 passed, 0 failed, 26 skipped.
+
+**Effect on what an existing Emby user sees,** measured on a synthetic library (400 films, 25 shows, certificates and
+scores spread like a real one, cold enrichment) read with the fields withheld and then asked for:
+- the 12 `ratingMin` channels that the test library can fill go from 0 titles (no OMDb data) to 15 to 81 each; with OMDb
+  data in, the fallback was already filling some, and the result can only be larger than before;
+- SAT MORNING CARTOONS, AFTER SCHOOL TV, 80S AFTER SCHOOL TV, RETRO TOONS, Y2K TOONS, FAMILY HOUR, FAMILY TV and ANIMATION
+  lose their TV-14, TV-MA, R and unrated-adult titles: 42 to 0, 56 to 28, 42 to 14, 21 to 5, 14 to 0, 75 to 46, 14 to 0,
+  32 to 25. A kids channel with too few real kids' shows falls under its minimum and leaves the guide (SAT MORNING CARTOONS,
+  FAMILY TV, Y2K TOONS here);
+- R RATED COMEDY goes from 0 to 18: its rating list has no "allow unrated", so it was empty on Emby until now.
+  21 of 142 channels moved. The numbers are the shape of the change, not a prediction for a library.
+Not run against a real Emby from here (the lab servers on this Mac were not up); the fake follows tydude's measurements.
+
+**Open.** The web tuner (`plex-tuner.html:9576`), the Roku (`roku/source/mediabrowser/MediaBrowserLibrary.brs:42`) and the
+Android app (`MediaBrowserLibrary.kt:200` on owen's branch) send the same list; `scripts/nostalgex-emby-dolby-vision-smoke.mjs:257`
+pins it. Not changed here.
+
+**Next.** Release timing is Chad's call (see the report).
+
+## 2026-11-04 (Apple TV: issue #146 second round, STOP WAITING on the first-run path, and what a big first load costs in memory)
+
+**Shipped.** Nothing yet. Branch `fix/first-load-memory` off main `5d880dd9`, for 1.0.30.
+
+**Why.** After 1.0.29 the reporter still reaches the Apple TV home screen: Plex 1.43.5, a remote server, a 105k-movie
+library that stalls, a 1k library that crashes too, stuck in onboarding. Later: every server worked when added on its
+own, "adding them all sequentially, during onboarding" may hit a memory limit.
+
+**Looked for a crash log first.** App Store Connect has none: 0 TestFlight crash submissions, no hang or launch
+diagnostics for 1.0.29 (53) or 52. Production crashes are Xcode Organizer only, not in the API.
+
+**Not reproduced (simulator).** `StopWaitingFirstRunHarnessTests` drives the first run the way the app takes it
+(`confirmServerSelection`, the section list, `confirmLibrarySelection`, then the scan) with `RootView` mounted, against
+a fake remote Plex whose sections never answer, stall mid-body, trickle, or drop the connection (the retry ladder runs),
+with and without the slow-link page size, 1k to 105k movies, one or two servers, STOP WAITING pressed in onboarding, right
+after confirming, at random moments, on a faulted section, whenever the scan sits still, repeatedly while the guide is
+built, and from the real button after a minute of quiet. 96 iterations plus the four-server runs below: no crash, no
+crash report. The simulator does not kill an app for memory, which is the one thing it cannot show.
+
+**The three 105k "hangs" were a slow build, not a stuck press.** The same iteration run alone with a 25-minute limit
+finished in 229 s (105,500 items, the channel build at about 0.7 channels a second). The 85 s limit was the bug.
+
+**The eight error-screen loads in the first 40-iteration run.** Five are the designed ending: nothing had come back
+before the press, so "Stopped waiting. Nothing had come back from your server". Three are different (iterations 2, 26,
+27): a connection dropped mid-section (`reset`), the retry ladder ran out, and the whole server's scan was thrown away,
+four finished sections included, with "Can't reach the server address saved on this device. Open Settings and reconnect
+while on the same network as your server." Only a cancellation keeps partial results (PlexAPIService.swift, the catch in
+`loadLibrary`); a transport error after the retries drops everything read so far, and the message tells a remote
+viewer to move to their own network. Not changed here. Not the crash.
+
+**Memory, the reporter's second message.** `testMultiServerOnboardingMemory`: four servers (105k, 50k, 10k, 10k movies)
+in one onboarding, a realistic library (titles, genres and studios the channel rules match), process footprint sampled
+every 0.25 s. Scanning does not accumulate: peaks 508, 535, 557, 571 MB, growing only by the items (the baseline of 296 MB
+is the test's own fixture). The channel build is where it goes: peak 1,282 MB, about 986 MB above baseline, 337 s.
+Inside it: the music-cache step makes a second full copy of every item (+99 MB) that the local `merged` in `loadLibrary`
+then keeps alive to the end of the load; the filter cache copies every item again (+172 MB); and the pools hold whole
+592-byte items by value: 91 channels, 573,333 items in 800,305 slots (451 MB allocated, 323 MB used), while the guide
+shows 13 channels with 77,270 pooled items, so about 87% of the pooled items belong to channels nobody is watching.
+`compactMap` grows its result in steps (1,328, 5,313, 21,254, 85,019 slots for items this size), so a pool just past a
+step carries up to four times what it uses. A single 105k server on the plainer fixture peaked at 589 MB. Where the
+tvOS limit sits for each model is not something the simulator or any file here tells; the TV's own
+`os_proc_available_memory()` does, and the cold harness already logs it.
+
+**Changed.**
+- `loadLibrary` drops `merged` after its last use, so the pre-music-cache list is freed when `applyMusicCacheToLibrary`
+  replaces it (the music-cache step: 596 MB after, 694 MB before).
+- `AppState.trimmed`: `filterItems` hands back a pool with no more slots than it needs (within an eighth); one exact-fit
+  copy per pool that has more.
+- Same four-server run after: peak 1,164 MB (-118 MB), pools 588,320 slots / 332 MB allocated (-119 MB), load end 981 MB
+  (-104 MB). What is held once the load has settled barely moves (966 MB vs 977 MB): freed pages stay in the process.
+- `FirstLoadMemoryTests` (2): a 5,400-item pool had 10,627 slots on main; it fails there and passes now.
+- `StopWaitingFirstRunHarnessTests` (opt-in, 2 tests): the soak and the memory run.
+- NostalgexTests: 1,107 tests, 1,079 passed, 0 failed, 28 skipped (the two new opt-in tests).
+
+**Not shown.** That memory is what takes the reporter's app down. It fits (the sum of their servers, a kill on STOP
+WAITING because that is when the build starts, individual servers fine) and is not proven: no crash log, no device
+run, model unknown. The cut here is about 10% of the peak; it does not change the order of magnitude. The bigger ones:
+build and keep pools only for channels in enabled bundles, and pools that hold indexes instead of items. Both touch what
+the schedule and the guide read, so they are a decision, not a drive-by.
+
+## 2026-11-04 (Apple TV: a section that fails for good no longer takes the scan with it; Jellyfin and Emby too)
+
+**Shipped.** Nothing yet. Branch `fix/scan-keeps-sections` off main `9e2c945d`, for 1.0.30 (issue #146 follow-up, Trello N-039).
+
+**Why.** Found while measuring #146: a fake remote Plex that dropped the connection in the fifth of five sections
+threw away the whole server's scan once the retries ran out (0 items, four finished sections included), and the viewer
+read "Can't reach the server address saved on this device. Open Settings and reconnect while on the same network as
+your server", for a server that was not on their network. Only a cancel kept the sections already read. Jellyfin and
+Emby had the identical catch, so N-039 (one erroring section fails the whole scan) is the same rule in two more files.
+
+**Changed.**
+- A section whose requests fail for good (a transport error after the retries, or an HTTP error status) is skipped; the
+  scan goes on with the next section and ends by handing back what it read as a `LibraryScanInterrupted` that names
+  the lost sections. One shared helper, `SectionFailures`, used by the Plex, Jellyfin and Emby loops. A cancel still
+  keeps its pages; a 401/403 or an unexpected payload still ends the scan; a scan that read nothing at all is still a
+  failure, with the original error.
+- `loadLibrary` builds the guide from what was read, marks the library stale (a later refresh fills the section in),
+  and names the lost sections in `lostSectionsLastLoad` and the install log: "server 'X' lost section(s) Documentaries,
+  kept 450 items from the others". A background refresh that loses a section is still thrown away, as an abandoned one
+  is. The "abandoned by the viewer" analytics flag no longer counts a lost section as the viewer's doing.
+- The message follows the address: `PlexAPIService.isLikelyLocalAddress` (private ranges, `.local`, a plex.direct name
+  that encodes a LAN address) keeps the "same network" advice. A remote or unknown address reads "The connection to
+  your server dropped while the library was loading. Check that the server is online, then Retry." or "Can't reach
+  your server from here. Check that it is online and that remote access is turned on, then Retry."
+- `SectionFailureScanTests` (6): a fake server that drops one of three sections; Plex, Jellyfin and Emby each fail on
+  main with the connection error and keep the other 450 movies now; every section failing is still a failure; the
+  load through `AppState` builds a guide with no error and names the section; the three message cases.
+- NostalgexTests: 1,109 tests, 1,083 passed, 0 failed, 26 skipped.
+
+**Not changed.** Roku, the web tuner and Android. Roku's Plex scan already skips a failed section
+(`PlexLibrary.brs`, "skipped a section that failed to load") without telling the viewer which.
+
+## 2026-11-04 (Apple TV: turning iCloud sync on waits for iCloud's first download before it pushes, N-036)
+
+**Shipped.** Nothing yet. Branch `appletv/n036-sync-turnon-hold` off main `9e2c945d`, for 1.0.30.
+
+**Why.** `NSUbiquitousKeyValueStore` is a local copy that iCloud fills in the background, so on a TV that has not
+finished its first download it reads empty even when the household has a lineup in iCloud. `setEnabled(true)` read that
+empty copy, found no value in the cloud for any key it held a value for, and pushed them all: a new TV's first-load
+defaults (the default package, Retro Mode on) became the latest write, and every other TV took them. Launch already held
+its push for a brand-new TV; turn-on did not. The Settings row comment said turn-on "pushes this TV's lineup first", which
+was the bug written down.
+
+**Measured first.** `PreferenceSyncTurnOnTests` runs two TVs on a fake iCloud that behaves the way that matters: a
+server, and a local copy per TV that stays empty until its first download, uploads on `synchronize()`, last write wins,
+and tells the TVs that have downloaded. On main the new TV turns sync on before its download arrives and: iCloud's
+`enabled_bundles` becomes `["nostalgex"]` where the household had four packages, the other TV's lineup becomes
+`["nostalgex"]` and its Retro Mode flips from off to on, and the new TV never joins the household. Three of the
+tests fail on main (the overwrite, the held push, turning off during the hold).
+
+**Changed.**
+- `setEnabled(true)`: when iCloud shows nothing and there is something to push, the push is held (`startHolding()`,
+  the launch mechanism) for up to `holdTimeout` (30 s; injectable). The first download, or any change from another TV,
+  ends the wait: what arrives is adopted (cloud wins) and only the keys iCloud still lacks are pushed. If nothing
+  ever arrives, the wait ends by itself and this TV seeds iCloud. Turning sync off during the wait pushes nothing. When
+  iCloud already shows values the download has arrived: nothing waits, the household wins, and only a key iCloud lacks
+  goes up at once (the existing behaviour, tested).
+- The Settings row comment now says that.
+- Tests (5): the overwrite; the first TV seeds an empty iCloud once its download comes back empty; turning off during
+  the hold; the wait ends on its own; no wait when the download is already here. NostalgexTests: 1,108 tests, 1,082
+  passed, 0 failed, 26 skipped.
+
+**Not changed.** `saveBundlePreferences` (`AppState+Channels.swift`): only a change the viewer made goes to
+iCloud, so first-load auto-enable never pushes. The seeding wait is a cost for the first TV only (up to 30 s before
+iCloud has its lineup). Not run on a real pair of TVs.
+
+## 2026-11-04 (Apple TV: Plex collection requests send a container size and read every page, N-038)
+
+**Shipped.** Nothing yet. Branch `appletv/n038-collection-container-size` off main `9e2c945d`, for 1.0.30.
+
+**Why.** Plex logs "Missing X-Plex-Container-Size header, will fail with status 400 in the future" for the
+collection requests: only the section item fetch sent a size. When Plex makes good on the warning the collection
+scan would stop silently, because its callers swallow the error (`try?` on the list of collections, `continue` on a
+collection's children) and an empty result reads as "this server has no collections". The per-show `allLeaves`
+crawl (the fallback for a server that ignores `type=4`) had the same bare request.
+
+**Changed.** `loadCollections`, `loadCollectionItems` and the per-show `allLeaves` read through one helper,
+`fetchAllPages`, with `X-Plex-Container-Start` / `-Size` as the section fetch does (300 a page). It moves on by the
+rows the server says a page holds (`size`) and stops at the server's `totalSize`, or at a short page when there is
+none, so a server that sends fewer than asked, or a row that fails to decode, neither skips nor repeats rows. A
+response with more rows than asked is a server that ignores paging and sent everything: it stops there. A ceiling of
+5,000 pages keeps a server that never says it is done from looping us. `/library/sections` and `/identity` are
+single small directory responses and are unchanged; not checked against a real server's log.
+
+**Tests.** `PlexContainerSizeTests` (5): a fake Plex that answers 400 to a list request with no container size and
+never sends more than 100 rows a response, with 318 collections (the I-068 case), a 1,250-item collection, a
+250-episode show through the per-show crawl, and a legacy server that ignores paging. Four fail on main (400, or
+only the first page), all pass now. NostalgexTests: 1,108 tests, 1,082 passed, 0 failed, 26 skipped.
+
+**Not done.** The web tuner (the web agent's branch) and Roku (#189, tydude001).
+
 ## 2026-11-05 (web tuner and Docker 1.0.14 prepared, not tagged)
 
 **Prepared.** Branch `web/release-1014`: `tunerVersion` 1.0.14 in `package.json`, the README headings and the Latest line

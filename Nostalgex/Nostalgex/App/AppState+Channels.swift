@@ -1287,13 +1287,56 @@ extension AppState {
         return result
     }
 
+    /// Libraries past this many titles get no coverage count: it runs every channel's rules
+    /// over the whole library, about 2 ms a title on a Mac and several times that on an Apple TV.
+    static let coverageItemCap = 30_000
+
+    /// Counts where the loaded titles land with every package on, once per library: the
+    /// answer does not move when a package is switched on or off, only when the library, the
+    /// enrichment cache or the built collection channels do. Off the main actor at utility
+    /// priority; the filter cache is read here (it needs the enrichment services), the rest
+    /// runs away from it. Logs the count and the first titles that no channel takes.
+    func ensureLibraryCoverage() {
+        guard !allItems.isEmpty, allItems.count <= Self.coverageItemCap, !channelConfigChannels.isEmpty else {
+            if allItems.count > Self.coverageItemCap { libraryCoverage = nil }
+            return
+        }
+        let dynamicChannels = allChannels.filter { $0.rules == nil }
+        let key = "\(allItems.count)|\(lastLoadAtUnix)|\(enrichmentService.cache.count)|\(channelConfigChannels.count)|"
+            + dynamicChannels.map { "\($0.id):\($0.itemPool.count)" }.joined(separator: ",")
+        guard key != libraryCoverageKey else { return }
+        libraryCoverageKey = key
+        libraryCoverageTask?.cancel()
+
+        let items = allItems
+        let cache = makeFilterCache(items)
+        let staticChannels = channelConfigChannels
+        let dynamicPools = dynamicChannels.map(\.itemPool)
+        let memberships = channelMemberships
+        let rules = exclusiveRules
+        let session = librarySessionGeneration
+        libraryCoverageTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                LibraryDiagnostics.coverage(items: items, cache: cache, staticChannels: staticChannels,
+                                            dynamicPools: dynamicPools, memberships: memberships, exclusiveRules: rules)
+            }.value
+            guard !Task.isCancelled, let self, self.librarySessionGeneration == session,
+                  self.libraryCoverageKey == key else { return }
+            self.libraryCoverage = result
+            let report = LibraryDiagnostics.orphanReport(
+                result, onEnabledChannels: self.titlesOnChannelsCount ?? LibraryDiagnostics.titlesOnChannels(in: self.channels))
+            print("[Plex90] \(report)")
+            InstallDiagnostics.note(String(report.prefix { $0 != "." }))
+        }
+    }
+
     /// Build a snapshot cache for a set of items. Called once per filter pass —
     /// per `loadLibrary`, per `buildPendingBundles`, and per
     /// `refilterChannelsWithEnrichment`. Enrichment is read here so any later
     /// asynchronous enrichment landings don't make the cache inconsistent
     /// mid-build (build loop is single-threaded on MainActor; rebuild is the
     /// re-snapshot point).
-    private func makeFilterCache(_ items: [PlexMediaItem]) -> [FilterCache] {
+    func makeFilterCache(_ items: [PlexMediaItem]) -> [FilterCache] {
         items.map { item in
             FilterCache(
                 item: item,
@@ -1368,7 +1411,7 @@ extension AppState {
         let editorialOverridesLower = rules.editorialOverrides?.map { $0.lowercased() } ?? []
         let contentRatingsSet: Set<String>? = rules.contentRatings.map { Set($0) }
 
-        return cached.compactMap { cache -> PlexMediaItem? in
+        let matched = cached.compactMap { cache -> PlexMediaItem? in
             // Emby Dolby Vision profile 5: on no channel, whatever the rules say.
             if cache.leftOffChannels { return nil }
             let item = cache.item
@@ -1756,9 +1799,14 @@ extension AppState {
             // is built from) came back null for 100% of a 500-title sample measured
             // against Chad's own server, so treating a missing native rating as an
             // automatic fail silently emptied the 13 channels that use a plain
-            // ratingMin gate. When neither native rating clears the bar, fall back
-            // to the same OMDb-enriched rating used by the imdbRatingMin gate above,
-            // at the same threshold, before rejecting.
+            // ratingMin gate. The cause was the scan, not the server: Emby 4.10 sends
+            // CommunityRating only when `Fields` names it, and the scan did not
+            // (#204; it does now, and 197 of 200 titles on a lab Emby carry it). A
+            // title the server still gives no score, and a Plex title without a
+            // critic score, can have none, so the fallback stays: when neither native
+            // rating clears the bar, use the same OMDb-enriched rating as the
+            // imdbRatingMin gate above, at the same threshold, before rejecting. The
+            // two are alternatives, so a native rating can only add titles here.
             if let ratingMin = rules.ratingMin {
                 let nativeOk = item.rating >= ratingMin || item.userRating >= ratingMin
                 if !nativeOk {
@@ -1781,6 +1829,21 @@ extension AppState {
 
             return item
         }
+        return Self.trimmed(matched)
+    }
+
+    /// A pool with no more slots than it needs, give or take an eighth. `compactMap` grows
+    /// its result in steps, so a pool just past a step carries up to about four times what it
+    /// uses, and every slot is a whole item (592 bytes). Measured on 175,000 movies across
+    /// four servers: 91 pools held 573,333 items in 800,305 slots, 451 MB allocated for
+    /// 323 MB used, all of it alive at the peak of the first load. One exact-fit copy per
+    /// pool that needs it; a pool already close to full is returned as it is.
+    nonisolated static func trimmed(_ pool: [PlexMediaItem]) -> [PlexMediaItem] {
+        guard pool.capacity - pool.count > max(pool.count / 8, 16) else { return pool }
+        var exact: [PlexMediaItem] = []
+        exact.reserveCapacity(pool.count)
+        exact.append(contentsOf: pool)
+        return exact
     }
 }
 

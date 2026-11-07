@@ -234,6 +234,9 @@ final class PreferenceSync {
     private var pendingKeys: [String] = []
     private var holdReleaseTask: Task<Void, Never>?
     nonisolated static let holdTimeoutSeconds: UInt64 = 30
+    /// How long a hold waits for iCloud before it gives up and pushes (`holdTimeoutSeconds`
+    /// in the app; shorter in a test).
+    let holdTimeout: TimeInterval
 
     /// The viewer's per-TV choice. Read from `defaults` at init; changed through
     /// `setEnabled`. Nothing touches `cloud` while this is false.
@@ -243,9 +246,11 @@ final class PreferenceSync {
     private let observesNotifications: Bool
     private var observer: NSObjectProtocol?
 
-    init(cloud: UbiquitousKeyValueStoring, defaults: UserDefaults, observeNotifications: Bool, keys: [String]? = nil) {
+    init(cloud: UbiquitousKeyValueStoring, defaults: UserDefaults, observeNotifications: Bool, keys: [String]? = nil,
+         holdTimeout: TimeInterval = TimeInterval(PreferenceSync.holdTimeoutSeconds)) {
         self.cloud = cloud
         self.defaults = defaults
+        self.holdTimeout = holdTimeout
         self.activeKeys = keys ?? Self.debugKeyFilter() ?? Self.syncedKeys
         self.observesNotifications = observeNotifications
         self.isEnabled = defaults.bool(forKey: Self.syncEnabledKey)
@@ -276,6 +281,13 @@ final class PreferenceSync {
 
     /// Turning on adopts what iCloud already holds (another TV's lineup), pushes the
     /// keys iCloud has no value for yet, then starts listening.
+    ///
+    /// When iCloud shows nothing at all, the push waits (N-036). On a TV that has not
+    /// finished its first download the local copy of iCloud is empty even though the
+    /// household has a lineup there, and pushing this TV's first-load defaults into that
+    /// gap made them the latest write: every other TV took them. The first download
+    /// (or `holdTimeout` with nothing arriving: iCloud really is empty) ends the wait; what
+    /// arrives is adopted, and only what iCloud still lacks is pushed, as at launch.
     /// Turning off stops listening and leaves both iCloud and the local values as they are.
     func setEnabled(_ on: Bool) {
         guard on != isEnabled else { return }
@@ -295,7 +307,13 @@ final class PreferenceSync {
         let remote = cloudValues()
         print("[Sync] turned on: local \(Self.describe(local)) cloud \(Self.describe(remote))")
         let plan = PreferenceSyncMerge.plan(local: local, cloud: remote, keys: activeKeys, trigger: .turnOn)
-        push(plan.pushToCloud, label: "turned on")
+        if remote.isEmpty, !plan.pushToCloud.isEmpty {
+            startHolding()
+            pendingKeys = Array(plan.pushToCloud.keys)
+            print("[Sync] turned on: iCloud shows nothing yet, holding \(pendingKeys.count) key(s) up to \(Int(holdTimeout))s for its first download")
+        } else {
+            push(plan.pushToCloud, label: "turned on")
+        }
         apply(plan.applyLocally)
         startObserving()
     }
@@ -369,9 +387,9 @@ final class PreferenceSync {
 
     private func startHolding() {
         holdingOutgoing = true
-        print("[Sync] new TV with nothing in iCloud yet: holding writes up to \(Self.holdTimeoutSeconds)s")
+        print("[Sync] nothing in iCloud yet: holding writes up to \(Int(holdTimeout))s")
         holdReleaseTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: Self.holdTimeoutSeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64((self?.holdTimeout ?? 0) * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.releaseHold(reason: "timeout")
         }

@@ -14,6 +14,9 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     let accessToken: String
     let userId: String
     var serverID: String = ""
+    /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
+    let scanSkips = ScanSkipCounter()
+    var skippedNoRuntime: Int { scanSkips.count }
 
     /// Stable per-install device id. Reuses the same UUID Plex uses so the value is
     /// consistent across backends on a device.
@@ -101,24 +104,64 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         }
         let (data, response) = try await Self.session.data(for: req)
         let views = try Self.decode(ItemsResponse.self, data: data, response: response).Items ?? []
-        return views.map { PlexSection(key: $0.Id, title: $0.Name ?? "Library", type: Self.sectionType(for: $0.CollectionType)) }
+        return Self.videoSections(from: views)
     }
 
-    /// Maps a Jellyfin `CollectionType` to the section type strings the loader branches on.
-    static func sectionType(for collectionType: String?) -> String {
-        switch collectionType?.lowercased() {
-        case "tvshows": return "show"
-        case "musicvideos": return "musicvideo"
-        default: return "movie"   // movies + anything else treated as flat item lists
+    /// The views a scan reads: every view except the ones that hold no videos. Those are not
+    /// scanned and not offered in library selection.
+    static func videoSections(from views: [JellyfinItem]) -> [PlexSection] {
+        views.compactMap { view in
+            let type = sectionType(for: view.CollectionType)
+            return type == "other" ? nil : PlexSection(key: view.Id, title: view.Name ?? "Library", type: type)
         }
     }
 
-    /// What a flat (non-TV) library is asked for. Jellyfin and Emby file the videos in a
-    /// Music Videos library as `MusicVideo`, so asking it for `Movie` alone came back empty
-    /// and HIGH ROTATION never filled (I-067, found by @owenvoke). `Movie` stays in the list
-    /// for a film someone filed there. Every other library still asks for films only.
-    static func itemTypes(forSectionType type: String) -> String {
-        type == "musicvideo" ? "Movie,MusicVideo" : "Movie"
+    /// CollectionTypes with no videos in them (#205, #206). Same list as the web tuner's
+    /// `NostalgexJellyfinUrls.sectionType`, pinned by scripts/jellyfin-library-golden.json.
+    private static let nonVideoCollectionTypes: Set<String> = [
+        "playlists", "music", "boxsets", "books", "audiobooks", "photos", "homevideos",
+        "livetv", "trailers", "folders", "channels",
+    ]
+
+    /// Maps a Jellyfin `CollectionType` to the section type strings the loader branches on:
+    /// "show", "musicvideo", "other" (a view with no videos in it, never read), or "movie".
+    ///
+    /// A Playlists view answers any items request with its playlists, whatever
+    /// `IncludeItemTypes` says (Jellyfin's `PlaylistsFolder` overwrites it), so asking it for
+    /// films returned its playlists and the scan filed each as a film: a 33 minute workout mix
+    /// aired on VHS VAULT. Music, Collections, Books, Photos, Home Videos, Live TV, Trailers,
+    /// Folders and Channels are the same kind of view. A view with no CollectionType, or one
+    /// this does not know, is mixed content and still a film view.
+    static func sectionType(for collectionType: String?) -> String {
+        guard let kind = collectionType?.lowercased() else { return "movie" }
+        switch kind {
+        case "tvshows": return "show"
+        case "musicvideos": return "musicvideo"
+        case _ where nonVideoCollectionTypes.contains(kind): return "other"
+        default: return "movie"   // movies, mixed content, anything unknown
+        }
+    }
+
+    /// What a section is asked for, or nil for one that is not read. Jellyfin and Emby file the
+    /// videos in a Music Videos library as `MusicVideo`, so asking it for `Movie` alone came
+    /// back empty and HIGH ROTATION never filled (I-067, found by @owenvoke). `Movie` stays in
+    /// the list for a film someone filed there.
+    static func itemTypes(forSectionType type: String) -> String? {
+        switch type {
+        case "show": return "Series"
+        case "musicvideo": return "Movie,MusicVideo"
+        case "other": return nil
+        default: return "Movie"
+        }
+    }
+
+    /// True when a row the server sent is one of the types the scan asked for. A row with no
+    /// `Type` is kept. Case does not matter. Backstop for a view that answers with something
+    /// else than it was asked for (Playlists does; others might).
+    static func isAskedType(_ type: String?, asked: String) -> Bool {
+        guard let type, !type.isEmpty else { return true }
+        let wanted = type.lowercased()
+        return asked.split(separator: ",").contains { $0.lowercased() == wanted }
     }
 
     // MARK: - Library loading
@@ -126,12 +169,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     private static let pageSize = 200
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        scanSkips.reset()
         let allSections = try await loadSections()
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
         // and discarded.
         let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
         var allItems: [PlexMediaItem] = []
+        var failures = SectionFailures(backend: "Jellyfin")
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
                 sectionIndex: i, totalSections: sections.count,
@@ -152,13 +197,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     }
                 } else {
                     let isMusicSection = section.type == "musicvideo"
+                    let asked = JellyfinAPIService.itemTypes(forSectionType: section.type) ?? "Movie"
                     // One event per page, as the Plex scan does. Without it the item
                     // count stood still for the whole section, so the stall watch read a
                     // big movie library that was still arriving as a dead server: a
                     // 15,000-movie section at 3 s a page (75 pages) was abandoned at 210 s
                     // with the server still answering (MovieLibraryScaleHarness).
                     let raw = try await fetchAllItems(
-                        parentId: section.key, includeItemTypes: JellyfinAPIService.itemTypes(forSectionType: section.type)
+                        parentId: section.key, includeItemTypes: asked
                     ) { loaded, _ in
                         progress?(LoadProgressEvent(
                             sectionIndex: i, totalSections: sections.count,
@@ -166,7 +212,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                             itemsLoadedSoFar: baseItemCount + loaded, showsCompleted: nil, totalShows: nil
                         ))
                     }
-                    items = raw.compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
+                    items = raw.filter { JellyfinAPIService.isAskedType($0.itemType, asked: asked) }
+                        .compactMap { parseMovieItem($0, isMusicSection: isMusicSection) }
                 }
             } catch {
                 // Cancelled with sections already read: hand those back rather than losing
@@ -174,6 +221,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 if Task.isCancelled, !allItems.isEmpty {
                     throw LibraryScanInterrupted(partialItems: allItems)
                 }
+                // A section that fails for good costs that section, not the scan (N-039).
+                if failures.absorb(error, section: section.title) { continue }
                 throw error
             }
             allItems.append(contentsOf: items)
@@ -185,6 +234,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 throw LibraryScanInterrupted(partialItems: allItems)
             }
         }
+        try failures.finish(items: allItems)
 
         // TMDB-manifest channels (franchises, anime, stand-up) only match when items carry
         // tmdbID. Log coverage so a low number flags a server whose metadata isn't scraped yet.
@@ -209,7 +259,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 .init(name: "ParentId", value: parentId),
                 .init(name: "Recursive", value: "true"),
                 .init(name: "IncludeItemTypes", value: includeItemTypes),
-                .init(name: "Fields", value: "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData"),
+                .init(name: "Fields", value: Self.scanFields),
                 .init(name: "StartIndex", value: "\(start)"),
                 .init(name: "Limit", value: "\(Self.pageSize)"),
                 .init(name: "SortBy", value: "SortName"),
@@ -251,6 +301,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     /// rarely carry their own TMDB id, and channel rules key off the series).
     private func fetchShowsSection(_ section: PlexSection, onBatch: PlexAPIService.ShowProgress? = nil) async throws -> [PlexMediaItem] {
         let series = try await fetchAllItems(parentId: section.key, includeItemTypes: "Series")
+            .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Series") }
         var results: [PlexMediaItem] = []
         let batchSize = 10
         for batchStart in stride(from: 0, to: series.count, by: batchSize) {
@@ -276,10 +327,11 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     private func fetchEpisodes(for show: JellyfinItem) async throws -> [PlexMediaItem] {
         do {
             let episodes = try await fetchAllItems(parentId: show.Id, includeItemTypes: "Episode")
+                .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Episode") }
             let showGenres = show.Genres ?? []
             return episodes.compactMap { ep -> PlexMediaItem? in
                 let durationMin = Self.minutes(fromTicks: ep.RunTimeTicks)
-                guard durationMin > 0 else { return nil }
+                guard durationMin > 0 else { scanSkips.add(); return nil }
                 let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
                 let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
                 let source = JellyfinItem.bestMediaSource(ep.MediaSources)
@@ -325,7 +377,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
 
     func parseMovieItem(_ item: JellyfinItem, isMusicSection: Bool) -> PlexMediaItem? {
         let durationMin = Self.minutes(fromTicks: item.RunTimeTicks)
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         var genres = item.Genres ?? []
         if isMusicSection && !genres.contains(where: { $0.lowercased().contains("music") }) {
             genres.append("Music Video")
@@ -389,6 +441,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     }
 
     /// Jellyfin runtimes are in 100-ns ticks. 600,000,000 ticks == 1 minute.
+    /// What a library scan asks the server for, on Jellyfin and on Emby (which reads it from
+    /// here). Emby 4.10 leaves `OfficialRating` and `CommunityRating` out of an Items answer
+    /// unless they are named; Jellyfin 12.2 sends them anyway. Every channel rule that reads a
+    /// certificate or a star rating (kids channels, the 9 PM hold, the `ratingMin` gate) needs
+    /// them, so they are named for both (#204). The web tuner, the Roku and the Android app
+    /// send the same list.
+    static let scanFields = "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating"
+
     static func minutes(fromTicks ticks: Int64?) -> Int {
         guard let ticks else { return 0 }
         return Int(ticks / 600_000_000)
@@ -874,6 +934,15 @@ struct JellyfinItem: Decodable {
     let MediaSources: [MediaSource]?
     let ImageTags: [String: String]?
     let UserData: UserData?
+    /// "Movie", "Series", "Episode", "MusicVideo", "Playlist", "Audio", "BoxSet" and so on.
+    let itemType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case Id, Name, SeriesName, Overview, ProductionYear, PremiereDate, DateCreated, ChildCount
+        case OfficialRating, CommunityRating, RunTimeTicks, Genres, CollectionType, ParentIndexNumber
+        case IndexNumber, ProviderIds, Studios, MediaSources, ImageTags, UserData
+        case itemType = "Type"
+    }
 
     struct Studio: Decodable { let Name: String? }
     struct UserData: Decodable {

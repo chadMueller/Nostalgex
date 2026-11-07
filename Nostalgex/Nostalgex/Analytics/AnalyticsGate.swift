@@ -63,7 +63,7 @@ struct AnalyticsGate {
             return Rule(identity: ["backend"], limit: 2)
         case "setting.changed":
             return Rule(identity: nil, limit: 20)
-        case "rate.tapped", "rating_nudge.shown", "rating_nudge.tapped", "signup.qr.shown",
+        case "rate.tapped", "rate.opened", "rating_nudge.shown", "rating_nudge.tapped", "rating_nudge.opened", "signup.qr.shown",
              "library.load.empty", "library.load.stop_waiting_tapped":
             return Rule(identity: [], limit: 1)
         default:
