@@ -36,6 +36,14 @@ a guide the old build saved (the cases only). The power-loss seed's key has no s
 runs the re-check at once, which saves it again, so only a power loss with Settings still open would play a seed from
 the other setting.
 
+## 2026-11-07 (Roku 1.0.12: the release record joins main)
+
+**Shipped.** Roku 1.0.12, signed 2026-11-05 and uploaded to the beta (channel 888351) and to the public app's update, which is scheduled for Mon Nov 9. Package md5 `28894c7c1ec950ccbf8ab3ae8f44e970` (in `roku/releases.tsv`). The release commit is `19ec96a6`, tagged `roku-v1.0.12`: main `9e2c945d` (tydude001's #182, the first channel plays while the library loads after a power loss, and #191, the loading screen holds the screensaver off) plus the `build_version=12` bump and nothing else.
+
+**Not in the signed build.** Main's `roku/` is past it. It also holds the six PRs merged on 2026-11-06 (#213, #199, #200, #210, #212, #214) and the Jellyfin and Emby scan's `OfficialRating` and `CommunityRating` Fields (#204). None of that is in 1.0.12; the signed package is what the tag builds. The next Roku build bumps to 13 and is cut after the stick passes: #212 and #214 timed on a big Plex library, #213 with a Jellyfin playlist, #199 and #200 with a real file the Roku can't play, and #210's seed edge.
+
+**Changed.** This merge puts the release record on main: `roku/manifest` at `build_version=12`, the 1.0.12 row in `roku/releases.tsv`, and the tag `roku-v1.0.12` on the release commit, which stays an ancestor (the branch merged main in, never rebased).
+
 ## 2026-11-05 (Apple TV 1.0.30 (54): the TestFlight candidate, integrated, archived, validated, not uploaded)
 
 **Shipped.** Nothing. Branch `integrate/1030-testflight` (not pushed), archived from `45ec480a`. The IPA is validated and
