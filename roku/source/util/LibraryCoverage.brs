@@ -143,11 +143,7 @@ function NxCoverageWork(job as Object, budgetMs as Integer, t as Object) as Bool
         else if job.phase = "clear" then
             slice = job.slices[job.slice]
             while job.pos < slice.Count()
-                ' Lower case: the filter sets it as item.nxFilter, which on a
-                ' TV is the key "nxfilter" in an item read back with
-                ' ParseJson (a case-sensitive AA there), and Delete("nxFilter")
-                ' leaves that one in place (43S45, Roku OS 16.0.4).
-                job.items[slice[job.pos]].Delete("nxfilter")
+                NxFilterForget(job.items[slice[job.pos]])
                 job.pos = job.pos + 1
                 if (job.pos mod 256) = 0 and t.TotalMilliseconds() >= budgetMs then return false
             end while
