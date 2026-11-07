@@ -539,6 +539,32 @@ fields, so the two land together. The Apple TV (`EmbyAPIService.swift:218`, `Jel
 (`MediaBrowserLibrary.kt:200`, PR #151) send the same list and are not changed here. Not run against a real Emby; the
 Jellyfin side relies on #204's 12.2.0 measurement and on Jellyfin's Fields binder skipping a name it does not know.
 
+## 2026-11-05 (Roku: a deep link while the power-loss seed's guide is up waits for the full guide, #203)
+
+**Why.** #203: after a power loss the app opens on the seed's one-channel guide (#182), and `MainScene.onDeepLink`
+handed every deep link that arrived then straight to it. `GuideView.applyDeepLink` found no such channel there and
+returned without a word, so a link for any channel but the seed's was dropped. The link was lost when the full guide
+went up, too. A launch link already waited for the full guide.
+
+**Changed.**
+- `roku/source/guide/DeepLink.brs`: `NxDeepLinkWaits`. A link waits while the seed's guide is up and can't apply
+  it: any channel but the seed's own, or an item link. A link on a full guide, one for the seed's channel, and no
+  link at all don't wait. 8 cases in `roku/tests/DeepLinkTests.brs`.
+- `roku/components/MainScene.brs`: `onDeepLink` keeps such a link in `m.pendingLink`, and the guide gets it when the
+  full guide replaces the seed's.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin (17 channels; the seed was CH 3), with this branch on
+main `2b71559` and a scratch launch switch that deleted the `cachefs:` files and kept the registry. Times are from
+the launch:
+- A link for CH 14 at 2.3 s, and on a second launch at 16.0 s, waited with CH 3 still tuned. CH 14 tuned 0.5 s after the
+  full guide went up, at 24.4 s and 24.7 s.
+- A link for CH 7 after the guide was up tuned 0.2 s later.
+- A launch link for CH 14 kept the loading screen up, with no CH 3, until CH 14 tuned at 24.3 s.
+- A link for CH 3, the seed's own, went to the seed's guide at once.
+
+**Open.** A Plex sign-in, a stick, and a link that comes in while the seed's last airing runs out (the loading screen
+comes back, and the guide made then takes the link when it's created).
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
