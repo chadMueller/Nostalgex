@@ -281,9 +281,9 @@ const files = [
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
   // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs,
   // ScheduleDSTGoldenTests.brs, ScheduleParityGoldenTests.brs, ReportTests.brs
-  // (watch-cleanup-golden.json), StreamQualityTests.brs, Utf8RepairTests.brs and
-  // MediaBrowserTests.brs (jellyfin-library-golden.json) read them.
-  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "jellyfin-library-golden.json"].map((g) =>
+  // (watch-cleanup-golden.json), StreamQualityTests.brs, Utf8RepairTests.brs,
+  // WatershedGoldenTests.brs and MediaBrowserTests.brs (jellyfin-library-golden.json) read them.
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;

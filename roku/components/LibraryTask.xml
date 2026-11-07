@@ -74,6 +74,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/Lineup.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideSchedule.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/ColdBootSeed.brs" />
   <script type="text/brightscript" uri="pkg:/source/franchise/FranchiseBuilder.brs" />
   <script type="text/brightscript" uri="pkg:/source/franchise/FranchiseUnicode.brs" />

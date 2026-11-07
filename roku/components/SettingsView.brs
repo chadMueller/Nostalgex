@@ -240,6 +240,9 @@ sub buildRows()
             end for
         end if
     end if
+    ' WATERSHED goes fourth in CHANNELS & BUNDLES once the rail is in (#188);
+    ' until then, after MY COLLECTIONS (#190).
+    m.rows.Push({ kind: "watershed" })
     m.rows.Push({ kind: "version", text: NxVersionLabel() })
 end sub
 
@@ -685,6 +688,15 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = "0xFFE500FF"
         end if
+    else if row.kind = "watershed" then
+        label = "WATERSHED"
+        detail = "18 and R-rated titles wait until 9 PM"
+        state = "OFF"
+        stateColor = "0xFFFFFF59"
+        if NxWatershedOn() then
+            state = "ON"
+            stateColor = "0xFFE500FF"
+        end if
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
         label = "GUIDE TEXT SIZE"
@@ -913,6 +925,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             render()
         else if row.kind = "retro" then
             NxSaveRetroMode(not NxRetroMode())
+            render()
+        else if row.kind = "watershed" then
+            ' The library task reads it on its next re-check, which closing
+            ' Settings asks for at once.
+            NxSaveWatershed(not NxWatershedOn())
+            print "settings: watershed "; NxWatershedOn()
             render()
         else if row.kind = "guideText" then
             NxSaveGuideTextLarge(not NxGuideTextLarge())

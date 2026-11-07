@@ -273,6 +273,18 @@ sub onGuide()
         if t >= m.playing.endSec and not NxAiringEnded(m.playing, t, m.video.state) then same = true
         ' So does a deep-linked item, which no channel airs.
         if m.playing.linked = true then same = true
+        ' And a programme playing when the WATERSHED gate opened or closed (the
+        ' switch, 9 PM, midnight): it finishes, then the card or the next
+        ' programme, as on the Apple TV and the web tuner.
+        ' It stays kept through later refreshes (the next hour's), not only this one.
+        if tunedId <> invalid and t < m.playing.endSec then
+            was = invalid
+            for each p in previous
+                if p.id = tunedId then was = p
+            end for
+            if was <> invalid and (was.watershed = true) <> (m.channels[m.tuned].watershed = true) then m.playing.gateKept = true
+            if m.playing.gateKept = true then same = true
+        end if
     end if
     ' An item link being looked up starts its own.
     if not same and not m.stopped and m.itemTask = invalid then tune(m.tuned)
@@ -470,6 +482,15 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
             end if
         end if
     end for
+
+    ' A channel WATERSHED alone has emptied says when it comes back, dim, in
+    ' place of its airings (ChannelGuideView's watershedRowPlaceholder).
+    if ch.held = true then
+        x = m.colX + 1
+        row.AppendChild(newRect(x, 0, 1920 - x, 80, "0xFFFFFF05"))
+        row.AppendChild(newRect(x, 0, 1, 80, "0xFFFFFF1F"))
+        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.title, "0xFFFFFF66", x + 14, m.guideText.titleY, 1920 - x - 28))
+    end if
 
     ' Channel column, drawn over the programs' left edge; the row's stripe or
     ' focus fill runs through it, as on the Apple TV.
@@ -882,6 +903,13 @@ sub startTune(idx as Integer)
         ' The seed's last airing has ended and the library is still loading:
         ' the loading screen, not a black one (#155).
         if m.seeded then m.top.seedEnded = true
+        ' WATERSHED emptied the channel: its card, which counts as no failure
+        ' and stays until the gate lifts and the guide retunes (AppState's
+        ' .watershedHold).
+        if ch.held = true then
+            print "player: nothing airs, WATERSHED holds channel "; ch.id
+            showCard(NxWatershedCard())
+        end if
         return
     end if
     stream = NxStreamContent(b, offset&, rung)
@@ -1361,6 +1389,7 @@ end sub
 sub showCard(card as Object)
     accent = "0xFFB020"
     if not card.serverSide then accent = "0xFF2244"
+    if card.accent <> invalid then accent = card.accent
     m.card = card
     m.top.FindNode("failHead").text = card.headline
     m.top.FindNode("failHead").color = accent + "FF"
@@ -2294,6 +2323,8 @@ end sub
 
 sub onSettingsResult()
     result = m.settings.result
+    ' A WATERSHED switch: the library task's re-check now, not in 30 s.
+    m.top.reschedule = true
     for each id in m.settings.callFunc("buildingIds", invalid)
         m.building[id] = true
     end for
