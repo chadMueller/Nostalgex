@@ -378,6 +378,23 @@ build, in 40 s, 9 tunes and four cards, each "1 in a row" up to 4, and the
 fifth at 42 s stopped the channel with its card up, nothing tried in the
 next 29 s. Jellyfin and Emby go another way (the stream ends unplayed, and
 the server's answer is read as a short file's end), not changed here.
+An end the server answers for after the start failed (issue #184's
+Jellyfin and Emby way, 2026-11-04). Their server stream can end unplayed,
+so the server is asked; the player then ends again (an error), which
+`failAttempt` couldn't act on with the probe under way, and the server's
+200 was read as a short file's end, so the next airing started fresh.
+`failAttempt` now marks the probe (`failedWhileAsking`), and
+`NxProbeAnswerAction` makes such an answer a failed start: the next rung,
+or the card. Measured on the 43S45 against the lab Emby as `nxlab`, with
+a scratch launch switch that broke the player's copy of every stream of
+channel 7 and left the probe's: main, in 40 s, 106 tunes and 53
+hand-overs, no card, 26 of them this way and 27 the Plex way (#199). This
+change alone: every end the server answered went on down the ladder
+instead, and the 1080p stream's failure then handed over the Plex way (41
+in 40 s). With #199 as well, on Emby: 12 tunes and five cards, the fifth
+at 31 s, then nothing tuned in the next 10 s. The cards said "Your server
+wouldn't start this one": the 1080p stream's first segment answered 500.
+On the lab Jellyfin: five cards in 41 s.
 
 **A stream that starves after its picture** (issue #59, after upstream's
 `PlaybackStarvation` and `handleStarvation`). Once a start has played, the
