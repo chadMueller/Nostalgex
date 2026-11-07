@@ -10,6 +10,9 @@ struct PlexAPIService: MediaBackend {
     /// Carries playback reports (timeline, scrobble, Continue Watching cleanup). Tests
     /// replace it with a recorder.
     var reportTransport: any ReportTransport = URLSessionReportTransport.shared
+    /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
+    let scanSkips = ScanSkipCounter()
+    var skippedNoRuntime: Int { scanSkips.count }
 
     /// URLSession with timeout configured for Plex API calls
     private static let session: URLSession = {
@@ -205,6 +208,7 @@ struct PlexAPIService: MediaBackend {
     // `LoadProgressEvent` / `LoadProgress` now live in MediaBackend.swift (shared by all backends).
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        scanSkips.reset()
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
         // handful of rows, so its duration is essentially pure round-trip latency.
@@ -223,6 +227,7 @@ struct PlexAPIService: MediaBackend {
         print("[Plex90] LINK: probe \(String(format: "%.2f", probeSeconds))s -> \(isSlowLink ? "slow" : "normal"), page size \(pageSize)")
 
         var allItems: [PlexMediaItem] = []
+        var failures = SectionFailures(backend: "Plex90")
         for (i, section) in sections.enumerated() {
             progress?(LoadProgressEvent(
                 sectionIndex: i,
@@ -254,6 +259,8 @@ struct PlexAPIService: MediaBackend {
                 if Task.isCancelled, !allItems.isEmpty {
                     throw LibraryScanInterrupted(partialItems: allItems)
                 }
+                // A section that fails for good costs that section, not the scan.
+                if failures.absorb(error, section: section.title) { continue }
                 throw error
             }
             allItems.append(contentsOf: items)
@@ -265,6 +272,7 @@ struct PlexAPIService: MediaBackend {
                 throw LibraryScanInterrupted(partialItems: allItems)
             }
         }
+        try failures.finish(items: allItems)
         return allItems
     }
 
@@ -337,6 +345,7 @@ struct PlexAPIService: MediaBackend {
             // Show list pages are small (one entry per show); episodes come from a single
             // bulk sweep below.
             let shows = try await fetchSectionItemsPaged(section, pageSize: pageSize)
+            let skipsBeforeBulk = scanSkips.count
             let bulk = try await fetchEpisodesBulk(
                 section: section,
                 shows: shows,
@@ -347,6 +356,9 @@ struct PlexAPIService: MediaBackend {
             // per-show crawl rather than silently reporting an empty TV library.
             if bulk.isEmpty, !shows.isEmpty {
                 print("[Plex90] BULK EPISODES: section '\(section.title)' returned 0 — falling back to per-show fetch")
+                // The bulk pass may have dropped every episode for its runtime; the crawl
+                // reads the same ones again, so count them once.
+                scanSkips.rewind(to: skipsBeforeBulk)
                 return try await fetchEpisodesPerShow(from: shows, onBatch: onShowBatch)
             }
             return bulk
@@ -444,7 +456,7 @@ struct PlexAPIService: MediaBackend {
     /// Shared by the bulk sweep and the per-show fallback so both produce identical items.
     private func makeEpisodeItem(_ ep: PlexRawItem, show: PlexRawItem) -> PlexMediaItem? {
         let durationMin = (ep.duration ?? 0) / 60000
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         let s = ep.parentIndex.map { "S\(String(format: "%02d", $0))" } ?? ""
         let e = ep.index.map { "E\(String(format: "%02d", $0))" } ?? ""
         let media = ep.bestMedia
@@ -500,10 +512,10 @@ struct PlexAPIService: MediaBackend {
 
     private func fetchShowEpisodes(_ show: PlexRawItem) async throws -> [PlexMediaItem] {
         do {
-            guard let req = request(path: "/library/metadata/\(show.ratingKey)/allLeaves") else { return [] }
-            let (data, response) = try await dataWithRetry(req)
-            let episodes = try Self.decodePlexJSONResponse(SectionItemsResponse.self, data: data, response: response)
-                .MediaContainer.Metadata ?? []
+            let episodes = try await fetchAllPages(path: "/library/metadata/\(show.ratingKey)/allLeaves") { data, response in
+                let c = try Self.decodePlexJSONResponse(SectionItemsResponse.self, data: data, response: response).MediaContainer
+                return (c.Metadata ?? [], c.size, c.totalSize)
+            }
             return episodes.compactMap { makeEpisodeItem($0, show: show) }
         } catch {
             return [] // skip shows that fail individually
@@ -512,7 +524,7 @@ struct PlexAPIService: MediaBackend {
 
     func parseMovieItem(_ item: PlexRawItem, isMusicSection: Bool) -> PlexMediaItem? {
         let durationMin = (item.duration ?? 0) / 60000
-        guard durationMin > 0 else { return nil }
+        guard durationMin > 0 else { scanSkips.add(); return nil }
         var genres = (item.Genre ?? []).map(\.tag)
         if isMusicSection && !genres.contains(where: { $0.lowercased().contains("music") }) {
             genres.append("Music Video")
@@ -606,26 +618,67 @@ struct PlexAPIService: MediaBackend {
 
     // MARK: - Collections
 
-    /// Fetch all collections for a given library section
+    /// Fetch all collections for a given library section, every page of them.
     func loadCollections(sectionKey: String) async throws -> [PlexCollection] {
-        guard let req = request(path: "/library/sections/\(sectionKey)/collections") else {
-            throw APIError.invalidResponse
+        try await fetchAllPages(path: "/library/sections/\(sectionKey)/collections") { data, response in
+            let c = try Self.decodePlexJSONResponse(CollectionsResponse.self, data: data, response: response).MediaContainer
+            return (c.Metadata ?? [], c.size, c.totalSize)
         }
-        let (data, response) = try await Self.session.data(for: req)
-        let collections = try Self.decodePlexJSONResponse(CollectionsResponse.self, data: data, response: response)
-            .MediaContainer.Metadata ?? []
-        return collections
     }
 
-    /// Fetch item ratingKeys belonging to a collection
+    /// Fetch item ratingKeys belonging to a collection, every page of them.
     func loadCollectionItems(collectionKey: String) async throws -> [String] {
-        guard let req = request(path: "/library/collections/\(collectionKey)/children") else {
-            throw APIError.invalidResponse
+        let items = try await fetchAllPages(path: "/library/collections/\(collectionKey)/children") { data, response in
+            let c = try Self.decodePlexJSONResponse(SectionItemsResponse.self, data: data, response: response).MediaContainer
+            return (c.Metadata ?? [], c.size, c.totalSize)
         }
-        let (data, response) = try await Self.session.data(for: req)
-        let items = try Self.decodePlexJSONResponse(SectionItemsResponse.self, data: data, response: response)
-            .MediaContainer.Metadata ?? []
         return items.map(\.ratingKey)
+    }
+
+    /// Page size for the list endpoints that are not a section's items: a section's
+    /// collections, a collection's children, a show's episodes.
+    private static let listPageSize = 300
+    /// A ceiling on pages for one list, so a server that never says it is done cannot loop us.
+    private static let maxListPages = 5_000
+
+    /// Reads a Plex list endpoint a page at a time (`X-Plex-Container-Start` / `-Size`, as
+    /// the section item fetch does). Plex logs "Missing X-Plex-Container-Size header, will
+    /// fail with status 400 in the future" for the bare request (N-038), and a single big
+    /// size would cut off a long list at whatever the server allows, so it pages until the
+    /// server's `totalSize` is read, or until a short page when it gives none.
+    ///
+    /// - A page moves on by the rows the server says it holds (`size`), so a server that
+    ///   sends fewer than asked, or a row that failed to decode, neither skips nor repeats.
+    /// - A response with MORE rows than asked came from a server that ignores paging and sent
+    ///   everything: that is the whole list.
+    private func fetchAllPages<Row>(
+        path: String,
+        pageSize: Int = PlexAPIService.listPageSize,
+        decode: (Data, URLResponse) throws -> (rows: [Row], size: Int?, totalSize: Int?)
+    ) async throws -> [Row] {
+        var all: [Row] = []
+        var start = 0
+        var consumed = 0
+        let separator = path.contains("?") ? "&" : "?"
+        for _ in 0 ..< Self.maxListPages {
+            guard let req = request(path: "\(path)\(separator)X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)") else {
+                throw APIError.invalidResponse
+            }
+            let (data, response) = try await dataWithRetry(req)
+            let (rows, size, totalSize) = try decode(data, response)
+            all.append(contentsOf: rows)
+            let returned = size ?? rows.count
+            consumed += returned
+            if returned == 0 { break }
+            if returned > pageSize { break }
+            if let totalSize {
+                if consumed >= totalSize { break }
+            } else if returned < pageSize {
+                break
+            }
+            start += returned
+        }
+        return all
     }
 
     // MARK: - Stream URLs
@@ -643,8 +696,12 @@ struct PlexAPIService: MediaBackend {
     /// still shows a private address in the host. A private/link-local address means there
     /// is effectively unlimited bandwidth and no reason to cap direct play; anything else
     /// (public address or relay) is treated as remote.
-    var isLikelyLocalServer: Bool {
-        guard let host = URL(string: serverURL)?.host?.lowercased() else { return false }
+    var isLikelyLocalServer: Bool { Self.isLikelyLocalAddress(serverURL) }
+
+    /// The same test for any server address (the load error message names the network only
+    /// when the server is on it).
+    static func isLikelyLocalAddress(_ address: String) -> Bool {
+        guard let host = URL(string: address)?.host?.lowercased() else { return false }
         if host == "localhost" || host.hasSuffix(".local") { return true }
         // plex.direct encodes the address with dashes: 192-168-1-50.abc.plex.direct
         let normalized = host.replacingOccurrences(of: "-", with: ".")
@@ -1674,14 +1731,18 @@ private struct SectionItemsResponse: Decodable {
         /// Total items in the section across all pages (Plex sets this on paged
         /// responses). Absent on endpoints that don't paginate (e.g. `/allLeaves`).
         let totalSize: Int?
+        /// Rows in THIS response (Plex sets it on every list response). Moves a page forward
+        /// by what the server sent, not by what was asked for.
+        let size: Int?
         let Metadata: [PlexRawItem]?
 
-        private enum CodingKeys: String, CodingKey { case totalSize, Metadata }
+        private enum CodingKeys: String, CodingKey { case totalSize, size, Metadata }
 
         /// An item that fails to decode is skipped and logged; the page still loads.
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             totalSize = try c.decodeIfPresent(Int.self, forKey: .totalSize)
+            size = try c.decodeIfPresent(Int.self, forKey: .size)
             Metadata = try c.decodeIfPresent([PlexSkippableItem<PlexRawItem>].self, forKey: .Metadata)?.compactMap(\.value)
         }
     }
@@ -1689,7 +1750,11 @@ private struct SectionItemsResponse: Decodable {
 
 private struct CollectionsResponse: Decodable {
     let MediaContainer: Container
-    struct Container: Decodable { let Metadata: [PlexCollection]? }
+    struct Container: Decodable {
+        let totalSize: Int?
+        let size: Int?
+        let Metadata: [PlexCollection]?
+    }
 }
 
 struct PlexCollection: Decodable {

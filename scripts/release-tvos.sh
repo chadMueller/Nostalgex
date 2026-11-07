@@ -52,6 +52,15 @@ for f in channels.json channels-memberships.json; do
 done
 echo "    bundled $(basename "$APP"), channel data present"
 
+# The keys come from the gitignored Nostalgex/Secrets.xcconfig. A checkout without it (a fresh
+# worktree, a clone) builds and archives fine with the keys empty and the enrichment layer
+# silently off, so confirm they landed. Never print them.
+for k in SupabaseURL SupabaseAnonKey TelemetryDeckAppID; do
+  v=$(/usr/libexec/PlistBuddy -c "Print :$k" "$APP/Info.plist" 2>/dev/null || true)
+  [ -n "$v" ] || { echo "EMPTY $k in the archive's Info.plist: is Nostalgex/Secrets.xcconfig missing?"; exit 1; }
+done
+echo "    API keys present in Info.plist"
+
 echo "==> Exporting"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" \

@@ -26,7 +26,7 @@ and already pinned to the Apple TV.
 | `LibraryLoadStallWatch.swift` (`LibraryLoadStallDetector`, `withLibraryLoadStallWatch`), `stallBlock` (`Plex90App.swift`) | `source/util/LoadStall.brs`, the watch in `components/MainScene.brs`, `NxServerWait` in `source/plex/PlexApi.brs` | ported (issue #61; differences in [When the server goes quiet](#when-the-server-goes-quiet)); cases in `tests/StallTests.brs`; measured on a 43S45 against Emby; the screensaver held off while loading and a paused app's time left out (not in upstream's watch) |
 | `LaunchGuard.swift` (unfinished loads), `startOverButton` and `UnfinishedLoadsView` (`Plex90App.swift`), `AppState.startOver()` (#150) | `source/util/LaunchGuard.brs`, START OVER in `components/LoadingView.*`, LOADING DIDN'T FINISH and the keys in `components/MainScene.brs` | ported; the reinstall check isn't needed, since deleting the channel cleared its registry on a TV (differences in [A way out of a load](#a-way-out-of-a-load)); cases in `tests/LaunchGuardTests.brs`; pressed on a 43S45 against Emby |
 | Settings as a rail and a detail pane (N-028, `Views/Settings/`: `SettingsRailView`, `SettingsContainerView`, `SettingsCategory`, the five tabs' views); `toggleBundle`, `rebuildLineupAfterBundleChange` (`AppState+Channels.swift`) | `components/SettingsView.*`, `source/guide/SettingsRail.brs`, `rebuildForBundles` in `components/LibraryTask.brs` | ported ([Settings as a rail and a pane](#settings-as-a-rail-and-a-pane)); no rating or tips, the QR card instead. SUBTITLE LANGUAGE and AUDIO LANGUAGE (#62) open their list in place, as MY COLLECTIONS does, where upstream opens a picker sheet. A package switch builds only its own channels, behind Settings; its pools matched a full rebuild's on the 43S45 |
-| RESCAN LIBRARY under SERVERS & ACCOUNTS (`Views/Settings/SettingsServersView.swift`), `rescanLibrary` (`AppState+Auth.swift`), `LibraryDiagnostics.summary`, `PlaybackDiagnostics` (issue #66) | `components/SettingsView.*`, `onRescanRequest` in `components/MainScene.brs`, `source/util/RescanInfo.brs`, `source/util/PlaybackVerdict.brs` | ported; the row reads every server again behind the guide, as the launch refresh does, so the guide changes only if the pools did (upstream also clears its day schedules). The summary counts are taken when a load ends and kept with the sign-in; the last verdict is a given-up programme's only (upstream also logs its fallbacks). Cases in `tests/RescanTests.brs`, passing on device; pressed on a Streaming Stick Plus against Emby |
+| RESCAN LIBRARY under SERVERS & ACCOUNTS (`Views/Settings/SettingsServersView.swift`), `rescanLibrary` (`AppState+Auth.swift`), `LibraryDiagnostics.summary`, `PlaybackDiagnostics` (issue #66) | `components/SettingsView.*`, `onRescanRequest` in `components/MainScene.brs`, `source/util/RescanInfo.brs`, `source/util/PlaybackVerdict.brs` | ported; the row reads every server again behind the guide, as the launch refresh does, so the guide changes only if the pools did (upstream also clears its day schedules). The summary counts are taken when a load ends and kept with the sign-in; the last verdict is a given-up programme's only (upstream also logs its fallbacks). Cases in `tests/RescanTests.brs`, passing on device; pressed on a Streaming Stick Plus against Emby. **The library line (#207)**, `LibraryDiagnostics.coverage` and `coverageLine` on `appletv/library-coverage-counts`, `scripts/nostalgex-library-coverage.js` on the web: `source/util/LibraryCoverage.brs` counts it behind the guide (`startCoverage` and `reportCoverage` in `components/LibraryTask.brs`), `NxCoverageLine` in `source/util/RescanInfo.brs` words it, and the loaders count what their runtime guards drop (`NxScanSkipAdd`). The guide build filters only the switched-on packages' channels, so the count reuses those results and filters the rest itself, in steps between the task's messages; the Apple TV runs it off the main thread. Over 30,000 titles it isn't counted, as there. The count is saved with the library counts, so it shows after a restart until the next load's own is ready; the skipped number is also saved per server with the snapshot, so a Plex server read from its save keeps it. The console has the one COVERAGE line, titles included: the Roku keeps no separate device log. Cases in `tests/CoverageTests.brs` (parity vectors from `tests/gen-coverage.mjs`); pressed on a 43" TCL against Jellyfin |
 | `PlayerView`, `MiniChannelStrip`, `NowPlayingPanel`, `SleepGracePrompt`, `SleepTimerLogic` | `components/GuideView.brs`, `components/MiniStripView.*`, `components/NowPlayingView.*`, `source/guide/SleepTimer.brs` | ported (differences below); sleep-timer cases in `tests/SleepTimerTests.brs` |
 | The Now Playing panel's poster: `posterURL(for:)` (`AppState+Playback.swift`), `PlexAPIService.thumbnailURL` (issue #76) | `source/plex/PlexPoster.brs`, `components/PosterTask.*`, `components/NowPlayingView.*` | ported, Plex only as upstream: 150 by 225 left of the info zone, from the server's thumbnail transcode at 300 wide. The request goes through `NxPlexTransfer`, so it follows every Plex request's address rule (HTTPS, or plain HTTP to a home-network address), with the token in a header, not the URL; the file goes in `tmp:`; the saved library still keeps no artwork, so an item read back from it asks for its own `/thumb`. Cases in `tests/PosterTests.brs`, passing on device. On a stick signed in to Emby the panel shows no poster, as upstream; a Plex poster hasn't been seen on a TV yet |
 | `plex-tuner.html` `scanOnePlexServer` and helpers; `parseMusicVideoFromPlex` | `source/plex/PlexLibrary.brs` | ported; checked live against upstream (below) |
@@ -97,6 +97,14 @@ pools and is asked to re-check schedules every 30 seconds, as upstream's
 `rebuildAllSchedules` runs, so time restrictions and day changes re-pack as
 they would upstream; it schedules again only when the local hour or day has
 moved, the only inputs besides the pools.
+
+Plex's collection lists are read in windows (`NxPlexPaged`, upstream's
+`fetchPlexPaged`, #189): the section list and each section's collections 300
+at a time, each collection's children 120 at a time. Plex 1.43.5 logs a
+warning for a `/collections` or `/children` read with no size, and for a
+`/children` size over 120, saying both will fail with status 400 in the
+future. A sized `/children`
+answer is slower, about 4 s instead of 2 s for 69 collections on the 55R617.
 
 A launch whose servers all come from their saves reuses the last build's
 filter results (kept in the saved pools file), as a package switch does,
@@ -413,6 +421,38 @@ clips, on this build:
   clock stopped; no BrightScript was running). It came back after Emby was
   started again, and didn't recur in the later runs.
 
+A server stream whose retry errors too (issue #184, 2026-11-04). After the
+retry's error the server is asked (`failAttempt`), and Roku's player says
+`finished` right after. That `finished` used to hand over to the next
+airing, a fresh start with its own retry, so the answer was dropped and a
+stream the server answers for but the player can't play went from
+programme to programme with no card. A `finished` while the server is
+asked after an error (`probingAfterError`) is now ignored, as one after the
+card is. Measured on the 43S45 against Plex (5,470 items), with a scratch
+launch switch that broke the player's copy of channel 2's server stream
+and left the probe's: main, in 40 s, 21 tunes, 10 hand-overs, no card; this
+build, in 40 s, 9 tunes and four cards, each "1 in a row" up to 4, and the
+fifth at 42 s stopped the channel with its card up, nothing tried in the
+next 29 s. Jellyfin and Emby go another way (the stream ends unplayed, and
+the server's answer is read as a short file's end), not changed here.
+An end the server answers for after the start failed (issue #184's
+Jellyfin and Emby way, 2026-11-04). Their server stream can end unplayed,
+so the server is asked; the player then ends again (an error), which
+`failAttempt` couldn't act on with the probe under way, and the server's
+200 was read as a short file's end, so the next airing started fresh.
+`failAttempt` now marks the probe (`failedWhileAsking`), and
+`NxProbeAnswerAction` makes such an answer a failed start: the next rung,
+or the card. Measured on the 43S45 against the lab Emby as `nxlab`, with
+a scratch launch switch that broke the player's copy of every stream of
+channel 7 and left the probe's: main, in 40 s, 106 tunes and 53
+hand-overs, no card, 26 of them this way and 27 the Plex way (#199). This
+change alone: every end the server answered went on down the ladder
+instead, and the 1080p stream's failure then handed over the Plex way (41
+in 40 s). With #199 as well, on Emby: 12 tunes and five cards, the fifth
+at 31 s, then nothing tuned in the next 10 s. The cards said "Your server
+wouldn't start this one": the 1080p stream's first segment answered 500.
+On the lab Jellyfin: five cards in 41 s.
+
 **A stream that starves after its picture** (issue #59, after upstream's
 `PlaybackStarvation` and `handleStarvation`). Once a start has played, the
 playhead is read once a second: under 0.25 s of progress for 3 s is a stall,
@@ -570,7 +610,11 @@ LaunchGuard marker stays. When that load's guide goes up, the tuned airing
 carries on if the guide airs the same programme on the channel
 (`GuideView.onGuide`'s refresh check) and is retuned otherwise. Until then SETTINGS and the sidebar say
 STILL LOADING YOUR LIBRARY, since the seed has no packages to list, and a
-launch deep link waits for the full guide as before. When the seed's last
+launch deep link waits for the full guide as before. So does a deep link that
+arrives while the seed's guide is up and names any channel but the seed's own
+(#203, `NxDeepLinkWaits`): MainScene keeps it and hands it to the full guide
+when that replaces the seed's. A link for the seed's own channel goes to the
+seed's guide at once. When the seed's last
 airing ends first, the loading screen comes back; a load that fails takes
 the seed's guide down and shows its error. Sign-out clears the seed with the
 other caches.
@@ -592,6 +636,18 @@ and kept the registry:
 - With the load failing 15 s after the seed went up, the error screen
   replaced the seed's guide and the player closed.
 - OK on SETTINGS showed STILL LOADING YOUR LIBRARY.
+
+Deep links on the seed's guide (#203), pressed on the 43S45 (OS 16.0.4,
+2026-11-05) with this work on main `2b71559`, signed in to the lab Jellyfin
+(17 channels, the seed CH 3), with the same wipe switch. Times from the
+launch:
+- A link for CH 14 sent at 2.3 s and again, on a second launch, at 16.0 s:
+  "waiting for the full guide", CH 3 stayed tuned, and CH 14 tuned 0.5 s after
+  the full guide went up (24.4 s and 24.7 s).
+- A link for CH 7 after the full guide was up tuned it 0.2 s later.
+- A launch link for CH 14: the loading screen, no CH 3, and CH 14 at 24.3 s.
+- A link for CH 3, the seed's own, went to the seed's guide at once, with no
+  wait and no retune.
 
 Not tried: a real power cut, which also brings the network up from cold; a
 Plex sign-in; the hourly re-save on a TV left on; Left for the sidebar, and a

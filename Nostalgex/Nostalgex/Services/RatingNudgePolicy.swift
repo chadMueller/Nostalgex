@@ -13,8 +13,18 @@ enum RatingNudgePolicy {
     static let minimumSessionSeconds: Double = 10 * 60
     /// Qualifying sessions needed, cumulative across launches.
     static let requiredSessions = 3
-    /// Untouched, the banner leaves on its own after this long.
-    static let autoDismissSeconds: Double = 8
+    /// Untouched, the banner leaves on its own after this long: 8 s, or 12 s when the
+    /// scroll hint is on, since there is a second line to read.
+    static var autoDismissSeconds: Double { autoDismissSeconds(hintShown: showsScrollHint) }
+    static func autoDismissSeconds(hintShown: Bool) -> Double { hintShown ? 12 : 8 }
+
+    /// A second line on the banner and under the Settings RATE tile. On: tested on the
+    /// living room Apple TV 2026-11-04, none of the write-review links (`AppStoreLink
+    /// .RateLinkVariant` b, c, d) lands on the stars; every one opens the product page
+    /// with focus on the download button and the stars below the fold. The line says so,
+    /// and the banner stays up 12 s instead of 8 to be read.
+    static let showsScrollHint = true
+    static let scrollHint = "Then scroll down to the stars"
 
     /// Debug launch argument that skips the counters and gates. The banner still only
     /// appears on the exit from fullscreen to the guide.

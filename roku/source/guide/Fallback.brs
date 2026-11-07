@@ -53,7 +53,12 @@ end function
 '     "finished" right after an error, while the retry waits or the card is
 '     up; that isn't the file's end, and handing over on it started the
 '     next film from its beginning, skipping the retry, the card and the
-'     count (CH 12, Soldier, a server stream joined 54 minutes in).
+'     count (CH 12, Soldier, a server stream joined 54 minutes in). The
+'     same while the server is asked after an error (probingAfterError,
+'     failAttempt's probe): handing over there started the next airing as
+'     a fresh start, with its own retry, so a stream the server answers
+'     for but the player can't play went from programme to programme
+'     every few seconds, never reaching the card or the five-in-a-row stop.
 '   "error": a second end in a row without playing is a failed start.
 '   "probe": a server stream that ended without playing: ask the server
 '     first, as a file gone from disk ends this way too.
@@ -62,6 +67,7 @@ end function
 function NxFinishedAction(ctx as Object) as Object
     ends = ctx.unplayedEnds
     if ctx.attemptRunning <> true then return { action: "ignore", unplayedEnds: ends }
+    if ctx.probingAfterError = true then return { action: "ignore", unplayedEnds: ends }
     if ctx.sawPlaying = true then return { action: "handover", unplayedEnds: ends }
     ends = ends + 1
     if ends >= 2 then return { action: "error", unplayedEnds: ends }
@@ -217,6 +223,31 @@ function NxProbeVerdict(code as Integer) as String
     if code >= 400 then return "refused"
     if code <= 0 then return "unreachable"
     return "answered"
+end function
+
+' What the server's answer to a probe leads to. p is GuideView's probeFor:
+' finished (asked because the stream ended unplayed), nxt (the rung to try
+' next, or invalid) and failedWhileAsking (the start failed while the server
+' was asked: failAttempt can't act then, a probe being under way). Returns:
+'   "handover": an end, and the server answered: a join past the end of a
+'     file shorter than its slot, so the next airing.
+'   "fail": an end and an answer, but the start failed while it was asked.
+'     That end was the player's, not the file's: Jellyfin and Emby's server
+'     stream ended unplayed, ended again (an error, NxFinishedAction), and
+'     taking the 200 as a short file's end handed over to the next airing,
+'     a fresh start, so a stream the server answers for but the player
+'     can't play went between two airings about once a second and never
+'     reached the card (#184). The ladder goes on from the failed start.
+'   "giveup": refused or unreachable, or nothing left to try: the card.
+'   "stepdown": the next rung, p.nxt.
+function NxProbeAnswerAction(p as Object, verdict as String) as String
+    if verdict <> "answered" then return "giveup"
+    if p.finished = true then
+        if p.failedWhileAsking = true then return "fail"
+        return "handover"
+    end if
+    if p.nxt = invalid then return "giveup"
+    return "stepdown"
 end function
 
 ' Whether a URL is an HLS playlist, by its path.

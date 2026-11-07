@@ -381,7 +381,13 @@ function rowHeight(row as Object) as Integer
     end if
     if row.kind = "subheader" or row.kind = "info" then return 44
     if row.kind = "support" then return 184
-    if row.kind = "rescan" then return 126
+    ' Two lines under its detail, and a third when the library line (#207)
+    ' and a playback failure are both there.
+    if row.kind = "rescan" then
+        n = NxRescanLines(NxLibraryHeld(), "", NxLastPlaybackVerdict(), 0).Count() - 1
+        if n < 2 then n = 2
+        return 74 + 26 * n
+    end if
     ' Upstream's subtitle in two lines.
     if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" then return 100
     return 74
@@ -741,8 +747,10 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         now& = CreateObject("roDateTime").AsSeconds()
         lines = NxRescanLines(NxLibraryHeld(), NxKindName(NxSignedInKind()), NxLastPlaybackVerdict(), now&)
         detail = lines[0]
-        extra = [lines[1]]
-        if lines.Count() > 2 then extra.Push(lines[2])
+        extra = []
+        for i = 1 to lines.Count() - 1
+            extra.Push(lines[i])
+        end for
         state = ""
         stateColor = m.accent + "FF"
         if m.top.rescanning then state = "UPDATING…"
