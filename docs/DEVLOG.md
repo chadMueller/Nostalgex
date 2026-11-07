@@ -13,23 +13,25 @@ know is in no tab and never shows, and #211 adds `watershed`; and the sound whil
 - `NxSettingsRowsInTab` (`source/guide/SettingsRail.brs`) picks one tab's rows from every tab's. `buildRows` ends in
   it, and `selectTab` now calls only it (`pickTab`), unless a list is open, which `NxSettingsKeyAction` folds before
   focus can reach the rail, so that rebuild is only a guard. `refreshRows` still rebuilds.
-- `watershed` is in the CHANNELS list now, before #211's row exists, so its tab doesn't depend on which of the two
-  lands first. On the Apple TV the switch is on the channels page. The rest of that merge is still by hand: #211's head
-  merged onto this one conflicts in `SettingsView.brs`, at `buildRows` (where the row goes) and `pressRow`.
+- WATERSHED, with #211 on main (merged in at `2d86f01`): its row is added at the end of CHANNELS & BUNDLES, after
+  MY COLLECTIONS and before SERVERS, with #211's draw and press branches. `watershed` was already in the CHANNELS list. #214's `rowHeight` block and its loop over the lines in
+  `drawRow` are kept.
 - Seven cases in `SettingsRailTests.brs` (69 there now).
 
 **The sound, read from the code.** `GuideView` mutes in `openSettings` and unmutes in `onSettingsResult`. SettingsView
 leaves only by setting `result` (`signOut` from its row, `rebuild` or `close` from `leave`), and `onSettingsResult` is
-the only place Settings is removed, with the unmute on the line after, so every way out unmutes. Not heard: the TV's volume stays at 0 for tests, and
-neither ECP nor the node tree reports `mute`.
+the only place Settings is removed, with the unmute two lines after, so every way out unmutes. Not heard: the TV's
+volume stays at 0 for tests, and neither ECP nor the node tree reports `mute`.
 
-**Pressed** on the 43S45 (OS 16.0.4), build `4a1a987` (test data), lab Emby as `nxtest`, with 120 three-film
-collections made on the test Emby for the run and deleted after it. The server sent 121 (with the one it had);
-the app listed 108, 12 folded into franchises, and OTHER COLLECTIONS showed 96 FOUND · 12 UNDER FRANCHISES.
+**Pressed** on the 43S45 (OS 16.0.4), build `2d86f01` (test data), lab Emby as `nxtest`, with 120 three-film
+collections made on the test Emby for the run and deleted after it. The server sent 121 (with the one it had); the app
+listed 108, 12 folded into franchises, and OTHER COLLECTIONS showed 96 FOUND · 12 UNDER FRANCHISES.
 - Rail presses, each timed from the ECP key to the new tab's title in the node tree (a tree read is about 0.14 s of
-  it): 0.19 to 0.63 s with OTHER COLLECTIONS folded, 0.15 to 0.31 s with its 96 rows open.
-- After those presses, a lab collection's row in CHANNELS & BUNDLES switched ON and OFF again. Back twice closed
-  Settings: SettingsView left the node tree, which only `onSettingsResult` does, and the guide took focus.
+  it): 0.16 to 0.62 s over 8 presses with OTHER COLLECTIONS folded, 0.16 to 0.34 s over 8 with its 96 rows open. The
+  fix alone (`4a1a987`, before #211 was merged in) gave 0.19 to 0.63 s and 0.15 to 0.31 s.
+- WATERSHED showed after OTHER COLLECTIONS in CHANNELS & BUNDLES and switched ON, then OFF.
+- After the rail presses, a lab collection's row switched ON and OFF again. Back twice closed Settings: SettingsView
+  left the node tree, which only `onSettingsResult` does, and the guide took focus.
 
 **Open.** Not measured: the old build's press time for comparison, a stick, a library of a few hundred franchises,
 the second half (#188's CHANNELS & BUNDLES link rows and pages).
