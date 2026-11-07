@@ -280,7 +280,11 @@ function NxPlexEpisodeItem(ep as Object, show as Object, showGenres as Object, s
     tmdbID = showTmdb
     if tmdbID = invalid then tmdbID = NxParseTmdbIdFromPlex(ep, true)
     durationMin = NxPlexMinutes(ep.duration)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
     media = NxPickBestVersion(ep.Media)
     partKey = invalid
     container = invalid
@@ -346,7 +350,11 @@ function NxPlexMovieItem(item as Object, section as Object, isMusicVideoSection 
     if isMusicVideoSection and not hasMusicGenre then genres.Push("Music Video")
 
     durationMin = NxPlexMinutes(item.duration)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
 
     ' A music-video library, or a short item tagged with a Music genre (the
     ' 10-minute cap keeps musicals and biopics out).

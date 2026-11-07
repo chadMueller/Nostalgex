@@ -424,6 +424,67 @@ Playlists library asked for `Movie` answered with the playlist. Measured on the 
 
 **Open.** Nothing on the Roku.
 
+## 2026-11-06 (Roku: RESCAN LIBRARY says how many titles are on a channel, on none, and skipped, #207)
+
+**Why.** #207, the Roku side of the Apple TV 1.0.30's library line and the web tuner's (2026-11-05 entry below):
+a viewer who misses a title on every channel can tell "no channel takes it" from "it never loaded".
+
+**Changed.**
+- `roku/source/util/LibraryCoverage.brs` (new): the count, from the web's `scripts/nostalgex-library-coverage.js`
+  and the Apple TV's definitions. The guide build filters only the switched-on packages' channels
+  (`NxPoolChannelIds`), so the count reuses their filter results and runs every other `channels.json` channel
+  itself, one server's titles at a time, dropping each slice's filter cache after it (I-065). It runs in steps of
+  about 100 ms between the library task's messages, so a package switch or the 30 s re-check is still answered
+  while it counts. A Dolby Vision profile 5 file the display can't show is on no channel, as the build has it. Over
+  30,000 titles it isn't counted, as on the Apple TV. `NxCoverageReport` writes the console's `COVERAGE:` line.
+- `roku/components/LibraryTask.brs`: `startCoverage` once the guide is handed over, `reportCoverage` when it is
+  done and after a package switch (a franchise or collection channel moves it; a package alone doesn't). The line
+  is saved in the `libraryHeld` record with the counts, for the load that made it.
+- The loaders count the movies and episodes their runtime guards drop (`NxScanSkipAdd` at the four
+  `durationMin <= 0` returns). The number is saved per server with the snapshot, so a Plex server read from its save
+  keeps it, and in `libraryHeld`, so it survives a restart and goes with SIGN OUT.
+- `roku/source/util/RescanInfo.brs`: `NxCoverageLine`, the line between the summary and "Last updated", and
+  `NxSaveLibraryCoverage`. `components/SettingsView.brs`: the row shows every line it has, and grows by one only
+  when the library line and a playback failure are both there.
+
+**Tests.** `roku/tests/gen-coverage.mjs` runs the web's `compute`, `formatLine` and `orphanReport` with `itemPasses`
+as `runLibraryCoverage` does, over the filter vectors' library (every second title) and every fourth real channel,
+under both filter clocks, in six cases: four `minItems` settings, two of them again with built collection and
+franchise pools. `roku/tests/CoverageTests.brs` (suite `coverage`, split in six off-device) checks each case's counts
+per kind, the first-25 list, the line and the console line, and every third case again in many steps with ten
+channels' results reused; that switching packages doesn't move the number and removing titles does; the wording; the
+row's lines; the Plex and Jellyfin/Emby skipped counts from saved answers (missing, 0, 30 s, 59.999 s dropped; 60 s
+kept; a music video counted with the movies); and, on a TV only, the saved record read back from the registry, a
+newer load's record replacing the count, and SIGN OUT clearing it.
+
+**Pressed** on the 43S45 (Roku OS 16.0.4) against our Jellyfin 12.2.0 as a user who sees every library:
+- Settings read `5,436 OF 5,492 ON CHANNELS · 56 ON NO CHANNEL (5 MOVIES, 51 EPISODES) · 2 SKIPPED (NO RUNTIME)`
+  after the app was closed and opened again. The two skipped are Lab clips of 599,990,000 ticks (59.999 s); the server
+  holds 5,494 movies, episodes and music videos.
+- **Parity:** the 5,492 titles the TV loaded, printed from a build with a dump not in this branch and run through
+  the web's `compute` with every `channels.json` channel, gave the same per kind (movies 799 of 804, episodes 4,633
+  of 4,684, music videos 4 of 4) and the same first 25 titles, byte for byte.
+- **Time:** 32.9 to 33.5 s over five loads, behind the guide, after the build had handed it over: 64 channels'
+  results reused, 78 filtered. The longest step was 106 to 161 ms, and the final tally 197 to 213 ms. Memory 26%
+  to 29% of the app's limit. The first build's longest step was 455 ms; checking the clock every 16 titles instead
+  of 128 made it 366 ms, and splitting the end of the pass (marking the hits, dropping the filter cache) into steps
+  of its own brought it down to the figures above.
+- **The filter cache's key:** on a TV an item read back with `ParseJson` is a case-sensitive AA, and the filter's
+  `item.nxFilter = ...` stores the key `nxfilter`, so `Delete("nxFilter")` leaves it (the test library's 309
+  titles all kept theirs). The count deletes `nxfilter`, which clears either kind.
+- **Remote:** a key reached the guide's handler 20 to 34 ms after the ECP press during the count (one at 77 ms, 12
+  presses) and 17 to 21 ms after it, on the build before the cache delete's case changed (a freshly scanned
+  library's items take either spelling).
+- **A package switch:** KIDZ ZONE off left 5,436 on channels and moved "on the channels in the guide now" from
+  4,138 to 3,882; on again, 4,138.
+
+**Not measured.** A library of about 11,800 titles (ours is 5,492; at this rate about 70 s on this TV), a stick,
+Plex on a TV (its skipped count is checked off-device only) and Emby on a TV. The Done when's
+`scripts/qa/library-coverage.mjs` and `appletv/library-coverage-counts` aren't on `main`; the parity check above
+used `scripts/nostalgex-library-coverage.js`, which is.
+
+**Open.** Settings open when the count lands shows the line on its next redraw (leaving and opening it again).
+
 ## 2026-11-05 (web tuner and Docker 1.0.14 prepared, not tagged)
 
 **Prepared.** Branch `web/release-1014`: `tunerVersion` 1.0.14 in `package.json`, the README headings and the Latest line
