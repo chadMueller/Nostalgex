@@ -67,6 +67,14 @@ function NxRunVersionTests() as Integer
     NxCheck(r, "saved key: saved before the format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|20261028|[""nostalgex""]|[]", cur)), "false")
     NxCheck(r, "saved key: another format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|g0|20261028|[""nostalgex""]|[]", cur)), "false")
     NxCheck(r, "saved key: its own format, not the library's", NxSavedFormat(), "g1")
+    day = "20261028"
+    off = NxSavedKey("1.0.7+bbbb", NxGuideKeyRest(day, ["nostalgex"], "[]", false))
+    on = NxSavedKey("1.0.7+bbbb", NxGuideKeyRest(day, ["nostalgex"], "[]", true))
+    NxCheck(r, "saved key: WATERSHED off adds nothing", off, cur)
+    NxCheck(r, "saved key: WATERSHED on is in it", on, cur + "|watershed")
+    NxCheck(r, "saved key: a guide saved with WATERSHED off doesn't show with it on", FormatJson(NxSavedKeyShowable(off, on)), "false")
+    NxCheck(r, "saved key: a guide saved with WATERSHED on doesn't show with it off", FormatJson(NxSavedKeyShowable(on, off)), "false")
+    NxCheck(r, "saved key: WATERSHED on, another build shows", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.6+aaaa", NxGuideKeyRest(day, ["nostalgex"], "[]", true)), on)), "true")
     NxCheck(r, "saved key: none saved", FormatJson(NxSavedKeyShowable(invalid, cur)), "false")
     NxCheck(r, "saved key: a current key with no parts", FormatJson(NxSavedKeyShowable("x", "x")), "false")
     print "version cases:"; r.pass; " passed,"; r.fail; " failed"

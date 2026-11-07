@@ -411,6 +411,7 @@ sub onLibraryStatus()
             m.guide = CreateObject("roSGNode", "GuideView")
             m.guide.ObserveField("action", "onGuideAction")
             m.guide.ObserveField("bundleRequest", "onBundleRequest")
+            m.guide.ObserveField("reschedule", "onScheduleTimer")
             m.guide.ObserveField("rescanRequest", "onRescanRequest")
             m.guide.ObserveField("seedEnded", "onSeedEnded")
             m.guide.libraryBusy = m.libraryBusy

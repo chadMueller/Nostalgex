@@ -256,6 +256,10 @@ sub buildRows()
         end if
     end if
 
+    ' WATERSHED (#190) ends CHANNELS & BUNDLES, after MY COLLECTIONS, as the
+    ' fourth of the Apple TV's channels sections.
+    add({ kind: "watershed" })
+
     add({ kind: "subheader", text: "SERVERS" }, "servers")
     for i = 0 to m.servers.Count() - 1
         add({ kind: "server", index: i })
@@ -788,6 +792,15 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "watershed" then
+        label = "WATERSHED"
+        detail = "18 and R-rated titles wait until 9 PM"
+        state = "OFF"
+        stateColor = "0xFFFFFF59"
+        if NxWatershedOn() then
+            state = "ON"
+            stateColor = "0xFFE500FF"
+        end if
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
         label = "GUIDE TEXT SIZE"
@@ -1081,6 +1094,12 @@ sub pressRow()
         render()
     else if row.kind = "retro" then
         NxSaveRetroMode(not NxRetroMode())
+        render()
+    else if row.kind = "watershed" then
+        ' The library task reads it on its next re-check, which closing
+        ' Settings asks for at once.
+        NxSaveWatershed(not NxWatershedOn())
+        print "settings: watershed "; NxWatershedOn()
         render()
     else if row.kind = "guideText" then
         NxSaveGuideTextLarge(not NxGuideTextLarge())

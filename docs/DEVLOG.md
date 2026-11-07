@@ -34,6 +34,39 @@ the app listed 108, 12 folded into franchises, and OTHER COLLECTIONS showed 96 F
 **Open.** Not measured: the old build's press time for comparison, a stick, a library of a few hundred franchises,
 the second half (#188's CHANNELS & BUNDLES link rows and pages).
 
+## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
+
+**Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
+was, because `NxGuideCacheKey` had no switch in it. With the switch turned on since, that guide aired R, NC-17 and
+TV-MA titles before 9 PM until the full build replaced it. The guide file is written only after a full load, so a
+switch in Settings reschedules the running app but leaves the file as it was.
+
+**Changed.** `NxGuideKeyRest` (`source/util/SavedKey.brs`) builds the key after the build, and adds `|watershed` when
+the switch is on. Off adds nothing, so a guide saved before the switch existed still shows on the first launch after
+an update. The launch reads the switch from the registry; the save uses the guide's own `watershed`. Five cases in
+`VersionTests.brs`.
+
+**Not changed.** The other half of the review, that the saved-pools launch (`NxGuideFromSavedPools` and the
+tomorrow schedule after it) schedules with the switch off: both call `setLineup` first, which sets the switch from
+the registry, so those schedules are held. The TV runs below agree.
+
+**Pressed** on the 43S45 (OS 16.0.4), build `6ce57c1` (test data), between 12:03 and 12:58 PM. Each read took the
+first 22 channels of the guide over the about two hours the grid shows, matched against each server's ratings as read
+on 11-05 (1 to 4 titles a read unmatched by name). A read runs about 70 s, past the full load behind the launch; on each
+relaunch that load kept the launch guide's schedules.
+- Lab Jellyfin, `nxtest` (5,492 titles): switch off, guide saved. Switch on, relaunch: the saved guide was skipped,
+  the saved pools were scheduled and shown in 4.5 s, 0 of 79 titles on screen R, NC-17 or TV-MA, and the full load
+  kept those schedules ("its schedules stand", which compares the switch). Relaunch with it on: the saved guide
+  showed in 1.3 s, 0 of 79. Switch off, relaunch: pools again, and 11 of 81 held-rated titles back on screen.
+- Lab Emby, `nxtest` (5,578 titles, main's `Fields` from #204): switch off, 10 of 79 held-rated titles on screen.
+  Switch on, relaunch: the saved pools were shown in 3.5 s, 0 of 78.
+
+**Open.** As before: the real 9 PM and midnight, a launch deep link onto a held channel, the golden suite through
+`deploy.sh --test`, a Plex sign-in, a stick, the channels past the first 22, and the first launch after an update onto
+a guide the old build saved (the cases only). The power-loss seed's key has no switch either; closing Settings
+runs the re-check at once, which saves it again, so only a power loss with Settings still open would play a seed from
+the other setting.
+
 ## 2026-11-07 (Roku 1.0.12: the release record joins main)
 
 **Shipped.** Roku 1.0.12, signed 2026-11-05 and uploaded to the beta (channel 888351) and to the public app's update, which is scheduled for Mon Nov 9. Package md5 `28894c7c1ec950ccbf8ab3ae8f44e970` (in `roku/releases.tsv`). The release commit is `19ec96a6`, tagged `roku-v1.0.12`: main `9e2c945d` (tydude001's #182, the first channel plays while the library loads after a power loss, and #191, the loading screen holds the screensaver off) plus the `build_version=12` bump and nothing else.
@@ -638,6 +671,48 @@ in 9 request lines: the Roku job goes red until `roku/source/mediabrowser/MediaB
 fields, so the two land together. The Apple TV (`EmbyAPIService.swift:218`, `JellyfinAPIService.swift:212`) and Android
 (`MediaBrowserLibrary.kt:200`, PR #151) send the same list and are not changed here. Not run against a real Emby; the
 Jellyfin side relies on #204's 12.2.0 measurement and on Jellyfin's Fields binder skipping a name it does not know.
+
+## 2026-11-05 (Roku: WATERSHED, the 9 PM hold, its switch and its card, #190)
+
+**Why.** #190: the Apple TV and the web tuner have a WATERSHED switch that holds R, NC-17 and TV-MA titles until
+9 PM on every channel without its own `blockRatings`. The Roku had none, so those titles aired all day.
+
+**Changed.**
+- `roku/source/guide/Lineup.brs`: `NxTimeFilteredPool` takes the switch and applies the global pass after the
+  channel's own rules, with no fallback, as `Channel.filteredPool` does. `NxIsWatershedHold` mirrors
+  `isWatershedHold`. Held to `scripts/watershed-golden.json` by `roku/tests/WatershedGoldenTests.brs` (13 cases, pool
+  and hold), and `run.sh` runs `nostalgex-watershed-smoke.mjs` on the file first, as for the other goldens.
+- `roku/source/guide/Watershed.brs`: the switch (registry `player`, `watershed`, off by default, sent nowhere) and the
+  Apple TV's words for the guide row and the card.
+- `roku/source/guide/GuideSchedule.brs`, `roku/components/LibraryTask.brs`: the library task reads the switch before
+  every schedule. The re-check's key and each channel's pool memo carry the gate, so the switch, 9 PM and midnight
+  reschedule, and a guide built under the other setting isn't reused (`sameSchedule` compares it too). Each
+  scheduled channel says whether the gate is closed on it and whether it alone emptied it. The re-check prints its
+  time and memory. 13 checks on this wiring in `WatershedGoldenTests.brs`.
+- `roku/components/GuideView.brs`: a held channel's row reads BROADCASTS RESUME AT 9 PM, and tuning it puts up the
+  card in place of a failure, counting none. A programme playing when the gate moves is kept until it ends, through
+  later refreshes too. Closing Settings asks for the re-check at once.
+- `roku/components/SettingsView.brs`: WATERSHED, after MY COLLECTIONS until #188's rail moves it.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin (17 channels, 18 with the collection below).
+- The #190 build (`1a0af9c`): the switch rescheduled about 1.3 s after Settings closed. With a lab collection of six
+  R films switched on (CH 400), WATERSHED on before 9 PM put BROADCASTS RESUME AT 9 PM in its row. A deep link to
+  CH 400 put up the card, which stayed with nothing retried. Switching it off cleared the card, and CH 400 played
+  (picture in 3.7 s).
+- A diagnostic build (`1a0af9c` with the gate at 10 AM and pool counts printed), switched on at 9:47: R, NC-17 and
+  TV-MA titles went to 0 in each of the 10 pools it printed, e.g. CH 14's from 50 to 21 and CH 13's from 20 to 5.
+  VHS VAULT's pool was 25 either way. The 66 titles on screen had none of those ratings. At 10:00 the re-check put
+  them back (CH 14 at 50), and 8 on screen had them. CH 3 stayed tuned through the switch and the 10:00 change, with
+  no retune. Whether the kept-programme path was what held it is not known.
+- The re-check of 18 channels, forced every minute in throwaway builds: main 149 to 164 ms, this branch with the
+  switch off 163 to 170 ms, with it on 257 to 270 ms, and 832 ms for the one that follows switching it on (every
+  day repacked). Memory 25 to 26% throughout. By the code, the ~100 ms with the switch on is each pool filtered again
+  for today, tomorrow and the hold check; on a TV the re-check runs once an hour.
+
+On Emby nothing is held: its scan never asks for `OfficialRating`, so no title is rated (#204).
+
+**Open.** Not seen on a TV: the real 9 PM and midnight, a launch deep link onto a held channel, the golden suite
+through `deploy.sh --test`, a Plex sign-in and a stick.
 
 ## 2026-11-05 (Roku: a deep link while the power-loss seed's guide is up waits for the full guide, #203)
 
