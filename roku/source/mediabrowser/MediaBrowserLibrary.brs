@@ -39,19 +39,72 @@ end function
 
 ' One page of items under a parent, with the fields the channel rules read.
 function NxMbItemsPath(userId as String, parentId as String, types as String, start as Integer) as String
-    return "/Items?userId=" + NxUrlEncode(userId) + "&ParentId=" + NxUrlEncode(parentId) + "&Recursive=true" + "&IncludeItemTypes=" + types + "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData" + "&StartIndex=" + start.ToStr() + "&Limit=200&SortBy=SortName"
+    return "/Items?userId=" + NxUrlEncode(userId) + "&ParentId=" + NxUrlEncode(parentId) + "&Recursive=true" + "&IncludeItemTypes=" + types + "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating" + "&StartIndex=" + start.ToStr() + "&Limit=200&SortBy=SortName"
 end function
 
-' What a flat (not TV) library is asked for. Jellyfin and Emby file the videos
-' in a Music Videos library as MusicVideo, so asking it for Movie alone came
-' back empty and HIGH ROTATION never filled (I-067). Movie stays in the list
-' for a clip someone filed there as a film. Every other library is still asked
-' for films only, so a stray music video in a Movies library stays off the
-' film channels. `collectionType` is the library's CollectionType, as the
-' server sends it.
-function NxMbItemTypesFor(collectionType as Dynamic) as String
-    if LCase(NxToStr(collectionType)) = "musicvideos" then return "Movie,MusicVideo"
-    return "Movie"
+' A library's CollectionType, as the server sends it, as the kind of section
+' the scan branches on: "show", "musicvideo", "movie", or "other", a library
+' with no videos in it (Playlists, Music, Collections, Photos and the like),
+' which the scan never asks for items. Jellyfin's PlaylistsFolder answers any
+' request with its playlists, whatever IncludeItemTypes says, so asking the
+' Playlists library for films aired a playlist of songs as a film (#205).
+' No CollectionType, or one not listed, is mixed content, read as films. As
+' upstream's NostalgexJellyfinUrls.sectionType (scripts/nostalgex-jellyfin-urls.js,
+' point 12); scripts/jellyfin-library-golden.json's `sections` pin both.
+function NxMbSectionType(collectionType as Dynamic) as String
+    ct = LCase(NxToStr(collectionType))
+    if ct = "tvshows" then return "show"
+    if ct = "musicvideos" then return "musicvideo"
+    nonVideo = { music: true, playlists: true, boxsets: true, books: true, audiobooks: true, photos: true, homevideos: true, livetv: true, trailers: true, folders: true, channels: true }
+    if nonVideo.DoesExist(ct) then return "other"
+    return "movie"
+end function
+
+' What a section is asked for (IncludeItemTypes), or invalid for "other",
+' which is not asked. Jellyfin and Emby file the videos in a Music Videos
+' library as MusicVideo, so asking it for Movie alone came back empty and HIGH
+' ROTATION never filled (I-067). Movie stays in its list for a clip someone
+' filed there as a film. A film library is asked for films only, so a stray
+' music video in a Movies library stays off the film channels. As upstream's
+' NostalgexJellyfinUrls.itemTypes.
+function NxMbItemTypes(section as String) as Dynamic
+    if section = "show" then return "Series"
+    if section = "musicvideo" then return "Movie,MusicVideo"
+    if section = "movie" then return "Movie"
+    return invalid
+end function
+
+' What a library is asked for, by its CollectionType: NxMbItemTypes of its
+' NxMbSectionType.
+function NxMbItemTypesFor(collectionType as Dynamic) as Dynamic
+    return NxMbItemTypes(NxMbSectionType(collectionType))
+end function
+
+' False for a row whose Type is not among the types that were asked for
+' (`includeItemTypes`, a comma list). A row with no Type is kept: every
+' Jellyfin and Emby answer carries one, and a test double may not. As
+' upstream's NostalgexJellyfinUrls.hasAskedType; the golden file's `types`
+' pin it.
+function NxMbHasAskedType(item as Dynamic, includeItemTypes as Dynamic) as Boolean
+    if type(item) <> "roAssociativeArray" then return true
+    t = LCase(NxToStr(item.Type))
+    if t = "" then return true
+    for each want in LCase(NxToStr(includeItemTypes)).Split(",")
+        if want = t then return true
+    end for
+    return false
+end function
+
+' The rows of the types asked for. A server may answer with more (the
+' Playlists library always answers with playlists), and a playlist or a song
+' is not a programme. Paging counts the rows the server sent
+' (NxMbMorePages), so this runs after it, as upstream's fetchItems filters.
+function NxMbAskedOnly(rows as Object, includeItemTypes as Dynamic) as Object
+    out = []
+    for each row in rows
+        if NxMbHasAskedType(row, includeItemTypes) then out.Push(row)
+    end for
+    return out
 end function
 
 ' Items per page, as upstream's Limit=200.
@@ -355,7 +408,11 @@ function NxMbMovieItem(jf as Object, isMusicVideoSection as Boolean, musicGenre 
         hasMusicGenre = true
     end if
     durationMin = NxMbMinutes(jf.RunTimeTicks)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
     ' A music-video library, or a short item tagged with a Music genre (the
     ' 10-minute cap keeps musicals and biopics out).
     isMusicVideo = isMusicVideoSection or (durationMin <= 10 and hasMusicGenre)
@@ -407,7 +464,11 @@ end function
 ' An episode, with its show's fields; invalid when it has no running time.
 function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, showTmdb as Dynamic, isMusicVideoSection as Boolean) as Dynamic
     durationMin = NxMbMinutes(ep.RunTimeTicks)
-    if durationMin <= 0 then return invalid
+    ' Counted for Settings' SKIPPED (NO RUNTIME) (#207, NxScanSkipAdd).
+    if durationMin <= 0 then
+        NxScanSkipAdd()
+        return invalid
+    end if
     mi = NxMbMediaInfo(ep)
     librarySource = "tv"
     if isMusicVideoSection then librarySource = "musicVideo"
@@ -484,13 +545,15 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
     musicGenre = CreateObject("roRegex", "music", "i")
     out = []
     for each view in views
-        if type(view) = "roAssociativeArray" then
-            ct = LCase(NxToStr(view.CollectionType))
+        section = ""
+        if type(view) = "roAssociativeArray" then section = NxMbSectionType(view.CollectionType)
+        ' A library with no videos in it is never asked for items (#205).
+        if section <> "" and section <> "other" then
             name = NxToStr(NxOr(view.Name, "Library"))
-            isMusicVideoSection = ct = "musicvideos"
+            isMusicVideoSection = section = "musicvideo"
             parentId = NxToStr(view.Id)
-            if ct = "tvshows" then
-                series = NxMbMorePages(fetcher, userId, parentId, "Series", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Series", 0)))
+            if section = "show" then
+                series = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, "Series", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Series", 0))), "Series")
                 ' Five shows at a time, as upstream's BATCH_SIZE, kept in
                 ' show order as its Promise.all keeps them.
                 batch = 5
@@ -506,7 +569,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         show = shows[s]
                         showGenres = NxList(show.Genres)
                         showTmdb = NxMbTmdb(show.ProviderIds)
-                        for each ep in NxMbMorePages(fetcher, userId, NxToStr(show.Id), "Episode", answers[s])
+                        for each ep in NxMbAskedOnly(NxMbMorePages(fetcher, userId, NxToStr(show.Id), "Episode", answers[s]), "Episode")
                             if type(ep) = "roAssociativeArray" then
                                 it = NxMbEpisodeItem(ep, show, showGenres, showTmdb, isMusicVideoSection)
                                 if it <> invalid then
@@ -526,8 +589,8 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                     if NxLoadStopped() then exit for
                 end for
             else
-                types = NxMbItemTypesFor(ct)
-                items = NxMbMorePages(fetcher, userId, parentId, types, fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0)))
+                types = NxMbItemTypes(section)
+                items = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, types, fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0))), types)
                 for each raw in items
                     if type(raw) = "roAssociativeArray" then
                         it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)

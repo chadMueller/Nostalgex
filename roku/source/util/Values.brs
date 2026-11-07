@@ -137,3 +137,23 @@ function NxCacheRootFor(base as String, space as String) as String
     if space = "" then return base
     return base + "/" + space
 end function
+
+' ── The loaders' skipped count ──────────────────────────────────────────────
+' Movies and episodes a loader dropped for having no runtime (missing, zero,
+' or under a minute: durationMin <= 0), counted where they are dropped, once
+' each, for Settings' SKIPPED (NO RUNTIME) (#207). The library task resets
+' it before each server's scan and reads it after; it lives in the thread's
+' global AA, so a test can read it too.
+
+sub NxScanSkipsReset()
+    GetGlobalAA().nxScanSkipped = 0
+end sub
+
+sub NxScanSkipAdd()
+    g = GetGlobalAA()
+    g.nxScanSkipped = NxNumberOr0(g.nxScanSkipped) + 1
+end sub
+
+function NxScanSkips() as Integer
+    return NxNumberOr0(GetGlobalAA().nxScanSkipped)
+end function

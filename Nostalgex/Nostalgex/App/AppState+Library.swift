@@ -165,6 +165,7 @@ extension AppState {
         // and abandon this one on its first poll.
         loadCancelRequested = false
         isLoadStalling = false
+        lostSectionsLastLoad = []
 
         if isBackground {
             isBackgroundRefreshing = true
@@ -210,6 +211,7 @@ extension AppState {
             let multiServer = apisToScan.count > 1
 
             var merged: [PlexMediaItem] = []
+            var skippedNoRuntime = 0
             var successCount = 0
             var lastError: Error?
             // Set when a scan was abandoned rather than finishing. What follows is built
@@ -294,14 +296,22 @@ extension AppState {
                     )
                     merged.append(contentsOf: items)
                     successCount += 1
+                    skippedNoRuntime += scanAPI.skippedNoRuntime
                 } catch let interrupted as LibraryScanInterrupted {
                     // Abandoned partway, but whole sections came back. Those count as a
                     // success: a reduced guide beats an error screen.
                     print("[Plex90] LOAD: server '\(serverLabel)' abandoned with \(interrupted.partialItems.count) items already fetched")
                     merged.append(contentsOf: interrupted.partialItems)
+                    skippedNoRuntime += scanAPI.skippedNoRuntime
                     if !interrupted.partialItems.isEmpty { successCount += 1 }
                     scanWasAbandoned = true
                     lastError = interrupted
+                    if !interrupted.failedSections.isEmpty {
+                        // Not a cancel: these sections' requests failed for good. The guide is
+                        // built from the rest, and the report says which ones are missing.
+                        lostSectionsLastLoad += interrupted.failedSections.map { multiServer ? "\(serverLabel): \($0)" : $0 }
+                        InstallDiagnostics.note("LOAD: server '\(serverLabel)' lost section(s) \(interrupted.failedSections.joined(separator: ", ")), kept \(interrupted.partialItems.count) items from the others")
+                    }
                 } catch let stalled as LibraryLoadStalled {
                     print("[Plex90] LOAD: server '\(serverLabel)' stalled (userInitiated=\(stalled.userInitiated))")
                     scanWasAbandoned = true
@@ -326,7 +336,7 @@ extension AppState {
                 // Distinguish "user tapped stop waiting" from "watchdog gave up" so the
                 // dashboard can tell frustration from unreliability.
                 let userInitiated = (lastError as? LibraryLoadStalled)?.userInitiated == true
-                    || (lastError as? LibraryScanInterrupted) != nil
+                    || (lastError as? LibraryScanInterrupted).map({ $0.failedSections.isEmpty }) == true
                 Analytics.track(.libraryLoadAbandoned(
                     background: isBackground,
                     itemsFound: merged.count,
@@ -354,7 +364,9 @@ extension AppState {
                 merged = merged.filter { itemBelongsToConnectedServers($0) }
             }
             allItems = merged
+            libraryScanFieldsVersion = LibrarySnapshotStore.scanFieldsVersion
             scanItemsFound = merged.count
+            skippedNoRuntimeCount = skippedNoRuntime
             let withTMDB = merged.filter { $0.tmdbID != nil }.count
             let withIMDB = merged.filter { $0.imdbID != nil }.count
             print("[Plex90] Library: \(merged.count) items from \(successCount) server(s), \(withTMDB) with TMDB IDs, \(withIMDB) with IMDb IDs")
@@ -362,6 +374,10 @@ extension AppState {
                 // They stay in the library; ChannelEligibility keeps them out of every pool.
                 print("[Plex90] CHANNELS: \(ChannelEligibility.leftOffCount(merged, backend: backendKind)) Emby Dolby Vision profile 5 item(s) left off channels")
             }
+            // Last use. `allItems` holds the list from here on; this local would keep the
+            // list `applyMusicCacheToLibrary` replaces alive until the load returns (a whole
+            // extra copy of every item through the channel build: 99 MB at 175,000 items).
+            merged = []
             LibraryLoadProbe.mark("merge+dedupe")
 
             if hasAnyCollectionBundle {
@@ -531,7 +547,7 @@ extension AppState {
                 Analytics.track(.libraryRefreshBackgroundFailed(reason: reason))
             } else {
                 Analytics.track(.libraryLoadFailed(reason: reason, background: false))
-                errorMessage = Self.userFacingLoadLibraryError(error, backend: backendKind)
+                errorMessage = Self.userFacingLoadLibraryError(error, backend: backendKind, serverURL: serverURL)
                 let host = URL(string: serverURL)?.host ?? "?"
                 if let stalled = error as? LibraryLoadStalled {
                     lastFailureDiagnostic = "\(host) · stalled \(Int(stalled.secondsWithoutProgress))s"
@@ -645,9 +661,20 @@ extension AppState {
             DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
             return false
         }
-        let isStale = found.isStale
+        var isStale = found.isStale
         let fromLegacyFile = found.fromLegacyFile
+        let savedScanFields = found.snapshot.scanFieldsVersion
         applyLibrarySnapshot(&found.snapshot)
+        libraryScanFieldsVersion = savedScanFields
+        if LibrarySnapshotStore.scanNeedsRefresh(backend: backendKind, savedVersion: savedScanFields) {
+            // Read by the old scan: on Emby no title here has a certificate or a star rating
+            // (#204), and on either a playlist or a track may be in as a film (#205, #206). The
+            // guide stays up from the snapshot; the refresh that follows must not be skipped on
+            // "the server says nothing changed".
+            isStale = true
+            librarySignature = nil
+            InstallDiagnostics.note("snapshot: read by an older scan (version \(savedScanFields ?? 0)), refreshing in background")
+        }
         isLibraryStale = isStale
         InstallDiagnostics.note("snapshot: restored, stale=\(isStale), enrichment rows=\(enrichmentService.cache.count)")
         refillEnrichmentAfterRestoreIfNeeded()
@@ -695,6 +722,7 @@ extension AppState {
         errorMessage = nil
         lastLoadAtUnix = snap.lastLoadAtUnix
         librarySignature = snap.librarySignature
+        skippedNoRuntimeCount = snap.skippedNoRuntime ?? 0
 
         // The bundle list in UserDefaults is the latest choice, and may be newer than the
         // snapshot (a toggle that never re-saved it, or a lineup that arrived from another
@@ -821,7 +849,9 @@ extension AppState {
             enabledBundleIDs: enabledBundleIDs,
             exclusiveRules: exclusiveRules,
             discoveredCollections: discoveredCollections,
-            foundFranchises: foundFranchises
+            foundFranchises: foundFranchises,
+            scanFieldsVersion: libraryScanFieldsVersion,
+            skippedNoRuntime: skippedNoRuntimeCount
         )
         LibraryLoadProbe.mark("snapshot.capture")
         LibrarySnapshotStore.saveInBackground(payload)

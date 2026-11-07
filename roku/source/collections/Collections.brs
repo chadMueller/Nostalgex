@@ -577,29 +577,114 @@ end function
 
 ' ── Plex ────────────────────────────────────────────────────────────────────
 
+' Plex list endpoints take their window as X-Plex-Container-Start and
+' X-Plex-Container-Size. A request with no size makes Plex log "Missing
+' X-Plex-Container-Size header. This will fail with status code 400 in the
+' future" (#189, upstream N-038), and a size alone would cut a long list off at
+' the first window, so every list here is read through NxPlexPaged, the port
+' of fetchPlexPaged. The window travels beside the path, as getJSON(path,
+' { start, size }), so `path` stays the bare endpoint the golden vectors
+' record.
+'
+' Measured on Plex 1.43.5 (2026-11-05): /library/sections/<key>/collections
+' takes a size up to 1000, and /library/collections/<key>/children up to 120;
+' over that the server logs "X-Plex-Container-Size header exceeds limit".
+' So the children are read 120 at a time where upstream reads 300.
+function NxPlexPageSize() as Integer
+    return 300
+end function
+
+function NxPlexChildrenPageSize() as Integer
+    return 120
+end function
+
+' plexWindowPath: `path` with the window as query parameters; without one,
+' the path as it was.
+function NxPlexWindowPath(path as String, win as Dynamic) as String
+    if win = invalid then return path
+    sep = "?"
+    if Instr(1, path, "?") > 0 then sep = "&"
+    return path + sep + "X-Plex-Container-Start=" + NxToStr(win.start) + "&X-Plex-Container-Size=" + NxToStr(win.size)
+end function
+
+' fetchPlexPaged: every entry of one list endpoint, read in windows of
+' pageSize, or invalid when a window fails (upstream throws), so a caller
+' never holds half a list. The walk ends at totalSize, or at the first short
+' page when the server sends no total. A later page drops what an earlier one
+' gave, so a server that ignores the start adds nothing and ends the walk, and
+' 200 windows end it too.
+function NxPlexPaged(fetcher as Object, path as String, listKey as String, pageSize as Integer) as Dynamic
+    return NxPlexPagedFrom(fetcher, path, listKey, pageSize, fetcher.getJSON(path, { start: 0, size: pageSize }))
+end function
+
+' The same walk when the first window is already read (first is its answer,
+' invalid when it failed): the children's first windows come five at a time.
+function NxPlexPagedFrom(fetcher as Object, path as String, listKey as String, pageSize as Integer, first as Dynamic) as Dynamic
+    all = []
+    earlier = {}
+    earlier.SetModeCaseSensitive()
+    start = 0
+    data = first
+    for n = 0 to 199
+        if n > 0 then data = fetcher.getJSON(path, { start: start, size: pageSize })
+        if type(data) <> "roAssociativeArray" then return invalid
+        container = {}
+        if type(data.MediaContainer) = "roAssociativeArray" then container = data.MediaContainer
+        page = NxList(container[listKey])
+        fresh = []
+        for each entry in page
+            id = NxPlexPagedId(entry)
+            if n = 0 or id = invalid then
+                fresh.Push(entry)
+            else if not earlier.DoesExist(id) then
+                fresh.Push(entry)
+            end if
+        end for
+        for each entry in page
+            id = NxPlexPagedId(entry)
+            if id <> invalid then earlier[id] = true
+        end for
+        all.Append(fresh)
+        if page.Count() = 0 or fresh.Count() = 0 then exit for
+        if NxIsNumber(container.totalSize) then
+            if start + page.Count() >= container.totalSize then exit for
+        else if page.Count() < pageSize then
+            exit for
+        end if
+        ' By what came back, not by what was asked: a server may cap the
+        ' window below the size.
+        start = start + page.Count()
+    end for
+    return all
+end function
+
+' An entry's ratingKey, else its key, as text; invalid when it has neither.
+function NxPlexPagedId(entry as Dynamic) as Dynamic
+    if type(entry) <> "roAssociativeArray" then return invalid
+    if entry.ratingKey <> invalid then return NxToStr(entry.ratingKey)
+    if entry.key <> invalid then return NxToStr(entry.key)
+    return invalid
+end function
+
 ' fetchPlexCollections: every collection in the server's movie and TV
 ' sections, deduped by ratingKey, with its child keys, as
 ' [{ id: "<serverKey>:<ratingKey>", title, childKeys, serverKey }], or
 ' invalid when the section list fails (upstream throws). A section whose
 ' collections fail is skipped, and a collection whose children fail is
-' dropped. fetcher.getJSON(path) returns the parsed document or invalid;
-' fetcher.getMany(paths), when it has one, returns them all in order, which
-' lets the Plex fetcher keep several requests in flight.
+' dropped. fetcher.getJSON(path, window) returns the parsed document or
+' invalid; fetcher.getMany(paths, window), when it has one, returns them all
+' in order, which lets the Plex fetcher keep several requests in flight.
 function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress = invalid as Dynamic) as Dynamic
-    doc = fetcher.getJSON("/library/sections")
-    if type(doc) <> "roAssociativeArray" then return invalid
-    sections = []
-    if type(doc.MediaContainer) = "roAssociativeArray" then sections = NxList(doc.MediaContainer.Directory)
+    sections = NxPlexPaged(fetcher, "/library/sections", "Directory", NxPlexPageSize())
+    if sections = invalid then return invalid
     list = []
     seen = {}
     seen.SetModeCaseSensitive()
     for each section in sections
         if type(section) = "roAssociativeArray" then
             if section.type = "movie" or section.type = "show" then
-                data = fetcher.getJSON("/library/sections/" + NxToStr(section.key) + "/collections")
-                if type(data) = "roAssociativeArray" then
-                    rows = []
-                    if type(data.MediaContainer) = "roAssociativeArray" then rows = NxList(data.MediaContainer.Metadata)
+                rows = NxPlexPaged(fetcher, "/library/sections/" + NxToStr(section.key) + "/collections", "Metadata", NxPlexPageSize())
+                if rows <> invalid then
                     for each c in rows
                         if type(c) = "roAssociativeArray" then
                             if c.ratingKey <> invalid then
@@ -619,6 +704,8 @@ function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress
     done = 0
     batch = 25
     docs = []
+    kidsSize = NxPlexChildrenPageSize()
+    firstWin = { start: 0, size: kidsSize }
     for i = 0 to list.Count() - 1
         c = list[i]
         if i mod batch = 0 then
@@ -627,28 +714,26 @@ function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress
                 if j < list.Count() then paths.Push("/library/collections/" + NxToStr(list[j].ratingKey) + "/children")
             end for
             if fetcher.getMany <> invalid then
-                docs = fetcher.getMany(paths)
+                docs = fetcher.getMany(paths, firstWin)
             else
                 docs = []
                 for each path in paths
-                    docs.Push(fetcher.getJSON(path))
+                    docs.Push(fetcher.getJSON(path, firstWin))
                 end for
             end if
         end if
-        data = docs[i mod batch]
+        kids = NxPlexPagedFrom(fetcher, "/library/collections/" + NxToStr(c.ratingKey) + "/children", "Metadata", kidsSize, docs[i mod batch])
         done = done + 1
         if progress <> invalid then
             progress.progress = "Reading collections: " + done.ToStr() + " of " + list.Count().ToStr()
             progress.bar = done / list.Count()
             progress.barCaption = "Collection " + done.ToStr() + " of " + list.Count().ToStr()
         end if
-        if type(data) = "roAssociativeArray" then
+        if kids <> invalid then
             childKeys = []
-            if type(data.MediaContainer) = "roAssociativeArray" then
-                for each row in NxList(data.MediaContainer.Metadata)
-                    if type(row) = "roAssociativeArray" then childKeys.Push(NxToStr(row.ratingKey)) else childKeys.Push("")
-                end for
-            end if
+            for each row in kids
+                if type(row) = "roAssociativeArray" then childKeys.Push(NxToStr(row.ratingKey)) else childKeys.Push("")
+            end for
             title = NxToStr(c.title)
             if not NxTruthy(c.title) then title = "Untitled"
             out.Push({ id: serverKey + ":" + NxToStr(c.ratingKey), title: title, childKeys: childKeys, serverKey: serverKey })

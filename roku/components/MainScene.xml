@@ -15,6 +15,7 @@
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/DailyRefresh.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LaunchGuard.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0E11FF" />

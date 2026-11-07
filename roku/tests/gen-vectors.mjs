@@ -4,7 +4,7 @@
 // the Apple TV Swift. The BrightScript port must reproduce every vector; a
 // divergence is a bug in the port, never a reason to regenerate.
 //
-//   node tests/gen-vectors.mjs            # write tests/vectors/{schedule,filter,lineup,franchise,enrichment,collections,mediabrowser,schedule-dst-zones}.json
+//   node tests/gen-vectors.mjs            # write tests/vectors/{schedule,filter,lineup,franchise,enrichment,collections,mediabrowser,coverage,schedule-dst-zones}.json
 //   node tests/gen-vectors.mjs --check    # fail if the file is stale
 //
 // Upstream: $NOSTALGEX_DIR, default the Nostalgex repo this port lives in
@@ -34,6 +34,7 @@ import { mediaBrowserVectors } from "./gen-mediabrowser.mjs";
 import { dstZones, parityZones } from "./gen-dst.mjs";
 import { watchVectors } from "./gen-watch.mjs";
 import { playbackInfoVectors } from "./gen-playback-info.mjs";
+import { coverageVectors } from "./gen-coverage.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = resolve(process.env.NOSTALGEX_DIR || join(here, "..", ".."));
@@ -272,12 +273,17 @@ const files = [
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-playback-info.js" },
     ...(await playbackInfoVectors(upstream)),
   }],
+  [join(here, "vectors", "coverage.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-coverage.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-library-coverage.js, scripts/nostalgex-channel-filter.cjs itemPasses" },
+    ...(await coverageVectors(upstream)),
+  }],
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
   // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs,
   // ScheduleDSTGoldenTests.brs, ScheduleParityGoldenTests.brs, ReportTests.brs
-  // (watch-cleanup-golden.json), StreamQualityTests.brs and Utf8RepairTests.brs
-  // read them.
-  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json"].map((g) =>
+  // (watch-cleanup-golden.json), StreamQualityTests.brs, Utf8RepairTests.brs and
+  // MediaBrowserTests.brs (jellyfin-library-golden.json) read them.
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "jellyfin-library-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;

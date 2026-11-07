@@ -57,6 +57,11 @@ protocol MediaBackend: Sendable {
     /// Item identifiers belonging to a collection.
     func loadCollectionItems(collectionKey: String) async throws -> [String]
 
+    /// How many movies and episodes the last `loadLibrary` read from the server and then
+    /// dropped because their runtime was under one minute (or missing): the loader cannot
+    /// schedule an item with no length. Shown under RESCAN LIBRARY as "N SKIPPED (NO RUNTIME)".
+    var skippedNoRuntime: Int { get }
+
     /// Direct-play URL (raw file) when the container/codecs are AVPlayer-native; else nil.
     func buildDirectPlayURL(for item: PlexMediaItem) -> URL?
 
@@ -288,8 +293,71 @@ typealias LoadProgress = @Sendable (LoadProgressEvent) -> Void
 /// guide: an abandoned scan that threw a bare `CancellationError` would discard minutes of
 /// fetched library for nothing. Every backend keeps the pages it had read of the section
 /// that was in flight, too.
+extension MediaBackend {
+    /// A backend that never drops an item for its runtime reports none.
+    var skippedNoRuntime: Int { 0 }
+}
+
+/// Counts what a scan drops for having no runtime. One per service value, shared by every
+/// copy of it (a class), safe to add to from the concurrent episode fetches.
+final class ScanSkipCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+
+    var count: Int { lock.lock(); defer { lock.unlock() }; return n }
+    func add() { lock.lock(); n += 1; lock.unlock() }
+    func reset() { lock.lock(); n = 0; lock.unlock() }
+    /// Takes back what was added after `mark`, for a section that is read a second way.
+    func rewind(to mark: Int) { lock.lock(); n = min(n, mark); lock.unlock() }
+}
+
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
+    /// Sections that failed for good while the others were read (a connection that dropped
+    /// until the retries ran out, a server error). Empty for a cancel.
+    var failedSections: [String] = []
+}
+
+/// What a scan does about a section whose requests fail for good: carry on without that
+/// section and keep the rest. Before this a dropped connection in the fifth section threw
+/// away the four already read, and the viewer was told to move to their own network (#146,
+/// Trello N-039 for Jellyfin and Emby). A cancel keeps the pages read as before; a failure
+/// that says something is wrong with the whole server (401/403, an unexpected payload) still
+/// ends the scan; and a scan that read nothing at all is still a failure.
+struct SectionFailures {
+    let backend: String
+    private(set) var titles: [String] = []
+    private var first: Error?
+
+    init(backend: String) { self.backend = backend }
+
+    /// A transport error (the connection dropped or timed out) or an HTTP error status.
+    static func isSkippable(_ error: Error) -> Bool {
+        if Task.isCancelled || error is CancellationError { return false }
+        if let api = error as? PlexAPIService.APIError {
+            if case .httpFailure = api { return true }
+            return false
+        }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code != NSURLErrorCancelled
+    }
+
+    /// True when the scan should go on without this section.
+    mutating func absorb(_ error: Error, section: String) -> Bool {
+        guard Self.isSkippable(error) else { return false }
+        print("[\(backend)] LOAD: section '\(section)' failed after its retries (\(error)), carrying on without it")
+        titles.append(section)
+        if first == nil { first = error }
+        return true
+    }
+
+    /// Ends the scan: fine when nothing failed; the first error when nothing was read; else
+    /// the sections that were read, with the ones that were lost named.
+    func finish(items: [PlexMediaItem]) throws {
+        guard !titles.isEmpty else { return }
+        if items.isEmpty, let first { throw first }
+        throw LibraryScanInterrupted(partialItems: items, failedSections: titles)
+    }
 }
 
 

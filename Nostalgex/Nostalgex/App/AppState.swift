@@ -285,6 +285,9 @@ class AppState {
     var isLibraryStale: Bool = false
     /// Change signature of the library as of the last full scan; nil when unknown.
     var librarySignature: String?
+    /// The `LibrarySnapshotStore.scanFieldsVersion` of the request that read `allItems`: the
+    /// current one after a scan, the saved one after a restore. What the next snapshot writes.
+    var libraryScanFieldsVersion: Int?
     /// Last time the library was asked whether it changed, so the 15-minute tick does not
     /// re-ask every time once the 6h mark has passed.
     var lastLibraryCheckAtUnix: Int = 0
@@ -367,6 +370,11 @@ class AppState {
     /// guide if anything was fetched, clear error if not).
     var loadCancelRequested: Bool = false
 
+    /// Sections the last load went on without because their requests failed for good (a
+    /// dropped connection, a server error), named "Server: Section" when more than one
+    /// server was read. Empty when every section was read. The guide is built from the rest.
+    var lostSectionsLastLoad: [String] = []
+
     /// The user's way out of a scan that has gone quiet. Resolution is deliberately the
     /// same path as an automatic stall, so there is only one behaviour to reason about.
     func stopWaitingForLibraryScan() {
@@ -437,7 +445,44 @@ class AppState {
     /// The guide's channels. The scheduler packs each day across all of them, so one title is
     /// never on two at once: it has to know the lineup before any schedule is built.
     var channels: [Channel] = [] {
-        didSet { registerScheduleLineup() }
+        didSet {
+            registerScheduleLineup()
+            scheduleTitlesOnChannelsCount()
+        }
+    }
+
+    /// Movies and episodes the last scan dropped because their runtime was under one minute
+    /// (or missing). Saved with the library snapshot so it survives a relaunch. Shown under
+    /// RESCAN LIBRARY as "N SKIPPED (NO RUNTIME)" when above zero.
+    var skippedNoRuntimeCount: Int = 0
+
+    /// How many distinct library titles sit in the pool of at least one channel in the guide
+    /// right now (`channels`, so only enabled packages). Nil until counted. Counted off the
+    /// main actor a moment after the lineup settles, because every channel's pool is read.
+    var titlesOnChannelsCount: Int?
+    @ObservationIgnored var titlesOnChannelsTask: Task<Void, Never>?
+
+    /// Where the loaded titles land with every package on (`LibraryDiagnostics.Coverage`),
+    /// shown under RESCAN LIBRARY. Counted on demand, off the main actor, when that page is
+    /// open (`ensureLibraryCoverage`); nil until then, and for a library past the size cap.
+    var libraryCoverage: LibraryDiagnostics.Coverage?
+    @ObservationIgnored var libraryCoverageTask: Task<Void, Never>?
+    @ObservationIgnored var libraryCoverageKey: String?
+
+    /// Recounts once the lineup has been still for a moment. A package switch, a rescan and
+    /// a snapshot restore each set `channels`, some of them several times in a row.
+    func scheduleTitlesOnChannelsCount() {
+        titlesOnChannelsTask?.cancel()
+        let lineup = channels
+        titlesOnChannelsTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            let count = await Task.detached(priority: .utility) {
+                LibraryDiagnostics.titlesOnChannels(in: lineup)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.titlesOnChannelsCount = count
+        }
     }
 
     /// Hands the scheduler the lineup under the fingerprint schedules are packed with now.

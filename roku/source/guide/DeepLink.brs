@@ -40,6 +40,19 @@ function NxDeepLinkItem(link as Dynamic, isDev as Boolean) as String
     return Mid(id, 6).Trim()
 end function
 
+' Whether a deep link that arrives with a guide on screen waits for the next
+' one instead (#203). Only while that guide is the cold-boot seed's (seeded,
+' channels its one channel): a link the seed's guide can't apply, for any
+' channel but its own or an item link, waits for the full guide, as a launch
+' link does. A link for the seed's own channel, any link on a full guide, and
+' no link at all go to the guide at once.
+function NxDeepLinkWaits(seeded as Boolean, channels as Dynamic, link as Dynamic) as Boolean
+    if not seeded or link = invalid then return false
+    ' An unset node field reads as {}, not invalid.
+    if NxDeepLinkText(link.contentId) = "" then return false
+    return NxDeepLinkChannel(channels, link) < 0
+end function
+
 ' The index in channels of the channel the link names, or -1.
 function NxDeepLinkChannel(channels as Dynamic, link as Dynamic) as Integer
     if channels = invalid or link = invalid then return -1
