@@ -69,6 +69,12 @@ struct LibrarySnapshotV1: Codable {
     /// Franchises found in the library at scan time. Optional so older snapshots decode;
     /// absent reads as "nothing found yet".
     var foundFranchiseRows: [StoredFoundFranchise]? = nil
+    /// Which scan request made these items (`LibrarySnapshotStore.scanFieldsVersion`). Optional
+    /// so snapshots written before it existed decode, as "the old request".
+    var scanFieldsVersion: Int? = nil
+    /// Movies and episodes the scan dropped for having no runtime. Optional so older
+    /// snapshots decode; absent reads as none.
+    var skippedNoRuntime: Int? = nil
 }
 
 // MARK: - On-disk format v3 (chunked)
@@ -116,6 +122,10 @@ struct LibrarySnapshotMetaV3: Codable {
     var foundFranchiseRows: [StoredFoundFranchise]? = nil
     var foundFranchiseMovieItems: [[Int32]]? = nil
     var foundFranchiseTVItems: [[Int32]]? = nil
+    /// See `LibrarySnapshotV1.scanFieldsVersion`.
+    var scanFieldsVersion: Int? = nil
+    /// Movies and episodes the scan dropped for having no runtime (optional: absent in older files).
+    var skippedNoRuntime: Int? = nil
 }
 
 /// current.json. Small, written last, replaced atomically.
@@ -136,6 +146,26 @@ enum LibrarySnapshotStore {
     static let refreshAfterSeconds = 6 * 3600
     /// Past this age a scan runs even if the library reports no change.
     static let forceRefreshAfterSeconds = 24 * 3600
+
+    /// What the scan that read a snapshot's items asked for and kept, for Jellyfin and Emby:
+    /// 1 = it names `OfficialRating` and `CommunityRating` (#204; Emby 4.10 sends neither
+    /// unasked, so no title carried a certificate or a star rating before);
+    /// 2 = it also reads only the views that hold videos and drops a row whose `Type` it did not
+    /// ask for (#205, #206; a playlist, a track or a box set was a "film" before).
+    /// A snapshot with no number was read by the first scan.
+    static let scanFieldsVersion = 2
+
+    /// True when a snapshot has to be refreshed because the scan that made it read the library
+    /// the old way, and what it holds is wrong on this backend: Emby (no ratings, playlists as
+    /// films) and Jellyfin (playlists as films). Plex's scan never had either problem. The guide
+    /// comes up from the snapshot and the refresh runs behind it, once: a scan stamps the current
+    /// version, and so does the snapshot saved after it.
+    static func scanNeedsRefresh(backend: MediaBackendKind, savedVersion: Int?) -> Bool {
+        switch backend {
+        case .emby, .jellyfin: return (savedVersion ?? 0) < scanFieldsVersion
+        case .plex: return false
+        }
+    }
 
     /// Bump only when an older file can no longer decode or would decode into something
     /// wrong. A bump clears every user's snapshot and forces a full rescan on next launch.
@@ -238,6 +268,8 @@ enum LibrarySnapshotStore {
         let franchiseRows: [StoredFoundFranchise]
         let franchiseMovies: [[PlexMediaItem]]
         let franchiseTV: [[PlexMediaItem]]
+        let scanFieldsVersion: Int?
+        let skippedNoRuntime: Int
     }
 
     static func makePayload(
@@ -252,7 +284,9 @@ enum LibrarySnapshotStore {
         enabledBundleIDs: Set<String>,
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
-        foundFranchises: [FoundFranchise] = []
+        foundFranchises: [FoundFranchise] = [],
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion,
+        skippedNoRuntime: Int = 0
     ) -> Payload {
         Payload(
             fingerprint: fingerprint(identity: identity),
@@ -274,7 +308,9 @@ enum LibrarySnapshotStore {
             collectionItems: discoveredCollections.map(\.items),
             franchiseRows: foundFranchises.map { StoredFoundFranchise.from($0, includeItemKeys: false) },
             franchiseMovies: foundFranchises.map(\.movies),
-            franchiseTV: foundFranchises.map(\.tvItems)
+            franchiseTV: foundFranchises.map(\.tvItems),
+            scanFieldsVersion: scanFieldsVersion,
+            skippedNoRuntime: skippedNoRuntime
         )
     }
 
@@ -306,14 +342,16 @@ enum LibrarySnapshotStore {
         enabledBundleIDs: Set<String>,
         exclusiveRules: [ExclusiveRule],
         discoveredCollections: [DiscoveredCollection],
-        foundFranchises: [FoundFranchise] = []
+        foundFranchises: [FoundFranchise] = [],
+        scanFieldsVersion: Int? = LibrarySnapshotStore.scanFieldsVersion,
+        skippedNoRuntime: Int = 0
     ) throws {
         let payload = makePayload(
             identity: identity, serverName: serverName, librarySignature: librarySignature,
             lastLoadAtUnix: lastLoadAtUnix, allItems: allItems, channelConfigChannels: channelConfigChannels,
             allChannels: allChannels, bundles: bundles, enabledBundleIDs: enabledBundleIDs,
             exclusiveRules: exclusiveRules, discoveredCollections: discoveredCollections,
-            foundFranchises: foundFranchises)
+            foundFranchises: foundFranchises, scanFieldsVersion: scanFieldsVersion, skippedNoRuntime: skippedNoRuntime)
         let e = nextEpoch()
         try writeQueue.sync { try write(payload, epoch: e) }
     }
@@ -379,7 +417,9 @@ enum LibrarySnapshotStore {
             discoveredCollectionItems: p.collectionItems.map(indexes),
             foundFranchiseRows: p.franchiseRows,
             foundFranchiseMovieItems: p.franchiseMovies.map(indexes),
-            foundFranchiseTVItems: p.franchiseTV.map(indexes)
+            foundFranchiseTVItems: p.franchiseTV.map(indexes),
+            scanFieldsVersion: p.scanFieldsVersion,
+            skippedNoRuntime: p.skippedNoRuntime
         )
         indexByID = [:]
         try autoreleasepool {
@@ -552,7 +592,9 @@ enum LibrarySnapshotStore {
             exclusiveRuleJSON: meta.exclusiveRuleJSON,
             discoveredCollectionRows: collectionRows,
             librarySignature: meta.librarySignature,
-            foundFranchiseRows: franchiseRows
+            foundFranchiseRows: franchiseRows,
+            scanFieldsVersion: meta.scanFieldsVersion,
+            skippedNoRuntime: meta.skippedNoRuntime
         )
     }
 

@@ -53,6 +53,19 @@ function NxRunDeepLinkTests() as Integer
     b = NxLinkedAiring({ ratingKey: "1", title: "No Length", type: "movie" }, 1000)
     NxCheck(r, "airing without a length: two hours", b.endSec.ToStr(), "8200")
 
+    ' ── A link while the cold-boot seed's guide is up (#203) ──
+    seedGuide = [{ id: 1, number: 1, name: "ONE" }]
+    other = NxDeepLinkFrom({ contentId: "3", mediaType: "live" })
+    own = NxDeepLinkFrom({ contentId: "1", mediaType: "live" })
+    NxCheck(r, "seeded: another channel waits", FormatJson(NxDeepLinkWaits(true, seedGuide, other)), "true")
+    NxCheck(r, "seeded: the seed's own channel goes now", FormatJson(NxDeepLinkWaits(true, seedGuide, own)), "false")
+    NxCheck(r, "seeded: an item link waits", FormatJson(NxDeepLinkWaits(true, seedGuide, item)), "true")
+    NxCheck(r, "seeded: no link", FormatJson(NxDeepLinkWaits(true, seedGuide, invalid)), "false")
+    NxCheck(r, "seeded: unset field", FormatJson(NxDeepLinkWaits(true, seedGuide, {})), "false")
+    NxCheck(r, "full guide: another channel goes now", FormatJson(NxDeepLinkWaits(false, channels, other)), "false")
+    NxCheck(r, "full guide: one it lacks still goes", FormatJson(NxDeepLinkWaits(false, seedGuide, other)), "false")
+    NxCheck(r, "seeded with no channels: waits", FormatJson(NxDeepLinkWaits(true, invalid, other)), "true")
+
     print "deep link cases: "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

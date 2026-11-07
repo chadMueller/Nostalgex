@@ -220,6 +220,13 @@ enum AnalyticsEvent: Sendable {
     /// The viewer chose RATE on the rating nudge banner (opens the product page).
     case ratingNudgeTapped
 
+    /// tvOS answered the banner's RATE open. `accepted` is what `openURL` reported;
+    /// `variant` is the `AppStoreLink.RateLinkVariant` letter that was opened.
+    case ratingNudgeOpened(accepted: Bool, variant: String)
+
+    /// tvOS answered the Settings RATE open. Same parameters.
+    case rateOpened(accepted: Bool, variant: String)
+
     // MARK: Update emails
 
     /// The update-emails QR in Settings was on screen. Once per Settings visit, never
@@ -274,6 +281,8 @@ enum AnalyticsEvent: Sendable {
         case .rateTapped: return "rate.tapped"
         case .ratingNudgeShown: return "rating_nudge.shown"
         case .ratingNudgeTapped: return "rating_nudge.tapped"
+        case .ratingNudgeOpened: return "rating_nudge.opened"
+        case .rateOpened: return "rate.opened"
         case .signupQRShown: return "signup.qr.shown"
         case .sessionEnded: return "app.session.ended"
         }
@@ -396,6 +405,9 @@ enum AnalyticsEvent: Sendable {
 
         case .rateTapped, .ratingNudgeShown, .ratingNudgeTapped:
             return [:]
+
+        case .ratingNudgeOpened(let accepted, let variant), .rateOpened(let accepted, let variant):
+            return ["accepted": accepted ? "true" : "false", "variant": variant]
 
         case .signupQRShown(let backend):
             return ["placement": "settings", "backend": backend.rawValue]

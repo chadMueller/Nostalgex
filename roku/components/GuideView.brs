@@ -1169,7 +1169,7 @@ sub onVideoState()
     if state = "finished" then
         rung = ""
         if m.attempt <> invalid then rung = m.attempt.rung
-        fin = NxFinishedAction({ attemptRunning: m.attempt <> invalid, sawPlaying: m.sawPlaying, unplayedEnds: m.unplayedEnds, rung: rung, probing: m.probing })
+        fin = NxFinishedAction({ attemptRunning: m.attempt <> invalid, sawPlaying: m.sawPlaying, unplayedEnds: m.unplayedEnds, rung: rung, probing: m.probing, probingAfterError: m.probing = true and m.probeFor <> invalid and m.probeFor.finished <> true })
         m.unplayedEnds = fin.unplayedEnds
         if fin.action = "ignore" then
             print "player: finished after the start failed; its retry or card goes on"
@@ -1242,6 +1242,12 @@ end sub
 ' that lasts a moment still gets its retry.
 sub failAttempt(event as String)
     m.deadlineTimer.control = "stop"
+    ' While the server is asked the probe's answer decides; it is told the
+    ' start failed meanwhile (NxProbeAnswerAction).
+    if m.probing = true and m.probeFor <> invalid and m.probeFor.failedWhileAsking <> true then
+        m.probeFor.failedWhileAsking = true
+        print "player: the start failed while the server is asked; an answer won't count as the file's end"
+    end if
     if m.attempt = invalid or m.playing = invalid or m.tuned < 0 or m.probing = true then return
     nxt = NxFallbackNext(m.attempt, event, NxServerKind(NxStreamServer(m.playing)))
     if event = "nopicture" or nxt = invalid then
@@ -1277,15 +1283,23 @@ sub onProbeDone(ev as Object)
     if p = invalid then return
     verdict = NxProbeVerdict(code)
     print "player: the server "; verdict; " ("; code; ")"
-    if p.finished and verdict = "answered" then
+    action = NxProbeAnswerAction(p, verdict)
+    if action = "handover" then
         handOver()
-        return
-    end if
-    if p.nxt = invalid or verdict <> "answered" then
+    else if action = "fail" then
+        ' The start failed while it was asked: on down the ladder, or the card.
+        nxt = invalid
+        if m.attempt <> invalid and m.playing <> invalid then nxt = NxFallbackNext(m.attempt, "error", NxServerKind(NxStreamServer(m.playing)))
+        if nxt = invalid then
+            giveUp("error", code)
+        else
+            stepDown(nxt, "error")
+        end if
+    else if action = "giveup" then
         giveUp(p.event, code)
-        return
+    else
+        stepDown(p.nxt, p.event)
     end if
-    stepDown(p.nxt, p.event)
 end sub
 
 sub stepDown(nxt as Object, event as String)

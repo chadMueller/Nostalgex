@@ -572,8 +572,11 @@ function NxMbFixtureFetcher(fx as Object) as Object
             all = []
             ' IncludeItemTypes is a comma list, as the servers read it.
             asked = "," + NxToStr(q.IncludeItemTypes) + ","
+            ' A parent in `answersAll` answers with everything it holds,
+            ' whatever was asked, as Jellyfin's Playlists library does (#205).
+            answersAll = NxHasValue(NxList(m.fx.answersAll), q.ParentId)
             for each it in NxList(m.fx.items[q.ParentId])
-                if Instr(1, asked, "," + NxToStr(it.Type) + ",") > 0 then all.Push(it)
+                if answersAll or Instr(1, asked, "," + NxToStr(it.Type) + ",") > 0 then all.Push(it)
             end for
             start = q.StartIndex.ToInt()
             limit = q.Limit.ToInt()
@@ -740,19 +743,21 @@ function NxRunMusicVideoTypeTests(fixturePath as String, channelsPath as String,
     end for
 
     ' What each kind of library is asked for. Only a musicvideos library asks
-    ' for both; a Movies, mixed (no type) or any other library asks for films.
+    ' for both; a Movies or mixed (no type) library asks for films. Home
+    ' Videos, Collections and Music hold no films and are not asked at all
+    ' ("", as upstream's jellyfin-library-golden.json has them since #205).
     libraries = [
         ["musicvideos", "Movie,MusicVideo"],
         ["MusicVideos", "Movie,MusicVideo"],
         ["movies", "Movie"],
-        ["homevideos", "Movie"],
-        ["boxsets", "Movie"],
-        ["music", "Movie"],
+        ["homevideos", ""],
+        ["boxsets", ""],
+        ["music", ""],
         ["", "Movie"],
         [invalid, "Movie"]
     ]
     for each lib in libraries
-        NxCheck(r, "item types for library type '" + NxToStr(lib[0]) + "'", NxMbItemTypesFor(lib[0]), lib[1])
+        NxCheck(r, "item types for library type '" + NxToStr(lib[0]) + "'", NxToStr(NxMbItemTypesFor(lib[0])), lib[1])
     end for
 
     print "music video item type cases: "; r.pass; " passed,"; r.fail; " failed"
@@ -795,4 +800,182 @@ function NxMbAskedTypes(requests as Object) as Object
         end if
     end for
     return asked
+end function
+
+' ── #205: a library with no videos in it is never read as films ──
+
+' Jellyfin's Playlists library answers any request with its playlists,
+' whatever IncludeItemTypes says, and the scan called every library that was
+' not TV or Music Videos a film library, so an audio playlist aired on VHS
+' VAULT as a 33 minute film. Upstream's scripts/jellyfin-library-golden.json
+' (copied byte for byte into the vectors) pins which libraries are read and
+' which rows are kept; the saved answers below are the regression case from
+' the issue. Returns the failure count.
+function NxRunPlaylistLeakTests(goldenPath as String, fixturePath as String, channelsPath as String, manifestPath as String) as Integer
+    r = { pass: 0, fail: 0 }
+    golden = ParseJson(ReadAsciiFile(goldenPath))
+    fx = ParseJson(ReadAsciiFile(fixturePath))
+    config = ParseJson(ReadAsciiFile(channelsPath))
+    manifest = ParseJson(ReadAsciiFile(manifestPath))
+    if golden = invalid or fx = invalid or config = invalid or manifest = invalid then
+        print "FAIL cannot read "; goldenPath; ", "; fixturePath; ", "; channelsPath; " or "; manifestPath
+        return 1
+    end if
+
+    ' The golden file's `sections`: a CollectionType gives a section type and
+    ' what it is asked for (null: not asked).
+    for each c in golden.sections
+        label = "section for CollectionType '" + NxToStr(c.collectionType) + "'"
+        section = NxMbSectionType(c.collectionType)
+        NxCheck(r, label, section, NxToStr(c.sectionType))
+        NxCheck(r, label + " asks for", NxToStr(NxMbItemTypes(section)), NxToStr(c.itemTypes))
+    end for
+    ' Its `types`: a row the server sent, what was asked, and whether it is kept.
+    for each c in golden.types
+        NxCheck(r, "row of Type '" + NxToStr(c.item.Type) + "' asked " + c.asked, NxToStr(NxMbHasAskedType(c.item, c.asked)), NxToStr(c.kept))
+    end for
+
+    ' The saved answers: the shared fixture's four libraries, plus a Playlists
+    ' library holding an audio playlist of 8 tracks, 33 minutes, no year
+    ' (answered with its playlists whatever is asked), a Music library with
+    ' Audio and MusicAlbum rows and a Collections library with a BoxSet, both
+    ' answering with everything too, for a server that ignores the request.
+    ticks33& = 33& * 60& * 10000000&
+    playlist = { Id: "pl-workout", Name: "Workout Mix", Type: "Playlist", MediaType: "Audio", ChildCount: 8, RunTimeTicks: ticks33& }
+    extraViews = [
+        { Id: "v-playlists", Name: "Playlists", CollectionType: "playlists" },
+        { Id: "v-music", Name: "Music", CollectionType: "music" },
+        { Id: "v-boxsets", Name: "Collections", CollectionType: "boxsets" }
+    ]
+    extraItems = {
+        "v-playlists": [playlist],
+        "v-music": [
+            { Id: "au-1", Name: "Song One", Type: "Audio", MediaType: "Audio", RunTimeTicks: 2400000000& },
+            { Id: "al-1", Name: "An Album", Type: "MusicAlbum", RunTimeTicks: 24000000000& }
+        ],
+        "v-boxsets": [{ Id: "bx-1", Name: "A Film Collection", Type: "BoxSet", RunTimeTicks: 72000000000& }]
+    }
+    leakIds = ["pl-workout", "au-1", "al-1", "bx-1"]
+    views = []
+    views.Append(fx.views)
+    views.Append(extraViews)
+    items = {}
+    items.Append(fx.items)
+    items.Append(extraItems)
+    server = { userId: fx.userId, views: views, items: items, fail: [], answersAll: ["v-playlists", "v-music", "v-boxsets"] }
+
+    ' The same playlist and a song filed in the Movies library, answered
+    ' whatever is asked: the rows are dropped by their Type.
+    strictItems = {}
+    strictItems.Append(fx.items)
+    strictMovies = []
+    strictMovies.Append(fx.items["v-movies"])
+    strictMovies.Push(playlist)
+    strictMovies.Push(extraItems["v-music"][0])
+    strictItems["v-movies"] = strictMovies
+    strictServer = { userId: fx.userId, views: fx.views, items: strictItems, fail: [], answersAll: ["v-movies"] }
+
+    vhsVault = invalid
+    highRotation = invalid
+    for each def in config.channels
+        if def.name = "VHS VAULT" then vhsVault = def
+        if highRotation = invalid and type(def.rules) = "roAssociativeArray" then
+            if def.rules.source = "musicVideo" and def.rules.genres = invalid and def.rules.yearRange = invalid then highRotation = def
+        end if
+    end for
+    NxCheck(r, "channels.json has VHS VAULT", NxToStr(vhsVault <> invalid), "true")
+    NxCheck(r, "channels.json has HIGH ROTATION", NxToStr(highRotation <> invalid), "true")
+    if vhsVault = invalid or highRotation = invalid then return r.fail
+    exclusive = NxFilterExclusiveRules(config.exclusiveRules)
+    clock = NxFilterClock()
+
+    ' The case is real: read as a film, the playlist passes VHS VAULT's rules.
+    asFilm = NxMbMovieItem(playlist, false, CreateObject("roRegex", "music", "i"))
+    NxCheck(r, "read as a film, the playlist is an item", NxToStr(asFilm <> invalid), "true")
+    if asFilm <> invalid then NxCheck(r, "read as a film, the playlist passes VHS VAULT", NxToStr(NxItemPasses(asFilm, NxFilterChannel(vhsVault), manifest, exclusive, clock, "jellyfin") <> ""), "true")
+
+    for each kind in ["jellyfin", "emby"]
+        plain = NxMbScanServer(NxMbFixtureFetcher(fx), kind, fx.userId, 0)
+        fetcher = NxMbFixtureFetcher(server)
+        got = NxMbScanServer(fetcher, kind, fx.userId, 0)
+        NxCheck(r, kind + ": the scan returns items", NxToStr(got <> invalid and plain <> invalid), "true")
+        if got <> invalid and plain <> invalid then
+            ' Everything the four video libraries gave before loads exactly as
+            ' before (compared before the filter, which caches on the items).
+            NxCheck(r, kind + ": the four video libraries load as without the extra libraries", NxMbItemsText(got), NxMbItemsText(plain))
+            asked = NxMbAskedTypes(fetcher.requests)
+            for each v in extraViews
+                NxCheck(r, kind + ": the " + v.Name + " library is never asked for items", NxToStr(asked.DoesExist(v.Id)), "false")
+            end for
+            byKey = {}
+            for each it in got
+                byKey[NxToStr(it.ratingKey)] = it
+            end for
+            for each id in leakIds
+                NxCheck(r, kind + ": " + id + " is not loaded", NxToStr(byKey.DoesExist(id)), "false")
+            end for
+            onChannel = 0
+            for each def in config.channels
+                for each entry in NxFilterPool(got, NxFilterChannel(def), manifest, exclusive, clock, kind)
+                    if NxHasValue(leakIds, NxToStr(entry.item.ratingKey)) then onChannel = onChannel + 1
+                end for
+            end for
+            NxCheck(r, kind + ": no channel holds the playlist, a song, an album or a collection", onChannel.ToStr(), "0")
+            ' A MusicVideo in the Music Videos library still reaches HIGH ROTATION (I-067).
+            clip = byKey["mv-3"]
+            NxCheck(r, kind + ": the MusicVideo mv-3 loads", NxToStr(clip <> invalid), "true")
+            if clip <> invalid then NxCheck(r, kind + ": mv-3 passes HIGH ROTATION", NxToStr(NxItemPasses(clip, NxFilterChannel(highRotation), manifest, exclusive, clock, kind) <> ""), "true")
+        end if
+
+        got = NxMbScanServer(NxMbFixtureFetcher(strictServer), kind, fx.userId, 0)
+        NxCheck(r, kind + ": a Movies library answering with everything: the scan returns items", NxToStr(got <> invalid and plain <> invalid), "true")
+        if got <> invalid and plain <> invalid then
+            stray = 0
+            for each it in got
+                if NxHasValue(leakIds, NxToStr(it.ratingKey)) then stray = stray + 1
+            end for
+            NxCheck(r, kind + ": a playlist or song row answered for Movie is dropped", stray.ToStr(), "0")
+            NxCheck(r, kind + ": and the films load as before", NxMbItemsText(got), NxMbItemsText(plain))
+        end if
+    end for
+
+    print "playlist leak cases (upstream jellyfin-library-golden.json):"; r.pass; " passed,"; r.fail; " failed"
+    return r.fail
+end function
+
+' A scan's items as text, to compare two scans: each item's fields in key
+' order, lists and nested fields spelled out. FormatJson refuses items that
+' share a list (the genres), so it can't be used. The filter's own cache
+' (nxFilter) is left out.
+function NxMbItemsText(items as Object) as String
+    lines = []
+    for each it in items
+        lines.Push(NxMbValueText(it, 0))
+    end for
+    return lines.Join(Chr(10))
+end function
+
+function NxMbValueText(v as Dynamic, depth as Integer) as String
+    if depth > 4 then return "…"
+    if type(v) = "roAssociativeArray" then
+        keys = []
+        for each k in v
+            if LCase(k) <> "nxfilter" then keys.Push(k)
+        end for
+        keys.Sort()
+        parts = []
+        for each k in keys
+            parts.Push(k + "=" + NxMbValueText(v[k], depth + 1))
+        end for
+        return "{" + parts.Join(",") + "}"
+    end if
+    if type(v) = "roArray" or type(v) = "roList" then
+        parts = []
+        for each x in v
+            parts.Push(NxMbValueText(x, depth + 1))
+        end for
+        return "[" + parts.Join(",") + "]"
+    end if
+    if v = invalid then return "invalid"
+    return NxToStr(v)
 end function

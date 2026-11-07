@@ -62,7 +62,8 @@ end function
 
 ' { format, servers: { <machine id>: entry } }, empty when there is none or
 ' it is from another format. An entry is { gen, chunks, count, savedAt,
-' signature, collections }.
+' signature, collections, skipped }; skipped (#207) is missing, so 0, in one
+' saved before it.
 function NxSnapshotReadMeta(dir as String) as Object
     empty = { format: NxSnapshotFormat(), servers: {} }
     text = NxSnapshotReadFile(dir + "/meta.json")
@@ -127,7 +128,7 @@ end function
 ' Saves one server's items (only those with this serverIndex) and
 ' collections under a new generation, then the meta, then drops the old
 ' generation's chunks. `collections` may be invalid when they couldn't be read.
-sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger)
+sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger, skipped = 0 as Integer)
     CreateDirectory(dir)
     old = meta.servers[key]
     gen = 1
@@ -156,7 +157,7 @@ sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as 
         NxSnapshotWriteFile(NxSnapshotChunkPath(dir, key, gen, chunks), FormatJson(chunk))
         chunks = chunks + 1
     end if
-    meta.servers[key] = { gen: gen, chunks: chunks, count: count, savedAt: nowSec, signature: signature, collections: collections }
+    meta.servers[key] = { gen: gen, chunks: chunks, count: count, savedAt: nowSec, signature: signature, collections: collections, skipped: skipped }
     NxSnapshotWriteMeta(dir, meta)
     if type(old) = "roAssociativeArray" and NxIsNumber(old.chunks) then
         for c = 0 to old.chunks - 1

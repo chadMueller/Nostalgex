@@ -59,6 +59,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LibraryCoverage.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/SavedKey.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerResolve.brs" />

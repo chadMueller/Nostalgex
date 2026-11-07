@@ -1,6 +1,32 @@
 {
   "entries": [
     {
+      "version": "1.0.30",
+      "date": "NOV 2026",
+      "released": false,
+      "title": "One title per channel at a time, library counts in Settings, and better Emby, Jellyfin and big-library handling",
+      "bullets": [
+        "A title no longer airs on two channels at the same time. The guide is now put together across all your channels at once.",
+        "Settings > Servers > RESCAN LIBRARY shows how many of your titles are on a channel, how many are on no channel, and how many were skipped because the server gave no running time.",
+        "The RATE banner now tells you to scroll down to the stars once the App Store opens.",
+        "Franchise collections grey out on the FRANCHISES page while FRANCHISES is off.",
+        "On Emby, kids channels stop airing adult titles. Emby wasn't sending ratings, so every film and show looked unrated. Kids channels can get smaller, and the 9 PM holds on VHS VAULT and WATERSHED now hold.",
+        "On Jellyfin and Emby, playlists, music, collections and other libraries with no videos are no longer scanned as films.",
+        "If one library on your server fails to load, the rest of the scan carries on.",
+        "A big first load uses less memory.",
+        "Plex collections are read in full, however many titles they hold.",
+        "Turning on iCloud sync can no longer overwrite the choices already saved for your household.",
+        "CARTOON NETWORK and the other channels that use extra title info stay in the guide after the app restarts.",
+        "Your Apple TV stays awake while a library loads.",
+        "Music Videos libraries on Jellyfin and Emby fill HIGH ROTATION.",
+        "On Jellyfin and Emby, AUDIO LANGUAGE is used when the server transcodes.",
+        "Big Jellyfin and Emby movie libraries show their progress while they load instead of looking stuck.",
+        "Plex sign-in no longer waits on a shared server's dead home addresses.",
+        "A film with a forced subtitle track starts right away when the server can't burn the subtitles in.",
+        "TRUE CRIME and PREMIERES need three titles before they show up."
+      ]
+    },
+    {
       "version": "1.0.29",
       "date": "NOV 2026",
       "released": true,

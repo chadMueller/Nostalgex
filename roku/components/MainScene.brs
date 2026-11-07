@@ -422,7 +422,15 @@ sub onLibraryStatus()
             m.top.AppendChild(m.guide)
         end if
         m.guide.guide = g
+        ' A link that waited behind the seed's guide goes to the full one (#203).
+        if not first and m.seeded and not seed and m.pendingLink <> invalid then
+            print "deep link: the full guide is up; applying the link that waited"
+            m.guide.deepLink = m.pendingLink
+            m.pendingLink = invalid
+        end if
         m.seeded = seed
+        m.seedChannels = invalid
+        if seed then m.seedChannels = g.channels
         if first then m.guide.SetFocus(true)
         launchComplete()
         if m.scheduleTimer = invalid then
@@ -482,12 +490,17 @@ sub onDailyTick()
 end sub
 
 ' A deep link goes to the guide, or waits for it while sign-in or the
-' library load runs.
+' library load runs, or while the seed's one-channel guide is up and the link
+' names another channel (#203, NxDeepLinkWaits).
 sub onDeepLink()
-    if m.guide <> invalid then
-        m.guide.deepLink = m.top.deepLink
+    link = m.top.deepLink
+    if m.guide <> invalid and NxDeepLinkWaits(m.seeded, m.seedChannels, link) then
+        print "deep link: waiting for the full guide; the saved channel's guide hasn't the channel"
+        m.pendingLink = link
+    else if m.guide <> invalid then
+        m.guide.deepLink = link
     else
-        m.pendingLink = m.top.deepLink
+        m.pendingLink = link
     end if
 end sub
 

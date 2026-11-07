@@ -414,12 +414,14 @@ sub loadLibrary()
                 else
                     collections.failed = collections.failed + 1
                 end if
-                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt })
+                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt, skipped: NxNumberOr0(saved.entry.skipped) })
                 print "library: "; saved.items.Count(); " items from the saved library, server "; i
             else
                 m.top.progress = "Reading your library from " + NxToStr(servers[i].name) + "…"
                 info = { signature: invalid }
+                NxScanSkipsReset()
                 got = scanUnderWatch(servers[i], i, info)
+                skipped = NxScanSkips()
                 stopped = info.stopped
                 if stopped <> "" then
                     count = 0
@@ -448,7 +450,7 @@ sub loadLibrary()
                 end if
                 items.Append(got)
                 if stopped = "" then
-                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec& }
+                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec&, skipped: skipped }
                     scanned.Push(s)
                     saves.Push(s)
                 end if
@@ -559,11 +561,18 @@ sub loadLibrary()
     end if
     timer.Mark()
     for each s in scanned
-        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&)
+        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&, s.skipped)
     end for
     NxSnapshotForgetServers(snapDir, snap, keys)
     ' What Settings' RESCAN LIBRARY row says the app holds, and since when.
-    NxSaveLibraryHeld(NxLibraryCounts(items), nowSec&)
+    ' With the movies and episodes each server's last scan dropped for having
+    ' no runtime, so the number survives a restart (#207).
+    counts = NxLibraryCounts(items)
+    counts.skipped = 0
+    for each s in saves
+        counts.skipped = counts.skipped + NxNumberOr0(s.skipped)
+    end for
+    NxSaveLibraryHeld(counts, nowSec&)
     reg = NxPlexRegistry()
     if reg.Read("librarySaved") <> "1" and (scanned.Count() > 0 or not m.top.firstRun) then
         reg.Write("librarySaved", "1")
@@ -579,7 +588,7 @@ sub loadLibrary()
     end for
     ' The enrichment cache too, which holds its rows once read, so a cleared
     ' cachefs: gets it back with the library (resaveClearedLibrary).
-    lib = { items: items, collections: collections, saves: saves, serversOn: NxSavedServersOnKey(), enrichCache: opts.cache }
+    lib = { items: items, collections: collections, saves: saves, serversOn: NxSavedServersOnKey(), enrichCache: opts.cache, heldAt: nowSec&, defs: config.channels, manifest: manifest, exclusive: NxFilterExclusiveRules(config.exclusiveRules) }
     items = invalid
     keepScheduling(built.ordered, built.guide, built.channels, lib)
 end sub
@@ -908,9 +917,20 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
     ' (time restrictions go by the hour). The re-check skips while neither
     ' has moved; scheduling about 120 channels took a core for 9 to 10 s.
     lastHour = guideHourKey(guide)
+    coverage = startCoverage(lib, builtChannels)
     while true
-        msg = Wait(0, port)
-        if type(msg) = "roSGNodeEvent" and msg.GetField() = "bundleRequest" then
+        if coverage <> invalid and not coverage.reported then
+            ' The count goes on between messages, a step at a time.
+            msg = port.GetMessage()
+            if msg = invalid then
+                if NxCoverageStep(coverage.job, 100) then reportCoverage(coverage, lib, ordered, builtChannels)
+            end if
+        else
+            msg = Wait(0, port)
+        end if
+        if msg = invalid then
+            ' Nothing was waiting; the count took a step.
+        else if type(msg) = "roSGNodeEvent" and msg.GetField() = "bundleRequest" then
             ' Several switches while one builds: the saved packages are read
             ' afresh each time, so one build covers every request queued
             ' behind it, and a request the guide already answers builds
@@ -930,6 +950,9 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
                     last = FormatJson(guide.channels)
                     lastHour = guideHourKey(guide)
                     m.top.bundleBuilt = FormatJson(guide.enabledBundles)
+                    ' A franchise or collection channel switched on or off
+                    ' moves the count; a package alone doesn't.
+                    if coverage <> invalid and coverage.reported then reportCoverage(coverage, lib, ordered, builtChannels)
                 else
                     m.top.bundleBuilt = "rebuild"
                 end if
@@ -976,6 +999,55 @@ function hourKeyNow() as String
     NxSetWatershed(NxWatershedOn())
     return NxScheduleHourKey(CreateObject("roDateTime").AsSeconds(), NxWatershedSet())
 end function
+
+' The coverage count for Settings' library line (#207,
+' source/util/LibraryCoverage.brs), started once the guide is handed over;
+' invalid for a library over NxCoverageMaxTitles, as on the Apple TV.
+function startCoverage(lib as Object, builtChannels as Object) as Dynamic
+    if lib.items.Count() = 0 then return invalid
+    if lib.items.Count() > NxCoverageMaxTitles() then
+        print "library: coverage not counted: "; lib.items.Count(); " titles is over "; NxCoverageMaxTitles()
+        return invalid
+    end if
+    timer = CreateObject("roTimespan")
+    f = { manifest: lib.manifest, exclusive: lib.exclusive, clock: NxFilterClock(), backend: NxSignedInKind(), dv: NxDisplayShowsDolbyVision() }
+    job = NxCoverageStart(lib.items, lib.defs, builtChannels, f)
+    return { job: job, timer: timer, reported: false, line: "" }
+end function
+
+' Saves the count for Settings and prints the COVERAGE line, when it differs
+' from the last one reported.
+sub reportCoverage(coverage as Object, lib as Object, ordered as Object, builtChannels as Object)
+    defIds = {}
+    for each def in lib.defs
+        defIds[NxToStr(def.id)] = true
+    end for
+    dynamicPools = []
+    for each ch in builtChannels
+        if not defIds.DoesExist(NxToStr(ch.id)) then dynamicPools.Push(NxList(ch.pool))
+    end for
+    tally = CreateObject("roTimespan")
+    cov = NxCoverageTally(coverage.job, dynamicPools)
+    tallyMs = tally.TotalMilliseconds()
+    onAir = {}
+    onAir.SetModeCaseSensitive()
+    for each ch in ordered
+        for each it in NxList(ch.pool)
+            onAir[NxCoverageKey(it)] = true
+        end for
+    end for
+    line = NxCoverageReport(cov, onAir.Count())
+    if line = coverage.line then return
+    coverage.line = line
+    first = not coverage.reported
+    coverage.reported = true
+    heldAt& = lib.heldAt
+    NxSaveLibraryCoverage(cov, heldAt&)
+    if first then
+        print "library: coverage counted in "; coverage.timer.TotalMilliseconds(); " ms ("; coverage.job.reused; " channels' filter results reused, "; coverage.job.filtered; " filtered; "; coverage.job.steps; " steps, the longest "; coverage.job.longestMs; " ms; tallied in "; tallyMs; " ms); memory "; NxMemoryLine()
+    end if
+    print line
+end sub
 
 ' The cold-boot seed (source/guide/ColdBootSeed.brs) for the channel a launch
 ' opens on, written when it changed: a registry write is a flash write, and
@@ -1110,7 +1182,7 @@ sub resaveClearedLibrary(lib as Object)
             ' Its first save time, so it still ages out a day after the scan.
             ' From JSON it may be an Integer or a Double.
             savedAt& = s.savedAt
-            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&)
+            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&, NxNumberOr0(s.skipped))
             print "library: saved server "; s.index; "'s library again in "; t.TotalMilliseconds(); " ms"
         end if
     end for
