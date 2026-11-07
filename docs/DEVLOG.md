@@ -565,6 +565,42 @@ the launch:
 **Open.** A Plex sign-in, a stick, and a link that comes in while the seed's last airing runs out (the loading screen
 comes back, and the guide made then takes the link when it's created).
 
+## 2026-11-05 (Roku: the collections lists are read in sized windows, the children 120 at a time, #189)
+
+**Why.** A tester's Plex log from a Roku first load said "Missing X-Plex-Container-Size header" (#189). Sent from
+a computer with the Roku's headers to our Plex 1.43.5, the server warns on two of the port's list requests:
+`/library/sections/<key>/collections` and `/library/collections/<key>/children`. `/library/sections`,
+`/library/metadata/<key>/allLeaves` and `/hubs/continueWatching/items` don't warn bare or with any size up to 20,000,
+and the section item reads (`/library/sections/<key>/all`) already send one. The query-string form silences the warning, so no header is needed.
+Plex also caps the window per path: `/collections` and the section item reads at 1000, `/children` at 120. Above that it
+logs "X-Plex-Container-Size header exceeds limit 120. This will fail with status code 400 in the future". By that
+probe the web tuner's 300 window (N-038) should draw it on every collection read; the web tuner wasn't run.
+
+**Changed.**
+- `roku/source/collections/Collections.brs`: `NxPlexPaged` and `NxPlexPagedFrom`, a port of `fetchPlexPaged`, read
+  the section list, each section's collections and each collection's children in windows until `totalSize` or a
+  short page. A failed window drops that list, and a server that ignores the start ends the walk. The window travels
+  beside the path, so the golden vectors still record bare paths and pass unchanged. Children are read 120 at a
+  time, the rest 300.
+- `roku/source/plex/PlexLibrary.brs`: `NxPlexCollectionsFetcher` puts the window on the request; the children's
+  first windows still go five at a time.
+- `roku/tests/CollectionTests.brs`: 19 checks. 650 collections with one of 700 children give the same result as
+  whole answers, no request goes without a size, and the collections go 300 and the children 120 at a time. Also a server
+  that caps the window, one with no `totalSize`, one that ignores the start, and a failed window. 14 fail on main.
+
+**Pressed** on our 55R617 (Roku OS 15.3.4) against our Plex 1.43.5: 5,501 titles and 69 collections. RESCAN
+LIBRARY three times on each build. Main (`2fb4625`): the collections step took 2.2, 2.2 and 2.4 s, and Plex logged
+74 warnings each time, 5 on `/collections` and 69 on `/children`. This branch (`91dc0df`): 4.2, 4.2 and 4.0 s, no
+warning, and the same 22 channels and pools fingerprint. DISCOVERING COLLECTIONS finished every time on both. The
+step is slower because Plex answers a sized `/children` request more slowly: a median of 258 ms against 128 ms in
+Plex's log for the TV's requests, and 104 against 57 ms from a computer, the same there at 120 or 300. The TV ran
+`91dc0df`; the next commit changes only tests and docs. A first load after a fresh sign-in: main
+18.6 s for the step and 74 warnings, this branch (build `6868848acfb3`, what the head stages) 22.6 s and none; the guide came up
+38.5 and 42.5 s after sign-in.
+
+**Open.** A library of a few hundred collections, as the tester's 318: by our server's
+per-request cost, an estimate, the step would take about 9 s longer than now. Whether the tester's hang was this is unknown. The web tuner's `/children` window is 300.
+
 ## 2026-11-05 (privacy: the Roku app saves its first channel's next few hours)
 
 **Shipped.** Today, 2026-11-05, on Chad's go under his standing rule that privacy text ships once reviewed: the Roku
