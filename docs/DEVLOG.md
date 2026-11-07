@@ -399,6 +399,31 @@ only the first page), all pass now. NostalgexTests: 1,108 tests, 1,082 passed, 0
 
 **Not done.** The web tuner (the web agent's branch) and Roku (#189, tydude001).
 
+## 2026-11-06 (Roku: a Jellyfin or Emby library with no videos in it is never read as films, #205)
+
+**Why.** #205, the Roku side of the web tuner's playlist fix: the Roku scan asked every library that was not TV
+or Music Videos for `Movie`, and Jellyfin's Playlists library answers with its playlists whatever is asked, so a
+playlist was read as a film with no year and entered VHS VAULT, DVD SHELF and FLICKS.
+
+**Changed.** `roku/source/mediabrowser/MediaBrowserLibrary.brs`: `NxMbSectionType`, `NxMbItemTypes` and
+`NxMbHasAskedType` port `sectionType`, `itemTypes` and `hasAskedType` (`scripts/nostalgex-jellyfin-urls.js`,
+point 12). `NxMbScanServer` skips a library whose section is `other` and keeps only the rows of the types asked
+for (`NxMbAskedOnly`, after paging) for films, series and episodes alike. `roku/tests/gen-vectors.mjs` copies
+`scripts/jellyfin-library-golden.json` into the vectors; `NxRunPlaylistLeakTests` (`roku/tests/MediaBrowserTests.brs`,
+suite `playlist-leak`) runs its `sections` and `types` and the issue's regression case from saved answers. The
+music video suite's `homevideos`, `boxsets` and `music` cases now expect no request, as the golden file has them.
+
+**Pressed** on the 43S45 (Roku OS 16.0.4) against our Jellyfin 12.2.0 as a user who sees every library, with a
+playlist of three Lab clips added for the run and deleted after. Asked for `Movie`, its Playlists library answered
+with the playlist (`Type: Playlist`, 12 minutes, no year). Main loaded 5,493 titles and put the playlist on VHS
+VAULT, DVD SHELF and FLICKS; this branch loaded 5,492, the playlist on no channel. Those three channels each lost
+exactly the playlist; the other 46 held the same titles (a print of each channel's sorted ids, both builds).
+
+**Emby.** Our Emby 4.10.1.0 answers the same: with a playlist added for the check (and deleted after), its
+Playlists library asked for `Movie` answered with the playlist. Measured on the server only, not on a TV.
+
+**Open.** Nothing on the Roku.
+
 ## 2026-11-05 (web tuner and Docker 1.0.14 prepared, not tagged)
 
 **Prepared.** Branch `web/release-1014`: `tunerVersion` 1.0.14 in `package.json`, the README headings and the Latest line

@@ -91,6 +91,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("playback-info") then failures = failures + NxRunPlaybackInfoTests("pkg:/tests/vectors/playback-info.json")
     if NxTestWants("stream-quality") then failures = failures + NxRunStreamQualityTests("pkg:/tests/vectors/stream-quality-golden.json")
     if NxTestWants("bad-byte") then failures = failures + NxRunUtf8RepairTests("pkg:/tests/vectors/utf8-repair-golden.json")
+    if NxTestWants("playlist-leak") then failures = failures + NxRunPlaylistLeakTests("pkg:/tests/vectors/jellyfin-library-golden.json", "pkg:/tests/fixtures/mediabrowser-server.json", "pkg:/data/channels.json", "pkg:/data/channels-memberships.json")
     if NxTestWants("cross-channel") then failures = failures + NxRunCrossChannelTests()
     if NxTestWants("settings-channels") then failures = failures + NxRunSettingsChannelsTests("pkg:/data/channels.json")
     if failures = 0 then print "ALL TESTS PASSED" else print "TESTS FAILED"

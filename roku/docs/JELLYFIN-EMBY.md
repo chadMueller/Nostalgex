@@ -49,7 +49,14 @@ code path.
   the `Fields` list (`ProviderIds,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`),
   in pages of 200. A library of type `musicvideos` is asked for
   `IncludeItemTypes=Movie,MusicVideo`, because both servers file its videos as
-  `MusicVideo`; every other library, mixed ones included, is asked for `Movie`.
+  `MusicVideo`; a `movies` library, and a mixed one (no type, or one not
+  listed), is asked for `Movie`. A library with no videos in it (`playlists`,
+  `music`, `boxsets`, `books`, `audiobooks`, `photos`, `homevideos`, `livetv`,
+  `trailers`, `folders`, `channels`) is never asked: Jellyfin's Playlists
+  library answers any request with its playlists, whatever `IncludeItemTypes`
+  says, and a playlist read as a film aired on VHS VAULT (#205). A row whose
+  `Type` is not one of the types asked for is dropped; a row with no `Type` is
+  kept. The rules are upstream's `scripts/jellyfin-library-golden.json`.
 - TV shows: list the series, then each series' episodes, several series at a
   time. Each episode takes its show's genres, TMDB id, year, studio and
   ratings, because the channel rules match on the show.
