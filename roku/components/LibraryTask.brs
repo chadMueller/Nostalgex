@@ -15,8 +15,10 @@ function NxGuideCachePath() as String
     return NxCacheRoot() + "/nostalgex-guide.json"
 end function
 
-function NxGuideCacheKey(nowSec as LongInteger, bundles as Object) as String
-    return NxSavedKey(NxBuildKey(), NxLocalDay(nowSec).dayKey + "|" + FormatJson(bundles) + "|" + NxChoicesKey())
+' watershed: the switch the guide is (or would be) scheduled with
+' (NxGuideKeyRest).
+function NxGuideCacheKey(nowSec as LongInteger, bundles as Object, watershed as Boolean) as String
+    return NxSavedKey(NxBuildKey(), NxGuideKeyRest(NxLocalDay(nowSec).dayKey, bundles, NxChoicesKey(), watershed))
 end function
 
 ' Which build this is, for the cache keys: the app version and the hash of
@@ -279,7 +281,7 @@ sub loadLibrary()
         if raw <> "" then
             saved = ParseJson(raw)
             if type(saved) = "roAssociativeArray" then
-                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles())
+                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles(), NxWatershedOn())
                 if NxSavedKeyShowable(saved.key, guideKey) and type(saved.guide) = "roAssociativeArray" then
                     m.savedGuideKey = saved.key
                     ' Another build scheduled it, so its schedules don't
@@ -865,7 +867,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' never reused from the file). cachefs: can lose a file, so it must be there.
     fs = CreateObject("roFileSystem")
     timer.Mark()
-    guideKey = NxGuideCacheKey(nowSec&, bundles)
+    guideKey = NxGuideCacheKey(nowSec&, bundles, guide.watershed = true)
     if matched and sameSchedule and m.savedGuideKey = guideKey and fs.Exists(NxGuideCachePath()) then
         print "library: the saved guide is this one; not saved again"
     else

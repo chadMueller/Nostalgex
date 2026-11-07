@@ -22,6 +22,18 @@ function NxSavedFormat() as String
     return "g1"
 end function
 
+' The saved guide's key after the build: the local day, the packages on, the
+' choices, and WATERSHED when it is on. The guide's schedules hold the
+' switch's R, NC-17 and TV-MA titles (or don't), so a guide saved with the
+' switch the other way is not shown at launch: on, it would air them before
+' 9 PM until the full build replaced it (#211). Off adds nothing, so a guide
+' saved before the switch existed, which is off, still shows.
+function NxGuideKeyRest(dayKey as String, bundles as Object, choices as String, watershed as Boolean) as String
+    rest = dayKey + "|" + FormatJson(bundles) + "|" + choices
+    if watershed then rest = rest + "|watershed"
+    return rest
+end function
+
 function NxSavedKey(build as String, rest as String) as String
     return build + "|" + NxSavedFormat() + "|" + rest
 end function
