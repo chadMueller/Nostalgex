@@ -93,7 +93,7 @@ fi
 # /bin/bash is 3.2.
 filter_parts=${NX_FILTER_SHARDS:-10}
 qr_parts=${NX_QR_SHARDS:-4}
-coverage_parts=${NX_COVERAGE_SHARDS:-6}
+coverage_parts=${NX_COVERAGE_SHARDS:-7}
 parts=out/test-parts
 rm -rf "$parts" && mkdir -p "$parts"
 suites=$(grep -oE 'NxTestWants\("[a-z-]+"\)' tests/main.brs | sed -E 's/.*"(.*)".*/\1/')

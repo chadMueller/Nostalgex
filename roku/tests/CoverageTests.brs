@@ -9,9 +9,12 @@
 ' saved answers with runtimes either side of a minute. Returns the failure
 ' count.
 
-' `shard` ({ index, count }, from tests/run.sh) runs only the parity cases
-' whose position is `index` mod `count`, and the rest in part 0; invalid runs
-' them all, as on a TV.
+' `shard` ({ index, count }, from tests/run.sh) splits the work: part 0 runs
+' the checks after the parity cases, and the other parts share the parity
+' cases, the ones that also run stepped (every third) dealt out first, so each
+' part gets as many of them as the next; invalid runs them all, as on a TV.
+' Splitting by position alone put every stepped case in parts 0 and 3, and
+' the other checks in part 0 too, which took four times as long as the rest.
 function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard = invalid as Dynamic) as Integer
     r = { pass: 0, fail: 0 }
     v = ParseJson(ReadAsciiFile(vectorsPath))
@@ -34,7 +37,8 @@ function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard
     end if
 
     ' ── Parity with the web tuner, case by case ──
-    for ci = shardIndex to v.cases.Count() - 1 step shardCount
+    mine = NxCoverageShardCases(v.cases.Count(), shardIndex, shardCount)
+    for each ci in mine
         c = v.cases[ci]
         clock = clocks[c.clock]
         defs = NxCoverageDefs(v.channels, c.minItems)
@@ -75,7 +79,7 @@ function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard
             NxCovCheck(r, label + ": no filter cache left", leftover, 0)
         end if
     end for
-    if shardIndex <> 0 then
+    if shardCount > 1 and shardIndex <> 0 then
         print "coverage cases:"; r.pass; " passed,"; r.fail; " failed"
         return r.fail
     end if
@@ -214,6 +218,29 @@ function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard
         g.nxDataSpace = keepSpace
     end if
 
+    ' ── The split itself: every case in exactly one part ──
+    for each split in [{ total: 12, count: 7 }, { total: 12, count: 6 }, { total: 13, count: 7 }, { total: 2, count: 7 }, { total: 12, count: 1 }]
+        seen = []
+        for ci = 0 to split.total - 1
+            seen.Push(0)
+        end for
+        for p = 0 to split.count - 1
+            for each ci in NxCoverageShardCases(split.total, p, split.count)
+                seen[ci] = seen[ci] + 1
+            end for
+        end for
+        once = 0
+        for each n in seen
+            if n = 1 then once = once + 1
+        end for
+        NxCovCheck(r, "split: " + split.total.ToStr() + " cases over " + split.count.ToStr() + " parts, each in one part", once, split.total)
+        if split.count > 1 then NxCovCheck(r, "split: part 0 has none of " + split.total.ToStr(), NxCoverageShardCases(split.total, 0, split.count).Count(), 0)
+    end for
+    heavy = 0
+    for each ci in NxCoverageShardCases(12, 1, 7)
+        if ci mod 3 = 0 then heavy = heavy + 1
+    end for
+    NxCovCheck(r, "split: 12 cases over 7 parts, part 1 has one stepped case", heavy, 1)
     print "coverage cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
@@ -304,3 +331,31 @@ end function
 sub NxCovCheck(r as Object, name as String, got as Dynamic, want as Dynamic)
     NxCheck(r, name, FormatJson(got), FormatJson(want))
 end sub
+
+' The parity cases (by position) that part `index` of `count` runs. One part
+' runs them all. Otherwise part 0 runs none (it has the other checks) and the
+' rest share them: the cases that also run stepped (position mod 3 = 0) first,
+' then the others, dealt out in turn, so every case runs in exactly one part.
+function NxCoverageShardCases(total as Integer, index as Integer, count as Integer) as Object
+    out = []
+    if count <= 1 then
+        for ci = 0 to total - 1
+            out.Push(ci)
+        end for
+        return out
+    end if
+    if index = 0 then return out
+    order = []
+    for ci = 0 to total - 1 step 3
+        order.Push(ci)
+    end for
+    for ci = 0 to total - 1
+        if ci mod 3 <> 0 then order.Push(ci)
+    end for
+    k = 0
+    for each ci in order
+        if k mod (count - 1) = index - 1 then out.Push(ci)
+        k = k + 1
+    end for
+    return out
+end function
