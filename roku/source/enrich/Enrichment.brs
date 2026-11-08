@@ -575,7 +575,7 @@ function NxEnrichAttach(items as Object, records as Object) as Integer
                 e = records[NxToStr(item.tmdbID)]
                 if e <> invalid then
                     item.enrichment = e
-                    item.Delete("nxFilter")
+                    NxFilterForget(item)
                     n = n + 1
                 end if
             end if

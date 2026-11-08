@@ -42,7 +42,7 @@ function NxRunMultiServerFilterTests(configPath as String, manifestPath as Strin
     ' That pass memoized item.nxFilter on every item; the per-server split
     ' below must answer the same whether the cache starts warm or cold.
     for each it in items
-        it.Delete("nxFilter")
+        NxFilterForget(it)
     end for
 
     ' The new way: one server's items at a time.
@@ -57,9 +57,49 @@ function NxRunMultiServerFilterTests(configPath as String, manifestPath as Strin
 
     leaked = 0
     for each it in items
-        if it.DoesExist("nxFilter") then leaked = leaked + 1
+        if NxFilterHeld(it) then leaked = leaked + 1
     end for
     NxCheck(r, "every item's filter cache is gone once its server is done", leaked.ToStr(), "0")
+
+    ' #215: the same library read back with ParseJson, as the saved library
+    ' is. On a TV that gives case-sensitive AAs, where item.nxFilter is the
+    ' key "nxfilter" and Delete("nxFilter") alone leaves it. No cache is left
+    ' whichever spelling it was stored under.
+    read = ParseJson(FormatJson(items))
+    probe = ParseJson("{""t"":1}")
+    probe.nxFilter = 1
+    probe.Delete("nxFilter")
+    ' Information, not a check: the off-TV interpreter may answer otherwise.
+    print "multi-server filter: on this runtime Delete(""nxFilter"") on a ParseJson item leaves the cache: "; probe.DoesExist("nxfilter")
+    ' Only the cache is checked here, not the pools: on a TV some rules read a
+    ' field by its camelCase name, which a ParseJson item doesn't hold there
+    ' (a separate bug, not this one's).
+    NxFilterPoolsByServer(read, defs, manifest, exclusive, clock, "plex")
+    leaked = 0
+    for each it in read
+        if NxFilterHeld(it) then leaked = leaked + 1
+    end for
+    NxCheck(r, "read back with ParseJson: every item's filter cache is gone once its server is done", leaked.ToStr(), "0")
+    one = ParseJson("{""ratingKey"":""9""}")
+    one.nxFilter = { title: "x" }
+    NxFilterForget(one)
+    NxCheck(r, "NxFilterForget on a ParseJson item leaves no cache", FormatJson(NxFilterHeld(one)), "false")
+    lit = { ratingKey: "9" }
+    lit.nxFilter = { title: "x" }
+    NxFilterForget(lit)
+    NxCheck(r, "NxFilterForget on a literal item leaves no cache", FormatJson(NxFilterHeld(lit)), "false")
+
+    ' #215, the one that changes a guide: a title read back with ParseJson,
+    ' filtered before its enrichment record arrives (the first build), then
+    ' filtered again after NxEnrichAttach (the rebuild), matches by the record.
+    spy = NxFilterChannel({ id: 219, rules: { type: "movie", keywords: ["spy", "espionage"], keywordsRequireAnyGenre: ["Action", "Thriller"] } })
+    excl = NxFilterExclusiveRules([])
+    film = ParseJson(FormatJson({ title: "Spy Film", type: "movie", genres: ["Action"], duration: 100, tmdbID: 77, ratingKey: "1" }))
+    NxCheck(r, "read back with ParseJson: before its record, SPY GAMES misses it", NxItemPasses(film, spy, invalid, excl, clock), "")
+    records = {}
+    records["77"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""Espionage""}]}}"), "77", invalid, "movie", NxEnrichIsoTime(1760000000&))
+    NxCheck(r, "read back with ParseJson: the record attaches", NxEnrichAttach([film], records).ToStr(), "1")
+    NxCheck(r, "read back with ParseJson: after its record, SPY GAMES takes it by keyword", NxItemPasses(film, spy, invalid, excl, clock), "keyword")
 
     print "multi-server filter cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
