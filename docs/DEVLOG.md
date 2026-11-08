@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-08 (Roku: enrichment fields on a title read back from the saved library)
+
+**Why.** On a TV `FormatJson` writes keys in lower case and `ParseJson` gives case-sensitive AAs, so a title read
+back from the saved library (`source/plex/LibrarySnapshot.brs`) holds `imdbrating`, not `imdbRating`. `NxEnriched`
+read by the camelCase name with a bracket, so it missed, and a `ratingMin` channel lost the OMDb fallback on a
+launch from the save: #216's TV run had 132 of 142 channels' pools the same after the round trip.
+
+**Changed.** `NxEnriched` (`source/filter/ChannelFilter.brs`) looks a camelCase key up by its lower-case spelling
+too, in the record and on the item; the record still comes first. 11 cases in the new `tests/FilterCaseTests.brs`:
+a hand-made lower-case copy of `MultiServerFilterTests`' fixture, which is how the TV holds it, differed in 10
+channels without the fix, all `ratingMin` ones.
+
+**Pressed** with `deploy.sh --test` on the 55R617 (OS 15.3.4), main with this, #216 and #220 merged: the suite
+passed, the round trip through `FormatJson` and `ParseJson` included, and the TV printed `{"imdbrating":1}` for
+`FormatJson({ imdbRating: 1 })`.
+
+**Open.** A real library through `loadLibrary` and a relaunch from its save on a TV: our sideloads run with
+enrichment off.
+
 ## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
 
 **Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
