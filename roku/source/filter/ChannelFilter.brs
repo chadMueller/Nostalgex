@@ -939,11 +939,19 @@ end function
 
 ' Upstream's enrichedValue: under item.enrichment, else flat on the item.
 function NxEnriched(item as Object, key as String) as Dynamic
+    ' A title read back from the saved library holds its keys in lower case on
+    ' a TV (FormatJson writes them so, and ParseJson's AAs are case-sensitive
+    ' there), so a camelCase name such as imdbRating is looked up both ways.
+    lower = LCase(key)
     e = item.enrichment
     if type(e) = "roAssociativeArray" then
-        if e[key] <> invalid then return e[key]
+        v = e[key]
+        if v = invalid and lower <> key then v = e[lower]
+        if v <> invalid then return v
     end if
-    return item[key]
+    v = item[key]
+    if v = invalid and lower <> key then v = item[lower]
+    return v
 end function
 
 function NxLowerList(v as Dynamic) as Object

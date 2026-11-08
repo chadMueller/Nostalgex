@@ -85,6 +85,7 @@ sub Main(args = invalid as Dynamic)
 
     if NxTestWants("small-library") then failures = failures + NxRunSmallLibraryTests("pkg:/data/channels.json", "pkg:/data/channels-memberships.json")
     if NxTestWants("multi-server-filter") then failures = failures + NxRunMultiServerFilterTests("pkg:/data/channels.json", "pkg:/data/channels-memberships.json")
+    if NxTestWants("filter-case") then failures = failures + NxRunFilterCaseTests("pkg:/data/channels.json", "pkg:/data/channels-memberships.json")
     if NxTestWants("plex-audio") then failures = failures + NxRunPlexAudioTests()
     if NxTestWants("poster") then failures = failures + NxRunPosterTests()
     if NxTestWants("rescan") then failures = failures + NxRunRescanTests()
