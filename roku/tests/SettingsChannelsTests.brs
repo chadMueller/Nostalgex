@@ -58,6 +58,20 @@ function NxRunSettingsChannelsTests(configPath as String) as Integer
     NxCheck(r, "page: the kinds follow", NxPageKinds(NxFranchisePageEntries(franchises, collections, true)), "franchise|collection|collection|franchise|franchise")
     NxCheck(r, "page: switch off, the collections stay listed", NxPageNames(NxFranchisePageEntries(franchises, collections, false)), "alien Nation|Batman Collection")
     NxCheck(r, "page: nothing at all", NxPageNames(NxFranchisePageEntries([], [], true)), "")
+
+    ' ── ChannelsHomePage: the link rows and their values ────────────────────
+    NxCheck(r, "links: the three pages, in the list's order", NxPageIds(NxChannelsPages()), "packages|franchises|collections")
+    NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL PACKAGES|FRANCHISES|MY COLLECTIONS")
+    n = { packagesOn: 3, franchisesOn: true, franchiseRowsOn: 5, franchiseCollectionsOn: 2, collectionsOn: 4 }
+    NxCheck(r, "links: CHANNEL PACKAGES counts the packages on", NxChannelsLinkValue("packages", n), "3 ON")
+    NxCheck(r, "links: FRANCHISES counts franchise rows and franchise collections", NxChannelsLinkValue("franchises", n), "7 ON")
+    NxCheck(r, "links: MY COLLECTIONS counts the viewer's own on", NxChannelsLinkValue("collections", n), "4 ON")
+    n.franchisesOn = false
+    NxCheck(r, "links: FRANCHISES with its switch off reads OFF, whatever is set under it", NxChannelsLinkValue("franchises", n), "OFF")
+    NxCheck(r, "links: FRANCHISES on with nothing under it reads 0 ON", NxChannelsLinkValue("franchises", { franchisesOn: true }), "0 ON")
+    NxCheck(r, "links: no packages on", NxChannelsLinkValue("packages", {}), "0 ON")
+    NxCheck(r, "links: never SCANNING on the Roku", NxChannelsLinkValue("collections", {}), "0 ON")
+    NxCheck(r, "links: a page it doesn't know", NxChannelsLinkValue("missing", n), "")
     NxCheck(r, "page: no lists yet", NxPageNames(NxFranchisePageEntries(invalid, invalid, true)), "")
     tie = NxFranchisePageEntries([{ id: "dict:DUNE", name: "DUNE" }], [{ id: "c9", title: "Dune", category: "franchises" }], true)
     NxCheck(r, "page: a tie keeps the franchise first", NxPageKinds(tie), "franchise|collection")
@@ -136,4 +150,20 @@ function NxPageKinds(entries as Object) as String
         out = out + e.kind
     end for
     return out
+end function
+
+function NxPageIds(pages as Object) as String
+    out = []
+    for each p in pages
+        out.Push(p.id)
+    end for
+    return out.Join("|")
+end function
+
+function NxPageTitles(pages as Object) as String
+    out = []
+    for each p in pages
+        out.Push(p.title)
+    end for
+    return out.Join("|")
 end function

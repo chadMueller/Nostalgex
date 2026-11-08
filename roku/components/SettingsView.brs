@@ -15,6 +15,12 @@ sub init()
     m.where = "rail"
     m.tabs = NxSettingsTabs()
     m.tabIndex = 0
+    ' The CHANNELS & BUNDLES page on show (ChannelsPage): "packages",
+    ' "franchises" or "collections", or "" for the tab's list. Back to the list
+    ' whenever another tab is picked.
+    m.channelsPage = ""
+    ' The page the rows being added belong to (buildRows).
+    m.addPage = ""
     m.focus = -1
     m.scroll = 0
     ' The site, as upstream's user agents give it; SUPPORT NOSTALGEX's QR code.
@@ -117,6 +123,7 @@ function rowKey(row as Object) as String
     if row.category <> invalid then key = key + "|" + NxToStr(row.category)
     if row.key <> invalid then key = key + "|" + NxToStr(row.key)
     if row.code <> invalid then key = key + "|" + NxToStr(row.code)
+    if row.page <> invalid then key = key + "|" + NxToStr(row.page)
     return key
 end function
 
@@ -172,6 +179,7 @@ sub open(unused = invalid as Dynamic)
     m.collectionsOpen = {}
     m.languageOpen = ""
     m.tabIndex = 0
+    m.channelsPage = ""
     m.where = "rail"
     buildRows()
     m.focus = NxSettingsFirstFocusable(m.rows)
@@ -187,12 +195,13 @@ end sub
 '   PLAYBACK & PICTURE (SettingsPlaybackView): RETRO MODE, GUIDE TEXT SIZE,
 '   STREAM QUALITY, SUBTITLES, the languages, then WATCH HISTORY with the two
 '   reporting switches.
-'   CHANNELS & BUNDLES (SettingsChannelsView): until its link rows and pages
-'   are ported, the three sections in one scroll: CHANNEL PACKAGES (every
-'   package but FRANCHISES), FRANCHISES (its switch heading its own section,
-'   then one A to Z list of the classics, the found franchises and the
+'   CHANNELS & BUNDLES (SettingsChannelsView): a list of three link rows, each
+'   with its value on the right, then WATERSHED. Each link opens a page in the
+'   pane: CHANNEL PACKAGES (every package but FRANCHISES), FRANCHISES (its
+'   switch, then one A to Z list of the classics, the found franchises and the
 '   server's franchise collections) and MY COLLECTIONS (the viewer's own,
-'   folded closed behind a SHOW/HIDE row, as upstream's accordion).
+'   folded closed behind a SHOW/HIDE row, as upstream's accordion). A page's
+'   rows are its section's from when the tab was one scroll.
 '   SERVERS & ACCOUNTS (SettingsServersView): the servers, RESCAN LIBRARY,
 '   SIGN OUT.
 '   ABOUT (SettingsAboutView): VERSION, then LINKS with GITHUB.
@@ -204,6 +213,9 @@ end sub
 '   LANGUAGE), languageChoice, reportNowPlaying, reportMarkWatched, bundle,
 '   franchiseAll, franchise, franchiseCollection, collectionsToggle,
 '   collection, version, github: rows
+'   channelsLink: a CHANNELS & BUNDLES link row; `page` is the page it opens
+' Every row has `inTab`, and `inPage` for the CHANNELS & BUNDLES page it is
+' on ("" for the tab's list, and for every other tab's rows).
 ' The franchise rows are the last guide build's, so they show once the package
 ' was on for a build. MY COLLECTIONS holds the viewer's own collections only
 ' (OTHER COLLECTIONS), shown only when it has a row.
@@ -228,6 +240,12 @@ sub buildRows()
     add({ kind: "reportNowPlaying" })
     add({ kind: "reportMarkWatched" })
 
+    ' The list: a link row for each page (ChannelsHomePage), then WATERSHED.
+    for each p in NxChannelsPages()
+        add({ kind: "channelsLink", page: p.id, title: p.title })
+    end for
+
+    m.addPage = "packages"
     add({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" }, "channels")
     franchisesAt = -1
     for i = 0 to m.top.bundles.Count() - 1
@@ -237,7 +255,9 @@ sub buildRows()
             pushPackage(i)
         end if
     end for
+    m.addPage = "franchises"
     if franchisesAt >= 0 then pushFranchises(franchisesAt)
+    m.addPage = "collections"
     add({ kind: "header", title: "MY COLLECTIONS", subtitle: "Turn the server collections you want into channels" }, "channels")
     note = NxCollectionsNote(m.top.collections)
     if note <> "" then add({ kind: "info", text: note }, "channels")
@@ -256,8 +276,9 @@ sub buildRows()
         end if
     end if
 
-    ' WATERSHED (#190) ends CHANNELS & BUNDLES, after MY COLLECTIONS, as the
-    ' fourth of the Apple TV's channels sections.
+    m.addPage = ""
+    ' WATERSHED (#190) ends the CHANNELS & BUNDLES list, after the three links,
+    ' as on the Apple TV.
     add({ kind: "watershed" })
 
     add({ kind: "subheader", text: "SERVERS" }, "servers")
@@ -275,9 +296,33 @@ sub buildRows()
     pickTab()
 end sub
 
-' The current tab's rows from every tab's (m.all), as buildRows left them.
+' The current tab's rows from every tab's (m.all), as buildRows left them: on
+' CHANNELS & BUNDLES, the page on show's.
 sub pickTab()
-    m.rows = NxSettingsRowsInTab(m.all, m.tabs[m.tabIndex].id)
+    m.rows = NxSettingsRowsInTab(m.all, m.tabs[m.tabIndex].id, shownPage())
+end sub
+
+' The CHANNELS & BUNDLES page on show, or "" on its list and on any other tab.
+function shownPage() as String
+    if m.tabs[m.tabIndex].id = "channels" then return m.channelsPage
+    return ""
+end function
+
+' Opens a CHANNELS & BUNDLES page from its link row, or steps back to the list
+' (page "") onto the row that opened `from`, as showChannelsPage. A page opens
+' scrolled to its top, on its first row; one with nothing to focus (MY
+' COLLECTIONS before any collection is read) leaves focus nowhere, and Back or
+' Left still leaves it.
+sub showPage(page as String, from = "" as String)
+    m.channelsPage = page
+    pickTab()
+    m.focus = NxSettingsFirstFocusable(m.rows)
+    if page = "" and from <> "" then
+        at = NxSettingsLinkRowOf(m.rows, from)
+        if at >= 0 then m.focus = at
+    end if
+    m.scroll = 0
+    render()
 end sub
 
 ' One row into the full list, in its tab: the rule's for a row with something
@@ -285,6 +330,7 @@ end sub
 sub add(row as Object, tabId = "" as String)
     if tabId = "" then tabId = NxSettingsTabOf(row.kind)
     row.inTab = tabId
+    row.inPage = m.addPage
     m.all.Push(row)
 end sub
 
@@ -460,6 +506,27 @@ function collectionsOnAir(category as String) as String
         if collectionOn(row) then onAir = onAir + 1
     end for
     return onAir.ToStr() + "/" + rows.Count().ToStr() + " ON AIR"
+end function
+
+' The counts behind the link rows' values (NxChannelsLinkValue), from this
+' visit's switches, as the Apple TV's list reads its live state.
+function linkCounts() as Object
+    n = { packagesOn: 0, franchisesOn: false, franchiseRowsOn: 0, franchiseCollectionsOn: 0, collectionsOn: 0 }
+    for each b in m.top.bundles
+        if NxHasValue(m.enabled, b.id) then
+            if b.id = NxFranchisesBundleID() then n.franchisesOn = true else n.packagesOn = n.packagesOn + 1
+        end if
+    end for
+    for each f in NxList(m.top.franchises)
+        if franchiseOn(f) then n.franchiseRowsOn = n.franchiseRowsOn + 1
+    end for
+    for each row in collectionRows("franchises")
+        if collectionOn(row) then n.franchiseCollectionsOn = n.franchiseCollectionsOn + 1
+    end for
+    for each row in collectionRows("custom")
+        if collectionOn(row) then n.collectionsOn = n.collectionsOn + 1
+    end for
+    return n
 end function
 
 ' ADD ALL / REMOVE ALL covers the whole FRANCHISES list: every franchise row
@@ -643,7 +710,15 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     ' The state's width: 380, or 760 for a value that is a line of its own
     ' (ABOUT's version and address).
     stateW = 380
-    if row.kind = "bundle" then
+    if row.kind = "channelsLink" then
+        ' SettingsLinkRow: the page's title, its value on the right in cyan
+        ' when focused, and a chevron after it.
+        label = row.title
+        detail = ""
+        state = NxChannelsLinkValue(row.page, linkCounts()) + "  >"
+        stateColor = "0xFFFFFF99"
+        if focused then stateColor = m.accent + "FF"
+    else if row.kind = "bundle" then
         b = m.top.bundles[row.index]
         on = NxHasValue(m.enabled, b.id)
         label = b.name
@@ -799,7 +874,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         stateColor = "0xFFFFFF59"
         if NxWatershedOn() then
             state = "ON"
-            stateColor = "0xFFE500FF"
+            stateColor = m.accent + "FF"
         end if
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
@@ -949,13 +1024,15 @@ function advanceOf(font as String, size as Integer) as Float
 end function
 
 ' Up and Down on the rail swap the tab, and with it the hero and the rows, with
-' no press. An open list folds when its tab is left; the MY COLLECTIONS
-' accordion and a package still building stay as they were. Each tab opens
-' scrolled to the top. Nothing is saved or rebuilt here.
+' no press. An open list folds when its tab is left, and CHANNELS & BUNDLES goes
+' back to its list; the MY COLLECTIONS accordion and a package still building
+' stay as they were. Each tab opens scrolled to the top. Nothing is saved or rebuilt here.
 sub selectTab(i as Integer)
     if i < 0 or i > m.tabs.Count() - 1 or i = m.tabIndex then return
     m.tabIndex = i
     m.signOutArmed = false
+    ' Another tab puts CHANNELS & BUNDLES back on its list.
+    m.channelsPage = ""
     ' Only the tab changes, so its rows are picked from the ones built, not
     ' built again: with a few hundred franchises or collections a rebuild on
     ' each press of the rail was a lot of work on a stick (#201 review). An
@@ -978,7 +1055,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         m.signOutArmed = false
         render()
     end if
-    action = NxSettingsKeyAction(m.where, key, m.languageOpen <> "")
+    action = NxSettingsKeyAction(m.where, key, m.languageOpen <> "", shownPage() <> "")
     if action = "tabUp" then
         selectTab(m.tabIndex - 1)
     else if action = "tabDown" then
@@ -1006,6 +1083,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         pressRow()
     else if action = "fold" then
         foldLanguage()
+    else if action = "pageUp" then
+        showPage("", m.channelsPage)
     else if action = "toRail" then
         m.where = "rail"
         render()
@@ -1015,8 +1094,11 @@ end function
 
 ' OK on the focused row.
 sub pressRow()
+    if m.focus < 0 then return
     row = m.rows[m.focus]
-    if row.kind = "bundle" then
+    if row.kind = "channelsLink" then
+        showPage(row.page)
+    else if row.kind = "bundle" then
         id = m.top.bundles[row.index].id
         kept = []
         found = false

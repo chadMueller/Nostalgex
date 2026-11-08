@@ -1,6 +1,7 @@
 ' Settings as a rail and a pane, held to the Apple TV's (N-028, 1.0.29): the
 ' five tabs in the rail's order, which tab each row belongs to, where focus
-' lands when a tab is entered, and what a key does on the rail and in the rows.
+' lands when a tab or a CHANNELS & BUNDLES page is entered, and what a key does
+' on the rail, in the rows and inside a page.
 ' The drawing is SettingsView's; these are the rules it follows.
 '
 ' Source: upstream Nostalgex/Views/Settings/SettingsCategory.swift (the tabs,
@@ -35,7 +36,7 @@ function NxSettingsTabOf(kind as String) as String
     ' WATERSHED is #211's row (SettingsChannelsView on the Apple TV). It is
     ' listed here before that row exists, so neither pull request has to land
     ' first: a kind missing from these lists is in no tab and never shows.
-    channels = ["bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed"]
+    channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed"]
     servers = ["server", "rescan", "signOut"]
     about = ["version", "github"]
     if kind = "support" then return "support"
@@ -49,13 +50,27 @@ end function
 ' The rows of `all` in the tab `tabId`, in order. SettingsView builds every
 ' tab's rows once and picks one tab's from them on each rail press, so Up and
 ' Down on the rail don't rebuild the franchise and collection lists.
-function NxSettingsRowsInTab(all as Dynamic, tabId as String) as Object
+' `page` is the CHANNELS & BUNDLES page on show (a row's `inPage`): "" is the
+' tab's list, which every other tab's rows are on too. A row with no `inPage`
+' is on the list.
+function NxSettingsRowsInTab(all as Dynamic, tabId as String, page = "" as String) as Object
     rows = []
     if type(all) <> "roArray" then return rows
     for each row in all
-        if type(row) = "roAssociativeArray" and row.inTab = tabId then rows.Push(row)
+        if type(row) = "roAssociativeArray" and row.inTab = tabId and NxToStr(row.inPage) = page then rows.Push(row)
     end for
     return rows
+end function
+
+' The row on the list that opens `page` (its channelsLink), for Back from the
+' page to land on (ChannelsPage.linkRowID); -1 when the list has none.
+function NxSettingsLinkRowOf(rows as Dynamic, page as String) as Integer
+    i = 0
+    for each row in NxList(rows)
+        if NxToStr(row.kind) = "channelsLink" and NxToStr(row.page) = page then return i
+        i = i + 1
+    end for
+    return -1
 end function
 
 ' ── Focus ───────────────────────────────────────────────────────────────────
@@ -83,14 +98,19 @@ end function
 
 ' What a key does, from where focus is: "rail" or "rows". `listOpen` is a
 ' language or quality list open in place, which folds before anything else, as
-' it did when the list was one page. The actions:
+' it did when the list was one page. `inPage` is a CHANNELS & BUNDLES page on
+' show, where Back steps up to the list before it reaches the rail
+' (SettingsContainerView's onExitCommand). The actions:
 '   on the rail: "tabUp" / "tabDown" swap the pane at once, with no press;
 '   "enter" (Right or OK) goes into the tab's first row; "leave" (Back) closes
 '   Settings. Left does nothing there.
 '   in the rows: "move" (Up / Down), "press" (OK), "fold" (Left or Back with a
-'   list open), "toRail" (Left or Back otherwise). Right does nothing.
+'   list open), "pageUp" (Back inside a page: to the list, on the row that
+'   opened it), "toRail" (Left, or Back on the list). Left inside a page goes
+'   to the rail too and leaves the page on show, as the Apple TV's does. Right
+'   does nothing.
 ' "" is a key with nothing to do.
-function NxSettingsKeyAction(where as String, key as String, listOpen as Boolean) as String
+function NxSettingsKeyAction(where as String, key as String, listOpen as Boolean, inPage = false as Boolean) as String
     if where = "rail" then
         if key = "up" then return "tabUp"
         if key = "down" then return "tabDown"
@@ -102,6 +122,7 @@ function NxSettingsKeyAction(where as String, key as String, listOpen as Boolean
     if key = "OK" then return "press"
     if key = "left" or key = "back" then
         if listOpen then return "fold"
+        if key = "back" and inPage then return "pageUp"
         return "toRail"
     end if
     return ""
