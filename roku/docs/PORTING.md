@@ -46,7 +46,7 @@ and already pinned to the Apple TV.
 | `SubtitleSelectionLogic.swift`; the SUBTITLES setting (`Views/Settings/SettingsPlaybackView.swift`) and CC toggle (`NowPlayingPanel.swift`) | `source/subtitles/`, `components/` | ported; cases transcribed from `SubtitleSelectionLogicTests.swift`. SUBTITLES reads FOREIGN AUDIO until chosen, as upstream's default (#64), and only a setting that changed is saved. CC is the ★ key in fullscreen, and a row of the Now Playing panel. SUBTITLE LANGUAGE and AUDIO LANGUAGE (#62) take upstream's presets, with MATCH ROKU LANGUAGE, compared by language alone, since Roku hands tracks over without a region. AUDIO LANGUAGE picks the Jellyfin/Emby track (below) and, on any other stream, the first track in it the player lists, set only when the player isn't already on it; with none, the player's choice stays, where upstream takes the first track. FOREIGN AUDIO compares with AUDIO LANGUAGE. Plex still sends the subtitle track the Plex account has selected (below). A Jellyfin or Emby file's forced text track in SUBTITLE LANGUAGE comes as the server's SRT, where upstream burns it in (#63, `JELLYFIN-EMBY.md`) |
 | Guide look: the Apple TV app's TunerView, InfoPanelView, ChannelGuideView, CRTOverlayView, StaticScreenView, PlayerView's ChannelOSD (upstream f51e72b) | `components/GuideView.*`, `images/look/` from `scripts/look-images.py` | recreated to its measurements (below); DM Mono and VT323 bundled (`THIRD-PARTY-LICENSES.md`). The logo, home-screen icons and splash are the nostalgex.app wordmark from upstream's `logo/png/` (`scripts/icons.sh`), as the maintainer asked ([Discussion #8](https://github.com/chadMueller/Nostalgex/discussions/8#discussioncomment-19003344)); the Apple TV app itself still shows its earlier lightning-bolt logo |
 | RETRO MODE (`AppState.retroMode`, on by default; `Views/Settings/SettingsPlaybackView.swift`) | `source/guide/RetroMode.brs`, Settings › RETRO MODE | ported: the guide's video cropped to 4:3 under the CRT overlay, full screen under it too, at upstream's `RetroLook` values (e48cdc1: scanlines 0.18, a darker vignette, more flicker and tracking). With it off, a slow tune shows the plain dim TUNING card, no snow (`tuningOverlay`, #75) |
-| WATERSHED (#190): `Channel.filteredPool`'s global pass and `isWatershedHold` (`Models/Channel.swift`), `AppState.watershedEnabled` (key `nostalgex_watershed`), the Settings row in `SettingsChannelsView`, the guide row in `ChannelGuideView`, `WatershedCard`; the web tuner's `getTimeFilteredPool`, `isWatershedHold` and `watershedChanged` | `source/guide/Lineup.brs` (`NxTimeFilteredPool`, `NxIsWatershedHold`), `source/guide/Watershed.brs`, `source/guide/GuideSchedule.brs`, Settings › WATERSHED | ported: off unless switched on, saved per TV in the registry (`player`, `watershed`) and sent nowhere. With it on, before 9 PM a channel without its own `blockRatings` drops R, NC-17 and TV-MA (GB-15 and GB-18 through their US label), with no fallback; VHS VAULT is untouched. Held to upstream's `scripts/watershed-golden.json` (`tests/WatershedGoldenTests.brs`). The re-check's key and each channel's pool memo carry the gate, so the switch, 9 PM and midnight reschedule and a schedule built under the other setting is never reused. A channel the gate emptied shows BROADCASTS RESUME AT 9 PM in its row and the Apple TV's card when tuned, counting no failure; a programme playing when the gate moves finishes first. Until #188's rail, the row sits after MY COLLECTIONS. Pressed on the 43S45 against the lab Jellyfin (2026-11-05, `docs/DEVLOG.md`); on Emby no title is rated until its scan asks for `OfficialRating` (#204) |
+| WATERSHED (#190): `Channel.filteredPool`'s global pass and `isWatershedHold` (`Models/Channel.swift`), `AppState.watershedEnabled` (key `nostalgex_watershed`), the Settings row in `SettingsChannelsView`, the guide row in `ChannelGuideView`, `WatershedCard`; the web tuner's `getTimeFilteredPool`, `isWatershedHold` and `watershedChanged` | `source/guide/Lineup.brs` (`NxTimeFilteredPool`, `NxIsWatershedHold`), `source/guide/Watershed.brs`, `source/guide/GuideSchedule.brs`, Settings › WATERSHED | ported: off unless switched on, saved per TV in the registry (`player`, `watershed`) and sent nowhere. With it on, before 9 PM a channel without its own `blockRatings` drops R, NC-17 and TV-MA (GB-15 and GB-18 through their US label), with no fallback; VHS VAULT is untouched. Held to upstream's `scripts/watershed-golden.json` (`tests/WatershedGoldenTests.brs`). The re-check's key and each channel's pool memo carry the gate, so the switch, 9 PM and midnight reschedule and a schedule built under the other setting is never reused. A channel the gate emptied shows BROADCASTS RESUME AT 9 PM in its row and the Apple TV's card when tuned, counting no failure; a programme playing when the gate moves finishes first. The row ends the CHANNELS & BUNDLES list, after its three links, as on the Apple TV. Pressed on the 43S45 against the lab Jellyfin (2026-11-05, `docs/DEVLOG.md`); on Emby no title is rated until its scan asks for `OfficialRating` (#204) |
 | Nothing upstream: GUIDE TEXT SIZE (I-060), a Roku-only display choice | `source/guide/GuideText.brs`, Settings › GUIDE TEXT SIZE | NORMAL is the Apple TV's sizes; LARGE draws the grid's time header, CHANNEL heading, channel numbers and names and program titles bigger (26 px titles, 20 px names). The panel above the grid keeps its sizes. Two built-in sizes, no choice of fonts |
 | `scripts/nostalgex-season.js` (Swift: `ChannelBundle.swift` `isInSeason`, `SeasonalPrompt.swift`, `GuideChannelOrder.swift` `seasonalLeadIDs`); `SeasonalInviteRow` | `source/guide/SeasonalPrompt.brs`, the row above channel one, the guide's lead, Settings' SPOTLIGHTED note | ported, `seasonStart` included (TIS THE SEASON from a week before US Thanksgiving); upstream's `scripts/season-golden.json` vendored and passing, plus cases transcribed from `SeasonalPromptTests.swift`. A switched-on seasonal package builds in every month, as upstream's `staticChannelIDsForPoolBuild` (8160f04) |
 | A library that fills no channel: `autoEnableBundlesWithContent` (`AppState+Channels.swift`) and the NO CHANNELS FOUND screen with OPEN SETTINGS (`Plex90App.swift`) (issue #60) | `components/LibraryTask.brs`, `source/guide/BundleChoices.brs`, `components/GuideView.brs` | ported: when the packages on build no channel, every other package that isn't seasonal or a collection one is tried and the ones with content stay on, saved as the viewer's choice. If none has content, the guide says NO CHANNELS FOUND and OK opens Settings. Cases in `tests/SmallLibraryTests.brs`. A background refresh that builds no channels under a guide that has some is dropped and that guide stays; the Apple TV shows NO CHANNELS FOUND then |
@@ -288,11 +288,28 @@ draws them.
   before, and a package switch still builds behind Settings. A package still
   building reads BUILDING when its tab is opened again; each tab opens scrolled
   to the top.
+- **CHANNELS & BUNDLES** (`SettingsChannelsView`): a list of three link rows,
+  CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS, each with its value on the
+  right (`NxChannelsLinkValue` in `source/guide/SettingsChannels.brs`: "n ON",
+  and FRANCHISES OFF while its switch is off), then WATERSHED. OK on a link
+  opens its page in the pane, scrolled to the top on its first row, under the
+  tab's hero. Back inside a page steps up to the list, onto the row that opened
+  it; Left goes to the rail and leaves the page on show, so Right comes back
+  into it; picking another tab puts the tab back on its list. The values count
+  this visit's switches, as the Apple TV's list reads its live state. A page
+  holds its section's rows from when the tab was one scroll, headings and
+  notes included: CHANNEL PACKAGES every package but FRANCHISES, with the amber
+  counts; FRANCHISES the switch, its notes, ADD ALL / REMOVE ALL and the one A
+  to Z list; MY COLLECTIONS its note and the OTHER COLLECTIONS fold-out. Before
+  any collection is read MY COLLECTIONS has only its note, so focus has no row
+  there and Back or Left leaves it; the Apple TV's page always has its SCAN MY
+  COLLECTIONS button, which the Roku doesn't have (collections are read with
+  the library). The Apple TV's SCANNING value doesn't apply for the same
+  reason.
 - **Where each row went:** PLAYBACK & PICTURE has RETRO MODE, GUIDE TEXT SIZE,
   STREAM QUALITY, SUBTITLES, the two languages, then WATCH HISTORY with SHOW NOW
   PLAYING and MARK WATCHED (from CONNECTION, as on the Apple TV). CHANNELS &
-  BUNDLES has CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS as they were, in
-  one scroll, until the link rows and pages come (#188's second PR). SERVERS &
+  BUNDLES has the link rows and pages above. SERVERS &
   ACCOUNTS has the servers, RESCAN LIBRARY and SIGN OUT (still two presses;
   the Apple TV's DISCONNECT is one). ABOUT has VERSION as a row and LINKS with
   GITHUB, both focusable with nothing to press, as there. The CONNECTION heading
@@ -302,9 +319,10 @@ draws them.
   (`GuideView.openSettings`).
 - **Left out:** the rail's SF Symbol icons (the rows are a bar and a title), the
   glow and scanline texture behind the rail, the fade where rows slide under
-  the hero, the rounded corners, and the cross-fade between tabs. LIBRARIES,
-  the iCloud sync row, WATERSHED (#190) and WHY ARE SOME CHANNELS MISSING? have
-  their own parity rows.
+  the hero, the rounded corners, and the cross-fade between tabs and pages. A
+  link row's chevron is a ">" after its value. LIBRARIES, the iCloud sync row
+  and WHY ARE SOME CHANNELS MISSING? (the CHANNEL PACKAGES page's link to
+  `ChannelsMissingPage`) have their own parity rows.
 
 While the FRANCHISES package is on, a collection that is a franchise the
 package already carries folds into it. It leaves the list and never gets a
