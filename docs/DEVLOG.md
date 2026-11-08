@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
+
+**Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail
+(#201) kept the tab as one scroll of CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS; on the Apple TV it is a short
+list of link rows, each with its value, opening a page in the pane.
+
+**Changed.** The tab opens on three link rows, CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS, with the Apple
+TV's values (`NxChannelsLinkValue`, `source/guide/SettingsChannels.brs`: "n ON", FRANCHISES OFF while its switch is
+off), then WATERSHED. OK opens a page holding its section's rows as they were. Back inside a page steps up to the
+list onto the row that opened it; Left goes to the rail and keeps the page; another tab resets the tab to its list
+(`NxSettingsKeyAction`'s `pageUp`, `NxSettingsRowsInTab`'s page, `NxSettingsLinkRowOf`, `source/guide/SettingsRail.brs`).
+WATERSHED's ON is Settings' cyan, where #211's merge left the yellow.
+
+**Not changed.** The pages' rows, the FRANCHISES page's behaviour (its collections stay listed with the switch off,
+as on main), saving and rebuilding on the way out.
+
+**Pressed** on the 55R617 (OS 15.3.4), this branch merged with #216 (test data), lab Emby `nxtest` with 120
+three-film lab collections made for the run and deleted after (5,609 titles, 120 collections listed, 22 channels).
+A page drew 0.16 to 0.23 s after OK and the list 0.15 to 0.20 s after Back, eight times each; memory 80 MB
+(`chanperf` anon). The guide to the FRANCHISES switch is 7 presses.
+
+**Open.** A page with nothing to focus on a TV (MY COLLECTIONS before collections are read), `deploy.sh
+--settings-tour`, the sound, a Plex library and a stick.
+
 ## 2026-11-07 (Roku: Settings rail, Chad's review of #201)
 
 **Why.** Chad's review: `selectTab` rebuilt every tab's rows (`buildRows`) on each Up or Down on the rail, which with
