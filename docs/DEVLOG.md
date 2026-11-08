@@ -29,6 +29,39 @@ case-sensitive copies of the fixture differ in 10 channels too, all `ratingMin`.
 **Open.** The camelCase reads, as their own issue. A real title through `loadLibrary` and the remote step on a TV:
 our sideloads run with enrichment off (no relay or Supabase keys).
 
+## 2026-11-07 (Roku: Settings rail, Chad's review of #201)
+
+**Why.** Chad's review: `selectTab` rebuilt every tab's rows (`buildRows`) on each Up or Down on the rail, which with
+a few hundred franchises or collections is a lot to redo per press on a stick; a row kind `NxSettingsTabOf` doesn't
+know is in no tab and never shows, and #211 adds `watershed`; and the sound while Settings is open had not been run.
+
+**Changed.**
+- `NxSettingsRowsInTab` (`source/guide/SettingsRail.brs`) picks one tab's rows from every tab's. `buildRows` ends in
+  it, and `selectTab` now calls only it (`pickTab`), unless a list is open, which `NxSettingsKeyAction` folds before
+  focus can reach the rail, so that rebuild is only a guard. `refreshRows` still rebuilds.
+- WATERSHED, with #211 on main (merged in at `2d86f01`): its row is added at the end of CHANNELS & BUNDLES, after
+  MY COLLECTIONS and before SERVERS, with #211's draw and press branches. `watershed` was already in the CHANNELS list. #214's `rowHeight` block and its loop over the lines in
+  `drawRow` are kept.
+- Seven cases in `SettingsRailTests.brs` (69 there now).
+
+**The sound, read from the code.** `GuideView` mutes in `openSettings` and unmutes in `onSettingsResult`. SettingsView
+leaves only by setting `result` (`signOut` from its row, `rebuild` or `close` from `leave`), and `onSettingsResult` is
+the only place Settings is removed, with the unmute two lines after, so every way out unmutes. Not heard: the TV's
+volume stays at 0 for tests, and neither ECP nor the node tree reports `mute`.
+
+**Pressed** on the 43S45 (OS 16.0.4), build `2d86f01` (test data), lab Emby as `nxtest`, with 120 three-film
+collections made on the test Emby for the run and deleted after it. The server sent 121 (with the one it had); the app
+listed 108, 12 folded into franchises, and OTHER COLLECTIONS showed 96 FOUND · 12 UNDER FRANCHISES.
+- Rail presses, each timed from the ECP key to the new tab's title in the node tree (a tree read is about 0.14 s of
+  it): 0.16 to 0.62 s over 8 presses with OTHER COLLECTIONS folded, 0.16 to 0.34 s over 8 with its 96 rows open. The
+  fix alone (`4a1a987`, before #211 was merged in) gave 0.19 to 0.63 s and 0.15 to 0.31 s.
+- WATERSHED showed after OTHER COLLECTIONS in CHANNELS & BUNDLES and switched ON, then OFF.
+- After the rail presses, a lab collection's row switched ON and OFF again. Back twice closed Settings: SettingsView
+  left the node tree, which only `onSettingsResult` does, and the guide took focus.
+
+**Open.** Not measured: the old build's press time for comparison, a stick, a library of a few hundred franchises,
+the second half (#188's CHANNELS & BUNDLES link rows and pages).
+
 ## 2026-11-07 (Roku: WATERSHED's saved guide, and the hold on Emby, #190 review)
 
 **Why.** Chad's review of #211: a saved guide made with the WATERSHED switch the other way was shown at launch as it
@@ -843,6 +876,61 @@ the card word for word. That the real server answers 500 for a playlist id is no
 real Jellyfin or Emby; whether Emby's Playlists view answers like Jellyfin's is not known. Apple TV
 (`JellyfinAPIService.sectionType`, `EmbyAPIService`), Roku (`NxMbItemTypesFor`) and Android (`MediaBrowserLibrary.kt`)
 read the same views the same way and have no `Type` check; none is changed here.
+
+## 2026-11-04 (Roku: Settings is the Apple TV's rail and detail pane, the first of #188's two PRs)
+
+**Shipped.** Nothing yet. Branch `roku-settings-rail` off main `456a511`, not pushed.
+
+**Why.** #188: on the Apple TV, Settings has a rail of five tabs down the left and the open tab's rows on the
+right; on the Roku it was one long list under one title, and SIGN OUT or the version line took a press through
+all of it. The maintainer asked for two PRs: the rail and the five tabs first, then the CHANNELS & BUNDLES link
+rows and their pages. This is the first.
+
+**Changed.**
+- `roku/source/guide/SettingsRail.brs`: the rules, from `SettingsCategory.swift` and `SettingsContainerView.swift`.
+  The five tabs in the rail's order with SUPPORT NOSTALGEX pinned and the hero lines word for word; which tab a
+  row kind sits in (the two reporting switches move from CONNECTION to PLAYBACK & PICTURE's WATCH HISTORY, as
+  there); the first focusable row of a tab (none on SUPPORT NOSTALGEX, so focus stays on the rail); and what a
+  key does on the rail (Up and Down swap the pane with no press, Right or OK go in, Back leaves) and in the rows
+  (Left or Back go to the rail, an open language or quality list folding first). 62 cases in
+  `roku/tests/SettingsRailTests.brs`.
+- `roku/components/SettingsView.brs`: builds every tab's rows and shows the selected tab's; draws the rail at the
+  Apple TV's sizes (bars 4, 6 and 8; a 22% tint and 3 px border on the focused tab, a 6% fill on the selected
+  one) and the pane's hero (the Apple TV's 96 px icons, copied to `roku/images/look/settings_hero_*.png`, title
+  34, line 20) pinned above a divider with only the rows scrolling. The accent is Settings' cyan. The CONNECTION
+  heading and the footer line are gone. ABOUT has VERSION as a row and LINKS with GITHUB (focusable, nothing to
+  press, as there). CHANNELS & BUNDLES keeps CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS in one scroll until
+  the second PR. Leaving Settings saves and rebuilds as before; moving between tabs does neither, and a package
+  still building reads BUILDING when its tab is opened again.
+- `roku/components/GuideView.brs`: the playing channel is muted while Settings is open, as the Apple TV's
+  `SettingsContainerView` does.
+- `roku/source/util/AppVersion.brs`: `NxVersionValue`, the VERSION row's value, one case in `VersionTests.brs`.
+- Comments that cited `BundleManagerView.swift` (deleted by N-028) point at `Views/Settings/`; `PORTING.md`
+  § Settings as a rail and a pane says what is left out (icons, glow, scanlines, the fade under the hero, rounded
+  corners, the cross-fade).
+
+**Pressed** on the 43" TCL (43S45, Roku OS 16.0.4), test-data builds signed in to the lab Emby as a user who
+sees 5,516 items (795 films, 4,721 episodes, one collection; #188 asks for over a hundred collections, which
+no lab server has), FRANCHISES on, 43 channels. Keys were sent over ECP one at a time and focus read from the
+SceneGraph debug server after each, since screenshots go black while a film plays. Main `456a511` against this
+branch merged onto #182, #191 and #199, with a scratch print in `openSettings` (not in the PR) for the times:
+
+| | main | this branch |
+|---|---|---|
+| Settings, key press to drawn | 1.11 s | 1.12 s |
+| memory at open (`roAppMemoryMonitor`) | 40% to 40% | 40% to 41% |
+| presses from the guide to RESCAN LIBRARY | 3 | 7 |
+| presses to SIGN OUT | 6 | 8 |
+| presses to the first franchise switch | 28 | 20 |
+
+The rail's presses are Up to SETTINGS, OK, Down to the tab, Right, then Down; main's are Up, OK and Down
+through the one list. Every key rule in `SettingsRailTests.brs` held on the TV: Right on SUPPORT NOSTALGEX stays
+on the rail; Down swaps the hero through the five tabs and stops at ABOUT; Right into a tab lands on its first
+row; OK on VERSION and GITHUB does nothing; STREAM QUALITY's list opens on the level in use, the first Left folds
+it and the second reaches the rail; Back from a row goes to the rail; Down then Up on the rail and Right re-enters
+on the first row; Back on the rail leaves. `scripts/deploy.sh --settings-tour` shows the rail and every tab.
+One bug found there and fixed: Right from the rail went back to the row last left (GITHUB), not the tab's first
+row. Not checked here: the sound, which the debug server doesn't show.
 
 ## 2026-11-04 (Roku: a "finished" while the server is asked after an error hands over nothing, #184's Plex way)
 

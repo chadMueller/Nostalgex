@@ -2246,6 +2246,9 @@ sub openSettings()
     m.settings.ObserveField("bundleChange", "onSettingsBundleChange")
     m.settings.ObserveField("rescan", "onSettingsRescan")
     m.settings.rescanning = m.top.libraryBusy
+    ' The playing channel is muted while Settings is open, as on the Apple TV
+    ' (SettingsContainerView's onAppear).
+    m.video.mute = true
     m.top.AppendChild(m.settings)
     m.settings.callFunc("open", invalid)
     m.settings.callFunc("setBuilding", m.building.Keys())
@@ -2331,6 +2334,7 @@ sub onSettingsResult()
     renderBuildNotice()
     m.top.RemoveChild(m.settings)
     m.settings = invalid
+    m.video.mute = false
     linkWaiting = m.linkAfterSettings = true
     m.linkAfterSettings = false
     m.top.SetFocus(true)

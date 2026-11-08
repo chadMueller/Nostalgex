@@ -10,6 +10,7 @@ function NxRunVersionTests() as Integer
     NxCheck(r, "no nx_build", NxFormatVersionLabel("1", "0", "2", ""), "VERSION 1.0.2")
     NxCheck(r, "padded build_version", NxFormatVersionLabel("1", "0", "00002", ""), "VERSION 1.0.2")
     NxCheck(r, "missing number", NxFormatVersionLabel("", "0", "2", " "), "VERSION ?.0.2")
+    NxCheck(r, "the ABOUT row's value is the line without its word", "VERSION " + NxVersionValue(), NxVersionLabel())
 
     ' Data space, as this build's own manifest has it. The repo's manifest
     ' (off the TV, and what release.sh ships) has no nx_data_ns: every name
