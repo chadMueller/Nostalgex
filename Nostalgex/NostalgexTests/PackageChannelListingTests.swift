@@ -183,82 +183,70 @@ final class PackageChannelListingTests: XCTestCase {
 
     // MARK: What is drawn
 
+    private func plain(_ text: AttributedString) -> String {
+        String(text.characters).replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+
+    func testTheDrawnTextIsTheNamesJoinedByCommasAndNoChannelNumbers() {
+        let listing = PackageChannelListing(
+            availability: [(901, "FAMILY HOUR", true), (902, "DIZ FLICKS", true), (903, "TOON TOWN", false)],
+            enabled: true, building: false
+        )
+        let text = PackageChannelNames.attributed(listing: listing, isOn: true)
+        XCTAssertEqual(plain(text), "FAMILY HOUR, DIZ FLICKS, TOON TOWN", "names joined by commas, nothing else")
+        XCTAssertFalse(plain(text).contains("901"), "no id")
+        XCTAssertFalse(plain(text).contains(where: \.isNumber), "no channel numbers")
+        XCTAssertFalse(plain(text).hasSuffix(","), "no separator after the last name")
+    }
+
+    /// The spaces inside a name do not break, so a wrapped line can end only after a comma.
+    func testANameIsNeverBrokenAcrossLines() {
+        let listing = PackageChannelListing(
+            availability: [(1, "FAMILY HOUR", true), (2, "DIZ FLICKS", true)], enabled: false, building: false
+        )
+        let raw = String(PackageChannelNames.attributed(listing: listing, isOn: false).characters)
+        XCTAssertEqual(raw, "FAMILY\u{00A0}HOUR, DIZ\u{00A0}FLICKS")
+    }
+
+    func testEveryNameIsInTheTextOnceAndInOrder() {
+        let config = ChannelConfigLoader.loadBundled()
+        for definition in config.bundles {
+            let names = definition.channelIDs.compactMap { id in config.channels.first { $0.id == id }?.name }
+            let listing = PackageChannelListing(availability: names.enumerated().map { ($0.offset, $0.element, true) },
+                                                enabled: false, building: false)
+            let text = plain(PackageChannelNames.attributed(listing: listing, isOn: false))
+            XCTAssertEqual(text, names.joined(separator: ", "), "\(definition.id)")
+        }
+    }
+
     func testOnlyTheShortChannelsAreDrawnAmber() {
         let listing = PackageChannelListing(
             availability: [(1, "ONE", true), (2, "TWO TWO", false), (3, "THREE", true), (4, "FOUR", false)],
             enabled: true, building: false
         )
+        let text = PackageChannelNames.attributed(listing: listing, isOn: true)
         let amber = Color(hex: "#FFB020")
-        let drawnAmber = listing.entries.filter { PackageChannelNames.nameColor(isShort: $0.isShort, isOn: true) == amber }.map(\.name)
-        XCTAssertEqual(drawnAmber, ["TWO TWO", "FOUR"], "exactly the channels the badge counts")
-        XCTAssertEqual(drawnAmber, listing.shortChannels.map(\.name))
-        XCTAssertNotEqual(PackageChannelNames.nameColor(isShort: false, isOn: true), amber)
-        XCTAssertNotEqual(PackageChannelNames.nameColor(isShort: false, isOn: false), amber)
+        var amberRuns: [String] = []
+        for run in text.runs where run.foregroundColor == amber {
+            amberRuns.append(plain(AttributedString(text[run.range])))
+        }
+        XCTAssertEqual(amberRuns, ["TWO TWO", "FOUR"], "exactly the channels the badge counts")
+        XCTAssertEqual(amberRuns, listing.shortChannels.map(\.name))
     }
 
     func testAnOffPackageReadsDimmerThanAnOnPackage() {
         XCTAssertNotEqual(PackageChannelNames.nameColor(isShort: false, isOn: true),
                           PackageChannelNames.nameColor(isShort: false, isOn: false))
-    }
-
-    // MARK: Line breaks: a dot only between two names on one line
-
-    private func lines(_ widths: [CGFloat], max: CGFloat, separator: CGFloat = 10, gap: CGFloat = 9) -> [[Int]] {
-        PackageNameFlow.lines(nameWidths: widths, separatorWidth: separator, gap: gap, maxWidth: max)
-    }
-
-    func testNamesThatAllFitAreOneLine() {
-        XCTAssertEqual(lines([50, 60, 70], max: 1000), [[0, 1, 2]])
-    }
-
-    func testANameThatDoesNotFitStartsTheNextLine() {
-        // A dot and its two gaps cost 28. 50 + 28 + 60 = 138 fits in 140; the 70 wide name would make it 236.
-        XCTAssertEqual(lines([50, 60, 70, 30], max: 140), [[0, 1], [2, 3]], "greedy, in order: 70 + 28 + 30 = 128 fits")
-        XCTAssertEqual(lines([50, 60, 70, 30], max: 240), [[0, 1, 2], [3]])
-        XCTAssertEqual(lines([50, 60, 70, 30], max: 100), [[0], [1], [2], [3]], "nothing fits beside the name before it")
-    }
-
-    func testEveryNameIsOnExactlyOneLineInOrderAndNoLineIsEmpty() {
-        let widths: [CGFloat] = (0..<22).map { CGFloat(40 + ($0 * 37) % 120) }
-        for max in stride(from: CGFloat(60), through: 900, by: 45) {
-            let result = lines(widths, max: max)
-            XCTAssertEqual(result.flatMap { $0 }, Array(widths.indices), "max \(max): every name once, in order")
-            XCTAssertTrue(result.allSatisfy { !$0.isEmpty }, "max \(max): no empty line")
-        }
-    }
-
-    /// The dots drawn are the ones between two names on one line, so with n names on k lines there are
-    /// n - k of them, and no line can start or end with one.
-    func testTheDotsDrawnAreTheOnesBetweenNamesOnTheSameLine() {
-        let widths: [CGFloat] = (0..<22).map { CGFloat(40 + ($0 * 37) % 120) }
-        for max in stride(from: CGFloat(60), through: 900, by: 45) {
-            let result = lines(widths, max: max)
-            let dots = result.reduce(0) { $0 + $1.count - 1 }
-            XCTAssertEqual(dots, widths.count - result.count, "max \(max)")
-        }
-    }
-
-    func testALineIsNeverWiderThanTheWidthUnlessOneNameIsAlone() {
-        let widths: [CGFloat] = [120, 90, 150, 60, 200, 80]
-        let result = lines(widths, max: 300)
-        for line in result {
-            let width = line.map { widths[$0] }.reduce(0, +) + CGFloat(line.count - 1) * 28
-            XCTAssertTrue(width <= 300 || line.count == 1, "\(line): \(width)")
-        }
-        XCTAssertEqual(lines([500], max: 300), [[0]], "a name wider than the row has its own line")
-    }
-
-    func testNoNamesIsNoLines() {
-        XCTAssertEqual(lines([], max: 300), [])
+        XCTAssertNotEqual(PackageChannelNames.nameColor(isShort: false, isOn: true), Color(hex: "#FFB020"))
     }
 
     // MARK: What VoiceOver hears
 
     func testTheCountReadsTitlesAndMatchesTheBadge() {
         let one = PackageChannelListing(availability: availability([true, true, false]), enabled: true, building: false)
-        XCTAssertEqual(one.badgeLabel, "1 channel has not enough titles yet")
+        XCTAssertEqual(one.badgeLabel, "1 channel does not have enough titles yet")
         let three = PackageChannelListing(availability: availability([true, false, false, false]), enabled: true, building: false)
-        XCTAssertEqual(three.badgeLabel, "3 channels have not enough titles yet")
+        XCTAssertEqual(three.badgeLabel, "3 channels do not have enough titles yet")
         let none = PackageChannelListing(availability: availability([true, true]), enabled: true, building: false)
         XCTAssertNil(none.badgeLabel)
         XCTAssertNil(PackageChannelListing(availability: availability([true, false]), enabled: false, building: false).badgeLabel)

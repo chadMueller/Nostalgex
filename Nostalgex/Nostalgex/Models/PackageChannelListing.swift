@@ -53,7 +53,7 @@ struct PackageChannelListing: Equatable {
     /// on-screen line and the WHY ARE SOME CHANNELS MISSING? page use.
     var badgeLabel: String? {
         guard let count = badge else { return nil }
-        return count == 1 ? "1 channel has not enough titles yet" : "\(count) channels have not enough titles yet"
+        return count == 1 ? "1 channel does not have enough titles yet" : "\(count) channels do not have enough titles yet"
     }
 
     /// The row's VoiceOver hint: the channels in order, then which of them are short, because amber is

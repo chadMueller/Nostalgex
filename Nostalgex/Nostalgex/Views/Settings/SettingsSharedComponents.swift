@@ -338,10 +338,25 @@ struct SettingsToggleRow: View {
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
         .accessibilityLabel(alertBadgeLabel.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
-        // Only a package row with names has a hint; an empty one reads nothing, never "Channels: ".
-        .accessibilityHint(channelNames?.spokenChannels ?? "")
+        .accessibilityHintIfPresent(channelNames?.spokenChannels)
         .animation(.easeInOut(duration: 0.2), value: isOn)
         .animation(.easeInOut(duration: 0.15), value: isFocused)
+    }
+}
+
+// MARK: - Optional accessibility hint
+
+extension View {
+    /// Applies `accessibilityHint` only when there is a hint. With nil the view comes back as it was,
+    /// so a row that has none (every `SettingsToggleRow` but a package row) is not touched, and a hint a
+    /// caller sets on it afterwards is the only one.
+    @ViewBuilder
+    func accessibilityHintIfPresent(_ hint: String?) -> some View {
+        if let hint, !hint.isEmpty {
+            accessibilityHint(hint)
+        } else {
+            self
+        }
     }
 }
 

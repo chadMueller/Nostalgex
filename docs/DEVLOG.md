@@ -11,14 +11,20 @@ of content without saying which.
 
 **Changed.** On CHANNEL PACKAGES (Settings, CHANNELS & BUNDLES) the focused row grows to list its channels under the
 description. Names only, no channel numbers, in the package's own order (`channelIDs` in channels.json; every shipped package
-lists them by ascending channel number, which is how the website's lineup sorts them, and a test pins that), in small type with
-a dot between two names on the same line and none at the start or end of a line. A package that is off lists them dim. A package that is on lists them brighter, with
-the channels short of content in amber and one line under the list, "Amber: not enough titles yet". Only the focused row
-opens, so the page is no longer than before while a viewer scrolls past. Nothing new is stored: no key, no page, and the
-names come from channels.json through the call the row already made (`bundleChannelAvailability`). WHY ARE SOME CHANNELS
-MISSING? is unchanged and is still where the reasons are explained. VoiceOver reads the row's count as "4 channels have not
-enough titles yet" (it said "need more content"; titles is the word the on-screen line and the WHY page use) and reads the
-names as the row's hint, then which of them are short, because amber is colour only. A row with no names has no hint.
+lists them by ascending channel number, which is how the website's lineup sorts them, and a test pins that). They are one run
+of small type, separated by commas, that wraps like any other text. A package that is off lists them dim. A package that is on
+lists them brighter, with the channels short of content in amber and one line under the list, "Amber: not enough titles yet".
+Only the focused row opens, so the page is no longer than before while a viewer scrolls past. Nothing new is stored: no key,
+no page, and the names come from channels.json through the call the row already made (`bundleChannelAvailability`). WHY ARE
+SOME CHANNELS MISSING? is unchanged and is still where the reasons are explained.
+
+The list is a single `Text`. A custom layout that kept a separator off the end of a wrapped line was tried and dropped: a
+plain `Text` wraps by itself and cannot lose a name, and a comma at the end of a line reads as ordinary typography.
+
+VoiceOver reads the row's count as "4 channels do not have enough titles yet" ("1 channel does not have enough titles yet";
+it said "need more content", and titles is the word the on-screen line and the WHY page use). It reads the names as the row's
+hint, then which of them are short, because amber is colour only. The hint is applied only to a row that has names
+(`accessibilityHintIfPresent`), so every other `SettingsToggleRow` comes back from it unchanged.
 
 One rule decides which channels are amber (`PackageChannelListing`), and the row's amber count is read from the same list,
 so the count names exactly what it counts. A package that is off, still building, or with nothing on air marks no channel:
@@ -27,32 +33,31 @@ MISSING? differs from the sum of the counts on the rows in three ways. It counts
 this page. It counts only channels that have rules. And it lists every channel of a package that is on with nothing on air,
 where the row shows no amber. In the test library it reads 17 where the rows add up to 12.)
 
-**Scrolling, the open risk.** The Settings pane scrolls to centre the row that took focus, in the same moment the row before it
-shrinks and the new one grows. Measured on the simulator with the real focus engine, down through all 14 packages and back up
-(a library of the shipped packages, some on with channels the sample library cannot fill): unfocused rows are 95 pt tall,
-focused ones 129 to 296 pt (NOSTALGEX, 22 names and 4 amber, the tallest; KIDZ ZONE, 15 names, off). Every row in the middle of
-the list comes to rest at the same place on the screen whatever its own height, 0.58 of the screen height, and the same place
-going up as going down. The first row and the last stop where the list ends (0.41 and 0.69). No focused row was cut off at
-the top or the bottom. Switching a package with Select keeps its list open and the row where it was, while it builds and
-after, and back off. That is the simulator: how the focus engine and the scroll view behave on an Apple TV is not measured.
+**Scrolling, the open risk.** The Settings pane scrolls to centre the row that took focus, in the same moment the row before
+it shrinks and the new one grows. Measured on the simulator with the real focus engine, down through all 14 packages and back
+up (a library of the shipped packages, some on with channels the sample library cannot fill): unfocused rows are 95 pt tall,
+focused ones 129 to 268 pt (NOSTALGEX, 22 names and 4 amber, the tallest at 268; KIDZ ZONE, 15 names, off, 184; HIGH ROTATION,
+last, on with 5 amber, 186). Every row in the middle of the list comes to rest at the same place on the screen whatever its own
+height, 0.58 of the screen height, and the same place going up as going down. The first row and the last stop where the list
+ends (0.41 and 0.70), and NOSTALGEX, second from the top and the tallest, rests at 0.56. No focused row was cut off at the top
+or the bottom. Switching a package with Select keeps its list open and the row where it was, while it builds and after, and
+back off. That is the simulator: how the focus engine and the scroll view behave on an Apple TV is not measured.
 
-**Test.** `PackageChannelListingTests` (24): the names in package order, every shipped package read from channels.json with no
+**Test.** `PackageChannelListingTests` (21): the names in package order, every shipped package read from channels.json with no
 name dropped, every shipped package listing its channels by ascending channel number (the order the website sorts them in), a
 long package, the amber set equals the channels without content and the badge counts them (exhaustive over every pattern of up
 to six channels, on or off, building or not, against the rule it replaced), an empty package, a package with no missing
-channels, off, building and nothing on air marking none, which names are drawn amber, where names break into lines (a dot only
-between two names on one line, every name once and in order, a name wider than the row alone on its line), and what VoiceOver
-hears (the count in titles, the names, which are short, and no hint for a package with no names).
+channels, off, building and nothing on air marking none, the drawn text (the names and nothing else, joined by commas, every
+shipped package's names once and in order, a name never broken across lines, only the short ones amber, an off package dimmer),
+and what VoiceOver hears (the count in titles, the names, which are short, and no hint for a package with no names).
 `SettingsPackageChannelsTests` (UI, 2): the walk above, with the same row measured focused and unfocused, and the amber line
 present on exactly the rows that carry the amber count; and Select on a package. Demo mode with a new test-only
 `-uiTestPackageList`, which lists the shipped packages after DEMO, some on with channels short of content.
 
-**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `PackageChannelListingTests` 24 of 24. UI:
-`SettingsPackageChannelsTests` 2 of 2 and `SettingsChannelsDrilldownTests` 1 of 1 (it reads the row's new VoiceOver text). The
-whole of `NostalgexTests` was last run on the commit before this change: 1,202 passed, 0 failed, 29 skipped (the live-server
-harnesses). What changed since is the names list's drawing, the row's VoiceOver count and hint, and this class's tests, so the
-rest of the suite was not run again. The screenshots show no dot at the start or end of a wrapped line, and the heights of the
-long rows are the same as before (296 pt for NOSTALGEX, 213 pt for HIGH ROTATION).
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,207 passed, 0 failed,
+29 skipped (the live-server harnesses), `PackageChannelListingTests` among them 21 of 21. UI: `SettingsPackageChannelsTests`
+2 of 2 and `SettingsChannelsDrilldownTests` 1 of 1 (it reads the row's new VoiceOver text). The screenshots show the names in
+commas wrapping after a comma, with the amber ones amber.
 
 **Half-done.** On `appletv/package-channels-preview`, off the 1.0.31 bundle branch (f2fda75d) and not merged into it, so that
 build can ship without it. Not pushed, no build cut, not run on a TV. The Roku app and the web tuner are not changed. The list
