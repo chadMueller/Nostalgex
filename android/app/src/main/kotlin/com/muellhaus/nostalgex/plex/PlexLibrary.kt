@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex.plex
 
 import com.muellhaus.nostalgex.engine.DailyManifest
+import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.SectionTally
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaItem
@@ -34,6 +35,14 @@ class PlexLibrary(private val client: PlexClient) {
 
     private suspend fun directories(server: PlexServer) =
         client.get(server, "/library/sections")["MediaContainer"]?.jsonObject?.array("Directory") ?: emptyList()
+
+    /**
+     * Each section's change stamps, for the refresh's signature (LibraryChangeSignature, #195):
+     * one small request, where a scan reads every item.
+     */
+    suspend fun stamps(server: PlexServer): List<DailyRefresh.SectionStamp> = directories(server).map {
+        DailyRefresh.SectionStamp(it.str("key") ?: "", it.long("updatedAt"), it.long("contentChangedAt"))
+    }
 
     /** Every library on the server, for the library-selection screen and Settings (loadSections). */
     suspend fun sections(server: PlexServer): List<LibrarySection> = directories(server).map {

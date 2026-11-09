@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.CollectionCategory
 import com.muellhaus.nostalgex.engine.Collections
@@ -687,6 +688,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     fun signOut() {
         closeSettings()
+        stopDailyRefresh()
         playback.stop()
         leaveDemoMode()
         prefs.signOut()
@@ -1319,6 +1321,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
                     scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
+                    markLoaded(scanned.abandoned)
                     if (enrichment != null) {
                         val titles = items.count { it.tmdbID != null }
                         step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
@@ -1500,9 +1503,11 @@ class AppModel(private val context: Context) : Playback.Listener {
                 // An abandoned refresh is a subset of what is on screen: keep the guide (isLibraryStale).
                 if (scanned.abandoned) {
                     Log.i(TAG, "REFRESH abandoned mid-scan; keeping the loaded lineup")
+                    markLoaded(abandoned = true)
                     return@launch
                 }
                 val items = scanned.items
+                markLoaded(abandoned = false)
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
                 val collections = readCollections(servers)
@@ -1611,6 +1616,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
         screen = Screen.Watching
         startClock()
+        startDailyRefresh()
         // The first channel, as the Apple TV tunes at launch (it keeps no last channel).
         tune(built.channels.first())
         return true
@@ -1630,6 +1636,74 @@ class AppModel(private val context: Context) : Playback.Listener {
                 if (watershedHold) channel?.let { ch -> if (lineup?.isWatershedHold(ch) == false) tune(ch) }
             }
         }
+    }
+
+    // ── The daily refresh (startDailyRefresh, refreshLibraryIfChanged, #195) ──
+
+    private var dailyRefreshJob: Job? = null
+
+    /**
+     * Every 15 minutes while the guide is up, once the library last loaded 6 hours ago or more
+     * and the last check was as long ago, the library is read again behind the guide. Stopped
+     * with the activity (MainActivity.onStop), as tvOS suspends the Apple TV's loop; the first
+     * check after coming back is 15 minutes later.
+     */
+    fun startDailyRefresh() {
+        dailyRefreshJob?.cancel()
+        if (screen != Screen.Watching || demoMode) return
+        dailyRefreshJob = scope.launch {
+            while (isActive) {
+                delay(DailyRefresh.CHECK_SECONDS * 1000)
+                val now = System.currentTimeMillis() / 1000
+                if (demoMode || loadingLibrary || refreshing || screen != Screen.Watching) continue
+                if (DailyRefresh.due(now, prefs.lastLoadSec, prefs.lastCheckSec)) refreshIfChanged(now)
+            }
+        }
+    }
+
+    fun stopDailyRefresh() {
+        dailyRefreshJob?.cancel()
+        dailyRefreshJob = null
+    }
+
+    /**
+     * The 6-hour refresh, made to ask before it scans: on Plex an unchanged signature on a scan
+     * under a day old skips it. Jellyfin and Emby have no signature and always scan.
+     */
+    private suspend fun refreshIfChanged(now: Long) {
+        prefs.lastCheckSec = now
+        val age = now - prefs.lastLoadSec
+        val t0 = SystemClock.elapsedRealtime()
+        val current = currentSignature()
+        if (DailyRefresh.shouldSkip(age, prefs.librarySignature, current)) {
+            Log.i(TAG, "REFRESH: library unchanged on server (${age / 3600}h since scan, checked in ${SystemClock.elapsedRealtime() - t0} ms), skipping rebuild")
+            return
+        }
+        Log.i(TAG, "REFRESH: ${age / 3600}h since scan, signature ${if (current == null) "unavailable" else "changed"}, reloading in background")
+        refreshInBackground(selectedServers, scannedItems)
+    }
+
+    /** Every Plex server's signature as one (currentLibrarySignature); null on Jellyfin and Emby, or when a server can't say. */
+    private suspend fun currentSignature(): String? {
+        if (mbServer != null || demoMode) return null
+        val servers = selectedServers.takeIf { it.isNotEmpty() } ?: return null
+        val library = PlexLibrary(plex)
+        val parts = servers.map { server ->
+            val stamps = runCatching { library.stamps(server) }.getOrNull() ?: return null
+            DailyRefresh.signature(server.machineIdentifier, stamps) ?: return null
+        }
+        return DailyRefresh.combine(parts)
+    }
+
+    /**
+     * A load or refresh finished: the clock and baseline the daily refresh reads. An abandoned
+     * scan is backdated a day, so the next check reads it again, and carries no signature.
+     */
+    private suspend fun markLoaded(abandoned: Boolean) {
+        val now = System.currentTimeMillis() / 1000
+        prefs.librarySignature = if (abandoned) null else currentSignature()
+        prefs.lastLoadSec = if (abandoned) now - DailyRefresh.FORCE_AFTER_SECONDS else now
+        prefs.lastCheckSec = now
     }
 
     // ── Watching ─────────────────────────────────────────────────────────

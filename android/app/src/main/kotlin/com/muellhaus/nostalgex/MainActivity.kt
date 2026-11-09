@@ -48,11 +48,14 @@ class MainActivity : ComponentActivity() {
         // its watch state back (PlaybackTracker.onBackground); coming back tunes in again.
         model.watchReporter.stop()
         model.playback.stop()
+        // The daily refresh waits too: nobody is watching the guide it would rebuild.
+        model.stopDailyRefresh()
     }
 
     override fun onRestart() {
         super.onRestart()
         model.channel?.let(model::tune)
+        model.startDailyRefresh()
     }
 
     override fun onDestroy() {

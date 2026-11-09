@@ -121,7 +121,25 @@ class Prefs(context: Context) {
         get() = prefs.getString(StreamQuality.STORAGE_KEY, null) ?: StreamQuality.AUTO.id
         set(value) = prefs.edit().putString(StreamQuality.STORAGE_KEY, value).apply()
 
-    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser").apply()
+    /**
+     * The daily refresh's clock and baseline (#195), as the Apple TV keeps them with its
+     * snapshot: when the library last loaded (backdated a day after an abandoned scan), when it
+     * was last checked, and the Plex signature it loaded with. Seconds since the epoch.
+     */
+    var lastLoadSec: Long
+        get() = prefs.getLong("nostalgex_last_load_at", 0L)
+        set(value) = prefs.edit().putLong("nostalgex_last_load_at", value).apply()
+
+    var lastCheckSec: Long
+        get() = prefs.getLong("nostalgex_last_library_check_at", 0L)
+        set(value) = prefs.edit().putLong("nostalgex_last_library_check_at", value).apply()
+
+    var librarySignature: String?
+        get() = prefs.getString("nostalgex_library_signature", null)
+        set(value) = prefs.edit().putString("nostalgex_library_signature", value).apply()
+
+    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser")
+        .remove("nostalgex_last_load_at").remove("nostalgex_last_library_check_at").remove("nostalgex_library_signature").apply()
 }
 
 /**

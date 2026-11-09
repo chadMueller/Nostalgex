@@ -3,6 +3,34 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: the library is read again every 6 hours, #195)
+
+**Why.** Android read the library only at launch and on RESCAN LIBRARY, so a film added on the server while the app ran never appeared. The Apple TV (`startDailyRefresh`, `refreshLibraryIfChanged`) and the Roku (`DailyRefresh.brs`) read it again behind the guide on their own (#195).
+
+**Changed.**
+- `DailyRefresh` (new, `android/engine`):
+  - the due rule: every 15 minutes, a refresh once the last load and the last check are both 6 hours old;
+  - the Plex signature from each section's `updatedAt` and `contentChangedAt` (`LibraryChangeSignature`; `scannedAt` is left out because Plex's scheduled scans bump it every run);
+  - the skip: unchanged signature, and a scan under 24 hours old.
+  - `DailyRefreshTest` holds it to the Roku's `DailyRefreshTests.brs` cases and the Apple TV's `LibraryRefreshEfficiencyTests` signature and skip cases.
+- `AppModel`:
+  - The timer runs while the guide is up, never in demo mode, and never starts a refresh while a load or a refresh is running.
+  - On Plex it asks each server's `/library/sections` first (`PlexLibrary.stamps`). Jellyfin and Emby have no signature and always rescan, as before.
+  - A changed library is swapped in by `refreshInBackground` as before, without stopping what is playing.
+  - Every full load and every refresh records the load time, the check time and the signature. An abandoned scan is backdated a day and has no signature, as on the Apple TV.
+  - They live in `Prefs` rather than the saved library, so saved libraries stay valid; sign-out clears them.
+- `MainActivity`: the timer stops with the activity (`onStop`) and starts again with it (`onRestart`), as tvOS suspends the Apple TV's loop. A TV left on another app doesn't rescan behind it, and the first check after coming back is 15 minutes later.
+
+**Measured on a SHIELD (Android 11).** A temporary build with a 30 s check and a 60 s threshold, not committed:
+- On the 11,396-item Plex library, the launch refresh read everything in 34.5 s, with the Java heap peaking at 114 MiB.
+- The next check asked for the section stamps, found them unchanged, and skipped the rebuild in 31 ms, the heap flat at 61 MiB.
+- A copy against the test Jellyfin: with the guide up, a fifth film was added on the server. The next check rescanned (no signature) and read 5 items in 448 ms. The guide gained the film as UP NEXT and two channels, with no relaunch and the programme still playing.
+
+**Not checked.**
+- A Plex library that changes, to see the signature move on a real server. The change rule is covered by the Apple TV's cases.
+- The real 15-minute and 6-hour times on a TV.
+- The launch refresh on this library logged "collections changed" on runs where the library hadn't changed, as in the #196 runs. That looks like the collections comparison, not this change, and is not looked into here.
+
 ## 2026-11-09 (Android: Plex titles with a Latin-1 byte, #196)
 
 **Why.** Plex copies a file or folder name into its JSON byte for byte, so an unmatched item named in Latin-1 puts a lone 0xE9 in its title. Android read every Plex answer with OkHttp's `body.string()`, which turns such a byte into U+FFFD, so the guide would read "Caf� Society". The Apple TV, the web tuner and the Roku read the byte as Windows-1252 and show "Café Society" (#196).

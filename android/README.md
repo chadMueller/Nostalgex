@@ -21,6 +21,9 @@ listing; it installs over `adb`.
   server if you own none. Jellyfin and Emby read the one server signed
   in to, as the web tuner's `fetchJellyfinLibraryFromServer`. The library is
   saved, so a launch opens on it and reads the servers again behind the guide.
+  While the guide is up it reads them again every 6 hours, as the Apple TV
+  does; on Plex a library whose sections haven't changed is skipped until its
+  last scan is a day old.
 - Builds the channels from the root's `channels.json` and
   `channels-memberships.json` (symlinked into `app/src/main/assets/`), with
   the package you had on, or the packages with content if that one fills
