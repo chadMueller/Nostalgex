@@ -1,8 +1,10 @@
 import Foundation
 
 /// The channel names a focused package row lists under its description on CHANNEL PACKAGES
-/// (discussion #217). Names only, no channel numbers, in the package's own order (the order
-/// of `channelIDs` in channels.json, the same order the website's lineup uses).
+/// (discussion #217). Names only, no channel numbers, in the package's own order: the order of
+/// `channelIDs` in channels.json. Every shipped package lists them by ascending channel number,
+/// which is how the website's lineup sorts them (`scripts/generate-lineup-html.mjs`), so the two
+/// agree; `PackageChannelListingTests` pins that.
 ///
 /// One rule decides which channels are short of content, and the amber count on the row is
 /// read from this same list (`badge`), so the count names exactly what it counts:
@@ -45,5 +47,23 @@ struct PackageChannelListing: Equatable {
     var badge: Int? {
         let count = shortChannels.count
         return count > 0 ? count : nil
+    }
+
+    /// What VoiceOver reads after the row's title for the amber count. "Titles", the word the
+    /// on-screen line and the WHY ARE SOME CHANNELS MISSING? page use.
+    var badgeLabel: String? {
+        guard let count = badge else { return nil }
+        return count == 1 ? "1 channel has not enough titles yet" : "\(count) channels have not enough titles yet"
+    }
+
+    /// The row's VoiceOver hint: the channels in order, then which of them are short, because amber is
+    /// colour only on screen. Nil when there are no names, so a row with no list has no hint at all.
+    var spokenChannels: String? {
+        guard !entries.isEmpty else { return nil }
+        var text = "Channels: " + names.joined(separator: ", ") + "."
+        if !shortChannels.isEmpty {
+            text += " Not enough titles yet: " + shortChannels.map(\.name).joined(separator: ", ") + "."
+        }
+        return text
     }
 }

@@ -100,7 +100,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
         let legend = app.descendants(matching: .any)["packageChannelNamesLegend"].exists
         XCTAssertTrue(names, "\(step): the focused row lists its channels")
         // The amber legend is on exactly the rows that carry the amber count: the count names what it counts.
-        XCTAssertEqual(legend, f.label.contains("more content"), "\(step): amber names and the amber count go together: \(f.label)")
+        XCTAssertEqual(legend, f.label.contains("not enough titles"), "\(step): amber names and the amber count go together: \(f.label)")
         print("PACKAGE-CHANNELS \(step): \(f.label.prefix(34)) y=\(Int(frame.minY))..\(Int(frame.maxY)) h=\(Int(frame.height)) centre=\(String(format: "%.2f", centre)) names=\(names) legend=\(legend) value=\(f.value as? String ?? "-")")
         shot(step)
         XCTAssertGreaterThanOrEqual(frame.minY, window.minY, "\(step): the focused row is cut off at the top")

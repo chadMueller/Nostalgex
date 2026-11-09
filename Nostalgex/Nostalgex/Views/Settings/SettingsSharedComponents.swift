@@ -338,7 +338,8 @@ struct SettingsToggleRow: View {
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
         .accessibilityLabel(alertBadgeLabel.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
-        .accessibilityHint(channelNames.map { PackageChannelNames.spokenNames($0) } ?? "")
+        // Only a package row with names has a hint; an empty one reads nothing, never "Channels: ".
+        .accessibilityHint(channelNames?.spokenChannels ?? "")
         .animation(.easeInOut(duration: 0.2), value: isOn)
         .animation(.easeInOut(duration: 0.15), value: isFocused)
     }

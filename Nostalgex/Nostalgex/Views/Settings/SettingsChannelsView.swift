@@ -191,7 +191,7 @@ private struct ChannelsPackagesPage: View {
             subtitle: subtitle,
             detail: bundle.enabled ? "\(available)/\(total) CH" : "\(total) CH",
             alertBadge: missingBadge,
-            alertBadgeLabel: missingBadge.map { "\($0) channel\($0 == 1 ? "" : "s") need\($0 == 1 ? "s" : "") more content" },
+            alertBadgeLabel: listing.badgeLabel,
             channelNames: listing,
             isOn: bundle.enabled,
             isFocused: isFocused("bundle_\(bundle.id)"),
