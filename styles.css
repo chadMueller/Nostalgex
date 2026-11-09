@@ -3081,12 +3081,6 @@ sup.tm { font-size: 0.32em; vertical-align: top; position: relative; top: 0.35em
 @media (max-width: 480px) {
   .page-home .hero-roku .cta-sticker { right: 16px; }
 }
-.page-home .hero-roku-note {
-  margin-top: 10px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--ink-soft);
-}
 
 .page-home .hero-servers {
   display: flex;
