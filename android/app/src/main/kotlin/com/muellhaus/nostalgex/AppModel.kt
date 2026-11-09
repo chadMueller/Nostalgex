@@ -853,19 +853,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     // ── Libraries (library selection: AppState+Auth.swift, I-054) ────────
 
     /** The libraries switched off, as LibrarySection ids. A library never seen before is on. */
-    /** The libraries hidden on Jellyfin that the viewer switched on; the rest of the hidden ones stay off (hiddenSectionsOnByDefault). */
-    var includedHiddenSections by mutableStateOf(prefs.includedHiddenSections)
-        private set
-
-    /** A hidden library follows its own opt-in set while hidden ones start off; every other library the opt-out set. */
-    private fun optIn(section: LibrarySection) = section.hidden && !LibrarySection.HIDDEN_ON_BY_DEFAULT
-
-    /** Whether a library is scanned: switched off, or hidden on Jellyfin and not switched on, it isn't. */
-    fun isSectionOn(section: LibrarySection) =
-        if (optIn(section)) section.id in includedHiddenSections else section.id !in deselectedSections
-
-    /** Whether a library starts on in the picker after sign-in (librarySectionStartsOn). */
-    fun sectionStartsOn(section: LibrarySection) = !optIn(section)
+    /** Whether a library is scanned: one switched off isn't. */
+    fun isSectionOn(section: LibrarySection) = section.id !in deselectedSections
 
     var deselectedSections by mutableStateOf(prefs.deselectedSections)
         private set
@@ -876,7 +865,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     private suspend fun loadAllSections(): List<LibrarySection> {
         mbServer?.let { mb ->
-            return runCatching { mediaBrowser.sections(mb, selectedServers.first().machineIdentifier) }.getOrDefault(emptyList())
+            return runCatching { mediaBrowser.sections(mb, selectedServers.first().machineIdentifier, includeHiddenOn) }.getOrDefault(emptyList())
         }
         val library = PlexLibrary(plex)
         return prefs.servers.flatMap { server -> runCatching { library.sections(server) }.getOrDefault(emptyList()) }
@@ -890,16 +879,12 @@ class AppModel(private val context: Context) : Playback.Listener {
     private fun chooseLibrariesOrScan() {
         deselectedSections = emptySet()
         prefs.deselectedSections = emptySet()
-        includedHiddenSections = emptySet()
-        prefs.includedHiddenSections = emptySet()
         screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
         scope.launch {
             val sections = loadAllSections()
             availableSections = sections
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
-            // A hidden library is worth the screen even alone: it starts off, so without the picker
-            // nothing would offer it.
-            if (sections.size > 1 || sections.any { it.hidden }) screen = Screen.ChooseLibraries(sections) else loadLibrary()
+            if (sections.size > 1) screen = Screen.ChooseLibraries(sections) else loadLibrary()
         }
     }
 
@@ -920,11 +905,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun confirmLibraries(included: Set<String>) {
         val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
         if (included.isEmpty()) return
-        // A hidden library that stayed off isn't an exclusion: it is simply not switched on.
-        deselectedSections = sections.filter { !optIn(it) && it.id !in included }.map { it.id }.toSet()
+        deselectedSections = sections.filter { it.id !in included }.map { it.id }.toSet()
         prefs.deselectedSections = deselectedSections
-        includedHiddenSections = sections.filter { optIn(it) && it.id in included }.map { it.id }.toSet()
-        prefs.includedHiddenSections = includedHiddenSections
         Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
     }
@@ -936,13 +918,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (loadingLibrary || refreshing) return
         val on = isSectionOn(section)
         if (on && enabledSectionCount <= 1) return
-        if (optIn(section)) {
-            includedHiddenSections = if (on) includedHiddenSections - section.id else includedHiddenSections + section.id
-            prefs.includedHiddenSections = includedHiddenSections
-        } else {
-            deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
-            prefs.deselectedSections = deselectedSections
-        }
+        deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
+        prefs.deselectedSections = deselectedSections
         libraryStore.clear()
         closeSettings()
         playback.stop()
@@ -1442,10 +1419,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
-            val hiddenOn = LibrarySection.excludedKeys(includedHiddenSections, servers.first().machineIdentifier)
             val skipped = java.util.concurrent.atomic.AtomicInteger()
             val (items, abandoned) = watched(foreground, mb.name) { onSection, cancelled ->
-                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, hiddenOn) { skipped.incrementAndGet() }
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, includeHiddenOn) { skipped.incrementAndGet() }
             }
             return ScanResult(items, abandoned, skipped.get())
         }
@@ -1527,7 +1503,8 @@ class AppModel(private val context: Context) : Playback.Listener {
      * Reads every server again while the guide is up, then asks for the enrichment the local
      * cache didn't have. The guide changes only if the library or its enrichment did.
      */
-    private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>) {
+    /** `alwaysSave` saves what it read even when nothing changed, for a library store that was just cleared. */
+    private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>, alwaysSave: Boolean = false) {
         scope.launch {
             refreshing = true
             try {
@@ -1551,7 +1528,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val collectionsChanged = !Collections.sameMembers(collections, serverCollections)
                 val reordered = !collectionsChanged && collections != serverCollections
                 val scanChanged = items != saved || collections != serverCollections
-                if (scanChanged) {
+                if (scanChanged || alwaysSave) {
                     scannedItems = items
                     serverCollections = collections
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
@@ -1847,6 +1824,33 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun toggleOpenOnLastChannel() {
         openOnLastChannel = !openOnLastChannel
         prefs.openOnLastChannel = openOnLastChannel
+    }
+
+    /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#224): off unless the viewer turns it on. */
+    var includeHiddenLibraries by mutableStateOf(prefs.includeHiddenLibraries)
+        private set
+
+    /** Whether Settings offers the switch: Jellyfin only, since Emby's library list has no hidden ones to ask for. */
+    val offersIncludeHidden get() = mbServer?.kind == "jellyfin"
+
+    /** What the scan and the library list ask for: the switch, on Jellyfin. */
+    private val includeHiddenOn get() = offersIncludeHidden && includeHiddenLibraries
+
+    /**
+     * The switch, as the web's toggleIncludeHiddenLibraries: the library is read again once, in
+     * the background, so the guide, the channel playing and Settings stay as they are. The saved
+     * library was read the other way, so it is dropped first: a read that fails isn't followed by
+     * a launch that restores a library the switch no longer describes. A press while a read is
+     * running does nothing.
+     */
+    fun toggleIncludeHiddenLibraries() {
+        if (!offersIncludeHidden || loadingLibrary || refreshing) return
+        includeHiddenLibraries = !includeHiddenLibraries
+        prefs.includeHiddenLibraries = includeHiddenLibraries
+        Log.i(TAG, "INCLUDE HIDDEN LIBRARIES ${if (includeHiddenLibraries) "on" else "off"}; reading the library again")
+        libraryStore.clear()
+        refreshSections()
+        refreshInBackground(selectedServers, scannedItems, alwaysSave = true)
     }
 
     /**

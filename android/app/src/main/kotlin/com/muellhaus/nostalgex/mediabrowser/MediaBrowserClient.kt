@@ -246,12 +246,12 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         excluded: Set<String> = emptySet(),
         onSection: (List<MediaItem>) -> Unit = {},
         cancelled: () -> Boolean = { false },
-        /** Libraries hidden on Jellyfin that the viewer switched on (view ids). */
-        includedHidden: Set<String> = emptySet(),
+        /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN. */
+        includeHidden: Boolean = false,
         onSkippedNoRuntime: () -> Unit = {},
     ): List<MediaItem> = withContext(Dispatchers.IO) {
         fun stamp(items: List<MediaItem>) = items.map { it.copy(serverUrl = server.url, serverToken = server.token) }
-        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includedHidden, onSkippedNoRuntime).let(::stamp)
+        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includeHidden, onSkippedNoRuntime).let(::stamp)
     }
 
     /**
@@ -263,8 +263,8 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
     }
 
     /** Every library the user can see, for the library-selection screen and Settings. */
-    suspend fun sections(server: MediaBrowserServer, serverId: String): List<LibrarySection> = withContext(Dispatchers.IO) {
-        library(server).sections(serverId, server.name)
+    suspend fun sections(server: MediaBrowserServer, serverId: String, includeHidden: Boolean): List<LibrarySection> = withContext(Dispatchers.IO) {
+        library(server).sections(serverId, server.name, includeHidden)
     }
 
     /** The engine's scan over this server. A refused or failed read throws. */

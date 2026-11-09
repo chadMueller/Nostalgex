@@ -4,6 +4,7 @@ import android.content.Context
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.LibrarySection
+import com.muellhaus.nostalgex.engine.MediaBrowserLibrary
 import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
@@ -72,10 +73,13 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("nostalgex_completed_initial_load", false)
         set(value) = prefs.edit().putBoolean("nostalgex_completed_initial_load", value).apply()
 
-    /** The libraries hidden on Jellyfin that the viewer switched on (LibrarySection ids), under the Apple TV's key. */
-    var includedHiddenSections: Set<String>
-        get() = prefs.getStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, null) ?: emptySet()
-        set(value) = prefs.edit().putStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, value).apply()
+    /**
+     * INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#224), on this TV only, under the web tuner's key.
+     * Sign-out leaves it alone, as the web's does.
+     */
+    var includeHiddenLibraries: Boolean
+        get() = prefs.getBoolean(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY, MediaBrowserLibrary.INCLUDE_HIDDEN_DEFAULT)
+        set(value) = prefs.edit().putBoolean(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY, value).apply()
 
     /** The libraries switched off (LibrarySection ids), under the Apple TV's key. Absent means every library is on. */
     var deselectedSections: Set<String>

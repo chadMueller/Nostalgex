@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: libraries hidden on Jellyfin behind one switch, #224)
+
+**Changed.** Libraries hidden from the Jellyfin home screen now sit behind one switch, as on the web tuner. Android had them the Apple TV's way: each one listed and switched on separately. Chad's issue asked for the web's single switch until he says otherwise, and the switch keeps Android the same as the web and Docker.
+- **The switch.** INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's wording. It sits under OPEN ON LAST CHANNEL, only on Jellyfin, and isn't shown in demo mode. It is off by default (`MediaBrowserLibrary.INCLUDE_HIDDEN_DEFAULT`) and kept on the TV under the web's key, `nostalgex_include_hidden_libraries`. Sign-out leaves it alone.
+- **Off.** The scan and library selection send the one plain `/UserViews?userId=` request Android always sent.
+- **On.** The scan asks once, with `includeHidden=true`. Library selection asks both lists so a hidden library can be marked HIDDEN ON JELLYFIN. A hidden library is then on like any other, unless the viewer switches it off.
+- **Pressing it.** The saved library is dropped, as the web does, then read again in the background. The guide, the channel playing and Settings stay where they are, and the result is saved even when nothing changed.
+- **Removed.** The per-library opt-in: `includedHiddenSections` and the key `nostalgex_included_hidden_library_sections`. It was never in a release.
+- **Emby.** Unchanged in both positions.
+
+`JellyfinHiddenLibrariesTest` is rewritten around the switch: the golden `views` paths; off sends exactly the old request; on reads a hidden film library and a hidden show library's episodes; a library the user can't access is never asked; a hidden library switched off stays unread; Emby is the same either way. With the parameter taken out of `userViewsPath`, 3 of its 7 tests fail. All 274 engine tests pass.
+
+**Measured** on a Google TV emulator (Android 16) against a lab Jellyfin 12.4 in Docker. The test user had one film library hidden from My Media (3 films) and one with no access (2 films). On the server, the plain list leaves out the hidden library, `includeHidden=true` adds it, the library without access is in neither list, and asking that library for items directly answers HTTP 401.
+- **Off:** 5 items, 3 channels in the guide.
+- **On:** a background re-read of 8 items in 1.5 s, and 4 channels. LIBRARIES lists the hidden library as "Movies · HIDDEN ON JELLYFIN" and doesn't list the one without access.
+- **Off again:** 5 items and 3 channels.
+
+Not measured on a real Google TV.
+
 ## 2026-11-09 (Android: Jellyfin and Emby playlists no longer air as films, #206)
 
 **Changed.**

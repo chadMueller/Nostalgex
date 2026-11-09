@@ -55,35 +55,21 @@ class MediaBrowserLibrary(
 
     /**
      * Every library, for the library-selection screen and Settings (JellyfinAPIService.loadSections).
-     * On Jellyfin two requests: the plain list, as always, then the list with the libraries the
-     * user hides from the home screen; one only in the second is `hidden`. If the second fails
-     * the answer is the plain list. The union keeps the second answer's order, so a second
-     * answer that is somehow smaller can't take a library off the list.
+     * With the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch off (`includeHidden` false), the one
+     * plain list Android always asked for. With it on, on Jellyfin, the list with the libraries
+     * the user hides from the home screen too, and the plain list beside it so a hidden one can
+     * be marked `hidden`. If the plain list fails, nothing is marked. A view with no videos in
+     * it (Playlists, Music, Collections...) is not offered (#206).
      */
-    fun sections(serverId: String, serverName: String): List<LibrarySection> {
-        val shown = views()
-        val everything = if (backend == "jellyfin") runCatching { views(includeHidden = true) }.getOrNull() ?: shown else shown
-        val shownIds = shown.mapTo(HashSet()) { it.str("Id") }
-        val everythingIds = everything.mapTo(HashSet()) { it.str("Id") }
-        // A view with no videos in it (Playlists, Music, Collections...) is not offered (#206).
-        return (everything + shown.filter { it.str("Id") !in everythingIds }).filter(::holdsVideos).map { view ->
+    fun sections(serverId: String, serverName: String, includeHidden: Boolean = false): List<LibrarySection> {
+        val listed = views(includeHidden)
+        val shownIds = if (includeHidden && backend == "jellyfin") {
+            views().mapTo(HashSet()) { it.str("Id") }.takeIf { it.isNotEmpty() }
+        } else null
+        return listed.filter(::holdsVideos).map { view ->
             LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")),
-                hidden = view.str("Id") !in shownIds)
+                hidden = shownIds != null && view.str("Id") !in shownIds)
         }
-    }
-
-    /**
-     * The libraries a scan reads: the plain list, plus those hidden on Jellyfin that the viewer
-     * switched on (`includedHidden`, view ids). The hidden list is only asked for when one is
-     * on, so by default the scan's requests are what they always were.
-     */
-    private fun scanViews(includedHidden: Set<String>): List<JsonObject> {
-        val shown = views()
-        if (backend != "jellyfin" || includedHidden.isEmpty()) return shown
-        val everything = runCatching { views(includeHidden = true) }.getOrNull() ?: return shown
-        val shownIds = shown.mapTo(HashSet()) { it.str("Id") }
-        return everything.filter { it.str("Id") in shownIds || it.str("Id") in includedHidden } +
-            shown.filter { s -> everything.none { it.str("Id") == s.str("Id") } }
     }
 
     /**
@@ -95,13 +81,17 @@ class MediaBrowserLibrary(
         excluded: Set<String> = emptySet(),
         /** Each library once it is read whole, so a scan abandoned later still has these (LibraryScanInterrupted). */
         onSection: (List<MediaItem>) -> Unit = {},
-        /** Libraries hidden on Jellyfin that the viewer switched on (view ids); the rest of the hidden ones aren't read. */
-        includedHidden: Set<String> = emptySet(),
+        /**
+         * INCLUDE LIBRARIES HIDDEN ON JELLYFIN: the list is asked with includeHidden=true, so a
+         * library the user hides from the Jellyfin home screen is read like any other. Off, the
+         * request is the plain one. Emby has no such list (userViewsPath).
+         */
+        includeHidden: Boolean = INCLUDE_HIDDEN_DEFAULT,
         /** A movie or episode dropped for having no runtime, for the coverage line (skippedNoRuntimeCount). */
         onSkippedNoRuntime: () -> Unit = {},
     ): List<MediaItem> {
         // A view with no videos in it is never asked for items (#206).
-        val viewList = scanViews(includedHidden).filter { (it.str("Id") ?: "") !in excluded && holdsVideos(it) }
+        val viewList = views(includeHidden).filter { (it.str("Id") ?: "") !in excluded && holdsVideos(it) }
         val out = ArrayList<MediaItem>()
         val tally = SectionTally()
         for ((index, view) in viewList.withIndex()) {
@@ -357,6 +347,16 @@ class MediaBrowserLibrary(
         fun userViewsPath(backend: String, userId: String, includeHidden: Boolean = false) =
             if (backend == "emby") "/Users/${enc(userId)}/Views"
             else "/UserViews?userId=${enc(userId)}" + if (includeHidden) "&includeHidden=true" else ""
+
+        /**
+         * INCLUDE LIBRARIES HIDDEN ON JELLYFIN starts off (nostalgex-jellyfin-urls.js
+         * INCLUDE_HIDDEN_DEFAULT): hiding a library can be on purpose (adult content, test or
+         * plugin folders), so its titles must not start airing by surprise.
+         */
+        const val INCLUDE_HIDDEN_DEFAULT = false
+
+        /** Where the switch is kept on the TV, under the web tuner's key. */
+        const val INCLUDE_HIDDEN_KEY = "nostalgex_include_hidden_libraries"
 
         /** "DoviProfile50" is profile 5, "DoviProfile81" profile 8. */
         fun embyDoviProfile(subtype: String?): Int? =

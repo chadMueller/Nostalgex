@@ -79,8 +79,11 @@ listing; it installs over `adb`.
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned. A Plex music library adds nothing on either app (Plex lists
   artists, with no running time), so switching it off only saves its requests.
-  A Jellyfin library the user hides from the home screen is listed too, marked
-  HIDDEN ON JELLYFIN, and off until switched on there or in Settings. A Jellyfin
+  A Jellyfin library the user hides from the home screen is read only with
+  INCLUDE LIBRARIES HIDDEN ON JELLYFIN on (under PLAYBACK, off by default, as on
+  the web tuner, #224). Then it is listed, marked HIDDEN ON JELLYFIN, and on
+  like any other library; pressing the switch reads the library again once in
+  the background. A library the user has no access to is never listed. A Jellyfin
   or Emby view that holds no videos (Playlists, Music, Collections, Books,
   Photos, Home Videos, Live TV and the like) is neither listed nor scanned, and a
   row whose type the scan did not ask for is dropped, so a playlist is never a

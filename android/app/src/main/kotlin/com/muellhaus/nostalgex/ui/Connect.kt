@@ -324,8 +324,8 @@ private fun QuickConnect(model: AppModel, server: CheckedServer, code: String?) 
  */
 @Composable
 private fun ChooseLibraries(model: AppModel, sections: List<LibrarySection>) {
-    // Every library on, so one press builds the full guide; except one hidden on Jellyfin, listed and off until switched on.
-    var included by remember { mutableStateOf(sections.filter { model.sectionStartsOn(it) }.map { it.id }.toSet()) }
+    // Every library on, so one press builds the full guide.
+    var included by remember { mutableStateOf(sections.map { it.id }.toSet()) }
     val multiServer = sections.map { it.serverId }.toSet().size > 1
     Column(Modifier.widthIn(max = u(760)), verticalArrangement = Arrangement.spacedBy(u(24))) {
         Column(

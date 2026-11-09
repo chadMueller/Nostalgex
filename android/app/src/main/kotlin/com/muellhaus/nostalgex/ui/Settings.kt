@@ -379,6 +379,15 @@ private fun PlaybackRows(model: AppModel) {
             on = model.openOnLastChannel,
             modifier = Modifier.paneRow(model, "open_last_channel"),
         ) { model.toggleOpenOnLastChannel() }
+        // Jellyfin only, after OPEN ON LAST CHANNEL as on the web tuner (#224). Off unless switched on.
+        if (model.offersIncludeHidden) {
+            ToggleRow(
+                title = "INCLUDE LIBRARIES HIDDEN ON JELLYFIN",
+                subtitle = "Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.",
+                on = model.includeHiddenLibraries,
+                modifier = Modifier.paneRow(model, "include_hidden_libraries"),
+            ) { model.toggleIncludeHiddenLibraries() }
+        }
         // WATCH HISTORY (SettingsPlaybackView): what the server is told about what you watch.
         val server = model.backendName
         SectionHeader("WATCH HISTORY", "What $server is told about what you watch")

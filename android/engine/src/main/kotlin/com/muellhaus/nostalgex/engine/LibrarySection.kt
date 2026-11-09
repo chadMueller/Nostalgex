@@ -14,7 +14,8 @@ data class LibrarySection(
     val type: String,
     /**
      * Jellyfin only: the user hides this library from the home screen on the server
-     * (`MyMediaExcludes`). It is listed, and off until the viewer switches it on.
+     * (`MyMediaExcludes`). Listed only with INCLUDE LIBRARIES HIDDEN ON JELLYFIN on, and then
+     * on like any other library unless switched off.
      */
     val hidden: Boolean = false,
 ) {
@@ -41,22 +42,12 @@ data class LibrarySection(
         /** The Apple TV's UserDefaults key for the libraries switched off. */
         const val STORAGE_KEY = "nostalgex_deselected_library_sections"
 
-        /** The Apple TV's key for the hidden libraries the viewer switched on (LibrarySectionSelectionStore). */
-        const val INCLUDED_HIDDEN_KEY = "nostalgex_included_hidden_library_sections"
-
-        /**
-         * Whether a library hidden from the Jellyfin home screen starts on (hiddenSectionsOnByDefault).
-         * False: hiding it was a choice made on the server (adult content, test or plugin
-         * folders), so its titles must not start airing by surprise. The one line to change.
-         */
-        const val HIDDEN_ON_BY_DEFAULT = false
-
         /** What Settings and the library picker call such a library. */
         const val HIDDEN_MARK = "HIDDEN ON JELLYFIN"
 
         fun storageKey(serverId: String, key: String) = "$serverId::$key"
 
-        /** The library keys on one server among stored ids (switched off, or hidden ones switched on). */
+        /** The library keys on one server among the stored ids switched off. */
         fun excludedKeys(deselected: Set<String>, serverId: String): Set<String> {
             val prefix = storageKey(serverId, "")
             return deselected.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
