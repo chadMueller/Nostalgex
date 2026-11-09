@@ -31,11 +31,10 @@ its guide), as do two blog posts that describe Retro mode. The web tuner's remov
 ## 2026-11-09 (Apple TV: the guide no longer shows its highlight move when it comes back from full screen, I-041)
 
 **What the viewer saw.** Change channel in full screen, leave it, and the guide came back with the highlight on the row the
-viewer had left from, then moved it to the channel that is playing. The first I-041 fix put focus on the right row, but
-the move was in plain sight, and reported as clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a
-simulator. The
-same thing happened when the guide first appeared: the first row, or the seasonal invite, was highlighted for a moment
-before the playing channel.
+viewer had left from, then moved it to the channel that is playing. The first I-041 fix put focus on the right row, but the
+move was in plain sight, and it was reported as clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a
+simulator. The same thing happened when the guide first appeared: the first row, or the seasonal invite, was highlighted for
+a moment before the playing channel.
 
 **Why.** The highlight was drawn from the guide's focus state alone. tvOS hands focus back to the guide when the full
 screen cover has finished closing, which on a simulator is about 0.55 s after the close was asked for, and it hands it to
@@ -79,12 +78,13 @@ does not stop that. So the far case was measured: channel 1 playing, one press d
 the reverse, 19 rows apart. tvOS handed focus to the far row at about 552 ms and the guide moved it to the live row 6 to
 11 ms later, and the list's scroll offset did not change at all after the guide came back (1158 pt before and after going
 down to channel 20, 0 pt before and after going up to channel 1). The guide's placement on the live row runs in the same
-pass as the handout, which would undo a focus scroll within the frame. That is a simulator measurement; the offset
-changes on a TV are in the `[GuideJump]` lines as `scroll offset a -> b`.
+pass as the handout, which probably undoes a focus scroll within the frame; the probe cannot confirm that mechanism, only
+that the offset did not change. That is a simulator measurement; the offset changes on a TV are in the `[GuideJump]` lines
+as `scroll offset a -> b`.
 
 **Not measured.** The two limits (0.3 s for the move to the live row once a wrong row is handed out, 2 s overall) are
 constants with a unit test that pins their values; whether they suit a TV is not measured. The build was tried on the
-living room Apple TV 4K and looked right to its owner; the TV's own `[GuideJump]` timings are not read yet.
+living room Apple TV 4K by hand and looked right; its `[GuideJump]` timings are not read here.
 
 **Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) now reads the probe and fails if the guide drew
 any row but the live channel, in all three cases (back from full screen, the playing channel not the first, an invite above
@@ -96,11 +96,13 @@ ends the hold, its generation counter, its limits and which presses act. On this
 `GuideFocusAfterFullScreenTests` 5 of 5, `GuideReturnFocusTests` 20 of 20, `ChannelGuideWrapFocusTests` 9 of 9 (the guide's
 focus handler, which this change edits), `NowPlayingPanelFocusTests` 3 of 3, `OpenOnLastChannelLaunchTests` 2 of 2,
 `SettingsOpenOnLastChannelTests` 1 of 1, and the whole of `NostalgexTests`: 1,201 passed, 0 failed, 29 skipped (the
-live-server harnesses).
+live-server harnesses). Two of those UI classes, `ChannelGuideWrapFocusTests` and `NowPlayingPanelFocusTests`, run without a
+harness root and are for the simulator only; `OpenOnLastChannelLaunchTests`, `SettingsOpenOnLastChannelTests` and
+`GuideFocusAfterFullScreenTests` set their own.
 
-**Half-done.** On `appletv/guide-focus-no-jump`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut. Not
-yet run on a TV; the numbers above are a simulator's. Left alone: the package panel and the rows changing behind an open
-guide.
+**Half-done.** On `appletv/guide-focus-no-jump`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut. Tried by
+hand on the living room Apple TV 4K, where it looked right; its `[GuideJump]` timings are not read here, and the numbers above
+are a simulator's. Left alone: the package panel and the rows changing behind an open guide.
 
 ## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
 

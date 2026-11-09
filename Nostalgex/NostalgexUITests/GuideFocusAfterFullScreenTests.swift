@@ -166,15 +166,18 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
     ///
     /// Channel down from channel 1 wraps to channel 20, so one press in full screen is a 19 row jump.
     func testTheListDoesNotScrollToTheOldRowWhenTheLiveChannelIsFarAbove() {
-        farJump(root: "i041-far-jump-down", tuneRow: 0, press: .left, expectLive: "9020", expectOld: "9001")
+        farJump(root: "i041-far-jump-down", tuneRow: 0, press: .left, expectLive: "9020", expectOld: "9001", listIsScrolled: true)
     }
 
     /// The other way round: tuned on channel 20 (the bottom), one press up in full screen wraps to channel 1.
     func testTheListDoesNotScrollToTheOldRowWhenTheLiveChannelIsFarBelow() {
-        farJump(root: "i041-far-jump-up", tuneRow: 19, press: .right, expectLive: "9001", expectOld: "9020")
+        farJump(root: "i041-far-jump-up", tuneRow: 19, press: .right, expectLive: "9001", expectOld: "9020", listIsScrolled: false)
     }
 
-    private func farJump(root: String, tuneRow: Int, press change: XCUIRemote.Button, expectLive: String, expectOld: String) {
+    /// `listIsScrolled`: whether the live row is one the list has to be scrolled down to reach (channel 20), so
+    /// the offset it rests at is not zero; at the top (channel 1) it rests at zero.
+    private func farJump(root: String, tuneRow: Int, press change: XCUIRemote.Button, expectLive: String, expectOld: String,
+                         listIsScrolled: Bool) {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)
         Thread.sleep(forTimeInterval: 4)
@@ -209,12 +212,20 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         XCTAssertTrue(summary.hasPrefix("origin=fullScreenClosed"), summary)
         assertNeverShownAnotherRow(summary, live: expectLive, "far jump, back from full screen")
         // The row tvOS handed focus to was the far one, so the jump really was far.
-        XCTAssertTrue(probeList("raw", in: summary).contains(expectOld) || probeList("raw", in: summary).contains(expectLive),
-                      "raw focus never reached a row: \(summary)")
-        // And the list did not move in front of the viewer: no offset change after it came back (the probe
-        // lists the offset it had, then every change, so more than one entry is a scroll).
+        XCTAssertTrue(probeList("raw", in: summary).contains(expectOld),
+                      "tvOS never handed focus to the old row \(expectOld), so this was not the far case: \(summary)")
+        // And the list did not move in front of the viewer. The probe lists the offset the list had when the
+        // guide came back, then every change: exactly one entry is a list that stayed put, none is an observer
+        // that never reported (which would make the check vacuous), more than one is a scroll.
         let offsets = probeScroll(in: summary)
-        XCTAssertLessThanOrEqual(offsets.count, 1, "the list scrolled after the guide came back: \(offsets). \(summary)")
+        XCTAssertEqual(offsets.count, 1, "expected the one offset the list rested at, saw \(offsets). \(summary)")
+        if let rest = offsets.first.flatMap({ Double($0) }) {
+            if listIsScrolled {
+                XCTAssertGreaterThan(rest, 0, "the live row is far down, so the list rests scrolled: \(summary)")
+            } else {
+                XCTAssertEqual(rest, 0, accuracy: 0.5, "the live row is at the top, so the list rests at zero: \(summary)")
+            }
+        }
         let liveNumber = (Int(expectLive) ?? 0) - 9000
         XCTAssertTrue(focused().exists && focused().label.hasPrefix("Channel \(liveNumber),"),
                       "focus ended on \(focused().exists ? focused().label : "nothing"), not the live channel")
