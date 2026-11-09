@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: the home-screen row of #194, held for a question)
+
+**Half-done.** The link half of #194 is on `feature/android` (`9f5dc22d`). The "On Now" row isn't built: whether Google TV shows an app's row at all is unanswered, and Google TV is where #194 asks it to be measured.
+
+**What the docs say.** Android TV's home-screen guide (developer.android.com, "Recommend content on the home screen") is the only one Google publishes.
+- An app's first channel is its default and appears without the user approving it (`PreviewChannelHelper.publishDefaultChannel`, or `TvContractCompat.requestChannelBrowsable`).
+- It needs `com.android.providers.tv.permission.WRITE_EPG_DATA` and `androidx.tvprovider`. The library also merges `READ_EPG_DATA` into the manifest.
+- The home screen can be told to create the row at install with `android.media.tv.action.INITIALIZE_PROGRAMS`.
+- The guide says nothing about Google TV. What reports there are say Google TV hides third-party rows or doesn't show them:
+  - an open issue on Google's own `android/tv-samples` (#83) has channels created but never shown on API 30;
+  - open-source TV apps' notes from this year describe the same.
+
+**Measured.**
+- A throwaway build (not committed) published a default "On Now" channel with three cards.
+- On a Google TV emulator (Android 16) the channel was created (id 5), but the home screen can't be reached without signing in to a Google account, so whether it shows wasn't seen.
+- On a SHIELD it was created with `browsable=false` and not shown. That SHIELD's home screen is a third-party launcher, not the stock Android TV one, so that says nothing either way.
+- `PreviewChannelHelper.getAllChannels` in tvprovider 1.0.0 throws on a channel published without a description; the real channel must set one.
+
+**Next.** Chad's answer: whether any app's row shows on his Google TV, or a probe build tried there. If it does, the row is a launcher channel as #194 describes, plus the privacy text, and posters served by the app's own content provider (a Plex poster URL carries the token).
+
 ## 2026-11-09 (Android: a link that tunes a channel, the first half of #194)
 
 **Changed.** `nostalgex://channel/<id>` opens the app on that channel full screen, from a cold start or while it runs.
