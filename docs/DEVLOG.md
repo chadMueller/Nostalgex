@@ -3,6 +3,59 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: the guide no longer shows its highlight move when it comes back from full screen, I-041)
+
+**What the viewer saw.** Change channel in full screen, leave it, and the guide came back with the highlight on the row the
+viewer had left from, then moved it to the channel that is playing. The first I-041 fix put focus on the right row, but
+the move was in plain sight, and clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a simulator. The
+same thing happened when the guide first appeared: the first row, or the seasonal invite, was highlighted for a moment
+before the playing channel.
+
+**Why.** The highlight was drawn from the guide's focus state alone. tvOS hands focus back to the guide when the full
+screen cover has finished closing, which on a simulator is about 0.55 s after the close was asked for, and it hands it to
+the row it remembers, the old one. The guide moved focus to the live row a moment later (6 ms on a simulator, more on a
+TV). For that moment the old row was the highlighted one. The guide itself was on screen the whole time the cover was
+closing.
+
+**Changed.**
+- The guide draws the live channel's row highlighted from the first frame it is back, whatever row tvOS has focused for the
+  moment (`GuideReturnFocus.highlighted`, held by `LiveHighlightHold`, from the close of full screen or the guide
+  appearing). Real focus is still moved to the live row exactly as before.
+- The hold lets go the moment focus is anywhere other than the handout of a wrong row: focus on the live row, or the
+  viewer moving it, so a viewer's own move is never overridden. It lets go 0.3 s after a wrong row is handed out if the
+  move has not landed, so the highlight cannot stay on a row that is not the focused one, and it never lasts longer than
+  2 s.
+- No animated scroll runs for this case any more. The guide is placed on the live row with no animation when the channel
+  changes (it is covered then), when it comes back, and when it first appears. Before, the first appearance scrolled to
+  the row 0.1 s later with a 0.2 s animation, and the return scrolled 0.3 s later. The viewer's own moves still scroll
+  with the 0.2 s animation.
+- A debug-only log and probe (`GuideJumpProbe`): `[GuideJump]` lines with the time in milliseconds from the moment the
+  guide came back, for the row tvOS focused and the row the guide drew highlighted. A release build has an empty stand-in
+  and logs and keeps nothing. With `-uiTestGuideJumpProbe` a UI test can read the same sequence.
+
+**Measured** on the simulator (Apple TV 4K, 3rd generation), from the moment the guide came back:
+
+| | row drawn highlighted before | row drawn highlighted now | tvOS focus |
+|---|---|---|---|
+| back from full screen, channel changed 4 to 6 | none, then channel 4 at 540 ms, then 6 at 553 ms | channel 6 at 2.6 ms | channel 4 at 552 ms, channel 6 at 558 ms |
+| first appearance, playing channel 4 | none, then channel 1, then 4 | channel 4 at 7.6 ms | channel 1 at 59 ms, channel 4 at 90 ms |
+| first appearance, invite above channel 1 | none, then the invite, then 1 | channel 1 at 7.9 ms | the invite at 79 ms, channel 1 at 106 ms |
+
+The first frames after Menu show CH 06 highlighted and in view while the cover is still going away. The TV's own numbers
+are read from the same `[GuideJump]` lines.
+
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) now reads the probe and fails if the guide drew
+any row but the live channel, in all three cases (back from full screen, the playing channel not the first, an invite
+above channel 1). On the commit before this change those three failed with "the guide drew [9004, 9006] highlighted, not
+only the live channel 9006" and its two siblings; they pass now. `GuideReturnFocusTests` gained 9 cases for the highlight
+rule, what ends the hold, its generation counter and its two limits. On this head, on the simulator:
+`GuideFocusAfterFullScreenTests` 3 of 3, `GuideReturnFocusTests` 17 of 17 and `ChannelGuideWrapFocusTests` 9 of 9 (the
+guide's focus handler, which this change edits). The whole unit suite was not run again.
+
+**Half-done.** On `appletv/guide-focus-no-jump`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut. Not
+yet run on a TV; the numbers above are a simulator's. Left alone: the package panel and the rows changing behind an open
+guide.
+
 ## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
 
 **Why.** The setting was written to be off until someone turned it on. The decision is the other way: a viewer who has not
