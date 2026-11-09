@@ -38,6 +38,15 @@ enum GuideReturnFocus {
         isHandout && target(handedTo: handedTo, liveChannelID: liveRow) != nil
     }
 
+    /// Whether a press on a guide row does its action. While the guide holds the highlight on the live row,
+    /// a press on any other row (the one tvOS handed focus to, which the guide is about to correct) is
+    /// ignored: it must never tune a channel other than the one the viewer sees highlighted. Play/Pause is
+    /// not affected, it full-screens the playing channel from any row.
+    static func rowActs(row: Int, highlighted: Int?, holding: Bool) -> Bool {
+        guard holding, let highlighted else { return true }
+        return row == highlighted
+    }
+
     /// How long the guide draws the live row highlighted at most, from the moment it comes back. It has
     /// to outlast the cover closing: tvOS hands focus back when full screen has finished going away, about
     /// 0.5 s after it was asked to close on a simulator, and the guide is on screen all that time. The

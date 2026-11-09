@@ -34,6 +34,10 @@ final class GuideJumpProbe {
     private var live: Int?
     private var shownIDs: [(id: Int?, at: Double)] = []
     private var rawIDs: [(id: Int?, at: Double)] = []
+    /// The list's scroll offset, in points, whenever it changed: the one it had when the guide came back,
+    /// then every change after. More than one entry means the list moved in front of the viewer.
+    private var offsets: [(y: Double, at: Double)] = []
+    private var lastOffset: Double?
 
     private func milliseconds() -> Double {
         Double(DispatchTime.now().uptimeNanoseconds &- startedAt) / 1_000_000
@@ -50,7 +54,8 @@ final class GuideJumpProbe {
     }
 
     private func refresh() {
-        summary = "origin=\(origin) live=\(name(live)) shown=[\(format(shownIDs))] raw=[\(format(rawIDs))]"
+        let scroll = offsets.map { "\(Int($0.y.rounded()))@\(String(format: "%.1f", $0.at))" }.joined(separator: ",")
+        summary = "origin=\(origin) live=\(name(live)) shown=[\(format(shownIDs))] raw=[\(format(rawIDs))] scroll=[\(scroll)]"
     }
 
     /// The guide has come back (or first appeared): starts a new measurement.
@@ -60,6 +65,7 @@ final class GuideJumpProbe {
         self.live = live
         shownIDs = [(shown, 0)]
         rawIDs = [(raw, 0)]
+        offsets = lastOffset.map { [($0, 0)] } ?? []
         line("\(origin): live=\(name(live)) shown=\(name(shown)) raw=\(name(raw))")
         refresh()
     }
@@ -75,6 +81,18 @@ final class GuideJumpProbe {
         guard origin != "none", shownIDs.last?.id != new else { return }
         shownIDs.append((new, milliseconds()))
         line("shown highlight \(name(old)) -> \(name(new))\(new == live ? " (the live channel)" : "")")
+        refresh()
+    }
+
+    /// The list's scroll offset changed from `old` to `new`. The first entry of a measurement is the offset
+    /// the list had when the guide came back, so a measurement with more than one entry is a list that
+    /// moved in front of the viewer.
+    func scrollOffsetChanged(from old: Double, to new: Double) {
+        lastOffset = new
+        guard origin != "none" else { return }
+        if offsets.isEmpty { offsets.append((old, 0)) }
+        offsets.append((new, milliseconds()))
+        line("scroll offset \(Int(old.rounded())) -> \(Int(new.rounded())) pt")
         refresh()
     }
 
@@ -103,5 +121,6 @@ struct GuideJumpProbe {
     func rawFocusChanged(from old: Int?, to new: Int?) {}
     func shownChanged(from old: Int?, to new: Int?) {}
     func note(_ text: String) {}
+    func scrollOffsetChanged(from old: Double, to new: Double) {}
 }
 #endif

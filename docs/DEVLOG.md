@@ -15,23 +15,25 @@ overlay is scanlines, vignette and flicker, as before: the same constants and th
 RETRO MODE row's line in PLAYBACK & PICTURE read "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio" and now reads
 "CRT scanlines, vignette, flicker, 4:3 aspect ratio".
 
-**Test.** No test pinned the constants or the line. `CRTOverlayRenderTests` (3, new) renders the overlay over white and
-over black and reads the pixels: a dark scanline every third row at about the scanline opacity, a vignette that darkens the
-corners and the edges and leaves the middle alone, nothing lighter than what is under it, and no light across the picture
-over black. `NowPlayingPanelFocusTests` (3, the UI class that touches the RETRO MODE rows) pass. Simulator screenshots of
-the guide and of full screen with Retro mode on (it is on by default), a second apart, show the scanlines, the vignette and
-the edge still drawn. The whole unit suite was not run: the change is the overlay and one line of text.
+**Test.** No test pinned the constants or the line, and none here would catch the line coming back: it started hidden and
+appeared 6 to 15 seconds after the overlay did, so a render of the first frame cannot show it. `CRTOverlayRenderTests` (3,
+new) guards what stays. It renders the overlay over white and reads the pixels: a dark scanline every third row at about
+the scanline opacity, and a vignette that darkens the corners and the edges and leaves the middle alone; and, over black, a
+first frame that adds no light inside the edge. `NowPlayingPanelFocusTests` (3, the UI class that touches the RETRO MODE
+rows) pass. Simulator screenshots of the guide and of full screen with Retro mode on (it is on by default), a second
+apart, show the scanlines, the vignette and the edge still drawn. The whole unit suite was not run on that branch: the
+change is the overlay and one line of text.
 
-**Not changed here.** The web tuner and the Roku app still draw a tracking line, and their Retro mode text still lists it
-(the web tuner's Settings and `docs/WEB-TUNER-FEATURES.md`, the Roku's Settings row and its guide), as do two blog posts
-that describe Retro mode. On `appletv/retro-no-tracking-line`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build
-cut.
+**Not changed here.** The Roku app still draws a tracking line and its Retro mode text still lists it (its Settings row and
+its guide), as do two blog posts that describe Retro mode. The web tuner's removal is on its own branch, not on main. On
+`appletv/retro-no-tracking-line`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut.
 
 ## 2026-11-09 (Apple TV: the guide no longer shows its highlight move when it comes back from full screen, I-041)
 
 **What the viewer saw.** Change channel in full screen, leave it, and the guide came back with the highlight on the row the
 viewer had left from, then moved it to the channel that is playing. The first I-041 fix put focus on the right row, but
-the move was in plain sight, and clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a simulator. The
+the move was in plain sight, and reported as clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a
+simulator. The
 same thing happened when the guide first appeared: the first row, or the seasonal invite, was highlighted for a moment
 before the playing channel.
 
@@ -53,9 +55,14 @@ closing.
   changes (it is covered then), when it comes back, and when it first appears. Before, the first appearance scrolled to
   the row 0.1 s later with a 0.2 s animation, and the return scrolled 0.3 s later. The viewer's own moves still scroll
   with the 0.2 s animation.
+- A press on a row is ignored while the highlight is held on the live row and the row pressed is another one
+  (`GuideReturnFocus.rowActs`), so a Select in the moment between tvOS handing focus to the old row and the move to the
+  live row cannot tune a channel other than the one the viewer sees highlighted. Play/Pause is untouched: it full-screens
+  the playing channel from any row.
 - A debug-only log and probe (`GuideJumpProbe`): `[GuideJump]` lines with the time in milliseconds from the moment the
-  guide came back, for the row tvOS focused and the row the guide drew highlighted. A release build has an empty stand-in
-  and logs and keeps nothing. With `-uiTestGuideJumpProbe` a UI test can read the same sequence.
+  guide came back, for the row tvOS focused, the row the guide drew highlighted and the list's scroll offset. A release
+  build has an empty stand-in and logs and keeps nothing. With `-uiTestGuideJumpProbe` a UI test can read the same
+  sequence.
 
 **Measured** on the simulator (Apple TV 4K, 3rd generation), from the moment the guide came back:
 
@@ -65,16 +72,31 @@ closing.
 | first appearance, playing channel 4 | none, then channel 1, then 4 | channel 4 at 7.6 ms | channel 1 at 59 ms, channel 4 at 90 ms |
 | first appearance, invite above channel 1 | none, then the invite, then 1 | channel 1 at 7.9 ms | the invite at 79 ms, channel 1 at 106 ms |
 
-The first frames after Menu show CH 06 highlighted and in view while the cover is still going away. The TV's own numbers
-are read from the same `[GuideJump]` lines.
+The first frames after Menu show CH 06 highlighted and in view while the cover is still going away.
+
+**The old row far from the live one.** tvOS scrolls a list to show the row it focuses, and the guide's own placement
+does not stop that. So the far case was measured: channel 1 playing, one press down in full screen wraps to channel 20, and
+the reverse, 19 rows apart. tvOS handed focus to the far row at about 552 ms and the guide moved it to the live row 6 to
+11 ms later, and the list's scroll offset did not change at all after the guide came back (1158 pt before and after going
+down to channel 20, 0 pt before and after going up to channel 1). The guide's placement on the live row runs in the same
+pass as the handout, which would undo a focus scroll within the frame. That is a simulator measurement; the offset
+changes on a TV are in the `[GuideJump]` lines as `scroll offset a -> b`.
+
+**Not measured.** The two limits (0.3 s for the move to the live row once a wrong row is handed out, 2 s overall) are
+constants with a unit test that pins their values; whether they suit a TV is not measured. The build was tried on the
+living room Apple TV 4K and looked right to its owner; the TV's own `[GuideJump]` timings are not read yet.
 
 **Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) now reads the probe and fails if the guide drew
-any row but the live channel, in all three cases (back from full screen, the playing channel not the first, an invite
-above channel 1). On the commit before this change those three failed with "the guide drew [9004, 9006] highlighted, not
-only the live channel 9006" and its two siblings; they pass now. `GuideReturnFocusTests` gained 9 cases for the highlight
-rule, what ends the hold, its generation counter and its two limits. On this head, on the simulator:
-`GuideFocusAfterFullScreenTests` 3 of 3, `GuideReturnFocusTests` 17 of 17 and `ChannelGuideWrapFocusTests` 9 of 9 (the
-guide's focus handler, which this change edits). The whole unit suite was not run again.
+any row but the live channel, in all three cases (back from full screen, the playing channel not the first, an invite above
+channel 1), and has two far cases that fail if the list scrolls after the guide comes back (channel 1 to 20 and 20 to 1).
+The probe exists only from this change on, so the commit before it cannot run these tests as they are; with the probe added
+to the previous behaviour, the three first cases failed with "the guide drew [9004, 9006] highlighted, not only the live
+channel 9006" and its two siblings, and they pass now. `GuideReturnFocusTests` gained 12 cases for the highlight rule, what
+ends the hold, its generation counter, its limits and which presses act. On this head, on the simulator:
+`GuideFocusAfterFullScreenTests` 5 of 5, `GuideReturnFocusTests` 20 of 20, `ChannelGuideWrapFocusTests` 9 of 9 (the guide's
+focus handler, which this change edits), `NowPlayingPanelFocusTests` 3 of 3, `OpenOnLastChannelLaunchTests` 2 of 2,
+`SettingsOpenOnLastChannelTests` 1 of 1, and the whole of `NostalgexTests`: 1,201 passed, 0 failed, 29 skipped (the
+live-server harnesses).
 
 **Half-done.** On `appletv/guide-focus-no-jump`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut. Not
 yet run on a TV; the numbers above are a simulator's. Left alone: the package panel and the rows changing behind an open

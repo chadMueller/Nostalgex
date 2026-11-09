@@ -84,7 +84,10 @@ struct ChannelGuideView: View {
                                         .focusable()
                                 }
                                 if let offer = appState.seasonalBundleOnOffer {
-                                    Button { seasonalPromptShown = true } label: {
+                                    Button {
+                                        guard rowActs(on: Self.seasonalRowID) else { return }
+                                        seasonalPromptShown = true
+                                    } label: {
                                         SeasonalInviteRow(
                                             bundle: offer,
                                             isFocused: highlighted == Self.seasonalRowID,
@@ -99,6 +102,9 @@ struct ChannelGuideView: View {
                                 }
                                 ForEach(Array(appState.channels.enumerated()), id: \.element.id) { index, channel in
                                     Button {
+                                        // Not while the highlight is held on the live row and focus is on another:
+                                        // the press would tune a channel the viewer does not see highlighted.
+                                        guard rowActs(on: channel.id) else { return }
                                         // Selecting the channel that is on goes full screen, unless it
                                         // stopped after repeated failures: then selecting it retries.
                                         if appState.currentChannel?.id == channel.id, !appState.channelFailureRun.isStopped {
@@ -140,9 +146,14 @@ struct ChannelGuideView: View {
                                 wrapSentinel(Self.wrapBottomSentinelID)
                             }
                         }
+                        #if DEBUG
                         .onChange(of: highlightedID) { oldID, newID in
                             GuideJumpProbe.shared.shownChanged(from: oldID, to: newID)
                         }
+                        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+                            GuideJumpProbe.shared.scrollOffsetChanged(from: Double(old), to: Double(new))
+                        }
+                        #endif
                         .onChange(of: focusedChannelID) { oldID, newID in
                             GuideJumpProbe.shared.rawFocusChanged(from: oldID, to: newID)
                             // Back from full screen: focus arrives from none, on the row tvOS
@@ -371,6 +382,11 @@ struct ChannelGuideView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + GuideReturnFocus.holdTimeout) {
             liveHold.expire(generation: holdGeneration)
         }
+    }
+
+    /// See `GuideReturnFocus.rowActs`.
+    private func rowActs(on id: Int) -> Bool {
+        GuideReturnFocus.rowActs(row: id, highlighted: highlightedID, holding: liveHold.isActive)
     }
 
     /// Scrolls the row to the centre with no animation at all, whatever transaction is running.

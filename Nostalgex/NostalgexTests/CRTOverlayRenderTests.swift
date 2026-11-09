@@ -2,11 +2,11 @@ import XCTest
 import SwiftUI
 @testable import Nostalgex
 
-/// Retro mode's overlay (`CRTOverlayView`) is scanlines, a vignette and flicker. These render it
-/// once, over white, and read the pixels: the scanlines are a dark line every third row at the
-/// scanline opacity, the vignette darkens the corners and edges and leaves the middle alone. The white
-/// tracking line that used to run down the screen is gone, so nothing in the overlay is lighter than
-/// the white behind it.
+/// Retro mode's overlay (`CRTOverlayView`) is scanlines, a vignette and flicker. These render its first
+/// frame once and read the pixels: the scanlines are a dark line every third row at the scanline
+/// opacity, the vignette darkens the corners and edges and leaves the middle alone. They guard the
+/// effects that stay. They would not catch the white tracking line coming back: it used to start hidden
+/// and appear 6 to 15 seconds after the overlay did, so a render of the first frame never showed it.
 @MainActor
 final class CRTOverlayRenderTests: XCTestCase {
 
@@ -65,11 +65,9 @@ final class CRTOverlayRenderTests: XCTestCase {
         XCTAssertLessThan(topMid, middle - 0.2, "the top edge is darker than the middle")
     }
 
-    /// With the tracking line gone, nothing the overlay draws is lighter than what is under it.
-    func testNothingInTheOverlayIsBrighterThanTheWhiteBehindIt() throws {
-        let pixels = try render()
-        XCTAssertLessThanOrEqual(pixels.flatMap { $0 }.max() ?? 2, 1.0)
-        // And over black, the only light the overlay adds is the faint edge stroke.
+    /// Over black, the first frame adds no light inside the edge: no band, no bright line, only the faint
+    /// edge stroke at the border. A guard on what the overlay draws at rest, not on a line that appears later.
+    func testTheFirstFrameAddsNoLightInsideTheEdge() throws {
         let view = CRTOverlayView()
             .frame(width: CGFloat(width), height: CGFloat(height))
             .background(Color.black)
@@ -82,7 +80,7 @@ final class CRTOverlayRenderTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ))
         context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
-        // Away from the 2 pt edge stroke there is no light at all: no band of white across the picture.
+        // Away from the 2 pt edge stroke there is no light at all.
         var brightest: UInt8 = 0
         for y in 8..<(height - 8) {
             for x in 8..<(width - 8) { brightest = max(brightest, raw[(y * width + x) * 4]) }

@@ -129,6 +129,25 @@ final class GuideReturnFocusTests: XCTestCase {
         XCTAssertFalse(hold.isActive)
     }
 
+    /// A press between tvOS handing focus to the wrong row and the move to the live row must not act on the
+    /// wrong one: the viewer is looking at the live row.
+    func testWhileHoldingOnlyThePressOnTheHighlightedRowActs() {
+        XCTAssertTrue(GuideReturnFocus.rowActs(row: 9006, highlighted: 9006, holding: true), "the row drawn highlighted")
+        XCTAssertFalse(GuideReturnFocus.rowActs(row: 9004, highlighted: 9006, holding: true), "the old row, not drawn highlighted")
+        XCTAssertFalse(GuideReturnFocus.rowActs(row: -900, highlighted: 9006, holding: true), "the invite handed out, not highlighted")
+    }
+
+    func testWithoutAHoldEveryPressActs() {
+        for row in [9004, 9006, -900] {
+            XCTAssertTrue(GuideReturnFocus.rowActs(row: row, highlighted: 9006, holding: false))
+        }
+    }
+
+    /// No live row to hold the highlight on: nothing is held, so nothing is ignored.
+    func testAHoldWithNoHighlightedRowIgnoresNothing() {
+        XCTAssertTrue(GuideReturnFocus.rowActs(row: 9004, highlighted: nil, holding: true))
+    }
+
     /// The cover takes about half a second to close and hands focus back at the end of it, so a hold
     /// shorter than that would let go of the live row just before the old one is handed out.
     func testTheHoldOutlastsTheCoverClosingAndIsNeverLongerThanTheHandoutWindow() {
