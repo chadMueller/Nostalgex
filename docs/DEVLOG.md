@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: Jellyfin and Emby playlists no longer air as films, #206)
+
+**Changed.**
+- `MediaBrowserLibrary` ports the web tuner's `sectionType`, `itemTypes` and `hasAskedType` and the Apple TV's `JellyfinPlaylistLeakTests`.
+  - The scan used to ask every view that isn't TV or Music Videos for `IncludeItemTypes=Movie`. Jellyfin's Playlists view answers any request with its playlists, and each one became a film.
+  - Now a view whose CollectionType holds no videos (playlists, music, boxsets, books, audiobooks, photos, homevideos, livetv, trailers, folders, channels) gives `other`. It is never asked for items and isn't offered in library selection, as on the Apple TV.
+  - Any row whose `Type` wasn't asked for is dropped. A row with no `Type` is kept.
+  - A view with no CollectionType, or one not known here, is still read as films.
+- `JellyfinPlaylistLeakTest` checks every `sections` and `types` case in `scripts/jellyfin-library-golden.json`. It runs the Swift test's fake server (Playlists, Music, Collections and Home Videos views, and a mixed view holding a playlist and a clip) on Jellyfin and on Emby, and builds every stock channel's pool:
+  - nothing that isn't a film reaches any channel;
+  - the films still reach VHS VAULT;
+  - the MusicVideo rows still reach HIGH ROTATION (I-067).
+  
+  On the old scan, 4 of its 5 tests fail. All 273 engine tests pass.
+
+**Measured.** On a lab Jellyfin 12.4 in Docker: 5 films, a Music library of 8 generated tracks, and an audio playlist of the 8 tracks, 33 minutes long. Asked for `Movie`, the Playlists view answered with the playlist. Android's real scan and the channel filter for every stock channel, old against new:
+- Old: the playlist loaded as a 33 minute film with no year and sat on VHS VAULT, DVD SHELF and FLICKS. The Playlists and Music views were offered as film libraries.
+- New: 2 fewer items requests and no playlist. The pools of NOSTALGEX LOL, BUDDIES, PREMIERES and VHS VAULT hold the same 5 films as before.
+
+On this server the "Collections" view has no CollectionType, so it is still read as films. The row-type check is what keeps a BoxSet out of it. This lab library had none to drop.
+
+Not measured on Emby; whether Emby's Playlists view answers the same way isn't known. Not measured on a Google TV: the SHIELD here is on Plex.
+
+**A library saved before the change.** It still holds the playlist when the app opens, but Android rescans in the background after every launch that restores a saved library, so it goes once that scan ends. No stale marker is needed, as the Apple TV's `scanFieldsVersion` is, because Android never skips a Jellyfin or Emby refresh. The same is true of #209: an Emby library saved before the rating fields is read again at the next launch, not at "the next 6-hour refresh" as the entry below says.
+
 ## 2026-11-09 (Android: the Emby ratings test of #209, and #194's row dropped)
 
 **Changed.** `EmbyRatingFieldsTest` ports the Apple TV's `EmbyRatingFieldsTests`, which #209 asks for and `386f3800` shipped without. A fake server answers as Emby 4.10 does, sending `OfficialRating` and `CommunityRating` only when `Fields` names them. The tests run the real scan and the real stock channel filter over `channels.json`:

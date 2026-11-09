@@ -80,7 +80,11 @@ listing; it installs over `adb`.
   never scanned. A Plex music library adds nothing on either app (Plex lists
   artists, with no running time), so switching it off only saves its requests.
   A Jellyfin library the user hides from the home screen is listed too, marked
-  HIDDEN ON JELLYFIN, and off until switched on there or in Settings.
+  HIDDEN ON JELLYFIN, and off until switched on there or in Settings. A Jellyfin
+  or Emby view that holds no videos (Playlists, Music, Collections, Books,
+  Photos, Home Videos, Live TV and the like) is neither listed nor scanned, and a
+  row whose type the scan did not ask for is dropped, so a playlist is never a
+  film (#206).
 - OPEN ON LAST CHANNEL (off by default) under PLAYBACK: a launch opens the
   channel you last tuned, if it is still in the guide under the same name.
 - `nostalgex://channel/<id>` opens the app on that channel full screen, from a

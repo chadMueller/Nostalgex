@@ -65,7 +65,8 @@ class MediaBrowserLibrary(
         val everything = if (backend == "jellyfin") runCatching { views(includeHidden = true) }.getOrNull() ?: shown else shown
         val shownIds = shown.mapTo(HashSet()) { it.str("Id") }
         val everythingIds = everything.mapTo(HashSet()) { it.str("Id") }
-        return (everything + shown.filter { it.str("Id") !in everythingIds }).map { view ->
+        // A view with no videos in it (Playlists, Music, Collections...) is not offered (#206).
+        return (everything + shown.filter { it.str("Id") !in everythingIds }).filter(::holdsVideos).map { view ->
             LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")),
                 hidden = view.str("Id") !in shownIds)
         }
@@ -99,7 +100,8 @@ class MediaBrowserLibrary(
         /** A movie or episode dropped for having no runtime, for the coverage line (skippedNoRuntimeCount). */
         onSkippedNoRuntime: () -> Unit = {},
     ): List<MediaItem> {
-        val viewList = scanViews(includedHidden).filter { (it.str("Id") ?: "") !in excluded }
+        // A view with no videos in it is never asked for items (#206).
+        val viewList = scanViews(includedHidden).filter { (it.str("Id") ?: "") !in excluded && holdsVideos(it) }
         val out = ArrayList<MediaItem>()
         val tally = SectionTally()
         for ((index, view) in viewList.withIndex()) {
@@ -110,7 +112,7 @@ class MediaBrowserLibrary(
             progress.update(ScanProgress(index, viewList.size, name, type, out.size))
             try {
                 if (type == "show") {
-                    val shows = fetchItems(view.str("Id") ?: "", "Series")
+                    val shows = fetchItems(view.str("Id") ?: "", itemTypes(type)!!)
                     for ((done, show) in shows.withIndex()) {
                         val showGenres = show.strings("Genres")
                         val showTmdb = tmdbFromProviderIds(show.obj("ProviderIds"))
@@ -157,7 +159,7 @@ class MediaBrowserLibrary(
                 } else {
                     // A music video library also holds MusicVideo items, which a request for Movie
                     // never returns (I-067, #172); a clip filed as a film still loads.
-                    val types = if (isMusicVideoSection) "Movie,MusicVideo" else "Movie"
+                    val types = itemTypes(type)!!
                     // Each page goes in as it arrives, with its progress, as Plex does: a big library
                     // keeps the stall watch seeing it arrive, and a stopped scan keeps the pages
                     // read (EmbyAPIService and JellyfinAPIService, N-033).
@@ -244,12 +246,14 @@ class MediaBrowserLibrary(
             val (status, body) = fetch.get(path)
             if (status !in 200..299) throw IllegalStateException("HTTP $status for items under $parentId")
             val d = body as? JsonObject ?: JsonObject(emptyMap())
-            val items = d.arr("Items")
+            val raw = d.arr("Items")
+            // Only the types asked for: a row of another type is dropped (#206).
+            val items = raw.filter { hasAskedType(it.str("Type"), types) }
             all += items
             onPage(items)
-            val total = d.long("TotalRecordCount")?.toInt() ?: all.size
-            start += items.size
-            if (items.isEmpty() || all.size >= total) break
+            val total = d.long("TotalRecordCount")?.toInt() ?: (start + raw.size)
+            start += raw.size
+            if (raw.isEmpty() || start >= total) break
         }
         return all
     }
@@ -293,13 +297,56 @@ class MediaBrowserLibrary(
         private val MUSIC = Regex("music", RegexOption.IGNORE_CASE)
         private val DOVI = Regex("doviprofile(\\d{2,})", RegexOption.IGNORE_CASE)
 
-        /** /UserViews on Jellyfin, /Users/{id}/Views on Emby (nostalgex-jellyfin-urls.js userViewsPath). */
-        /** A view's CollectionType as the section type the scan branches on; anything else is a flat list. */
-        fun sectionType(collectionType: String?) = when (collectionType?.lowercase()) {
-            "tvshows" -> "show"
-            "musicvideos" -> "musicvideo"
-            else -> "movie"
+        /**
+         * CollectionTypes with no videos in them (#206): never asked for items and not offered
+         * in library selection. nostalgex-jellyfin-urls.js NON_VIDEO_VIEWS and the Apple TV's
+         * nonVideoCollectionTypes, pinned by `sections` in scripts/jellyfin-library-golden.json.
+         */
+        private val NON_VIDEO_VIEWS = setOf(
+            "music", "playlists", "boxsets", "books", "audiobooks", "photos", "homevideos", "livetv", "trailers", "folders", "channels",
+        )
+
+        /**
+         * A view's CollectionType as the section type the scan branches on: "show", "musicvideo",
+         * "other" (a view that holds no videos, never read), or "movie". A Playlists view answers
+         * any items request with its playlists, whatever IncludeItemTypes says (Jellyfin's
+         * PlaylistsFolder overwrites it), so asking it for films filed a 33 minute workout mix as
+         * a film on VHS VAULT. A view with no CollectionType, or one not known here, is mixed
+         * content and still a film view.
+         */
+        fun sectionType(collectionType: String?): String {
+            val kind = collectionType?.lowercase() ?: return "movie"
+            return when {
+                kind == "tvshows" -> "show"
+                kind == "musicvideos" -> "musicvideo"
+                kind in NON_VIDEO_VIEWS -> "other"
+                else -> "movie"
+            }
         }
+
+        /**
+         * IncludeItemTypes for a section, or null for one that is not read. A music video library
+         * is asked for MusicVideo and for Movie, for a clip filed as a film (I-067).
+         */
+        fun itemTypes(sectionType: String): String? = when (sectionType) {
+            "show" -> "Series"
+            "musicvideo" -> "Movie,MusicVideo"
+            "movie" -> "Movie"
+            else -> null
+        }
+
+        /**
+         * False for a row whose Type is not among the types asked for, for a view that answers
+         * with more than it was asked (Playlists does). A row with no Type is kept. Case does
+         * not matter. nostalgex-jellyfin-urls.js hasAskedType.
+         */
+        fun hasAskedType(type: String?, asked: String): Boolean {
+            if (type.isNullOrEmpty()) return true
+            return asked.lowercase().split(',').contains(type.lowercase())
+        }
+
+        /** True for a view the scan reads (one that holds videos). */
+        private fun holdsVideos(view: JsonObject) = sectionType(view.str("CollectionType")) != "other"
 
         /**
          * The request that lists a user's libraries (nostalgex-jellyfin-urls.js userViewsPath),
