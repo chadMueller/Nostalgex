@@ -107,10 +107,6 @@
     0%,100% { opacity: 0.7; }
     50% { opacity: 1; }
   }
-  @keyframes vhs-tracking {
-    0% { top: -5%; }
-    100% { top: 105%; }
-  }
   @keyframes dots {
     0% { content: ''; }
     25% { content: '.'; }
@@ -514,23 +510,6 @@
     transition: opacity 0.35s ease;
   }
 
-  /* VHS tracking line (retro mode only) */
-  .vhs-tracking {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: rgba(255,255,255,0.05);
-    z-index: 11;
-    pointer-events: none;
-    box-shadow: 0 0 10px 2px rgba(255,255,255,0.02);
-    display: none;
-    top: -5%;
-  }
-  body.retro-mode .vhs-tracking {
-    display: block;
-  }
-
   /* ══════════════════════════════════════
      RETRO MODE (B key toggle)
   ══════════════════════════════════════ */
@@ -599,13 +578,6 @@
     pointer-events: none;
     z-index: 12;
     border-radius: 20px;
-  }
-
-  /* Enhanced VHS tracking */
-  body.retro-mode .vhs-tracking {
-    height: 2px;
-    background: rgba(255,255,255,0.06);
-    box-shadow: 0 0 12px 3px rgba(255,255,255,0.02);
   }
 
   /* Retro mode toast */
@@ -3426,9 +3398,6 @@
       <!-- Static overlay -->
       <div class="static-overlay" id="static-overlay"></div>
 
-      <!-- VHS tracking line -->
-      <div class="vhs-tracking"></div>
-
       <!-- CRT retro overlay (scan lines + vignette, retro mode only) -->
       <div class="retro-overlay" id="retro-overlay"></div>
 
@@ -3597,7 +3566,7 @@
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
         <div>
           <div style="font-size: 22px; color: rgba(255,255,255,0.85);">Retro mode</div>
-          <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 4px;">CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio. Shortcut: B</div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 4px;">CRT scanlines, vignette, flicker, 4:3 aspect ratio. Shortcut: B</div>
         </div>
         <button class="plex-btn" id="cfg-retro-toggle" style="font-size: 11px; padding: 12px 22px;" onclick="toggleRetroMode()">ON</button>
       </div>
@@ -4848,7 +4817,6 @@
     // Apply saved retro mode
     if (retroMode) {
       document.body.classList.add('retro-mode');
-      startVhsCycle();
     }
 
     renderActiveGuide();
@@ -7441,35 +7409,6 @@
     renderSleepControls();
   })();
 
-  let vhsTimer = null;
-
-  function runVhsSweep() {
-    const line = document.querySelector('.vhs-tracking');
-    if (!line || !retroMode) return;
-    const duration = 14 + Math.random() * 18; // 14–32s per sweep
-    line.style.animation = `vhs-tracking ${duration}s linear`;
-    line.addEventListener('animationend', function onEnd() {
-      line.removeEventListener('animationend', onEnd);
-      line.style.animation = 'none';
-      if (!retroMode) return;
-      const gap = 4000 + Math.random() * 14000; // 4–18s gap between sweeps
-      vhsTimer = setTimeout(runVhsSweep, gap);
-    }, { once: true });
-  }
-
-  function startVhsCycle() {
-    stopVhsCycle();
-    const initialDelay = 2000 + Math.random() * 6000;
-    vhsTimer = setTimeout(runVhsSweep, initialDelay);
-  }
-
-  function stopVhsCycle() {
-    clearTimeout(vhsTimer);
-    vhsTimer = null;
-    const line = document.querySelector('.vhs-tracking');
-    if (line) line.style.animation = 'none';
-  }
-
   // Reflect retro state across every control (side toolbar value, floating button,
   // settings toggle) so the on/off state is always clear, not hidden behind the B key.
   function updateRetroControls() {
@@ -7553,7 +7492,6 @@
     retroMode = !retroMode;
     document.body.classList.toggle('retro-mode', retroMode);
     lsSet('plex90_retro_mode', retroMode);
-    if (retroMode) startVhsCycle(); else stopVhsCycle();
     updateRetroControls();
     // Show toast
     const toast = document.getElementById('retro-toast');

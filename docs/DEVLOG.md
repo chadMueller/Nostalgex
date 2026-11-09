@@ -55,10 +55,40 @@ rule, `.roku-add-note`, scoped to the Roku page.
 **Half-done.** The README has no Roku heading or table column yet, and the screenshots on `/roku` are still the
 ones from the beta. There is no "what's new" block for Roku on the site; the changelog is the App Store version only.
 
+## 2026-11-09 (web tuner: Retro mode no longer draws the tracking line, branch only)
+
+**Why.** Viewers said the faint white line that drifts down the picture in Retro mode is very distracting. The product call is
+that it goes, on every surface; the Apple TV removes its tracking glitch on its own branch and the Roku port is separate.
+
+**Changed.** On the same branch as the Open on last channel default (`web/last-channel-default-on`), not pushed and not tagged,
+so it ships with the next web and Docker bundle. In `plex-tuner.html`: the `.vhs-tracking` element, its CSS (the base rule, the
+retro-mode rule and the "enhanced" rule), the `vhs-tracking` keyframes, and the timer code that started a sweep two to eight
+seconds after Retro mode went on and every four to eighteen seconds after that (`runVhsSweep`, `startVhsCycle`,
+`stopVhsCycle`, and the calls to them from load and from `toggleRetroMode`). The rest of Retro mode is as it was: scanlines,
+vignette, the flicker on the video, the 4:3 picture, the toast, the B key. The Settings line under Retro mode said "VHS glitch";
+it now reads "CRT scanlines, vignette, flicker, 4:3 aspect ratio. Shortcut: B", which is true on the web and is the Apple TV's
+wording. Retro mode is on by default in the browser (`plex90_retro_mode` is on unless it was saved as `false`), so the line was
+what a new viewer saw first.
+
+**Checked.** New `npm run test:retro:browser` (45 checks, headless, a stub Jellyfin so a channel is playing): after the old
+sweep's start time there is no `.vhs-tracking` element, nothing with that name or "tracking" in a class, id or inline style, no
+stylesheet rule or keyframes for it, no running animation of it, and no thin full-width bright element by any other name;
+scanlines, vignette, flicker and 4:3 are still drawn; the Settings line is the new wording; Retro mode off and on again, by the
+B key and by the Settings button, throws nothing (a leftover call to the removed functions would have been a ReferenceError);
+at 1440x900 and 390x844 on a new install and at 960x540 for a browser that had it off. Served the page from before this change
+the same smoke fails 20 checks (the element, the rules, the running animation, the old Settings line). `npm test` is green. One
+test did depend on the removed code without naming the line: the sleep timer smoke lifts its section of the page up to the
+line `let vhsTimer = null;`, so it failed until its end anchor moved to the next comment (`// Reflect retro state across every
+control`); the section it lifts is the same text. Not measured on a real TV browser.
+
+**Found, not changed.** Two blog posts in `content/blog` still say Retro mode adds "VHS glitch" (and the Apple TV Settings
+subtitle says it until its branch lands). The site follows shipped versions, so they are left for the site pass.
+
 ## 2026-11-09 (web tuner: OPEN ON LAST CHANNEL is on by default, branch only)
 
-**Shipped.** Nothing. This is branch `web/last-channel-default-on`, two commits on main `70686b63` (web tuner 1.0.15). It is not
-pushed and not tagged: pushing main deploys the hosted tuner, so it goes out with the next web and Docker bundle.
+**Shipped.** Nothing. This is branch `web/last-channel-default-on`, on main `70686b63` (web tuner 1.0.15); its first two commits are this
+change and the watershed fix below. It is not pushed and not tagged: pushing main deploys the hosted tuner, so it goes out with
+the next web and Docker bundle.
 
 **Why.** The setting shipped off in 1.0.15. The product decision of 2026-11-09 is that it is on, the same on every surface
 (the Apple TV's `LaunchChannelMemory.enabledByDefault` is flipped on its own branch; the Roku port is a separate item).

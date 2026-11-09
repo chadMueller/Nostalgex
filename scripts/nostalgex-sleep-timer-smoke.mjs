@@ -256,7 +256,7 @@ function tunerFixture({ channel = 7, fullscreen = false, transform = (src) => sr
   };
   context.window = context;
   vm.createContext(context);
-  const section = between("  /* ══════════════════════════════════════\n     SLEEP TIMER\n", "  let vhsTimer = null;");
+  const section = between("  /* ══════════════════════════════════════\n     SLEEP TIMER\n", "  // Reflect retro state across every control");
   // The module, with its timers bound to the fake clock, then the production section.
   vm.runInContext(moduleSource + "\n" + transform(section).replace(
     "NostalgexSleepTimer.createSleepTimer({",

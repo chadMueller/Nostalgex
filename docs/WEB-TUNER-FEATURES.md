@@ -170,7 +170,7 @@ Saved auth shape:
 
 Toggle with **B** or Settings → General → Display → Retro mode.
 
-Applies: 4:3 aspect ratio, CRT scanlines, vignette, VHS tracking glitch animation.
+Applies: 4:3 aspect ratio, CRT scanlines, vignette, flicker. The line that used to drift down the picture (the VHS tracking glitch) was removed in 1.0.16 because viewers found it very distracting; nothing else about the look changed. The Settings line reads "CRT scanlines, vignette, flicker, 4:3 aspect ratio. Shortcut: B", the Apple TV's wording. `npm run test:retro:browser` holds it.
 
 Stored in `localStorage` as `plex90_retro_mode`.
 
