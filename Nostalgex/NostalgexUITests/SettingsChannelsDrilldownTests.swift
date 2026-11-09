@@ -103,7 +103,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
 
         visit("CHANNEL PACKAGES", shotName: "after-2-packages", expectFirst: "DEMO") {
             // The amber count on a package short of content, read out in full.
-            XCTAssertTrue(focusedLabel().contains("1 channel needs more content"),
+            XCTAssertTrue(focusedLabel().contains("1 channel does not have enough titles yet"),
                           "DEMO should carry the short-of-content count: \(focusedLabel())")
             // Down to the missing-channels link, into that page and back.
             for _ in 0..<6 where !focusedLabel().hasPrefix("WHY ARE SOME CHANNELS MISSING") { press(.down, 0.6) }

@@ -3,6 +3,99 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: CHANNEL PACKAGES scroll fixed after a run on a real Apple TV, discussion #217)
+
+**Found on a real Apple TV.** The list above was measured on a simulator, where the focused row always came to rest at the same
+height. Run on an Apple TV 4K (3rd generation, tvOS 27.2) with the real remote it did not. Going down, the focused row's centre sat
+lower and lower on the screen (0.41, 0.56, 0.62, 0.70, 0.79 of the screen height); going up, every row rested with its top at one
+place, so down and up disagreed; and on the jump to OVERTIME the row's top was at 197 pt, above the pinned header's lower edge at
+206 pt, so its title line was hidden under the header. The walk test only compared the row against the window, so it could not see
+that. What held up: every row grows and shrinks, the tallest (NOSTALGEX, 22 names) is 268 pt, and fast taps (0.23 s a press),
+13-press bursts, a 20-press jitter and 2.5 and 5 second holds all ended on the right package with no row left half open.
+The names of an off package read at 4.41:1 against the focused row, just under 4.5:1.
+
+**Changed.** The Settings pane centred the focused row at the moment of the press, while the row before it was shrinking and the
+new one growing. A package row (the only rows that change size) is now placed after the rows have stopped changing size: the
+pane waits the row's own animation time plus a frame, centres the row once, and once more with no animation to finish a slide the
+system cut short. A new press cancels the wait, so a held press scrolls once, where it stops. Every other row centres at once, as
+before. The centre of the pane is one point whatever a row's height, and the tallest row is well inside it, so a package row sits
+wholly below the header, in the same place going down as going up. The cause on the device was not isolated (the system's own
+scroll to the focused row, or a centre worked out before the rows had finished moving); both are covered by placing the row last,
+and neither is proved. The off-state names go from 45 to 47 percent white (4.66:1).
+
+**Test.** `SettingsPackageChannelsTests` now checks the focused row's top against the pinned header's lower edge (the top of the
+rows' scroll view, plus its 32 pt fade and a margin), not only against the window, and holds rows in the middle of the list to
+one resting height (within 0.01 of the screen) and each row to the same height going up as going down (0.01). On the simulator
+the walk reads as before: 0.58 for every middle row, and it passes with the new header check (75 s). `PackageChannelListingTests` (22) adds the 4.5:1 contrast check for every name
+colour on the focused row.
+
+**Measured.** On the tvOS simulator, one run each: `PackageChannelListingTests` 22 of 22; `SettingsPackageChannelsTests` 2 of 2
+(the walk, and Select on a package; the second test was re-run alone after the test runner was killed by another run on the
+same simulator).
+
+**Not verified.** The simulator never showed the problem, so a passing simulator run does not prove this fix. It has to be run on an
+Apple TV: the walk down and up, a jump to OVERTIME, fast taps and a hold.
+
+## 2026-11-09 (Apple TV: a focused package lists its channels on CHANNEL PACKAGES, discussion #217)
+
+**Why.** A proposal from tydude001 on discussion #217 (Trello I-084). On CHANNEL PACKAGES a viewer cannot see what a package
+adds without switching it on and waiting for the build, and the amber count on a row says how many of its channels are short
+of content without saying which.
+
+**Changed.** On CHANNEL PACKAGES (Settings, CHANNELS & BUNDLES) the focused row grows to list its channels under the
+description. Names only, no channel numbers, in the package's own order (`channelIDs` in channels.json; every shipped package
+lists them by ascending channel number, which is how the website's lineup sorts them, and a test pins that). They are one run
+of small type, separated by commas, that wraps like any other text. A package that is off lists them dim. A package that is on
+lists them brighter, with the channels short of content in amber and one line under the list, "Amber: not enough titles yet".
+Only the focused row opens, so the page is no longer than before while a viewer scrolls past. Nothing new is stored: no key,
+no page, and the names come from channels.json through the call the row already made (`bundleChannelAvailability`). WHY ARE
+SOME CHANNELS MISSING? is unchanged and is still where the reasons are explained.
+
+The list is a single `Text`. A custom layout that kept a separator off the end of a wrapped line was tried and dropped: a
+plain `Text` wraps by itself and cannot lose a name, and a comma at the end of a line reads as ordinary typography.
+
+VoiceOver reads the row's count as "4 channels do not have enough titles yet" ("1 channel does not have enough titles yet";
+it said "need more content", and titles is the word the on-screen line and the WHY page use). It reads the names as the row's
+hint, then which of them are short, because amber is colour only. The hint is applied only to a row that has names
+(`accessibilityHintIfPresent`), so every other `SettingsToggleRow` comes back from it unchanged.
+
+One rule decides which channels are amber (`PackageChannelListing`), and the row's amber count is read from the same list,
+so the count names exactly what it counts. A package that is off, still building, or with nothing on air marks no channel:
+the row already says so, and none of those showed a count before. (Not changed here: the total on WHY ARE SOME CHANNELS
+MISSING? differs from the sum of the counts on the rows in three ways. It counts the FRANCHISES package, which has no row on
+this page. It counts only channels that have rules. And it lists every channel of a package that is on with nothing on air,
+where the row shows no amber. In the test library it reads 17 where the rows add up to 12.)
+
+**Scrolling, the open risk.** The Settings pane scrolls to centre the row that took focus, in the same moment the row before
+it shrinks and the new one grows. Measured on the simulator with the real focus engine, down through all 14 packages and back
+up (a library of the shipped packages, some on with channels the sample library cannot fill): unfocused rows are 95 pt tall,
+focused ones 129 to 268 pt (NOSTALGEX, 22 names and 4 amber, the tallest at 268; KIDZ ZONE, 15 names, off, 184; HIGH ROTATION,
+last, on with 5 amber, 186). Every row in the middle of the list comes to rest at the same place on the screen whatever its own
+height, 0.58 of the screen height, and the same place going up as going down. The first row and the last stop where the list
+ends (0.41 and 0.70), and NOSTALGEX, second from the top and the tallest, rests at 0.56. No focused row was cut off at the top
+or the bottom. Switching a package with Select keeps its list open and the row where it was, while it builds and after, and
+back off. That is the simulator: how the focus engine and the scroll view behave on an Apple TV is not measured.
+
+**Test.** `PackageChannelListingTests` (21): the names in package order, every shipped package read from channels.json with no
+name dropped, every shipped package listing its channels by ascending channel number (the order the website sorts them in), a
+long package, the amber set equals the channels without content and the badge counts them (exhaustive over every pattern of up
+to six channels, on or off, building or not, against the rule it replaced), an empty package, a package with no missing
+channels, off, building and nothing on air marking none, the drawn text (the names and nothing else, joined by commas, every
+shipped package's names once and in order, a name never broken across lines, only the short ones amber, an off package dimmer),
+and what VoiceOver hears (the count in titles, the names, which are short, and no hint for a package with no names).
+`SettingsPackageChannelsTests` (UI, 2): the walk above, with the same row measured focused and unfocused, and the amber line
+present on exactly the rows that carry the amber count; and Select on a package. Demo mode with a new test-only
+`-uiTestPackageList`, which lists the shipped packages after DEMO, some on with channels short of content.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,207 passed, 0 failed,
+29 skipped (the live-server harnesses), `PackageChannelListingTests` among them 21 of 21. UI: `SettingsPackageChannelsTests`
+2 of 2 and `SettingsChannelsDrilldownTests` 1 of 1 (it reads the row's new VoiceOver text). The screenshots show the names in
+commas wrapping after a comma, with the amber ones amber.
+
+**Half-done.** On `appletv/package-channels-preview`, off the 1.0.31 bundle branch (f2fda75d) and not merged into it, so that
+build can ship without it. Not pushed, no build cut, not run on a TV. The Roku app and the web tuner are not changed. The list
+text is 18 pt, a step under the row's description; whether that reads from the couch is a TV question.
+
 ## 2026-11-09 (Apple TV: UI tests can no longer wipe a real Apple TV)
 
 **What happened.** A UI test was run on a real Apple TV. It launched the app with `-uiTestResetCredentials` and no harness root,
