@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: a new member order in a Plex collection no longer rebuilds the guide)
+
+**Why.** On a SHIELD with a 11,396-item Plex library, the launch refresh logged "collections changed, rebuilding" on runs where nothing had changed. A diagnostic build (not committed) logged the difference. All 288 collections matched by id and title, but 4 listed the same members in another order: the same set of child keys in a different sequence. They are adjacent collection ids, most likely smart collections sorted by plays or last watched, which reorder after something is watched. `refreshInBackground` compared the collections as lists, so each reorder rebuilt the whole lineup. A second launch, with no reorder, said "unchanged".
+
+**Changed.**
+- `Collections.sameMembers` (`android/engine`): the same collections, by id, title and server, with the same members in any order.
+- `refreshInBackground` rebuilds only when that says no. A member order that moved is still saved, so the next build follows the server's order as the Apple TV's next load would, and the log says "unchanged (collection members in a new order, saved)".
+- A pool does follow member order, and the running order follows the pool. But a packed day is stored and stays put (`DailyManifest`), so a reorder never needed a mid-day rebuild.
+- `CollectionsSameMembersTest` (new, 3). It pins one limit: two lists of the same length that repeat different members compare as the same, which a server's collection, listing each member once, can't produce.
+
+**Measured.** Three launches on the SHIELD after the change: "unchanged" each time, the refresh reading the items in 18 to 20 s. None of the three happened to reorder a collection, so the saved-reorder branch ran in the tests only.
+
+**Noticed, not changed.** Reading the 288 collections took 81.3 to 81.6 s on every launch, one request per collection in turn, against 18 to 20 s for the library itself. The Apple TV reads Plex collections only when a collection package is on. Android reads them with every load and refresh, as the Roku does (android/README.md lists this). Reading them several at a time would cut it, and is a separate change.
+
 ## 2026-11-09 (Android: the library is read again every 6 hours, #195)
 
 **Why.** Android read the library only at launch and on RESCAN LIBRARY, so a film added on the server while the app ran never appeared. The Apple TV (`startDailyRefresh`, `refreshLibraryIfChanged`) and the Roku (`DailyRefresh.brs`) read it again behind the guide on their own (#195).

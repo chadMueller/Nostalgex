@@ -35,6 +35,23 @@ data class ServerCollection(
  * the fetch as a function, so the app layer brings the HTTP and this stays pure.
  */
 object Collections {
+    /**
+     * Whether two reads of the servers' collections hold the same collections with the same
+     * members, whatever order the members came in. A Plex smart collection sorted by plays or
+     * by last watched lists the same members in a new order after something is watched;
+     * measured on a SHIELD, 4 of 288 collections did between two launches. That isn't a new
+     * lineup: the stored day stays put, so a refresh needn't rebuild for it.
+     */
+    fun sameMembers(a: List<ServerCollection>, b: List<ServerCollection>): Boolean {
+        if (a.size != b.size) return false
+        val byId = b.associateBy { it.id }
+        return a.all { x ->
+            val y = byId[x.id] ?: return@all false
+            x.title == y.title && x.serverKey == y.serverKey && x.childKeys.size == y.childKeys.size &&
+                x.childKeys.toSet() == y.childKeys.toSet()
+        }
+    }
+
     // ChannelIDSpace.dynamicBase and categoryStride: one id block per kind of runtime channel.
     const val DYNAMIC_BASE = 1_000_000
     const val CATEGORY_STRIDE = 10_000

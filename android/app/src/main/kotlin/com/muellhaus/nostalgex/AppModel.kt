@@ -1511,8 +1511,12 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
                 val collections = readCollections(servers)
-                val collectionsChanged = collections != serverCollections
-                val scanChanged = items != saved || collectionsChanged
+                // Members in a new order (a smart collection after a play) are saved, so the next
+                // build follows the server's order, but don't rebuild the guide: the stored day
+                // stays put either way.
+                val collectionsChanged = !Collections.sameMembers(collections, serverCollections)
+                val reordered = !collectionsChanged && collections != serverCollections
+                val scanChanged = items != saved || collections != serverCollections
                 if (scanChanged) {
                     scannedItems = items
                     serverCollections = collections
@@ -1520,7 +1524,8 @@ class AppModel(private val context: Context) : Playback.Listener {
                 }
                 val enriched = enrich(items, remote = true)
                 if (enriched == libraryItems && !collectionsChanged) {
-                    Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged")
+                    Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged" +
+                        if (reordered) " (collection members in a new order, saved)" else "")
                     return@launch
                 }
                 libraryItems = enriched
