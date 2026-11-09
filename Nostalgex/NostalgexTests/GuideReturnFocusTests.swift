@@ -18,6 +18,20 @@ final class GuideReturnFocusTests: XCTestCase {
         XCTAssertNil(GuideReturnFocus.target(handedTo: nil, liveChannelID: 9006))
     }
 
+    // MARK: A playing channel with no row
+
+    func testThePlayingChannelIsOnlyAnAnchorWhenTheGuideHasARowForIt() {
+        let rows: Set<Int> = [1, 2, 3, 4]
+        XCTAssertEqual(GuideReturnFocus.liveRowID(liveChannelID: 3, hasRow: rows.contains), 3)
+        XCTAssertNil(GuideReturnFocus.liveRowID(liveChannelID: 9, hasRow: rows.contains), "no row to anchor to")
+        XCTAssertNil(GuideReturnFocus.liveRowID(liveChannelID: nil, hasRow: rows.contains))
+        // With no row for the playing channel the handout stands: focus stays where tvOS put it and the
+        // info panel follows it. Measured on a simulator: anchoring to the missing row left the ring on
+        // channel 1 with no info panel at all.
+        let liveRow = GuideReturnFocus.liveRowID(liveChannelID: 9, hasRow: rows.contains)
+        XCTAssertNil(GuideReturnFocus.target(handedTo: 1, liveChannelID: liveRow))
+    }
+
     // MARK: The window
 
     func testAnEarlierTimerCannotCloseALaterWindow() {

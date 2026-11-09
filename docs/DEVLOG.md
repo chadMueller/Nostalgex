@@ -26,6 +26,12 @@ entering full screen and from none back to the OLD row on leaving, with the live
   demo mode (`-uiTestStartOnChannel 4`, `-uiTestSeasonalInvite`): focus on channel 1, or on the invite, for the 5 seconds
   watched. On the basement Apple TV 4K (tvOS 27.2) both cases already land on the playing channel without this commit, so it
   protects the simulator and any tvOS that behaves that way; not measured on another tvOS version.
+- The early return skips one `onFocusChanged` call, the one for the row tvOS handed focus to. Measured on a simulator with
+  timestamps: the call for the live channel follows 8 ms later after full screen, and 31 to 34 ms later when the guide first
+  appears, with or without the invite. The info panel goes from empty to the live channel and never shows the wrong row.
+  One case it did break, found by that measurement: when the playing channel has no row in the guide (its package was
+  switched off while it played), the anchor pointed at a row that is not there, the ring stayed on channel 1 and the info
+  panel stayed empty. The handout is now only acted on when the playing channel has a row (`GuideReturnFocus.liveRowID`).
 - Not touched: the packages panel and the rows changing behind an open guide.
 
 **Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has the two cases above; the first fails on main with "the

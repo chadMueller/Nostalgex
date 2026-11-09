@@ -15,6 +15,14 @@ enum GuideReturnFocus {
         return liveChannelID
     }
 
+    /// The playing channel, if the guide has a row for it. Asking for focus on a row that is not there
+    /// moves nothing, so with no row there is nothing to anchor to and the handout is left alone (the
+    /// ordinary path then runs, and the info panel follows the row focus really is on).
+    static func liveRowID(liveChannelID: Int?, hasRow: (Int) -> Bool) -> Int? {
+        guard let liveChannelID, hasRow(liveChannelID) else { return nil }
+        return liveChannelID
+    }
+
     /// The window in which the guide waits for the handout. Closing full screen, or the guide first
     /// appearing, opens it; the handout, or a timer, closes it. Each opening has its own generation,
     /// so the timer of an earlier opening (a close of full screen two seconds ago) cannot close a

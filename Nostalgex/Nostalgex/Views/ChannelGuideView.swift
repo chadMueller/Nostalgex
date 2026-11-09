@@ -130,7 +130,10 @@ struct ChannelGuideView: View {
                             // the old one; move focus to the live channel, once (I-041).
                             if handoutWindow.isOpen, oldID == nil, newID != nil {
                                 handoutWindow.close()
-                                if GuideReturnFocus.target(handedTo: newID, liveChannelID: appState.currentChannel?.id) != nil {
+                                let liveRow = GuideReturnFocus.liveRowID(liveChannelID: appState.currentChannel?.id) { id in
+                                    appState.channels.contains { $0.id == id }
+                                }
+                                if GuideReturnFocus.target(handedTo: newID, liveChannelID: liveRow) != nil {
                                     anchorFocusToLiveChannel(proxy)
                                     return
                                 }
