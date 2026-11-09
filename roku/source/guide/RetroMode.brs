@@ -1,7 +1,7 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
 ' RETRO MODE, as the Apple TV app's (AppState.retroMode, on unless switched
-' off; BundleManagerView): the guide's video cropped to 4:3 under a CRT
+' off; Views/Settings/SettingsPlaybackView): the guide's video cropped to 4:3 under a CRT
 ' overlay, and full screen under the same overlay (RetroLook, upstream
 ' e48cdc1).
 

@@ -1,7 +1,7 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
-' Settings > CONNECTION > RESCAN LIBRARY (#66), as upstream's row in
-' Views/BundleManagerView.swift: what the app holds (LibraryDiagnostics
+' Settings > SERVERS & ACCOUNTS > RESCAN LIBRARY (#66), as upstream's row in
+' Views/Settings/SettingsServersView.swift: what the app holds (LibraryDiagnostics
 ' .summary), when the library last loaded (libraryLastUpdatedText) and the
 ' last time playback was given up on (PlaybackDiagnostics.latestForSettings).
 ' The counts are taken when a load finishes and kept in the registry with the

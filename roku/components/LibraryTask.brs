@@ -586,7 +586,7 @@ sub loadLibrary()
     ' reading it back from cachefs: for each switch kept two copies alive
     ' (reused pools held the old one) and failed when the OS had cleared it.
     for each it in items
-        it.Delete("nxFilter")
+        NxFilterForget(it)
     end for
     ' The enrichment cache too, which holds its rows once read, so a cleared
     ' cachefs: gets it back with the library (resaveClearedLibrary).
@@ -1149,7 +1149,7 @@ function rebuildForBundles(prev as Object, lib as Object) as Dynamic
     print "library: package change: "; lib.items.Count(); " items in memory; memory "; NxMemoryLine()
     built = buildGuide(lib.items, config, manifest, lib.collections, true, reuse)
     for each it in lib.items
-        it.Delete("nxFilter")
+        NxFilterForget(it)
     end for
     print "library: package change built in "; timer.TotalMilliseconds(); " ms; memory "; NxMemoryLine()
     resaveClearedLibrary(lib)

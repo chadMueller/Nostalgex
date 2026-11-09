@@ -1,9 +1,11 @@
 ' What Settings' channel rows work out beyond a switch, held to the Apple TV's
 ' CHANNELS & BUNDLES (N-028, 1.0.29): the amber count on a package short of
-' content, and the FRANCHISES page's one A to Z list.
+' content, the FRANCHISES page's one A to Z list, and the values on the tab's
+' link rows.
 '
 ' Source: upstream Nostalgex/Views/Settings/SettingsChannelsView.swift
-' (ChannelsPackagesPage.packageRow, ChannelsFranchisesPage, ChannelsCollectionsPage)
+' (ChannelsHomePage, ChannelsPackagesPage.packageRow, ChannelsFranchisesPage,
+' ChannelsCollectionsPage)
 ' and Views/Settings/SettingsSharedComponents.swift (AlertCountBadge).
 '
 ' Port copyright (c) 2026 nostalgex-roku contributors, MIT License.
@@ -136,4 +138,35 @@ function NxCollectionsNote(c as Dynamic) as String
         return "All " + split.franchises.ToStr() + " of your collections are franchises, under FRANCHISES."
     end if
     return split.custom.ToStr() + " FOUND · " + split.franchises.ToStr() + " UNDER FRANCHISES"
+end function
+
+' ── The CHANNELS & BUNDLES list ─────────────────────────────────────────────
+
+' The tab's pages (ChannelsPage), in the list's order: each opens from its link
+' row, in the same pane, and Back steps up from it to that row. WHY ARE SOME
+' CHANNELS MISSING? (ChannelsPage.missing) has its own parity row, so it isn't
+' here.
+function NxChannelsPages() as Object
+    return [
+        { id: "packages", title: "CHANNEL PACKAGES" },
+        { id: "franchises", title: "FRANCHISES" },
+        { id: "collections", title: "MY COLLECTIONS" }
+    ]
+end function
+
+' The value on a link row's right (ChannelsHomePage): CHANNEL PACKAGES and MY
+' COLLECTIONS read "n ON"; FRANCHISES reads OFF while its switch is off, when
+' none of its collections airs either (FranchisesPageGate.onCount), and
+' otherwise counts the franchise rows and franchise collections switched on.
+' `n` holds the counts: packagesOn, franchisesOn (the switch), franchiseRowsOn,
+' franchiseCollectionsOn, collectionsOn. The Apple TV's SCANNING on MY
+' COLLECTIONS doesn't apply: the Roku reads collections with the library.
+function NxChannelsLinkValue(page as String, n as Object) as String
+    if page = "packages" then return NxNumberOr0(n.packagesOn).ToStr() + " ON"
+    if page = "franchises" then
+        if n.franchisesOn <> true then return "OFF"
+        return (NxNumberOr0(n.franchiseRowsOn) + NxNumberOr0(n.franchiseCollectionsOn)).ToStr() + " ON"
+    end if
+    if page = "collections" then return NxNumberOr0(n.collectionsOn).ToStr() + " ON"
+    return ""
 end function

@@ -165,6 +165,20 @@ function NxFilterChannel(channel as Object) as Object
     return c
 end function
 
+' Drops the filter's cache of an item (NxFilterItem), under both spellings.
+' NxFilterItem sets it as item.nxFilter, and in an item read back with
+' ParseJson, which is a case-sensitive AA on a TV, that key is "nxfilter":
+' Delete("nxFilter") alone left it in place (43S45, Roku OS 16.0.4, #215).
+sub NxFilterForget(item as Object)
+    item.Delete("nxfilter")
+    item.Delete("nxFilter")
+end sub
+
+' Whether an item still holds the filter's cache, under either spelling.
+function NxFilterHeld(item as Object) as Boolean
+    return item.DoesExist("nxfilter") or item.DoesExist("nxFilter")
+end function
+
 ' An item's lowercased and derived fields, computed once and kept on the item.
 function NxFilterItem(item as Object) as Object
     p = item.nxFilter
@@ -340,7 +354,7 @@ function NxFilterPoolsByServer(items as Object, defs as Object, manifest as Dyna
         ' This slice is done with every channel; nothing past this point
         ' reads item.nxFilter, so it only ever cost memory from here.
         for each it in slice
-            it.Delete("nxFilter")
+            NxFilterForget(it)
         end for
         done = done + 1
         if progress <> invalid then progress.report(done, slices.Count())
@@ -939,11 +953,19 @@ end function
 
 ' Upstream's enrichedValue: under item.enrichment, else flat on the item.
 function NxEnriched(item as Object, key as String) as Dynamic
+    ' A title read back from the saved library holds its keys in lower case on
+    ' a TV (FormatJson writes them so, and ParseJson's AAs are case-sensitive
+    ' there), so a camelCase name such as imdbRating is looked up both ways.
+    lower = LCase(key)
     e = item.enrichment
     if type(e) = "roAssociativeArray" then
-        if e[key] <> invalid then return e[key]
+        v = e[key]
+        if v = invalid and lower <> key then v = e[lower]
+        if v <> invalid then return v
     end if
-    return item[key]
+    v = item[key]
+    if v = invalid and lower <> key then v = item[lower]
+    return v
 end function
 
 function NxLowerList(v as Dynamic) as Object
