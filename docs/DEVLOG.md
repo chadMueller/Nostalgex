@@ -32,6 +32,46 @@ guide alone already put the ring on the playing channel. That is the guide's fir
 is not changed here; with the setting off nothing differs from today. Not measured on another tvOS version or with a real
 library.
 
+## 2026-11-08 (Apple TV: Jellyfin libraries hidden from the home screen are listed, off until switched on)
+
+**Why.** Jellyfin's `GET /UserViews` has an `includeHidden` parameter that defaults to false. With it false,
+`UserViewManager.GetUserViews` drops every library in the user's `MyMediaExcludes` (the "Display on home screen" box in
+Home settings), and the scan reads only the libraries the list names, so a library hidden on the server was never listed
+or scanned. The web agent measured it on a lab Jellyfin 10.11.11 (a user who hides two libraries and has no access to a
+third): the plain list names 3 libraries and `includeHidden=true` names 5, the third in neither; an admin gets 6 both ways;
+asking the library without access directly answers 401. The same code is in 12.x by a read of the release tags. A user hides
+a library on purpose (adult content, test or plugin folders), so these must not start airing on channels by surprise.
+
+**Changed.**
+- `JellyfinAPIService.loadSections` makes two requests: the plain `/UserViews?userId=` it always made, then the same with
+  `includeHidden=true`. A library only in the second is hidden (`PlexSection.hidden`, `LibrarySectionRef.isHidden`). If the
+  second request fails the answer is the plain list, as before.
+- A hidden library is listed in the onboarding picker and in Settings under LIBRARIES, marked HIDDEN ON JELLYFIN, and OFF
+  until the viewer switches it on. `LibrarySectionSelectionStore.hiddenSectionsOnByDefault` (false) is the one constant;
+  true makes a hidden library follow the same opt-out as every other. The viewer's choice is its own set
+  (`includedHiddenLibrarySectionKeys`), and the Jellyfin scan leaves a hidden library out unless it is in that set, so a
+  library hidden after the app last listed them stays out too.
+- The collection sweep leaves out the same sections the scan does (`sectionKeysLeftOutOfScan`), so it asks a hidden library
+  nothing until it is switched on. The two answers are merged, so a second one that comes back smaller cannot take a library
+  off the list. The picker also shows for a hidden library alone: it starts off, so without it nothing would be scanned and
+  nothing would offer it. A hidden library that simply stays off is not counted as an exclusion in the picker's analytics signal.
+- No forced refresh. The toggle's existing rescan fetches a library when it is switched on. A viewer with no hidden library
+  sees nothing different, and one who has some sees them listed off, with the scan reading what it read before. A first
+  sign-in on a server with one library on the home screen and a hidden one now shows the picker (two sections).
+- Emby's list (`/Users/{id}/Views`) is unchanged.
+
+**Test.** `JellyfinHiddenLibrariesTests` runs the real network code against a loopback server that, like Jellyfin, lists
+the hidden library only when asked: it is listed and marked, not scanned by default, scanned once switched on, scanned
+when the default is on (and still switchable off), unchanged when nothing is hidden, plain list when the second request
+fails, the two answers merged, and Emby sends one request with no query. `HiddenLibrarySelectionTests` covers the picker's
+default, the Settings toggle and its persistence, a hidden library alone getting the picker, the analytics count, the
+collection sweep, that a library that is not hidden follows the old opt-out, a new sign-in starting from the defaults, and
+the default-on position. Tests set the position they test; one assertion pins the shipped default. `JellyfinLibraryGoldenTests` reads `views` from the shared file when it is there (each Jellyfin case's `includeHidden`, else
+read from its path) and skips until then.
+
+**Open.** Whether the default is off is Chad's call (one constant). Held on its own branch (`appletv/jellyfin-include-hidden`).
+Not run against a Jellyfin from the Apple TV side.
+
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
 **Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail

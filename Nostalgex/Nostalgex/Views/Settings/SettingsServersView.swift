@@ -53,7 +53,7 @@ struct SettingsServersView: View {
                     title: section.title.uppercased(),
                     subtitle: isLast
                         ? "\(section.typeLabel) · only enabled library"
-                        : (multiServer ? "\(section.serverName) · \(section.typeLabel)" : section.typeLabel),
+                        : section.subtitle(multiServer: multiServer),
                     detail: isOn ? "INCLUDED" : "OFF",
                     isOn: isOn,
                     isFocused: isFocused("section_\(section.id)"),

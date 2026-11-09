@@ -1723,6 +1723,13 @@ struct PlexSection: Decodable {
     var scannedAt: Int? = nil
     var updatedAt: Int? = nil
     var contentChangedAt: Int? = nil
+    /// Jellyfin only: a library the user hides from the home screen (My Media). Never in a
+    /// server's answer, so it is not decoded; the Jellyfin service sets it.
+    var hidden: Bool = false
+
+    private enum CodingKeys: String, CodingKey {
+        case key, title, type, scannedAt, updatedAt, contentChangedAt
+    }
 }
 
 private struct SectionItemsResponse: Decodable {

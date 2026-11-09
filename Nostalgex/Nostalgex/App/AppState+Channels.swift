@@ -386,11 +386,13 @@ extension AppState {
             }
             // TV libraries too: a Plex collection of shows lives in the TV library, and
             // reading movie libraries only meant it was never even listed. A section
-            // the viewer turned off in library selection (I-054) is left out here too,
-            // its collections are never read, same as its items never are.
-            let excludedKeys = excludedSectionKeys(forServerID: server.machineIdentifier)
+            // the scan leaves out is left out here too, its collections are never read, same
+            // as its items never are: one the viewer turned off in library selection (I-054),
+            // or one the user hides from the Jellyfin home screen and the viewer has not
+            // switched on.
+            let leftOutKeys = sectionKeysLeftOutOfScan(sections, forServerID: server.machineIdentifier)
             let collectionSections = sections.filter {
-                ($0.type == "movie" || $0.type == "show") && !excludedKeys.contains($0.key)
+                ($0.type == "movie" || $0.type == "show") && !leftOutKeys.contains($0.key)
             }
 
             // Deduped by id: Plex scopes collections to a section, but Jellyfin and Emby

@@ -214,11 +214,15 @@ extension AppState {
     func presentLibrarySelectionOrScan() async {
         deselectedLibrarySectionKeys = []
         LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+        includedHiddenLibrarySectionKeys = []
+        LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
 
         let sections = await loadAllLibrarySections()
         availableLibrarySections = sections
 
-        guard sections.count > 1 else {
+        // A hidden library is always worth a screen, even alone: it starts off, so without the
+        // picker nothing would be scanned and nothing would offer it.
+        guard sections.count > 1 || sections.contains(where: \.isHidden) else {
             // Nothing to choose (or sections couldn't be read right after sign-in,
             // loadLibrary will raise its own connection error if the server is
             // genuinely unreachable, so a transient read failure here shouldn't block
@@ -239,14 +243,14 @@ extension AppState {
         if selectedServers.isEmpty {
             if let sections = try? await apiForServer(nil).loadSections() {
                 collected = sections.map {
-                    LibrarySectionRef(serverID: "", serverName: serverName, sectionKey: $0.key, title: $0.title, type: $0.type)
+                    LibrarySectionRef(serverID: "", serverName: serverName, sectionKey: $0.key, title: $0.title, type: $0.type, isHidden: $0.hidden)
                 }
             }
         } else {
             for server in selectedServers {
                 guard let sections = try? await apiForServer(server).loadSections() else { continue }
                 collected.append(contentsOf: sections.map {
-                    LibrarySectionRef(serverID: server.machineIdentifier, serverName: server.name, sectionKey: $0.key, title: $0.title, type: $0.type)
+                    LibrarySectionRef(serverID: server.machineIdentifier, serverName: server.name, sectionKey: $0.key, title: $0.title, type: $0.type, isHidden: $0.hidden)
                 })
             }
         }
@@ -258,12 +262,19 @@ extension AppState {
     /// (see `excludedSectionKeys(forServerID:)` and each backend's `loadLibrary`).
     func confirmLibrarySelection(includedIDs: Set<String>) {
         let excluded = pendingLibrarySections.filter { !includedIDs.contains($0.id) }
-        deselectedLibrarySectionKeys = Set(excluded.map(\.id))
+        // A hidden library follows its own opt-in set while it is off by default; every other
+        // section, and a hidden one when the default is on, follows the opt-out set.
+        let optIn = pendingLibrarySections.filter { $0.isHidden && hiddenLibrariesAreOptIn }
+        includedHiddenLibrarySectionKeys = Set(optIn.filter { includedIDs.contains($0.id) }.map(\.id))
+        LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        let optIns = Set(optIn.map(\.id))
+        deselectedLibrarySectionKeys = Set(excluded.map(\.id).filter { !optIns.contains($0) })
         LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
         Analytics.track(.connectLibrarySelectionConfirmed(
             backend: analyticsBackend,
             sectionCount: pendingLibrarySections.count,
-            excludedCount: excluded.count
+            // What the viewer turned off: a hidden library that simply stayed off is not an exclusion.
+            excludedCount: excluded.filter { !optIns.contains($0.id) }.count
         ))
         needsLibrarySelection = false
         pendingLibrarySections = []
@@ -320,8 +331,46 @@ extension AppState {
     /// Sections to show in Settings.
     var librarySectionsForSettings: [LibrarySectionRef] { availableLibrarySections }
 
+    /// Libraries the user hides from the Jellyfin home screen start off and are switched on by the
+    /// viewer (`LibrarySectionSelectionStore.hiddenSectionsOnByDefault`); with the default on they
+    /// follow the same opt-out set as every other section.
+    var hiddenLibrariesAreOptIn: Bool { !hiddenSectionsOnByDefault }
+
     func isLibrarySectionDeselected(_ section: LibrarySectionRef) -> Bool {
-        deselectedLibrarySectionKeys.contains(section.id)
+        if section.isHidden, hiddenLibrariesAreOptIn {
+            return !includedHiddenLibrarySectionKeys.contains(section.id)
+        }
+        return deselectedLibrarySectionKeys.contains(section.id)
+    }
+
+    /// Whether this section starts on in the onboarding picker.
+    func librarySectionStartsOn(_ section: LibrarySectionRef) -> Bool {
+        !(section.isHidden && hiddenLibrariesAreOptIn)
+    }
+
+    /// The raw keys of the sections a scan of one server does not read: the ones the viewer turned off,
+    /// and the libraries the user hides from the Jellyfin home screen that the viewer has not switched
+    /// on (the Jellyfin scan applies the same rule itself; this is for the code that reads sections
+    /// without scanning them, like the collection sweep).
+    func sectionKeysLeftOutOfScan(_ sections: [PlexSection], forServerID serverID: String) -> Set<String> {
+        var leftOut = excludedSectionKeys(forServerID: serverID)
+        if hiddenLibrariesAreOptIn {
+            let switchedOn = includedHiddenSectionKeys(forServerID: serverID)
+            for section in sections where section.hidden && !switchedOn.contains(section.key) {
+                leftOut.insert(section.key)
+            }
+        }
+        return leftOut
+    }
+
+    /// The hidden libraries of one server the viewer switched on, as the raw section keys a
+    /// backend's `loadLibrary` knows them by (the same prefix handling as `excludedSectionKeys`).
+    func includedHiddenSectionKeys(forServerID serverID: String) -> Set<String> {
+        let prefix = LibrarySectionRef.storageKey(serverID: serverID, sectionKey: "")
+        return Set(includedHiddenLibrarySectionKeys.compactMap { key -> String? in
+            guard key.hasPrefix(prefix) else { return nil }
+            return String(key.dropFirst(prefix.count))
+        })
     }
 
     /// How many of the sections Settings currently knows about are turned on. Backs
@@ -351,11 +400,16 @@ extension AppState {
         let wasOn = !isLibrarySectionDeselected(section)
         if wasOn {
             guard enabledLibrarySectionCount > 1 else { return }
-            deselectedLibrarySectionKeys.insert(section.id)
-        } else {
-            deselectedLibrarySectionKeys.remove(section.id)
         }
-        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+        if section.isHidden, hiddenLibrariesAreOptIn {
+            if wasOn { includedHiddenLibrarySectionKeys.remove(section.id) }
+            else { includedHiddenLibrarySectionKeys.insert(section.id) }
+            LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        } else {
+            if wasOn { deselectedLibrarySectionKeys.insert(section.id) }
+            else { deselectedLibrarySectionKeys.remove(section.id) }
+            LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+        }
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
         Task { await loadLibrary() }

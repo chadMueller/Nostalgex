@@ -256,6 +256,13 @@ class AppState {
     /// `LibrarySectionSelectionStore` on every change. Default is empty, every section
     /// on, until the onboarding screen or Settings turns one off.
     var deselectedLibrarySectionKeys: Set<String> = LibrarySectionSelectionStore.load()
+    /// Libraries the user hides from the Jellyfin home screen that the viewer switched ON, keyed
+    /// by `LibrarySectionRef.id`. A hidden library is listed in LIBRARIES but off until it is in
+    /// here (`LibrarySectionSelectionStore.hiddenSectionsOnByDefault` flips that).
+    var includedHiddenLibrarySectionKeys: Set<String> = LibrarySectionSelectionStore.loadIncludedHidden()
+    /// `LibrarySectionSelectionStore.hiddenSectionsOnByDefault`, a property so a test can set the other
+    /// position. Nothing but a test ever changes it.
+    var hiddenSectionsOnByDefault: Bool = LibrarySectionSelectionStore.hiddenSectionsOnByDefault
 
     // MARK: - App state
 
@@ -1024,7 +1031,9 @@ class AppState {
                 serverURL: server?.baseURL ?? serverURL,
                 accessToken: server?.token ?? token,
                 userId: server?.userId ?? jellyfinUserId,
-                serverID: server?.machineIdentifier ?? ""
+                serverID: server?.machineIdentifier ?? "",
+                includedHiddenSectionKeys: includedHiddenSectionKeys(forServerID: server?.machineIdentifier ?? ""),
+                hiddenSectionsOnByDefault: hiddenSectionsOnByDefault
             )
         case .emby:
             // Emby is single-server: same credential shape as Jellyfin.

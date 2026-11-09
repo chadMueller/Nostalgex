@@ -14,8 +14,11 @@ final class JellyfinLibraryGoldenTests: XCTestCase {
             enum CodingKeys: String, CodingKey { case type = "Type" }
         }
         struct Kind: Decodable { let item: Row; let asked: String; let kept: Bool }
+        /// The request that lists a user's libraries (added with the includeHidden change).
+        struct View: Decodable { let backend: String; let userId: String; let includeHidden: Bool?; let path: String }
         let sections: [Section]
         let types: [Kind]
+        let views: [View]?
     }
 
     /// Repo root, found from this source file: NostalgexTests -> Nostalgex -> root.
@@ -37,6 +40,25 @@ final class JellyfinLibraryGoldenTests: XCTestCase {
             let label = c.collectionType.map { "\"\($0)\"" } ?? "no CollectionType"
             XCTAssertEqual(JellyfinAPIService.sectionType(for: c.collectionType), c.sectionType, label)
             XCTAssertEqual(JellyfinAPIService.itemTypes(forSectionType: c.sectionType), c.itemTypes, label)
+        }
+    }
+
+    /// The request that lists a user's libraries, as the web tuner builds it. Skipped until the shared
+    /// file carries `views`. Each Jellyfin case is one position of the web tuner's switch
+    /// (`includeHidden`, else read from the path); the app asks both lists.
+    func testTheJellyfinLibraryListIsAskedAsTheWebTunerAsksIt() throws {
+        guard let cases = try golden().views else {
+            throw XCTSkip("scripts/jellyfin-library-golden.json has no `views` yet")
+        }
+        let jellyfin = cases.filter { $0.backend == "jellyfin" }
+        XCTAssertFalse(jellyfin.isEmpty)
+        for c in jellyfin {
+            var components = URLComponents()
+            components.path = "/UserViews"
+            components.queryItems = JellyfinAPIService.userViewsQuery(
+                userId: c.userId, includeHidden: c.includeHidden ?? c.path.contains("includeHidden=true"))
+            XCTAssertEqual("\(components.path)?\(components.percentEncodedQuery ?? "")", c.path,
+                           "user \(c.userId.debugDescription)")
         }
     }
 
