@@ -29,7 +29,7 @@ Here's the short version, checked October 2026. The rest of the post explains ea
 | JellyStream | Jellyfin or any IPTV player | Yes | You set genre rules, it fills the schedule | Yes | Free, open source |
 | Live Channels plugin | Any Jellyfin app | Inside Jellyfin | Yes | Through Jellyfin Live TV | Free, open source |
 | NostalgiaTV | Android TV, Android and Amazon devices | Optional Docker server | Prebuilt channels plus custom ones | Yes, with its server | Free, with a paid Pro upgrade |
-| Nostalgex | Apple TV and a web browser | No | No, it builds every channel | No | Free, open source |
+| Nostalgex | Apple TV, Roku and a web browser | No | No, it builds every channel | No | Free, open source |
 
 If you want to dig into any of them, start with the [Tunarr README](https://github.com/chrisbenincasa/tunarr/), [JellyStream](https://github.com/oarko/jellystream), the [Live Channels plugin](https://github.com/JPKribs/jellyfin-plugin-livechannels) and [NostalgiaTV on Google Play](https://play.google.com/store/apps/details?id=com.nostalgiatv). NostalgiaTV is a separate app from a different developer, and a good one if your house runs on Android TV or Fire TV.
 
@@ -70,7 +70,7 @@ Here's what you give up with [Nostalgex](/), plainly:
 * **No handmade schedules.** You don't build channels or time slots. Nostalgex builds every channel and schedule from your library on its own. If you want Seinfeld at 7 and a movie at 9 every night, that's a Tunarr job.
 * **No tuner or M3U output.** Nothing gets shared out to Plex Live TV, Kodi or other players.
 * **No recording.**
-* **Only two places to watch.** The Apple TV app (tvOS 18 or later) and the [web tuner](/web-tuner) in a browser. There's no Android, Roku or Fire TV version.
+* **TV apps plus the web.** The Apple TV app (tvOS 18 or later), the [Roku Channel Store app](/roku), and the [web tuner](/web-tuner) in a browser. There is no Fire TV version.
 
 XDA Developers [tried Nostalgex with a Jellyfin server](https://www.xda-developers.com/this-jellyfin-plugin-made-my-media-library-feel-like-old-school-cable-tv/) in October and landed in the same place: much easier than Tunarr or ErsatzTV, with less control over individual channels. That's a fair summary.
 

@@ -98,7 +98,7 @@ No. NostalgiaTV is a separate app for Plex, Jellyfin and Emby that runs on Andro
 
 ### Does Nostalgex work on Roku or Fire TV?
 
-No. Nostalgex runs on Apple TV with tvOS 18 or later, and in a browser through the web tuner.
+Yes on Roku. Nostalgex is on the Roku Channel Store (add code NOSTALGEX), on Apple TV with tvOS 18 or later, and in a browser through the web tuner. There is no Fire TV version.
 
 <!--
 Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
