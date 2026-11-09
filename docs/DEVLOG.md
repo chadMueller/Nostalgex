@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: collection members read four at a time, as the web tuner reads them)
+
+**Why.** On a SHIELD, reading a Plex server's 288 collections took 81.3 to 81.6 s on every launch refresh, against 18 to 20 s for the 11,396-item library itself (noted in the entry on collection member order, below). The web tuner's `fetchPlexCollections` and `fetchBoxSetCollections` read the members of four collections at once (`mapLimit(list, 4, ...)`), but the Android port read them one at a time. Its own comment on the BoxSet read said so.
+
+**Changed.**
+- `Collections.mapLimit` is the JS's: at most `COLLECTION_READS_AT_ONCE` (4) calls at a time on a small thread pool, the results in the list's order whatever order they finish in.
+- `fetchPlexCollections` and `fetchBoxSetCollections` read members through it. A collection whose read fails is still dropped, and the progress count still runs from 1 to the total.
+- `CollectionsMapLimitTest` (new, 4): order kept when calls finish out of order, never more than 4 at once, an error comes through, an empty list.
+
+**Measured on the SHIELD.** Two launches: the 288 collections read in 24.1 s and 24.3 s, against 81.3 to 81.6 s before, about 3.4 times faster. Both refreshes said "unchanged", so the parallel read gave the same collections as the one-at-a-time read had saved.
+
 ## 2026-11-09 (Android: OPEN ON LAST CHANNEL, hidden Jellyfin libraries, and RESCAN LIBRARY's lines)
 
 **Why.** Three Apple TV changes on main that weren't in the Android parity table yet: OPEN ON LAST CHANNEL (I-017, `a5d84f59`, `15ffeaa3`), Jellyfin libraries hidden from the home screen (`1c0d9458`), and RESCAN LIBRARY drawing every line of its counts (`de710a11`).

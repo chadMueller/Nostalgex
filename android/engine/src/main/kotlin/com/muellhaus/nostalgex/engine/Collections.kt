@@ -8,6 +8,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import java.text.Normalizer
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.Locale
 
 /**
@@ -585,17 +589,16 @@ object Collections {
                 // The JS warns on the console and goes on to the next section.
             }
         }
-        val out = ArrayList<ServerCollection>()
-        list.forEachIndexed { i, row ->
+        val done = AtomicInteger()
+        return mapLimit(list, COLLECTION_READS_AT_ONCE) { row ->
             val childKeys = try {
                 parsePlexCollectionChildren(getJSON(plexCollectionChildrenPath(row.ratingKey)))
             } catch (e: Exception) {
                 null
             }
-            onProgress?.invoke(i + 1, list.size)
-            if (childKeys != null) out.add(plexCollection(serverKey, row, childKeys))
-        }
-        return out
+            onProgress?.invoke(done.incrementAndGet(), list.size)
+            childKeys?.let { plexCollection(serverKey, row, it) }
+        }.filterNotNull()
     }
 
     // ── Network: Jellyfin and Emby ──
@@ -652,8 +655,8 @@ object Collections {
 
     /**
      * `fetchBoxSetCollections`, with the fetch passed in as for [fetchPlexCollections]. The
-     * list failing throws; a BoxSet with any page failing is dropped. One call at a time,
-     * where the JS reads four BoxSets at once.
+     * list failing throws; a BoxSet with any page failing is dropped. Four BoxSets at once, as
+     * the JS's mapLimit reads them.
      */
     fun fetchBoxSetCollections(
         serverKey: String,
@@ -662,8 +665,8 @@ object Collections {
         onProgress: ((Int, Int) -> Unit)? = null,
     ): List<ServerCollection> {
         val boxSets = parseBoxSetList(getJSON(boxSetListPath(userId)))
-        val out = ArrayList<ServerCollection>()
-        boxSets.forEachIndexed { i, b ->
+        val done = AtomicInteger()
+        return mapLimit(boxSets, COLLECTION_READS_AT_ONCE) { b ->
             val childKeys = try {
                 val keys = ArrayList<String>()
                 var start = 0
@@ -677,10 +680,34 @@ object Collections {
             } catch (e: Exception) {
                 null
             }
-            onProgress?.invoke(i + 1, boxSets.size)
-            if (childKeys != null) out.add(boxSetCollection(serverKey, b, childKeys))
+            onProgress?.invoke(done.incrementAndGet(), boxSets.size)
+            childKeys?.let { boxSetCollection(serverKey, b, it) }
+        }.filterNotNull()
+    }
+
+    /** How many collections' members are read at once: the JS's mapLimit(list, 4, ...). */
+    const val COLLECTION_READS_AT_ONCE = 4
+
+    /**
+     * The JS's mapLimit: `fn` over `list`, at most `limit` at a time, the results in the list's
+     * order whatever order they finish in. `fn` blocks (each call is a request), so this runs on
+     * a small pool of threads. An exception from `fn` is thrown here; the callers catch their own.
+     */
+    fun <T, R> mapLimit(list: List<T>, limit: Int, fn: (T) -> R): List<R> {
+        if (list.isEmpty()) return emptyList()
+        val pool = Executors.newFixedThreadPool(minOf(limit, list.size))
+        try {
+            val futures = list.map { item -> pool.submit(Callable { fn(item) }) }
+            return futures.map {
+                try {
+                    it.get()
+                } catch (e: ExecutionException) {
+                    throw e.cause ?: e
+                }
+            }
+        } finally {
+            pool.shutdownNow()
         }
-        return out
     }
 
     // ── JS's reading of JSON ──
