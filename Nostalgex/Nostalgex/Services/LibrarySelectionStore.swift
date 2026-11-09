@@ -12,11 +12,23 @@ struct LibrarySectionRef: Identifiable, Hashable, Sendable {
     let sectionKey: String
     let title: String
     let type: String
+    /// Jellyfin only: the user hides this library from the home screen on the server.
+    var isHidden: Bool = false
+
+    /// What Settings and the library picker call such a library.
+    static let hiddenMark = "HIDDEN ON JELLYFIN"
 
     var id: String { Self.storageKey(serverID: serverID, sectionKey: sectionKey) }
 
     static func storageKey(serverID: String, sectionKey: String) -> String {
         "\(serverID)::\(sectionKey)"
+    }
+
+    /// The line under the library's name: its kind, the server when more than one is in play, and
+    /// `hiddenMark` for a library the user hides from the Jellyfin home screen.
+    func subtitle(multiServer: Bool) -> String {
+        let base = multiServer ? "\(serverName) · \(typeLabel)" : typeLabel
+        return isHidden ? "\(base) · \(Self.hiddenMark)" : base
     }
 
     /// Short label for the section's content type, used in subtitles. Falls back to
@@ -50,5 +62,24 @@ enum LibrarySectionSelectionStore {
 
     static func save(_ deselected: Set<String>) {
         AppDefaults.standard.set(Array(deselected), forKey: key)
+    }
+
+    /// Whether a library the user hides from the Jellyfin home screen is on until the viewer
+    /// switches it off. False: it is listed in LIBRARIES but off, and nothing from it airs
+    /// until the viewer switches it on, because hiding it was a choice made on the server
+    /// (adult content, test or plugin folders). The one line to change if that call changes.
+    static let hiddenSectionsOnByDefault = false
+
+    private static let includedHiddenKey = "nostalgex_included_hidden_library_sections"
+
+    /// The hidden libraries the viewer switched ON, by `LibrarySectionRef.id`. Only read while
+    /// `hiddenSectionsOnByDefault` is false; with it true a hidden library follows the same
+    /// opt-out set as every other.
+    static func loadIncludedHidden() -> Set<String> {
+        Set(AppDefaults.standard.stringArray(forKey: includedHiddenKey) ?? [])
+    }
+
+    static func saveIncludedHidden(_ included: Set<String>) {
+        AppDefaults.standard.set(Array(included), forKey: includedHiddenKey)
     }
 }

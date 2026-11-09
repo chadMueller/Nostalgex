@@ -14,6 +14,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     let accessToken: String
     let userId: String
     var serverID: String = ""
+    /// Libraries the user hides from the Jellyfin home screen that the viewer switched ON, by raw
+    /// section key. A hidden library is listed in LIBRARIES either way; it is only scanned when it
+    /// is in here, unless `hiddenSectionsOnByDefault` is true.
+    var includedHiddenSectionKeys: Set<String> = []
+    /// `LibrarySectionSelectionStore.hiddenSectionsOnByDefault`; a property so a test can set it.
+    var hiddenSectionsOnByDefault: Bool = LibrarySectionSelectionStore.hiddenSectionsOnByDefault
     /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
     let scanSkips = ScanSkipCounter()
     var skippedNoRuntime: Int { scanSkips.count }
@@ -98,21 +104,53 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
 
     // MARK: - Library sections (views)
 
+    /// Every library the user can open: the ones on the home screen, and the ones the user hides
+    /// from it (`hidden`). Jellyfin's /UserViews leaves a hidden library (`MyMediaExcludes`) out
+    /// unless asked with `includeHidden=true`, so a library hidden on the server was never listed
+    /// and never scanned. Two requests: the plain list, which is what this always asked, then the
+    /// list with the hidden ones; a library in the second and not the first is hidden. If the
+    /// second fails the answer is the plain list, as before. Emby's list is unchanged.
     func loadSections() async throws -> [PlexSection] {
-        guard let req = request(path: "/UserViews", queryItems: [.init(name: "userId", value: userId)]) else {
+        let shown = try await userViews(includeHidden: false)
+        let everything = (try? await userViews(includeHidden: true)) ?? shown
+        let shownIDs = Set(shown.map(\.Id))
+        let everythingIDs = Set(everything.map(\.Id))
+        let hiddenIDs = everythingIDs.subtracting(shownIDs)
+        // The union, in the second answer's order: a second answer that is somehow smaller than the
+        // first cannot take a library off the list that the first one had.
+        let union = everything + shown.filter { !everythingIDs.contains($0.Id) }
+        return Self.videoSections(from: union, hiddenIDs: hiddenIDs)
+    }
+
+    private func userViews(includeHidden: Bool) async throws -> [JellyfinItem] {
+        guard let req = request(path: "/UserViews", queryItems: Self.userViewsQuery(userId: userId, includeHidden: includeHidden)) else {
             throw PlexAPIService.APIError.invalidResponse
         }
         let (data, response) = try await Self.session.data(for: req)
-        let views = try Self.decode(ItemsResponse.self, data: data, response: response).Items ?? []
-        return Self.videoSections(from: views)
+        return try Self.decode(ItemsResponse.self, data: data, response: response).Items ?? []
+    }
+
+    /// The query of the request that lists a user's libraries: `userId`, and `includeHidden=true`
+    /// for the list with the libraries the user hides from My Media. includeHidden only lifts
+    /// that hiding: a library the user has no access to is still not in the answer. The same
+    /// request as the web tuner's `NostalgexJellyfinUrls.userViewsPath`, pinned by `views` in
+    /// scripts/jellyfin-library-golden.json.
+    static func userViewsQuery(userId: String, includeHidden: Bool) -> [URLQueryItem] {
+        var items: [URLQueryItem] = [.init(name: "userId", value: userId)]
+        if includeHidden { items.append(.init(name: "includeHidden", value: "true")) }
+        return items
     }
 
     /// The views a scan reads: every view except the ones that hold no videos. Those are not
-    /// scanned and not offered in library selection.
-    static func videoSections(from views: [JellyfinItem]) -> [PlexSection] {
+    /// scanned and not offered in library selection. `hiddenIDs` are the views the user hides
+    /// from the home screen; they are listed, marked `hidden`.
+    static func videoSections(from views: [JellyfinItem], hiddenIDs: Set<String> = []) -> [PlexSection] {
         views.compactMap { view in
             let type = sectionType(for: view.CollectionType)
-            return type == "other" ? nil : PlexSection(key: view.Id, title: view.Name ?? "Library", type: type)
+            guard type != "other" else { return nil }
+            var section = PlexSection(key: view.Id, title: view.Name ?? "Library", type: type)
+            section.hidden = hiddenIDs.contains(view.Id)
+            return section
         }
     }
 
@@ -174,7 +212,14 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
         // and discarded.
-        let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
+        // A library the user hides from the home screen is listed but left out until the viewer
+        // switched it on (`hiddenSectionsOnByDefault` flips that): hiding it was a choice made on
+        // the server, and its titles must not start airing by surprise.
+        let sections = allSections.filter { section in
+            if excludedSectionKeys.contains(section.key) { return false }
+            if section.hidden, !hiddenSectionsOnByDefault, !includedHiddenSectionKeys.contains(section.key) { return false }
+            return true
+        }
         var allItems: [PlexMediaItem] = []
         var failures = SectionFailures(backend: "Jellyfin")
         for (i, section) in sections.enumerated() {

@@ -691,8 +691,9 @@ struct LibrarySelectionView: View {
         .defaultFocus($focusedID, "continue")
         .onAppear {
             // Default: every section on, so the remote starts on CONTINUE, one press
-            // builds a full guide without having to touch a single row.
-            includedIDs = Set(appState.pendingLibrarySections.map(\.id))
+            // builds a full guide without having to touch a single row. Except a library the
+            // user hides from the Jellyfin home screen: it is listed, and off until switched on.
+            includedIDs = Set(appState.pendingLibrarySections.filter(appState.librarySectionStartsOn).map(\.id))
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(120))
                 focusedID = "continue"
@@ -717,7 +718,7 @@ struct LibrarySelectionView: View {
                     Text(section.title)
                         .font(.custom("DMMono-Medium", size: 28))
                         .foregroundStyle(isFocused ? OnboardingPalette.onFocus : (isOn ? .white : .white.opacity(0.55)))
-                    Text(multiServer ? "\(section.serverName) · \(section.typeLabel)" : section.typeLabel)
+                    Text(section.subtitle(multiServer: multiServer))
                         .font(.custom("DMMono-Regular", size: 18))
                         .foregroundStyle(isFocused ? OnboardingPalette.onFocus.opacity(0.75) : .white.opacity(0.4))
                 }
