@@ -16,8 +16,7 @@ final class LANDiscoveryUITests: XCTestCase {
             throw XCTSkip("Needs a real Emby on the LAN. Set NOSTALGEX_LAN_DISCOVERY_UITEST=1 to run.")
         }
 
-        let app = XCUIApplication()
-        app.launchArguments = ["-uiTestForceSettings", "1"]
+        let app = isolatedApp(arguments: ["-uiTestForceSettings", "1"])
         app.launch()
 
         XCTAssertTrue(app.buttons["CONNECT TO PLEX"].waitForExistence(timeout: 15))

@@ -28,8 +28,10 @@ class AppState {
 
         // UI tests run in a shared simulator environment; allow a launch argument to reset
         // persisted credentials so tests don't leak state across runs.
-        if ProcessInfo.processInfo.arguments.contains("-uiTestResetCredentials")
-            || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow") {
+        // Both flags delete or rewrite stored data, so they act only under HarnessIsolation
+        // (TestLaunchFlags): on a launch with the real stores they are ignored.
+        let reproAppReviewFlow = TestLaunchFlags.isOn("-reproAppReviewFlow")
+        if TestLaunchFlags.isOn("-uiTestResetCredentials") || reproAppReviewFlow {
             credentialStore.delete(key: "plex_server_url")
             credentialStore.delete(key: "plex_token")
             AppDefaults.standard.removeObject(forKey: "plex_server_url")
@@ -40,7 +42,7 @@ class AppState {
         setupBackgroundObservers()
 
         // Deterministic App Review repro harness: simulate a "connected + loaded" state.
-        if ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow") {
+        if reproAppReviewFlow {
             serverURL = "https://example.com"
             token = "TEST_TOKEN"
             saveCredentials()
@@ -158,12 +160,12 @@ class AppState {
 
     var isUITestStubLibrarySuccess: Bool {
         ProcessInfo.processInfo.arguments.contains("-uiTestStubLibrarySuccess")
-        || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
+        || TestLaunchFlags.isOn("-reproAppReviewFlow")
     }
 
     var isUITestInstantAuth: Bool {
-        ProcessInfo.processInfo.arguments.contains("-uiTestInstantAuth")
-        || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
+        TestLaunchFlags.isOn("-uiTestInstantAuth")
+        || TestLaunchFlags.isOn("-reproAppReviewFlow")
     }
 
     // MARK: - Stored credentials (Keychain-backed)

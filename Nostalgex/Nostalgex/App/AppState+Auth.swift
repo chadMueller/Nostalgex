@@ -14,8 +14,7 @@ extension AppState {
     /// Loads credentials from Keychain only when we don't already have them in memory.
     /// This avoids clobbering a just-acquired token/serverURL during the PIN auth flow.
     func hydrateCredentialsIfNeeded() {
-        if ProcessInfo.processInfo.arguments.contains("-uiTestResetCredentials")
-            || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow") {
+        if TestLaunchFlags.isOn("-uiTestResetCredentials") || TestLaunchFlags.isOn("-reproAppReviewFlow") {
             return
         }
         // Restore the last-load timestamp from UserDefaults so the "loaded < 24h

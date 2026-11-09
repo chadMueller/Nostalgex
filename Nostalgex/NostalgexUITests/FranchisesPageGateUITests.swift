@@ -46,8 +46,7 @@ final class FranchisesPageGateUITests: XCTestCase {
     private func rail(_ id: String) -> XCUIElement { app.buttons["settingsRail_\(id)"] }
 
     private func openFranchisesPage() {
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestFranchiseFixture"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestFranchiseFixture"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")

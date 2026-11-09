@@ -57,6 +57,22 @@ Rules for the entry:
 - Keep it to the length the day earned. A one-line day gets one line.
 - No em dashes, no emoji. Match the tone of the rest of the docs.
 
+## UI tests and a real Apple TV
+
+A UI test that launches the app without a harness root can delete a real Apple TV's library snapshot, settings and
+sign-in (it did, 2026-11-09). `TEST_RUNNER_NOSTALGEX_HARNESS_ROOT` only reaches the test runner, not the app a test
+launches, so isolation has to be set on the app itself.
+
+- Make every app a UI test launches with `isolatedApp(arguments:)` (`NostalgexUITests/IsolatedApp.swift`). It sets
+  `NOSTALGEX_HARNESS_ROOT`, a root of its own per test, so a new test cannot forget. Never call `XCUIApplication()`
+  in a test file.
+- A test that must see the real stores uses `realStoresApp(because:)`: simulator only, it skips on a real Apple TV.
+- The launch flags that delete or rewrite stored data (`TestLaunchFlags.destructive`, which includes
+  `-uiTestResetCredentials` and `-reproAppReviewFlow`) act only while the harness root is set. Without it the app
+  ignores them and logs one line. A new flag of that kind goes on that list and is read with `TestLaunchFlags.isOn`.
+- `node scripts/ui-test-isolation-check.mjs` checks all of this from the source. It is part of `npm test` and runs on
+  every pull request.
+
 ## Before changing playback or the guide
 
 These are the product. A regression here is worse than a missing feature, and
