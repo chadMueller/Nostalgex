@@ -16,6 +16,9 @@ struct ChannelGuideView: View {
     /// Open from when full screen closes, or the guide first appears, until tvOS hands focus to the
     /// guide. See `GuideReturnFocus`.
     @State private var handoutWindow = GuideReturnFocus.HandoutWindow()
+    /// Holds the highlight on the live channel's row while the guide comes back, so the row tvOS hands
+    /// focus to first is never drawn highlighted. See `GuideReturnFocus.highlighted`.
+    @State private var liveHold = GuideReturnFocus.LiveHighlightHold()
 
     @State private var showBundleSidebar: Bool = false
 
@@ -26,6 +29,18 @@ struct ChannelGuideView: View {
     /// channel. See `wrapSentinel`.
     private static let wrapBottomSentinelID = -902
     @State private var seasonalPromptShown = false
+
+    /// The row the guide draws highlighted: the row that has focus, except while the guide is coming back
+    /// (full screen closed, or the guide first appearing), when it is the live channel's row from the
+    /// first frame. tvOS hands focus to the row it remembers first, and the guide moves it a moment
+    /// later; drawing the highlight from the focus alone showed the viewer that move.
+    private var highlightedID: Int? {
+        guard liveHold.isActive else { return focusedChannelID }
+        let liveRow = GuideReturnFocus.liveRowID(liveChannelID: appState.currentChannel?.id) { id in
+            appState.channels.contains { $0.id == id }
+        }
+        return GuideReturnFocus.highlighted(focused: focusedChannelID, holdingLive: true, liveRow: liveRow)
+    }
 
     private let channelColumnWidth: CGFloat = 220
     private let rowHeight: CGFloat = 80
@@ -42,6 +57,7 @@ struct ChannelGuideView: View {
             // from fullscreen (where the tuner view can pause timers).
             let visibleStart = windowStart.addingTimeInterval(TimeInterval(slotOffset * 1800))
             let visibleLabels = timeSlotLabels(from: visibleStart)
+            let highlighted = highlightedID
 
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
@@ -71,7 +87,7 @@ struct ChannelGuideView: View {
                                     Button { seasonalPromptShown = true } label: {
                                         SeasonalInviteRow(
                                             bundle: offer,
-                                            isFocused: focusedChannelID == Self.seasonalRowID,
+                                            isFocused: highlighted == Self.seasonalRowID,
                                             rowHeight: rowHeight
                                         )
                                     }
@@ -94,7 +110,7 @@ struct ChannelGuideView: View {
                                         EPGRow(
                                             channel: channel,
                                             schedule: schedules[channel.id],
-                                            isFocused: focusedChannelID == channel.id,
+                                            isFocused: highlighted == channel.id,
                                             isEvenRow: index % 2 == 0,
                                             channelColumnWidth: channelColumnWidth,
                                             programsWidth: programsWidth,
@@ -124,20 +140,35 @@ struct ChannelGuideView: View {
                                 wrapSentinel(Self.wrapBottomSentinelID)
                             }
                         }
+                        .onChange(of: highlightedID) { oldID, newID in
+                            GuideJumpProbe.shared.shownChanged(from: oldID, to: newID)
+                        }
                         .onChange(of: focusedChannelID) { oldID, newID in
+                            GuideJumpProbe.shared.rawFocusChanged(from: oldID, to: newID)
                             // Back from full screen: focus arrives from none, on the row tvOS
                             // remembers. If the channel was changed in full screen that row is
                             // the old one; move focus to the live channel, once (I-041).
-                            if handoutWindow.isOpen, oldID == nil, newID != nil {
+                            let isHandout = handoutWindow.isOpen && oldID == nil && newID != nil
+                            var liveRow: Int?
+                            if isHandout {
                                 handoutWindow.close()
-                                let liveRow = GuideReturnFocus.liveRowID(liveChannelID: appState.currentChannel?.id) { id in
+                                liveRow = GuideReturnFocus.liveRowID(liveChannelID: appState.currentChannel?.id) { id in
                                     appState.channels.contains { $0.id == id }
                                 }
-                                if GuideReturnFocus.target(handedTo: newID, liveChannelID: liveRow) != nil {
-                                    anchorFocusToLiveChannel(proxy)
-                                    return
-                                }
                             }
+                            if GuideReturnFocus.holdSurvives(isHandout: isHandout, handedTo: newID, liveRow: liveRow) {
+                                // The wrong row was handed out. The highlight stays on the live row
+                                // (`liveHold`) until the move to it lands, or for a moment at most.
+                                let holdGeneration = liveHold.generation
+                                DispatchQueue.main.asyncAfter(deadline: .now() + GuideReturnFocus.correctionTimeout) {
+                                    liveHold.expire(generation: holdGeneration)
+                                }
+                                anchorFocusToLiveChannel(proxy)
+                                return
+                            }
+                            // Any other change ends the hold: focus is on the live channel, or the viewer
+                            // moved it, and the highlight follows the focus again.
+                            if liveHold.isActive { liveHold.end() }
                             // The downward wrap. Focus landing on the sentinel below the
                             // last channel is the only proof that a press ran off the end
                             // of the list, so that is what drives it. Nothing here reads a
@@ -167,14 +198,22 @@ struct ChannelGuideView: View {
                                 return
                             }
                             if !suppressFocusScroll, let id = newID {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    proxy.scrollTo(id, anchor: .center)
+                                if isHandout {
+                                    // The guide coming back with focus already on the live channel: it is
+                                    // placed, not scrolled to in front of the viewer.
+                                    scrollWithoutAnimation(proxy, to: id)
+                                } else {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        proxy.scrollTo(id, anchor: .center)
+                                    }
                                 }
                             }
                             onFocusChanged?(newID)
                         }
                         .onChange(of: appState.isFullScreen) { _, isFullScreen in
                             if !isFullScreen {
+                                GuideJumpProbe.shared.begin("fullScreenClosed", live: appState.currentChannel?.id,
+                                                            shown: highlightedID, raw: focusedChannelID)
                                 armHandoutWindow()
                                 anchorFocusToLiveChannel(proxy)
                             }
@@ -192,6 +231,9 @@ struct ChannelGuideView: View {
                             guard let id = newID, id != focusedChannelID else { return }
                             suppressFocusScroll = true
                             focusedChannelID = id
+                            // Placed at once, not 0.3 s later: with the channel changed in full screen the
+                            // guide is covered now, and has to be on the live row when it is uncovered.
+                            scrollWithoutAnimation(proxy, to: id)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 proxy.scrollTo(id, anchor: .center)
                                 suppressFocusScroll = false
@@ -200,16 +242,19 @@ struct ChannelGuideView: View {
                         .onAppear {
                             // First focus comes from the engine a moment after this, and goes to the
                             // first row, or the seasonal invite, not the playing channel (I-041).
+                            GuideJumpProbe.shared.begin("guideAppeared", live: appState.currentChannel?.id,
+                                                        shown: highlightedID, raw: focusedChannelID)
                             armHandoutWindow()
                             let targetID = appState.currentChannel?.id ?? appState.channels.first?.id
                             if let id = targetID {
                                 focusedChannelID = id
-                                // Explicit scroll in case focusedChannelID was already set
-                                // (e.g., returning from Settings where the value didn't change)
+                                // Placed on the row at once, and again a moment later in case
+                                // focusedChannelID was already set (e.g., returning from Settings where
+                                // the value didn't change). Neither is animated: the guide opens on the
+                                // row, it does not scroll to it in front of the viewer.
+                                scrollWithoutAnimation(proxy, to: id)
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        proxy.scrollTo(id, anchor: .center)
-                                    }
+                                    scrollWithoutAnimation(proxy, to: id)
                                 }
                             }
                         }
@@ -306,6 +351,11 @@ struct ChannelGuideView: View {
             }
         }
         .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            if GuideJumpProbe.isExposedToTests { GuideJumpProbeElement() }
+        }
+        #endif
     }
 
     // MARK: - Live channel anchor
@@ -316,6 +366,21 @@ struct ChannelGuideView: View {
     private func armHandoutWindow() {
         let generation = handoutWindow.open()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { handoutWindow.expire(generation: generation) }
+        // The highlight is held on the live row from this first frame, through the cover closing.
+        let holdGeneration = liveHold.begin()
+        DispatchQueue.main.asyncAfter(deadline: .now() + GuideReturnFocus.holdTimeout) {
+            liveHold.expire(generation: holdGeneration)
+        }
+    }
+
+    /// Scrolls the row to the centre with no animation at all, whatever transaction is running.
+    private func scrollWithoutAnimation(_ proxy: ScrollViewProxy, to id: Int) {
+        GuideJumpProbe.shared.note("scrollTo \(id) (no animation)")
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            proxy.scrollTo(id, anchor: .center)
+        }
     }
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
@@ -324,8 +389,11 @@ struct ChannelGuideView: View {
         guard let id = appState.currentChannel?.id else { return }
         suppressFocusScroll = true
         focusedChannelID = id
+        // Now, so the guide is already on the live row when it is uncovered, and again once the focus
+        // move has settled.
+        scrollWithoutAnimation(proxy, to: id)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            proxy.scrollTo(id, anchor: .center)
+            scrollWithoutAnimation(proxy, to: id)
             suppressFocusScroll = false
         }
     }

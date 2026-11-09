@@ -33,6 +33,36 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         return String(header.label.prefix(5))
     }
 
+    /// What the debug probe in the guide recorded since the guide last came back or first appeared
+    /// (`GuideJumpProbe`, readable with `-uiTestGuideJumpProbe`): `origin=... live=<id> shown=[...] raw=[...]`.
+    /// `shown` is the row the guide drew highlighted, in order, which is what the viewer sees.
+    private func probeSummary() -> String {
+        let element = app.otherElements["guideJumpProbe"]
+        return element.exists ? (element.value as? String ?? "") : "<no probe>"
+    }
+
+    private func probeList(_ key: String, in summary: String) -> [String] {
+        guard let range = summary.range(of: "\(key)=[") else { return [] }
+        let rest = summary[range.upperBound...]
+        guard let end = rest.firstIndex(of: "]") else { return [] }
+        // Each entry is "id@milliseconds": the row, and when the guide drew or focused it.
+        return rest[..<end].split(separator: ",").map { String($0.split(separator: "@")[0]) }
+    }
+
+    private func probeLive(in summary: String) -> String? {
+        guard let range = summary.range(of: "live=") else { return nil }
+        return String(summary[range.upperBound...].prefix { $0 != " " })
+    }
+
+    /// The guide must have drawn the live channel highlighted from its first frame, and never another row
+    /// before it: the viewer must not see the highlight move.
+    private func assertNeverShownAnotherRow(_ summary: String, live expected: String, _ context: String) {
+        let live = probeLive(in: summary)
+        XCTAssertEqual(live, expected, "\(context): the probe read the wrong live channel: \(summary)")
+        let rows = probeList("shown", in: summary).filter { $0 != "none" }
+        XCTAssertEqual(rows, [expected], "\(context): the guide drew \(rows) highlighted, not only the live channel \(expected). \(summary)")
+    }
+
     private func settled(on prefix: String, within seconds: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
@@ -50,7 +80,7 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         Thread.sleep(forTimeInterval: 4)
         app = XCUIApplication()
         app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i041-guide-focus"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels"]
+        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideJumpProbe"]
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
@@ -71,10 +101,19 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         shot("fullscreen-on-channel-6")
 
         // Back to the guide: the selection has to be the live channel, 6, not the 4 the viewer left from.
-        press(.menu, 1.0)
+        // The first frames of the guide coming back, as fast as the harness can take them.
+        XCUIRemote.shared.press(.menu)
+        shot("guide-returning-frame-1")
+        shot("guide-returning-frame-2")
+        Thread.sleep(forTimeInterval: 1.0)
         let landed = settled(on: "CH 06", within: 6)
         shot("guide-after-return")
         XCTAssertTrue(landed, "the guide came back on \(panelChannelNumber() ?? "no channel"), not the live channel 6")
+        // What the viewer saw on the way: the old row (channel 4) must never have been drawn highlighted.
+        let summary = probeSummary()
+        print("GUIDE-JUMP full-screen return: \(summary)")
+        XCTAssertTrue(summary.hasPrefix("origin=fullScreenClosed"), summary)
+        assertNeverShownAnotherRow(summary, live: "9006", "back from full screen")
     }
 
     /// The same handout problem when the guide first appears: with the playing channel not the first
@@ -96,7 +135,8 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         Thread.sleep(forTimeInterval: 4)
         app = XCUIApplication()
         app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = root
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestStartOnChannel", channel]
+        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestStartOnChannel", channel,
+                               "-uiTestGuideJumpProbe"]
             + (withInvite ? ["-uiTestSeasonalInvite"] : [])
         app.launch()
         let demo = app.buttons["demo mode"]
@@ -108,5 +148,9 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         shot("guide-first-seconds-\(withInvite ? "invite" : "plain")")
         XCTAssertTrue(focused().exists && focused().label.hasPrefix("Channel \(channel),"),
                       "the guide opened on \(focused().exists ? focused().label : "nothing"), not the playing channel \(channel)")
+        // And it never drew the first row, or the invite, highlighted on the way.
+        let summary = probeSummary()
+        print("GUIDE-JUMP first appearance (channel \(channel), invite \(withInvite)): \(summary)")
+        assertNeverShownAnotherRow(summary, live: "900\(channel)", "first appearance")
     }
 }

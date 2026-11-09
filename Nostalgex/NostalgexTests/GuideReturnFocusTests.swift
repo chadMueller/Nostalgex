@@ -66,4 +66,78 @@ final class GuideReturnFocusTests: XCTestCase {
     func testFocusHandedToTheInviteRowMovesToTheLiveChannel() {
         XCTAssertEqual(GuideReturnFocus.target(handedTo: -900, liveChannelID: 9006), 9006)
     }
+
+    // MARK: What is drawn highlighted while the guide comes back
+
+    /// The viewer must never see the highlight on the row tvOS hands focus to first.
+    func testWhileHoldingTheLiveRowIsHighlightedWhateverHasFocus() {
+        for focused in [nil, 9004, 9001, -900] as [Int?] {
+            XCTAssertEqual(GuideReturnFocus.highlighted(focused: focused, holdingLive: true, liveRow: 9006), 9006,
+                           "focus on \(String(describing: focused)): the live row is what is drawn")
+        }
+    }
+
+    func testWithoutAHoldTheHighlightFollowsFocus() {
+        for focused in [nil, 9004, 9006, -900] as [Int?] {
+            XCTAssertEqual(GuideReturnFocus.highlighted(focused: focused, holdingLive: false, liveRow: 9006), focused)
+        }
+    }
+
+    /// No row for the playing channel (its package was switched off): nothing to hold the highlight on.
+    func testAHoldWithNoLiveRowLeavesTheHighlightOnFocus() {
+        XCTAssertEqual(GuideReturnFocus.highlighted(focused: 9004, holdingLive: true, liveRow: nil), 9004)
+        XCTAssertNil(GuideReturnFocus.highlighted(focused: nil, holdingLive: true, liveRow: nil))
+    }
+
+    func testTheHoldSurvivesOnlyTheHandoutOfTheWrongRow() {
+        XCTAssertTrue(GuideReturnFocus.holdSurvives(isHandout: true, handedTo: 9004, liveRow: 9006),
+                      "the old row handed out: the correction follows, keep the highlight on the live row")
+        XCTAssertTrue(GuideReturnFocus.holdSurvives(isHandout: true, handedTo: -900, liveRow: 9006), "the invite handed out")
+        XCTAssertFalse(GuideReturnFocus.holdSurvives(isHandout: true, handedTo: 9006, liveRow: 9006),
+                       "focus arrived on the live row itself: nothing to correct")
+        XCTAssertFalse(GuideReturnFocus.holdSurvives(isHandout: true, handedTo: 9004, liveRow: nil), "no live row to hold")
+        XCTAssertFalse(GuideReturnFocus.holdSurvives(isHandout: false, handedTo: 9004, liveRow: 9006),
+                       "not a handout: the viewer moved focus, or the correction landed, and the highlight follows it")
+    }
+
+    func testAHoldNobodyEndsEndsByItsOwnTimer() {
+        var hold = GuideReturnFocus.LiveHighlightHold()
+        XCTAssertFalse(hold.isActive)
+        let generation = hold.begin()
+        XCTAssertTrue(hold.isActive)
+        hold.expire(generation: generation)
+        XCTAssertFalse(hold.isActive, "the hard limit: it can never stay on")
+    }
+
+    func testTheHoldEndsWhenFocusIsWhereItBelongsOrTheViewerMoves() {
+        var hold = GuideReturnFocus.LiveHighlightHold()
+        _ = hold.begin()
+        hold.end()
+        XCTAssertFalse(hold.isActive)
+    }
+
+    /// The timer of a hold that ended, or of an earlier close of full screen, cannot end a later hold.
+    func testAnEarlierHoldsTimerCannotEndALaterHold() {
+        var hold = GuideReturnFocus.LiveHighlightHold()
+        let first = hold.begin()
+        hold.end()
+        let second = hold.begin()
+        XCTAssertNotEqual(first, second)
+        hold.expire(generation: first)
+        XCTAssertTrue(hold.isActive, "the first hold's timer fired during the second hold")
+        hold.expire(generation: second)
+        XCTAssertFalse(hold.isActive)
+    }
+
+    /// The cover takes about half a second to close and hands focus back at the end of it, so a hold
+    /// shorter than that would let go of the live row just before the old one is handed out.
+    func testTheHoldOutlastsTheCoverClosingAndIsNeverLongerThanTheHandoutWindow() {
+        XCTAssertGreaterThan(GuideReturnFocus.holdTimeout, 1, "well over the ~0.5 s the cover takes to close")
+        XCTAssertLessThanOrEqual(GuideReturnFocus.holdTimeout, 2, "no longer than the handout window")
+    }
+
+    func testOnceTheWrongRowIsHandedOutTheMoveHasOnlyAMomentToLand() {
+        XCTAssertLessThanOrEqual(GuideReturnFocus.correctionTimeout, 0.3)
+        XCTAssertGreaterThan(GuideReturnFocus.correctionTimeout, 0.1, "longer than the move takes on a slow TV")
+    }
 }
