@@ -49,9 +49,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
     private func openPackages() {
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i084-package-channels-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestFranchiseFixture", "-uiTestPackageList"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestFranchiseFixture", "-uiTestPackageList"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
