@@ -3,6 +3,10 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: CI's collection test after the four-at-a-time read)
+
+**Changed.** CI failed `CollectionsVectorTest.plexCallsAsTheWebTunersDo` on the push of `cd104f28`. Since `ace692b3` reads collection members four at a time, the order of the Plex calls varies from run to run, and that test compared it exactly. It passed on the Mac by chance. The calls now compare sorted, with their counts, as the BoxSet test beside it already did. The test's stub records them in a synchronized list, since four threads add to it. The results still compare in order, and they are in order. Three clean runs of all 259 engine tests passed. The Vercel check on PR #151 asks for authorisation to deploy a fork's branch; that is the project's Vercel setting, not the code.
+
 ## 2026-11-09 (Android: the home-screen row of #194, held for a question)
 
 **Half-done.** The link half of #194 is on `feature/android` (`9f5dc22d`). The "On Now" row isn't built: whether Google TV shows an app's row at all is unanswered, and Google TV is where #194 asks it to be measured.

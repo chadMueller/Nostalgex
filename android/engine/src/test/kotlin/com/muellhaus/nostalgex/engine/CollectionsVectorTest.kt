@@ -156,7 +156,8 @@ class CollectionsVectorTest {
 
     /** A fetch over the vector's documents: a path it lacks throws, as the JS stub does. */
     private class Stub(private val docs: JsonObject) {
-        val calls = ArrayList<String>()
+        // Collection members are read four at a time (Collections.mapLimit), so from several threads.
+        val calls: MutableList<String> = java.util.Collections.synchronizedList(ArrayList())
         fun get(path: String): JsonElement {
             calls.add(path)
             return docs[path] ?: throw IllegalStateException("404")
@@ -171,7 +172,9 @@ class CollectionsVectorTest {
             } catch (e: Exception) {
                 JsonPrimitive("throws")
             }
-            assertEquals("${v.s("name")}: calls", canon(v["calls"]), canon(JsonArray(stub.calls.map(::JsonPrimitive))))
+            // The JS reads four collections' members at once, so the calls compare sorted, as a set
+            // with its counts; the results keep the list's order and compare as they are.
+            assertEquals("${v.s("name")}: calls", v["calls"]!!.jsonArray.map { it.jsonPrimitive.content }.sorted(), stub.calls.sorted())
             assertEquals("${v.s("name")}: out", canon(v["out"]), canon(out))
         }
     }
