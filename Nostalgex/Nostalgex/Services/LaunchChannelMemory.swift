@@ -4,8 +4,12 @@ import Foundation
 /// the first one in the guide.
 ///
 /// Per Apple TV. The switch is not in `PreferenceSync.syncedKeys`, so iCloud never carries it, or
-/// the channel, to another Apple TV. Off unless someone turns it on: with it off, a launch opens
-/// exactly where it always did.
+/// the channel, to another Apple TV. On unless someone turns it off. With it off,
+/// a launch opens exactly where it did before this setting existed.
+///
+/// The channel is saved whether the switch is on or off, so a launch only has something to open
+/// once the viewer has tuned a channel on this build. Until then, and for a viewer who updated
+/// from a build without this setting, a launch opens the first channel as before.
 ///
 /// What is saved is the channel's id AND its name. A collection or franchise channel can be
 /// renumbered when the lineup is rebuilt, so an id alone could tune a different channel than the
@@ -14,8 +18,9 @@ import Foundation
 enum LaunchChannelMemory {
     /// The Settings switch. Local to this Apple TV.
     static let enabledKey = "nostalgex_open_on_last_channel"
-    /// The one line to change to make opening on the last channel the default.
-    static let enabledByDefault = false
+    /// The one line the default lives on. A switch the viewer has pressed is stored under
+    /// `enabledKey` and always wins over it.
+    static let enabledByDefault = true
     /// The channel the viewer last tuned: `Saved`, JSON.
     static let savedKey = "nostalgex_last_watched_channel"
 

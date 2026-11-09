@@ -3,6 +3,40 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
+
+**Why.** The setting was written to be off until someone turned it on. The decision is the other way: a viewer who has not
+touched it gets it, and turns it off in PLAYBACK & PICTURE if they would rather start on channel 1. It will feel different
+at first for someone who updates, and that was accepted.
+
+**Changed.** `LaunchChannelMemory.enabledByDefault` is `true`, the only line in the app that changed behaviour; the rest is
+comments, tests and this log. A press on the switch is stored and always wins over the default, so a viewer who turns it
+off stays off. The row's title and line ("Open on last channel", "Start on the channel you were last watching") read the
+same with the setting on, so they are unchanged. Demo mode still hides the row, saves nothing and starts on its own start
+channel (`DemoData.startChannel(in:)` first, then the first channel): the memory does not apply there.
+
+**What a viewer who updates sees.** The channel is saved on every tune the viewer makes (the guide, next and previous, the
+mini strip), whether the switch is on or off, and not on a tune the app makes itself. Nothing was saved by any build before
+this one, so the first launch after the update opens channel 1, as it always did. From the first channel the viewer tunes,
+the next launch opens that channel. A viewer who never tunes keeps opening on channel 1. A saved channel that is gone, or whose
+name changed, opens channel 1.
+
+**Test.** `LaunchChannelMemoryTests`: the default is pinned `true`; nothing saved is channel 1; a tune is what the next launch
+opens, with the switch never pressed and nothing written to it; a viewer who turned it off opens channel 1; entering demo mode
+with a real memory saved still starts on the demo's own first channel. `SettingsOpenOnLastChannelTests` reads the row On in
+a fresh storage root, switches it off and back. `OpenOnLastChannelLaunchTests` no longer presses the switch: it reads it as
+On, tunes channel 5, relaunches on 5, then turns it off and relaunches on channel 1.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,186 passed, 0 failed,
+29 skipped (the live-server harnesses). UI: `OpenOnLastChannelLaunchTests` 2 of 2, `GuideFocusAfterFullScreenTests` 3 of 3
+and `SettingsOpenOnLastChannelTests` 1 of 1.
+
+**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. Not run on a TV with the default on. With
+it on, opening on a channel other than 1 is the common case, so the guide's first focus on the playing channel (the I-041
+commits in this bundle) now applies to every viewer, not only to those who turned the setting on. The web tuner's switch is
+still off by default in this branch (its Settings row, `docs/WEB-TUNER-FEATURES.md` and the 2026-11-08 web entry below say so),
+and the Roku has no such setting. The hidden Jellyfin libraries switch is unchanged and stays off by default.
+
 ## 2026-11-09 (Apple TV: the guide-focus fix (I-041) merged with the 1.0.31 candidate)
 
 **Changed.** `appletv/i041-guide-focus` (2e4a3a0c) is merged onto main (70686b63) on `appletv/1.0.31-bundle`, so the next
@@ -29,20 +63,20 @@ on the simulator.
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
 an optional start-up setting.
 
-**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, off by default (`LaunchChannelMemory.enabledByDefault`, one
-line to flip). A channel the viewer tunes (the guide, next and previous, the mini strip) is saved with its id and its
-name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
+**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, on by default (`LaunchChannelMemory.enabledByDefault`, one
+line; it was off when this entry was first written and was switched on 2026-11-09, see that entry). A channel the viewer
+tunes (the guide, next and previous, the mini strip) is saved with its id and its name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
 the saved snapshot or the load has built the guide, the app opens that channel if the setting is on and a channel with
 the same id and the same name is in the lineup; otherwise it opens the first channel, as before. A collection or
 franchise channel renumbered by a rebuild is not tuned by mistake: a changed name or a missing id opens the first
 channel. Demo mode (what App Review sees) hides the row, ignores the setting and saves nothing; signing out clears the saved
 channel (the setting stays).
 
-**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
-synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
+**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, on by default, demo mode, sign-out, not
+synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, on, and switches).
 
 **Proved end to end** in demo mode with the app's storage isolated (`OpenOnLastChannelLaunchTests`, with
-`-uiTestLaunchMemoryInDemo`): switch on in Settings, tune channel 5, relaunch, and 5 is the channel playing; switch off,
+`-uiTestLaunchMemoryInDemo`): switch on in Settings (as shipped it is On already, and the test now only reads it), tune channel 5, relaunch, and 5 is the channel playing; switch off,
 relaunch, and it is channel 1, as today. On a simulator. With the guide-focus branch (`appletv/i041-guide-focus`) merged
 in, the same flow, with and without a forced seasonal invite above channel 1, also put the guide's focus ring on channel 5
 on a simulator and on a real Apple TV 4K (tvOS 27.2).

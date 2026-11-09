@@ -1,6 +1,6 @@
 import XCTest
 
-/// The OPEN ON LAST CHANNEL row (I-017) is on PLAYBACK & PICTURE, off by default, and a press
+/// The OPEN ON LAST CHANNEL row (I-017) is on PLAYBACK & PICTURE, on by default, and a press
 /// switches it. Put back the way it was at the end so nothing is left on the simulator.
 final class SettingsOpenOnLastChannelTests: XCTestCase {
     private var app: XCUIApplication!
@@ -14,9 +14,12 @@ final class SettingsOpenOnLastChannelTests: XCTestCase {
         Thread.sleep(forTimeInterval: settle)
     }
 
-    func testTheRowIsThereOffByDefaultAndSwitches() {
+    func testTheRowIsThereOnByDefaultAndSwitches() {
         continueAfterFailure = false
         app = XCUIApplication()
+        // A fresh storage root: the shipped default is what is read, not a press an earlier run left on
+        // this simulator. Nothing here reaches the app's real stores.
+        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-settings-row-\(Int(Date().timeIntervalSince1970))"
         app.launchArguments = ["-uiTestForceSettingsPage"]
         app.launch()
         let playback = app.buttons["settingsRail_playback"]
@@ -27,16 +30,16 @@ final class SettingsOpenOnLastChannelTests: XCTestCase {
         for _ in 0..<14 where focused().label != "OPEN ON LAST CHANNEL" { press(.down) }
         let row = focused()
         XCTAssertEqual(row.label, "OPEN ON LAST CHANNEL", "the row is not on PLAYBACK & PICTURE")
-        XCTAssertEqual(row.value as? String, "Off", "off until someone turns it on")
-        let off = app.screenshot()
-        let a = XCTAttachment(screenshot: off); a.name = "open-on-last-channel-off"; a.lifetime = .keepAlways; add(a)
-
-        press(.select, 1.0)
-        XCTAssertEqual(focused().value as? String, "On")
+        XCTAssertEqual(row.value as? String, "On", "on until someone turns it off")
         let on = app.screenshot()
-        let b = XCTAttachment(screenshot: on); b.name = "open-on-last-channel-on"; b.lifetime = .keepAlways; add(b)
+        let a = XCTAttachment(screenshot: on); a.name = "open-on-last-channel-on"; a.lifetime = .keepAlways; add(a)
 
         press(.select, 1.0)
-        XCTAssertEqual(focused().value as? String, "Off", "left as it was found")
+        XCTAssertEqual(focused().value as? String, "Off")
+        let off = app.screenshot()
+        let b = XCTAttachment(screenshot: off); b.name = "open-on-last-channel-off"; b.lifetime = .keepAlways; add(b)
+
+        press(.select, 1.0)
+        XCTAssertEqual(focused().value as? String, "On", "left as it was found")
     }
 }
