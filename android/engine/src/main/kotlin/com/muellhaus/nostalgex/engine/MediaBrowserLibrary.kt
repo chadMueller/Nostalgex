@@ -35,9 +35,13 @@ class MediaBrowserLibrary(
     var adoptedEmby = false
         private set
 
-    /** The user's libraries (views). An Emby server still saved as Jellyfin answers /UserViews with a 404. */
-    private fun views(): List<JsonObject> {
-        var (status, views) = fetch.get(userViewsPath(backend, userId))
+    /**
+     * The user's libraries (views). An Emby server still saved as Jellyfin answers /UserViews
+     * with a 404. `includeHidden` asks Jellyfin for the libraries the user hides from the home
+     * screen too; Emby's list has no such switch.
+     */
+    private fun views(includeHidden: Boolean = false): List<JsonObject> {
+        var (status, views) = fetch.get(userViewsPath(backend, userId, includeHidden))
         if (status == 404 && backend == "jellyfin") {
             val emby = fetch.get(userViewsPath("emby", userId))
             if (emby.first in 200..299) {
@@ -49,9 +53,36 @@ class MediaBrowserLibrary(
         return (views as? JsonObject)?.arr("Items") ?: emptyList()
     }
 
-    /** Every library, for the library-selection screen and Settings (JellyfinAPIService.loadSections). */
-    fun sections(serverId: String, serverName: String): List<LibrarySection> = views().map { view ->
-        LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")))
+    /**
+     * Every library, for the library-selection screen and Settings (JellyfinAPIService.loadSections).
+     * On Jellyfin two requests: the plain list, as always, then the list with the libraries the
+     * user hides from the home screen; one only in the second is `hidden`. If the second fails
+     * the answer is the plain list. The union keeps the second answer's order, so a second
+     * answer that is somehow smaller can't take a library off the list.
+     */
+    fun sections(serverId: String, serverName: String): List<LibrarySection> {
+        val shown = views()
+        val everything = if (backend == "jellyfin") runCatching { views(includeHidden = true) }.getOrNull() ?: shown else shown
+        val shownIds = shown.mapTo(HashSet()) { it.str("Id") }
+        val everythingIds = everything.mapTo(HashSet()) { it.str("Id") }
+        return (everything + shown.filter { it.str("Id") !in everythingIds }).map { view ->
+            LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")),
+                hidden = view.str("Id") !in shownIds)
+        }
+    }
+
+    /**
+     * The libraries a scan reads: the plain list, plus those hidden on Jellyfin that the viewer
+     * switched on (`includedHidden`, view ids). The hidden list is only asked for when one is
+     * on, so by default the scan's requests are what they always were.
+     */
+    private fun scanViews(includedHidden: Set<String>): List<JsonObject> {
+        val shown = views()
+        if (backend != "jellyfin" || includedHidden.isEmpty()) return shown
+        val everything = runCatching { views(includeHidden = true) }.getOrNull() ?: return shown
+        val shownIds = shown.mapTo(HashSet()) { it.str("Id") }
+        return everything.filter { it.str("Id") in shownIds || it.str("Id") in includedHidden } +
+            shown.filter { s -> everything.none { it.str("Id") == s.str("Id") } }
     }
 
     /**
@@ -63,8 +94,10 @@ class MediaBrowserLibrary(
         excluded: Set<String> = emptySet(),
         /** Each library once it is read whole, so a scan abandoned later still has these (LibraryScanInterrupted). */
         onSection: (List<MediaItem>) -> Unit = {},
+        /** Libraries hidden on Jellyfin that the viewer switched on (view ids); the rest of the hidden ones aren't read. */
+        includedHidden: Set<String> = emptySet(),
     ): List<MediaItem> {
-        val viewList = views().filter { (it.str("Id") ?: "") !in excluded }
+        val viewList = scanViews(includedHidden).filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
         val tally = SectionTally()
         for ((index, view) in viewList.withIndex()) {
@@ -266,8 +299,15 @@ class MediaBrowserLibrary(
             else -> "movie"
         }
 
-        fun userViewsPath(backend: String, userId: String) =
-            if (backend == "emby") "/Users/${enc(userId)}/Views" else "/UserViews?userId=${enc(userId)}"
+        /**
+         * The request that lists a user's libraries (nostalgex-jellyfin-urls.js userViewsPath),
+         * held to `views` in scripts/jellyfin-library-golden.json. `includeHidden` adds Jellyfin's
+         * includeHidden=true, which lifts only the home-screen hiding: a library the user has no
+         * access to is still left out.
+         */
+        fun userViewsPath(backend: String, userId: String, includeHidden: Boolean = false) =
+            if (backend == "emby") "/Users/${enc(userId)}/Views"
+            else "/UserViews?userId=${enc(userId)}" + if (includeHidden) "&includeHidden=true" else ""
 
         /** "DoviProfile50" is profile 5, "DoviProfile81" profile 8. */
         fun embyDoviProfile(subtype: String?): Int? =

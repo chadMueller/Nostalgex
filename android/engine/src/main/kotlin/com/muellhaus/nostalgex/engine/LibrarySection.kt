@@ -12,8 +12,19 @@ data class LibrarySection(
     val title: String,
     /** "movie", "show", "musicvideo", or whatever else the server calls it ("artist", "photo"). */
     val type: String,
+    /**
+     * Jellyfin only: the user hides this library from the home screen on the server
+     * (`MyMediaExcludes`). It is listed, and off until the viewer switches it on.
+     */
+    val hidden: Boolean = false,
 ) {
     val id: String get() = storageKey(serverId, key)
+
+    /** The line under the library's name (LibrarySectionRef.subtitle): its kind, the server when more than one is in play, and [HIDDEN_MARK]. */
+    fun subtitle(multiServer: Boolean): String {
+        val base = if (multiServer) "$serverName · $typeLabel" else typeLabel
+        return if (hidden) "$base · $HIDDEN_MARK" else base
+    }
 
     /** The kind of library, for the row's subtitle (LibrarySectionRef.typeLabel). */
     val typeLabel: String
@@ -30,9 +41,22 @@ data class LibrarySection(
         /** The Apple TV's UserDefaults key for the libraries switched off. */
         const val STORAGE_KEY = "nostalgex_deselected_library_sections"
 
+        /** The Apple TV's key for the hidden libraries the viewer switched on (LibrarySectionSelectionStore). */
+        const val INCLUDED_HIDDEN_KEY = "nostalgex_included_hidden_library_sections"
+
+        /**
+         * Whether a library hidden from the Jellyfin home screen starts on (hiddenSectionsOnByDefault).
+         * False: hiding it was a choice made on the server (adult content, test or plugin
+         * folders), so its titles must not start airing by surprise. The one line to change.
+         */
+        const val HIDDEN_ON_BY_DEFAULT = false
+
+        /** What Settings and the library picker call such a library. */
+        const val HIDDEN_MARK = "HIDDEN ON JELLYFIN"
+
         fun storageKey(serverId: String, key: String) = "$serverId::$key"
 
-        /** The library keys switched off on one server, from the stored ids. */
+        /** The library keys on one server among stored ids (switched off, or hidden ones switched on). */
         fun excludedKeys(deselected: Set<String>, serverId: String): Set<String> {
             val prefix = storageKey(serverId, "")
             return deselected.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()

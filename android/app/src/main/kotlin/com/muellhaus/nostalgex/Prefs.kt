@@ -7,6 +7,7 @@ import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
+import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -69,6 +70,11 @@ class Prefs(context: Context) {
     var initialLoadComplete: Boolean
         get() = prefs.getBoolean("nostalgex_completed_initial_load", false)
         set(value) = prefs.edit().putBoolean("nostalgex_completed_initial_load", value).apply()
+
+    /** The libraries hidden on Jellyfin that the viewer switched on (LibrarySection ids), under the Apple TV's key. */
+    var includedHiddenSections: Set<String>
+        get() = prefs.getStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, value).apply()
 
     /** The libraries switched off (LibrarySection ids), under the Apple TV's key. Absent means every library is on. */
     var deselectedSections: Set<String>
@@ -138,7 +144,19 @@ class Prefs(context: Context) {
         get() = prefs.getString("nostalgex_library_signature", null)
         set(value) = prefs.edit().putString("nostalgex_library_signature", value).apply()
 
-    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser")
+    /** OPEN ON LAST CHANNEL's switch and the channel last tuned (LaunchChannelMemory), on this TV only. */
+    var openOnLastChannel: Boolean
+        get() = prefs.getBoolean(LaunchChannelMemory.ENABLED_KEY, LaunchChannelMemory.ENABLED_BY_DEFAULT)
+        set(value) = prefs.edit().putBoolean(LaunchChannelMemory.ENABLED_KEY, value).apply()
+
+    var lastWatchedChannel: LaunchChannelMemory.Saved?
+        get() = prefs.getString(LaunchChannelMemory.SAVED_KEY, null)?.let { runCatching { json.decodeFromString<LaunchChannelMemory.Saved>(it) }.getOrNull() }
+        set(value) = prefs.edit().apply {
+            if (value == null) remove(LaunchChannelMemory.SAVED_KEY) else putString(LaunchChannelMemory.SAVED_KEY, json.encodeToString(value))
+        }.apply()
+
+    // The saved channel belongs to the lineup just left; the switch stays (the Apple TV's disconnect).
+    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser").remove(LaunchChannelMemory.SAVED_KEY)
         .remove("nostalgex_last_load_at").remove("nostalgex_last_library_check_at").remove("nostalgex_library_signature").apply()
 }
 

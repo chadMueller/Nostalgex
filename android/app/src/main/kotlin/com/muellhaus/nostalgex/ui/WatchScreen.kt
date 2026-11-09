@@ -354,7 +354,7 @@ private fun FullScreen(
         }
         when (overlay) {
             Overlay.STRIP -> MiniChannelStrip(model, onSelect = { picked ->
-                model.tune(picked)
+                model.tuneFromViewer(picked)
                 onOverlay(Overlay.NONE)
                 onFlash()
             })
@@ -654,7 +654,7 @@ private fun Guide(
                         onSelect = {
                             // Selecting the channel that is on goes full screen, unless it stopped after
                             // repeated failures: then selecting it retries. Any other channel tunes.
-                            if (ch.id == model.channel?.id && !model.channelStopped) model.fullScreen = true else model.tune(ch)
+                            if (ch.id == model.channel?.id && !model.channelStopped) model.fullScreen = true else model.tuneFromViewer(ch)
                         },
                     )
                 }

@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: OPEN ON LAST CHANNEL, hidden Jellyfin libraries, and RESCAN LIBRARY's lines)
+
+**Why.** Three Apple TV changes on main that weren't in the Android parity table yet: OPEN ON LAST CHANNEL (I-017, `a5d84f59`, `15ffeaa3`), Jellyfin libraries hidden from the home screen (`1c0d9458`), and RESCAN LIBRARY drawing every line of its counts (`de710a11`).
+
+**Changed.**
+- **OPEN ON LAST CHANNEL.** `LaunchChannelMemory` (new, `android/engine`) is the Apple TV's rule, under its keys: the saved channel opens only when the switch is on and a channel with the same id and the same name is in the lineup, so a renumbered collection or franchise channel opens the first one instead. Demo mode always opens the first.
+  - `AppModel.tuneFromViewer` remembers a channel the viewer tunes (the guide, the mini strip, channel up and down), whether or not the switch is on. The app's own tunes (the first channel, the 9 PM Watershed lift, coming back from another app) aren't remembered.
+  - The row is under AUDIO LANGUAGE in PLAYBACK & PICTURE, hidden in demo mode. Sign-out clears the saved channel and leaves the switch.
+  - `LaunchChannelMemoryTest` (8) holds the Apple TV's cases: saved, off, nothing saved, gone, renumbered, demo, the default.
+- **Hidden Jellyfin libraries.** `/UserViews` leaves out a library the user hides from My Media unless asked with `includeHidden=true`.
+  - `MediaBrowserLibrary.sections` asks both ways on Jellyfin. A library only in the second answer is `hidden`, listed with "HIDDEN ON JELLYFIN" after its type, and off until switched on.
+  - That choice is its own set (`nostalgex_included_hidden_library_sections`, `LibrarySection.HIDDEN_ON_BY_DEFAULT` false). A new sign-in starts it empty.
+  - The scan asks for the hidden list only when a hidden library is on, so by default its requests are byte for byte what they were and `MediaBrowserScanTest` still matches the web tuner.
+  - The library picker shows even for one library if it is hidden, since nothing else could switch it on. Emby is unchanged.
+  - `JellyfinHiddenLibrariesTest` (6) holds the request to `views` in `scripts/jellyfin-library-golden.json` and covers the listing, a failed second request, the scan off and on, and Emby.
+- **RESCAN LIBRARY.** `ToggleRow` takes `subtitleLines` (3 as before); RESCAN LIBRARY passes no limit.
+
+**Measured on a SHIELD (Android 11).**
+- OPEN ON LAST CHANNEL, with a Plex library: switched on, CH 05 picked in the guide, and a relaunch opened on CH 05 with its programme playing. Switched off, a relaunch opened on CH 01.
+- Hidden libraries, with a copy of the app against the test Jellyfin 12.4 with its Comedy library hidden for the user (`MyMediaExcludes`):
+  - The picker listed Comedy as "Movies · HIDDEN ON JELLYFIN", OFF.
+  - CONTINUE read 7 of 8 libraries and no comedy, without asking for the hidden list.
+  - Settings listed it the same way. Switching it on reloaded with its 5 films, and CH 03, CH 07 and CH 14 came on.
+- RESCAN LIBRARY on the Plex library already fills 3 lines (the summary wraps to two).
+
+**Not ported.** The Apple TV's RESCAN LIBRARY row also has a coverage line (titles on a channel, on none, and skipped for having no runtime: `LibraryDiagnostics.coverageLine`) and the last playback failure (`PlaybackDiagnostics`). Android's row has the summary and "Last updated" only. With them added the old 3-line cap would have cut it, which is why the cap goes now.
+
 ## 2026-11-09 (Android: a new member order in a Plex collection no longer rebuilds the guide)
 
 **Why.** On a SHIELD with a 11,396-item Plex library, the launch refresh logged "collections changed, rebuilding" on runs where nothing had changed. A diagnostic build (not committed) logged the difference. All 288 collections matched by id and title, but 4 listed the same members in another order: the same set of child keys in a different sequence. They are adjacent collection ids, most likely smart collections sorted by plays or last watched, which reorder after something is watched. `refreshInBackground` compared the collections as lists, so each reorder rebuilt the whole lineup. A second launch, with no reorder, said "unchanged".

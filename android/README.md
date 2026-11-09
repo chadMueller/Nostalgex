@@ -79,6 +79,10 @@ listing; it installs over `adb`.
   CHOOSE YOUR LIBRARIES; a library left off (there or later in Settings) is
   never scanned. A Plex music library adds nothing on either app (Plex lists
   artists, with no running time), so switching it off only saves its requests.
+  A Jellyfin library the user hides from the home screen is listed too, marked
+  HIDDEN ON JELLYFIN, and off until switched on there or in Settings.
+- OPEN ON LAST CHANNEL (off by default) under PLAYBACK: a launch opens the
+  channel you last tuned, if it is still in the guide under the same name.
 - The loading screen's step rail, with what the scan is reading and a progress
   bar, and START OVER (it asks first) for the whole load. After two loads in a
   row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY

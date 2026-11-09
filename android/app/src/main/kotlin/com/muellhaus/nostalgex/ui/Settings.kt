@@ -369,9 +369,16 @@ private fun PlaybackRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "audio_lang"),
         ) { model.settingsPicker = "audio_lang" }
-        // WATCH HISTORY (SettingsPlaybackView): what the server is told about what you watch.
-        // Not in demo mode, where there is no server to tell.
+        // OPEN ON LAST CHANNEL and WATCH HISTORY aren't in demo mode, where the first does
+        // nothing and there is no server to tell (launchMemoryApplies).
         if (model.demoMode) return@Column
+        ToggleRow(
+            title = "OPEN ON LAST CHANNEL",
+            subtitle = "Start on the channel you were last watching",
+            on = model.openOnLastChannel,
+            modifier = Modifier.paneRow(model, "open_last_channel"),
+        ) { model.toggleOpenOnLastChannel() }
+        // WATCH HISTORY (SettingsPlaybackView): what the server is told about what you watch.
         val server = model.backendName
         SectionHeader("WATCH HISTORY", "What $server is told about what you watch")
         ToggleRow(
@@ -651,15 +658,11 @@ private fun ServerRows(model: AppModel) {
             Subheader("LIBRARIES")
             val multiServer = model.availableSections.map { it.serverId }.toSet().size > 1
             for (section in model.availableSections) {
-                val on = section.id !in model.deselectedSections
+                val on = model.isSectionOn(section)
                 val isLast = on && model.enabledSectionCount <= 1
                 ToggleRow(
                     title = section.title.uppercase(),
-                    subtitle = when {
-                        isLast -> "${section.typeLabel} · only enabled library"
-                        multiServer -> "${section.serverName} · ${section.typeLabel}"
-                        else -> section.typeLabel
-                    },
+                    subtitle = if (isLast) "${section.typeLabel} · only enabled library" else section.subtitle(multiServer),
                     detail = if (on) "INCLUDED" else "OFF",
                     on = on,
                     showToggle = !isLast,
@@ -676,6 +679,8 @@ private fun ServerRows(model: AppModel) {
             on = true,
             showToggle = false,
             loading = if (model.refreshing) "Updating…" else null,
+            // Every line of its counts: the summary alone wraps onto two (SettingsServersView, de710a11).
+            subtitleLines = Int.MAX_VALUE,
             modifier = Modifier.paneRow(model, "rescan").padding(top = u(8)),
         ) { model.rescanLibrary() }
         ToggleRow(
@@ -781,6 +786,8 @@ private fun ToggleRow(
     badge: Int? = null,
     loading: String? = null,
     showToggle: Boolean = true,
+    /** How many lines the subtitle may take (subtitleLineLimit); RESCAN LIBRARY takes every one. */
+    subtitleLines: Int = 3,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -809,7 +816,7 @@ private fun ToggleRow(
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(4))) {
             Text(title, style = font(DMMonoMedium, 22, Color.White.copy(alpha = if (on) 1f else 0.35f)))
-            if (subtitle != null) Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = if (on) 0.8f else 0.5f)), maxLines = 3)
+            if (subtitle != null) Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = if (on) 0.8f else 0.5f)), maxLines = subtitleLines)
             if (warning != null) Text(warning, style = font(DMMono, 20, Amber), maxLines = 2)
         }
         if (loading != null) {

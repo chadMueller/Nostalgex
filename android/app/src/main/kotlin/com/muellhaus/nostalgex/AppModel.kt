@@ -13,6 +13,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
+import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.CollectionCategory
 import com.muellhaus.nostalgex.engine.Collections
 import com.muellhaus.nostalgex.engine.EnrichmentService
@@ -849,6 +850,20 @@ class AppModel(private val context: Context) : Playback.Listener {
     // ── Libraries (library selection: AppState+Auth.swift, I-054) ────────
 
     /** The libraries switched off, as LibrarySection ids. A library never seen before is on. */
+    /** The libraries hidden on Jellyfin that the viewer switched on; the rest of the hidden ones stay off (hiddenSectionsOnByDefault). */
+    var includedHiddenSections by mutableStateOf(prefs.includedHiddenSections)
+        private set
+
+    /** A hidden library follows its own opt-in set while hidden ones start off; every other library the opt-out set. */
+    private fun optIn(section: LibrarySection) = section.hidden && !LibrarySection.HIDDEN_ON_BY_DEFAULT
+
+    /** Whether a library is scanned: switched off, or hidden on Jellyfin and not switched on, it isn't. */
+    fun isSectionOn(section: LibrarySection) =
+        if (optIn(section)) section.id in includedHiddenSections else section.id !in deselectedSections
+
+    /** Whether a library starts on in the picker after sign-in (librarySectionStartsOn). */
+    fun sectionStartsOn(section: LibrarySection) = !optIn(section)
+
     var deselectedSections by mutableStateOf(prefs.deselectedSections)
         private set
 
@@ -872,12 +887,16 @@ class AppModel(private val context: Context) : Playback.Listener {
     private fun chooseLibrariesOrScan() {
         deselectedSections = emptySet()
         prefs.deselectedSections = emptySet()
+        includedHiddenSections = emptySet()
+        prefs.includedHiddenSections = emptySet()
         screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
         scope.launch {
             val sections = loadAllSections()
             availableSections = sections
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
-            if (sections.size > 1) screen = Screen.ChooseLibraries(sections) else loadLibrary()
+            // A hidden library is worth the screen even alone: it starts off, so without the picker
+            // nothing would offer it.
+            if (sections.size > 1 || sections.any { it.hidden }) screen = Screen.ChooseLibraries(sections) else loadLibrary()
         }
     }
 
@@ -898,21 +917,29 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun confirmLibraries(included: Set<String>) {
         val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
         if (included.isEmpty()) return
-        deselectedSections = sections.map { it.id }.filter { it !in included }.toSet()
+        // A hidden library that stayed off isn't an exclusion: it is simply not switched on.
+        deselectedSections = sections.filter { !optIn(it) && it.id !in included }.map { it.id }.toSet()
         prefs.deselectedSections = deselectedSections
+        includedHiddenSections = sections.filter { optIn(it) && it.id in included }.map { it.id }.toSet()
+        prefs.includedHiddenSections = includedHiddenSections
         Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
     }
 
-    val enabledSectionCount get() = availableSections.count { it.id !in deselectedSections }
+    val enabledSectionCount get() = availableSections.count { isSectionOn(it) }
 
     /** A LIBRARIES row in Settings, as toggleServer: never the last one on; the library is then read again. */
     fun toggleLibrarySection(section: LibrarySection) {
         if (loadingLibrary || refreshing) return
-        val on = section.id !in deselectedSections
+        val on = isSectionOn(section)
         if (on && enabledSectionCount <= 1) return
-        deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
-        prefs.deselectedSections = deselectedSections
+        if (optIn(section)) {
+            includedHiddenSections = if (on) includedHiddenSections - section.id else includedHiddenSections + section.id
+            prefs.includedHiddenSections = includedHiddenSections
+        } else {
+            deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
+            prefs.deselectedSections = deselectedSections
+        }
         libraryStore.clear()
         closeSettings()
         playback.stop()
@@ -1411,8 +1438,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
+            val hiddenOn = LibrarySection.excludedKeys(includedHiddenSections, servers.first().machineIdentifier)
             val (items, abandoned) = watched(foreground, mb.name) { onSection, cancelled ->
-                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled)
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, hiddenOn)
             }
             return ScanResult(items, abandoned)
         }
@@ -1622,8 +1650,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         screen = Screen.Watching
         startClock()
         startDailyRefresh()
-        // The first channel, as the Apple TV tunes at launch (it keeps no last channel).
-        tune(built.channels.first())
+        // The first channel, or with OPEN ON LAST CHANNEL on the one last tuned when it is still
+        // in the lineup under the same name (channelToOpenFirst).
+        tune(LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!)
         return true
     }
 
@@ -1760,7 +1789,31 @@ class AppModel(private val context: Context) : Playback.Listener {
         val list = lineup?.channels ?: return
         if (list.isEmpty()) return
         val i = list.indexOfFirst { it.id == channel?.id }
-        tune(list[Math.floorMod(i + by, list.size)])
+        tuneFromViewer(list[Math.floorMod(i + by, list.size)])
+    }
+
+    // ── OPEN ON LAST CHANNEL (I-017, LaunchChannelMemory) ────────────────
+
+    var openOnLastChannel by mutableStateOf(prefs.openOnLastChannel)
+        private set
+
+    fun toggleOpenOnLastChannel() {
+        openOnLastChannel = !openOnLastChannel
+        prefs.openOnLastChannel = openOnLastChannel
+    }
+
+    /**
+     * A channel the viewer tuned (tuneChannelFromUser): the guide, the mini strip, channel up and
+     * down. It is remembered whether or not the switch is on, so turning it on opens on what was
+     * last watched. A tune the app makes on its own isn't remembered, so a launch that falls
+     * back to the first channel doesn't forget the missing one. Demo mode remembers nothing.
+     */
+    fun tuneFromViewer(ch: GuideChannel) {
+        if (!demoMode) {
+            val saved = LaunchChannelMemory.Saved(ch.id, ch.name)
+            if (prefs.lastWatchedChannel != saved) prefs.lastWatchedChannel = saved
+        }
+        tune(ch)
     }
 
     override fun onStarted(item: MediaItem, delivery: Delivery) {
