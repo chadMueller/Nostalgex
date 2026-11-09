@@ -487,7 +487,7 @@ extension AppState {
         channels = demoChannels
         allItems = demoChannels.flatMap { $0.itemPool }
 
-        if currentChannel == nil, let first = channels.first {
+        if currentChannel == nil, let first = channelToOpenFirst {
             selectChannel(first)
         }
 
