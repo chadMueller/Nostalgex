@@ -19,10 +19,17 @@ channel. Demo mode ignores the setting and saves nothing; signing out clears the
 **Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
 synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
 
-**Open.** With the setting on and a seasonal invite above channel 1, tvOS may hand the guide's first focus to the invite
-row instead of the playing channel (measured on a simulator with a forced invite: it did). That is the guide's
-first-focus problem, not this setting's, and is not changed here; with the setting off nothing differs from today.
-Verified on the simulator only; not looked at on an Apple TV.
+**Proved end to end** in demo mode with the app's storage isolated (`OpenOnLastChannelLaunchTests`, with
+`-uiTestLaunchMemoryInDemo`): switch on in Settings, tune channel 5, relaunch, and 5 is the channel playing; switch off,
+relaunch, and it is channel 1, as today. On a simulator. With the guide-focus branch (`appletv/i041-guide-focus`) merged
+in, the same flow, with and without a forced seasonal invite above channel 1, also put the guide's focus ring on channel 5
+on a simulator and on a real Apple TV 4K (tvOS 27.2).
+
+**Open.** On a simulator the focus engine hands the guide's first focus to the first row, or to the seasonal invite, not
+to the playing channel, so on a simulator the ring starts on channel 1 unless that branch is in. On the Apple TV above the
+guide alone already put the ring on the playing channel. That is the guide's first-focus problem, not this setting's, and
+is not changed here; with the setting off nothing differs from today. Not measured on another tvOS version or with a real
+library.
 
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
