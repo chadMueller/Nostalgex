@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.CollectionCategory
 import com.muellhaus.nostalgex.engine.Collections
 import com.muellhaus.nostalgex.engine.EnrichmentService
@@ -1354,6 +1355,8 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** AppState.userFacingPlexAPIServiceError: what CONNECTION FAILED says for each way a load fails. */
     private fun connectionFailure(e: Throwable): String = when {
+        // Every library failed (#198): say why the first one did.
+        e is EveryLibraryFailed -> connectionFailure(e.cause)
         // userFacingLoadLibraryError: nothing usable came back, so say what happened and what to check.
         e is LoadStalled && e.userInitiated -> "Stopped waiting. Nothing had come back from your server, so no channels were built. Retry when the connection looks better."
         e is LoadStalled -> "Your server stopped sending data partway through the scan and never resumed. Check that it is awake and reachable on this network, then Retry."
@@ -1414,6 +1417,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val items = ArrayList<MediaItem>()
         var abandoned = false
         var stalled: LoadStalled? = null
+        var failed: EveryLibraryFailed? = null
         var read = 0
         for (server in servers) {
             try {
@@ -1427,9 +1431,13 @@ class AppModel(private val context: Context) : Playback.Listener {
             } catch (e: LoadStalled) {
                 abandoned = true
                 stalled = e
+            } catch (e: EveryLibraryFailed) {
+                // A server whose every library failed adds nothing; the others still count (#198).
+                Log.w(TAG, "Every library on ${server.name} failed", e)
+                failed = failed ?: e
             }
         }
-        if (read == 0) stalled?.let { throw it }
+        if (read == 0) (stalled ?: failed)?.let { throw it }
         return ScanResult(items, abandoned)
     }
 
@@ -1519,6 +1527,13 @@ class AppModel(private val context: Context) : Playback.Listener {
                 }) + ", rebuilding")
                 val fresh = buildLineup(enriched, "refreshed")
                 if (fresh.channels.isEmpty()) return@launch
+                // From NO CHANNELS FOUND, a rescan that finds channels brings the guide up, as a
+                // package switch does (#198).
+                if (screen == Screen.NoChannels) {
+                    closeSettings()
+                    show(fresh)
+                    return@launch
+                }
                 // What is on keeps playing; the channel now airs from its new pool from the next programme.
                 val id = channel?.id
                 lineup = fresh

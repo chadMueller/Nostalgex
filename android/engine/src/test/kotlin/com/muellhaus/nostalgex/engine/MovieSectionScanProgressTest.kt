@@ -73,9 +73,19 @@ class MovieSectionScanProgressTest {
         }
     }
 
-    /** An error is not a stop: the library goes whole or not at all, as the web tuner's per-view catch. */
+    /**
+     * An error is not a stop: the library goes whole or not at all, as the web tuner's per-view
+     * catch. Here it is the only library, so the scan fails (#198) and keeps none of its pages.
+     */
     @Test fun aLibraryThatFailsMidwayLeavesNoneOfItsItems() {
-        val items = server("jellyfin", failAt = 400).scan()
-        assertTrue(items.isEmpty())
+        val kept = ArrayList<MediaItem>()
+        try {
+            server("jellyfin", failAt = 400).scan(onSection = { kept += it })
+            fail("the only library failed, so the scan should have")
+        } catch (e: EveryLibraryFailed) {
+            assertTrue(e.cause.message, e.cause.message!!.contains("HTTP 500"))
+        }
+        // The pages before the error went to onSection; a stop is what keeps them, and this was no stop.
+        assertEquals(400, kept.size)
     }
 }

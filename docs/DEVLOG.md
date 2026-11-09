@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: a scan where every library fails is a failed load, #198)
+
+**Why.** Chad found it reading the code (#198). When a server lists its libraries and then fails every item request, each library was skipped as one bad library, the scan came back empty, and the empty library was saved. The guide said NO CHANNELS FOUND, and so did every launch after, from the saved copy. A RESCAN LIBRARY from that screen that did find channels left the screen as it was.
+
+**Changed.**
+- `SectionTally` (new, `android/engine`): a scan counts the libraries read and keeps the first error. Both scans use it: `MediaBrowserLibrary.scan` for Jellyfin and Emby, `PlexLibrary.scan` for Plex.
+  - One library that errors is still skipped while the others are read. Android keeps this, where the Apple TV fails the whole scan.
+  - If every library errored and none was read, the scan throws `EveryLibraryFailed` with the first error. The load then shows CONNECTION FAILED in that error's words, and nothing is saved.
+  - A library that answers with no items counts as read, so a genuinely empty library still gives NO CHANNELS FOUND.
+- With several Plex servers, one whose every library failed is skipped like a stalled one. The load fails only if no server was read.
+- `LibraryStore.load` ignores a saved library with no items, so a launch does a full load instead of showing NO CHANNELS FOUND again.
+- `refreshInBackground`: a rescan from NO CHANNELS FOUND that builds channels closes Settings and brings the guide up, as a package switch already did.
+- Tests: `EveryLibraryFailedTest` (new, 4), and `MovieSectionScanProgressTest`'s one-library failure now expects the scan to fail. Removing the check fails 2 of them. 216 engine tests, 0 failures.
+
+**Measured on a SHIELD (Android 11).** A copy of each build under another package name, against a test Jellyfin 12.4 behind a proxy that answers 500 to every library item request:
+- Before: NO CHANNELS FOUND after the load, and again on relaunch from `SAVED LIBRARY 0 items`. A RESCAN with the proxy passing everything read 4 items and built 1 channel, and the screen stayed on NO CHANNELS FOUND.
+- After: CONNECTION FAILED, "Jellyfin returned HTTP 500. Check the server is running, then try again." A relaunch did a full load again rather than reading a saved copy. With every library answering empty, the load gave NO CHANNELS FOUND, and a RESCAN with the proxy passing everything brought the guide up on CH 03, playing in 0.7 s.
+- A Plex sign-in on the same SHIELD still loads its 11,396-item library and plays.
+
+**Not checked.** A Plex server that fails its item requests; the Plex path shares `SectionTally` but was run only against a healthy server.
+
 ## 2026-11-09 (Android: rebased onto main at channels.json v50, and the Emby ratings fix #204)
 
 **Changed.** `feature/android` is rebased onto `70686b63` (channels.json v50); only `docs/DEVLOG.md` conflicted. `MediaBrowserLibrary.fetchItems` names `OfficialRating` and `CommunityRating` in `Fields`, as the web tuner and Roku now do (#204). Emby 4.10 leaves both out of an `/Items` answer unless asked, so on Emby every title read as unrated, for the content-rating channels, VHS VAULT's 9 PM hold, WATERSHED and the `ratingMin` channels alike. `MediaBrowserScanTest` caught it: the web's vectors carry the two names and Android's requests did not. 212 engine tests, 0 failures.

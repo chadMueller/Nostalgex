@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex.plex
 
 import com.muellhaus.nostalgex.engine.DailyManifest
+import com.muellhaus.nostalgex.engine.SectionTally
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.ScanProgress
@@ -50,6 +51,7 @@ class PlexLibrary(private val client: PlexClient) {
     ): List<MediaItem> {
         val sections = directories(server).filter { (it.str("key") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
+        val tally = SectionTally()
         for ((index, section) in sections.withIndex()) {
             val sectionStart = out.size
             val title = section.str("title") ?: ""
@@ -71,12 +73,16 @@ class PlexLibrary(private val client: PlexClient) {
                     items.mapNotNullTo(out) { movieItem(server, it, type, isMusicVideoSection) }
                 }
                 onSection(out.subList(sectionStart, out.size).toList())
+                tally.read()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch section $title", e)
+                tally.failed(e)
             }
         }
+        // Every section failing is a failed scan, not an empty library (#198).
+        tally.check()
         return out
     }
 

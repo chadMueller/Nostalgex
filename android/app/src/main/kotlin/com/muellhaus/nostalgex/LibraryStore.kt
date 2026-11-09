@@ -32,7 +32,9 @@ class LibraryStore(context: Context) {
     fun load(servers: List<PlexServer>): Library? = runCatching {
         if (!file.exists()) return null
         val saved = file.inputStream().buffered().use { json.decodeFromStream<Saved>(it) }
-        Library(saved.items, saved.collections).takeIf { saved.format == FORMAT && saved.servers == key(servers) }
+        // A saved library with no items is never used: it can only say NO CHANNELS FOUND, and a
+        // full load is the way back from that (#198).
+        Library(saved.items, saved.collections).takeIf { saved.format == FORMAT && saved.servers == key(servers) && saved.items.isNotEmpty() }
     }.getOrNull()
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)

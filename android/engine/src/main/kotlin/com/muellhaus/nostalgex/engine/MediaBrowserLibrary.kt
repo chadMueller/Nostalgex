@@ -66,6 +66,7 @@ class MediaBrowserLibrary(
     ): List<MediaItem> {
         val viewList = views().filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
+        val tally = SectionTally()
         for ((index, view) in viewList.withIndex()) {
             val sectionStart = out.size
             val type = sectionType(view.str("CollectionType"))
@@ -176,6 +177,7 @@ class MediaBrowserLibrary(
                 }
                 // A TV library goes in whole; a movie library already went in page by page.
                 if (type == "show") onSection(out.subList(sectionStart, out.size).toList())
+                tally.read()
             } catch (e: ScanCancelled) {
                 throw e
             } catch (e: Exception) {
@@ -183,8 +185,11 @@ class MediaBrowserLibrary(
                 // leaves none of its own items: the web reads a library whole before it keeps any.
                 // (Only a stop keeps a movie library's pages, through onSection.)
                 while (out.size > sectionStart) out.removeAt(out.lastIndex)
+                tally.failed(e)
             }
         }
+        // Every library failing is a failed scan, not an empty library (#198).
+        tally.check()
         return out
     }
 
