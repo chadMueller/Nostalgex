@@ -227,6 +227,10 @@ struct SupportTile: View {
 struct SettingsToggleRow: View {
     let title: String
     let subtitle: String?
+    /// How many lines the subtitle may take. Two for every row, which is all a one-line
+    /// description needs; nil lets a row whose subtitle is text a viewer has to read in
+    /// full (RESCAN LIBRARY's counts, which a support report quotes) take what it needs.
+    var subtitleLineLimit: Int? = 2
     var detail: String? = nil
     /// A price has to be readable; the default detail is a faint annotation.
     var detailIsProminent: Bool = false
@@ -265,7 +269,7 @@ struct SettingsToggleRow: View {
                         Text(subtitle)
                             .font(.custom("DMMono-Regular", size: 20))
                             .foregroundStyle(.white.opacity(isOn ? 0.8 : 0.5))
-                            .lineLimit(2)
+                            .lineLimit(subtitleLineLimit)
                     }
 
                     if let warning {

@@ -86,6 +86,9 @@ struct SettingsServersView: View {
                     let verdict = PlaybackDiagnostics.latestForSettings().map { "\nLast playback failure: \($0)" } ?? ""
                     return "\(held)\(coverage)\nLast updated \(updated). \(base)\(verdict)"
                 }(),
+                // Every line of it, not two: the summary alone wraps to two lines in this
+                // pane, which cut off the coverage line a support report asks for.
+                subtitleLineLimit: nil,
                 isOn: true,
                 isFocused: isFocused("rescan"),
                 isLoading: appState.isLoading || appState.isBackgroundRefreshing,
