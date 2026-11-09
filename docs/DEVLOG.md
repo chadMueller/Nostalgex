@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: the Emby ratings test of #209, and #194's row dropped)
+
+**Changed.** `EmbyRatingFieldsTest` ports the Apple TV's `EmbyRatingFieldsTests`, which #209 asks for and `386f3800` shipped without. A fake server answers as Emby 4.10 does, sending `OfficialRating` and `CommunityRating` only when `Fields` names them. The tests run the real scan and the real stock channel filter over `channels.json`:
+- SAT MORNING CARTOONS drops the TV-MA and TV-14 shows and keeps the TV-Y7 one and the unrated one.
+- VHS VAULT holds its 7 R films at 3 PM and airs all 16 at 10 PM.
+- WATERSHED holds R titles on a plain channel.
+- CERTIFIED GOLD and ALL TIME GREATS get the 6 and 5 films that clear 8 and 8.2.
+- Jellyfin reads the same titles.
+- On the Swift test's synthetic library of 400 films and 25 shows, no `ratingMin` channel loses a title.
+
+With the two fields taken out of the request, 7 of the 9 fail. The 2 that still pass are the old-request control and the only-grow check. All 268 engine tests pass.
+
+The Apple TV also marks a saved Emby library from before the fix as stale, because its 24-hour "nothing changed" hold could keep it unrated. Android needs no marker: it keeps no change signature for Jellyfin or Emby, so a saved Emby library is read again at the next 6-hour refresh. Not measured against a real Emby server or on a Google TV.
+
+**#194.** Chad doesn't want the home-screen row. Google TV's documentation covers only the Engage SDK, and preview channels reportedly don't show on API 30 and up. The `nostalgex://channel/<id>` link stays as it is.
+
 ## 2026-11-09 (Android: CI's collection test after the four-at-a-time read)
 
 **Changed.** CI failed `CollectionsVectorTest.plexCallsAsTheWebTunersDo` on the push of `cd104f28`. Since `ace692b3` reads collection members four at a time, the order of the Plex calls varies from run to run, and that test compared it exactly. It passed on the Mac by chance. The calls now compare sorted, with their counts, as the BoxSet test beside it already did. The test's stub records them in a synchronized list, since four threads add to it. The results still compare in order, and they are in order. Three clean runs of all 259 engine tests passed. The Vercel check on PR #151 asks for authorisation to deploy a fork's branch; that is the project's Vercel setting, not the code.
