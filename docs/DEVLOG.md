@@ -55,6 +55,43 @@ rule, `.roku-add-note`, scoped to the Roku page.
 **Half-done.** The README has no Roku heading or table column yet, and the screenshots on `/roku` are still the
 ones from the beta. There is no "what's new" block for Roku on the site; the changelog is the App Store version only.
 
+## 2026-11-09 (web tuner: OPEN ON LAST CHANNEL is on by default, branch only)
+
+**Shipped.** Nothing. This is branch `web/last-channel-default-on`, two commits on main `70686b63` (web tuner 1.0.15). It is not
+pushed and not tagged: pushing main deploys the hosted tuner, so it goes out with the next web and Docker bundle.
+
+**Why.** The setting shipped off in 1.0.15. The product decision of 2026-11-09 is that it is on, the same on every surface
+(the Apple TV's `LaunchChannelMemory.enabledByDefault` is flipped on its own branch; the Roku port is a separate item).
+
+**Changed.** `OPEN_DEFAULT = true` in `scripts/nostalgex-last-channel.js`, and `isOn(stored)` now answers the default only when
+nothing is stored; a stored value reads as before (`'1'` on, anything else off). The Settings button's static markup reads ON
+(`updateOpenLastChannelControls` still sets it from storage on every load). Storage the page cannot read reads as the
+default, so the button and the next start agree.
+
+Why an existing choice survives: the button always writes `'0'` or `'1'` and never removes the key, so a browser that switched
+it off on 1.0.15 holds `'0'` and stays off, one that switched it on holds `'1'` and stays on. Only a browser that never pressed
+the button (no value) takes the new default. Opening on the remembered channel never writes the switch, so the default stays a
+default. A viewer with nothing remembered, or a remembered channel that was renamed, renumbered or dropped, still gets the first
+enabled channel. One thing to expect: 1.0.15 remembered the viewer's tunes whether the switch was on or off, so a browser that
+never chose already holds a channel and its first visit after the update opens on it.
+
+**Checked.** `npm run test:last-channel` (16 checks) and `npm run test:open-last-channel:browser` (61 checks, headless, a stub
+Jellyfin): the row reads ON on a new install and a click stores `'0'`, which survives a reload; stored `'0'` with a remembered
+channel opens the first channel; stored `'1'` and never-chose open the remembered one; every mismatch falls back to the first
+channel; signing out clears the channel and leaves the switch as it was; the button works by mouse at 960x540 and 390x844.
+Negative control: the same smoke served 1.0.15's page and engine fails 17 checks, all of them default-on checks, and none of the
+stored-choice ones. `npm test` passes, and so do the include-hidden, franchise-channels, start-over and watershed browser
+smokes (the ones that tune or reload).
+
+Found on the way, fixed in its own commit: `scripts/watershed-browser-smoke.mjs` read the Apple TV's `AppState.swift` for
+`UserDefaults.standard` and had been failing on main since the app moved to `AppDefaults`; it now accepts either. A test-file
+change only, not part of `npm test`.
+
+**Half-done.** The branch itself. It needs the push (the hosted default changes for every hosted viewer who never chose) and the
+Docker tag with the bundle. `tunerVersion` and the README release line are not touched; the bundle's release commit does that.
+
+**Next.** The Roku port defaults on too (parity item 40); the Android issue for the setting should say on by default.
+
 ## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
 
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):

@@ -3615,13 +3615,13 @@
       </div>
 
       <div class="config-section-label" style="margin-top: 28px;">PLAYBACK</div>
-      <!-- Off unless switched on. A real button, so a TV browser with no keys can press it. -->
+      <!-- On unless switched off (updateOpenLastChannelControls sets what the browser has stored). A real button, so a TV browser with no keys can press it. -->
       <div class="cfg-row">
         <div>
           <div class="cfg-row-title">Open on last channel</div>
           <div class="cfg-row-desc">Start on the channel you were last watching</div>
         </div>
-        <button class="plex-btn" id="cfg-open-last-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="false">OFF</button>
+        <button class="plex-btn on" id="cfg-open-last-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="true">ON</button>
       </div>
       <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
       <div class="cfg-row" id="cfg-include-hidden-row" hidden>
@@ -4428,13 +4428,16 @@
   }
 
   // ── OPEN ON LAST CHANNEL (Trello I-017) ─────────────────────────────────────
-  // Off unless the viewer turns it on, and kept per browser, as the Apple TV keeps it per TV.
+  // On unless the viewer turns it off (OPEN_DEFAULT in scripts/nostalgex-last-channel.js; a stored '0' is the
+  // viewer's own choice and stays off, only a browser that never chose takes the default), and kept per browser,
+  // as the Apple TV keeps it per TV.
   // The rules (what is kept, when a saved channel is not opened) are in scripts/nostalgex-last-channel.js.
   // The channel is remembered whenever the VIEWER tunes one on a real server (switchChannel's byViewer), whether
   // or not the switch is on, so switching it on opens on the channel already playing at the next visit. A tune the
   // page makes itself is not remembered, and the saved channel is cleared on sign-out (signOut).
   function openLastChannelOn() {
-    try { return NostalgexLastChannel.isOn(localStorage.getItem(NostalgexLastChannel.OPEN_KEY)); } catch (e) { return false; }
+    // Storage that cannot be read holds no choice, so it reads as what a browser that never chose gets.
+    try { return NostalgexLastChannel.isOn(localStorage.getItem(NostalgexLastChannel.OPEN_KEY)); } catch (e) { return NostalgexLastChannel.OPEN_DEFAULT; }
   }
 
   function updateOpenLastChannelControls() {

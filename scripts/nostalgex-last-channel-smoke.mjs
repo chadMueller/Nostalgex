@@ -24,9 +24,19 @@ check("storage keys are the ones the page and Docker keep", () => {
   strictEqual(LC.CHANNEL_KEY, "nostalgex_last_channel");
 });
 
-check("off unless the stored value is exactly 1", () => {
+check("the default is on (Chad's decision of 2026-11-09)", () => {
+  strictEqual(LC.OPEN_DEFAULT, true);
+});
+
+check("a browser that never chose (nothing stored) gets the default, which is on", () => {
+  strictEqual(LC.isOn(null), true);
+  strictEqual(LC.isOn(undefined), true);
+});
+
+check("a stored choice is kept: exactly 1 is on, a stored 0 stays off, anything else stored is off", () => {
   strictEqual(LC.isOn("1"), true);
-  for (const v of ["0", "", "true", "on", " 1", "11", null, undefined, 1, true]) strictEqual(LC.isOn(v), false, String(v));
+  strictEqual(LC.isOn("0"), false);
+  for (const v of ["", "true", "on", " 1", "11", 1, true, 0, false]) strictEqual(LC.isOn(v), false, String(v));
 });
 
 check("serialize keeps the id and the name, and parse reads them back", () => {

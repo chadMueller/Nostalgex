@@ -1,5 +1,6 @@
-// OPEN ON THE LAST CHANNEL (Trello I-017). An optional setting, off unless the viewer turns it on:
-// the guide opens on the channel that was playing when it was last used, instead of the first one.
+// OPEN ON THE LAST CHANNEL (Trello I-017). A setting, on unless the viewer turns it off (it was off by
+// default in 1.0.15; Chad's decision of 2026-11-09 made it on, see OPEN_DEFAULT below): the guide opens on
+// the channel that was playing when it was last used, instead of the first one.
 //
 // WHAT IS KEPT. The channel's id and its name, in this browser's storage (the Docker container's
 // tuner is the same page, so each browser that opens it keeps its own). Nothing leaves the browser.
@@ -17,7 +18,8 @@
 //
 //   const LC = window.NostalgexLastChannel;
 //   LC.OPEN_KEY; LC.CHANNEL_KEY;                 // the two storage keys
-//   LC.isOn(storedValue);                         // '1' is on; anything else, including no value, is off
+//   LC.OPEN_DEFAULT;                              // what a browser that never chose gets
+//   LC.isOn(storedValue);                         // no value: OPEN_DEFAULT. A stored '1' is on, anything else stored is off
 //   LC.serialize(channel);                        // the string to store for a channel, or null
 //   LC.parse(storedValue);                        // { id, name } or null
 //   LC.channelToOpen(saved, enabledChannels);     // the channel to open on, or null (open the first)
@@ -28,7 +30,13 @@
   const OPEN_KEY = 'nostalgex_open_last_channel';
   const CHANNEL_KEY = 'nostalgex_last_channel';
 
-  const isOn = (stored) => stored === '1';
+  // What a browser that has never stored a choice gets. ON since 1.0.16. The page writes '1' or '0' when the
+  // viewer presses the switch and never removes the key, so a stored '0' is a choice and stays off: only a
+  // browser with nothing stored takes this default. Anything else that is stored (a value this code did not
+  // write) counts as a choice too and reads as off, as it always did.
+  const OPEN_DEFAULT = true;
+
+  const isOn = (stored) => (stored == null ? OPEN_DEFAULT : stored === '1');
 
   // What is stored for a channel. null when it has no id or no name: nothing to match later.
   function serialize(channel) {
@@ -54,7 +62,7 @@
     return enabledChannels.find((c) => c && String(c.id) === String(saved.id) && c.name === saved.name) || null;
   }
 
-  const api = { OPEN_KEY, CHANNEL_KEY, isOn, serialize, parse, channelToOpen };
+  const api = { OPEN_KEY, CHANNEL_KEY, OPEN_DEFAULT, isOn, serialize, parse, channelToOpen };
   global.NostalgexLastChannel = api;
   if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     module.exports = api;
