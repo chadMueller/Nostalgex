@@ -215,7 +215,7 @@ const closeSettings = async (page) => { await page.locator(".config-close").clic
   check("source: card hint is the Apple TV's", card.includes(`"${CARD_HINT}"`));
   check("source: guide row label is the Apple TV's", guide.includes(`"${GUIDE_LABEL}"`));
   check("source: Settings row words are the Apple TV's", settings.includes('title: "WATERSHED"') && settings.includes(`subtitle: "${ROW_DESC}"`));
-  check("source: Apple TV default is off", /watershedEnabled: Bool = UserDefaults\.standard\.object\(forKey: Channel\.watershedDefaultsKey\) as\? Bool \?\? false/.test(read1("Nostalgex/Nostalgex/App/AppState.swift")));
+  check("source: Apple TV default is off", /watershedEnabled: Bool = (?:UserDefaults|AppDefaults)\.standard\.object\(forKey: Channel\.watershedDefaultsKey\) as\? Bool \?\? false/.test(read1("Nostalgex/Nostalgex/App/AppState.swift")));
 }
 
 // ── 1. Desktop: the whole flow ──
