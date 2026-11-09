@@ -1,5 +1,6 @@
 package com.muellhaus.nostalgex
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -40,6 +41,14 @@ class MainActivity : ComponentActivity() {
             }
         }
         model.start()
+        model.openLink(intent?.dataString)
+    }
+
+    /** A link while the app runs (singleTask): tunes now, or once the guide is up. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        model.openLink(intent.dataString)
     }
 
     override fun onStop() {

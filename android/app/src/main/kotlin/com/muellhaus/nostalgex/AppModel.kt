@@ -12,6 +12,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.DailyRefresh
+import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
@@ -1657,6 +1658,15 @@ class AppModel(private val context: Context) : Playback.Listener {
         startDailyRefresh()
         // The first channel, or with OPEN ON LAST CHANNEL on the one last tuned when it is still
         // in the lineup under the same name (channelToOpenFirst).
+        // A link that came before the guide opens its channel instead, full screen, if it names one.
+        val link = pendingLink?.also { pendingLink = null }?.takeIf { !demoMode }
+        val linked = link?.let { DeepLink.channelIndex(built.channels, { it.id }, { it.number }, it) }?.takeIf { it >= 0 }
+        if (linked != null) {
+            tuneFromViewer(built.channels[linked])
+            fullScreen = true
+            return true
+        }
+        if (link != null) Log.i(TAG, "LINK channel $link names no channel in the guide; opening as usual")
         tune(LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!)
         return true
     }
@@ -1795,6 +1805,38 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (list.isEmpty()) return
         val i = list.indexOfFirst { it.id == channel?.id }
         tuneFromViewer(list[Math.floorMod(i + by, list.size)])
+    }
+
+    // ── Links that tune a channel (#194, DeepLink) ──────────────────────
+
+    /** A link that came before the guide was up (a cold start, or during a load); applied by [show]. */
+    private var pendingLink: String? = null
+
+    /**
+     * `nostalgex://channel/<id>`: the channel it names, by id then number, tuned full screen
+     * (the Roku's DeepLink). A link that names no channel leaves the guide as it is. One that
+     * arrives before the guide is up waits for it.
+     */
+    fun openLink(uri: String?) {
+        val contentId = DeepLink.contentId(uri) ?: return
+        Log.i(TAG, "LINK channel $contentId")
+        if (screen != Screen.Watching || lineup == null || demoMode) {
+            pendingLink = contentId
+            return
+        }
+        applyLink(contentId)
+    }
+
+    private fun applyLink(contentId: String) {
+        val list = lineup?.channels ?: return
+        val i = DeepLink.channelIndex(list, { it.id }, { it.number }, contentId)
+        if (i < 0) {
+            Log.i(TAG, "LINK channel $contentId names no channel in the guide; leaving it as it is")
+            return
+        }
+        closeSettings()
+        tuneFromViewer(list[i])
+        fullScreen = true
     }
 
     // ── OPEN ON LAST CHANNEL (I-017, LaunchChannelMemory) ────────────────

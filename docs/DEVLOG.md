@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: a link that tunes a channel, the first half of #194)
+
+**Changed.** `nostalgex://channel/<id>` opens the app on that channel full screen, from a cold start or while it runs.
+- `DeepLink` (new, `android/engine`) is the Roku's `DeepLink.brs`: a link names a channel by its id, then by its number on the guide, and one that names no channel leaves the guide as it is. `DeepLinkTest` (6) has the Roku's id-before-number, number, franchise-id and unknown cases, plus malformed links.
+- The manifest takes `VIEW` for `nostalgex://channel`, and the activity is `singleTask`, so a link while the app runs reaches it through `onNewIntent` rather than starting a second copy.
+- A link that arrives before the guide is up waits for it, and the guide opens straight on the linked channel rather than tuning the first one and then that. A link counts as the viewer's own tune, so OPEN ON LAST CHANNEL remembers it.
+- This is the half Chad asked for first. The home-screen row of what's on now is the second.
+
+**Measured on a SHIELD (Android 11, a 11,396-item Plex library).**
+- Cold start, `am start -a android.intent.action.VIEW -d nostalgex://channel/5`: CH 5 full screen, picture 5.1 s after the link, 4.2 s of it the guide being built from the saved library.
+- While running, `nostalgex://channel/7`: CH 7 full screen, picture 0.9 s after the link.
+- `nostalgex://channel/abc`: logged as naming no channel, and the guide stayed as it was.
+
+**Not checked.** A link that arrives during a first full load, though it takes the same waiting path as the cold start.
+
 ## 2026-11-09 (Android: RESCAN LIBRARY's coverage line and last playback failure)
 
 **Why.** The Apple TV's RESCAN LIBRARY row has four parts, so a support report can say in one screenshot what the app holds and where it went: the library summary, a coverage line, "Last updated", and the last time playback was given up on. Android's had the first and third (the cap that would have cut the rest went in `cf41c7ad`).

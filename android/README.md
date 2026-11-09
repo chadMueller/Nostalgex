@@ -83,6 +83,10 @@ listing; it installs over `adb`.
   HIDDEN ON JELLYFIN, and off until switched on there or in Settings.
 - OPEN ON LAST CHANNEL (off by default) under PLAYBACK: a launch opens the
   channel you last tuned, if it is still in the guide under the same name.
+- `nostalgex://channel/<id>` opens the app on that channel full screen, from a
+  cold start or while it runs, naming it by id and then by number as the Roku
+  does (`adb shell am start -a android.intent.action.VIEW -d nostalgex://channel/5`).
+  A link that names no channel leaves the guide as it is.
 - The loading screen's step rail, with what the scan is reading and a progress
   bar, and START OVER (it asks first) for the whole load. After two loads in a
   row that never finished, the next launch asks LOADING DIDN'T FINISH: TRY
