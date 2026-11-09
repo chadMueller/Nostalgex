@@ -3,6 +3,29 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Roku: WHY ARE SOME CHANNELS MISSING?, #227)
+
+**Why.** The amber count on a Roku package short of content (#220) had no page behind it. On the Apple TV it opens
+WHY ARE SOME CHANNELS MISSING? (`ChannelsMissingPage`, I-004): each missing channel's rules in plain words and how
+many titles match now.
+
+**Changed.** CHANNEL PACKAGES ends with a link row, "n CH", shown only while a channel is missing; it opens MISSING
+CHANNELS one level down, and Back returns to the row (`source/guide/ChannelsMissing.brs`). A card per missing
+channel, under its package: colour and name, "Needs n matching titles. You have m.", and the rules as
+`plainLanguageRequirements` words them. The counts come from the coverage count the library task already runs after a
+load (#207): `NxCoverageStart` keeps each channel's filter-pass count, reusing the build's result for a channel it
+built. Until it is done a card says "Counting yours…".
+
+**Not changed.** Which channels air, the filter, the amber counts, the coverage line.
+
+**Pressed** on the 43S45 (OS 16.0.4), the branch's build against the lab Jellyfin as `nxtest` (5,526 titles;
+NOSTALGEX the one package on, 17 of its 22 channels on air). The row read 5 CH; the page listed the five, four at 0 and TEEN
+MOVIES at 2 of 5; Back went card, row, list, rail, guide. Opened right after a relaunch it said "Counting yours…" and
+the numbers replaced it on screen. The counts arrived about 55 s after the build, twice (the count 49.6 s and 50.3 s,
+its longest step 107 and 128 ms).
+
+**Open.** A Plex library, the same library on an Apple TV, a package switched on during the visit, a stick.
+
 ## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
 
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):

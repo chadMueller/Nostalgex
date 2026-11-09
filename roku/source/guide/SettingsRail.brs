@@ -36,7 +36,7 @@ function NxSettingsTabOf(kind as String) as String
     ' WATERSHED is #211's row (SettingsChannelsView on the Apple TV). It is
     ' listed here before that row exists, so neither pull request has to land
     ' first: a kind missing from these lists is in no tab and never shows.
-    channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed"]
+    channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone"]
     servers = ["server", "rescan", "signOut"]
     about = ["version", "github"]
     if kind = "support" then return "support"

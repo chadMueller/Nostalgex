@@ -16,9 +16,14 @@ sub init()
     m.tabs = NxSettingsTabs()
     m.tabIndex = 0
     ' The CHANNELS & BUNDLES page on show (ChannelsPage): "packages",
-    ' "franchises" or "collections", or "" for the tab's list. Back to the list
-    ' whenever another tab is picked.
+    ' "franchises", "collections" or "missing" (one level under CHANNEL
+    ' PACKAGES), or "" for the tab's list. Back to the list whenever another
+    ' tab is picked.
     m.channelsPage = ""
+    ' channels.json's channels by id, read the first time Settings needs them
+    ' (WHY ARE SOME CHANNELS MISSING?), and the page's channel count.
+    m.defs = invalid
+    m.missingCount = 0
     ' The page the rows being added belong to (buildRows).
     m.addPage = ""
     m.focus = -1
@@ -255,6 +260,7 @@ sub buildRows()
             pushPackage(i)
         end if
     end for
+    pushMissing()
     m.addPage = "franchises"
     if franchisesAt >= 0 then pushFranchises(franchisesAt)
     m.addPage = "collections"
@@ -317,12 +323,49 @@ sub showPage(page as String, from = "" as String)
     m.channelsPage = page
     pickTab()
     m.focus = NxSettingsFirstFocusable(m.rows)
-    if page = "" and from <> "" then
+    if from <> "" then
         at = NxSettingsLinkRowOf(m.rows, from)
         if at >= 0 then m.focus = at
     end if
     m.scroll = 0
     render()
+end sub
+
+' WHY ARE SOME CHANNELS MISSING? (ChannelsPackagesPage's link row, after the
+' packages) and the MISSING CHANNELS page it opens (ChannelsMissingPage): the
+' packages that are on and built, and their channels not on air, each as a
+' card under its package's name. The link row shows only while some channel
+' is missing; the page says so when none is. A card's lines are wrapped here,
+' so its height is known before it is drawn.
+sub pushMissing()
+    if m.defs = invalid then m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+    groups = NxMissingGroups(m.top.bundles, m.enabled, m.top.builtBundles, m.building, m.onAir, m.defs)
+    m.missingCount = NxMissingCount(groups)
+    if m.missingCount > 0 then add({ kind: "channelsLink", page: "missing", title: "WHY ARE SOME CHANNELS MISSING?" })
+    m.addPage = "missing"
+    add({ kind: "header", title: "MISSING CHANNELS", subtitle: "A channel goes on air once your library has enough titles that fit it" }, "channels")
+    if groups.Count() = 0 then
+        add({ kind: "missingNone" })
+        return
+    end if
+    cols = Int((m.rowW - 40) / advanceOf("DMMono-Regular", 20))
+    for each g in groups
+        add({ kind: "subheader", text: NxToStr(g.bundle.name) }, "channels")
+        for each def in g.channels
+            ' The amber line at its longest, so the height holds once counted.
+            needs = NxWrapText(NxMissingNeedsLine(def.minItems, 99999), cols).Count()
+            bullets = []
+            for each line in NxPlainRequirements(def.rules)
+                bullets.Append(NxWrapText("• " + line, cols))
+            end for
+            add({ kind: "missingCard", key: NxToStr(g.bundle.id) + ":" + NxToStr(def.id), def: def, needsLines: needs, bullets: bullets, cols: cols })
+        end for
+    end for
+end sub
+
+' The counts arrived, or changed: only the MISSING CHANNELS page shows them.
+sub onMatchCounts()
+    if m.rows <> invalid and shownPage() = "missing" then render()
 end sub
 
 ' One row into the full list, in its tab: the rule's for a row with something
@@ -432,6 +475,10 @@ function rowHeight(row as Object) as Integer
     end if
     if row.kind = "subheader" or row.kind = "info" then return 44
     if row.kind = "support" then return 184
+    ' ChannelRequirementCard: 14 px above and below, the name, the amber
+    ' line(s) and the rules, 26 px a line, and 6 px between cards.
+    if row.kind = "missingCard" then return 14 + 34 + 26 * (row.needsLines + row.bullets.Count()) + 14 + 6
+    if row.kind = "missingNone" then return 60
     ' Two lines under its detail, and a third when the library line (#207)
     ' and a playback failure are both there.
     if row.kind = "rescan" then
@@ -684,6 +731,13 @@ sub renderPane()
                 page.AppendChild(newLabel("NOSTALGEX.APP", "DMMono-Medium", 24, "0xFFFFFFBF", 220, y + 58))
                 page.AppendChild(newLabel("Scan with a phone camera to open it", "VT323-Regular", 24, "0xFFFFFF80", 220, y + 88))
                 page.AppendChild(newRect(0, y, 4, 176, m.accent + "66"))
+            else if row.kind = "missingCard" then
+                drawMissingCard(page, i, row, y)
+            else if row.kind = "missingNone" then
+                ' Read-only but focusable, as the Apple TV's, so focus has
+                ' somewhere to be on the page.
+                if i = m.focus and m.where = "rows" then page.AppendChild(newRect(0, y, m.rowW, 54, "0xFFFFFF12"))
+                page.AppendChild(newLabel("Every channel in your packages is on air.", "DMMono-Regular", 20, "0xFFFFFFB3", 20, y + 14))
             else
                 drawRow(page, i, row, y)
             end if
@@ -715,7 +769,11 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         ' when focused, and a chevron after it.
         label = row.title
         detail = ""
-        state = NxChannelsLinkValue(row.page, linkCounts()) + "  >"
+        if row.page = "missing" then
+            state = NxMissingLinkValue(m.missingCount) + "  >"
+        else
+            state = NxChannelsLinkValue(row.page, linkCounts()) + "  >"
+        end if
         stateColor = "0xFFFFFF99"
         if focused then stateColor = m.accent + "FF"
     else if row.kind = "bundle" then
@@ -1084,13 +1142,49 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if action = "fold" then
         foldLanguage()
     else if action = "pageUp" then
-        showPage("", m.channelsPage)
+        showPage(NxChannelsPageParent(m.channelsPage), m.channelsPage)
     else if action = "toRail" then
         m.where = "rail"
         render()
     end if
     return true
 end function
+
+' ChannelRequirementCard: a lighter panel, cyan-edged when focused; the
+' channel's colour bar and name, the amber line with how many titles match,
+' then its rules, one bullet each, as wrapped in pushMissing. Read-only: OK
+' does nothing on it.
+sub drawMissingCard(page as Object, i as Integer, row as Object, y as Float)
+    focused = (i = m.focus) and m.where = "rows"
+    h = rowHeight(row) - 6
+    fill = "0xFFFFFF08"
+    if focused then fill = "0xFFFFFF12"
+    page.AppendChild(newRect(0, y, m.rowW, h, fill))
+    if focused then
+        edge = m.accent + "80"
+        page.AppendChild(newRect(0, y, m.rowW, 2, edge))
+        page.AppendChild(newRect(0, y + h - 2, m.rowW, 2, edge))
+        page.AppendChild(newRect(0, y, 2, h, edge))
+        page.AppendChild(newRect(m.rowW - 2, y, 2, h, edge))
+    end if
+    def = row.def
+    color = NxToStr(def.colorHex)
+    if Left(color, 1) = "#" and Len(color) = 7 then color = "0x" + Mid(color, 2) + "FF" else color = "0xFFFFFFFF"
+    page.AppendChild(newRect(20, y + 18, 4, 22, color))
+    page.AppendChild(newLabel(UCase(NxToStr(def.name)), "DMMono-Medium", 22, "0xFFFFFFFF", 34, y + 14))
+    ly = y + 14 + 34
+    count = NxMissingCountOf(m.top.matchCounts, def.id)
+    for each line in NxWrapText(NxMissingNeedsLine(def.minItems, count), row.cols)
+        page.AppendChild(newLabel(line, "DMMono-Regular", 20, "0xFFB020FF", 20, ly))
+        ly = ly + 26
+    end for
+    ' The longest amber line was measured: a shorter one leaves its space.
+    ly = y + 14 + 34 + 26 * row.needsLines
+    for each line in row.bullets
+        page.AppendChild(newLabel(line, "DMMono-Regular", 20, "0xFFFFFFA6", 20, ly))
+        ly = ly + 26
+    end for
+end sub
 
 ' OK on the focused row.
 sub pressRow()

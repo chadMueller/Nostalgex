@@ -82,6 +82,15 @@ sub onArgs()
     m.settings.bundles = bundles
     m.settings.onAirIds = onAir
     m.settings.builtBundles = enabled
+    ' Made-up counts for WHY ARE SOME CHANNELS MISSING? (#227): every channel
+    ' a few titles short of its minimum, some at none.
+    byId = {}
+    for each def in config.channels
+        n = NxNumberOr0(def.minItems)
+        if n = 0 then n = 50
+        byId[NxToStr(def.id)] = (def.id mod 4) * Int(n / 4)
+    end for
+    m.settings.matchCounts = { state: "counted", byId: byId }
     m.settings.franchises = franchises
     m.settings.franchiseOverCap = overFound
     m.settings.franchiseCapacity = 90

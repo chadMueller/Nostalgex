@@ -1006,11 +1006,16 @@ end function
 ' source/util/LibraryCoverage.brs), started once the guide is handed over;
 ' invalid for a library over NxCoverageMaxTitles, as on the Apple TV.
 function startCoverage(lib as Object, builtChannels as Object) as Dynamic
-    if lib.items.Count() = 0 then return invalid
-    if lib.items.Count() > NxCoverageMaxTitles() then
-        print "library: coverage not counted: "; lib.items.Count(); " titles is over "; NxCoverageMaxTitles()
+    if lib.items.Count() = 0 then
+        m.top.matchCounts = { state: "none" }
         return invalid
     end if
+    if lib.items.Count() > NxCoverageMaxTitles() then
+        print "library: coverage not counted: "; lib.items.Count(); " titles is over "; NxCoverageMaxTitles()
+        m.top.matchCounts = { state: "none" }
+        return invalid
+    end if
+    m.top.matchCounts = { state: "counting" }
     timer = CreateObject("roTimespan")
     f = { manifest: lib.manifest, exclusive: lib.exclusive, clock: NxFilterClock(), backend: NxSignedInKind(), dv: NxDisplayShowsDolbyVision() }
     job = NxCoverageStart(lib.items, lib.defs, builtChannels, f)
@@ -1031,6 +1036,9 @@ sub reportCoverage(coverage as Object, lib as Object, ordered as Object, builtCh
     tally = CreateObject("roTimespan")
     cov = NxCoverageTally(coverage.job, dynamicPools)
     tallyMs = tally.TotalMilliseconds()
+    ' Each channel's count is the library's, so a later report (a franchise or
+    ' collection switched) leaves it as it is.
+    if not coverage.reported then m.top.matchCounts = { state: "counted", byId: coverage.job.counts }
     onAir = {}
     onAir.SetModeCaseSensitive()
     for each ch in ordered
@@ -1084,6 +1092,7 @@ end function
 ' day schedules from the saved pools, read the first time one is needed.
 sub keepSavedGuide()
     m.top.refreshed = true
+    m.top.matchCounts = { state: "none" }
     port = CreateObject("roMessagePort")
     m.top.ObserveField("reschedule", port)
     m.top.ObserveField("bundleRequest", port)
