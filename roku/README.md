@@ -1,10 +1,9 @@
 # nostalgex-roku
 
-A Roku port of [Nostalgex](https://github.com/chadMueller/Nostalgex), the
-retro live-TV channel guide for your own media library. The upstream project
-ships an Apple TV app and a browser tuner, and Roku is
-[not on its roadmap](https://github.com/chadMueller/Nostalgex/discussions/8).
-This port fills that gap.
+The Roku app for [Nostalgex](https://github.com/chadMueller/Nostalgex), the
+retro live-TV channel guide for your own media library. It is on the Roku
+Channel Store (the main README has the link and the add code), and this
+folder is its source.
 
 The goal is a faithful port, rewritten in BrightScript and SceneGraph. It
 signs in to Plex, Jellyfin or Emby, reads your library, and airs upstream's
@@ -16,10 +15,11 @@ background.
 
 **Server collections become channels on Plex only so far.**
 
-## Install (developer mode)
+## Install a build for development (developer mode)
 
-Until there is a store listing, it installs by sideloading. The port lives in
-`roku/` of the Nostalgex repo; paths below are relative to that folder.
+The store app is the way to install Nostalgex; to run your own build, sideload
+it. The app lives in `roku/` of the Nostalgex repo; paths below are relative to
+that folder.
 
 1. Enable developer mode on the TV once: press Home ×3, Up ×2, Right, Left,
    Right, Left, Right on the remote, then set a developer password. The TV
