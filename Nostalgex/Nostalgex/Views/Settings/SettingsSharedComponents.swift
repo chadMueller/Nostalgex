@@ -44,11 +44,11 @@ struct SettingsLinkRow: View {
             .padding(.vertical, 22)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.07) : .white.opacity(0.02))
+                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : .clear, lineWidth: 1.5)
+                    .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
             )
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -98,11 +98,11 @@ struct ChannelRequirementCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isFocused ? Color.white.opacity(0.07) : Color.white.opacity(0.03))
+                .fill(isFocused ? Color.white.opacity(0.10) : Color.white.opacity(0.03))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : Color.clear, lineWidth: 1.5)
+                .stroke(isFocused ? Color("BrandCyan") : Color.clear, lineWidth: 3)
         )
         .focusable(true)
         .animation(.easeInOut(duration: 0.12), value: isFocused)
@@ -140,11 +140,11 @@ struct FranchiseActionButton: View {
             .padding(.vertical, 18)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.07) : .white.opacity(0.02))
+                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : .clear, lineWidth: 1.5)
+                    .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
             )
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -300,8 +300,11 @@ struct SettingsToggleRow: View {
                     }
                     if let detail {
                         Text(detail)
-                            .font(detailIsProminent ? .custom("DMMono-Medium", size: 22) : .custom("VT323-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(detailIsProminent ? 0.85 : 0.2))
+                            .font(.custom("DMMono-Medium", size: 22))
+                            .foregroundStyle(
+                                detailIsProminent ? .white.opacity(0.85)
+                                    : isFocused ? Color("BrandCyan") : .white.opacity(0.6)
+                            )
                     }
                 }
 
@@ -316,13 +319,13 @@ struct SettingsToggleRow: View {
             .padding(.vertical, 18)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.07) : .white.opacity(0.02))
+                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        isFocused ? Color("BrandCyan").opacity(0.5) : .clear,
-                        lineWidth: 1.5
+                        isFocused ? Color("BrandCyan") : .clear,
+                        lineWidth: 3
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: 10))
@@ -559,13 +562,13 @@ struct LanguagePickerSheet: View {
                                 .padding(.vertical, 18)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(focusedID == preset.id ? .white.opacity(0.07) : .white.opacity(0.02))
+                                        .fill(focusedID == preset.id ? .white.opacity(0.10) : .white.opacity(0.02))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
                                         .stroke(
-                                            focusedID == preset.id ? Color("BrandCyan").opacity(0.5) : .clear,
-                                            lineWidth: 1.5
+                                            focusedID == preset.id ? Color("BrandCyan") : .clear,
+                                            lineWidth: 3
                                         )
                                 )
                             }
@@ -660,13 +663,13 @@ struct StreamQualityPickerSheet: View {
                                 .padding(.vertical, 18)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(focusedID == quality.id ? .white.opacity(0.07) : .white.opacity(0.02))
+                                        .fill(focusedID == quality.id ? .white.opacity(0.10) : .white.opacity(0.02))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
                                         .stroke(
-                                            focusedID == quality.id ? Color("BrandCyan").opacity(0.5) : .clear,
-                                            lineWidth: 1.5
+                                            focusedID == quality.id ? Color("BrandCyan") : .clear,
+                                            lineWidth: 3
                                         )
                                 )
                             }

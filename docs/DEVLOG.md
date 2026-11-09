@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: settings values readable, focused settings row easy to find)
+
+**Why.** A design pass over demo mode on an Apple TV 4K simulator (tvOS 27.2, build 1.0.30) found two settings
+problems you notice from the couch. The current value on a settings row (NORMAL, AUTO, FOREIGN AUDIO, MATCH APPLE TV
+LANGUAGE) was VT323 20pt at 20% white, measured 1.98:1 against the row. The focused row was marked by a 1.5px cyan
+stroke at 50% and a fill only 1.12:1 lighter than an unfocused row, so it was hard to tell where the remote was.
+
+**Changed.** `SettingsToggleRow`'s detail text is DMMono-Medium 22 at 60% white, cyan when focused, the treatment
+`SettingsLinkRow` already gives OFF and 0 ON. A detail marked prominent (a price) is unchanged. Every settings row,
+the subtitle language and stream quality pickers, and the rating banner now focus with a solid BrandCyan 3px stroke
+and a 10% white fill. `NostalgexTests` pass.
+
+**Not changed.** Guide, player and Now Playing panel styling. Other findings from the pass are in an issue for Chad
+to decide on.
+
 ## 2026-11-09 (Roku: RETRO MODE no longer draws the tracking line)
 
 **Why.** Chad's decision, from viewer feedback: the white tracking (drift) line that rolled through the picture in
