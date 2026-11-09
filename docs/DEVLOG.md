@@ -14,11 +14,13 @@ entering full screen and from none back to the OLD row on leaving, with the live
 **Approach.**
 - What is set: the focus ring goes to the live channel, as `anchorFocusToLiveChannel` already did when full screen closes.
 - When: once more, the moment tvOS hands focus back to the guide, i.e. `focusedChannelID` changing from none to a row
-  while `awaitingFocusHandout` is set. Closing full screen sets it; the handout, or 2 seconds, clears it.
+  while the handout window is open. Closing full screen opens it; the handout, or 2 seconds, closes it. Each opening
+  has its own generation number and its timer only closes the opening it belongs to, so the timer of an earlier close
+  of full screen cannot shut a later window early (`GuideReturnFocus.HandoutWindow`).
 - Why it survives: a request made while nothing in the guide has focus does not stick, and tvOS then restores the row it
   remembers. Acting on the handout puts our request after the engine's, not before it, and a viewer's own move is never
   "from none", so it is left alone.
-- Where: `ChannelGuideView` (one flag, two small hunks) and the pure rule `GuideReturnFocus.target(handedTo:liveChannelID:)`.
+- Where: `ChannelGuideView` (the window, three small hunks) and the pure rule and window in `GuideReturnFocus`.
 - Second commit, same flag and rule, set when the guide first appears: with the playing channel not the first, or a
   seasonal invite above channel 1, tvOS gave first focus to the first row or the invite instead. Measured on a simulator in
   demo mode (`-uiTestStartOnChannel 4`, `-uiTestSeasonalInvite`): focus on channel 1, or on the invite, for the 5 seconds
@@ -27,7 +29,7 @@ entering full screen and from none back to the OLD row on leaving, with the live
 - Not touched: the packages panel and the rows changing behind an open guide.
 
 **Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has the two cases above; the first fails on main with "the
-guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (4) covers the rule.
+guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (7) covers the rule and the window, including a timer from an earlier opening firing while a later one is open.
 The return-from-full-screen case fails without the first commit and passes with it on a simulator and on a real Apple TV
 4K (3rd generation, tvOS 27.2). The two first-appearance cases fail without the second commit on the simulator and pass on
 the TV either way. TV runs use isolated app storage, so nothing the TV holds was touched.

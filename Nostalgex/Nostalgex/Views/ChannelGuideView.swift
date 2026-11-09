@@ -13,8 +13,9 @@ struct ChannelGuideView: View {
     // How many 30-min slots the user has scrolled forward (0-44 for 24-hour window)
     @State private var slotOffset: Int = 0
     @State private var suppressFocusScroll: Bool = false
-    /// Set when full screen closes, until tvOS hands focus back to the guide. See `GuideReturnFocus`.
-    @State private var awaitingFocusHandout: Bool = false
+    /// Open from when full screen closes, or the guide first appears, until tvOS hands focus to the
+    /// guide. See `GuideReturnFocus`.
+    @State private var handoutWindow = GuideReturnFocus.HandoutWindow()
 
     @State private var showBundleSidebar: Bool = false
 
@@ -127,8 +128,8 @@ struct ChannelGuideView: View {
                             // Back from full screen: focus arrives from none, on the row tvOS
                             // remembers. If the channel was changed in full screen that row is
                             // the old one; move focus to the live channel, once (I-041).
-                            if awaitingFocusHandout, oldID == nil, newID != nil {
-                                awaitingFocusHandout = false
+                            if handoutWindow.isOpen, oldID == nil, newID != nil {
+                                handoutWindow.close()
                                 if GuideReturnFocus.target(handedTo: newID, liveChannelID: appState.currentChannel?.id) != nil {
                                     anchorFocusToLiveChannel(proxy)
                                     return
@@ -171,10 +172,8 @@ struct ChannelGuideView: View {
                         }
                         .onChange(of: appState.isFullScreen) { _, isFullScreen in
                             if !isFullScreen {
-                                awaitingFocusHandout = true
+                                armHandoutWindow()
                                 anchorFocusToLiveChannel(proxy)
-                                // If tvOS never hands focus back (it was never taken away), stop waiting.
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { awaitingFocusHandout = false }
                             }
                         }
                         .onChange(of: appState.guideLiveRowFocusRequest) { _, _ in
@@ -198,8 +197,7 @@ struct ChannelGuideView: View {
                         .onAppear {
                             // First focus comes from the engine a moment after this, and goes to the
                             // first row, or the seasonal invite, not the playing channel (I-041).
-                            awaitingFocusHandout = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { awaitingFocusHandout = false }
+                            armHandoutWindow()
                             let targetID = appState.currentChannel?.id ?? appState.channels.first?.id
                             if let id = targetID {
                                 focusedChannelID = id
@@ -308,6 +306,14 @@ struct ChannelGuideView: View {
     }
 
     // MARK: - Live channel anchor
+
+    /// Opens the window in which the guide waits for tvOS's focus handout, and closes it after two
+    /// seconds if the handout never comes (focus was never taken away). The timer carries its
+    /// window's generation, so an earlier opening's timer cannot close a later one.
+    private func armHandoutWindow() {
+        let generation = handoutWindow.open()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { handoutWindow.expire(generation: generation) }
+    }
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
     /// off while the scroll settles.

@@ -14,4 +14,31 @@ enum GuideReturnFocus {
         guard let handedTo, let liveChannelID, handedTo != liveChannelID else { return nil }
         return liveChannelID
     }
+
+    /// The window in which the guide waits for the handout. Closing full screen, or the guide first
+    /// appearing, opens it; the handout, or a timer, closes it. Each opening has its own generation,
+    /// so the timer of an earlier opening (a close of full screen two seconds ago) cannot close a
+    /// later one.
+    struct HandoutWindow: Equatable {
+        private(set) var generation = 0
+        private(set) var isOpen = false
+
+        /// Opens the window. The returned generation goes with the timer that will close it.
+        mutating func open() -> Int {
+            generation += 1
+            isOpen = true
+            return generation
+        }
+
+        /// The handout arrived: closes the window, and makes any timer still running stale.
+        mutating func close() {
+            generation += 1
+            isOpen = false
+        }
+
+        /// A timer ran out. Closes the window only if it is still the opening that timer belongs to.
+        mutating func expire(generation timerGeneration: Int) {
+            if timerGeneration == generation { isOpen = false }
+        }
+    }
 }
