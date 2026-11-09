@@ -189,6 +189,16 @@ The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as
 
 ---
 
+## Open on last channel
+
+Settings > GENERAL > PLAYBACK, a real button (no key needed). Off unless switched on. With it on, a load opens on the channel that was playing when the tuner was last used instead of the first enabled channel. Code: `scripts/nostalgex-last-channel.js`, wired in `plex-tuner.html` (`channelToOpenOn`, `rememberLastChannel`, `toggleOpenLastChannel`).
+
+- Kept in the browser's own storage (`nostalgex_open_last_channel`, `nostalgex_last_channel`), so each browser or device that opens the container keeps its own. Nothing is sent anywhere.
+- The channel is remembered with its id and its name every time one is tuned on a real server, switch on or off. It is opened only when an enabled channel has the same id and the same name. Renamed, renumbered, dropped, package off, nothing kept, a damaged value: the first enabled channel opens, as with the switch off.
+- Tests: `npm run test:last-channel`, `npm run test:open-last-channel:browser`.
+
+---
+
 ## Playback scrobbling
 
 Reports "Now Playing" to the server and marks an item watched when the user has:

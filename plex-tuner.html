@@ -32,6 +32,7 @@
 <script src="scripts/nostalgex-jellyfin-urls.js"></script>
 <script src="scripts/nostalgex-stream-quality.js"></script>
 <script src="scripts/nostalgex-sleep-timer.js"></script>
+<script src="scripts/nostalgex-last-channel.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
@@ -3191,7 +3192,7 @@
   }
   /* The row in the guide Watershed has emptied (the placeholder in ChannelGuideView.swift). */
   .grid-program--held { color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
-  #cfg-watershed-toggle.on { background: var(--cyan); color: #000; }
+  #cfg-watershed-toggle.on, #cfg-open-last-toggle.on { background: var(--cyan); color: #000; }
 
   /* Phones: one column, label over value. */
   @media (max-width: 560px) {
@@ -3612,7 +3613,15 @@
       </div>
 
       <div class="config-section-label" style="margin-top: 28px;">PLAYBACK</div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+      <!-- Off unless switched on. A real button, so a TV browser with no keys can press it. -->
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Open on last channel</div>
+          <div class="cfg-row-desc">Start on the channel you were watching, not the first one. If that channel is gone or renumbered, it starts on the first one.</div>
+        </div>
+        <button class="plex-btn" id="cfg-open-last-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="false">OFF</button>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
         <div>
           <div style="font-size: 22px; color: rgba(255,255,255,0.85);">Show Now Playing</div>
           <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 4px;">Show the current program on your server. Marking a title watched is a separate choice.</div>
@@ -4408,6 +4417,48 @@
     return getTimeFilteredPool(channel, watershedEnabled).length === 0;
   }
 
+  // ── OPEN ON LAST CHANNEL (Trello I-017) ─────────────────────────────────────
+  // Off unless the viewer turns it on, and kept per browser, as the Apple TV keeps it per TV.
+  // The rules (what is kept, when a saved channel is not opened) are in scripts/nostalgex-last-channel.js.
+  // The channel is remembered every time one is tuned on a real server, whether or not the
+  // switch is on, so switching it on opens on the channel already playing at the next visit.
+  function openLastChannelOn() {
+    try { return NostalgexLastChannel.isOn(localStorage.getItem(NostalgexLastChannel.OPEN_KEY)); } catch (e) { return false; }
+  }
+
+  function updateOpenLastChannelControls() {
+    const on = openLastChannelOn();
+    const button = document.getElementById('cfg-open-last-toggle');
+    if (!button) return;
+    button.textContent = on ? 'ON' : 'OFF';
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
+
+  function toggleOpenLastChannel() {
+    // lsSet says whether it saved; the button shows what the next start will read.
+    lsSet(NostalgexLastChannel.OPEN_KEY, openLastChannelOn() ? '0' : '1');
+    updateOpenLastChannelControls();
+  }
+
+  function rememberLastChannel(ch) {
+    const value = NostalgexLastChannel.serialize(ch);
+    if (value) lsSet(NostalgexLastChannel.CHANNEL_KEY, value);
+  }
+
+  /** The channel a load opens on: the last one watched when the switch is on and it is still
+   *  there with the same id and name, else the first enabled channel, as before. */
+  function channelToOpenOn() {
+    const enabled = CHANNELS.filter(ch => ch.enabled);
+    if (openLastChannelOn()) {
+      let saved = null;
+      try { saved = NostalgexLastChannel.parse(localStorage.getItem(NostalgexLastChannel.CHANNEL_KEY)); } catch (e) {}
+      const last = NostalgexLastChannel.channelToOpen(saved, enabled);
+      if (last) return last;
+    }
+    return enabled[0] || null;
+  }
+
   // ── WATERSHED: the switch, and the card for a channel it has emptied ─────────
   // The two functions above read `nostalgex_watershed` ('1' is on). This is the only code
   // that writes it. Off unless the viewer turns it on, and kept per browser: the Apple TV
@@ -4808,6 +4859,7 @@
     updateRetroControls();
     updateSyncActivityControls();
     updateWatershedControls();
+    updateOpenLastChannelControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
     const menuBtn = document.getElementById('m-menu-btn');
@@ -5452,6 +5504,7 @@
     const sleepEnded = document.getElementById('sleep-ended');
     if (sleepEnded) sleepEnded.hidden = true;
     currentChannel = channelId;
+    if (plexConnected) rememberLastChannel(ch);
     appState = 'player';
     document.getElementById('player-screen').classList.add('has-channel');
     document.getElementById('key-hints').style.display = 'flex';
@@ -8152,6 +8205,7 @@
     if (subSel) subSel.value = subtitleLanguage;
     updateAutoSubsControls();
     updateWatershedControls();
+    updateOpenLastChannelControls();
   }
 
   function hideConfig() {
@@ -10282,11 +10336,12 @@
     return serverItems;
   }
 
-  // After a library load: tune the first enabled channel, or, when no package has any
+  // After a library load: tune the first enabled channel (or the last one watched, when OPEN ON LAST CHANNEL
+  // is on), or, when no package has any
   // content, say so (issue #129). Without this the screen stayed black with nothing to press.
   const emptyGuideShown = () => document.getElementById('plex-empty').style.display === 'flex';
   function tuneFirstOrShowEmpty() {
-    const firstEnabled = CHANNELS.find(ch => ch.enabled);
+    const firstEnabled = channelToOpenOn();
     if (firstEnabled) {
       hideEmptyGuideState();
       switchChannel(firstEnabled.id);
