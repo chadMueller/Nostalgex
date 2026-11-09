@@ -3,6 +3,46 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: UI tests can no longer wipe a real Apple TV)
+
+**What happened.** A UI test was run on a real Apple TV. It launched the app with `-uiTestResetCredentials` and no harness root,
+so on the device the flag acted on the TV's real stores: it deleted the library snapshot, rewrote the settings and removed the
+saved sign-in. The harness root was set for the test runner (`TEST_RUNNER_NOSTALGEX_HARNESS_ROOT`), but that variable only
+reaches the runner, not the app a test launches. A UI test is isolated only if it sets `NOSTALGEX_HARNESS_ROOT` on the app's own
+launch environment, and five test files launched with a reset and did not.
+
+**Changed.**
+- One launch helper for every UI test: `isolatedApp(arguments:)` in `NostalgexUITests/IsolatedApp.swift`. It sets
+  `NOSTALGEX_HARNESS_ROOT` on the app, with a root of its own per test and run, so a new test cannot forget. Every UI test file that
+  makes an app (twelve) now does it through the helper, the ones that already set a root by hand included. `realStoresApp(because:)` is for a
+  test that has to see the real stores: it runs on the simulator only and skips on a device. None needs it today.
+- In the app, the launch flags that delete or rewrite stored data act only while the harness root is set: `-uiTestResetCredentials`,
+  `-reproAppReviewFlow` (which also overwrote the sign-in with a test token), `-uiTestInstantAuth`, `-uiTestRescanRowFixture`,
+  `-uiTestLaunchMemoryInDemo`, `-uiTestForceLibrarySelection` and `-uiTestFranchiseFixture`. Any other launch ignores them, logs one
+  line (`TEST FLAG: <flag> ignored ...`) and starts as a normal launch. A release build has no harness isolation, so it never
+  acts on them. They are listed once, in `TestLaunchFlags`, and read through `TestLaunchFlags.isOn`.
+- `scripts/ui-test-isolation-check.mjs` reads the Swift files and fails when a UI test file calls `XCUIApplication(` itself, names
+  one of those flags without going through the helper, passes one to `realStoresApp`, or when the helper's copy of the flag list
+  drifts from the app's. It runs in `npm test` and as its own CI job on every pull request (it needs no Mac).
+- The RESCAN row test no longer launches a second "clear" app after each test: its fixture now writes into the test's own root, so
+  there is nothing to clean up, and that extra launch was itself a launch on the real stores.
+
+**Test.** `TestLaunchFlagsTests` (unit): every listed flag is ignored without isolation, acts with it, and a flag that only changes
+what is drawn is never held. The static check was run against a test that calls `XCUIApplication(` directly, one that passes a
+reset flag to `realStoresApp`, one with an empty reason, and a flag list that differs from the app's: each fails it.
+
+**Measured.** On the tvOS simulator, one run each. UI: the ten classes that launch the app (`AppReviewReproHarnessTests`,
+`ChannelGuideWrapFocusTests`, `FirstLaunchSmokeTests`, `FranchisesPageGateUITests`, `GuideFocusAfterFullScreenTests`,
+`NowPlayingPanelFocusTests`, `OpenOnLastChannelLaunchTests`, `SettingsChannelsDrilldownTests`, `SettingsOpenOnLastChannelTests`,
+`SettingsRescanRowTests`): 27 tests, 26 passed, 1 skipped (the old instant-auth flow, skipped before this change), 0 failed.
+Unit: `NostalgexTests` 1,236 tests, 1,207 passed, 0 failed, 29 skipped (the live-server harnesses). `LANDiscoveryUITests` and the
+sign-in tour need real servers and were not run; they are converted and pass the static check.
+
+**Not done here.** Nothing was run on an Apple TV for this change. The approach (the root set on the app, the real stores
+compared before and after) was checked on a real Apple TV 4K (3rd generation) earlier the same day. A UI test added on another
+branch that makes its own `XCUIApplication` will fail the check until it uses the helper. On `appletv/ui-test-safety`, off
+`appletv/1.0.31-rc1` (ba30acba), not pushed, no build cut.
+
 ## 2026-11-09 (Apple TV: package stripes in the guide, and a way to move along them)
 
 **What.** A coloured stripe down the left edge of the guide, one per package, with the package name written up it. The

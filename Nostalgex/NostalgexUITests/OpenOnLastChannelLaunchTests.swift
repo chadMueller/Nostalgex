@@ -68,11 +68,9 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        // A fresh root every run: the setting and the saved channel persist in it, and a run that stops
-        // half way must not hand its state to the next.
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-open-on-last-channel-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestLaunchMemoryInDemo", "-uiTestManyChannels"]
+        // A fresh root every run: the setting and the saved channel persist in it across the relaunches below, and
+        // a run that stops half way must not hand its state to the next.
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestLaunchMemoryInDemo", "-uiTestManyChannels"])
 
         // 1. Nothing remembered yet (a viewer's first launch after an update): channel 1.
         launchIntoDemo()
@@ -107,9 +105,7 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-demo-row-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels"]   // no -uiTestLaunchMemoryInDemo
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels"])   // no -uiTestLaunchMemoryInDemo
         launchIntoDemo()
 
         let settings = app.buttons["tunerSettingsButton"]

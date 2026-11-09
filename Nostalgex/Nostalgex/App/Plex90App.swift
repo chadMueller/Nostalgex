@@ -16,9 +16,9 @@ struct RootView: View {
         //, same order `presentLibrarySelectionOrScan()` uses, so the view never mounts
         // on an empty list and defaults every row to off.
         let forceSettingsPage = ProcessInfo.processInfo.arguments.contains("-uiTestForceSettingsPage")
-        let uiTestInstantAuth = ProcessInfo.processInfo.arguments.contains("-uiTestInstantAuth")
-            || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
-        let reproAppReviewFlow = ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow")
+        let uiTestInstantAuth = TestLaunchFlags.isOn("-uiTestInstantAuth")
+            || TestLaunchFlags.isOn("-reproAppReviewFlow")
+        let reproAppReviewFlow = TestLaunchFlags.isOn("-reproAppReviewFlow")
         NavigationStack(path: $navigationPath) {
             Group {
                 if reproAppReviewFlow {
@@ -69,7 +69,7 @@ struct RootView: View {
             UIApplication.shared.isIdleTimerDisabled = keep
         }
         .task {
-            if ProcessInfo.processInfo.arguments.contains("-uiTestForceLibrarySelection") {
+            if TestLaunchFlags.isOn("-uiTestForceLibrarySelection") {
                 appState.didAttemptCredentialHydration = true
                 appState.pendingLibrarySections = [
                     LibrarySectionRef(serverID: "demo", serverName: "Demo Server", sectionKey: "1", title: "Movies", type: "movie"),

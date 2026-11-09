@@ -21,9 +21,7 @@ final class ChannelGuideWrapFocusTests: XCTestCase {
     private let manyChannelCount = 20
 
     private func launchIntoGuide(manyChannels: Bool = false) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-uiTestResetCredentials"]
-        if manyChannels { app.launchArguments.append("-uiTestManyChannels") }
+        let app = isolatedApp(arguments: ["-uiTestResetCredentials"] + (manyChannels ? ["-uiTestManyChannels"] : []))
         app.launch()
 
         let demo = app.buttons["demo mode"]

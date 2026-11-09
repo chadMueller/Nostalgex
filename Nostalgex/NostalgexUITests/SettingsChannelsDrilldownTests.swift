@@ -54,8 +54,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
     private func rail(_ id: String) -> XCUIElement { app.buttons["settingsRail_\(id)"] }
 
     private func openChannelsTab() {
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestFranchiseFixture", "-uiTestShortPackage"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestFranchiseFixture", "-uiTestShortPackage"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")

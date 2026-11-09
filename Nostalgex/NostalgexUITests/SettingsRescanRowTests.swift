@@ -18,17 +18,8 @@ final class SettingsRescanRowTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// The fixture writes a fake last-load time and a fake playback verdict into the
-    /// simulator's defaults. One more launch with `clear` takes them out again.
-    override func tearDown() {
-        let cleaner = XCUIApplication()
-        cleaner.launchArguments = ["-uiTestForceSettingsPage", "-uiTestRescanRowFixture", "clear"]
-        cleaner.launch()
-        _ = cleaner.buttons["settingsRail_servers"].waitForExistence(timeout: 30)
-        Thread.sleep(forTimeInterval: 1.5)
-        cleaner.terminate()
-        super.tearDown()
-    }
+    // The fixture writes a fake last-load time and a fake playback verdict. They go into this test's own harness
+    // root (the app ignores the fixture flag otherwise), so there is nothing to take out afterwards.
 
     private func focused() -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
@@ -68,8 +59,7 @@ final class SettingsRescanRowTests: XCTestCase {
 
     /// Opens SERVERS & ACCOUNTS and walks down to RESCAN LIBRARY.
     private func openRescanRow(fixture: String) {
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTestForceSettingsPage", "-uiTestRescanRowFixture", fixture]
+        app = isolatedApp(arguments: ["-uiTestForceSettingsPage", "-uiTestRescanRowFixture", fixture])
         app.launch()
         let servers = app.buttons["settingsRail_servers"]
         XCTAssertTrue(servers.waitForExistence(timeout: 30), "Settings never opened")

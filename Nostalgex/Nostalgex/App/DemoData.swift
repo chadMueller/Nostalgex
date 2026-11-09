@@ -239,7 +239,7 @@ enum DemoData {
     /// server and before the shared enrichment table carries the franchise columns.
     /// Never set in a shipping run.
     static var franchiseFixtureRequested: Bool {
-        ProcessInfo.processInfo.arguments.contains("-uiTestFranchiseFixture")
+        TestLaunchFlags.isOn("-uiTestFranchiseFixture")
     }
 
     /// `-uiTestShortPackage`, with the franchise fixture: the DEMO package also lists a
@@ -411,7 +411,8 @@ extension DemoData {
     /// shipping run.
     static var rescanRowFixture: String? {
         let args = ProcessInfo.processInfo.arguments
-        guard let flag = args.firstIndex(of: "-uiTestRescanRowFixture"), flag + 1 < args.count else { return nil }
+        guard TestLaunchFlags.isOn("-uiTestRescanRowFixture"),
+              let flag = args.firstIndex(of: "-uiTestRescanRowFixture"), flag + 1 < args.count else { return nil }
         return args[flag + 1]
     }
 

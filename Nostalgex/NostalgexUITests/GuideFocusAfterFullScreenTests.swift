@@ -82,9 +82,7 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         // on a simulator.
         XCUIRemote.shared.press(.menu)
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i041-guide-focus"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideJumpProbe"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideJumpProbe"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
@@ -124,24 +122,22 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
     /// (what OPEN ON LAST CHANNEL does, and a seasonal invite above channel 1 does to the first row),
     /// tvOS handed focus to the first row, not the channel that is playing.
     func testGuideOpensOnThePlayingChannelWhenItIsNotTheFirst() {
-        guideOpensOnTheLiveChannel(startingOn: "4", withInvite: false, root: "i041-first-focus")
+        guideOpensOnTheLiveChannel(startingOn: "4", withInvite: false)
     }
 
     /// A seasonal invite sits above channel 1 while its package is in season; first focus went to it
     /// instead of the channel that is playing.
     func testGuideOpensOnThePlayingChannelWithASeasonalInviteAboveChannelOne() {
-        guideOpensOnTheLiveChannel(startingOn: "1", withInvite: true, root: "i041-first-focus-invite")
+        guideOpensOnTheLiveChannel(startingOn: "1", withInvite: true)
     }
 
-    private func guideOpensOnTheLiveChannel(startingOn channel: String, withInvite: Bool, root: String) {
+    private func guideOpensOnTheLiveChannel(startingOn channel: String, withInvite: Bool) {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = root
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestStartOnChannel", channel,
-                               "-uiTestGuideJumpProbe"]
-            + (withInvite ? ["-uiTestSeasonalInvite"] : [])
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestStartOnChannel", channel,
+                                      "-uiTestGuideJumpProbe"]
+            + (withInvite ? ["-uiTestSeasonalInvite"] : []))
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
@@ -166,24 +162,22 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
     ///
     /// Channel down from channel 1 wraps to channel 20, so one press in full screen is a 19 row jump.
     func testTheListDoesNotScrollToTheOldRowWhenTheLiveChannelIsFarAbove() {
-        farJump(root: "i041-far-jump-down", tuneRow: 0, press: .left, expectLive: "9020", expectOld: "9001", listIsScrolled: true)
+        farJump(tuneRow: 0, press: .left, expectLive: "9020", expectOld: "9001", listIsScrolled: true)
     }
 
     /// The other way round: tuned on channel 20 (the bottom), one press up in full screen wraps to channel 1.
     func testTheListDoesNotScrollToTheOldRowWhenTheLiveChannelIsFarBelow() {
-        farJump(root: "i041-far-jump-up", tuneRow: 19, press: .right, expectLive: "9001", expectOld: "9020", listIsScrolled: false)
+        farJump(tuneRow: 19, press: .right, expectLive: "9001", expectOld: "9020", listIsScrolled: false)
     }
 
     /// `listIsScrolled`: whether the live row is one the list has to be scrolled down to reach (channel 20), so
     /// the offset it rests at is not zero; at the top (channel 1) it rests at zero.
-    private func farJump(root: String, tuneRow: Int, press change: XCUIRemote.Button, expectLive: String, expectOld: String,
+    private func farJump(tuneRow: Int, press change: XCUIRemote.Button, expectLive: String, expectOld: String,
                          listIsScrolled: Bool) {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = root
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideJumpProbe"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideJumpProbe"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")

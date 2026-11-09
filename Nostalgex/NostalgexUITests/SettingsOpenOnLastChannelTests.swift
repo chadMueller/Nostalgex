@@ -16,11 +16,9 @@ final class SettingsOpenOnLastChannelTests: XCTestCase {
 
     func testTheRowIsThereOnByDefaultAndSwitches() {
         continueAfterFailure = false
-        app = XCUIApplication()
         // A fresh storage root: the shipped default is what is read, not a press an earlier run left on
         // this simulator. Nothing here reaches the app's real stores.
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-settings-row-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestForceSettingsPage"]
+        app = isolatedApp(arguments: ["-uiTestForceSettingsPage"])
         app.launch()
         let playback = app.buttons["settingsRail_playback"]
         XCTAssertTrue(playback.waitForExistence(timeout: 30), "Settings never opened")
