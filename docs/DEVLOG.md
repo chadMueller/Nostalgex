@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: Plex titles with a Latin-1 byte, #196)
+
+**Why.** Plex copies a file or folder name into its JSON byte for byte, so an unmatched item named in Latin-1 puts a lone 0xE9 in its title. Android read every Plex answer with OkHttp's `body.string()`, which turns such a byte into U+FFFD, so the guide would read "Caf� Society". The Apple TV, the web tuner and the Roku read the byte as Windows-1252 and show "Café Society" (#196).
+
+**Changed.**
+- `PlexUtf8Repair` (new, `android/engine`) is the Apple TV's `PlexUTF8Repair`. Every byte outside a well-formed UTF-8 sequence (Unicode table 3-7) is read as Windows-1252, and the five bytes Windows-1252 leaves undefined keep their Latin-1 code point. A valid answer is decoded as it is. One leading byte order mark is dropped, as `body.string()` did and a JSON parser expects.
+- `PlexClient.getJson`, which every Plex library, section, episode, collection and plex.tv resources read goes through, reads the bytes, repairs, then parses. A repair logs the Apple TV's line, `PLEX UTF-8 <path>: repaired N byte(s) that were not UTF-8, read as Windows-1252`, with any token left out of the path.
+- `Utf8RepairGoldenTest` holds it to `scripts/utf8-repair-golden.json`, the cases the Apple TV, the web tuner and the Roku already read: all 27 match. It also checks a Plex-shaped page with a lone 0xE9 in a title parses to "Café Society", with valid accents and emoji untouched. With the Windows-1252 table taken out, the curly-quote case and others fail.
+- The not-ported note in `PlexLibrary.kt` and the README line that said titles weren't repaired are gone.
+
+**Measured on a SHIELD (Android 11).** The launch refresh of a 11,396-item Plex library, two runs of each build, alternated:
+
+| Build | Read in | Peak Java heap |
+|---|---|---|
+| Before | 24.3 s, 23.7 s | 143 MiB, 128 MiB |
+| After | 22.2 s, 19.9 s | 120 MiB, 133 MiB |
+
+That library is valid UTF-8 throughout (no repair line was logged), so it measures the cost of reading bytes and checking them, and that is within the run-to-run spread.
+
+**Not checked.** A real Plex item with a Latin-1 name on a TV: the library measured has none. The repair itself is covered by the shared cases.
+
 ## 2026-11-09 (Android: a scan where every library fails is a failed load, #198)
 
 **Why.** Chad found it reading the code (#198). When a server lists its libraries and then fails every item request, each library was skipped as one bad library, the scan came back empty, and the empty library was saved. The guide said NO CHANNELS FOUND, and so did every launch after, from the saved copy. A RESCAN LIBRARY from that screen that did find channels left the screen as it was.

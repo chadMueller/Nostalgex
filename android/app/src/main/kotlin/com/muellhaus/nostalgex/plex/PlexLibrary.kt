@@ -24,8 +24,8 @@ import android.util.Log
  * scanOnePlexServer and fetchPlexSectionPaged. The order is the server's, never shuffled, since
  * the schedule's running order depends on it.
  *
- * Not yet ported: the Windows-1252 repair of bad title bytes (PlexUTF8Repair) and the
- * MusicBrainz "Artist - Title" split for music videos.
+ * Every answer comes through PlexClient.getJson, which repairs bytes that aren't UTF-8
+ * (PlexUtf8Repair, #196). Music videos are split into artist and title by MusicTitle.
  */
 class PlexLibrary(private val client: PlexClient) {
     fun interface Progress {

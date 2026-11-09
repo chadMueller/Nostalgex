@@ -172,7 +172,6 @@ Different in the detail:
   points wide (as the Roku port also chose).
 - An episode's summary gets one line in the info panel, where SwiftUI shrinks
   the stack to fit two.
-- Plex titles with a byte that isn't UTF-8 are not repaired yet.
 - LAN discovery uses the address the server reports. A server in Docker
   reports the container's own address, which the TV can't reach; type the
   host's address instead.

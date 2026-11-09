@@ -24,6 +24,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import com.muellhaus.nostalgex.engine.PlexUtf8Repair
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
@@ -68,11 +70,26 @@ class PlexClient(private val clientId: String, versionName: String) {
         if (token != null) header("X-Plex-Token", token)
     }
 
+    /**
+     * A Plex answer as JSON. Its bytes are read and repaired first (PlexUtf8Repair, #196): Plex
+     * copies a Latin-1 file name into a title byte for byte, and decoding that as UTF-8 showed
+     * "Caf\uFFFD Society". A valid answer is decoded as it is; a repaired one logs the Apple TV's line.
+     */
     private suspend fun getJson(url: String, token: String? = null, client: OkHttpClient = http): JsonElement = withContext(Dispatchers.IO) {
         client.newCall(request(url, token).build()).execute().use { res ->
             if (!res.isSuccessful) throw PlexHttpException(res.code, url.substringBefore('?'))
-            json.parseToJsonElement(res.body.string())
+            val decoded = PlexUtf8Repair.decode(res.body.bytes())
+            if (decoded.repairedBytes > 0) Log.i(TAG, PlexUtf8Repair.logLine(logContext(url), decoded.repairedBytes))
+            json.parseToJsonElement(decoded.text)
         }
+    }
+
+    /** The request's path and query with any token left out, for the log (PlexAPIService.logContext). */
+    private fun logContext(url: String): String {
+        val u = url.toHttpUrlOrNull() ?: return "?"
+        val query = (0 until u.querySize).filter { !u.queryParameterName(it).lowercase().contains("token") }
+            .joinToString("&") { "${u.queryParameterName(it)}=${u.queryParameterValue(it) ?: ""}" }
+        return u.encodedPath + if (query.isEmpty()) "" else "?$query"
     }
 
     suspend fun createPin(): PlexPin = withContext(Dispatchers.IO) {
