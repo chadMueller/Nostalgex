@@ -128,7 +128,9 @@ final class LaunchChannelMemoryTests: XCTestCase {
         let state = AppState()
         state.channels = lineup
         state.rememberLaunchChannel(lineup[2])
+        XCTAssertTrue(state.launchMemoryApplies, "a real library shows the row and uses the memory")
         state.isDemoMode = true
+        XCTAssertFalse(state.launchMemoryApplies, "demo mode hides the row (SettingsPlaybackView) and ignores the memory")
         XCTAssertEqual(state.channelToOpenFirst?.id, 1)
         state.rememberLaunchChannel(lineup[1])
         XCTAssertEqual(LaunchChannelMemory.saved()?.id, 401, "a demo tune does not overwrite the real memory")

@@ -95,15 +95,18 @@ struct SettingsPlaybackView: View {
             }
             .settingsRow("audio_lang", focus: focus)
 
-            SettingsToggleRow(
-                title: "OPEN ON LAST CHANNEL",
-                subtitle: "Start on the channel you were last watching",
-                isOn: openOnLastChannel,
-                isFocused: isFocused("open_last_channel")
-            ) {
-                openOnLastChannel.toggle()
+            // Not in demo mode (what App Review sees), where it does nothing, like the WATCH HISTORY rows.
+            if appState.launchMemoryApplies {
+                SettingsToggleRow(
+                    title: "OPEN ON LAST CHANNEL",
+                    subtitle: "Start on the channel you were last watching",
+                    isOn: openOnLastChannel,
+                    isFocused: isFocused("open_last_channel")
+                ) {
+                    openOnLastChannel.toggle()
+                }
+                .settingsRow("open_last_channel", focus: focus)
             }
-            .settingsRow("open_last_channel", focus: focus)
 
             // Moved here from CONNECTION: both are about what happens while you watch.
             if !appState.isDemoMode {

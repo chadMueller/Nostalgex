@@ -6,7 +6,7 @@ extension AppState {
     /// never overwrite the channel a real library saved. `-uiTestLaunchMemoryInDemo` lifts that for
     /// UI tests, so the feature can be proven on an Apple TV that is signed out. Never set in a
     /// shipping run.
-    private var launchMemoryApplies: Bool {
+    var launchMemoryApplies: Bool {
         !isDemoMode || ProcessInfo.processInfo.arguments.contains("-uiTestLaunchMemoryInDemo")
     }
 

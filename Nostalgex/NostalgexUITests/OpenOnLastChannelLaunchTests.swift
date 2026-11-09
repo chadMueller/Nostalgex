@@ -95,4 +95,32 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         shot("relaunch-switch-off")
         XCTAssertTrue(liveChannelLabel().hasPrefix("Channel 1,"), "switch off, relaunched: \(liveChannelLabel())")
     }
+
+    /// Demo mode (what App Review sees) has no use for the setting, so PLAYBACK & PICTURE does not show it.
+    func testTheRowIsNotShownInDemoMode() {
+        continueAfterFailure = false
+        XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
+        Thread.sleep(forTimeInterval: 4)
+        app = XCUIApplication()
+        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-demo-row-\(Int(Date().timeIntervalSince1970))"
+        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels"]   // no -uiTestLaunchMemoryInDemo
+        launchIntoDemo()
+
+        let settings = app.buttons["tunerSettingsButton"]
+        for _ in 0..<10 where !settings.hasFocus { press(.up, 0.4) }
+        for _ in 0..<8 where !settings.hasFocus { press(.right, 0.4) }
+        press(.select, 2)
+        let playback = app.buttons["settingsRail_playback"]
+        XCTAssertTrue(playback.waitForExistence(timeout: 10), "Settings never opened")
+        for _ in 0..<4 where !playback.hasFocus { press(.down, 0.6) }
+        press(.right, 1.0)
+        var labels: [String] = []
+        for _ in 0..<12 {
+            labels.append(focused().exists ? focused().label : "<none>")
+            press(.down, 0.5)
+        }
+        shot("demo-playback-rows")
+        XCTAssertTrue(labels.contains("AUDIO LANGUAGE"), "walked the page: \(labels)")
+        XCTAssertFalse(labels.contains("OPEN ON LAST CHANNEL"), "the row shows in demo mode: \(labels)")
+    }
 }

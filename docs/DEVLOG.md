@@ -14,7 +14,8 @@ name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so i
 the saved snapshot or the load has built the guide, the app opens that channel if the setting is on and a channel with
 the same id and the same name is in the lineup; otherwise it opens the first channel, as before. A collection or
 franchise channel renumbered by a rebuild is not tuned by mistake: a changed name or a missing id opens the first
-channel. Demo mode ignores the setting and saves nothing; signing out clears the saved channel (the setting stays).
+channel. Demo mode (what App Review sees) hides the row, ignores the setting and saves nothing; signing out clears the saved
+channel (the setting stays).
 
 **Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
 synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
