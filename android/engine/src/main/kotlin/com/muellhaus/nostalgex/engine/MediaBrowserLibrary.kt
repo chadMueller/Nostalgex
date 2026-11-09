@@ -190,14 +190,16 @@ class MediaBrowserLibrary(
 
     /**
      * Every item of a type (or a comma list of types) under a parent, 200 at a time, with the
-     * fields the channel rules read. `onPage` sees each page as it arrives.
+     * fields the channel rules read. `onPage` sees each page as it arrives. OfficialRating and
+     * CommunityRating are named because Emby 4.10 leaves both out unless asked (#204); Jellyfin
+     * sends them regardless.
      */
     private fun fetchItems(parentId: String, types: String, onPage: (List<JsonObject>) -> Unit = {}): List<JsonObject> {
         val all = ArrayList<JsonObject>()
         var start = 0
         while (true) {
             val path = "/Items?userId=${enc(userId)}&ParentId=${enc(parentId)}&Recursive=true&IncludeItemTypes=$types" +
-                "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData" +
+                "&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating" +
                 "&StartIndex=$start&Limit=200&SortBy=SortName"
             val (status, body) = fetch.get(path)
             if (status !in 200..299) throw IllegalStateException("HTTP $status for items under $parentId")
