@@ -2998,6 +2998,8 @@
     border: 2px solid rgba(255,255,255,0.08);
     border-radius: 6px;
   }
+  /* A row that is not for this server (the Jellyfin-only switch) is hidden with the attribute; display: flex above would beat it. */
+  .cfg-row[hidden] { display: none; }
   .cfg-row--wrap { flex-wrap: wrap; }
   .cfg-row--wrap > div:first-child { flex: 1 1 260px; min-width: 0; }
   .cfg-row-title { font-size: 22px; color: rgba(255,255,255,0.85); }
@@ -3192,7 +3194,7 @@
   }
   /* The row in the guide Watershed has emptied (the placeholder in ChannelGuideView.swift). */
   .grid-program--held { color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
-  #cfg-watershed-toggle.on, #cfg-open-last-toggle.on { background: var(--cyan); color: #000; }
+  #cfg-watershed-toggle.on, #cfg-open-last-toggle.on, #cfg-include-hidden-toggle.on { background: var(--cyan); color: #000; }
 
   /* Phones: one column, label over value. */
   @media (max-width: 560px) {
@@ -3620,6 +3622,14 @@
           <div class="cfg-row-desc">Start on the channel you were watching, not the first one. If that channel is gone or renumbered, it starts on the first one.</div>
         </div>
         <button class="plex-btn" id="cfg-open-last-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="false">OFF</button>
+      </div>
+      <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
+      <div class="cfg-row" id="cfg-include-hidden-row" hidden>
+        <div>
+          <div class="cfg-row-title">Include libraries hidden on Jellyfin</div>
+          <div class="cfg-row-desc">Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.</div>
+        </div>
+        <button class="plex-btn" id="cfg-include-hidden-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleIncludeHiddenLibraries()" aria-label="Include libraries hidden on Jellyfin" aria-pressed="false">OFF</button>
       </div>
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
         <div>
@@ -4446,6 +4456,42 @@
     if (value) lsSet(NostalgexLastChannel.CHANNEL_KEY, value);
   }
 
+  // ── INCLUDE LIBRARIES HIDDEN ON JELLYFIN ────────────────────────────────────
+  // Jellyfin only. Off unless the viewer turns it on (the default is INCLUDE_HIDDEN_DEFAULT in
+  // scripts/nostalgex-jellyfin-urls.js, point 13 there has why), kept per browser. A library the
+  // viewer hid from the Jellyfin home screen is then asked for and scanned. Switching it reads the
+  // library again once, the way a change of server does.
+  function includeHiddenOn() {
+    return NostalgexJellyfinUrls.includeHiddenLibraries();
+  }
+
+  function updateIncludeHiddenControls() {
+    const row = document.getElementById('cfg-include-hidden-row');
+    const button = document.getElementById('cfg-include-hidden-toggle');
+    if (!row || !button) return;
+    row.hidden = mediaBackend !== 'jellyfin';
+    const on = includeHiddenOn();
+    button.textContent = on ? 'ON' : 'OFF';
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
+
+  async function toggleIncludeHiddenLibraries() {
+    if (mediaBackend !== 'jellyfin') return;
+    // lsSet says whether it saved. Nothing is read again if it did not: the scan reads this same
+    // key, so a choice it cannot read would change nothing.
+    if (!lsSet(NostalgexJellyfinUrls.INCLUDE_HIDDEN_KEY, includeHiddenOn() ? '0' : '1')) { updateIncludeHiddenControls(); return; }
+    updateIncludeHiddenControls();
+    // What was saved was read the other way: drop it, so a failed read below is not followed by a
+    // visit that restores a library the switch no longer describes.
+    clearLibraryCache();
+    try {
+      await fetchLibraryFromServer();
+    } catch (err) {
+      console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
+    }
+  }
+
   /** The channel a load opens on: the last one watched when the switch is on and it is still
    *  there with the same id and name, else the first enabled channel, as before. */
   function channelToOpenOn() {
@@ -4860,6 +4906,7 @@
     updateSyncActivityControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
+    updateIncludeHiddenControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
     const menuBtn = document.getElementById('m-menu-btn');
@@ -8206,6 +8253,7 @@
     updateAutoSubsControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
+    updateIncludeHiddenControls();
   }
 
   function hideConfig() {
@@ -9691,8 +9739,10 @@
 
     const headers = { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() };
 
-    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js).
-    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId);
+    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). Jellyfin
+    // adds includeHidden=true only when the viewer has switched on INCLUDE LIBRARIES HIDDEN ON JELLYFIN
+    // (point 13 there); off, the request is what it always was.
+    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
     let viewsRes = await fetch(viewsUrl(mediaBackend), { headers });
     // Backstop for an Emby server still saved as Jellyfin, if the start-up check could not
     // tell: Emby answers /UserViews with a 404. One more request, only on that 404.

@@ -39,6 +39,18 @@ What is different from Jellyfin, mirroring `Nostalgex/Nostalgex/Services/EmbyAPI
 
 ---
 
+## Include libraries hidden on Jellyfin
+
+Settings > GENERAL > PLAYBACK, under OPEN ON LAST CHANNEL, **Jellyfin only** (the row is hidden on Plex and Emby). Off unless switched on, per browser. A real button, so it works in a TV browser with no keys. Code: `scripts/nostalgex-jellyfin-urls.js` (point 13: `INCLUDE_HIDDEN_DEFAULT`, `includeHiddenLibraries`, `userViewsPath`), wired in `plex-tuner.html` (`toggleIncludeHiddenLibraries`), pinned by `scripts/jellyfin-library-golden.json` `views`.
+
+- A Jellyfin user can hide a library from the home screen ("Display on home screen" unchecked in Jellyfin's Home settings, stored as `MyMediaExcludes`). `GET /UserViews` leaves those libraries out unless it is asked with `includeHidden=true`, so a scan never reads them. Hiding is often on purpose (adult, kids-unsafe, test or plugin folders), and the web tuner and Docker have no per-library picker to switch a newly visible library off, so the default is OFF.
+- Off, the request is `/UserViews?userId=<id>`, what it always was. On, it is `/UserViews?userId=<id>&includeHidden=true`. A library the user has no access to is not in the answer either way. Emby's list (`/Users/{id}/Views`) is unchanged in both positions.
+- **The default is one line.** `INCLUDE_HIDDEN_DEFAULT` in `scripts/nostalgex-jellyfin-urls.js` (`const INCLUDE_HIDDEN_DEFAULT = false;`). A viewer's own choice ('1' on, '0' off) is kept under `nostalgex_include_hidden_libraries` and always wins over it.
+- Pressing the button saves the choice, drops the saved library and reads the library again once, as a change of server does.
+- Tests: `npm run test:jellyfin-urls`, `npm run test:jellyfin-library`, `npm run test:include-hidden:browser`.
+
+---
+
 ## Sleep timer
 
 Same as the Apple TV app (`SleepTimerLogic` and the SLEEP TIMER rows of the Now Playing panel). Code: `scripts/nostalgex-sleep-timer.js`, wired in the SLEEP TIMER section of `plex-tuner.html`.

@@ -102,8 +102,10 @@ const JELLYFIN_12_2 = { LocalAddress: "http://127.0.0.1:8096", ServerName: "lab"
   ProductName: "Jellyfin Server", OperatingSystem: "", Id: "0123456789abcdef0123456789abcdef", StartupWizardCompleted: true };
 const EMBY = (Version) => ({ LocalAddresses: [], RemoteAddresses: [], ServerName: "lab", Version, Id: "fedcba9876543210fedcba9876543210" });
 
-check("Jellyfin libraries stay at /UserViews?userId= (unchanged)", () =>
-  strictEqual(JU.userViewsPath("jellyfin", "user 1"), "/UserViews?userId=user%201"));
+check("Jellyfin libraries stay at /UserViews?userId= (unchanged), and without the switch on nothing is added", () => {
+  strictEqual(JU.userViewsPath("jellyfin", "user 1"), "/UserViews?userId=user%201");
+  strictEqual(JU.userViewsPath("jellyfin", "user 1", false), "/UserViews?userId=user%201");
+});
 check("Emby libraries are /Users/{id}/Views (/UserViews is 404 on Emby)", () =>
   strictEqual(JU.userViewsPath("emby", "user 1"), "/Users/user%201/Views"));
 check("Emby user id is path-escaped", () =>
@@ -148,6 +150,49 @@ for (const c of libraryGolden.sections) {
     strictEqual(JU.itemTypes(JU.sectionType(c.collectionType)), c.itemTypes);
   });
 }
+// The request that lists a user's libraries, in each position of the INCLUDE LIBRARIES HIDDEN ON JELLYFIN
+// switch (point 13): jellyfin-library-golden.json `views`.
+for (const c of libraryGolden.views) {
+  check(`libraries of ${c.backend} user ${JSON.stringify(c.userId)}, switch ${c.includeHidden ? "on" : "off"}, are asked at ${c.path}`, () =>
+    strictEqual(JU.userViewsPath(c.backend, c.userId, c.includeHidden), c.path));
+}
+check("the golden file has both positions for Jellyfin", () => {
+  const j = libraryGolden.views.filter((c) => c.backend === "jellyfin");
+  strictEqual(j.some((c) => c.includeHidden === false), true);
+  strictEqual(j.some((c) => c.includeHidden === true), true);
+});
+check("only a true switch adds includeHidden=true, once, and Emby never gets it", () => {
+  const on = new URL(JU.userViewsPath("jellyfin", "u", true), "http://x");
+  strictEqual(on.pathname, "/UserViews");
+  strictEqual(on.searchParams.getAll("includeHidden").join(","), "true");
+  strictEqual(on.searchParams.get("userId"), "u");
+  for (const v of [false, undefined, null, 0, 1, "", "true", "1", "yes", {}]) {
+    strictEqual(JU.userViewsPath("jellyfin", "u", v), "/UserViews?userId=u", JSON.stringify(v));
+  }
+  strictEqual(new URL(JU.userViewsPath("emby", "u", true), "http://x").search, "");
+});
+// The viewer's own choice: '1' on, '0' off, no value is the default, and the default is off.
+check("INCLUDE_HIDDEN_DEFAULT is false: a viewer who never chose gets the request it always was", () => {
+  strictEqual(JU.INCLUDE_HIDDEN_DEFAULT, false);
+  strictEqual(JU.includeHiddenLibraries(), false);           // node has no window, so no storage
+  strictEqual(JU.includeHiddenLibraries(null), false);
+  strictEqual(JU.includeHiddenLibraries({ getItem: () => null }), false);
+});
+check("includeHiddenLibraries: '1' is on, '0' is off, anything else is the default", () => {
+  const stored = (v) => ({ getItem: (k) => (k === JU.INCLUDE_HIDDEN_KEY ? v : "1") });
+  strictEqual(JU.INCLUDE_HIDDEN_KEY, "nostalgex_include_hidden_libraries");
+  strictEqual(JU.includeHiddenLibraries(stored("1")), true);
+  strictEqual(JU.includeHiddenLibraries(stored("0")), false);
+  for (const v of ["", "true", "on", " 1", "11", "false", null, undefined]) strictEqual(JU.includeHiddenLibraries(stored(v)), JU.INCLUDE_HIDDEN_DEFAULT, String(v));
+});
+check("a storage that throws is the default, not an error", () => {
+  strictEqual(JU.includeHiddenLibraries({ getItem() { throw new Error("denied"); } }), JU.INCLUDE_HIDDEN_DEFAULT);
+});
+check("the default lives in one place: one INCLUDE_HIDDEN_DEFAULT constant, read in one place", () => {
+  const src = readFileSync(new URL("./nostalgex-jellyfin-urls.js", import.meta.url), "utf8");
+  strictEqual((src.match(/const INCLUDE_HIDDEN_DEFAULT = /g) || []).length, 1);
+  strictEqual((src.match(/return INCLUDE_HIDDEN_DEFAULT;/g) || []).length, 1);
+});
 check("a view with no CollectionType key at all is a film view", () => strictEqual(JU.sectionType(undefined), "movie"));
 for (const c of libraryGolden.types) {
   check(`a ${JSON.stringify(c.item.Type)} row asked for ${c.asked} is ${c.kept ? "kept" : "dropped"}`, () =>
