@@ -161,8 +161,8 @@ export function renderFooter({ includeEmby = true } = {}) {
       </div>
       <nav class="footer-links" aria-label="Footer">
         <a href="/apple-tv">Apple TV</a>
-        <a href="/web-tuner">Web tuner</a>
         <a href="/roku">Roku</a>
+        <a href="/web-tuner">Web tuner</a>
         <a href="/plex">Plex</a>
         <a href="/jellyfin">Jellyfin</a>${embyLink}
         <a href="/channels">Channel Guide</a>

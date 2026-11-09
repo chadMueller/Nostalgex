@@ -1158,6 +1158,10 @@ a { color: inherit; }
   color: var(--final-note);
 }
 .final-inner .cta-row { margin-top: 44px; }
+/* The closing band is a fixed gradient in both themes, so its outline button uses the
+   fixed dark ink, not the theme ink (cream in dark mode, unreadable on the orange). */
+.final-inner .btn-outline { color: var(--on-accent); border-color: var(--on-accent); box-shadow: 3px 3px 0 var(--on-accent); }
+.final-inner .btn-outline:hover { box-shadow: 5px 5px 0 var(--on-accent); }
 
 /* ---------- Footer ---------- */
 .footer {
