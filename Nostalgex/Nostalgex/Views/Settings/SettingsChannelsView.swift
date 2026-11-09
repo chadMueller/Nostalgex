@@ -166,11 +166,12 @@ private struct ChannelsPackagesPage: View {
         let inSeason = bundle.isInSeason
         let availability = appState.bundleChannelAvailability(for: bundle)
         let available = availability.filter(\.hasContent).count
-        let missing = availability.count - available
         let total = bundle.channelIDs.count
         // While its channels build, the row says so instead of briefly reading
         // "Not enough content" and dimming.
         let building = bundle.enabled && appState.buildingBundleIDs.contains(bundle.id)
+        // The names the focused row lists (#217), and the one rule for which are short of content.
+        let listing = PackageChannelListing(availability: availability, enabled: bundle.enabled, building: building)
 
         // Availability is only computed for packages that are on, so an OFF package is
         // an invitation, never a warning.
@@ -181,8 +182,9 @@ private struct ChannelsPackagesPage: View {
             return bundle.description
         }()
         // Channels still short of content: a small amber count on the row, explained by
-        // WHY ARE SOME CHANNELS MISSING? below the packages.
-        let missingBadge: Int? = bundle.enabled && !building && available > 0 && missing > 0 ? missing : nil
+        // WHY ARE SOME CHANNELS MISSING? below the packages. Read from the same list that draws the
+        // amber names when the row is focused, so the count names exactly what it counts.
+        let missingBadge: Int? = listing.badge
 
         SettingsToggleRow(
             title: bundle.name,
@@ -190,6 +192,7 @@ private struct ChannelsPackagesPage: View {
             detail: bundle.enabled ? "\(available)/\(total) CH" : "\(total) CH",
             alertBadge: missingBadge,
             alertBadgeLabel: missingBadge.map { "\($0) channel\($0 == 1 ? "" : "s") need\($0 == 1 ? "s" : "") more content" },
+            channelNames: listing,
             isOn: bundle.enabled,
             isFocused: isFocused("bundle_\(bundle.id)"),
             isLoading: building,

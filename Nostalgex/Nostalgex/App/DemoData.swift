@@ -226,6 +226,51 @@ enum DemoData {
         ProcessInfo.processInfo.arguments.contains("-uiTestShortPackage")
     }
 
+    /// `-uiTestPackageList`, with the franchise fixture: CHANNEL PACKAGES lists the shipped
+    /// packages from channels.json after DEMO (names, order and sizes as shipped), some on with
+    /// channels the sample library cannot fill and some off, so a UI test can walk a long list
+    /// and a focused row that grows. Never set in a shipping run.
+    static var packageListFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestPackageList")
+    }
+
+    struct PackageListFixture {
+        /// The shipped packages but FRANCHISES (the fixture adds that one itself), each on or off.
+        let bundles: [ChannelBundle]
+        /// A stand-in channel, with the sample items, for every channel of an on package that is
+        /// not meant to be short of content.
+        let stockedChannels: [Channel]
+    }
+
+    /// Positions (0-based, in package order) of the channels each on package lacks:
+    /// NOSTALGEX is long (22 channels) and 4 short, the last package (HIGH ROTATION) is on with
+    /// 5 short, so the first, the long and the last rows all carry amber names. Any package not
+    /// listed here is off.
+    private static let packageListShortPositions: [String: [Int]] = [
+        "nostalgex": [3, 9, 14, 20],
+        "truecrime": [5],
+        "essentials": [2, 11],
+        "high-rotation": [1, 4, 6, 8, 12],
+    ]
+
+    static func packageListFixture(config: ChannelConfigResult) -> PackageListFixture {
+        let sample = baseChannels().first?.itemPool ?? []
+        var bundles: [ChannelBundle] = []
+        var stocked: [Channel] = []
+        var stockedIDs = Set<Int>()
+        for definition in config.bundles where definition.id != AppState.franchisesBundleID && !definition.id.hasPrefix("collections-") {
+            let short = packageListShortPositions[definition.id]
+            bundles.append(definition.toChannelBundle(enabled: short != nil))
+            guard let short else { continue }
+            for (position, id) in definition.channelIDs.enumerated()
+            where !short.contains(position) && stockedIDs.insert(id).inserted {
+                guard let shipped = config.channels.first(where: { $0.id == id }) else { continue }
+                stocked.append(channel(id: id, number: 1000 + id, name: shipped.name, colorHex: "#8899AA", items: sample))
+            }
+        }
+        return PackageListFixture(bundles: bundles, stockedChannels: stocked)
+    }
+
     struct FranchiseFixture {
         let items: [PlexMediaItem]
         let enrichment: [MediaEnrichment]

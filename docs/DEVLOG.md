@@ -3,6 +3,50 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: a focused package lists its channels on CHANNEL PACKAGES, discussion #217)
+
+**Why.** A proposal on discussion #217 (Trello I-084). On CHANNEL PACKAGES a viewer cannot see what a package adds without
+switching it on and waiting for the build, and the amber count on a row says how many of its channels are short of content
+without saying which.
+
+**Changed.** On CHANNEL PACKAGES (Settings, CHANNELS & BUNDLES) the focused row grows to list its channels under the
+description. Names only, no channel numbers, in the package's own order (the order in channels.json, as the website's lineup
+has them), dot separated, in small type. A package that is off lists them dim. A package that is on lists them brighter, with
+the channels short of content in amber and one line under the list, "Amber: not enough titles yet". Only the focused row
+opens, so the page is no longer than before while a viewer scrolls past. Nothing new is stored: no key, no page, and the
+names come from channels.json through the call the row already made (`bundleChannelAvailability`). WHY ARE SOME CHANNELS
+MISSING? is unchanged and is still where the reasons are explained. VoiceOver reads the names as the row's hint.
+
+One rule decides which channels are amber (`PackageChannelListing`), and the row's amber count is read from the same list,
+so the count names exactly what it counts. A package that is off, still building, or with nothing on air marks no channel:
+the row already says so, and none of those showed a count before. (Not changed here: the total on WHY ARE SOME CHANNELS
+MISSING? also counts the FRANCHISES package, which has no row on this page, and only channels that have rules, so it can differ
+from the sum of the counts on the rows. In the test library it reads 17 where the rows add up to 12.)
+
+**Scrolling, the open risk.** The Settings pane scrolls to centre the row that took focus, in the same moment the row before it
+shrinks and the new one grows. Measured on the simulator with the real focus engine, down through all 14 packages and back up
+(a library of the shipped packages, some on with channels the sample library cannot fill): unfocused rows are 95 pt tall,
+focused ones 129 to 296 pt (NOSTALGEX, 22 names and 4 amber, the tallest; KIDZ ZONE, 15 names, off). Every row in the middle of
+the list comes to rest at the same place on the screen whatever its own height, 0.58 of the screen height, and the same place
+going up as going down. The first row and the last stop where the list ends (0.41 and 0.69). No focused row was cut off at
+the top or the bottom. Switching a package with Select keeps its list open and the row where it was, while it builds and
+after, and back off. That is the simulator: how the focus engine and the scroll view behave on an Apple TV is not measured.
+
+**Test.** `PackageChannelListingTests` (16): the names in package order, every shipped package read from channels.json with no
+name dropped, a long package, the amber set equals the channels without content and the badge counts them (exhaustive over
+every pattern of up to six channels, on or off, building or not, against the rule it replaced), an empty package, a package with
+no missing channels, off, building and nothing on air marking none, and the drawn text being names only with a name never
+broken across lines. `SettingsPackageChannelsTests` (UI, 2): the walk above, with the same row measured focused and unfocused,
+and the amber line present on exactly the rows that carry the amber count; and Select on a package. Demo mode with a new
+test-only `-uiTestPackageList`, which lists the shipped packages after DEMO, some on with channels short of content.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,202 passed, 0 failed,
+29 skipped (the live-server harnesses). UI: `SettingsPackageChannelsTests` 2 of 2 and `SettingsChannelsDrilldownTests` 1 of 1.
+
+**Half-done.** On `appletv/package-channels-preview`, off the 1.0.31 bundle branch (f2fda75d) and not merged into it, so that
+build can ship without it. Not pushed, no build cut, not run on a TV. The Roku app and the web tuner are not changed. The list
+text is 18 pt, a step under the row's description; whether that reads from the couch is a TV question.
+
 ## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
 
 **Why.** The setting was written to be off until someone turned it on. The decision is the other way: a viewer who has not

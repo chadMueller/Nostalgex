@@ -239,6 +239,9 @@ struct SettingsToggleRow: View {
     /// text on screen; `alertBadgeLabel` is what VoiceOver reads for it.
     var alertBadge: Int? = nil
     var alertBadgeLabel: String? = nil
+    /// A package's channel names (#217). The row grows to list them under its description
+    /// while it has focus, and shrinks back when focus leaves. Nil for every other row.
+    var channelNames: PackageChannelListing? = nil
     let isOn: Bool
     let isFocused: Bool
     var isLoading: Bool = false
@@ -277,6 +280,11 @@ struct SettingsToggleRow: View {
                             .font(.custom("DMMono-Regular", size: 20))
                             .foregroundStyle(Color(hex: "#FFB020"))
                             .lineLimit(2)
+                    }
+
+                    if isFocused, let channelNames, !channelNames.entries.isEmpty {
+                        PackageChannelNames(listing: channelNames, isOn: isOn)
+                            .padding(.top, 6)
                     }
                 }
 
@@ -330,6 +338,7 @@ struct SettingsToggleRow: View {
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
         .accessibilityLabel(alertBadgeLabel.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
+        .accessibilityHint(channelNames.map { PackageChannelNames.spokenNames($0) } ?? "")
         .animation(.easeInOut(duration: 0.2), value: isOn)
         .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
