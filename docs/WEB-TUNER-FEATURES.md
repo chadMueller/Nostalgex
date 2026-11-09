@@ -203,7 +203,7 @@ The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as
 
 ## Open on last channel
 
-Settings > GENERAL > PLAYBACK, a real button (no key needed). On unless switched off (`OPEN_DEFAULT` in `scripts/nostalgex-last-channel.js`; it was off by default in 1.0.15, and Chad's decision of 2026-11-09 made it on). With it on, a load opens on the channel the viewer last tuned instead of the first enabled channel; a viewer with nothing remembered still gets the first enabled channel. Code: `scripts/nostalgex-last-channel.js`, wired in `plex-tuner.html` (`channelToOpenOn`, `rememberLastChannel`, `toggleOpenLastChannel`).
+Settings > GENERAL > PLAYBACK, a real button (no key needed). On unless switched off (`OPEN_DEFAULT` in `scripts/nostalgex-last-channel.js`; off by default in 1.0.15, on by default from 1.0.16). With it on, a load opens on the channel the viewer last tuned instead of the first enabled channel; a viewer with nothing remembered still gets the first enabled channel. Code: `scripts/nostalgex-last-channel.js`, wired in `plex-tuner.html` (`channelToOpenOn`, `rememberLastChannel`, `toggleOpenLastChannel`).
 
 - Kept in the browser's own storage (`nostalgex_open_last_channel`, `nostalgex_last_channel`), so each browser or device that opens the container keeps its own. Nothing is sent anywhere.
 - A choice is kept, a default is not stored. Pressing the button writes `0` or `1` and that stays; a browser that never pressed it holds no value and reads the default. So a browser that switched it off on 1.0.15 (stored `0`) stays off after the default changed, one that switched it on stays on, and only a browser that never chose now opens on the last channel. Opening on the remembered channel never writes the switch.

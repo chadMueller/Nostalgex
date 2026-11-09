@@ -55,13 +55,12 @@ rule, `.roku-add-note`, scoped to the Roku page.
 **Half-done.** The README has no Roku heading or table column yet, and the screenshots on `/roku` are still the
 ones from the beta. There is no "what's new" block for Roku on the site; the changelog is the App Store version only.
 
-## 2026-11-09 (web tuner: Retro mode no longer draws the tracking line, branch only)
+## 2026-11-09 (web tuner and Docker 1.0.16: Retro mode no longer draws the tracking line)
 
 **Why.** Viewers said the faint white line that drifts down the picture in Retro mode is very distracting. The product call is
 that it goes, on every surface; the Apple TV removes its tracking glitch on its own branch and the Roku port is separate.
 
-**Changed.** On the same branch as the Open on last channel default (`web/last-channel-default-on`), not pushed and not tagged,
-so it ships with the next web and Docker bundle. In `plex-tuner.html`: the `.vhs-tracking` element, its CSS (the base rule, the
+**Changed.** In web tuner and Docker 1.0.16, with the Open on last channel default below. In `plex-tuner.html`: the `.vhs-tracking` element, its CSS (the base rule, the
 retro-mode rule and the "enhanced" rule), the `vhs-tracking` keyframes, and the timer code that started a sweep two to eight
 seconds after Retro mode went on and every four to eighteen seconds after that (`runVhsSweep`, `startVhsCycle`,
 `stopVhsCycle`, and the calls to them from load and from `toggleRetroMode`). The rest of Retro mode is as it was: scanlines,
@@ -84,11 +83,10 @@ control`); the section it lifts is the same text. Not measured on a real TV brow
 **Found, not changed.** Two blog posts in `content/blog` still say Retro mode adds "VHS glitch" (and the Apple TV Settings
 subtitle says it until its branch lands). The site follows shipped versions, so they are left for the site pass.
 
-## 2026-11-09 (web tuner: OPEN ON LAST CHANNEL is on by default, branch only)
+## 2026-11-09 (web tuner and Docker 1.0.16: OPEN ON LAST CHANNEL is on by default)
 
-**Shipped.** Nothing. This is branch `web/last-channel-default-on`, on main `70686b63` (web tuner 1.0.15); its first two commits are this
-change and the watershed fix below. It is not pushed and not tagged: pushing main deploys the hosted tuner, so it goes out with
-the next web and Docker bundle.
+**Shipped.** Web tuner and Docker 1.0.16 (`tunerVersion` 1.0.16, tag `tuner-v1.0.16`), with the Retro mode entry above. The
+hosted tuner on nostalgex.app changes when main is pushed; the Docker image is built from the tag.
 
 **Why.** The setting shipped off in 1.0.15. The product decision of 2026-11-09 is that it is on, the same on every surface
 (the Apple TV's `LaunchChannelMemory.enabledByDefault` is flipped on its own branch; the Roku port is a separate item).
@@ -117,8 +115,8 @@ Found on the way, fixed in its own commit: `scripts/watershed-browser-smoke.mjs`
 `UserDefaults.standard` and had been failing on main since the app moved to `AppDefaults`; it now accepts either. A test-file
 change only, not part of `npm test`.
 
-**Half-done.** The branch itself. It needs the push (the hosted default changes for every hosted viewer who never chose) and the
-Docker tag with the bundle. `tunerVersion` and the README release line are not touched; the bundle's release commit does that.
+**Half-done.** Nothing on the web side. The hosted default changes for every hosted viewer who never chose, on the push; a
+Docker container changes when it pulls 1.0.16. Not measured on a real TV browser.
 
 **Next.** The Roku port defaults on too (parity item 40); the Android issue for the setting should say on by default.
 

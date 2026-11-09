@@ -1,7 +1,7 @@
 {
   "name": "nostalgex",
   "version": "1.0.0",
-  "tunerVersion": "1.0.15",
+  "tunerVersion": "1.0.16",
   "description": "Nostalgex marketing site, web tuner, and shared channel rule and schedule engine for the Plex, Jellyfin and Emby retro TV guide",
   "private": true,
   "type": "module",
