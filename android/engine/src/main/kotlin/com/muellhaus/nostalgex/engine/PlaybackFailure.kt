@@ -59,6 +59,21 @@ sealed class PlaybackFailure {
             is ChannelStopped -> "Nothing on this channel will play right now"
         }
 
+    /** What Settings keeps of it, short and specific (PlaybackFailure.diagnosticSummary). */
+    val diagnosticSummary: String
+        get() = when (this) {
+            is ServerRefused -> "$server HTTP $status, refused before video"
+            is FileMissing -> "$server HTTP 404, file not on disk"
+            is NotAuthorised -> "$server rejected credentials"
+            is ServerTooSlow -> "$server below real time on the capped stream"
+            is ServerUnreachable -> "$server unreachable"
+            is DeviceCannotRender -> "device could not decode ${codec ?: "the stream"}"
+            is NoPlayableSource -> "$server returned no stream URL"
+            is TranscodingUnavailable -> "$server declined to transcode"
+            is Unknown -> "$server failed with no usable signal"
+            is ChannelStopped -> "channel stopped after $CHANNEL_FAILURE_LIMIT failures in a row; last: ${last.diagnosticSummary}"
+        }
+
     /** Whose problem it is and what to do about it. */
     val detail: String
         get() = when (this) {

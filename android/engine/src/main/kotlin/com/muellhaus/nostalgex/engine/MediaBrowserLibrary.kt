@@ -96,6 +96,8 @@ class MediaBrowserLibrary(
         onSection: (List<MediaItem>) -> Unit = {},
         /** Libraries hidden on Jellyfin that the viewer switched on (view ids); the rest of the hidden ones aren't read. */
         includedHidden: Set<String> = emptySet(),
+        /** A movie or episode dropped for having no runtime, for the coverage line (skippedNoRuntimeCount). */
+        onSkippedNoRuntime: () -> Unit = {},
     ): List<MediaItem> {
         val viewList = scanViews(includedHidden).filter { (it.str("Id") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
@@ -115,7 +117,7 @@ class MediaBrowserLibrary(
                         val episodes = try { fetchItems(show.str("Id") ?: "", "Episode") } catch (e: ScanCancelled) { throw e } catch (e: Exception) { emptyList() }
                         for (ep in episodes) {
                             val minutes = DailyManifest.minutesFromTicks(ep.long("RunTimeTicks"))
-                            if (minutes <= 0) continue
+                            if (minutes <= 0) { onSkippedNoRuntime(); continue }
                             val mi = mediaInfo(ep)
                             val s = ep.long("ParentIndexNumber")?.takeIf { it != 0L }?.let { "S%02d".format(it) } ?: ""
                             val e = ep.long("IndexNumber")?.takeIf { it != 0L }?.let { "E%02d".format(it) } ?: ""
@@ -165,7 +167,7 @@ class MediaBrowserLibrary(
                             val genres = jf.strings("Genres").toMutableList()
                             if (isMusicVideoSection && genres.none { MUSIC.containsMatchIn(it) }) genres += "Music Video"
                             val minutes = DailyManifest.minutesFromTicks(jf.long("RunTimeTicks"))
-                            if (minutes <= 0) continue
+                            if (minutes <= 0) { onSkippedNoRuntime(); continue }
                             // A music-video library, or a short item tagged Music (10 minutes keeps musicals out).
                             val isMusicVideo = isMusicVideoSection || (minutes <= 10 && genres.any { MUSIC.containsMatchIn(it) })
                             val mi = mediaInfo(jf)

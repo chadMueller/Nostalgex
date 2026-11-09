@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.tv.material3.Text
 import com.muellhaus.nostalgex.AppModel
 import com.muellhaus.nostalgex.SettingsCategory
+import com.muellhaus.nostalgex.engine.LibraryDiagnostics
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.CollectionCategory
 import com.muellhaus.nostalgex.engine.Collections
@@ -636,6 +637,8 @@ private fun MissingPage(model: AppModel) {
 
 @Composable
 private fun ServerRows(model: AppModel) {
+    // The coverage line is counted when this page opens, and again when the lineup changes.
+    LaunchedEffect(model.lineup) { model.ensureLibraryCoverage() }
     Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
         Subheader("SERVERS")
         val selected = model.selectedServers
@@ -675,7 +678,12 @@ private fun ServerRows(model: AppModel) {
         } ?: "never"
         ToggleRow(
             title = "RESCAN LIBRARY",
-            subtitle = "${model.librarySummary()}\nLast updated $updated. Pull a fresh copy of your ${model.backendName} library after adding content",
+            // The Apple TV's lines: what is held, where it lands, when it was read, and the last
+            // time playback was given up on (SettingsServersView).
+            subtitle = model.librarySummary() +
+                (LibraryDiagnostics.coverageLine(model.libraryCoverage, model.skippedNoRuntime)?.let { "\n$it" } ?: "") +
+                "\nLast updated $updated. Pull a fresh copy of your ${model.backendName} library after adding content" +
+                (model.lastPlaybackFailure?.let { "\nLast playback failure: $it" } ?: ""),
             on = true,
             showToggle = false,
             loading = if (model.refreshing) "Updating…" else null,

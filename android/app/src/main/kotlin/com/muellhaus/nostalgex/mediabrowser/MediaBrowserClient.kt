@@ -248,9 +248,10 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         cancelled: () -> Boolean = { false },
         /** Libraries hidden on Jellyfin that the viewer switched on (view ids). */
         includedHidden: Set<String> = emptySet(),
+        onSkippedNoRuntime: () -> Unit = {},
     ): List<MediaItem> = withContext(Dispatchers.IO) {
         fun stamp(items: List<MediaItem>) = items.map { it.copy(serverUrl = server.url, serverToken = server.token) }
-        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includedHidden).let(::stamp)
+        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includedHidden, onSkippedNoRuntime).let(::stamp)
     }
 
     /**

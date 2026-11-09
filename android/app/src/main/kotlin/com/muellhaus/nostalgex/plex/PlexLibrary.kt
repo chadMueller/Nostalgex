@@ -29,6 +29,9 @@ import android.util.Log
  * (PlexUtf8Repair, #196). Music videos are split into artist and title by MusicTitle.
  */
 class PlexLibrary(private val client: PlexClient) {
+    /** Movies and episodes dropped for having no runtime, across this instance's scans (skippedNoRuntimeCount). */
+    val skippedNoRuntime = java.util.concurrent.atomic.AtomicInteger()
+
     fun interface Progress {
         fun update(progress: ScanProgress)
     }
@@ -122,7 +125,7 @@ class PlexLibrary(private val client: PlexClient) {
             val episodes = client.get(server, "/library/metadata/${show.str("ratingKey")}/allLeaves")["MediaContainer"]?.jsonObject?.array("Metadata") ?: emptyList()
             episodes.mapNotNull { ep ->
                 val minutes = DailyManifest.minutesFromPlexMs(ep.long("duration"))
-                if (minutes <= 0) return@mapNotNull null
+                if (minutes <= 0) { skippedNoRuntime.incrementAndGet(); return@mapNotNull null }
                 val media = pickBestVersion(ep.array("Media"))
                 MediaItem(
                     ratingKey = ep.str("ratingKey")!!,
@@ -170,7 +173,7 @@ class PlexLibrary(private val client: PlexClient) {
         val genres = item.array("Genre").mapNotNull { it.str("tag") }.toMutableList()
         if (isMusicVideoSection && genres.none { MUSIC.containsMatchIn(it) }) genres.add("Music Video")
         val minutes = DailyManifest.minutesFromPlexMs(item.long("duration"))
-        if (minutes <= 0) return null
+        if (minutes <= 0) { skippedNoRuntime.incrementAndGet(); return null }
         // A dedicated music-video library, or a short item tagged Music (10-minute cap keeps out musicals).
         val isMusicVideo = isMusicVideoSection || (minutes <= 10 && genres.any { MUSIC.containsMatchIn(it) })
         val media = pickBestVersion(item.array("Media"))

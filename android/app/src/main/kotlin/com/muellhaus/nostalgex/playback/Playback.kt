@@ -83,6 +83,8 @@ class Playback(
         fun onFailed(item: MediaItem, failure: PlaybackFailure)
         /** What PLAYBACK INFORMATION shows changed. */
         fun onInfo(info: PlaybackInfo)
+        /** The watchdog moved down the ladder: what it did next, the title and why (PlaybackDiagnostics.record). */
+        fun onVerdict(outcome: String, title: String, detail: String) {}
     }
 
     /** The viewer's languages (AUDIO LANGUAGE, resolved), for the track a Jellyfin or Emby transcode carries. */
@@ -474,9 +476,13 @@ class Playback(
         when {
             c.delivery == Delivery.DIRECT_PLAY -> {
                 Log.i(TAG, "WATCHDOG ${deadline}s, direct play gave no picture ($detail)")
+                listener.onVerdict("direct play → server stream after ${deadline}s", c.item.title, detail)
                 fallBack(c, "no picture after ${deadline}s", PlaybackInfo.Reason.STARTUP_NO_PICTURE, atOffset = true)
             }
-            !c.capped && !c.demo -> capped(c, c.offsetSec, "no picture after ${deadline}s ($detail)", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+            !c.capped && !c.demo -> {
+                listener.onVerdict("retry capped at 1080p after ${deadline}s", c.item.title, detail)
+                capped(c, c.offsetSec, "no picture after ${deadline}s ($detail)", PlaybackInfo.Reason.STARTUP_NO_PICTURE)
+            }
             else -> {
                 val failure = PlaybackFailure.classify(serverName, evidence(null, c.item))
                 Log.w(TAG, "WATCHDOG ${deadline}s, capped stream gave no picture ($detail); ${failure.headline}")
@@ -498,9 +504,13 @@ class Playback(
         when {
             c.delivery == Delivery.DIRECT_PLAY -> {
                 Log.i(TAG, "STARVED on direct play ($detail)")
+                listener.onVerdict("starved on direct play → server stream from ${at}s", c.item.title, detail)
                 fallBack(c, "starved", PlaybackInfo.Reason.STREAM_STALLED)
             }
-            !c.capped && !c.demo -> capped(c, at, "starved ($detail)", PlaybackInfo.Reason.STREAM_STALLED)
+            !c.capped && !c.demo -> {
+                listener.onVerdict("starved → capped 1080p from ${at}s", c.item.title, detail)
+                capped(c, at, "starved ($detail)", PlaybackInfo.Reason.STREAM_STALLED)
+            }
             else -> {
                 // The server answered and still couldn't be watched: a different sentence from "refused".
                 Log.w(TAG, "STARVED at 1080p too ($detail); nothing smaller to ask for")

@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Android: RESCAN LIBRARY's coverage line and last playback failure)
+
+**Why.** The Apple TV's RESCAN LIBRARY row has four parts, so a support report can say in one screenshot what the app holds and where it went: the library summary, a coverage line, "Last updated", and the last time playback was given up on. Android's had the first and third (the cap that would have cut the rest went in `cf41c7ad`).
+
+**Changed.**
+- `LibraryDiagnostics` (new, `android/engine`) is the Apple TV's coverage and `coverageLine`: titles on a channel with every package on, titles on none (split by kind when more than one kind has some), and titles skipped for having no runtime.
+- `Lineup.coverage()` filters the channels of packages that are off once, since the guide never needed them, and keeps their pools. It counts a channel with rules whose pool reaches its minItems, plus the collection and franchise channels. `AppModel.ensureLibraryCoverage` runs it in the background when SERVERS & ACCOUNTS opens and again after the lineup changes.
+- Both scans count what they drop for having no runtime (`PlexLibrary.skippedNoRuntime`, `MediaBrowserLibrary.scan`'s `onSkippedNoRuntime`). The count is from the last finished scan, so it reads 0 after a launch from the saved library until the refresh behind the guide ends.
+- `PlaybackDiagnostics` (new) and `PlaybackFailure.diagnosticSummary` are the Apple TV's: the last 5 verdicts, newest first, under `nostalgex_playback_verdicts_v2`, with URLs, tokens and credentials redacted. They are recorded where the Apple TV records them:
+  - the watchdog's direct play to server stream, and its capped 1080p retry;
+  - a stall on direct play, or on the server stream;
+  - an error card, and a channel stopping.
+
+  Each is logged as `WATCHDOG VERDICT`. A direct-play error that falls back at once isn't recorded, as on the Apple TV.
+- Tests: `LibraryDiagnosticsTest` (the Apple TV's `LibraryCoverageTests` wording, case for case, and the counting) and `PlaybackDiagnosticsTest` (the line, the 5 kept, redaction including percent-encoded, the summaries). 253 engine tests, 0 failures.
+
+**Measured on a SHIELD.** On the 11,396-item Plex library the row read "10,305 OF 11,396 ON CHANNELS · 1,091 ON NO CHANNEL (18 MOVIES, 1,073 EPISODES) · 1 SKIPPED (NO RUNTIME)". The count took 2.3 s off the main thread.
+
+**Not checked.** The "Last playback failure" line on a TV: nothing failed after the build went on. The line's format, keeping and redaction are covered by the tests.
+
 ## 2026-11-09 (Android: collection members read four at a time, as the web tuner reads them)
 
 **Why.** On a SHIELD, reading a Plex server's 288 collections took 81.3 to 81.6 s on every launch refresh, against 18 to 20 s for the 11,396-item library itself (noted in the entry on collection member order, below). The web tuner's `fetchPlexCollections` and `fetchBoxSetCollections` read the members of four collections at once (`mapLimit(list, 4, ...)`), but the Android port read them one at a time. Its own comment on the BoxSet read said so.

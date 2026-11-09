@@ -8,6 +8,7 @@ import com.muellhaus.nostalgex.engine.ManifestStore
 import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
+import com.muellhaus.nostalgex.engine.PlaybackDiagnostics
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -143,6 +144,11 @@ class Prefs(context: Context) {
     var librarySignature: String?
         get() = prefs.getString("nostalgex_library_signature", null)
         set(value) = prefs.edit().putString("nostalgex_library_signature", value).apply()
+
+    /** The last few playback verdicts, newest first (PlaybackDiagnostics), under the Apple TV's key. */
+    var playbackVerdicts: List<String>
+        get() = prefs.getString(PlaybackDiagnostics.KEY, null)?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
+        set(value) = prefs.edit().putString(PlaybackDiagnostics.KEY, json.encodeToString(value)).apply()
 
     /** OPEN ON LAST CHANNEL's switch and the channel last tuned (LaunchChannelMemory), on this TV only. */
     var openOnLastChannel: Boolean

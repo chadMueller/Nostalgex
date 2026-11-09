@@ -161,6 +161,23 @@ class Lineup(
         }
     }
 
+    /**
+     * Where the library lands with every package on (LibraryDiagnostics.coverage), for the
+     * coverage line under RESCAN LIBRARY. The channels of packages that are off haven't been
+     * filtered (the guide doesn't need them), so they are filtered here, once; their pools are
+     * kept, so switching such a package on later filters nothing. A channel counts when its pool
+     * reaches its minItems; the collection and franchise channels count as built.
+     */
+    fun coverage(): LibraryDiagnostics.Coverage? {
+        val o = opts ?: return null
+        val missing = config.channels.filter { !pools.containsKey(it.id) }
+        if (missing.isNotEmpty()) filter(items, missing, o, pools) { _, _ -> }
+        // Only channels with rules, as the Apple TV counts: one without rules takes the whole library.
+        val counted = config.channels.filter { it.rules != null }.mapNotNull { def -> pools[def.id]?.takeIf { it.size >= def.minItems } } +
+            runtime.map { it.pool }
+        return LibraryDiagnostics.coverage(items, counted)
+    }
+
     /** A franchise or collection switch: the franchise step again, then the guide. */
     fun setFranchiseChoices(choices: FranchiseChoices, enabledBundles: Set<String>) {
         franchiseChoices = choices

@@ -14,6 +14,8 @@ import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
+import com.muellhaus.nostalgex.engine.LibraryDiagnostics
+import com.muellhaus.nostalgex.engine.PlaybackDiagnostics
 import com.muellhaus.nostalgex.engine.CollectionCategory
 import com.muellhaus.nostalgex.engine.Collections
 import com.muellhaus.nostalgex.engine.EnrichmentService
@@ -1349,6 +1351,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
                     markLoaded(scanned.abandoned)
+                    skippedNoRuntime = scanned.skippedNoRuntime
                     if (enrichment != null) {
                         val titles = items.count { it.tmdbID != null }
                         step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
@@ -1403,7 +1406,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** Every library but those switched off, with where the scan has got to (on the main thread) and the server's name. */
     /** What a scan read, and whether some server's scan was abandoned (LibraryScanInterrupted). */
-    private class ScanResult(val items: List<MediaItem>, val abandoned: Boolean)
+    private class ScanResult(val items: List<MediaItem>, val abandoned: Boolean, val skippedNoRuntime: Int = 0)
 
     /** Nothing came back before the scan was abandoned (LibraryLoadStalled). */
     private class LoadStalled(val userInitiated: Boolean) : Exception("library scan abandoned")
@@ -1439,10 +1442,11 @@ class AppModel(private val context: Context) : Playback.Listener {
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
             val hiddenOn = LibrarySection.excludedKeys(includedHiddenSections, servers.first().machineIdentifier)
+            val skipped = java.util.concurrent.atomic.AtomicInteger()
             val (items, abandoned) = watched(foreground, mb.name) { onSection, cancelled ->
-                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, hiddenOn)
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, hiddenOn) { skipped.incrementAndGet() }
             }
-            return ScanResult(items, abandoned)
+            return ScanResult(items, abandoned, skipped.get())
         }
         val library = PlexLibrary(plex)
         val items = ArrayList<MediaItem>()
@@ -1469,7 +1473,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
         }
         if (read == 0) (stalled ?: failed)?.let { throw it }
-        return ScanResult(items, abandoned)
+        return ScanResult(items, abandoned, library.skippedNoRuntime.get())
     }
 
     /**
@@ -1536,6 +1540,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 }
                 val items = scanned.items
                 markLoaded(abandoned = false)
+                skippedNoRuntime = scanned.skippedNoRuntime
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()
                 val collections = readCollections(servers)
@@ -1852,15 +1857,64 @@ class AppModel(private val context: Context) : Playback.Listener {
     override fun onFailed(item: MediaItem, failure: PlaybackFailure) {
         val ch = channel ?: return
         skipJob?.cancel()
+        recordVerdict(failure.diagnosticSummary, item.title, failure.headline)
         if (failureRun.recordFailure(ch.id)) {
             playback.stop()
-            this.failure = PlaybackFailure.ChannelStopped(failure)
+            val stopped = PlaybackFailure.ChannelStopped(failure)
+            recordVerdict(stopped.diagnosticSummary, item.title, stopped.headline)
+            this.failure = stopped
             return
         }
         this.failure = failure
         skipJob = scope.launch {
             delay(5_000)
             if (channel?.id == ch.id) play(lineup?.next(ch, item, fromNaturalEnd = false))
+        }
+    }
+
+    // ── The last playback failure (PlaybackDiagnostics) ─────────────────
+
+    /** The newest verdict, for "Last playback failure" under RESCAN LIBRARY (latestForSettings). */
+    var lastPlaybackFailure by mutableStateOf(prefs.playbackVerdicts.firstOrNull())
+        private set
+
+    override fun onVerdict(outcome: String, title: String, detail: String) = recordVerdict(outcome, title, detail)
+
+    /** A watchdog or end-of-item decision, kept so Settings can say "device" or "server" (PlaybackDiagnostics.record). */
+    private fun recordVerdict(outcome: String, title: String, detail: String) {
+        val stamp = java.text.SimpleDateFormat("MMM d HH:mm", java.util.Locale.US).format(java.util.Date())
+        val line = PlaybackDiagnostics.line(stamp, outcome, title, detail)
+        Log.i(TAG, "WATCHDOG VERDICT: $line")
+        prefs.playbackVerdicts = PlaybackDiagnostics.push(prefs.playbackVerdicts, line)
+        lastPlaybackFailure = line
+    }
+
+    // ── RESCAN LIBRARY's coverage line (LibraryDiagnostics) ─────────────
+
+    /** Movies and episodes the last scan dropped for having no runtime (skippedNoRuntimeCount). */
+    var skippedNoRuntime by mutableIntStateOf(0)
+        private set
+
+    /** Where the library lands with every package on, once counted; null until then. */
+    var libraryCoverage by mutableStateOf<LibraryDiagnostics.Coverage?>(null)
+        private set
+    private var coverageFor: Lineup? = null
+
+    /**
+     * Counts the coverage when SERVERS & ACCOUNTS opens, and again after the lineup changes
+     * (ensureLibraryCoverage). Off the main thread: a package that is off has its channels
+     * filtered here for the first time.
+     */
+    fun ensureLibraryCoverage() {
+        val l = lineup ?: return
+        if (demoMode || coverageFor === l) return
+        coverageFor = l
+        scope.launch {
+            val t0 = SystemClock.elapsedRealtime()
+            val c = withContext(Dispatchers.Default) { l.coverage() }
+            if (lineup !== l) return@launch
+            libraryCoverage = c
+            c?.let { Log.i(TAG, "COVERAGE: ${it.totalOnChannels} of ${it.totalLoaded} on a channel with every package on, ${it.totalOnNoChannel} on none; counted in ${SystemClock.elapsedRealtime() - t0} ms") }
         }
     }
 
