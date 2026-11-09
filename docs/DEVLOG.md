@@ -3,6 +3,41 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: package stripes in the guide, and a way to move along them)
+
+**What.** A coloured stripe down the left edge of the guide, one per package, with the package name written up it. The
+name is sticky: it sits in the part of its package that is on screen, so it stays readable while the viewer scrolls
+through the package's channels. The idea is tango259's, from the contributor proposal; this is our own code.
+
+**Where it fits.** The stripe fills the empty slot at the left of every row, so nothing moves: programs, channel names
+and focus are where they were. (The slot is an accident of the layout: the header is 68 pt wider than the screen, so the
+rows are centred in a frame that wide, which leaves 31.5 pt at the left of each row, 29.5 on the live and the focused row.
+The stripe is 28 pt.) Each row draws its own piece of the stripe, so the colour scrolls with the rows.
+
+**Colour.** One of ten colours that are already channel colours in the app, picked from the package name by a fixed hash,
+so a name is the same colour on every launch and every Apple TV. The name is white or black, whichever reads better: at
+least 4.5 to 1 on every colour. No two neighbouring shipped packages share a colour.
+
+**Moving.** Left from the rows, with the time window at its start, focuses the stripe (a ring around the package's part of
+it). Up and Down jump to the previous and next package, scrolling so its first channel is at the top (without animation
+when Reduce Motion is on). Right goes back to the rows, on the first channel of the package the stripe is on, or on the
+row the viewer left if the stripe has not moved. Select opens the package list (the left rail), and so does Left again.
+Left on the rows used to open that list straight away; it is now two presses, the first to the stripe. The stripe is a
+focus target only after that first Left, so it can never be where first focus, or the return from full screen, lands.
+
+**Decided.** A channel in no package gets a plain grey stripe with no name, which Up and Down step over. FRANCHISES is one
+package, as in the package list. A package whose channels are all filtered out has no rows and so no stripe. A one-row
+package is 81 pt tall, so its name is cut to fit; below 44 pt of it on screen there is no name, only the colour. GUIDE
+TEXT SIZE does not change the stripe: its name is 18 pt in both sizes, because the slot cannot grow. When tvOS brings
+the first channel back into view on Right, it centres it like any focused row.
+
+**Test.** `GuideStripesTests` (32): which package a channel is in, the runs, Up and Down past the ends and over unnamed
+runs, the colour of every shipped package pinned, contrast on all ten colours, neighbours, and the label maths.
+`GuideStripeFocusTests` (UI, 3, demo mode with four demo packages, own harness root): Left to the stripe, Down through
+four packages and back up with each first channel at the top, no wrap at either end, Right back to the rows, Select and
+Left again opening the list. The accessibility tree does not report the stripe as focused, so the test reads where focus
+is from the guide's debug record. Simulator only so far; not seen on a TV.
+
 ## 2026-11-09 (Apple TV: Retro mode loses the white tracking line)
 
 **Why.** Feedback that the white line which ran down the screen in Retro mode is very distracting. It drew the eye away from

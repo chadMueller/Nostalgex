@@ -212,6 +212,28 @@ enum DemoData {
 
     // MARK: - Franchise fixture (test only)
 
+    /// `-uiTestGuideStripes`: demo mode's channels in four demo packages, so the guide's package stripes
+    /// have packages to name and move between: the first six channels, the next six, one channel on its own
+    /// (a package too short for its whole name), and the rest. Never set in a shipping run.
+    static var guideStripesFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestGuideStripes")
+    }
+
+    static func guideStripeBundles(for channels: [Channel]) -> [ChannelBundle] {
+        let ids = channels.map(\.id)
+        let cuts = [0, 6, 12, 13]
+        let names = ["RETRO ACTION", "LATE NIGHT", "TINY", "THE REST OF THE DEMO"]
+        return names.indices.compactMap { i in
+            let from = min(cuts[i], ids.count)
+            let to = i + 1 < cuts.count ? min(cuts[i + 1], ids.count) : ids.count
+            guard from < to else { return nil }
+            return ChannelBundle(
+                id: "demo-stripe-\(i)", name: names[i], description: nil,
+                channelIDs: Array(ids[from..<to]), activeMonths: nil, enabled: true
+            )
+        }
+    }
+
     /// `-uiTestFranchiseFixture`: demo mode plus a small enriched library, so the FOUND IN
     /// YOUR LIBRARY block and a found-franchise channel can be seen on a simulator with no
     /// server and before the shared enrichment table carries the franchise columns.

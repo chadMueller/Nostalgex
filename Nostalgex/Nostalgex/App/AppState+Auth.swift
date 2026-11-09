@@ -540,6 +540,12 @@ extension AppState {
         allChannels = demoChannels
         channels = demoChannels
         allItems = demoChannels.flatMap { $0.itemPool }
+        // `-uiTestGuideStripes` only: the demo channels in demo packages, for the guide's package stripes.
+        if DemoData.guideStripesFixtureRequested {
+            bundles = DemoData.guideStripeBundles(for: demoChannels)
+            enabledBundleIDs = Set(bundles.map(\.id))
+            applyBundleFilter()
+        }
 
         // The test-only start channel (-uiTestStartOnChannel) wins, then `channelToOpenFirst`
         // (the remembered channel when OPEN ON LAST CHANNEL applies, else the first channel).

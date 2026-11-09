@@ -30,6 +30,31 @@ struct ChannelGuideView: View {
     private static let wrapBottomSentinelID = -902
     @State private var seasonalPromptShown = false
 
+    // MARK: Package stripe (GuideStripes)
+
+    /// The stripe at the left edge, and the two one-point sentinels above and below it that tell the guide
+    /// Up or Down was pressed on the stripe (the engine decides, as with the wrap sentinel). All three are
+    /// focus targets only while the viewer is in the stripe (`stripeMode`), so the stripe can never be
+    /// where first focus, or tvOS's hand-back after full screen, lands.
+    private static let stripeFocusID = -903
+    private static let stripeUpSentinelID = -904
+    private static let stripeDownSentinelID = -905
+    @State private var stripeMode = false
+    /// The run the stripe is on: the package of the row Left was pressed on, then wherever Up and Down took it.
+    @State private var stripeGroupIndex: Int?
+    /// Whether Up or Down has moved the stripe since it took focus. If not, Right goes back to the row the
+    /// viewer left; if so, to the first channel of the package the stripe is on.
+    @State private var stripeJumped = false
+    @State private var stripeReturnRow: Int?
+    /// From Left until the stripe has focus: the stripe has only just become a focus target, so focus is
+    /// asked for a few times, and a focus that is nowhere for the moment does not count as leaving it.
+    @State private var stripeEntering = false
+    /// When the viewer last left the stripe. The Right press that leaves it can reach the guide's Right
+    /// handler after the engine has already moved focus; that press is not a step through time.
+    @State private var stripeLeftAt = Date.distantPast
+    @State private var scrollMetrics = GuideScrollMetrics()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// The row the guide draws highlighted: the row that has focus, except while the guide is coming back
     /// (full screen closed, or the guide first appearing), when it is the live channel's row from the
     /// first frame. tvOS hands focus to the row it remembers first, and the guide moves it a moment
@@ -58,6 +83,9 @@ struct ChannelGuideView: View {
             let visibleStart = windowStart.addingTimeInterval(TimeInterval(slotOffset * 1800))
             let visibleLabels = timeSlotLabels(from: visibleStart)
             let highlighted = highlightedID
+            let stripeGroups = self.stripeGroups
+            let stripeCells = GuideStripes.rowCells(groups: stripeGroups, count: appState.channels.count)
+            let stripeLeading: CGFloat = appState.seasonalBundleOnOffer != nil ? rowHeight : 0
 
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
@@ -121,7 +149,8 @@ struct ChannelGuideView: View {
                                             channelColumnWidth: channelColumnWidth,
                                             programsWidth: programsWidth,
                                             visibleWindowStart: visibleStart,
-                                            rowHeight: rowHeight
+                                            rowHeight: rowHeight,
+                                            stripe: stripeCells.indices.contains(index) ? stripeCells[index] : nil
                                         )
                                     }
                                     .buttonStyle(NoHighlightButtonStyle())
@@ -146,16 +175,54 @@ struct ChannelGuideView: View {
                                 wrapSentinel(Self.wrapBottomSentinelID)
                             }
                         }
+                        .overlay(alignment: .topLeading) {
+                            ZStack(alignment: .topLeading) {
+                                GuideStripeOverlay(
+                                    groups: stripeGroups, rowPitch: rowHeight + 1, leading: stripeLeading,
+                                    metrics: scrollMetrics,
+                                    focusedGroup: focusedChannelID == Self.stripeFocusID ? stripeGroupIndex : nil
+                                )
+                                stripeColumn
+                            }
+                        }
+                        .onScrollGeometryChange(for: GuideScrollSnapshot.self) {
+                            GuideScrollSnapshot(offset: $0.contentOffset.y, viewport: $0.containerSize.height)
+                        } action: { old, new in
+                            scrollMetrics.offset = new.offset
+                            scrollMetrics.viewport = new.viewport
+                            GuideJumpProbe.shared.scrollOffsetChanged(from: Double(old.offset), to: Double(new.offset))
+                        }
                         #if DEBUG
                         .onChange(of: highlightedID) { oldID, newID in
                             GuideJumpProbe.shared.shownChanged(from: oldID, to: newID)
                         }
-                        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
-                            GuideJumpProbe.shared.scrollOffsetChanged(from: Double(old), to: Double(new))
-                        }
                         #endif
+                        .onChange(of: stripeMode) { _, on in
+                            // The stripe is a focus target only now, so ask for focus only now.
+                            if on { requestStripeFocus() } else { stripeLeftAt = Date() }
+                        }
                         .onChange(of: focusedChannelID) { oldID, newID in
                             GuideJumpProbe.shared.rawFocusChanged(from: oldID, to: newID)
+                            // The package stripe and its sentinels are not channels: no scroll to them, no
+                            // preview for them, and none of the return-from-full-screen logic below.
+                            if newID == Self.stripeFocusID { stripeEntering = false; return }
+                            if newID == Self.stripeUpSentinelID || newID == Self.stripeDownSentinelID {
+                                jumpPackage(newID == Self.stripeUpSentinelID ? -1 : 1, proxy)
+                                // Back onto the stripe, which is where the viewer is.
+                                focusedChannelID = Self.stripeFocusID
+                                return
+                            }
+                            if stripeMode, !stripeEntering, oldID == Self.stripeFocusID,
+                               let landed = newID, appState.channels.contains(where: { $0.id == landed }) {
+                                // The engine moved focus off the stripe onto a row: Right. Back to the rows the
+                                // way the stripe means it, not wherever the engine put it.
+                                returnFromStripe(landedOn: landed)
+                                return
+                            }
+                            if stripeMode, !stripeEntering, newID == nil || appState.channels.contains(where: { $0.id == newID }) {
+                                // Focus left the stripe for the rows (or anywhere): the viewer is out of it.
+                                stripeMode = false
+                            }
                             // Back from full screen: focus arrives from none, on the row tvOS
                             // remembers. If the channel was changed in full screen that row is
                             // the old one; move focus to the live channel, once (I-041).
@@ -222,6 +289,7 @@ struct ChannelGuideView: View {
                             onFocusChanged?(newID)
                         }
                         .onChange(of: appState.isFullScreen) { _, isFullScreen in
+                            stripeMode = false
                             if !isFullScreen {
                                 GuideJumpProbe.shared.begin("fullScreenClosed", live: appState.currentChannel?.id,
                                                             shown: highlightedID, raw: focusedChannelID)
@@ -286,15 +354,24 @@ struct ChannelGuideView: View {
             .onMoveCommand { direction in
                 switch direction {
                 case .left:
-                    if slotOffset > 0 {
+                    if focusedChannelID == Self.stripeFocusID {
+                        // Left again, from the stripe: the package list, the way Left always reached it.
+                        openPackageList()
+                    } else if slotOffset > 0 {
                         slotOffset -= 1
                     } else if !showBundleSidebar {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showBundleSidebar = true
+                        if canEnterStripe {
+                            enterStripe()
+                        } else {
+                            openPackageList()
                         }
                     }
                 case .right:
-                    if showBundleSidebar {
+                    if stripeMode {
+                        returnFromStripe()
+                    } else if Date().timeIntervalSince(stripeLeftAt) < 0.5 {
+                        // The press that just left the stripe: already acted on.
+                    } else if showBundleSidebar {
                         withAnimation(.easeIn(duration: 0.15)) {
                             showBundleSidebar = false
                         }
@@ -390,13 +467,170 @@ struct ChannelGuideView: View {
     }
 
     /// Scrolls the row to the centre with no animation at all, whatever transaction is running.
-    private func scrollWithoutAnimation(_ proxy: ScrollViewProxy, to id: Int) {
+    private func scrollWithoutAnimation(_ proxy: ScrollViewProxy, to id: Int, anchor: UnitPoint = .center) {
         GuideJumpProbe.shared.note("scrollTo \(id) (no animation)")
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            proxy.scrollTo(id, anchor: .center)
+            proxy.scrollTo(id, anchor: anchor)
         }
+    }
+
+    // MARK: - Package stripe
+
+    /// The runs of the guide's rows that make the stripe, from the lineup on screen.
+    private var stripeGroups: [GuideStripeGroup] {
+        let membership = GuideStripes.membership(
+            bundles: appState.bundles,
+            enabledBundleIDs: appState.enabledBundleIDs,
+            foundFranchiseChannelIDs: appState.foundFranchiseChannelIDs,
+            franchisesBundleID: AppState.franchisesBundleID,
+            franchiseCollectionsBundleID: CollectionCategory.franchises.bundleID
+        )
+        return GuideStripes.groups(channels: appState.channels, membership: membership)
+    }
+
+    /// Left from the rows goes to the stripe when the focus is on a row (or the seasonal invite) and there
+    /// is a package to move between.
+    private var canEnterStripe: Bool {
+        guard GuideStripes.hasPackages(stripeGroups), let id = focusedChannelID else { return false }
+        return id == Self.seasonalRowID || appState.channels.contains { $0.id == id }
+    }
+
+    /// Takes focus to the stripe, on the package of the row the viewer was on.
+    private func enterStripe() {
+        let groups = stripeGroups
+        let row = focusedChannelID.flatMap { id in appState.channels.firstIndex { $0.id == id } }
+        stripeReturnRow = focusedChannelID
+        stripeJumped = false
+        stripeGroupIndex = row.flatMap { GuideStripes.groupIndex(containingRow: $0, in: groups) }
+            ?? groups.firstIndex { $0.package != nil }
+        // The stripe becomes a focus target now; `onChange(of: stripeMode)` asks for focus once it is.
+        stripeEntering = true
+        stripeMode = true
+    }
+
+    /// Asks for focus on the stripe, again every 80 ms (at most fifteen times, 1.2 s) until the engine has given
+    /// it: a focus request made in the same moment the stripe becomes a focus target can be dropped, and a
+    /// busy main thread can take a while to get to it. If it never lands, the viewer is put back on the row
+    /// they were on.
+    private func requestStripeFocus(attempt: Int = 0) {
+        guard stripeMode, stripeEntering else { return }
+        focusedChannelID = Self.stripeFocusID
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            guard stripeMode, stripeEntering else { return }
+            if focusedChannelID == Self.stripeFocusID {
+                stripeEntering = false
+            } else if attempt < 14 {
+                requestStripeFocus(attempt: attempt + 1)
+            } else {
+                stripeEntering = false
+                stripeMode = false
+                if let row = stripeReturnRow { focusedChannelID = row }
+            }
+        }
+    }
+
+    /// Up or Down on the stripe: the guide scrolls so that the previous or next package's first channel is at
+    /// the top. Focus stays on the stripe. Past the first or last package nothing moves.
+    private func jumpPackage(_ step: Int, _ proxy: ScrollViewProxy) {
+        let groups = stripeGroups
+        guard let current = stripeGroupIndex,
+              let next = GuideStripes.neighbourIndex(from: current, step: step, in: groups),
+              appState.channels.indices.contains(groups[next].firstRow) else { return }
+        stripeGroupIndex = next
+        stripeJumped = true
+        // The first package goes to the very top, seasonal invite and all.
+        let target: Int
+        if groups[next].firstRow == 0, appState.seasonalBundleOnOffer != nil {
+            target = Self.seasonalRowID
+        } else {
+            target = appState.channels[groups[next].firstRow].id
+        }
+        if reduceMotion {
+            scrollWithoutAnimation(proxy, to: target, anchor: .top)
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(target, anchor: .top)
+            }
+        }
+    }
+
+    /// Right on the stripe: back to the rows, on the row the viewer left, or on the first channel of the
+    /// package the stripe has been moved to. The list stays where the jump put it.
+    private func returnFromStripe(landedOn landed: Int? = nil) {
+        let groups = stripeGroups
+        var target = stripeReturnRow
+        if stripeJumped, let index = stripeGroupIndex, groups.indices.contains(index),
+           appState.channels.indices.contains(groups[index].firstRow) {
+            target = appState.channels[groups[index].firstRow].id
+        }
+        if target == nil || !(appState.channels.contains { $0.id == target }) {
+            target = appState.currentChannel?.id ?? appState.channels.first?.id
+        }
+        guard let target else { stripeMode = false; return }
+        suppressFocusScroll = true
+        if landed == target {
+            // Focus is already on the row: the stripe can stop being a focus target.
+            stripeMode = false
+        } else {
+            // Move focus to the row first. The stripe stays a focus target until focus has left it (the
+            // focus handler ends the mode once it is on a row): switching it off while it still has focus
+            // can leave focus nowhere.
+            focusedChannelID = target
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { suppressFocusScroll = false }
+    }
+
+    /// Select on the stripe, and Left again from it: the package list (the left jump rail).
+    private func openPackageList() {
+        stripeMode = false
+        if !showBundleSidebar {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showBundleSidebar = true
+            }
+        }
+    }
+
+    /// The stripe's focus target, between its two sentinels, over the left edge of the rows. A button, so Select
+    /// opens the package list; disabled, so it is not a focus target at all, until the viewer pressed Left.
+    @ViewBuilder
+    private var stripeColumn: some View {
+        VStack(spacing: 0) {
+            stripeSentinel(Self.stripeUpSentinelID)
+            Button {
+                openPackageList()
+            } label: {
+                Color.white.opacity(0.001)
+                    .frame(width: GuideStripes.stripeWidth)
+                    .frame(maxHeight: .infinity)
+            }
+            .buttonStyle(NoHighlightButtonStyle())
+            .focused($focusedChannelID, equals: Self.stripeFocusID)
+            .disabled(!stripeMode)
+            .accessibilityIdentifier("guideStripe")
+            .accessibilityLabel(stripeAccessibilityLabel)
+            .accessibilityHint("Up and Down change package. Select opens the package list. Right returns to the channels.")
+            .accessibilityHidden(!stripeMode)
+            stripeSentinel(Self.stripeDownSentinelID)
+        }
+        .frame(width: GuideStripes.stripeWidth)
+    }
+
+    private func stripeSentinel(_ id: Int) -> some View {
+        Color.white.opacity(0.001)
+            .frame(width: GuideStripes.stripeWidth, height: 1)
+            .focusable(stripeMode)
+            .focused($focusedChannelID, equals: id)
+            .accessibilityHidden(true)
+    }
+
+    private var stripeAccessibilityLabel: String {
+        let groups = stripeGroups
+        guard let index = stripeGroupIndex, groups.indices.contains(index), let name = groups[index].name else {
+            return "Package stripe"
+        }
+        return "Package \(name)"
     }
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
@@ -503,6 +737,8 @@ private struct EPGRow: View {
     let programsWidth: CGFloat
     let visibleWindowStart: Date
     let rowHeight: CGFloat
+    /// This row's piece of the package stripe, in the slot at the row's left edge.
+    var stripe: GuideStripes.RowCell? = nil
 
     // 2-hour visible window
     private let visibleDuration: TimeInterval = 7200
@@ -557,6 +793,13 @@ private struct EPGRow: View {
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .frame(height: 1)
+        }
+        // The package stripe. The row's content is centred in a frame wider than the screen, which leaves a
+        // slot at the left (31.5 pt, 29.5 on the live and focused row); the stripe fills it, so nothing moves.
+        .overlay(alignment: .topLeading) {
+            if let stripe {
+                GuideStripeCell(cell: stripe, height: rowHeight + 1, background: Color(red: 0.05, green: 0.05, blue: 0.12))
+            }
         }
     }
 
@@ -866,7 +1109,9 @@ private extension ChannelGuideView {
         case .letSystemHandle:
             return nil
         case .jumpToLiveChannel(let id):
-            return { focusedChannelID = id }
+            // Menu from the stripe goes back to the playing channel like it does from any row: out of the
+            // stripe first, so the move is an ordinary one.
+            return { stripeMode = false; focusedChannelID = id }
         }
     }
 
