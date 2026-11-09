@@ -72,6 +72,100 @@ read from its path) and skips until then.
 **Open.** Whether the default is off is Chad's call (one constant). Held on its own branch (`appletv/jellyfin-include-hidden`).
 Not run against a Jellyfin from the Apple TV side.
 
+## 2026-11-08 (Web tuner and Docker: an opt-in switch for libraries a Jellyfin user hides; Open on last channel; 1.0.15 prepared)
+
+**Shipped.** Nothing yet. Branch `web/jellyfin-hidden-libraries` off main `b2c6f404`, `tunerVersion` 1.0.15. Not tagged, not pushed.
+Since `tuner-v1.0.14` main changed nothing the tuner, the engine or the image reads (the 1.0.30 changelog entry, a QA
+script, the tvOS release script, this log, Roku and Apple TV work), so 1.0.15 is 1.0.14 plus the two items below.
+
+**Why (hidden libraries).** A report said that libraries a Jellyfin user hides from the home screen are never scanned.
+`GET /UserViews` has an `includeHidden` parameter that defaults to false, and with it false `UserViewManager.GetUserViews` drops every library in
+the user's `Configuration.MyMediaExcludes`, the "Display on home screen" box in Jellyfin's Home settings. The scan reads
+only the libraries the list names. The same code is in 10.11.11, 12.0, 12.2 and 12.4 (read from the release tags).
+**Why a switch, off by default.** Hiding a library can be on purpose (adult, kids-unsafe, test or plugin folders), and the
+web tuner and Docker have no per-library picker to switch a newly visible library off, so the first version of this branch,
+which always asked, was reworked: the viewer turns it on. The Apple TV has a picker and can ask without a switch.
+
+**Changed.**
+- Settings > General > Playback has "Include libraries hidden on Jellyfin", under "Open on last channel": Jellyfin only (the
+  row is hidden on Plex and Emby), per browser, off unless turned on, with one line under it. Off, Jellyfin's library list
+  is `/UserViews?userId=<id>`, byte for byte what it was. On, it is `/UserViews?userId=<id>&includeHidden=true`. Pressing it
+  saves the choice, drops the saved library and reads the library again once, in the background: the guide stays up, the
+  channel that is playing keeps playing (a foreground read ends by tuning the first channel) and Settings stays open. Pressing
+  it while that read runs does nothing.
+  `INCLUDE_HIDDEN_DEFAULT` in `scripts/nostalgex-jellyfin-urls.js` (point 13) is the one place the default lives; a saved
+  '1' or '0' always wins over it. No scan revision is bumped: with the default off nobody needs a forced re-read.
+- The shared case is a `views` list in `scripts/jellyfin-library-golden.json`: one case per position of the switch
+  (backend, user id, `includeHidden`, path). Emby has no such parameter and its path is the same in both.
+- The Roku port is untouched. Off, the web loader's request is what it was, so the Roku `mediabrowser.json` vectors
+  generated from this branch are byte-identical to the base's. `jellyfin-library-golden.json` in the Roku vectors is a copy
+  of the shared file and did change (the `_about` note and the new `views` key); the Roku reads only `sections` and `types`
+  from it.
+- Emby is left alone in both positions: `/Users/{id}/Views` has no such parameter in Emby's API reference, and on 4.10.1.0
+  a user with libraries in MyMediaExcludes still got every library they may open.
+- `.cfg-row[hidden] { display: none; }`: the new row is hidden with the attribute, and `.cfg-row { display: flex }` beat it,
+  so the row would have shown on Emby and Plex. Found by the browser smoke.
+- Open on last channel (Trello I-017): a switch in Settings > General > Playback, off unless turned on, with the Apple TV's
+  line under it ("Start on the channel you were last watching"). The tuner always tuned the first enabled channel after a
+  load. The channel is now remembered, with its id and name, whenever the viewer tunes one (a pick in the guide, channel up or
+  down, a number key) on a real server, in browser storage (per browser or container client), and opened when the switch is on
+  and an enabled channel has both. Tunes the page makes itself are not remembered (the first channel after a load, the
+  fallback when a package is switched off), so a saved channel that is not in the lineup yet (its package off, a collection
+  channel not built) is not overwritten by the first channel. The saved channel is cleared on sign-out, as the Apple TV
+  clears it on disconnect. Renamed, renumbered, dropped, package off, nothing kept or a damaged value falls back to the first
+  enabled channel. The choice is `scripts/nostalgex-last-channel.js`. The Apple TV builds the same setting first; the web row's title and
+  line match the Apple TV's ("Open on last channel", "Start on the channel you were last watching"). Only the place differs: the
+  Apple TV puts the row after AUDIO LANGUAGE, the web puts it first in Playback.
+  `web-tune-ownership-smoke` lifts `switchChannel` into a sandbox and needed a stub for the new call.
+
+**Measured.** A lab Jellyfin 10.11.11 in a Linux container (Colima), media of generated clips: a user who hides two
+libraries (Hidden Films, Hidden TV) from My Media and has no access to a third (Private Films), through the Home settings
+field `MyMediaExcludes` written by API (the web client's own page was not driven). The first three bullets were measured with
+the first version of the branch (it always asked) and show the two positions; the switch itself was then driven on the real page (see Tests).
+- `GET /UserViews` as the tuner always sent it: 3 libraries. With `includeHidden=true`: 5. Private Films in neither. An admin:
+  6 both ways. The user asking Private Films for items directly: HTTP 401. Asking Hidden Films directly: HTTP 200, 4 rows.
+- The tuner's real loader (lifted out of `plex-tuner.html`) read 10 titles without and 17 with (4 hidden films, 3 hidden
+  episodes), 0 from Private Films. The real page, headless, signed in as that user: library 10 titles and VHS VAULT 6
+  without, 17 and 10 with, no page errors.
+- A playlist the user owns still stays out (6 views listed with the parameter, 17 titles).
+- Emby 4.10.1.0 in a container: with `MyMediaExcludes` set through the API, `/Users/{id}/Views` listed all three libraries
+  the user may open with and without `IncludeHidden=true`; the library without access was not listed.
+
+**Review fixes (after the reviewer's pass).** No reporter's library sizes are quoted anywhere in the repo. Pressing the switch now reads in the background, so a viewer on a channel other than the first is
+not retuned to channel 1 and Settings stays open (`include-hidden-browser-smoke` toggles from a non-first channel and fails
+against the earlier foreground read). Only tunes the viewer makes are remembered, a saved channel that is not in the lineup
+yet is not overwritten by the first channel, sign-out clears it (`open-last-channel-browser-smoke`, which fails against the
+earlier page on all of these). The row says the Apple TV's one line.
+
+**Tests.** On the head (five commits on `b2c6f404`):
+- `npm test` exits 0, leak guard clean (urls smoke 96, library smoke 48, last-channel 14, tuner version 59, readme and changelog checks).
+- `npm run build` and `npm run build:selfhost` pass, and so do `test:tuner-version:builds` and `test:tuner-isolation:builds`.
+  `dist-selfhost` carries the new script, the row and `INCLUDE_HIDDEN_DEFAULT = false`; the image has no copy of its own.
+- Browser smokes, headless, 22 in all: 20 pass. `empty-lineup` (2 checks) and `watershed` (the "Apple TV default is off"
+  source check) fail the same way on origin/main's tree, so they are not from this branch. New: `include-hidden` 40 checks
+  (the old page fails 23 of them, the earlier foreground read 6) and `open-last-channel` 41 checks (the old page fails 18, the
+  earlier version of this page 6).
+- The Roku suite was not rerun: `roku/` is untouched, and the Roku `mediabrowser.json` vectors from this branch are
+  byte-identical to the base's. `jellyfin-library-golden.json` in the Roku vectors did change (the `_about` note and the `views`
+  key) and the Roku reads only `sections` and `types` from it; an earlier run with the `views` key present passed (66 parts,
+  5,988 cases).
+- The switch pressed with a mouse on the real page (hosted pages and the Docker build's `dist-selfhost`, both at 960x540)
+  against the lab Jellyfin, as the restricted user, with the first version of the switch (a foreground read): never chosen 10
+  titles, VHS VAULT 6, request `/UserViews?userId=<id>`; pressed on 17 titles (4 hidden films, 3 hidden episodes, 0 from the
+  library without access), VHS VAULT 10, one request with `includeHidden=true`; pressed again 10 and 6. An admin: 20 in every
+  position. Docker pages read `WEB TUNER 1.0.15 · DOCKER`. The background read was driven against the stub, not the lab
+  server. The image itself was not built.
+
+**Not verified.** Nothing was run on an Apple TV, a Roku or an Android TV. Whether Emby's own Home settings page writes the
+same ids I wrote through the API is not known. A Jellyfin user whose hidden library was grouped ("merge libraries") is read
+through the combined view the server builds, unchanged. No Jellyfin 12.x server was run; 12.x was read from source.
+
+**Next.** Apple TV (`JellyfinAPIService.loadSections` also feeds the library picker, and `scanFieldsVersion` goes to 3;
+the Apple TV can ask without a switch because of the picker), Roku (a setting, the request, the golden `views` and a scan
+test; a stick run) and Android take their own change; queue items are in the internal notes. If the default is ever flipped
+to on, change `INCLUDE_HIDDEN_DEFAULT` and decide on a `LIBRARY_SCAN_REVISION` bump so saved Jellyfin libraries are read
+again. STOP WAITING during a slow scan (web parity) and Docker-held settings (I-080) are not small and are not in this release.
+
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
 **Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail

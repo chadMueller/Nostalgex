@@ -3,7 +3,8 @@
     "Shared vectors for which Jellyfin and Emby library views a scan reads, and what it asks them for. The contract is the web tuner's NostalgexJellyfinUrls.sectionType, .itemTypes and .hasAskedType (scripts/nostalgex-jellyfin-urls.js, point 12); the Apple TV's JellyfinAPIService.sectionType and .itemTypes, the Roku's NxMbItemTypesFor and the Android MediaBrowserLibrary.sectionType are to match it.",
     "Read by scripts/nostalgex-jellyfin-urls-smoke.mjs (npm run test:jellyfin-urls).",
     "`sections`: a view's CollectionType (null, or missing, is mixed content) gives a sectionType and the IncludeItemTypes to ask for. sectionType 'other' is a view with no videos in it: the scan never asks it for items, because Jellyfin's PlaylistsFolder answers any request with its playlists, whatever IncludeItemTypes says.",
-    "`types`: a row the server sent, the types that were asked for, and whether the scan keeps the row. A row with no Type is kept."
+    "`types`: a row the server sent, the types that were asked for, and whether the scan keeps the row. A row with no Type is kept.",
+    "`views`: the request that lists a user's libraries, by backend, user id and the position of the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (`includeHidden`: false is the default, off unless the viewer turns it on). `path` is what follows the server address, query string included, with the user id percent-encoded. Switch off, Jellyfin's request is the one it always was. Switch on, Jellyfin adds includeHidden=true: /UserViews leaves out a library the user hides from the home screen (Configuration.MyMediaExcludes) unless asked, and a library that is left out is never scanned. includeHidden only lifts that hiding; a library the user has no access to is still not in the answer. Emby has no such parameter, so its path is the same in both positions (on Emby 4.10.1.0 a user with libraries in MyMediaExcludes still got every library they may open)."
   ],
   "sections": [
     { "collectionType": "movies", "sectionType": "movie", "itemTypes": "Movie" },
@@ -26,6 +27,17 @@
     { "collectionType": "folders", "sectionType": "other", "itemTypes": null },
     { "collectionType": "channels", "sectionType": "other", "itemTypes": null },
     { "collectionType": "Playlists", "sectionType": "other", "itemTypes": null }
+  ],
+  "views": [
+    { "backend": "jellyfin", "userId": "0123456789abcdef0123456789abcdef", "includeHidden": false, "path": "/UserViews?userId=0123456789abcdef0123456789abcdef" },
+    { "backend": "jellyfin", "userId": "0123456789abcdef0123456789abcdef", "includeHidden": true, "path": "/UserViews?userId=0123456789abcdef0123456789abcdef&includeHidden=true" },
+    { "backend": "jellyfin", "userId": "user 1", "includeHidden": false, "path": "/UserViews?userId=user%201" },
+    { "backend": "jellyfin", "userId": "user 1", "includeHidden": true, "path": "/UserViews?userId=user%201&includeHidden=true" },
+    { "backend": "jellyfin", "userId": "", "includeHidden": false, "path": "/UserViews?userId=" },
+    { "backend": "jellyfin", "userId": "", "includeHidden": true, "path": "/UserViews?userId=&includeHidden=true" },
+    { "backend": "emby", "userId": "0123456789abcdef0123456789abcdef", "includeHidden": false, "path": "/Users/0123456789abcdef0123456789abcdef/Views" },
+    { "backend": "emby", "userId": "0123456789abcdef0123456789abcdef", "includeHidden": true, "path": "/Users/0123456789abcdef0123456789abcdef/Views" },
+    { "backend": "emby", "userId": "a/b?c", "includeHidden": false, "path": "/Users/a%2Fb%3Fc/Views" }
   ],
   "types": [
     { "item": { "Type": "Movie" }, "asked": "Movie", "kept": true },

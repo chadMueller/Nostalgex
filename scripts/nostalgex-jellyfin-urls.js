@@ -99,6 +99,34 @@
 //    A row with no Type is kept. A view with no CollectionType (mixed content) is a film view.
 //    scripts/jellyfin-library-golden.json pins both functions, for the other apps to port.
 //
+// HIDDEN LIBRARIES. The Apple TV's JellyfinAPIService.loadSections, the Roku's NxMbViewsPath and the Android
+// MediaBrowserLibrary.userViewsPath are to match it (each with its own switch, or without one on a surface that
+// has a library picker).
+//
+// 13. A Jellyfin user can switch a library off for the home screen (web client, Settings > Home,
+//    "Display on home screen" unchecked; stored as Configuration.MyMediaExcludes). GET /UserViews
+//    takes `includeHidden`, default false, and with it false the answer leaves those libraries out
+//    (UserViewManager.GetUserViews: `if (!query.IncludeHidden) list = list.Where(i => !MyMediaExcludes
+//    .Contains(i.Id))`, the same in 10.11.11, 12.0, 12.2 and 12.4, read from the release tags). The
+//    scan only reads the libraries it is told about, so a hidden library's titles never reached a
+//    channel (a report found it).
+//    Hiding a library can be on purpose (adult, kids-unsafe, test or plugin folders), and the web
+//    tuner has no per-library picker to switch a newly visible one off again, so asking for hidden
+//    libraries is a switch, OFF by default: INCLUDE_HIDDEN_DEFAULT below is the one place the
+//    default lives, and includeHiddenLibraries() reads the viewer's own choice from storage. Off,
+//    Jellyfin's list is the request it always was, /UserViews?userId=<id>, byte for byte. On, it is
+//    /UserViews?userId=<id>&includeHidden=true. The parameter lifts the hiding and nothing else: the
+//    list is built from the libraries the user may open, and a library the user has no access to is
+//    not in it either way (the server answers HTTP 401 if it is asked for its items directly).
+//    Measured 2026-11-08 on Jellyfin 10.11.11: a user who hides Hidden Films and Hidden TV and has
+//    no access to Private Films got 3 libraries without the parameter and 5 with it (Private Films
+//    in neither); the scan read 10 titles without and 17 with (4 films, 3 episodes), 0 from Private
+//    Films; an admin's answer is the same either way. Emby is left alone, switch or no switch: its
+//    list, /Users/{id}/Views, has no includeHidden in the API reference (dev.emby.media), and on
+//    Emby 4.10.1.0 a user with MyMediaExcludes set still got every library they may open, with or
+//    without IncludeHidden=true (measured, the setting written through the API). Pinned by
+//    scripts/jellyfin-library-golden.json `views`, one case per position of the switch.
+//
 // Same on both, so shared: the MediaBrowser Authorization header (Emby 4.10 accepts it on every
 // call the tuner makes), AuthenticateByName with { Username, Pw }, /Items, PlaybackInfo, the
 // static stream, subtitle VTT, /Users/{id}/... watch state, and DELETE /Videos/ActiveEncodings,
@@ -111,7 +139,9 @@
 //   JU.staticStreamUrl({ serverUrl, itemId, mediaSourceId, container, token, audioStreamIndex });
 //   JU.withApiKey(url, token);
 //   JU.fallbackHlsUrl({ serverUrl, itemId, mediaSourceId, token, deviceId, playSessionId });
-//   JU.userViewsPath(backend, userId);
+//   JU.userViewsPath(backend, userId[, includeHidden]);   // Jellyfin adds &includeHidden=true when it is true (see 13)
+//   JU.includeHiddenLibraries([storage]);   // the viewer's switch: true or false, INCLUDE_HIDDEN_DEFAULT when never set
+//   JU.INCLUDE_HIDDEN_DEFAULT; JU.INCLUDE_HIDDEN_KEY;
 //   JU.serverStreamOnlyFields(backend, serverStreamOnly);
 //   JU.serverKindFromPublicInfo(json);
 //   await JU.quickConnectInitiate(serverUrl, headers[, fetchImpl]);   // the Response
@@ -188,10 +218,31 @@
     return backend === 'jellyfin' || backend === 'emby';
   }
 
-  // Where a user's libraries are listed (see 4 above).
-  function userViewsPath(backend, userId) {
+  // Whether a scan asks Jellyfin for the libraries a user hides from the home screen when the
+  // viewer has never chosen (see 13). The ONE place the default lives: flip it here to change it.
+  const INCLUDE_HIDDEN_DEFAULT = false;
+  // Where the viewer's own choice is kept, in the browser: '1' on, '0' off, no value is the default.
+  const INCLUDE_HIDDEN_KEY = 'nostalgex_include_hidden_libraries';
+
+  // The viewer's choice. `storage` is for a test; the page's own localStorage is used otherwise.
+  // Anything but '1' or '0', no storage, or a storage that throws, is INCLUDE_HIDDEN_DEFAULT.
+  function includeHiddenLibraries(storage) {
+    let raw = null;
+    try {
+      const s = storage !== undefined ? storage : (typeof window !== 'undefined' ? window.localStorage : null);
+      raw = s ? s.getItem(INCLUDE_HIDDEN_KEY) : null;
+    } catch (e) { raw = null; }
+    if (raw === '1') return true;
+    if (raw === '0') return false;
+    return INCLUDE_HIDDEN_DEFAULT;
+  }
+
+  // Where a user's libraries are listed (see 4 above). Jellyfin adds includeHidden=true only when
+  // asked to (see 13); without it the path is what it always was. Emby never gets it.
+  function userViewsPath(backend, userId, includeHidden) {
     const id = encodeURIComponent(userId || '');
-    return backend === 'emby' ? `/Users/${id}/Views` : `/UserViews?userId=${id}`;
+    if (backend === 'emby') return `/Users/${id}/Views`;
+    return `/UserViews?userId=${id}${includeHidden === true ? '&includeHidden=true' : ''}`;
   }
 
   // Extra PlaybackInfo body fields for the retry after a failed direct play (see 5 above).
@@ -289,7 +340,8 @@
 
   const api = {
     isMp4Family, staticStreamUrl, withApiKey, newPlaySessionId, fallbackHlsUrl,
-    isMediaBrowser, userViewsPath, serverStreamOnlyFields, serverKindFromPublicInfo,
+    isMediaBrowser, userViewsPath, includeHiddenLibraries, INCLUDE_HIDDEN_DEFAULT, INCLUDE_HIDDEN_KEY,
+    serverStreamOnlyFields, serverKindFromPublicInfo,
     quickConnectInitiateRetriesWithGet, quickConnectInitiate,
     subtitleProfiles, isTextSubtitle, forcedSubtitleToBurn, NO_SUBTITLE_STREAM,
     embyDoviProfile,

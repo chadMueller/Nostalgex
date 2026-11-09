@@ -39,6 +39,18 @@ What is different from Jellyfin, mirroring `Nostalgex/Nostalgex/Services/EmbyAPI
 
 ---
 
+## Include libraries hidden on Jellyfin
+
+Settings > GENERAL > PLAYBACK, under OPEN ON LAST CHANNEL, **Jellyfin only** (the row is hidden on Plex and Emby). Off unless switched on, per browser. A real button, so it works in a TV browser with no keys. Code: `scripts/nostalgex-jellyfin-urls.js` (point 13: `INCLUDE_HIDDEN_DEFAULT`, `includeHiddenLibraries`, `userViewsPath`), wired in `plex-tuner.html` (`toggleIncludeHiddenLibraries`), pinned by `scripts/jellyfin-library-golden.json` `views`.
+
+- A Jellyfin user can hide a library from the home screen ("Display on home screen" unchecked in Jellyfin's Home settings, stored as `MyMediaExcludes`). `GET /UserViews` leaves those libraries out unless it is asked with `includeHidden=true`, so a scan never reads them. Hiding is often on purpose (adult, kids-unsafe, test or plugin folders), and the web tuner and Docker have no per-library picker to switch a newly visible library off, so the default is OFF.
+- Off, the request is `/UserViews?userId=<id>`, what it always was. On, it is `/UserViews?userId=<id>&includeHidden=true`. A library the user has no access to is not in the answer either way. Emby's list (`/Users/{id}/Views`) is unchanged in both positions.
+- **The default is one line.** `INCLUDE_HIDDEN_DEFAULT` in `scripts/nostalgex-jellyfin-urls.js` (`const INCLUDE_HIDDEN_DEFAULT = false;`). A viewer's own choice ('1' on, '0' off) is kept under `nostalgex_include_hidden_libraries` and always wins over it.
+- Pressing the button saves the choice, drops the saved library and reads the library again once, in the background: the guide stays up, the channel playing keeps playing and Settings stays open. A press while that read runs does nothing.
+- Tests: `npm run test:jellyfin-urls`, `npm run test:jellyfin-library`, `npm run test:include-hidden:browser`.
+
+---
+
 ## Sleep timer
 
 Same as the Apple TV app (`SleepTimerLogic` and the SLEEP TIMER rows of the Now Playing panel). Code: `scripts/nostalgex-sleep-timer.js`, wired in the SLEEP TIMER section of `plex-tuner.html`.
@@ -186,6 +198,16 @@ The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as
 - **Server collections** are classified FRANCHISES (movie series: a shared TMDB collection, a known name, a keyword like "saga", a repeated word or title prefix) or OTHER COLLECTIONS. A collection that is the same franchise as a classic or a found one is folded into it and listed nowhere else. A collection holding shows folds only into a franchise that airs those shows.
 - **When more are on than fit** in CH 310-399, the ones with the most films stay, then the kept ones are numbered by name. Settings says how many are on but not shown.
 - **One engine.** `scripts/nostalgex-franchise-builder.js` groups the library, `scripts/nostalgex-collections.js` classifies and numbers, `scripts/nostalgex-franchise-lineup.js` puts them together in the Apple TV's order. `scripts/franchise-lineup-golden.json` holds them to the Apple TV's answers; the Swift test (`FranchiseLineupGoldenTests`) wrote those answers from the app's own code, and the Roku tests read a copy. `npm run test:franchise-lineup` checks this engine, `npm run test:franchise-channels:browser` drives the page.
+
+---
+
+## Open on last channel
+
+Settings > GENERAL > PLAYBACK, a real button (no key needed). Off unless switched on. With it on, a load opens on the channel the viewer last tuned instead of the first enabled channel. Code: `scripts/nostalgex-last-channel.js`, wired in `plex-tuner.html` (`channelToOpenOn`, `rememberLastChannel`, `toggleOpenLastChannel`).
+
+- Kept in the browser's own storage (`nostalgex_open_last_channel`, `nostalgex_last_channel`), so each browser or device that opens the container keeps its own. Nothing is sent anywhere.
+- The channel is remembered with its id and its name whenever the viewer tunes one on a real server (a pick in the guide, channel up or down, a number key), switch on or off. Tunes the page makes itself (the first channel after a load, the fallback when a package is switched off) are not remembered, so a saved channel that is not in the lineup yet is not replaced by the first one. Signing out clears it (the switch stays). It is opened only when an enabled channel has the same id and the same name. Renamed, renumbered, dropped, package off, nothing kept, a damaged value: the first enabled channel opens, as with the switch off.
+- Tests: `npm run test:last-channel`, `npm run test:open-last-channel:browser`.
 
 ---
 
