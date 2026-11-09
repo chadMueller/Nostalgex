@@ -40,12 +40,18 @@ struct SettingsChannelsView: View {
     let page: ChannelsPage?
     let open: (ChannelsPage) -> Void
 
+    /// A package row's focus id starts with this. A package row grows to list its channels while it has focus, so
+    /// the pane places it after it has finished changing size (`SettingsContainerView`).
+    static let packageRowPrefix = "bundle_"
+
+    static func isPackageRow(_ rowID: String) -> Bool { rowID.hasPrefix(packageRowPrefix) }
+
     static func firstRowID(page: ChannelsPage?, appState: AppState) -> String {
         switch page {
         case nil:
             return ChannelsPage.packages.linkRowID
         case .packages:
-            return ChannelsPackagesPage.rows(appState: appState).first.map { "bundle_\($0.id)" } ?? "channels_missing"
+            return ChannelsPackagesPage.rows(appState: appState).first.map { "\(packageRowPrefix)\($0.id)" } ?? "channels_missing"
         case .franchises:
             return ChannelsFranchisesPage.masterRowID
         case .collections:
@@ -194,13 +200,13 @@ private struct ChannelsPackagesPage: View {
             alertBadgeLabel: listing.badgeLabel,
             channelNames: listing,
             isOn: bundle.enabled,
-            isFocused: isFocused("bundle_\(bundle.id)"),
+            isFocused: isFocused("\(SettingsChannelsView.packageRowPrefix)\(bundle.id)"),
             isLoading: building,
             loadingMessage: "BUILDING"
         ) {
             appState.toggleBundle(bundle)
         }
-        .settingsRow("bundle_\(bundle.id)", focus: focus)
+        .settingsRow("\(SettingsChannelsView.packageRowPrefix)\(bundle.id)", focus: focus)
         .opacity(bundle.enabled && available == 0 && !building ? 0.5 : 1.0)
     }
 

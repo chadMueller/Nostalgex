@@ -15,10 +15,16 @@ struct PackageChannelNames: View {
     private static let font = Font.custom("DMMono-Regular", size: 18)
     private static let amber = Color(hex: "#FFB020")
 
+    /// White at this opacity for a name on an off package, and for one on an on package. 0.47 is the least that reads at
+    /// 4.5:1 or better on the focused row (white at 7 percent over the Settings background: 4.41:1 at 0.45, 4.66:1
+    /// at 0.47).
+    static let offNameOpacity: Double = 0.47
+    static let onNameOpacity: Double = 0.7
+
     /// The colour a name is drawn in: amber when it is short of content, otherwise white, brighter
     /// for a package that is on than for one that is off.
     static func nameColor(isShort: Bool, isOn: Bool) -> Color {
-        isShort ? amber : Color.white.opacity(isOn ? 0.7 : 0.45)
+        isShort ? amber : Color.white.opacity(isOn ? onNameOpacity : offNameOpacity)
     }
 
     /// The names in package order, joined by ", ". The spaces inside a name do not break, so a line can

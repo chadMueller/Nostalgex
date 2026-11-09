@@ -5,11 +5,13 @@ import XCTest
 /// page is no longer than before while a viewer scrolls past.
 ///
 /// The risk is how tvOS scrolls when the focused row changes height: the Settings scroll
-/// view centres the row it was told about, and the row above it shrinks in the same moment. So this
-/// walks the whole list with the real focus engine, down and then up, through a long package
-/// (NOSTALGEX, 22 channels), the first and the last package and packages that are on with
-/// channels short of content (amber), and checks after every press that the focused row is
-/// grown, wholly on screen, and not pushed off centre.
+/// view centres the row it was told about, and the row above it shrinks in the same moment. On a real
+/// Apple TV (not on a simulator) rows came to rest lower and lower going down, differently going up, and one
+/// landed with its title under the pinned header. So this walks the whole list with the real focus engine,
+/// down and then up, through a long package (NOSTALGEX, 22 channels), the first and the last package and
+/// packages that are on with channels short of content (amber), and checks after every press that the
+/// focused row is grown, wholly on screen, with its top below the pinned header (not just inside the
+/// window), at the same height going up as going down, and that rows in the middle rest at one height.
 ///
 /// Demo mode with `-uiTestPackageList`: the shipped packages from channels.json, some on with
 /// channels the sample library cannot fill. Storage is isolated, so nothing the Apple TV holds is touched.
@@ -79,6 +81,17 @@ final class SettingsPackageChannelsTests: XCTestCase {
         label != "<none>" && !label.hasPrefix("WHY ARE SOME CHANNELS MISSING")
     }
 
+    /// The fade at the top of the scrolling rows (`SettingsContainerView.rowsTopFade`) and the room left under it.
+    private static let headerFade: CGFloat = 32
+    private static let headerMargin: CGFloat = 8
+
+    /// The pinned header's lower edge: where the scrolling rows begin, under the hero and its divider.
+    private func headerBottom() -> CGFloat {
+        let scroll = app.scrollViews.firstMatch
+        XCTAssertTrue(scroll.exists, "the Settings rows scroll view is not in the tree")
+        return scroll.frame.minY
+    }
+
     /// One focused package row as measured on the screen.
     private struct Seen {
         let label: String
@@ -96,6 +109,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
         let window = app.frame
         let frame = f.frame
         let centre = (frame.midY - window.minY) / window.height
+        let header = headerBottom()
         let names = app.descendants(matching: .any)["packageChannelNames"].exists
         let legend = app.descendants(matching: .any)["packageChannelNamesLegend"].exists
         XCTAssertTrue(names, "\(step): the focused row lists its channels")
@@ -103,7 +117,11 @@ final class SettingsPackageChannelsTests: XCTestCase {
         XCTAssertEqual(legend, f.label.contains("have enough titles"), "\(step): amber names and the amber count go together: \(f.label)")
         print("PACKAGE-CHANNELS \(step): \(f.label.prefix(34)) y=\(Int(frame.minY))..\(Int(frame.maxY)) h=\(Int(frame.height)) centre=\(String(format: "%.2f", centre)) names=\(names) legend=\(legend) value=\(f.value as? String ?? "-")")
         shot(step)
-        XCTAssertGreaterThanOrEqual(frame.minY, window.minY, "\(step): the focused row is cut off at the top")
+        // Below the pinned header, not only inside the window: the rows scroll under the header, and a row whose
+        // top is above its lower edge has its title line hidden under it. The header's fade is part of the
+        // header, and a margin of its own is left under that.
+        XCTAssertGreaterThanOrEqual(frame.minY, header + Self.headerFade + Self.headerMargin,
+                                    "\(step): the focused row's top \(Int(frame.minY)) is under the pinned header (its lower edge is \(Int(header)))")
         XCTAssertLessThanOrEqual(frame.maxY, window.maxY, "\(step): the focused row is cut off at the bottom")
         return Seen(label: f.label, frame: frame, centre: centre)
     }
@@ -160,7 +178,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
         //     their own height and whatever the row above grew or shrank by: the pane centres them.
         let middle = order.dropFirst(2).dropLast(2).compactMap { centres[$0] }
         XCTAssertGreaterThan(middle.count, 5)
-        XCTAssertLessThan((middle.max() ?? 0) - (middle.min() ?? 0), 0.03, "middle rows rest off centre by different amounts: \(centres)")
+        XCTAssertLessThan((middle.max() ?? 0) - (middle.min() ?? 0), 0.01, "middle rows rest off centre by different amounts: \(centres)")
 
         // 3. Back up, the same walk, so scrolling up through the grown rows is checked too.
         for index in 0..<24 {
@@ -170,7 +188,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
             let title = label.components(separatedBy: ". ").first ?? label
             let seen = look("up-\(index + 1)-\(title)")
             // The same row comes to rest in the same place going up as it did going down.
-            XCTAssertEqual(seen.centre, centres[title] ?? -1, accuracy: 0.03, "\(title) rests somewhere else going up than going down")
+            XCTAssertEqual(seen.centre, centres[title] ?? -1, accuracy: 0.01, "\(title) rests somewhere else going up than going down")
             if title == order.first { break }
         }
         XCTAssertTrue(focusedLabel().hasPrefix(order.first ?? "?"), "back on the first package: \(focusedLabel())")

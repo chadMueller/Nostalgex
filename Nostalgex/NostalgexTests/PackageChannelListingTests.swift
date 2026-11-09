@@ -260,6 +260,32 @@ final class PackageChannelListingTests: XCTestCase {
         XCTAssertEqual(listing.spokenChannels, "Channels: ONE, TWO, THREE, FOUR. Not enough titles yet: TWO, FOUR.")
     }
 
+    // MARK: Contrast
+
+    /// WCAG contrast of the name colour over the focused row. The row is white at 7 percent over the Settings
+    /// background (about rgb 29, 29, 45); an Apple TV read the off-state names at 4.41:1 with white at 45 percent.
+    private func contrast(_ colour: Color) -> Double {
+        func linear(_ c: Double) -> Double { c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        func luminance(_ r: Double, _ g: Double, _ b: Double) -> Double {
+            0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        XCTAssertTrue(UIColor(colour).getRed(&r, green: &g, blue: &b, alpha: &a))
+        let row = (r: 29.0 / 255, g: 29.0 / 255, b: 45.0 / 255)
+        let over = (r: row.r + (Double(r) - row.r) * Double(a), g: row.g + (Double(g) - row.g) * Double(a), b: row.b + (Double(b) - row.b) * Double(a))
+        let light = luminance(over.r, over.g, over.b), dark = luminance(row.r, row.g, row.b)
+        return (max(light, dark) + 0.05) / (min(light, dark) + 0.05)
+    }
+
+    func testEveryNameColourReadsAtFourPointFiveToOneOrBetterOnTheFocusedRow() {
+        for isOn in [false, true] {
+            XCTAssertGreaterThanOrEqual(contrast(PackageChannelNames.nameColor(isShort: false, isOn: isOn)), 4.5, "on: \(isOn)")
+        }
+        XCTAssertGreaterThanOrEqual(contrast(PackageChannelNames.nameColor(isShort: true, isOn: false)), 4.5, "amber")
+        // And an off package's names are still the dimmer ones.
+        XCTAssertLessThan(PackageChannelNames.offNameOpacity, PackageChannelNames.onNameOpacity)
+    }
+
     func testTheHintHasNoShortChannelsToNameWhenNoneIsShort() {
         let off = PackageChannelListing(availability: [(1, "ONE", true), (2, "TWO", false)], enabled: false, building: false)
         XCTAssertEqual(off.spokenChannels, "Channels: ONE, TWO.")

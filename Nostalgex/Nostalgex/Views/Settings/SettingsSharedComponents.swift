@@ -253,6 +253,10 @@ struct SettingsToggleRow: View {
     var onLockedTap: (() -> Void)? = nil
     let onToggle: () -> Void
 
+    /// How long a row takes to grow or shrink when focus arrives or leaves. The Settings pane waits this long
+    /// (and a little more) before it places a package row, so it never measures a row that is still growing.
+    static let focusAnimationDuration: Double = 0.15
+
     var body: some View {
         Button {
             if proLocked {
@@ -340,7 +344,7 @@ struct SettingsToggleRow: View {
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
         .accessibilityHintIfPresent(channelNames?.spokenChannels)
         .animation(.easeInOut(duration: 0.2), value: isOn)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .animation(.easeInOut(duration: Self.focusAnimationDuration), value: isFocused)
     }
 }
 

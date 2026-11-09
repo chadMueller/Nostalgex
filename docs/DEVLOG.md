@@ -3,6 +3,39 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: CHANNEL PACKAGES scroll fixed after a run on a real Apple TV, discussion #217)
+
+**Found on a real Apple TV.** The list above was measured on a simulator, where the focused row always came to rest at the same
+height. Run on an Apple TV 4K (3rd generation, tvOS 27.2) with the real remote it did not. Going down, the focused row's centre sat
+lower and lower on the screen (0.41, 0.56, 0.62, 0.70, 0.79 of the screen height); going up, every row rested with its top at one
+place, so down and up disagreed; and on the jump to OVERTIME the row's top was at 197 pt, above the pinned header's lower edge at
+206 pt, so its title line was hidden under the header. The walk test only compared the row against the window, so it could not see
+that. What held up: every row grows and shrinks, the tallest (NOSTALGEX, 22 names) is 268 pt, and fast taps (0.23 s a press),
+13-press bursts, a 20-press jitter and 2.5 and 5 second holds all ended on the right package with no row left half open.
+The names of an off package read at 4.41:1 against the focused row, just under 4.5:1.
+
+**Changed.** The Settings pane centred the focused row at the moment of the press, while the row before it was shrinking and the
+new one growing. A package row (the only rows that change size) is now placed after the rows have stopped changing size: the
+pane waits the row's own animation time plus a frame, centres the row once, and once more with no animation to finish a slide the
+system cut short. A new press cancels the wait, so a held press scrolls once, where it stops. Every other row centres at once, as
+before. The centre of the pane is one point whatever a row's height, and the tallest row is well inside it, so a package row sits
+wholly below the header, in the same place going down as going up. The cause on the device was not isolated (the system's own
+scroll to the focused row, or a centre worked out before the rows had finished moving); both are covered by placing the row last,
+and neither is proved. The off-state names go from 45 to 47 percent white (4.66:1).
+
+**Test.** `SettingsPackageChannelsTests` now checks the focused row's top against the pinned header's lower edge (the top of the
+rows' scroll view, plus its 32 pt fade and a margin), not only against the window, and holds rows in the middle of the list to
+one resting height (within 0.01 of the screen) and each row to the same height going up as going down (0.01). On the simulator
+the walk reads as before: 0.58 for every middle row, and it passes with the new header check (75 s). `PackageChannelListingTests` (22) adds the 4.5:1 contrast check for every name
+colour on the focused row.
+
+**Measured.** On the tvOS simulator, one run each: `PackageChannelListingTests` 22 of 22; `SettingsPackageChannelsTests` 2 of 2
+(the walk, and Select on a package; the second test was re-run alone after the test runner was killed by another run on the
+same simulator).
+
+**Not verified.** The simulator never showed the problem, so a passing simulator run does not prove this fix. It has to be run on an
+Apple TV: the walk down and up, a jump to OVERTIME, fast taps and a hold.
+
 ## 2026-11-09 (Apple TV: a focused package lists its channels on CHANNEL PACKAGES, discussion #217)
 
 **Why.** A proposal from tydude001 on discussion #217 (Trello I-084). On CHANNEL PACKAGES a viewer cannot see what a package
