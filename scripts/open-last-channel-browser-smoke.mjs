@@ -5,12 +5,15 @@
  *
  * What it checks, each time the page loads from the saved library (the path every visit after
  * the first takes):
- *   - the switch is in Settings > GENERAL > PLAYBACK, off by default, a real button (a TV
- *     browser has no keys), visible and pressable by mouse at 960x540 and on a phone, and its
- *     text and aria-pressed follow the saved state;
+ *   - the switch is in Settings > GENERAL > PLAYBACK, off by default, with the Apple TV's one line
+ *     under it, a real button (a TV browser has no keys), visible and pressable by mouse at 960x540
+ *     and on a phone, and its text and aria-pressed follow the saved state;
  *   - off (the default): the guide opens on the first enabled channel, as it always did, even
  *     with a channel remembered;
- *   - every channel tuned is remembered with its id and name, whether or not the switch is on;
+ *   - a channel the VIEWER tunes (a pick in the guide, channel up or down, a number key) is remembered with its
+ *     id and name, whether or not the switch is on; a tune the page makes itself (the first channel after a
+ *     load) is not, so a saved channel that is not in the lineup yet is not replaced by the first channel;
+ *   - signing out clears the remembered channel, and leaves the switch;
  *   - on: the guide opens on the remembered channel;
  *   - on, but the remembered channel is not what it was (renamed, renumbered, its id gone, or
  *     its package switched off), or nothing is remembered, or the value is garbage: the guide
@@ -125,7 +128,7 @@ const first = await state(page);
 check("the stub library puts at least three channels on the air", first.enabled.length >= 3, `${first.enabled.length} enabled`);
 const [a, b, c] = [first.enabled[0], first.enabled[1], first.enabled[2]];
 check("first visit, switch off: opens on the first enabled channel", first.current === first.firstEnabled, JSON.stringify({ current: first.current, firstEnabled: first.firstEnabled }));
-check("the first channel tuned is remembered with its id and name", first.remembered === JSON.stringify({ id: a.id, name: a.name }), String(first.remembered));
+check("the channel the page tuned on its own after the load is not remembered", first.remembered === null, String(first.remembered));
 check("the switch is off on a new install", first.on === null);
 
 // ── The switch in Settings ───────────────────────────────────────────────────
@@ -138,18 +141,37 @@ const row = (p) => p.evaluate(() => {
   const r = b.getBoundingClientRect();
   const cs = getComputedStyle(b);
   return { exists: true, tag: b.tagName, type: b.type, text: b.textContent, pressed: b.getAttribute("aria-pressed"), label: b.getAttribute("aria-label"),
+    line: b.closest(".cfg-row")?.querySelector(".cfg-row-desc")?.textContent,
     shown: cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0,
     inside: r.left >= 0 && r.right <= innerWidth + 0.5 && r.top >= 0 && r.bottom <= innerHeight + 0.5 };
 });
 const s0 = await row(page);
 check("Settings > GENERAL has the OPEN ON LAST CHANNEL button", s0.exists && s0.tag === "BUTTON" && s0.type === "button", JSON.stringify(s0));
 check("it reads OFF, not pressed, and is named", s0.text === "OFF" && s0.pressed === "false" && s0.label === "Open on last channel", JSON.stringify(s0));
+check("the line under it is the Apple TV's one line, no second sentence", s0.line === "Start on the channel you were last watching", JSON.stringify(s0.line));
 check("it is visible and inside the 1440x900 screen", s0.shown && s0.inside, JSON.stringify(s0));
 await page.evaluate(() => { hideConfig(); });
 
 // ── Off: a remembered channel changes nothing ────────────────────────────────
-await page.evaluate((id) => switchChannel(id), c.id);
-check("tuning another channel remembers it (switch still off)", (await state(page)).remembered === JSON.stringify({ id: c.id, name: c.name }));
+// ── Who tuned: only the viewer's tunes are remembered ────────────────────────
+const remembered = (p) => p.evaluate(() => localStorage.getItem("nostalgex_last_channel"));
+const entry = (ch) => JSON.stringify({ id: ch.id, name: ch.name });
+await page.evaluate((id) => tuneFromGuide(id), c.id);
+check("a pick in the guide is remembered (switch still off)", (await remembered(page)) === entry(c), String(await remembered(page)));
+await page.evaluate((id) => { switchChannel(id); }, a.id);   // the page's own tune: no byViewer
+check("a tune the page makes itself changes the channel but not what is remembered", (await state(page)).current === a.id && (await remembered(page)) === entry(c), String(await remembered(page)));
+await page.evaluate(() => nextChannel());
+check("channel up is remembered", (await state(page)).current === b.id && (await remembered(page)) === entry(b), String(await remembered(page)));
+await page.evaluate(() => prevChannel());
+check("channel down is remembered", (await state(page)).current === a.id && (await remembered(page)) === entry(a), String(await remembered(page)));
+const digit = first.enabled.find((ch) => ch.id >= 1 && ch.id <= 9 && ch.id !== a.id);
+if (digit) {
+  await page.keyboard.press(String(digit.id));
+  await page.waitForTimeout(300);
+  check(`the number key ${digit.id} is remembered`, (await state(page)).current === digit.id && (await remembered(page)) === entry(digit), JSON.stringify([await state(page).then((s) => s.current), await remembered(page)]));
+}
+await page.evaluate((id) => tuneFromGuide(id), c.id);
+check("back to a pick in the guide: c is what is remembered", (await remembered(page)) === entry(c));
 const fetchesBefore = libraryFetches;
 await reload(page);
 const off = await state(page);
@@ -162,7 +184,7 @@ await page.click("#cfg-open-last-toggle", { timeout: 4000 }).catch(() => {});   
 const s1 = await page.evaluate(() => { const b = document.getElementById("cfg-open-last-toggle") || { textContent: "", getAttribute: () => null, classList: { contains: () => false } }; return { text: b.textContent, pressed: b.getAttribute("aria-pressed"), on: b.classList.contains("on"), stored: localStorage.getItem("nostalgex_open_last_channel") }; });
 check("a click turns it ON and saves it", s1.text === "ON" && s1.pressed === "true" && s1.on && s1.stored === "1", JSON.stringify(s1));
 await page.evaluate(() => { hideConfig(); });
-await page.evaluate((id) => switchChannel(id), b.id);
+await page.evaluate((id) => tuneFromGuide(id), b.id);
 await reload(page);
 const on1 = await state(page);
 check("switch on: opens on the channel it was on", on1.current === b.id, JSON.stringify({ current: on1.current, want: b.id }));
@@ -201,6 +223,26 @@ await page.evaluate((id) => {
 }, c.id);
 const closed = await page.evaluate(() => window.__opened);
 check("switch on, remembered channel switched off: the first enabled channel would open", closed === a.id, String(closed));
+
+// ── A saved channel that is not in the lineup yet is not replaced by the first channel ──
+// (its package off, a collection channel not built yet). With the switch on and with it off, the load tunes the
+// first channel by itself; that is not a tune the viewer made, so the saved channel stays.
+const notThere = JSON.stringify({ id: 424242, name: "NOT BUILT YET" });
+for (const position of ["on", "off"]) {
+  await page.evaluate((v) => localStorage.setItem("nostalgex_open_last_channel", v), position === "on" ? "1" : "0");
+  await setRemembered(notThere);
+  await reload(page);
+  const s = await state(page);
+  check(`switch ${position}, a saved channel that is not in the lineup: the first channel opens and the saved channel is kept`, s.current === a.id && s.remembered === notThere, JSON.stringify({ current: s.current, remembered: s.remembered }));
+}
+await page.evaluate(() => localStorage.setItem("nostalgex_open_last_channel", "1"));
+
+// ── Signing out clears the remembered channel, and leaves the switch ─────────
+await setRemembered(entry(c));
+await page.evaluate(() => { signOut(); });
+const out = await state(page);
+check("signing out clears the remembered channel", out.remembered === null, String(out.remembered));
+check("signing out leaves the switch alone", out.on === "1", String(out.on));
 
 check("no page errors in the whole run", errors.length === 0, errors.join(" | "));
 await ctx.close();

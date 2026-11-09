@@ -3619,7 +3619,7 @@
       <div class="cfg-row">
         <div>
           <div class="cfg-row-title">Open on last channel</div>
-          <div class="cfg-row-desc">Start on the channel you were watching, not the first one. If that channel is gone or renumbered, it starts on the first one.</div>
+          <div class="cfg-row-desc">Start on the channel you were last watching</div>
         </div>
         <button class="plex-btn" id="cfg-open-last-toggle" type="button" style="font-size: 11px; padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="false">OFF</button>
       </div>
@@ -4430,8 +4430,9 @@
   // ── OPEN ON LAST CHANNEL (Trello I-017) ─────────────────────────────────────
   // Off unless the viewer turns it on, and kept per browser, as the Apple TV keeps it per TV.
   // The rules (what is kept, when a saved channel is not opened) are in scripts/nostalgex-last-channel.js.
-  // The channel is remembered every time one is tuned on a real server, whether or not the
-  // switch is on, so switching it on opens on the channel already playing at the next visit.
+  // The channel is remembered whenever the VIEWER tunes one on a real server (switchChannel's byViewer), whether
+  // or not the switch is on, so switching it on opens on the channel already playing at the next visit. A tune the
+  // page makes itself is not remembered, and the saved channel is cleared on sign-out (signOut).
   function openLastChannelOn() {
     try { return NostalgexLastChannel.isOn(localStorage.getItem(NostalgexLastChannel.OPEN_KEY)); } catch (e) { return false; }
   }
@@ -4460,7 +4461,7 @@
   // Jellyfin only. Off unless the viewer turns it on (the default is INCLUDE_HIDDEN_DEFAULT in
   // scripts/nostalgex-jellyfin-urls.js, point 13 there has why), kept per browser. A library the
   // viewer hid from the Jellyfin home screen is then asked for and scanned. Switching it reads the
-  // library again once, the way a change of server does.
+  // library again once, in the background (the guide, the channel playing and Settings stay as they are).
   function includeHiddenOn() {
     return NostalgexJellyfinUrls.includeHiddenLibraries();
   }
@@ -4476,8 +4477,10 @@
     button.setAttribute('aria-pressed', String(on));
   }
 
+  let includeHiddenReading = false;
   async function toggleIncludeHiddenLibraries() {
-    if (mediaBackend !== 'jellyfin') return;
+    // A press while the last one is still being read does nothing: two reads at once would race for the library.
+    if (mediaBackend !== 'jellyfin' || includeHiddenReading) return;
     // lsSet says whether it saved. Nothing is read again if it did not: the scan reads this same
     // key, so a choice it cannot read would change nothing.
     if (!lsSet(NostalgexJellyfinUrls.INCLUDE_HIDDEN_KEY, includeHiddenOn() ? '0' : '1')) { updateIncludeHiddenControls(); return; }
@@ -4485,10 +4488,16 @@
     // What was saved was read the other way: drop it, so a failed read below is not followed by a
     // visit that restores a library the switch no longer describes.
     clearLibraryCache();
+    includeHiddenReading = true;
     try {
-      await fetchLibraryFromServer();
+      // In the background, as the daily refresh reads: the guide stays up, the channel that is playing keeps
+      // playing and Settings stays open. A foreground read ends by tuning the first channel (tuneFirstOrShowEmpty),
+      // which would take a viewer on any other channel off it.
+      await fetchLibraryFromServer({ background: true, buildAllChannels: false });
     } catch (err) {
       console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
+    } finally {
+      includeHiddenReading = false;
     }
   }
 
@@ -5540,7 +5549,10 @@
   // ══════════════════════════════════════
   // CHANNEL SWITCHING
   // ══════════════════════════════════════
-  function switchChannel(channelId) {
+  // `byViewer` is true for a tune the viewer made (a pick in the guide, channel up or down, a number key).
+  // Only those are remembered for OPEN ON LAST CHANNEL; the page's own (the first channel after a load, the
+  // fallback when a package goes) are not, so they never replace the channel the viewer was last on.
+  function switchChannel(channelId, byViewer) {
     const ch = CHANNELS.find(c => c.id === channelId);
     if (!ch || !ch.enabled) return;
     if (currentChannel === channelId) return;
@@ -5551,7 +5563,7 @@
     const sleepEnded = document.getElementById('sleep-ended');
     if (sleepEnded) sleepEnded.hidden = true;
     currentChannel = channelId;
-    if (plexConnected) rememberLastChannel(ch);
+    if (byViewer === true && plexConnected) rememberLastChannel(ch);
     appState = 'player';
     document.getElementById('player-screen').classList.add('has-channel');
     document.getElementById('key-hints').style.display = 'flex';
@@ -6426,24 +6438,24 @@
     const enabled = getEnabledChannels();
     if (enabled.length === 0) return;
     if (currentChannel === null) {
-      switchChannel(enabled[0].id);
+      switchChannel(enabled[0].id, true);
       return;
     }
     const currentIdx = enabled.findIndex(ch => ch.id === currentChannel);
     const nextIdx = (currentIdx + 1) % enabled.length;
-    switchChannel(enabled[nextIdx].id);
+    switchChannel(enabled[nextIdx].id, true);
   }
 
   function prevChannel() {
     const enabled = getEnabledChannels();
     if (enabled.length === 0) return;
     if (currentChannel === null) {
-      switchChannel(enabled[enabled.length - 1].id);
+      switchChannel(enabled[enabled.length - 1].id, true);
       return;
     }
     const currentIdx = enabled.findIndex(ch => ch.id === currentChannel);
     const prevIdx = (currentIdx - 1 + enabled.length) % enabled.length;
-    switchChannel(enabled[prevIdx].id);
+    switchChannel(enabled[prevIdx].id, true);
   }
 
   // ══════════════════════════════════════
@@ -7354,7 +7366,7 @@
   // the background goes through here, so a library refresh never restarts playback.
   function tuneFromGuide(channelId) {
     if (sleepStoppedPlayback && channelId === currentChannel) currentChannel = null;
-    switchChannel(channelId);
+    switchChannel(channelId, true);
   }
 
   /* ══════════════════════════════════════
@@ -8945,6 +8957,9 @@
     sessionStorage.removeItem('plex90_backend');
     sessionStorage.removeItem('plex90_jellyfin_user_id');
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    // The channel last watched is this account's too (the Apple TV clears it on disconnect). The OPEN ON LAST
+    // CHANNEL switch is a preference and stays.
+    try { localStorage.removeItem(NostalgexLastChannel.CHANNEL_KEY); } catch (e) {}
     // The library cache persists across sessions now, so it has to go with the
     // credentials. Otherwise a signed-out browser keeps the whole library.
     clearLibraryCache();
@@ -10883,7 +10898,7 @@
     const num = parseInt(key);
     if (num >= 1 && num <= 9) {
       const ch = CHANNELS.find(c => c.id === num && c.enabled);
-      if (ch) switchChannel(ch.id);
+      if (ch) switchChannel(ch.id, true);
       e.preventDefault();
       return;
     }

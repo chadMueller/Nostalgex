@@ -11,8 +11,11 @@
  *     mouse at 960x540 and on a phone;
  *   - never chosen, the first scan's request is exactly /UserViews?userId=u (what it always was) and no
  *     title from the hidden library is in the library; the button reads OFF;
- *   - pressing it saves '1', reads the library again ONCE with includeHidden=true, and the hidden
- *     library's films come in; the library without access is never asked for; the button reads ON;
+ *   - pressing it saves '1', reads the library again ONCE with includeHidden=true, in the background, and the
+ *     hidden library's films come in (and reach a channel's pool); the library without access is never asked
+ *     for; the button reads ON. A viewer on a channel other than the first stays on it, Settings stays open,
+ *     and nothing retunes (a foreground read ends by tuning the first channel); a second press while the read
+ *     runs does nothing;
  *   - a reload restores the library from the saved copy (no new request) and the switch stays ON; with the
  *     saved copy cleared the next scan asks for hidden libraries;
  *   - pressing it again saves '0', reads once more, with no includeHidden, and the hidden films go;
@@ -151,7 +154,10 @@ async function settled(page) {
 }
 const library = (page) => page.evaluate(() => {
   const titles = allItemsCache.map((i) => i.title);
-  return { total: allItemsCache.length, hidden: titles.filter((t) => /^Hidden Film/.test(t)).length, priv: titles.filter((t) => /^Private Film/.test(t)).length };
+  const all = typeof allChannelsUnfiltered !== "undefined" ? allChannelsUnfiltered : CHANNELS;
+  const vhs = (all.find((c) => c.name === "VHS VAULT") || {}).itemPool || [];
+  return { total: allItemsCache.length, hidden: titles.filter((t) => /^Hidden Film/.test(t)).length, priv: titles.filter((t) => /^Private Film/.test(t)).length,
+    vhsHidden: vhs.filter((i) => /^Hidden Film/.test(i.title)).length };
 });
 const openRow = (page) => page.evaluate(() => {
   showConfig();
@@ -177,11 +183,11 @@ const pressSwitch = async (page) => {
   await page.evaluate(() => { showConfig(); switchConfigTab("general"); });
   await page.click("#cfg-include-hidden-toggle", { timeout: 4000 }).catch(() => {});
 };
-// The foreground read after a press: give it a moment to start, then wait for the loading screen to go.
-const reread = async (page) => {
-  await page.waitForTimeout(800);
-  await page.waitForFunction(() => document.getElementById("loading-library").style.display === "none", null, { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(800);
+// The read after a press runs in the background: wait for its first request, then for the scan to finish.
+const reread = async (page, m) => {
+  const until = Date.now() + 30000;
+  while (log.views.length <= m.views && Date.now() < until) await page.waitForTimeout(100);
+  await page.waitForTimeout(2200);
 };
 
 // ═══ Jellyfin, at the size of a TV browser ═══════════════════════════════════
@@ -202,16 +208,25 @@ const reread = async (page) => {
   if (shots) { await page.waitForTimeout(700); await page.screenshot({ path: join(shots, "include-hidden-960x540.png") }); }
   await page.evaluate(() => { hideConfig(); });
 
-  // ON: a real mouse click
+  // ON: a real mouse click, from a channel other than the first, with Settings open
+  const enabled = await page.evaluate(() => CHANNELS.filter((c) => c.enabled).map((c) => c.id));
+  check("the stub library puts at least two channels on the air", enabled.length >= 2, String(enabled.length));
+  const other = enabled[1];
+  await page.evaluate((id) => { tuneFromGuide(id); window.__tunes = []; const original = switchChannel; window.switchChannel = (...args) => { window.__tunes.push(args[0]); return original(...args); }; }, other);
+  check("setup: the viewer is on a channel other than the first", (await page.evaluate(() => currentChannel)) === other && other !== enabled[0]);
   let m = mark();
   await pressSwitch(page);
-  await reread(page);
+  await reread(page, m);
   const afterOn = await library(page);
   const viewsOn = log.views.slice(m.views);
   check("pressing it saves '1'", (await stored(page)) === "1");
   check("pressing it reads the library again once, asking /UserViews?userId=u&includeHidden=true", viewsOn.length === 1 && viewsOn[0] === "/UserViews?userId=u&includeHidden=true", JSON.stringify(viewsOn));
   check("switch on: the hidden library's 20 films come in (320 titles)", afterOn.hidden === 20 && afterOn.total === 320, JSON.stringify(afterOn));
+  check("switch on: the hidden films reach a channel's pool (VHS VAULT)", afterOn.vhsHidden > 0, JSON.stringify(afterOn));
   check("switch on: the library the user has no access to is never listed or asked for items", log.private.length === 0 && afterOn.priv === 0 && !log.itemParents.includes("lib-private"), JSON.stringify(log.private));
+  const stay = await page.evaluate(() => ({ current: currentChannel, appState, configOpen: document.getElementById("config-overlay").classList.contains("open"), tunes: window.__tunes.slice(), loading: document.getElementById("loading-library").style.display }));
+  check("after the read the viewer is still on the channel they were on (not retuned to the first)", stay.current === other && stay.tunes.length === 0, JSON.stringify(stay));
+  check("after the read Settings is still open, and the loading screen did not come up", stay.appState === "config" && stay.configOpen === true && stay.loading === "none", JSON.stringify(stay));
   const s1 = await openRow(page);
   check("the button reads ON and pressed", s1.text === "ON" && s1.pressed === "true", JSON.stringify(s1));
   await page.evaluate(() => { hideConfig(); });
@@ -231,15 +246,18 @@ const reread = async (page) => {
   const fresh = log.views.slice(m.views);
   check("with the saved library cleared, the next visit scans and asks for hidden libraries", fresh.length === 1 && fresh[0] === "/UserViews?userId=u&includeHidden=true" && (await library(page)).hidden === 20, JSON.stringify(fresh));
 
-  // OFF again
+  // OFF again, from the same channel; two presses in one tick read once
+  const channelNow = await page.evaluate(() => currentChannel);
   m = mark();
-  await pressSwitch(page);
-  await reread(page);
+  await page.evaluate(() => { showConfig(); switchConfigTab("general"); window.__tunes = []; toggleIncludeHiddenLibraries(); toggleIncludeHiddenLibraries(); });
+  await reread(page, m);
   const afterOff = await library(page);
   const viewsOff = log.views.slice(m.views);
   check("pressing it again saves '0'", (await stored(page)) === "0");
-  check("it reads once more, without includeHidden", viewsOff.length === 1 && viewsOff[0] === "/UserViews?userId=u", JSON.stringify(viewsOff));
-  check("switch off again: the hidden films are gone (300 titles)", afterOff.hidden === 0 && afterOff.total === 300, JSON.stringify(afterOff));
+  check("two presses in a row read once, without includeHidden", viewsOff.length === 1 && viewsOff[0] === "/UserViews?userId=u", JSON.stringify(viewsOff));
+  check("switch off again: the hidden films are gone (300 titles)", afterOff.hidden === 0 && afterOff.total === 300 && afterOff.vhsHidden === 0, JSON.stringify(afterOff));
+  const stayOff = await page.evaluate(() => ({ current: currentChannel, appState, tunes: window.__tunes.slice() }));
+  check("and the viewer is still on the same channel, Settings open", stayOff.current === channelNow && stayOff.tunes.length === 0 && stayOff.appState === "config", JSON.stringify(stayOff));
   check("the button reads OFF again", (await openRow(page)).text === "OFF");
   check("no page errors on Jellyfin", errors.length === 0, errors.join(" | "));
   await ctx.close();

@@ -61,21 +61,31 @@ the first version of the branch (it always asked) and show the two positions; th
 - Emby 4.10.1.0 in a container: with `MyMediaExcludes` set through the API, `/Users/{id}/Views` listed all three libraries
   the user may open with and without `IncludeHidden=true`; the library without access was not listed.
 
-**Tests.** On the head (four commits on `b2c6f404`):
+**Review fixes (after the reviewer's pass).** No reporter's library sizes are quoted anywhere in the repo (the history was
+rewritten to remove them). Pressing the switch now reads in the background, so a viewer on a channel other than the first is
+not retuned to channel 1 and Settings stays open (`include-hidden-browser-smoke` toggles from a non-first channel and fails
+against the earlier foreground read). Only tunes the viewer makes are remembered, a saved channel that is not in the lineup
+yet is not overwritten by the first channel, sign-out clears it (`open-last-channel-browser-smoke`, which fails against the
+earlier page on all of these). The row says the Apple TV's one line.
+
+**Tests.** On the head (five commits on `b2c6f404`):
 - `npm test` exits 0, leak guard clean (urls smoke 96, library smoke 48, last-channel 14, tuner version 59, readme and changelog checks).
-- `npm run build` and `npm run build:selfhost` pass, and so do `test:tuner-version:builds` (10 checks on the builds) and
-  `test:tuner-isolation:builds`. `dist-selfhost` carries the new script, the row and `INCLUDE_HIDDEN_DEFAULT = false`; the image
-  has no copy of its own.
-- 22 headless browser smokes: 20 pass. `empty-lineup` (2 checks) and `watershed` (the "Apple TV default is off" source check)
-  fail the same way on origin/main's tree, so they are not from this branch. New: `include-hidden` 34 checks (23 fail against
-  origin/main's page) and `open-last-channel` 31 checks (12 fail against it).
-- The Roku suite was not rerun: `roku/` is untouched, the Roku mediabrowser vectors generated from this branch are byte-identical
-  to the base's, and the golden file's extra `views` key was in an earlier run that passed (66 parts, 5,988 cases).
+- `npm run build` and `npm run build:selfhost` pass, and so do `test:tuner-version:builds` and `test:tuner-isolation:builds`.
+  `dist-selfhost` carries the new script, the row and `INCLUDE_HIDDEN_DEFAULT = false`; the image has no copy of its own.
+- Browser smokes, headless, 22 in all: 20 pass. `empty-lineup` (2 checks) and `watershed` (the "Apple TV default is off"
+  source check) fail the same way on origin/main's tree, so they are not from this branch. New: `include-hidden` 40 checks
+  (the old page fails 23 of them, the earlier foreground read 6) and `open-last-channel` 41 checks (the old page fails 18, the
+  earlier version of this page 6).
+- The Roku suite was not rerun: `roku/` is untouched, and the Roku `mediabrowser.json` vectors from this branch are
+  byte-identical to the base's. `jellyfin-library-golden.json` in the Roku vectors did change (the `_about` note and the `views`
+  key) and the Roku reads only `sections` and `types` from it; an earlier run with the `views` key present passed (66 parts,
+  5,988 cases).
 - The switch pressed with a mouse on the real page (hosted pages and the Docker build's `dist-selfhost`, both at 960x540)
-  against the lab Jellyfin, as the restricted user: never chosen 10 titles, VHS VAULT 6, request `/UserViews?userId=<id>`;
-  pressed on 17 titles (4 hidden films, 3 hidden episodes, 0 from the library without access), VHS VAULT 10, one request with
-  `includeHidden=true`; pressed again 10 and 6. An admin: 20 in every position. Docker pages read `WEB TUNER 1.0.15 · DOCKER`.
-  The image itself was not built.
+  against the lab Jellyfin, as the restricted user, with the first version of the switch (a foreground read): never chosen 10
+  titles, VHS VAULT 6, request `/UserViews?userId=<id>`; pressed on 17 titles (4 hidden films, 3 hidden episodes, 0 from the
+  library without access), VHS VAULT 10, one request with `includeHidden=true`; pressed again 10 and 6. An admin: 20 in every
+  position. Docker pages read `WEB TUNER 1.0.15 · DOCKER`. The background read was driven against the stub, not the lab
+  server. The image itself was not built.
 
 **Not verified.** Nothing was run on an Apple TV, a Roku or an Android TV. Whether Emby's own Home settings page writes the
 same ids I wrote through the API is not known. A Jellyfin user whose hidden library was grouped ("merge libraries") is read
