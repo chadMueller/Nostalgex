@@ -68,7 +68,7 @@ struct SettingsContainerView: View {
             appState.player?.isMuted = true
         }
         .onDisappear {
-            appState.player?.isMuted = false
+            appState.player?.isMuted = TestLaunchFlags.audioMuted
         }
         .task {
             // Refresh the reachable-server list so deselected servers can be re-added.

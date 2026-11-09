@@ -10,6 +10,8 @@ struct TunerView: View {
     /// Guards against an older schedule rebuild landing after a newer one.
     @State private var scheduleBuildToken: Int = 0
     @State private var previewChannelID: Int? = nil
+    /// How far the guide's window is moved through time, in 30 minute steps (GuideTimeCursor).
+    @State private var guideTimeOffset = 0
     // Refresh schedules every 30 seconds (progress bar + entry transitions)
     let scheduleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -35,7 +37,8 @@ struct TunerView: View {
                                 InfoPanelView(
                                     channel: channel,
                                     schedule: schedule,
-                                    playingItem: isActiveChannel ? appState.currentItem : nil
+                                    playingItem: isActiveChannel ? appState.currentItem : nil,
+                                    previewEntry: previewEntry(in: schedule)
                                 )
                                     .frame(maxHeight: .infinity)
                                     .animation(.easeInOut(duration: 0.15), value: channel.id)
@@ -77,6 +80,7 @@ struct TunerView: View {
                     schedules: schedules,
                     windowStart: windowStart,
                     onFocusChanged: { id in previewChannelID = id },
+                    onTimeOffsetChanged: { guideTimeOffset = $0 },
                     onOpenSettings: { navigationPath.append(AppDestination.settings) }
                 )
                 .frame(maxHeight: .infinity)
@@ -143,6 +147,15 @@ struct TunerView: View {
                 appState.isFullScreen = true
             }
         }
+    }
+
+    /// The programme the info panel previews, when the guide's window is moved later than now: the one on the
+    /// focused channel at the window's left edge. Nil shows what is on now.
+    private func previewEntry(in schedule: ChannelSchedule) -> ScheduleEntry? {
+        guard let time = GuideTimeCursor.previewTime(slotOffset: guideTimeOffset, windowStart: windowStart),
+              let entry = GuideTimeCursor.entry(in: schedule.entries, at: time),
+              !entry.isNowPlaying else { return nil }
+        return entry
     }
 
     /// Channel to show in the info panel: focused channel in EPG, or current if none focused

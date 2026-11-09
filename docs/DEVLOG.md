@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
+
+**Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
+edge), is drawn in its colour pushed a fifth of the way to white, with a 5 pt cyan outline and a glow, and its name is
+chosen for that brighter colour (4.5 to 1 or better on all ten, tested). The fade-in is skipped under Reduce Motion. Where
+focus goes did not change.
+
+**Info panel follows the window (I-089).** Right and Left in the guide step the window through time, 30 minutes a press,
+with focus staying on the row. The top-left panel used to show only what is on now, so nothing in it changed. Moved later
+than now, it now shows the focused channel's programme at the window's left edge: title, episode, description, year,
+rating, its time range where the progress bar was, and the programme after it as UP NEXT. Changing row while the window
+is moved updates it too; back at the start it shows what is on now. The schedule already carries all of that, so there
+is no extra lookup and it works offline. How far a press moves, Select and first focus are unchanged. Not done: stepping
+by title instead of by 30 minutes, which would change how far a press moves.
+
+**Silent UI tests.** Demo mode streams Apple's BipBop sample, which beeps; every simulator UI test played it through the
+Mac's speakers. `isolatedApp` now passes `-uiTestMuteAudio`, and the app mutes every player it creates, and keeps the
+Settings screen from unmuting it, only under the harness root (like the other test flags); a release build ignores it.
+The static check fails if the helper stops passing it. Nothing else in the app makes sound: the channel-change static's
+noise is never enabled.
+
+**Test.** Unit 1,268 passed, 0 failed, 29 skipped. UI 18 of 18 (`GuideInfoPanelTimeTests`, `GuideStripeFocusTests`,
+`GuideFocusAfterFullScreenTests`, `ChannelGuideWrapFocusTests`). Simulator only.
+
 ## 2026-11-09 (Apple TV: CHANNEL PACKAGES scroll fixed after a run on a real Apple TV, discussion #217)
 
 **Found on a real Apple TV.** The list above was measured on a simulator, where the focused row always came to rest at the same

@@ -1365,6 +1365,7 @@ extension AppState {
         old?.replaceCurrentItem(with: nil)
         let fresh = AVPlayer(playerItem: playerItem)
         fresh.automaticallyWaitsToMinimizeStalling = true
+        fresh.isMuted = TestLaunchFlags.audioMuted   // test harness only: false in every normal launch
         player = fresh
         isVideoPlaying = fresh.timeControlStatus == .playing
 

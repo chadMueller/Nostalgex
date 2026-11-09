@@ -18,7 +18,9 @@ extension XCTestCase {
         let app = XCUIApplication()
         for (key, value) in environment { app.launchEnvironment[key] = value }
         app.launchEnvironment[IsolatedAppRoots.environmentKey] = IsolatedAppRoots.root(for: self)
-        app.launchArguments = arguments
+        // Silent: demo mode streams Apple's BipBop sample, which beeps through the Mac's speakers. The app honours
+        // the flag only under the harness root set above.
+        app.launchArguments = arguments + [IsolatedAppRoots.muteFlag]
         return app
     }
 
@@ -42,6 +44,8 @@ extension XCTestCase {
 
 enum IsolatedAppRoots {
     static let environmentKey = "NOSTALGEX_HARNESS_ROOT"
+    /// Mirrors `TestLaunchFlags.muteAudio`; the app honours it only under the harness root.
+    static let muteFlag = "-uiTestMuteAudio"
 
     /// Mirrors `TestLaunchFlags.destructive` in the app. `scripts/ui-test-isolation-check.mjs` fails when they differ.
     static let destructiveFlags: Set<String> = [

@@ -16,6 +16,15 @@ final class TestLaunchFlagsTests: XCTestCase {
         }
     }
 
+    /// The mute flag is for a harness run only: ignored without isolation (a viewer's TV, a release build).
+    func testTheMuteFlagActsOnlyUnderIsolation() {
+        let flag = TestLaunchFlags.muteAudio
+        XCTAssertEqual(flag, "-uiTestMuteAudio")
+        XCTAssertFalse(TestLaunchFlags.shouldHonour(flag, arguments: [flag], isolationActive: false))
+        XCTAssertTrue(TestLaunchFlags.shouldHonour(flag, arguments: [flag], isolationActive: true))
+        XCTAssertFalse(TestLaunchFlags.shouldHonour(flag, arguments: ["-uiTestManyChannels"], isolationActive: true))
+    }
+
     func testAFlagThatIsNotOnTheCommandLineNeverActs() {
         for flag in TestLaunchFlags.destructive {
             XCTAssertFalse(TestLaunchFlags.shouldHonour(flag, arguments: ["-uiTestManyChannels"], isolationActive: true), flag)

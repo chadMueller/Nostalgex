@@ -181,6 +181,17 @@ enum GuideStripes {
             return contrast(l, 0) >= contrast(l, 1)
         }
 
+        /// The colour a stripe is drawn in while it has focus: the same colour pushed a fifth of the way to white,
+        /// so it reads brighter than its neighbours. The name is chosen for this colour, not the plain one.
+        static func focusedHex(for hex: String) -> String {
+            let value = UInt32(hex.dropFirst(), radix: 16) ?? 0
+            func lift(_ shift: UInt32) -> UInt32 {
+                let c = Double((value >> shift) & 0xff)
+                return UInt32((c + (255 - c) * 0.22).rounded())
+            }
+            return String(format: "#%02X%02X%02X", lift(16), lift(8), lift(0))
+        }
+
         static func nameContrast(onHex hex: String) -> Double {
             let l = luminance(ofHex: hex)
             return max(contrast(l, 0), contrast(l, 1))

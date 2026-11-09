@@ -52,14 +52,37 @@ struct GuideStripeOverlay: View {
     let focusedGroup: Int?
 
     private static let font = Font.custom("DMMono-Medium", size: 18)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// How far the focused stripe lifts out of its slot, over the row's left edge.
+    private static let liftWidth: CGFloat = 38
 
     var body: some View {
         let labels = GuideStripes.labels(
             groups: groups, rowPitch: rowPitch, leading: leading, offset: metrics.offset, viewport: metrics.viewport
         )
         ZStack(alignment: .topLeading) {
+            // The focused package lifts: brighter colour, wider than its slot, a heavy outline and a glow.
+            if let focusedGroup, groups.indices.contains(focusedGroup), let name = groups[focusedGroup].name,
+               let span = GuideStripes.visibleSpan(
+                of: groups[focusedGroup], rowPitch: rowPitch, leading: leading, offset: metrics.offset, viewport: metrics.viewport
+               ) {
+                let lifted = GuideStripes.Palette.focusedHex(for: GuideStripes.Palette.hex(for: name))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(hex: lifted))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color("BrandCyan"), lineWidth: 5)
+                    )
+                    .shadow(color: Color("BrandCyan").opacity(0.9), radius: 14)
+                    .frame(width: Self.liftWidth, height: span.height)
+                    .offset(y: span.top)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
             ForEach(labels, id: \.groupIndex) { label in
-                let hex = GuideStripes.Palette.hex(for: label.name)
+                let isFocusedLabel = label.groupIndex == focusedGroup
+                let hex = isFocusedLabel
+                    ? GuideStripes.Palette.focusedHex(for: GuideStripes.Palette.hex(for: label.name))
+                    : GuideStripes.Palette.hex(for: label.name)
                 Text(label.name)
                     .font(Self.font)
                     .tracking(1.5)
@@ -68,21 +91,13 @@ struct GuideStripeOverlay: View {
                     .truncationMode(.tail)
                     .frame(width: max(label.height - 16, 0), height: GuideStripes.stripeWidth)
                     .rotationEffect(.degrees(-90))
-                    .frame(width: GuideStripes.stripeWidth, height: label.height)
+                    .frame(width: isFocusedLabel ? Self.liftWidth : GuideStripes.stripeWidth, height: label.height)
                     .offset(y: label.top)
             }
-            if let focusedGroup, groups.indices.contains(focusedGroup),
-               let span = GuideStripes.visibleSpan(
-                of: groups[focusedGroup], rowPitch: rowPitch, leading: leading, offset: metrics.offset, viewport: metrics.viewport
-               ) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color("BrandCyan"), lineWidth: 3)
-                    .frame(width: GuideStripes.stripeWidth, height: span.height)
-                    .offset(y: span.top)
-            }
         }
-        .frame(width: GuideStripes.stripeWidth, alignment: .topLeading)
+        .frame(width: Self.liftWidth + 20, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: focusedGroup)
         .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)

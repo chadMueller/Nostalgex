@@ -98,6 +98,15 @@ for (const file of files) {
   }
 }
 
+// The helper must pass the mute flag, and the app must still guard it (a release build ignores it).
+const helperText = fs.readFileSync(path.join(uiDir, helperName), 'utf8');
+if (!/muteFlag\s*=\s*"-uiTestMuteAudio"/.test(helperText) || !/arguments\s*\+\s*\[\s*IsolatedAppRoots\.muteFlag\s*\]/.test(helperText)) {
+  fail(helperName, 'isolatedApp no longer passes -uiTestMuteAudio (simulator tests would beep through the speakers)');
+}
+if (!/muteAudio\s*=\s*"-uiTestMuteAudio"/.test(fs.readFileSync(appFlags, 'utf8'))) {
+  fail('TestLaunchFlags.swift', 'muteAudio flag missing or renamed');
+}
+
 if (problems.length) {
   console.error('UI test isolation check FAILED:\n  ' + problems.join('\n  '));
   console.error('\nSee Nostalgex/NostalgexUITests/IsolatedApp.swift. A test that must see the real stores uses realStoresApp(because:), which runs on the simulator only.');

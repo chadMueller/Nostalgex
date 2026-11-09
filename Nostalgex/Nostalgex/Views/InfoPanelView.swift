@@ -7,6 +7,9 @@ struct InfoPanelView: View {
     /// reflects what the player is showing, not the clock-based schedule (they can
     /// drift by ~40s due to file-duration vs metadata mismatches).
     var playingItem: PlexMediaItem? = nil
+    /// A later programme the guide's window is moved to (I-089). When set, the panel shows it, with its time
+    /// range where the progress bar is, and the programme after it as UP NEXT.
+    var previewEntry: ScheduleEntry? = nil
 
     // MARK: - Typography
 
@@ -43,10 +46,11 @@ struct InfoPanelView: View {
                 .foregroundStyle(channel.color)
                 .padding(.bottom, Spacing.sectionGap)
 
-            if let now = schedule.nowPlaying {
+            if let now = schedule.nowPlaying ?? previewEntry {
                 // Use the actual playing item when provided (avoids title mismatch when
-                // file duration differs from schedule metadata by a few seconds).
-                let displayItem = playingItem ?? now.item
+                // file duration differs from schedule metadata by a few seconds). A previewed later
+                // programme is shown as it is on the schedule.
+                let displayItem = previewEntry?.item ?? playingItem ?? now.item
 
                 // Title (+ artist for music videos)
                 Text(displayItem.title)
@@ -105,12 +109,14 @@ struct InfoPanelView: View {
                         .padding(.bottom, Spacing.sectionGap)
                 }
 
-                // Meta row + inline progress
+                // Meta row + inline progress (or, for a later programme, when it is on)
                 metaRow(item: displayItem)
                     .padding(.bottom, Spacing.sectionGap)
 
                 // Up Next
-                if let next = schedule.upNext {
+                if let next = previewEntry != nil
+                    ? previewEntry.flatMap({ GuideTimeCursor.entry(after: $0, in: schedule.entries) })
+                    : schedule.upNext {
                     HStack(spacing: 10) {
                         Text("UP NEXT")
                             .font(Typo.upNextLabel)
@@ -159,6 +165,12 @@ struct InfoPanelView: View {
                 .font(Typo.metaBadge)
             }
 
+            if let previewEntry {
+                Text("\(Self.clock(previewEntry.startTime)) - \(Self.clock(previewEntry.endTime))")
+                    .font(Typo.progressTime)
+                    .foregroundStyle(channel.color)
+                    .accessibilityIdentifier("infoPanelTime")
+            } else {
             // Inline progress bar + time (wall clock, updates every second)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let live = schedule.livePlayback(at: context.date)
@@ -185,8 +197,17 @@ struct InfoPanelView: View {
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
+            }
         }
     }
+
+    private static let clockFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
+    private static func clock(_ date: Date) -> String { clockFormat.string(from: date) }
 
     private func metaBadge(_ text: String) -> some View {
         Text(text)

@@ -219,6 +219,17 @@ final class GuideStripesTests: XCTestCase {
         }
     }
 
+    /// The focused stripe is the same colour pushed brighter, and its name still reads on it.
+    func testTheFocusedColourIsBrighterAndTheNameStillReadsOnIt() {
+        for hex in GuideStripes.Palette.hexes {
+            let lifted = GuideStripes.Palette.focusedHex(for: hex)
+            XCTAssertGreaterThan(GuideStripes.Palette.luminance(ofHex: lifted), GuideStripes.Palette.luminance(ofHex: hex), hex)
+            XCTAssertGreaterThanOrEqual(GuideStripes.Palette.nameContrast(onHex: lifted), 4.5, "\(hex) lifted to \(lifted)")
+        }
+        XCTAssertEqual(GuideStripes.Palette.focusedHex(for: "#000000"), "#383838")
+        XCTAssertEqual(GuideStripes.Palette.focusedHex(for: "#FFFFFF"), "#FFFFFF")
+    }
+
     func testTheBetterOfBlackAndWhiteIsChosen() {
         XCTAssertTrue(GuideStripes.Palette.nameIsBlack(onHex: "#F1C40F"), "yellow wants black")
         XCTAssertFalse(GuideStripes.Palette.nameIsBlack(onHex: "#8E44AD"), "purple wants white")

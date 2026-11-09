@@ -8,6 +8,8 @@ struct ChannelGuideView: View {
     let schedules: [Int: ChannelSchedule]
     let windowStart: Date
     var onFocusChanged: ((Int?) -> Void)? = nil
+    /// The window's offset in 30 minute steps, whenever it changes: the info panel follows it (GuideTimeCursor).
+    var onTimeOffsetChanged: ((Int) -> Void)? = nil
     var onOpenSettings: (() -> Void)? = nil
 
     // How many 30-min slots the user has scrolled forward (0-44 for 24-hour window)
@@ -197,6 +199,9 @@ struct ChannelGuideView: View {
                             GuideJumpProbe.shared.shownChanged(from: oldID, to: newID)
                         }
                         #endif
+                        .onChange(of: slotOffset) { _, offset in
+                            onTimeOffsetChanged?(offset)
+                        }
                         .onChange(of: stripeMode) { _, on in
                             // The stripe is a focus target only now, so ask for focus only now.
                             if on { requestStripeFocus() } else { stripeLeftAt = Date() }

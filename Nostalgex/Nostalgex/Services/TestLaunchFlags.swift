@@ -24,12 +24,21 @@ enum TestLaunchFlags {
         "-uiTestFranchiseFixture",      // rewrites the enabled packages and seeds the enrichment cache
     ]
 
+    /// Silences every sound the app makes. It deletes nothing, but like the flags above it is for a harness
+    /// run only: a launch without isolation (a viewer's Apple TV, a release build) ignores it, so it can never
+    /// mute the app for a viewer. Demo mode streams Apple's BipBop sample, which beeps through the Mac's speakers
+    /// in every simulator UI test.
+    static let muteAudio = "-uiTestMuteAudio"
+
     /// The whole rule, apart from where the answers come from.
     static func shouldHonour(_ flag: String, arguments: [String], isolationActive: Bool) -> Bool {
         guard arguments.contains(flag) else { return false }
-        guard destructive.contains(flag) else { return true }
+        guard destructive.contains(flag) || flag == muteAudio else { return true }
         return isolationActive
     }
+
+    /// Whether the app is to be silent: the flag, and isolation.
+    static var audioMuted: Bool { isOn(muteAudio) }
 
     static var isolationActive: Bool {
         #if DEBUG
