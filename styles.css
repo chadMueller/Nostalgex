@@ -816,6 +816,8 @@ a { color: inherit; }
   .step h3 { font-size: 20px; }
   .step p { font-size: 11.5px; }
   .tile--soon .cta-sticker { right: 12px; }
+  /* The Roku tile keeps its arrow, so on a phone the New sticker moves to the left corner. */
+  .tile--navy .cta-sticker { right: auto; left: 14px; }
 }
 
 /* ---------- Guide (navy color block) ---------- */

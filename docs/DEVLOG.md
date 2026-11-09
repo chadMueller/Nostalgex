@@ -3,6 +3,29 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (site: New sticker on the Roku items, /roku shows the Roku store screenshots)
+
+**Why.** Roku is on the Channel Store, and the home page gave the Roku button and tile nothing to say that it is
+new. The two screenshots on `/roku` were still the 2026-10-18 captures (a Darkwing Duck frame in a 4:3 picture with
+black bars), not the set that is on the Roku store listing.
+
+**Changed.**
+- Home: a "New" sticker on the hero Roku button and on the Roku tile, the same `.cta-sticker` the Beta label used. On a
+  phone the tile's sticker moves to the left corner so it clears the arrow. No other new element.
+- `/roku`: the hero is the store's guide shot (Doug on channel 5, a live picture, the full info panel) and the features
+  block is the channel strip shot. Layout unchanged. WebP at 1280 and 1920 (49 and 100 KB, 26 and 64 KB), width and
+  height set, hero preloaded, strip lazy. New filenames (`roku-store-*`), so a cached copy of the old images cannot
+  show; the four old files are removed.
+- `public/og-roku-store-1200.png` replaces `og-roku-1200.png`: the old card showed the old guide and still said BETA.
+  The new one uses the same guide shot and no label. `roku.html` points `og:image` and `twitter:image` at it.
+
+**Measured.** `npm test` and `npm run build` pass. The built `web-tuner.html`, `plex-tuner.html` and the other 26
+files the tuner ships hash the same as on main before the change. Looked at headless at 1440 and 390 px, dark and
+light: no horizontal scroll, the sticker clear of the arrow on a phone.
+
+**Not changed.** The other pages' screenshots (the home page and `/apple-tv` show the Apple TV). The four Roku store
+shots that are not on `/roku` (full screen with the channel OSD, the retro look, Settings packages, connect your server).
+
 ## 2026-11-09 (Roku: WHY ARE SOME CHANNELS MISSING?, #227)
 
 **Why.** The amber count on a Roku package short of content (#220) had no page behind it. On the Apple TV it opens
