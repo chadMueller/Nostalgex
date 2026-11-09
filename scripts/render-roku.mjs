@@ -8,8 +8,12 @@
 // Three regions in roku.html:
 //
 //   ROKU-HERO-CTA   the hero button
-//   ROKU-BETA       the "Join the beta" card
+//   ROKU-BETA       the whole "Join the beta" section
 //   ROKU-POST       a link to the announcement post, once there is one
+//
+// `storeLive` is the first switch. True, the app is on the Roku Channel Store:
+// the hero button is the store add link and the beta section is gone from the
+// page. False, the beta page is rendered and `betaFull` decides how.
 //
 // `betaFull` is the switch for when Roku's 20 beta spots are taken. Open, the
 // hero button and step 1 go to the Roku add link and the access code is shown.
@@ -48,6 +52,16 @@ function validate(data) {
   const fail = (msg) => {
     throw new Error(`content/roku.json: ${msg}`);
   };
+  if (typeof data.storeLive !== "boolean") fail("storeLive must be true or false.");
+  if (!/^[A-Z0-9]{4,20}$/.test(data.storeCode || "")) {
+    fail(`storeCode "${data.storeCode}" should be the channel's 4 to 20 letters and digits.`);
+  }
+  if (!String(data.storeAddUrl || "").startsWith("https://my.roku.com/")) {
+    fail("storeAddUrl must be a https://my.roku.com/ link.");
+  }
+  if (!String(data.storeAddUrl).includes(data.storeCode)) {
+    fail("storeAddUrl does not contain storeCode. Did one change without the other?");
+  }
   if (typeof data.betaFull !== "boolean") fail("betaFull must be true or false.");
   if (!/^[A-Z0-9]{4,20}$/.test(data.accessCode || "")) {
     fail(`accessCode "${data.accessCode}" should be Roku's 4 to 20 letters and digits.`);
@@ -72,7 +86,20 @@ const BETA_FULL_LINE =
 
 // ── the hero button ──────────────────────────────────────────────────────────
 
+// What sits under the store button. Marketing's words (launch copy, 1c).
+const STORE_NOTE = "Opens your Roku account add page. Code NOSTALGEX.";
+
 function renderHeroCta(data) {
+  if (data.storeLive) {
+    return [
+      "",
+      '            <div class="cta-row">',
+      `              <a class="btn btn-ink btn-lg" href="${escapeHtml(data.storeAddUrl)}" ${external}>Add Nostalgex on Roku</a>`,
+      "            </div>",
+      `            <p class="roku-add-note">${STORE_NOTE}</p>`,
+      "            ",
+    ].join("\n");
+  }
   if (data.betaFull) {
     return [
       "",
@@ -104,7 +131,24 @@ function discordButton(data, style) {
   return `<a class="btn ${style} btn-lg" href="${escapeHtml(data.discordUrl)}" ${external}>Join the Discord</a>`;
 }
 
+// The card is wrapped in its section here, so the store page can drop the
+// whole section and leave no empty band behind.
 function renderBeta(data) {
+  if (data.storeLive) return "\n    ";
+  const section = (card) =>
+    [
+      "",
+      '    <section class="section roku-beta" id="beta">',
+      '      <div class="container container-narrow">',
+      card,
+      "      </div>",
+      "    </section>",
+      "    ",
+    ].join("\n");
+  return section(renderBetaCard(data));
+}
+
+function renderBetaCard(data) {
   const code = escapeHtml(data.accessCode);
   const addUrl = escapeHtml(data.addUrl);
   // A break point after each slash, so a phone wraps the link between path parts
@@ -114,7 +158,6 @@ function renderBeta(data) {
 
   if (data.betaFull) {
     return [
-      "",
       '        <div class="cta-card cta-card--pink roku-beta-card is-full reveal">',
       "          <h2>Join the beta</h2>",
       `          <p class="roku-full-lead">${BETA_FULL_LINE}</p>`,
@@ -123,12 +166,10 @@ function renderBeta(data) {
       "          </div>",
       `          <p class="roku-beta-body">${BETA_BODY}</p>`,
       "        </div>",
-      "        ",
     ].join("\n");
   }
 
   return [
-    "",
     '        <div class="cta-card cta-card--yellow roku-beta-card reveal">',
     "          <h2>Join the beta</h2>",
     `          <p class="roku-beta-body">${BETA_BODY}</p>`,
@@ -142,7 +183,6 @@ function renderBeta(data) {
     "          </div>",
     `          <p class="roku-beta-note">${BETA_ROOM_NOTE}</p>`,
     "        </div>",
-    "        ",
   ].join("\n");
 }
 
@@ -187,5 +227,5 @@ if (CHECK) {
   console.log("roku: generated regions match content/roku.json");
 } else {
   if (after !== before) await writeFile(PAGE, after, "utf8");
-  console.log(`roku: rendered roku.html, betaFull=${data.betaFull}`);
+  console.log(`roku: rendered roku.html, storeLive=${data.storeLive}, betaFull=${data.betaFull}`);
 }

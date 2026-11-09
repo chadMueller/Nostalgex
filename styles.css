@@ -750,6 +750,10 @@ a { color: inherit; }
 .tile--yellow { --tile-bg: var(--yellow); }
 .tile--cyan   { --tile-bg: var(--cyan); }
 .tile--pink   { --tile-bg: var(--pink); }
+/* Navy: the Roku tile once the app is on the store. No mark on it (no Roku artwork
+   on the site), so the name sits at the bottom like the dashed tile it replaces. */
+.tile--navy   { --tile-bg: var(--navy); color: var(--navy-ink); }
+.tile--navy .tile-name { margin-top: auto; }
 .tile:hover,
 .tile:focus-visible { transform: translate(-3px, -3px); box-shadow: 9px 9px 0 var(--ink); }
 .tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 5px; }
@@ -2804,6 +2808,13 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
 }
 .page-roku .roku-beta-card.is-full .roku-beta-actions { margin-top: 26px; }
 .page-roku .roku-beta-card.is-full .roku-beta-body { margin-top: 26px; color: var(--ink-soft); font-weight: 500; }
+/* Store page: the small line under the add button. */
+.page-roku .roku-add-note {
+  margin-top: 14px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
 .page-roku .roku-full-note {
   margin-bottom: 18px;
   text-wrap: pretty;

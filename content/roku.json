@@ -14,8 +14,17 @@
     "",
     "announcementPost: the slug of the Roku announcement post in content/blog/, or",
     "null. Once set, the credits section links to /blog/<slug>. The render fails if",
-    "the post does not exist or is still a draft, so the page never links a 404."
+    "the post does not exist or is still a draft, so the page never links a 404.",
+    "",
+    "storeLive is the switch above the switch. true: the app is on the Roku Channel",
+    "Store, so the hero button goes to storeAddUrl and the whole beta section comes",
+    "off the page, whatever betaFull says. false: the beta page as it was, driven by",
+    "betaFull. storeLive only drives the generated regions. The words around them",
+    "(hero line, step 1, the FAQ, the meta descriptions) are plain text in roku.html."
   ],
+  "storeLive": true,
+  "storeCode": "NOSTALGEX",
+  "storeAddUrl": "https://my.roku.com/account/add/NOSTALGEX",
   "betaFull": true,
   "accessCode": "JRLVTGL",
   "addUrl": "https://my.roku.com/account/add/JRLVTGL",

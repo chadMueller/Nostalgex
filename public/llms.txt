@@ -1,6 +1,6 @@
 # Nostalgex
 
-> Nostalgex is a free, open source (MIT) app that turns your own Plex, Jellyfin or Emby media library into 130+ live TV channels in 14 bundles, with a retro channel guide. It runs natively on Apple TV (tvOS 18 or later) and in a web browser through the free web tuner. It needs no paid service and nothing installed on your media server. It does not host or supply any media; everything plays from your own server.
+> Nostalgex is a free, open source (MIT) app that turns your own Plex, Jellyfin or Emby media library into 130+ live TV channels in 14 bundles, with a retro channel guide. It runs natively on Apple TV (tvOS 18 or later) and on Roku, and in a web browser through the free web tuner. It needs no paid service and nothing installed on your media server. It does not host or supply any media; everything plays from your own server.
 
 Nostalgex is made by Chad Mueller (Muell Haus Inc.). It is not affiliated with Plex, Jellyfin, Emby or Apple, and it is a different product from NostalgiaTV.
 
@@ -8,6 +8,7 @@ Nostalgex is made by Chad Mueller (Muell Haus Inc.). It is not affiliated with P
 
 - [Nostalgex on the App Store (Apple TV)](https://apps.apple.com/app/nostalgex/id6762563534): free, tvOS 18 or later
 - [Nostalgex for Apple TV](https://www.nostalgex.app/apple-tv): what the Apple TV app does, how sign-in works for Plex, Jellyfin and Emby, and how it compares to Pseudo TV, Tunarr and ErsatzTV
+- [Nostalgex for Roku](https://www.nostalgex.app/roku): on the Roku Channel Store, or add it from your Roku account with code NOSTALGEX
 - [Web tuner](https://www.nostalgex.app/web-tuner): free, runs in a browser; Jellyfin and Emby need an https address, Plex works as is
 - [Self-host the web tuner](https://www.nostalgex.app/self-host): the same tuner as a Docker container on your own machine, over plain http on your network, so a Jellyfin or Emby server with no https address is reachable from a browser
 
