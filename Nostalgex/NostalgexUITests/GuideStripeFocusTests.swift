@@ -6,7 +6,7 @@ import XCTest
 /// package list, and Left again does too. It is never where first focus goes.
 ///
 /// Demo mode with `-uiTestGuideStripes`: twenty demo channels in four demo packages (RETRO ACTION 1 to 6,
-/// LATE NIGHT 7 to 12, TINY 13, THE REST OF THE DEMO 14 to 20). Storage is isolated.
+/// LATE NIGHT 7 to 12, TINY 13, THE REST OF THE DEMO 14 to 20). Storage is isolated (`isolatedApp`).
 final class GuideStripeFocusTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -37,12 +37,10 @@ final class GuideStripeFocusTests: XCTestCase {
         add(a)
     }
 
-    private func launchGuide(root: String) {
+    private func launchGuide() {
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "\(root)-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideStripes", "-uiTestGuideJumpProbe"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestGuideStripes", "-uiTestGuideJumpProbe"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
@@ -79,7 +77,7 @@ final class GuideStripeFocusTests: XCTestCase {
     private func log(_ step: String) { print("STRIPE \(step): \(focusText())") }
 
     func testLeftFocusesTheStripeUpDownJumpPackagesAndRightReturns() {
-        launchGuide(root: "stripe-path")
+        launchGuide()
 
         // First focus is a row, the playing channel: the stripe is not a focus target yet.
         log("start")
@@ -145,7 +143,7 @@ final class GuideStripeFocusTests: XCTestCase {
     }
 
     func testSelectOnTheStripeOpensThePackageList() {
-        launchGuide(root: "stripe-select")
+        launchGuide()
         press(.left)
         XCTAssertTrue(stripeIsFocused, focusText())
         press(.select, 1.5)
@@ -155,7 +153,7 @@ final class GuideStripeFocusTests: XCTestCase {
     }
 
     func testLeftAgainFromTheStripeOpensThePackageList() {
-        launchGuide(root: "stripe-left-left")
+        launchGuide()
         press(.left)
         XCTAssertTrue(stripeIsFocused, focusText())
         press(.left, 1.5)
