@@ -44,8 +44,9 @@ which always asked, was reworked: the viewer turns it on. The Apple TV has a pic
   fallback when a package is switched off), so a saved channel that is not in the lineup yet (its package off, a collection
   channel not built) is not overwritten by the first channel. The saved channel is cleared on sign-out, as the Apple TV
   clears it on disconnect. Renamed, renumbered, dropped, package off, nothing kept or a damaged value falls back to the first
-  enabled channel. The choice is `scripts/nostalgex-last-channel.js`. The Apple TV builds the same setting first; its wording and
-  place in Settings were not available to read, so the row says "Open on last channel" and sits first in Playback.
+  enabled channel. The choice is `scripts/nostalgex-last-channel.js`. The Apple TV builds the same setting first; the web row's title and
+  line match the Apple TV's ("Open on last channel", "Start on the channel you were last watching"). Only the place differs: the
+  Apple TV puts the row after AUDIO LANGUAGE, the web puts it first in Playback.
   `web-tune-ownership-smoke` lifts `switchChannel` into a sandbox and needed a stub for the new call.
 
 **Measured.** A lab Jellyfin 10.11.11 in a Linux container (Colima), media of generated clips: a user who hides two
@@ -61,8 +62,7 @@ the first version of the branch (it always asked) and show the two positions; th
 - Emby 4.10.1.0 in a container: with `MyMediaExcludes` set through the API, `/Users/{id}/Views` listed all three libraries
   the user may open with and without `IncludeHidden=true`; the library without access was not listed.
 
-**Review fixes (after the reviewer's pass).** No reporter's library sizes are quoted anywhere in the repo (the history was
-rewritten to remove them). Pressing the switch now reads in the background, so a viewer on a channel other than the first is
+**Review fixes (after the reviewer's pass).** No reporter's library sizes are quoted anywhere in the repo. Pressing the switch now reads in the background, so a viewer on a channel other than the first is
 not retuned to channel 1 and Settings stays open (`include-hidden-browser-smoke` toggles from a non-first channel and fails
 against the earlier foreground read). Only tunes the viewer makes are remembered, a saved channel that is not in the lineup
 yet is not overwritten by the first channel, sign-out clears it (`open-last-channel-browser-smoke`, which fails against the
