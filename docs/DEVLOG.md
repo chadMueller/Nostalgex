@@ -43,6 +43,9 @@ and the beta flow (an access code, a Discord queue for tester spots) pointed peo
   Roku app instead of the beta.
 - The sitemap dates for the pages that changed, a Roku line in `llms.txt`, and the README's "Other devices" line,
   which still said the Roku port was "in the works" and installed by sideloading.
+- The product pages name no contributors. The Roku page's credits sentence no longer names anyone (the Roku source and
+  Nostalgex source buttons stay), and two older changelog bullets lose their thanks line. Credit lives in release notes,
+  announcements and the README.
 - Two published blog posts said there is no Roku version (a bullet and a table row in the Tunarr post, one FAQ
   answer in the Plex virtual channels post). Those lines say Roku now. The posts stay published.
 
