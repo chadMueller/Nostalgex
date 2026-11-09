@@ -196,6 +196,10 @@ struct ChannelGuideView: View {
                             }
                         }
                         .onAppear {
+                            // First focus comes from the engine a moment after this, and goes to the
+                            // first row, or the seasonal invite, not the playing channel (I-041).
+                            awaitingFocusHandout = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { awaitingFocusHandout = false }
                             let targetID = appState.currentChannel?.id ?? appState.channels.first?.id
                             if let id = targetID {
                                 focusedChannelID = id

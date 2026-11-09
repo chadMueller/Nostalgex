@@ -198,6 +198,18 @@ enum DemoData {
         )
     }
 
+    // MARK: - Start channel (test only)
+
+    /// `-uiTestStartOnChannel N`: demo mode starts on the N-th channel instead of the first, so a
+    /// UI test can see where the guide puts focus when the playing channel is not the first one.
+    /// Never set in a shipping run.
+    static func startChannel(in channels: [Channel]) -> Channel? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "-uiTestStartOnChannel"), flag + 1 < args.count,
+              let n = Int(args[flag + 1]), channels.indices.contains(n - 1) else { return nil }
+        return channels[n - 1]
+    }
+
     // MARK: - Franchise fixture (test only)
 
     /// `-uiTestFranchiseFixture`: demo mode plus a small enriched library, so the FOUND IN

@@ -19,12 +19,18 @@ entering full screen and from none back to the OLD row on leaving, with the live
   remembers. Acting on the handout puts our request after the engine's, not before it, and a viewer's own move is never
   "from none", so it is left alone.
 - Where: `ChannelGuideView` (one flag, two small hunks) and the pure rule `GuideReturnFocus.target(handedTo:liveChannelID:)`.
-- Not touched: the seasonal invite's first focus, the packages panel and the rows changing behind an open guide.
+- Second commit, same flag and rule, set when the guide first appears: with the playing channel not the first, or a
+  seasonal invite above channel 1, tvOS gave first focus to the first row or the invite instead. Measured on a simulator in
+  demo mode (`-uiTestStartOnChannel 4`, `-uiTestSeasonalInvite`): focus on channel 1, or on the invite, for the 5 seconds
+  watched. On the basement Apple TV 4K (tvOS 27.2) both cases already land on the playing channel without this commit, so it
+  protects the simulator and any tvOS that behaves that way; not measured on another tvOS version.
+- Not touched: the packages panel and the rows changing behind an open guide.
 
-**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) is the case above and fails on main with "the
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has the two cases above; the first fails on main with "the
 guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (4) covers the rule.
-Both outcomes held on a simulator and on a real Apple TV 4K (3rd generation, tvOS 27.2): the test fails without the change
-and passes with it on each. Run on the TV with the app's storage isolated, so nothing the TV holds was touched.
+The return-from-full-screen case fails without the first commit and passes with it on a simulator and on a real Apple TV
+4K (3rd generation, tvOS 27.2). The two first-appearance cases fail without the second commit on the simulator and pass on
+the TV either way. TV runs use isolated app storage, so nothing the TV holds was touched.
 
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 

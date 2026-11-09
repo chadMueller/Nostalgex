@@ -76,4 +76,37 @@ final class GuideFocusAfterFullScreenTests: XCTestCase {
         shot("guide-after-return")
         XCTAssertTrue(landed, "the guide came back on \(panelChannelNumber() ?? "no channel"), not the live channel 6")
     }
+
+    /// The same handout problem when the guide first appears: with the playing channel not the first
+    /// (what OPEN ON LAST CHANNEL does, and a seasonal invite above channel 1 does to the first row),
+    /// tvOS handed focus to the first row, not the channel that is playing.
+    func testGuideOpensOnThePlayingChannelWhenItIsNotTheFirst() {
+        guideOpensOnTheLiveChannel(startingOn: "4", withInvite: false, root: "i041-first-focus")
+    }
+
+    /// A seasonal invite sits above channel 1 while its package is in season; first focus went to it
+    /// instead of the channel that is playing.
+    func testGuideOpensOnThePlayingChannelWithASeasonalInviteAboveChannelOne() {
+        guideOpensOnTheLiveChannel(startingOn: "1", withInvite: true, root: "i041-first-focus-invite")
+    }
+
+    private func guideOpensOnTheLiveChannel(startingOn channel: String, withInvite: Bool, root: String) {
+        continueAfterFailure = false
+        XCUIRemote.shared.press(.menu)
+        Thread.sleep(forTimeInterval: 4)
+        app = XCUIApplication()
+        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = root
+        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels", "-uiTestStartOnChannel", channel]
+            + (withInvite ? ["-uiTestSeasonalInvite"] : [])
+        app.launch()
+        let demo = app.buttons["demo mode"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
+        for _ in 0..<10 where !demo.hasFocus { press(.down, 0.4) }
+        press(.select, 4)
+        XCTAssertTrue(app.buttons["tunerSettingsButton"].waitForExistence(timeout: 30), "tuner never appeared")
+        Thread.sleep(forTimeInterval: 3)
+        shot("guide-first-seconds-\(withInvite ? "invite" : "plain")")
+        XCTAssertTrue(focused().exists && focused().label.hasPrefix("Channel \(channel),"),
+                      "the guide opened on \(focused().exists ? focused().label : "nothing"), not the playing channel \(channel)")
+    }
 }

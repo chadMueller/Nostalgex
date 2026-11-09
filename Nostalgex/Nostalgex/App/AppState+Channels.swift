@@ -209,6 +209,12 @@ extension AppState {
     /// switched on for people — see `autoEnableBundlesWithContent`, which skips them.
     var seasonalBundleOnOffer: ChannelBundle? {
         _ = seasonalPromptRevision   // observation dependency; see the property's note
+        // Test-only: `-uiTestSeasonalInvite` forces the invite row to show, so a UI test can see where
+        // the guide puts first focus with an invite above channel 1. Never set in a shipping run.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestSeasonalInvite") {
+            return ChannelBundle(id: "tis-the-season", name: "TIS THE SEASON", description: nil,
+                                 channelIDs: [], activeMonths: [12])
+        }
         return SeasonalPrompt.bundleToOffer(
             bundles: bundles,
             enabledBundleIDs: enabledBundleIDs,
