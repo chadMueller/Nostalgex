@@ -17,9 +17,11 @@
     "            even on a page deployed before it. Set enabled to false when you next",
     "            touch the file so the markup goes too.",
     "",
-    "Several enabled messages rotate, one at a time. Under reduced motion nothing",
-    "rotates or scrolls: the first live message shows and closing it shows the next.",
-    "A message wider than the screen pans slowly back and forth instead of wrapping."
+    "The message scrolls left without stopping, repeated with a bullet between, at",
+    "about 50 pixels a second. A pause button, hovering and keyboard focus all hold it.",
+    "Several enabled messages take turns, one at a time, each after a full pass.",
+    "Under reduced motion nothing scrolls or rotates and a long message wraps: the",
+    "first live message shows and closing it shows the next."
   ],
   "messages": [
     {

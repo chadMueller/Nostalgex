@@ -8,8 +8,8 @@
 //   scripts/site-chrome.mjs           renderNav() puts it in front of the nav on the
 //                                     generated pages (blog, channel guide)
 //
-// The bar's behaviour (rotation, the slow pan for a long message, pause on hover
-// and focus, the close button) is in app.js, its look in styles.css under
+// The bar's behaviour (the scrolling ticker, rotation, pause on hover, focus and
+// the pause button, the close button) is in app.js, its look in styles.css under
 // `.announce`. Nothing here is read by the web tuner or the Docker build.
 
 import { readFileSync } from "node:fs";
@@ -24,6 +24,9 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{1,48}$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})$/;
 const KEYS = new Set(["id", "enabled", "text", "link", "startsAt", "endsAt"]);
 const MAX_TEXT = 140;
+// https://... or a site path. No backslash anywhere: a browser reads "/\x" as "//x", an
+// address on another site. A path may not start with "//" either.
+const LINK_RE = /^(?:https:\/\/[^\s"<>\\]+|\/(?![/\\])[^\s"<>\\]*)$/;
 // The house copy rules, so a message that breaks them fails the build, not review.
 const FUTURE_PROMISE = /coming soon|free forever|stays? free|no ads|forever free/i;
 
@@ -56,8 +59,8 @@ export function validate(data) {
     if (/[\u2013\u2014]/.test(m.text)) fail(`${at}: text has a dash used as a stop (em or en dash). Use a full stop or a comma.`);
     if (/\p{Extended_Pictographic}/u.test(m.text)) fail(`${at}: text has an emoji.`);
     if (FUTURE_PROMISE.test(m.text)) fail(`${at}: text promises something about the future ("${m.text.match(FUTURE_PROMISE)[0]}").`);
-    if (m.link !== undefined && !/^(?:https:\/\/[^\s"<>]+|\/(?!\/)[^\s"<>]*)$/.test(m.link)) {
-      fail(`${at}: link must be a https:// address or a path starting with a single /.`);
+    if (m.link !== undefined && !LINK_RE.test(m.link)) {
+      fail(`${at}: link must be a https:// address or a path starting with a single /, with no backslash.`);
     }
     for (const key of ["startsAt", "endsAt"]) {
       if (m[key] !== undefined && (!ISO_RE.test(m[key]) || Number.isNaN(Date.parse(m[key])))) {
@@ -84,9 +87,10 @@ export function loadEnded(now = Date.now()) {
 // who closed it never sees it flash and the page jump. app.js applies the same
 // rule when it takes over, and works on its own if this script never ran.
 // Every storage read is wrapped, so a browser with storage off still gets a bar.
-const GUARD =
+export const GUARD =
   "(function(){try{var b=document.getElementById(\"announce\"),d=[];" +
   `try{d=JSON.parse(localStorage.getItem("${DISMISS_KEY}")||"[]")}catch(e){}` +
+  "if(!Array.isArray(d))d=[];" +
   "var n=Date.now(),l=0;[].forEach.call(b.querySelectorAll(\".announce-msg\"),function(m){" +
   "var s=Date.parse(m.getAttribute(\"data-starts\")),e=Date.parse(m.getAttribute(\"data-ends\"));" +
   "if(d.indexOf(m.getAttribute(\"data-id\"))<0&&!(s>n)&&!(e<=n))l++});if(!l)b.hidden=true}catch(e){}})();";
@@ -105,10 +109,13 @@ export function renderBar(messages = loadEnabled()) {
         (m.startsAt ? ` data-starts="${escapeHtml(m.startsAt)}"` : "") +
         (m.endsAt ? ` data-ends="${escapeHtml(m.endsAt)}"` : "") +
         (i === 0 ? "" : " hidden");
-      const text = `<span class="announce-text">${escapeHtml(m.text)}</span>`;
+      // The track is what app.js scrolls. It holds the one real copy of the text; the script adds
+      // aria-hidden copies and bullets beside it, so the message is read once.
+      const track = `<span class="announce-track"><span class="announce-text">${escapeHtml(m.text)}</span></span>`;
+      const external = /^https:/.test(m.link || "");
       const body = m.link
-        ? `<a class="announce-link" href="${escapeHtml(m.link)}"${/^https:/.test(m.link) ? ' target="_blank" rel="noopener"' : ""}>${text}</a>`
-        : text;
+        ? `<a class="announce-link" href="${escapeHtml(m.link)}"${external ? ' target="_blank" rel="noopener"' : ""}>${track}${external ? '<span class="visually-hidden"> (opens in a new tab)</span>' : ""}</a>`
+        : track;
       return `      <p class="announce-msg" ${attrs}>${body}</p>`;
     })
     .join("\n");
@@ -118,6 +125,10 @@ export function renderBar(messages = loadEnabled()) {
     '    <div class="announce-msgs">',
     msgs,
     "    </div>",
+    '    <button class="announce-pause" type="button" aria-pressed="false" aria-label="Pause scrolling">',
+    '      <svg class="announce-ico-pause" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
+    '      <svg class="announce-ico-play" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg>',
+    "    </button>",
     '    <button class="announce-close" type="button" aria-label="Close announcement">',
     '      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>',
     "    </button>",

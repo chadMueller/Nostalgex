@@ -42,18 +42,23 @@
   }
 
   /* ---------- Announcement bar ----------
-     The markup comes from content/announcements.json (scripts/announcements.mjs)
-     and each message's text is in the page once. One message shows at a time.
-     Several rotate every 7 seconds; under reduced motion nothing rotates, the first
-     live one stays and closing it shows the next. A message wider than the bar
-     pans slowly back and forth (the one copy of the text moves, it is never
-     duplicated). Hover and focus pause both. Closed ids are kept in localStorage;
-     every read and write is in try/catch, so the bar works with storage off, for
-     the page at hand. */
+     The markup comes from content/announcements.json (scripts/announcements.mjs).
+     The message is in the page once, in a link, and that is the copy a screen reader
+     gets. This makes it a ticker: it fills the track with aria-hidden copies of the
+     text with a bullet between, and the CSS scrolls the track left by exactly one
+     copy and starts again, so the loop has no seam. It scrolls at about 50px a
+     second, held while a hand or the keyboard is on the bar or after the pause
+     button. Several messages rotate, each after a full pass. Under reduced motion
+     nothing is built, nothing moves and nothing rotates: the first live message
+     shows and closing it shows the next. Closed ids are kept in localStorage; every
+     read and write is in try/catch, so the bar works with storage off, for the page
+     at hand. */
   (function () {
     var bar = document.getElementById("announce");
     if (!bar || bar.hidden) return;
     var KEY = "nostalgex-announce-v1"; /* keep in step with DISMISS_KEY in scripts/announcements.mjs */
+    var SPEED = 50;      /* pixels a second */
+    var HOLD_MS = 8000;  /* the least time a message stays before the next one */
     var closed = [];
     try { closed = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
     if (!Array.isArray(closed)) closed = [];
@@ -68,24 +73,54 @@
     });
     if (!live.length) { bar.hidden = true; return; }
 
-    var cur = 0, dwell = 7000, hold = false, timer = null;
+    var cur = 0, dwell = HOLD_MS, hold = false, paused = false, timer = null;
 
-    /* Pan only when the text is wider than the bar. Returns the length of one pass in seconds. */
-    function fit(m) {
-      var text = m.querySelector(".announce-text");
-      m.classList.remove("is-pan");
-      var over = text.offsetWidth - m.clientWidth;
-      if (over < 2 || reduceMotion) return 0;
-      var secs = Math.max(6, over / 25); /* about 35px a second between the two pauses */
-      text.style.setProperty("--announce-shift", -over + "px");
-      text.style.setProperty("--announce-dur", secs.toFixed(1) + "s");
-      m.classList.add("is-pan");
-      return secs;
+    function bullet() {
+      var b = document.createElement("span");
+      b.className = "announce-sep";
+      b.setAttribute("aria-hidden", "true");
+      b.textContent = "\u2022";
+      return b;
+    }
+
+    /* Build the loop for the message on show. Returns the seconds one pass takes. */
+    function ticker(m) {
+      var track = m.querySelector(".announce-track");
+      var text = track.querySelector(".announce-text");
+      [].slice.call(track.querySelectorAll(".announce-clone, .announce-sep")).forEach(function (n) { n.remove(); });
+      track.classList.remove("is-moving");
+      bar.classList.remove("is-ticker");
+      if (reduceMotion) return 0;
+
+      function copy() {
+        var c = text.cloneNode(true);
+        c.classList.add("announce-clone");
+        c.setAttribute("aria-hidden", "true"); /* a visual repeat, not a second message */
+        return c;
+      }
+      track.appendChild(bullet());
+      var first = copy();
+      track.appendChild(first);
+      /* One copy plus its bullet: the distance the track moves before it repeats. */
+      var unit = first.getBoundingClientRect().left - text.getBoundingClientRect().left;
+      if (unit < 20) return 0;
+      /* At least twice the window wide, and always wider than the strip plus one copy. */
+      var need = Math.max(2 * window.innerWidth, m.clientWidth + unit + 1);
+      track.appendChild(bullet());
+      for (var n = 0; track.offsetWidth < need && n < 80; n++) {
+        track.appendChild(copy());
+        track.appendChild(bullet());
+      }
+      track.style.setProperty("--announce-unit", -unit + "px");
+      track.style.setProperty("--announce-dur", (unit / SPEED).toFixed(2) + "s");
+      track.classList.add("is-moving");
+      bar.classList.add("is-ticker");
+      return unit / SPEED;
     }
 
     function schedule() {
       clearTimeout(timer);
-      if (live.length < 2 || reduceMotion) return;
+      if (live.length < 2 || reduceMotion || paused) return;
       timer = setTimeout(function () {
         if (hold || document.hidden) return schedule(); /* wait while it is being read */
         show((cur + 1) % live.length, true);
@@ -96,7 +131,7 @@
       live.forEach(function (m, j) { m.hidden = j !== i; });
       cur = i;
       var m = live[i];
-      dwell = Math.max(7000, fit(m) * 1000);
+      dwell = Math.max(HOLD_MS, ticker(m) * 1000);
       if (fade && !reduceMotion) {
         m.classList.remove("is-entering");
         void m.offsetWidth;
@@ -106,20 +141,31 @@
     }
 
     show(0, false);
-    /* Widths change when the webfont arrives and when the window is resized. */
-    function refit() { if (live.length) fit(live[cur]); }
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
+    /* Widths change when the webfont arrives and when the window is resized: rebuild. */
+    function rebuild() { if (live.length) ticker(live[cur]); }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuild);
     var resizeTimer;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(refit, 150);
+      resizeTimer = setTimeout(rebuild, 150);
     });
 
     function hovering(e) { return e.pointerType === "mouse"; }
     bar.addEventListener("pointerenter", function (e) { if (hovering(e)) hold = true; });
     bar.addEventListener("pointerleave", function (e) { if (hovering(e)) hold = false; });
-    bar.addEventListener("focusin", function () { hold = true; });
+    bar.addEventListener("focusin", function (e) { hold = e.target.matches(":focus-visible"); }); /* keyboard focus only */
     bar.addEventListener("focusout", function () { hold = false; });
+
+    /* WCAG 2.2.2: moving text that runs longer than five seconds needs a way to stop it. */
+    var pauseBtn = bar.querySelector(".announce-pause");
+    if (pauseBtn) {
+      pauseBtn.addEventListener("click", function () {
+        paused = pauseBtn.getAttribute("aria-pressed") !== "true";
+        pauseBtn.setAttribute("aria-pressed", String(paused));
+        bar.classList.toggle("is-paused", paused);
+        if (paused) clearTimeout(timer); else schedule();
+      });
+    }
 
     var closeBtn = bar.querySelector(".announce-close");
     if (closeBtn) {

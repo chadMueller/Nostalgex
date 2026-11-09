@@ -274,15 +274,17 @@ a { color: inherit; }
 .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 
 /* ---------- Announcement bar ----------
-   A slim strip above the nav for news. Written into every marketing page from
-   content/announcements.json (scripts/announcements.mjs); app.js rotates the
-   messages and pans one that is wider than the screen. The nav is sticky, the bar
-   is not, so it scrolls away and the nav stays. The height is fixed from first
+   A slim yellow strip above the nav for news. Written into every marketing page
+   from content/announcements.json (scripts/announcements.mjs). app.js turns the
+   message into a ticker: it scrolls left without stopping, repeated with a bullet
+   between, and rotates if there is more than one. The yellow and the ink are the
+   brand colours and stay the same in both themes. The nav is sticky, the bar is
+   not, so it scrolls away and the nav stays. The height is fixed from first
    paint, so nothing moves when the script runs. */
 .announce {
-  background: var(--paper-deep);
-  color: var(--ink);
-  border-bottom: 1px solid var(--hairline);
+  background: var(--yellow);
+  color: var(--on-accent);
+  border-bottom: 1px solid #b38f00;   /* a darker edge, so it parts from a dark nav */
   font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 700;
@@ -297,22 +299,33 @@ a { color: inherit; }
   display: flex;
   align-items: center;
 }
-/* Same width as the close button, so the message sits in the middle of the bar. */
-.announce-inner::before { content: ""; flex: none; width: 36px; }
 .announce-msgs { flex: 1; min-width: 0; }
+/* While it scrolls, the text fades in and out at the two ends of the strip. */
+.announce.is-ticker .announce-msgs {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+}
 .announce-msg {
   margin: 0;
   /* Room for the underline: the box clips, and an underline sits below the line box. */
   padding-block: 4px;
   overflow: hidden;
+  /* The scrolling track is far wider than the strip. overflow clips what is drawn, but the
+     page's scroll width still counted it (3000px at 1440, and a phone browser can zoom
+     out to fit that), so the box also contains its paint. */
+  contain: paint;
   white-space: nowrap;
-  text-align: center;
-  text-overflow: ellipsis;
+  text-align: left;
+  text-overflow: ellipsis;   /* what a browser without the script shows */
 }
 .announce-msg[hidden] { display: none; }
-.announce-msg.is-pan { text-align: left; text-overflow: clip; }
 .announce-msg.is-entering { animation: announce-in 320ms var(--ease); }
 .announce-link { color: inherit; text-decoration: none; }
+.announce-track { display: inline-flex; align-items: baseline; }
+.announce-track.is-moving {
+  animation: announce-scroll var(--announce-dur, 12s) linear infinite;
+  will-change: transform;
+}
 .announce-text { display: inline-block; }
 /* On the span, not the link: an underline does not pass into an inline-block. */
 .announce-link .announce-text {
@@ -320,14 +333,15 @@ a { color: inherit; }
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
-.announce-link:hover .announce-text { text-decoration-color: var(--pink); }
-.announce-msg.is-pan .announce-text {
-  animation: announce-pan var(--announce-dur, 12s) ease-in-out infinite alternate;
-}
-/* Pause while a hand or the keyboard is on it, so a long message can be read. */
-.announce:hover .announce-text,
-.announce:focus-within .announce-text { animation-play-state: paused; }
-.announce-close {
+.announce-link:hover .announce-text { text-decoration-thickness: 3px; }
+.announce-sep { margin-inline: 1.3em; }
+/* Held while a hand or the keyboard is on the bar, or after the pause button. Only keyboard
+   focus counts: after a mouse click on a button the focus stays there, and that must not
+   leave the ticker stopped once the pointer has gone. */
+.announce.is-paused .announce-track,
+.announce:hover .announce-track,
+.announce:has(:focus-visible) .announce-track { animation-play-state: paused; }
+.announce-pause, .announce-close {
   flex: none;
   width: 36px;
   height: 36px;
@@ -341,24 +355,33 @@ a { color: inherit; }
   color: inherit;
   cursor: pointer;
 }
-.announce-close svg { width: 14px; height: 14px; }
-.announce-close:hover { color: var(--pink); }
-/* The site's pink ring is under 3:1 on this background, so the bar uses ink. */
-.announce :focus-visible { outline-color: var(--ink); outline-offset: -3px; }
-@keyframes announce-pan {
-  0%, 14% { transform: translateX(0); }
-  86%, 100% { transform: translateX(var(--announce-shift, 0px)); }
+.announce-pause svg, .announce-close svg { width: 14px; height: 14px; }
+/* Ink fills in, yellow on ink is 13:1. */
+.announce-pause:hover, .announce-close:hover { background: var(--on-accent); color: var(--yellow); }
+.announce-pause { display: none; }   /* there is nothing to pause until the script is scrolling it */
+.announce.is-ticker .announce-pause { display: inline-flex; }
+.announce-pause .announce-ico-play { display: none; }
+.announce-pause[aria-pressed="true"] .announce-ico-play { display: block; }
+.announce-pause[aria-pressed="true"] .announce-ico-pause { display: none; }
+/* Ink ring on yellow, 13:1. */
+.announce :focus-visible { outline-color: var(--on-accent); outline-offset: -3px; }
+@keyframes announce-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--announce-unit, -100%)); }
 }
 @keyframes announce-in { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 480px) {
   .announce { font-size: 12px; }
   .announce-inner { width: calc(100% - 40px); }
 }
-/* Nothing moves. A long message wraps and the bar grows to fit it. */
+/* Nothing moves, so there is nothing to pause. The message sits in the middle and a
+   long one wraps, and the bar grows to fit it. */
 @media (prefers-reduced-motion: reduce) {
-  .announce-msg { white-space: normal; overflow: visible; text-overflow: clip; padding-block: 8px; }
-  .announce-msg.is-pan { text-align: center; }
-  .announce-msg.is-entering, .announce-msg.is-pan .announce-text { animation: none; }
+  .announce-inner::before { content: ""; flex: none; width: 36px; }   /* centres it against the close button */
+  .announce-msg { white-space: normal; overflow: visible; text-overflow: clip; text-align: center; padding-block: 8px; }
+  .announce-track { display: inline; animation: none !important; }
+  .announce-pause { display: none !important; }
+  .announce-msg.is-entering { animation: none; }
 }
 @media print { .announce { display: none; } }
 
@@ -3037,16 +3060,29 @@ sup.tm { font-size: 0.32em; vertical-align: top; position: relative; top: 0.35em
    house parts (.btn-outline, .cta-sticker, .server-mark).
    ══════════════════════════════════════════════════════════════════ */
 
-/* .cta-sticker is absolutely positioned, so the button is its anchor here. */
-.page-home .hero-roku { margin-top: 34px; }
+/* Apple TV, Roku, then the web tuner. Apple TV and Roku share the first row and
+   the Roku line sits under its button; the web tuner button has the row below.
+   .cta-sticker is absolutely positioned, so the Roku button is its anchor. */
+.page-home .hero-actions {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
 .page-home .hero-roku .btn { position: relative; }
 .page-home .hero-roku .cta-sticker { top: -21px; right: -22px; }
-/* The button runs full width on a phone, so the sticker hangs inside it. */
+.page-home .hero-tuner { grid-column: 1 / -1; justify-self: start; }
+/* A phone gets one column: Apple TV, Roku and its line, the web tuner. The buttons
+   run full width, so the sticker hangs inside the Roku one. */
+@media (max-width: 560px) {
+  .page-home .hero-actions { grid-template-columns: 1fr; }
+  .page-home .hero-tuner { grid-column: auto; justify-self: stretch; }
+}
 @media (max-width: 480px) {
   .page-home .hero-roku .cta-sticker { right: 16px; }
 }
 .page-home .hero-roku-note {
-  margin-top: 16px;
+  margin-top: 10px;
   font-size: 15px;
   font-weight: 500;
   color: var(--ink-soft);

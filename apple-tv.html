@@ -148,13 +148,17 @@
   <div class="announce" id="announce" role="region" aria-label="Announcement">
     <div class="announce-inner">
       <div class="announce-msgs">
-        <p class="announce-msg" data-id="roku-store-launch" data-ends="2026-12-07T00:00:00-05:00"><a class="announce-link" href="https://my.roku.com/account/add/NOSTALGEX" target="_blank" rel="noopener"><span class="announce-text">Nostalgex is on the Roku Channel Store. Add it with the code NOSTALGEX.</span></a></p>
+        <p class="announce-msg" data-id="roku-store-launch" data-ends="2026-12-07T00:00:00-05:00"><a class="announce-link" href="https://my.roku.com/account/add/NOSTALGEX" target="_blank" rel="noopener"><span class="announce-track"><span class="announce-text">Nostalgex is on the Roku Channel Store. Add it with the code NOSTALGEX.</span></span><span class="visually-hidden"> (opens in a new tab)</span></a></p>
       </div>
+      <button class="announce-pause" type="button" aria-pressed="false" aria-label="Pause scrolling">
+        <svg class="announce-ico-pause" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+        <svg class="announce-ico-play" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg>
+      </button>
       <button class="announce-close" type="button" aria-label="Close announcement">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
       </button>
     </div>
-    <script>(function(){try{var b=document.getElementById("announce"),d=[];try{d=JSON.parse(localStorage.getItem("nostalgex-announce-v1")||"[]")}catch(e){}var n=Date.now(),l=0;[].forEach.call(b.querySelectorAll(".announce-msg"),function(m){var s=Date.parse(m.getAttribute("data-starts")),e=Date.parse(m.getAttribute("data-ends"));if(d.indexOf(m.getAttribute("data-id"))<0&&!(s>n)&&!(e<=n))l++});if(!l)b.hidden=true}catch(e){}})();</script>
+    <script>(function(){try{var b=document.getElementById("announce"),d=[];try{d=JSON.parse(localStorage.getItem("nostalgex-announce-v1")||"[]")}catch(e){}if(!Array.isArray(d))d=[];var n=Date.now(),l=0;[].forEach.call(b.querySelectorAll(".announce-msg"),function(m){var s=Date.parse(m.getAttribute("data-starts")),e=Date.parse(m.getAttribute("data-ends"));if(d.indexOf(m.getAttribute("data-id"))<0&&!(s>n)&&!(e<=n))l++});if(!l)b.hidden=true}catch(e){}})();</script>
   </div>
   <!-- ANNOUNCE:END (auto-generated) -->
 

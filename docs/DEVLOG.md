@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (site: the announcement bar is a yellow ticker; home buttons reordered)
+
+**Why.** Chad looked at the bar and wanted it brighter and a real ticker. He also wanted Roku before the web tuner on
+the home page, a New badge on `/roku`, and the web tuner button to say "Play on the Web Tuner". The review of the first
+bar (5440ea41) passed with five small items, folded in here.
+
+**Changed.**
+- The bar is the brand yellow (#FFD91C) with ink text in both themes, a darker edge under it, ink underline and buttons.
+  The text now scrolls left without stopping at about 50 px a second: `app.js` fills the track with `aria-hidden`
+  copies and a bullet between, and the CSS moves the track by exactly one copy, so the loop has no seam. The one real
+  copy sits in the link, so assistive technology reads the message once. It holds on hover, on keyboard focus and after a
+  new pause button (`aria-pressed`, named "Pause scrolling"). Several messages each stay for a full pass, 8 seconds at
+  least. Under reduced motion nothing is built or moves, the pause button is hidden, the text is centred and wraps.
+- Review items: a link may not contain a backslash (`/\x` is read as `//x`, another site), the inline guard only trusts
+  a stored array, an external link says "(opens in a new tab)" to assistive technology, and the button hover is ink with
+  yellow text (13:1) instead of pink. `scripts/announcements-smoke.mjs` (`npm run test:announcements`, in `npm test`)
+  covers the validator, the markup and the guard.
+- Found while testing: the scrolling track made the page's scroll width 3000 px at 1440 (the window did not scroll, but
+  a phone browser can zoom out to fit that). The message box now contains its paint. And `:focus-within` kept the
+  ticker stopped after a mouse click on the pause button; it is `:has(:focus-visible)` now, keyboard focus only.
+- Home hero order is Apple TV, Roku (with its Channel Store line under it), then the web tuner, one column on a phone.
+  The device tiles are Apple TV, Roku, Web tuner, Docker. The web tuner hero button reads "Play on the Web Tuner" on the
+  home page and the Plex, Jellyfin and Emby pages. `/roku` carries a New sticker on its headline.
+
+**Not changed.** The nav "Web app" label, the "Open the web tuner" buttons in the closing bands, the footer link order
+(Apple TV, Web tuner, Roku), and the Apple TV FAQ sentence that names the web tuner before Roku.
+
+**Measured.** `npm test` and `npm run build` pass; the tuner's 28 files and the Docker output's 81 files hash the same as
+origin/main. A headless run (126 checks) covers speed (40 to 60 px/s), a seamless loop (each repeat exactly one unit),
+pause by hover, focus and button, one copy for a screen reader, reduced motion, resize, storage off, dismissal.
+
 ## 2026-11-09 (site: an announcement bar above the nav)
 
 **Why.** The site had no place for news. The Roku launch is the first thing for it, and it should be reusable: a
