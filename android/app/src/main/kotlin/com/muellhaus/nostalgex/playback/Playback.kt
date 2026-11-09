@@ -143,9 +143,15 @@ class Playback(
      * A quarter is 48 MB at 192 MB (about 5 s of 80 Mbps, 13 s of 30 Mbps), 96 MB at 384 MB and
      * 128 MB at 512 MB, never more than the default video and audio buffers together.
      */
-    private fun bufferBytes(): Int {
-        val quarter = Runtime.getRuntime().maxMemory() / 4
-        return quarter.coerceIn(16L * 1024 * 1024, DefaultLoadControl.DEFAULT_VIDEO_BUFFER_SIZE.toLong() + DefaultLoadControl.DEFAULT_AUDIO_BUFFER_SIZE).toInt()
+    private fun bufferBytes(context: Context): Int {
+        val max = Runtime.getRuntime().maxMemory()
+        val cap = (max / 4).coerceIn(16L * 1024 * 1024, DefaultLoadControl.DEFAULT_VIDEO_BUFFER_SIZE.toLong() + DefaultLoadControl.DEFAULT_AUDIO_BUFFER_SIZE).toInt()
+        // Once, as the player is made, so a log says whether largeHeap took on this TV: the heap
+        // limit matches the large class when it did, the standard class when it didn't.
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        Log.i(TAG, "PLAYER BUFFER cap ${cap / MIB} MiB, a quarter of a ${max / MIB} MiB heap limit " +
+            "(this TV: ${am?.memoryClass ?: "?"} MiB standard, ${am?.largeMemoryClass ?: "?"} MiB with largeHeap)")
+        return cap
     }
 
     private var attempt = 0
@@ -156,7 +162,7 @@ class Playback(
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(http).setLoadErrorHandlingPolicy(NoRetryOnHttpError))
-        .setLoadControl(DefaultLoadControl.Builder().setTargetBufferBytes(bufferBytes()).build())
+        .setLoadControl(DefaultLoadControl.Builder().setTargetBufferBytes(bufferBytes(context)).build())
         .build()
         .apply {
             playWhenReady = true
@@ -626,6 +632,7 @@ class Playback(
 
     companion object {
         private const val TAG = "Nostalgex"
+        private const val MIB = 1024L * 1024
 
         /**
          * The starvation monitor's stall length: 2 s where the Apple TV uses 3. Measured on the

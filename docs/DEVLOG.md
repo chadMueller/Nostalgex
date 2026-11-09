@@ -7,6 +7,8 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.** `feature/android` is rebased onto `70686b63` (channels.json v50); only `docs/DEVLOG.md` conflicted. `MediaBrowserLibrary.fetchItems` names `OfficialRating` and `CommunityRating` in `Fields`, as the web tuner and Roku now do (#204). Emby 4.10 leaves both out of an `/Items` answer unless asked, so on Emby every title read as unrated, for the content-rating channels, VHS VAULT's 9 PM hold, WATERSHED and the `ratingMin` channels alike. `MediaBrowserScanTest` caught it: the web's vectors carry the two names and Android's requests did not. 212 engine tests, 0 failures.
 
+The player logs its buffer cap once, as it is made, with the heap limit and the TV's standard and `largeHeap` classes, so a log shows whether `largeHeap` took (asked for on PR #151). On a SHIELD: `PLAYER BUFFER cap 128 MiB, a quarter of a 512 MiB heap limit (this TV: 192 MiB standard, 512 MiB with largeHeap)`. A 4K HEVC film with E-AC-3 audio then direct played in 4.4 s with the Java heap at 176 to 183 MiB over 40 s.
+
 **Not checked.** Against an Emby: the test Emby here refused the sign-in tried, so the fix rests on the web tuner's measurement (0 of 200 films carried either field without the names, 195 and 197 with them).
 
 ## 2026-11-11 (Web tuner: the guide row no longer runs past its window when an airing crosses local midnight)
