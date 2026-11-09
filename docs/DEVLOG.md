@@ -3,6 +3,48 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (site: an announcement bar above the nav)
+
+**Why.** The site had no place for news. The Roku launch is the first thing for it, and it should be reusable: a
+message goes in a file, not in nine pages.
+
+**Changed.**
+- `content/announcements.json` holds the messages (`id`, `enabled`, `text`, optional `link`, `startsAt`, `endsAt`).
+  `scripts/announcements.mjs` validates it (unique slug ids, 140 characters, no em or en dashes, no emoji, no
+  "coming soon" style promises, https or `/` links, ISO dates with an offset) and renders the bar.
+- The bar is written into the nine static pages between `ANNOUNCE` markers by `scripts/render-announcements.mjs`
+  (`npm run announce:render`, run by `npm run build`; `npm run announce:render:check` is in `npm test`). The blog and
+  the channel guide get it from `renderNav()` in `scripts/site-chrome.mjs`. Not on privacy, terms and the 404 page
+  (no nav there), and not on the web tuner pages, which the script never opens. A new marketing page with the site nav
+  goes in `PAGES` in that script and gets the two marker lines above its nav.
+- `styles.css` (`.announce`) and `app.js`: one message at a time, rotating every 7 seconds if several are on; a message
+  wider than the screen pans slowly back and forth (one copy of the text, nothing duplicated); hover and focus pause
+  it; the close button remembers the id in `localStorage` (every read and write in try/catch); a new id shows again.
+  Under reduced motion nothing rotates or moves, long text wraps, and closing the first message shows the next. Ink on
+  the paper-deep colour is 15:1 in both themes; the focus ring uses ink because the site's pink is under 3:1 there.
+- A short inline script right after the bar hides it before first paint when every message is closed, not started or
+  ended, so a visitor who closed it does not see the page jump on each page. `app.js` applies the same rule and works
+  without it.
+- First message (marketing's wording is a draft): "Nostalgex is on the Roku Channel Store. Add it with the code
+  NOSTALGEX." linking to the Roku add page, ends 2026-12-07. The browser hides a message after `endsAt` even on a page
+  deployed earlier; set `enabled` to false when the file is next touched so the markup goes too.
+
+**Measured.** `npm test` and `npm run build` pass, and the files the tuner ships hash the same as before. A headless
+Chromium run against the built site (1440, 1024 and 390 px, light and dark):
+- Layout shift with the bar equals the same page without it: 0.046 against 0.049 on `/roku` at 1440, 0.153 against
+  0.162 on the home page at 390. (That shift is the hero when the webfont swaps in, about 0.11 on the home page at 1440
+  and 0.16 at 390. It was there before the bar and is not changed here.)
+- A visitor who closed the bar gets no jump on the next page. Without the inline script the nav sits 37 px low for the
+  first frame, at normal speed and at 6x slower CPU; with it the nav is at the top in every frame.
+- Contrast of the text and the close icon is 15.3:1 dark and 15.4:1 light; the focus ring is 15:1.
+- At 390 px the message (538 px of text in 278) pans, one pass takes 10.4 s, and hover stops it. Three messages rotate
+  at about 7 seconds, hover holds the one on screen, and reduced motion does not rotate.
+- With `localStorage` throwing on every call the bar renders and closes for the page, no console errors.
+- The link underline was clipped by the message box at first (the box hides overflow and the underline sits below
+  the line box). Caught by a pixel check, fixed with 4 px of vertical padding.
+
+**Half-done.** Not checked with a screen reader. The message wording is a draft for marketing.
+
 ## 2026-11-09 (site: New sticker on the Roku items, /roku shows the Roku store screenshots)
 
 **Why.** Roku is on the Channel Store, and the home page gave the Roku button and tile nothing to say that it is

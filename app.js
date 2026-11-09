@@ -41,6 +41,107 @@
     onScroll();
   }
 
+  /* ---------- Announcement bar ----------
+     The markup comes from content/announcements.json (scripts/announcements.mjs)
+     and each message's text is in the page once. One message shows at a time.
+     Several rotate every 7 seconds; under reduced motion nothing rotates, the first
+     live one stays and closing it shows the next. A message wider than the bar
+     pans slowly back and forth (the one copy of the text moves, it is never
+     duplicated). Hover and focus pause both. Closed ids are kept in localStorage;
+     every read and write is in try/catch, so the bar works with storage off, for
+     the page at hand. */
+  (function () {
+    var bar = document.getElementById("announce");
+    if (!bar || bar.hidden) return;
+    var KEY = "nostalgex-announce-v1"; /* keep in step with DISMISS_KEY in scripts/announcements.mjs */
+    var closed = [];
+    try { closed = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+    if (!Array.isArray(closed)) closed = [];
+
+    var now = Date.now();
+    var live = [].slice.call(bar.querySelectorAll(".announce-msg")).filter(function (m) {
+      var starts = Date.parse(m.getAttribute("data-starts"));
+      var ends = Date.parse(m.getAttribute("data-ends"));
+      var show = closed.indexOf(m.getAttribute("data-id")) < 0 && !(starts > now) && !(ends <= now);
+      m.hidden = true;
+      return show;
+    });
+    if (!live.length) { bar.hidden = true; return; }
+
+    var cur = 0, dwell = 7000, hold = false, timer = null;
+
+    /* Pan only when the text is wider than the bar. Returns the length of one pass in seconds. */
+    function fit(m) {
+      var text = m.querySelector(".announce-text");
+      m.classList.remove("is-pan");
+      var over = text.offsetWidth - m.clientWidth;
+      if (over < 2 || reduceMotion) return 0;
+      var secs = Math.max(6, over / 25); /* about 35px a second between the two pauses */
+      text.style.setProperty("--announce-shift", -over + "px");
+      text.style.setProperty("--announce-dur", secs.toFixed(1) + "s");
+      m.classList.add("is-pan");
+      return secs;
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      if (live.length < 2 || reduceMotion) return;
+      timer = setTimeout(function () {
+        if (hold || document.hidden) return schedule(); /* wait while it is being read */
+        show((cur + 1) % live.length, true);
+      }, dwell);
+    }
+
+    function show(i, fade) {
+      live.forEach(function (m, j) { m.hidden = j !== i; });
+      cur = i;
+      var m = live[i];
+      dwell = Math.max(7000, fit(m) * 1000);
+      if (fade && !reduceMotion) {
+        m.classList.remove("is-entering");
+        void m.offsetWidth;
+        m.classList.add("is-entering");
+      }
+      schedule();
+    }
+
+    show(0, false);
+    /* Widths change when the webfont arrives and when the window is resized. */
+    function refit() { if (live.length) fit(live[cur]); }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
+    var resizeTimer;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(refit, 150);
+    });
+
+    function hovering(e) { return e.pointerType === "mouse"; }
+    bar.addEventListener("pointerenter", function (e) { if (hovering(e)) hold = true; });
+    bar.addEventListener("pointerleave", function (e) { if (hovering(e)) hold = false; });
+    bar.addEventListener("focusin", function () { hold = true; });
+    bar.addEventListener("focusout", function () { hold = false; });
+
+    var closeBtn = bar.querySelector(".announce-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () {
+        var id = live[cur].getAttribute("data-id");
+        if (closed.indexOf(id) < 0) closed.push(id);
+        try { localStorage.setItem(KEY, JSON.stringify(closed.slice(-40))); } catch (e) {}
+        live[cur].hidden = true;
+        live.splice(cur, 1);
+        if (live.length) {
+          show(cur % live.length, true);
+        } else {
+          clearTimeout(timer);
+          bar.hidden = true;
+          /* The button that had focus is gone; hand focus to the logo so it is not lost. */
+          var brand = document.querySelector("#nav .brand");
+          if (brand) brand.focus();
+        }
+      });
+    }
+  })();
+
   /* ---------- Mobile menu (hamburger) ----------
      Nav links and the social icons hide out of the bar at 1024px; this is
      where they live instead. */

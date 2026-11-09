@@ -15,6 +15,8 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+import { renderBar } from "./announcements.mjs";
+
 export const SITE_ORIGIN = "https://www.nostalgex.app";
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image-1200.png`;
 export const DEFAULT_OG_ALT =
@@ -55,8 +57,13 @@ export function escapeAttr(text) {
   return escapeHtml(text);
 }
 
+// The announcement bar (content/announcements.json) sits in front of the nav, so
+// every generated page gets it from here. The static pages carry the same markup
+// in an ANNOUNCE region that scripts/render-announcements.mjs keeps current.
 export function renderNav() {
-  return `
+  const bar = renderBar();
+  const announce = bar ? `\n  ${bar.split("\n").join("\n  ")}\n` : "";
+  return `${announce}
   <header class="nav" id="nav">
     <div class="nav-inner">
       <a class="brand" href="/" aria-label="Nostalgex, home">

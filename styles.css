@@ -273,6 +273,95 @@ a { color: inherit; }
 
 .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 
+/* ---------- Announcement bar ----------
+   A slim strip above the nav for news. Written into every marketing page from
+   content/announcements.json (scripts/announcements.mjs); app.js rotates the
+   messages and pans one that is wider than the screen. The nav is sticky, the bar
+   is not, so it scrolls away and the nav stays. The height is fixed from first
+   paint, so nothing moves when the script runs. */
+.announce {
+  background: var(--paper-deep);
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+.announce[hidden] { display: none; }
+.announce-inner {
+  width: min(var(--container), 100% - 48px);
+  margin-inline: auto;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+/* Same width as the close button, so the message sits in the middle of the bar. */
+.announce-inner::before { content: ""; flex: none; width: 36px; }
+.announce-msgs { flex: 1; min-width: 0; }
+.announce-msg {
+  margin: 0;
+  /* Room for the underline: the box clips, and an underline sits below the line box. */
+  padding-block: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
+  text-overflow: ellipsis;
+}
+.announce-msg[hidden] { display: none; }
+.announce-msg.is-pan { text-align: left; text-overflow: clip; }
+.announce-msg.is-entering { animation: announce-in 320ms var(--ease); }
+.announce-link { color: inherit; text-decoration: none; }
+.announce-text { display: inline-block; }
+/* On the span, not the link: an underline does not pass into an inline-block. */
+.announce-link .announce-text {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.announce-link:hover .announce-text { text-decoration-color: var(--pink); }
+.announce-msg.is-pan .announce-text {
+  animation: announce-pan var(--announce-dur, 12s) ease-in-out infinite alternate;
+}
+/* Pause while a hand or the keyboard is on it, so a long message can be read. */
+.announce:hover .announce-text,
+.announce:focus-within .announce-text { animation-play-state: paused; }
+.announce-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.announce-close svg { width: 14px; height: 14px; }
+.announce-close:hover { color: var(--pink); }
+/* The site's pink ring is under 3:1 on this background, so the bar uses ink. */
+.announce :focus-visible { outline-color: var(--ink); outline-offset: -3px; }
+@keyframes announce-pan {
+  0%, 14% { transform: translateX(0); }
+  86%, 100% { transform: translateX(var(--announce-shift, 0px)); }
+}
+@keyframes announce-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 480px) {
+  .announce { font-size: 12px; }
+  .announce-inner { width: calc(100% - 40px); }
+}
+/* Nothing moves. A long message wraps and the bar grows to fit it. */
+@media (prefers-reduced-motion: reduce) {
+  .announce-msg { white-space: normal; overflow: visible; text-overflow: clip; padding-block: 8px; }
+  .announce-msg.is-pan { text-align: center; }
+  .announce-msg.is-entering, .announce-msg.is-pan .announce-text { animation: none; }
+}
+@media print { .announce { display: none; } }
+
 /* ---------- Nav ---------- */
 .nav {
   position: sticky;
