@@ -26,6 +26,32 @@ its longest step 107 and 128 ms).
 
 **Open.** A Plex library, the same library on an Apple TV, a package switched on during the visit, a stick.
 
+## 2026-11-09 (site: Roku goes from the beta to the Channel Store)
+
+**Why.** The Roku app is on the Roku Channel Store, so the pages that still said "beta" or "coming soon" were wrong,
+and the beta flow (an access code, a Discord queue for tester spots) pointed people at something they no longer need.
+
+**Changed.**
+- `/roku` has a store mode. `storeLive` in `content/roku.json` is the switch, read by `scripts/render-roku.mjs`.
+  On: the hero button is the Roku add link for the Channel Store code, and the whole "Join the beta" section is
+  gone (the renderer now owns the section wrapper, so no empty band is left behind). Off: the beta page renders
+  exactly as before, `betaFull` still decides how. The hero line, step 1, the FAQ answers and the three meta
+  descriptions are plain text in `roku.html` and now say Channel Store.
+- Home: the Roku button and the Roku tile lose the Beta sticker and the "coming soon" line.
+- The footer link reads "Roku" instead of "Roku (beta)" on every page, including `how-channels-work`, which had none.
+- The Plex, Jellyfin and Emby pages say "Also on Roku." and the Apple TV "No Apple TV?" answer sends people to the
+  Roku app instead of the beta.
+- The sitemap dates for the pages that changed, a Roku line in `llms.txt`, and the README's "Other devices" line,
+  which still said the Roku port was "in the works" and installed by sideloading.
+- Two published blog posts said there is no Roku version (a bullet and a table row in the Tunarr post, one FAQ
+  answer in the Plex virtual channels post). Those lines say Roku now. The posts stay published.
+
+**Not changed.** The web tuner, the Docker container and everything they build from. `styles.css` gets one small
+rule, `.roku-add-note`, scoped to the Roku page.
+
+**Half-done.** The README has no Roku heading or table column yet, and the screenshots on `/roku` are still the
+ones from the beta. There is no "what's new" block for Roku on the site; the changelog is the App Store version only.
+
 ## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
 
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
@@ -188,6 +214,7 @@ the Apple TV can ask without a switch because of the picker), Roku (a setting, t
 test; a stick run) and Android take their own change; queue items are in the internal notes. If the default is ever flipped
 to on, change `INCLUDE_HIDDEN_DEFAULT` and decide on a `LIBRARY_SCAN_REVISION` bump so saved Jellyfin libraries are read
 again. STOP WAITING during a slow scan (web parity) and Docker-held settings (I-080) are not small and are not in this release.
+
 
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
