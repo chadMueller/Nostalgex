@@ -104,6 +104,36 @@ function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard
         counts.Push(NxCoverageTally(job, []).totalOnChannels)
     end for
     NxCovCheck(r, "packages: other channels built, same count", counts[1] = counts[0] and counts[2] = counts[0], true)
+
+    ' ── Each channel's matching titles (#227, currentMatchCounts) ───────────
+    ' The job's per-channel count is each channel's own filter pass, whatever
+    ' its minItems, whether it was filtered here or its build's result reused.
+    want = {}
+    for each def in defs
+        want[NxToStr(def.id)] = NxFilterPool(v.items, NxFilterChannel(def), manifest, exclusive, clock, clock.backend).Count()
+    end for
+    built = []
+    for i = 0 to 9
+        pool = []
+        for each row in NxFilterPool(v.items, NxFilterChannel(defs[i]), manifest, exclusive, clock, clock.backend)
+            pool.Push(row.item)
+        end for
+        built.Push({ id: defs[i].id, filtered: pool, pool: pool })
+    end for
+    for each b in [[], built]
+        job = NxCoverageStart(v.items, defs, b, f)
+        while not NxCoverageStep(job, 0)
+        end while
+        off = []
+        nonzero = 0
+        for each id in want
+            if job.counts[id] <> want[id] then off.Push(id + " " + NxToStr(job.counts[id]) + " not " + want[id].ToStr())
+            if want[id] > 0 then nonzero = nonzero + 1
+        end for
+        NxCovCheck(r, "counts, " + b.Count().ToStr() + " built: each channel's filter pass", off.Join(", "), "")
+        NxCovCheck(r, "counts, " + b.Count().ToStr() + " built: one per channel", job.counts.Count(), defs.Count())
+        NxCovCheck(r, "counts, " + b.Count().ToStr() + " built: some channels match", nonzero > 0, true)
+    end for
     fewer = []
     for i = 0 to v.items.Count() - 1
         if i mod 3 <> 0 then fewer.Push(v.items[i])

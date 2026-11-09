@@ -279,6 +279,7 @@ sub startLibrary(useCache = false as Boolean, rebuild = false as Boolean, rescan
     if NxLoadTracked(m.guide <> invalid) then NxLoadStarted(NxLaunchGuardRegistry())
     m.library = CreateObject("roSGNode", "LibraryTask")
     m.library.ObserveField("bundleBuilt", "onBundleBuilt")
+    m.library.ObserveField("matchCounts", "onMatchCounts")
     m.library.useCache = useCache
     m.library.rebuild = rebuild
     m.library.rescan = rescan
@@ -415,6 +416,7 @@ sub onLibraryStatus()
             m.guide.ObserveField("rescanRequest", "onRescanRequest")
             m.guide.ObserveField("seedEnded", "onSeedEnded")
             m.guide.libraryBusy = m.libraryBusy
+            if m.library <> invalid and m.library.matchCounts <> invalid then m.guide.matchCounts = m.library.matchCounts
             if m.pendingLink <> invalid then m.guide.deepLink = m.pendingLink
             m.pendingLink = invalid
             if m.resumeId <> invalid then m.guide.resumeId = m.resumeId
@@ -520,6 +522,11 @@ sub onBundleBuilt()
     if m.guide <> invalid and m.library <> invalid then m.guide.bundleBuilt = m.library.bundleBuilt
 end sub
 
+' Each channel's matching titles, for Settings' WHY ARE SOME CHANNELS MISSING?
+sub onMatchCounts()
+    if m.guide <> invalid and m.library <> invalid then m.guide.matchCounts = m.library.matchCounts
+end sub
+
 sub onScheduleTimer()
     if m.library <> invalid then m.library.reschedule = true
 end sub
@@ -529,6 +536,7 @@ end sub
 sub releaseLibrary()
     if m.library = invalid then return
     m.library.UnobserveField("bundleBuilt")
+    m.library.UnobserveField("matchCounts")
     m.library.UnobserveField("phase")
     m.library.UnobserveField("status")
     m.library.UnobserveField("scanning")

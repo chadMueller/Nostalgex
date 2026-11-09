@@ -252,11 +252,33 @@ franchise collections are in the FRANCHISES section, not under MY COLLECTIONS:
   TV says "Not enough content to build this package" and dims it, which isn't
   ported. The Roku has had no "N need more content" line to replace.
 
-Not ported: the pages themselves, and WHY ARE SOME CHANNELS MISSING? (I-004),
-the page the Apple TV's amber count points to, so the count has no explainer
-here. `scripts/deploy.sh --settings-tour` shows SettingsView alone over made-up
-packages, franchises and collections (`tests/settings`), in the test data space,
-for looking at these rows with no library and no video.
+WHY ARE SOME CHANNELS MISSING? (I-004, #227) is the page the amber count points
+to, `ChannelsMissingPage` as the Apple TV has it (`source/guide/ChannelsMissing.brs`,
+cases in `tests/ChannelsMissingTests.brs`): a link row after the packages on
+CHANNEL PACKAGES, reading "n CH" and shown only while a channel is missing, opens
+MISSING CHANNELS one level down, where Back returns to the link row. The page
+lists, under each package's name, the channels of every package that is on,
+built and not building that aren't on air, each as a card: its colour and name,
+"Needs n matching titles. You have m.", and its rules as `plainLanguageRequirements`
+words them (the same fields, order and text; the Swift tests' cases are ported
+one for one). With none missing it says "Every channel in your packages is on
+air." Differences:
+
+- **When the count is made.** The Apple TV filters the library for the page's
+  channels when the page opens. The Roku keeps each channel's count from the
+  coverage count it already runs after a load (#207, `NxCoverageStart`'s
+  `counts`: the same filter pass, reusing the guide build's result for a channel
+  it built), so until that is done a card says "Counting yours…", as the Apple
+  TV's does while it counts.
+  The coverage count doesn't run for a library over 30,000 titles or a saved
+  guide with no library behind it; there the line stops at what the channel needs.
+- The cards' lines wrap by characters (the type is monospaced), so each card's
+  height is known before it is drawn; the 12 pt gap above the link row isn't
+  ported.
+
+`scripts/deploy.sh --settings-tour` shows SettingsView alone over made-up
+packages, franchises, collections and match counts (`tests/settings`), in the
+test data space, for looking at these rows with no library and no video.
 
 ## Settings as a rail and a pane
 
@@ -320,9 +342,8 @@ draws them.
 - **Left out:** the rail's SF Symbol icons (the rows are a bar and a title), the
   glow and scanline texture behind the rail, the fade where rows slide under
   the hero, the rounded corners, and the cross-fade between tabs and pages. A
-  link row's chevron is a ">" after its value. LIBRARIES, the iCloud sync row
-  and WHY ARE SOME CHANNELS MISSING? (the CHANNEL PACKAGES page's link to
-  `ChannelsMissingPage`) have their own parity rows.
+  link row's chevron is a ">" after its value. LIBRARIES and the iCloud sync
+  row have their own parity rows.
 
 While the FRANCHISES package is on, a collection that is a franchise the
 package already carries folds into it. It leaves the list and never gets a

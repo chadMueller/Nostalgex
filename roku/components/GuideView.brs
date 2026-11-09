@@ -2246,6 +2246,7 @@ sub openSettings()
     m.settings.ObserveField("bundleChange", "onSettingsBundleChange")
     m.settings.ObserveField("rescan", "onSettingsRescan")
     m.settings.rescanning = m.top.libraryBusy
+    if m.top.matchCounts <> invalid then m.settings.matchCounts = m.top.matchCounts
     ' The playing channel is muted while Settings is open, as on the Apple TV
     ' (SettingsContainerView's onAppear).
     m.video.mute = true
@@ -2258,6 +2259,12 @@ end sub
 
 sub onSettingsBundleChange()
     m.top.bundleRequest = true
+end sub
+
+' The counts reach a Settings already open too: its MISSING CHANNELS page
+' says "Counting yours…" until they do.
+sub onMatchCounts()
+    if m.settings <> invalid then m.settings.matchCounts = m.top.matchCounts
 end sub
 
 sub onBundleBuilt()

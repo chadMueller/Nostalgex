@@ -16,6 +16,9 @@
          now, so a WATERSHED switch reschedules at once (LibraryTask.reschedule). -->
     <field id="reschedule" type="boolean" alwaysNotify="true" />
     <field id="bundleBuilt" type="string" alwaysNotify="true" onChange="onBundleBuilt" />
+    <!-- Each channel's matching titles from the library task (its
+         matchCounts), for Settings' WHY ARE SOME CHANNELS MISSING? -->
+    <field id="matchCounts" type="assocarray" onChange="onMatchCounts" />
     <!-- A deep link from MainScene ({ contentId, mediaType }): tune that
          channel fullscreen, or in a sideloaded build play "item:<id>". -->
     <field id="deepLink" type="assocarray" alwaysNotify="true" onChange="onDeepLink" />

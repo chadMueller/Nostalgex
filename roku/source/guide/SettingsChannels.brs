@@ -143,9 +143,9 @@ end function
 ' ── The CHANNELS & BUNDLES list ─────────────────────────────────────────────
 
 ' The tab's pages (ChannelsPage), in the list's order: each opens from its link
-' row, in the same pane, and Back steps up from it to that row. WHY ARE SOME
-' CHANNELS MISSING? (ChannelsPage.missing) has its own parity row, so it isn't
-' here.
+' row, in the same pane, and Back steps up from it to that row. MISSING
+' CHANNELS (ChannelsPage.missing) isn't on the list: its link row is on CHANNEL
+' PACKAGES (source/guide/ChannelsMissing.brs).
 function NxChannelsPages() as Object
     return [
         { id: "packages", title: "CHANNEL PACKAGES" },
@@ -161,6 +161,8 @@ end function
 ' `n` holds the counts: packagesOn, franchisesOn (the switch), franchiseRowsOn,
 ' franchiseCollectionsOn, collectionsOn. The Apple TV's SCANNING on MY
 ' COLLECTIONS doesn't apply: the Roku reads collections with the library.
+' WHY ARE SOME CHANNELS MISSING? isn't on the list; its value is
+' NxMissingLinkValue.
 function NxChannelsLinkValue(page as String, n as Object) as String
     if page = "packages" then return NxNumberOr0(n.packagesOn).ToStr() + " ON"
     if page = "franchises" then
@@ -168,5 +170,12 @@ function NxChannelsLinkValue(page as String, n as Object) as String
         return (NxNumberOr0(n.franchiseRowsOn) + NxNumberOr0(n.franchiseCollectionsOn)).ToStr() + " ON"
     end if
     if page = "collections" then return NxNumberOr0(n.collectionsOn).ToStr() + " ON"
+    return ""
+end function
+
+' The page Back steps up to (ChannelsPage.parent): CHANNEL PACKAGES from
+' MISSING CHANNELS, the tab's list ("") from the others.
+function NxChannelsPageParent(page as String) as String
+    if page = "missing" then return "packages"
     return ""
 end function

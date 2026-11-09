@@ -34,6 +34,9 @@
     <field id="rescanning" type="boolean" value="false" onChange="onRescanning" />
     <!-- The library task's answer: the packages built, as JSON, or "rebuild". -->
     <field id="bundleBuilt" type="string" alwaysNotify="true" onChange="onBundleBuilt" />
+    <!-- Each channel's matching titles, for WHY ARE SOME CHANNELS MISSING?
+         (#227): the library task's matchCounts, { state, byId }. -->
+    <field id="matchCounts" type="assocarray" onChange="onMatchCounts" />
     <function name="open" />
     <function name="refreshRows" />
     <!-- The packages still building, for the guide to keep saying so once
@@ -48,6 +51,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SettingsChannels.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/ChannelsMissing.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SettingsRail.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />

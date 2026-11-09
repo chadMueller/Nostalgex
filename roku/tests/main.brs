@@ -99,6 +99,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("cross-channel") then failures = failures + NxRunCrossChannelTests()
     if NxTestWants("settings-channels") then failures = failures + NxRunSettingsChannelsTests("pkg:/data/channels.json")
     if NxTestWants("settings-rail") then failures = failures + NxRunSettingsRailTests()
+    if NxTestWants("channels-missing") then failures = failures + NxRunChannelsMissingTests("pkg:/data/channels.json")
     if failures = 0 then print "ALL TESTS PASSED" else print "TESTS FAILED"
 end sub
 

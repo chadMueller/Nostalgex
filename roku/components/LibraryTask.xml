@@ -52,6 +52,12 @@
          when that couldn't be done without a full load. -->
     <field id="bundleRequest" type="boolean" alwaysNotify="true" />
     <field id="bundleBuilt" type="string" alwaysNotify="true" />
+    <!-- Each channel's matching titles, for Settings' WHY ARE SOME CHANNELS
+         MISSING? (#227): { state, byId }. state is "counting" until the
+         coverage count is done, then "counted" with byId (a channel id, as
+         text, to its count); "none" when it isn't counted (no library, one
+         over NxCoverageMaxTitles, or a saved guide with no library). -->
+    <field id="matchCounts" type="assocarray" />
     <!-- Set (any value) to re-check schedules against the clock. -->
     <field id="reschedule" type="boolean" alwaysNotify="true" />
   </interface>

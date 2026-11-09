@@ -57,8 +57,12 @@ end function
 ' channel carries its filter result as `filtered`, which stands for that
 ' channel's filter pass. `f` is what the filter reads: { manifest,
 ' exclusive, clock, backend, dv (NxDisplayShowsDolbyVision) }. Returns the job NxCoverageStep advances.
+' Once done, the job's `counts` holds each channel's number of matching titles
+' by id, as text, for WHY ARE SOME CHANNELS MISSING? (the Apple TV's
+' currentMatchCounts, #227): the same filter pass, whatever the channel's
+' minItems.
 function NxCoverageStart(items as Object, defs as Object, built as Object, f as Object) as Object
-    job = { items: items, f: f, todo: [], hits: [], minItems: [], covered: {}, slices: [], slice: 0, channel: 0, pos: 0, phase: "filter", done: false, filtered: 0, reused: 0, steps: 0, longestMs: 0 }
+    job = { items: items, f: f, todo: [], todoIds: [], hits: [], minItems: [], covered: {}, counts: {}, slices: [], slice: 0, channel: 0, pos: 0, phase: "filter", done: false, filtered: 0, reused: 0, steps: 0, longestMs: 0 }
     job.covered.SetModeCaseSensitive()
     filtered = {}
     for each ch in NxList(built)
@@ -68,6 +72,7 @@ function NxCoverageStart(items as Object, defs as Object, built as Object, f as 
         got = filtered[NxToStr(def.id)]
         if got <> invalid then
             job.reused = job.reused + 1
+            job.counts[NxToStr(def.id)] = got.Count()
             if got.Count() >= NxCoverageMinItems(def) then
                 for each it in got
                     job.covered[NxCoverageKey(it)] = true
@@ -75,6 +80,7 @@ function NxCoverageStart(items as Object, defs as Object, built as Object, f as 
             end if
         else
             job.todo.Push(NxFilterChannel(def))
+            job.todoIds.Push(NxToStr(def.id))
             job.hits.Push([])
             job.minItems.Push(NxCoverageMinItems(def))
         end if
@@ -154,6 +160,7 @@ function NxCoverageWork(job as Object, budgetMs as Integer, t as Object) as Bool
         else
             while job.channel < job.todo.Count()
                 hits = job.hits[job.channel]
+                job.counts[job.todoIds[job.channel]] = hits.Count()
                 if hits.Count() >= job.minItems[job.channel] then
                     while job.pos < hits.Count()
                         job.covered[NxCoverageKey(job.items[hits[job.pos]])] = true
