@@ -93,7 +93,7 @@ fi
 # /bin/bash is 3.2.
 filter_parts=${NX_FILTER_SHARDS:-10}
 qr_parts=${NX_QR_SHARDS:-4}
-coverage_parts=${NX_COVERAGE_SHARDS:-6}
+coverage_parts=${NX_COVERAGE_SHARDS:-7}
 parts=out/test-parts
 rm -rf "$parts" && mkdir -p "$parts"
 suites=$(grep -oE 'NxTestWants\("[a-z-]+"\)' tests/main.brs | sed -E 's/.*"(.*)".*/\1/')
@@ -111,11 +111,29 @@ for suite in $suites; do
     done
 done
 files=(tests/main.brs tests/runtime-interpreter.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/WatershedGoldenTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/GuideNavTests.brs tests/ColdBootSeedTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/FranchiseLineupTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/CoverageTests.brs tests/LaunchGuardTests.brs tests/DolbyVisionTests.brs tests/DailyRefreshTests.brs tests/SmallLibraryTests.brs tests/MultiServerFilterTests.brs tests/FilterCaseTests.brs tests/ReportTests.brs tests/PlaybackInfoTests.brs tests/StreamQualityTests.brs tests/Utf8RepairTests.brs tests/CrossChannelTests.brs tests/SettingsChannelsTests.brs tests/SettingsRailTests.brs source/plex/PlexPoster.brs source/plex/ServerChoice.brs source/plex/ServerResolve.brs source/plex/LibrarySnapshot.brs source/plex/PlexLibrary.brs source/plex/PlexApi.brs source/plex/PlexPlayback.brs source/util/*.brs source/schedule/*.brs source/filter/*.brs source/guide/*.brs source/franchise/*.brs source/enrich/*.brs source/subtitles/*.brs source/collections/*.brs source/mediabrowser/*.brs)
-# $jobs parts at a time ($NX_TEST_JOBS overrides), the split suites' parts
-# first, so the small ones fill in around them.
+# $jobs parts at a time ($NX_TEST_JOBS overrides), the slowest first, so the
+# small ones fill in around them and the run doesn't wait on one started late.
+# How long each part took is kept in out/test-times.tsv (part, seconds) from
+# the run before; a part it doesn't list goes first, and with no file (a fresh
+# checkout, CI) the split suites' parts go first, as before.
+times=out/test-times.tsv
 export brs
-{ ls "$parts"/filter-*.brs "$parts"/qr-*.brs "$parts"/coverage-*.brs; ls "$parts"/*.brs | grep -v -e /filter- -e /qr- -e /coverage-; } |
-    pool xargs -P "$jobs" -I{} sh -c '"$brs" --root . "$@" "$0" >"${0%.brs}.log" 2>&1' {} "${files[@]}" || true
+{
+    if [ -s "$times" ]; then
+        for part in "$parts"/*.brs; do
+            name=$(basename "${part%.brs}")
+            t=$(awk -F '\t' -v n="$name" '$1 == n { print $2 }' "$times")
+            printf '%s\t%s\n' "${t:-999999}" "$part"
+        done | sort -t "$(printf '\t')" -k1,1nr | cut -f2
+    else
+        ls "$parts"/filter-*.brs "$parts"/qr-*.brs "$parts"/coverage-*.brs
+        ls "$parts"/*.brs | grep -v -e /filter- -e /qr- -e /coverage-
+    fi
+} | pool xargs -P "$jobs" -I{} sh -c 'start=$(date +%s); "$brs" --root . "$@" "$0" >"${0%.brs}.log" 2>&1; echo $(( $(date +%s) - start )) >"${0%.brs}.secs"' {} "${files[@]}" || true
+for part in "$parts"/*.brs; do
+    [ -f "${part%.brs}.secs" ] && printf '%s\t%s\n' "$(basename "${part%.brs}")" "$(cat "${part%.brs}.secs")"
+done | sort -t "$(printf '\t')" -k2,2nr >"$times.new" && mv "$times.new" "$times"
+echo "slowest parts (seconds): $(head -5 "$times" | tr '\t\n' ' ,')"
 # A part that crashed has no ALL TESTS PASSED line, so the check below fails it.
 failed=0
 for part in "$parts"/*.brs; do

@@ -914,9 +914,18 @@ function NxRunPlaylistLeakTests(goldenPath as String, fixturePath as String, cha
             for each id in leakIds
                 NxCheck(r, kind + ": " + id + " is not loaded", NxToStr(byKey.DoesExist(id)), "false")
             end for
+            ' Only the leak ids can count, and NxFilterPool decides each item on
+            ' its own (NxItemPasses), so filtering just those items gives the
+            ' same count as filtering every item and keeping theirs: every
+            ' channel in channels.json, in seconds where the whole scan took
+            ' about ten minutes in the off-TV interpreter.
+            leaked = []
+            for each it in got
+                if NxHasValue(leakIds, NxToStr(it.ratingKey)) then leaked.Push(it)
+            end for
             onChannel = 0
             for each def in config.channels
-                for each entry in NxFilterPool(got, NxFilterChannel(def), manifest, exclusive, clock, kind)
+                for each entry in NxFilterPool(leaked, NxFilterChannel(def), manifest, exclusive, clock, kind)
                     if NxHasValue(leakIds, NxToStr(entry.item.ratingKey)) then onChannel = onChannel + 1
                 end for
             end for
