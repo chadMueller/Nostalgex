@@ -13,6 +13,8 @@ struct ChannelGuideView: View {
     // How many 30-min slots the user has scrolled forward (0-44 for 24-hour window)
     @State private var slotOffset: Int = 0
     @State private var suppressFocusScroll: Bool = false
+    /// Set when full screen closes, until tvOS hands focus back to the guide. See `GuideReturnFocus`.
+    @State private var awaitingFocusHandout: Bool = false
 
     @State private var showBundleSidebar: Bool = false
 
@@ -122,6 +124,16 @@ struct ChannelGuideView: View {
                             }
                         }
                         .onChange(of: focusedChannelID) { oldID, newID in
+                            // Back from full screen: focus arrives from none, on the row tvOS
+                            // remembers. If the channel was changed in full screen that row is
+                            // the old one; move focus to the live channel, once (I-041).
+                            if awaitingFocusHandout, oldID == nil, newID != nil {
+                                awaitingFocusHandout = false
+                                if GuideReturnFocus.target(handedTo: newID, liveChannelID: appState.currentChannel?.id) != nil {
+                                    anchorFocusToLiveChannel(proxy)
+                                    return
+                                }
+                            }
                             // The downward wrap. Focus landing on the sentinel below the
                             // last channel is the only proof that a press ran off the end
                             // of the list, so that is what drives it. Nothing here reads a
@@ -158,7 +170,12 @@ struct ChannelGuideView: View {
                             onFocusChanged?(newID)
                         }
                         .onChange(of: appState.isFullScreen) { _, isFullScreen in
-                            if !isFullScreen { anchorFocusToLiveChannel(proxy) }
+                            if !isFullScreen {
+                                awaitingFocusHandout = true
+                                anchorFocusToLiveChannel(proxy)
+                                // If tvOS never hands focus back (it was never taken away), stop waiting.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { awaitingFocusHandout = false }
+                            }
                         }
                         .onChange(of: appState.guideLiveRowFocusRequest) { _, _ in
                             // The rating banner closed: land exactly where the return from

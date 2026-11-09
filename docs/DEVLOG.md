@@ -3,6 +3,29 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-08 (Apple TV: the guide follows a channel change made in full screen, I-041)
+
+**Why.** Change channel in full screen (next channel with Right), press Menu, and the guide came back with its
+selection on the row the viewer had left from while the live bolt sat on the channel now playing (Trello I-041, first
+reported in June). Reproduced on main on a simulator in demo mode: focus on channel 4, Select, Select, Right, Right,
+Menu. The info panel read CH 04 with channel 6 playing. The app log showed focus go from the old row to none on
+entering full screen and from none back to the OLD row on leaving, with the live channel never assigned.
+
+**Approach.**
+- What is set: the focus ring goes to the live channel, as `anchorFocusToLiveChannel` already did when full screen closes.
+- When: once more, the moment tvOS hands focus back to the guide, i.e. `focusedChannelID` changing from none to a row
+  while `awaitingFocusHandout` is set. Closing full screen sets it; the handout, or 2 seconds, clears it.
+- Why it survives: a request made while nothing in the guide has focus does not stick, and tvOS then restores the row it
+  remembers. Acting on the handout puts our request after the engine's, not before it, and a viewer's own move is never
+  "from none", so it is left alone.
+- Where: `ChannelGuideView` (one flag, two small hunks) and the pure rule `GuideReturnFocus.target(handedTo:liveChannelID:)`.
+- Not touched: the seasonal invite's first focus, the packages panel and the rows changing behind an open guide.
+
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) is the case above and fails on main with "the
+guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (4) covers the rule.
+Both outcomes held on a simulator and on a real Apple TV 4K (3rd generation, tvOS 27.2): the test fails without the change
+and passes with it on each. Run on the TV with the app's storage isolated, so nothing the TV holds was touched.
+
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
 **Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail
