@@ -17,9 +17,10 @@ uses). That was read from the code and the earlier dry merge; neither side alone
 29 skipped (the live-server harnesses, which need a server). UI: `GuideFocusAfterFullScreenTests` 3 of 3 and
 `OpenOnLastChannelLaunchTests` 2 of 2, the two classes the conflict touches. The rest of the UI tests were not re-run.
 
-**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. The guide code is unchanged from the
-commit that was measured on the basement Apple TV 4K (tvOS 27.2); this head has not itself been run on a TV. The
-first-appearance cases were only ever reproduced on the simulator.
+**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. The basement Apple TV 4K (tvOS 27.2) runs covered the first two guide commits (the return-from-full-screen fix and the
+first-appearance anchor). The last two (the handout window generation counter and the row-exists check) were measured on
+the simulator only, and this head has not itself been run on a TV. The first-appearance cases were only ever reproduced
+on the simulator.
 
 **Next.** A review of the branch, then a push to main.
 
@@ -217,8 +218,8 @@ entering full screen and from none back to the OLD row on leaving, with the live
   panel stayed empty. The handout is now only acted on when the playing channel has a row (`GuideReturnFocus.liveRowID`).
 - Not touched: the packages panel and the rows changing behind an open guide.
 
-**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has the two cases above; the first fails on main with "the
-guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (7) covers the rule and the window, including a timer from an earlier opening firing while a later one is open.
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has three cases (a channel changed in full screen then back, the playing channel not the first, a seasonal invite above channel 1); the first fails on main with "the
+guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (8) covers the rule and the window, including a timer from an earlier opening firing while a later one is open.
 The return-from-full-screen case fails without the first commit and passes with it on a simulator and on a real Apple TV
 4K (3rd generation, tvOS 27.2). The two first-appearance cases fail without the second commit on the simulator and pass on
 the TV either way. TV runs use isolated app storage, so nothing the TV holds was touched.
