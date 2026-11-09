@@ -91,6 +91,7 @@ extension AppState {
             method: method,
             channel: AnalyticsChannelDescriptor.describe(channel)
         ))
+        rememberLaunchChannel(channel)
         selectChannel(channel, precomputedSchedule: precomputedSchedule)
     }
 

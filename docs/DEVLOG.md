@@ -3,6 +3,35 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
+
+**Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
+an optional start-up setting.
+
+**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, off by default (`LaunchChannelMemory.enabledByDefault`, one
+line to flip). A channel the viewer tunes (the guide, next and previous, the mini strip) is saved with its id and its
+name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
+the saved snapshot or the load has built the guide, the app opens that channel if the setting is on and a channel with
+the same id and the same name is in the lineup; otherwise it opens the first channel, as before. A collection or
+franchise channel renumbered by a rebuild is not tuned by mistake: a changed name or a missing id opens the first
+channel. Demo mode (what App Review sees) hides the row, ignores the setting and saves nothing; signing out clears the saved
+channel (the setting stays).
+
+**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
+synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
+
+**Proved end to end** in demo mode with the app's storage isolated (`OpenOnLastChannelLaunchTests`, with
+`-uiTestLaunchMemoryInDemo`): switch on in Settings, tune channel 5, relaunch, and 5 is the channel playing; switch off,
+relaunch, and it is channel 1, as today. On a simulator. With the guide-focus branch (`appletv/i041-guide-focus`) merged
+in, the same flow, with and without a forced seasonal invite above channel 1, also put the guide's focus ring on channel 5
+on a simulator and on a real Apple TV 4K (tvOS 27.2).
+
+**Open.** On a simulator the focus engine hands the guide's first focus to the first row, or to the seasonal invite, not
+to the playing channel, so on a simulator the ring starts on channel 1 unless that branch is in. On the Apple TV above the
+guide alone already put the ring on the playing channel. That is the guide's first-focus problem, not this setting's, and
+is not changed here; with the setting off nothing differs from today. Not measured on another tvOS version or with a real
+library.
+
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
 **Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail

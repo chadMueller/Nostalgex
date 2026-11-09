@@ -468,7 +468,7 @@ extension AppState {
                 if let current = currentChannel {
                     selectChannel(current)
                 }
-            } else if currentChannel == nil, let first = channels.first {
+            } else if currentChannel == nil, let first = channelToOpenFirst {
                 selectChannel(first)
             }
 
@@ -769,7 +769,7 @@ extension AppState {
         // same numbering: the lists are what the rows were built from.
         materializeDynamicChannels()
         applyBundleFilter()
-        if currentChannel == nil, let first = channels.first {
+        if currentChannel == nil, let first = channelToOpenFirst {
             selectChannel(first)
         }
         if preferredBundleIDs != enabledBundleIDs {

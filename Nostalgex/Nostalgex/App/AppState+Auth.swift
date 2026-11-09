@@ -487,7 +487,7 @@ extension AppState {
         channels = demoChannels
         allItems = demoChannels.flatMap { $0.itemPool }
 
-        if currentChannel == nil, let first = channels.first {
+        if currentChannel == nil, let first = channelToOpenFirst {
             selectChannel(first)
         }
 
@@ -829,6 +829,8 @@ extension AppState {
         currentItem = nil
         playbackState = .idle
         isFullScreen = false
+        // The channel belongs to the lineup just left (OPEN ON LAST CHANNEL, I-017).
+        LaunchChannelMemory.clear()
         channels = []
         allChannels = []
         allItems = []
