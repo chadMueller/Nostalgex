@@ -33,6 +33,13 @@ The best way to watch on a TV. Connect one or more servers, then flip channels w
 
 **Quick start:** install [Nostalgex from the App Store](https://apps.apple.com/app/id6762563534), connect your server, pick a channel.
 
+<a id="roku-app"></a>
+## <img src="https://unpkg.com/lucide-static@1.58.0/icons/tv.svg" alt="Roku app" height="28" align="center"> Roku app `1.0.12`
+
+An app for Roku TVs and players. Connect one or more servers, then flip channels with the Roku remote. Works with Plex, Jellyfin and Emby.
+
+**Quick start:** add [Nostalgex from the Roku Channel Store](https://channelstore.roku.com/details/78a8bf8bdef46a9723940dcc2c2b7b28:8f1b9fc7f18549fa95ef9198511d2e13/nostalgex), or from your Roku account at [my.roku.com/account/add/NOSTALGEX](https://my.roku.com/account/add/NOSTALGEX) with the access code `NOSTALGEX`, then connect your server and pick a channel. The source is in [`roku/`](roku/).
+
 <a id="web-tuner-web-tunerhtml--plex-tunerhtml"></a>
 <a id="web-tuner"></a>
 ## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.15`
@@ -228,7 +235,7 @@ Each film series in your library (Star Wars, Rocky, whatever you own) gets its o
 - **Email:** support@nostalgex.app
 - **Help pages:** [support](https://www.nostalgex.app/support), [how channels get sorted](https://www.nostalgex.app/how-channels-work), [Docker container guide](https://www.nostalgex.app/self-host) and [docs/FAQ.md](docs/FAQ.md).
 
-**Other devices:** the Roku app, built by [tydude001](https://github.com/tydude001), is on the Roku Channel Store (add it from your Roku account with code NOSTALGEX), and its source is in [`roku/`](roku/). A Fire TV fork by [WSINTRA](https://github.com/WSINTRA) exists; it's unofficial and I don't support it. For a supported option on a TV, use the Apple TV app or the Roku app, or the Docker container in a TV browser.
+**Other devices:** the Roku app, built by [tydude001](https://github.com/tydude001), is described above. A Fire TV fork by [WSINTRA](https://github.com/WSINTRA) exists; it's unofficial and I don't support it. For a supported option on a TV, use the Apple TV app or the Roku app, or the Docker container in a TV browser.
 
 </details>
 
