@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
+
+**Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
+an optional start-up setting.
+
+**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, off by default (`LaunchChannelMemory.enabledByDefault`, one
+line to flip). A channel the viewer tunes (the guide, next and previous, the mini strip) is saved with its id and its
+name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
+the saved snapshot or the load has built the guide, the app opens that channel if the setting is on and a channel with
+the same id and the same name is in the lineup; otherwise it opens the first channel, as before. A collection or
+franchise channel renumbered by a rebuild is not tuned by mistake: a changed name or a missing id opens the first
+channel. Demo mode ignores the setting and saves nothing; signing out clears the saved channel (the setting stays).
+
+**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
+synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
+
+**Open.** With the setting on and a seasonal invite above channel 1, tvOS may hand the guide's first focus to the invite
+row instead of the playing channel (measured on a simulator with a forced invite: it did). That is the guide's
+first-focus problem, not this setting's, and is not changed here; with the setting off nothing differs from today.
+Verified on the simulator only; not looked at on an Apple TV.
+
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 
 **Why.** #188 asked for the Apple TV's CHANNELS & BUNDLES (`SettingsChannelsView`, N-028) in two PRs. The rail

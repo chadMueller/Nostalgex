@@ -829,6 +829,8 @@ extension AppState {
         currentItem = nil
         playbackState = .idle
         isFullScreen = false
+        // The channel belongs to the lineup just left (OPEN ON LAST CHANNEL, I-017).
+        LaunchChannelMemory.clear()
         channels = []
         allChannels = []
         allItems = []

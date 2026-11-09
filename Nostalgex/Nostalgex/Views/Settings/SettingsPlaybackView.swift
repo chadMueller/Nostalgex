@@ -8,6 +8,8 @@ struct SettingsPlaybackView: View {
 
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
+    /// OPEN ON LAST CHANNEL (I-017). Per Apple TV, never synced; see LaunchChannelMemory.
+    @AppStorage(LaunchChannelMemory.enabledKey, store: AppDefaults.standard) private var openOnLastChannel = LaunchChannelMemory.enabledByDefault
     @State private var showStreamQualityPicker = false
     @State private var showSubtitleLanguagePicker = false
     @State private var showAudioLanguagePicker = false
@@ -92,6 +94,16 @@ struct SettingsPlaybackView: View {
                 showAudioLanguagePicker = true
             }
             .settingsRow("audio_lang", focus: focus)
+
+            SettingsToggleRow(
+                title: "OPEN ON LAST CHANNEL",
+                subtitle: "Start on the channel you were last watching",
+                isOn: openOnLastChannel,
+                isFocused: isFocused("open_last_channel")
+            ) {
+                openOnLastChannel.toggle()
+            }
+            .settingsRow("open_last_channel", focus: focus)
 
             // Moved here from CONNECTION: both are about what happens while you watch.
             if !appState.isDemoMode {
