@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: the guide-focus fix (I-041) merged with the 1.0.31 candidate)
+
+**Changed.** `appletv/i041-guide-focus` (2e4a3a0c) is merged onto main (70686b63) on `appletv/1.0.31-bundle`, so the next
+Apple TV build carries it with OPEN ON LAST CHANNEL and the hidden Jellyfin libraries switch. Two files conflicted. The
+dev log kept both entries. In `enterDemoMode` the start channel is now `DemoData.startChannel(in: channels) ?? channelToOpenFirst`:
+the test-only `-uiTestStartOnChannel` wins, then the remembered channel (when OPEN ON LAST CHANNEL applies), then the first
+channel. Either side alone would drop one behaviour: the I-041 line ignores the remembered channel (which
+`OpenOnLastChannelLaunchTests` expects), the candidate line ignores `-uiTestStartOnChannel` (which `GuideFocusAfterFullScreenTests`
+uses). That was read from the code and the earlier dry merge; neither side alone was run. Nothing else changed.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,183 passed, 0 failed,
+29 skipped (the live-server harnesses, which need a server). UI: `GuideFocusAfterFullScreenTests` 3 of 3 and
+`OpenOnLastChannelLaunchTests` 2 of 2, the two classes the conflict touches. The rest of the UI tests were not re-run.
+
+**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. The guide code is unchanged from the
+commit that was measured on the basement Apple TV 4K (tvOS 27.2); this head has not itself been run on a TV. The
+first-appearance cases were only ever reproduced on the simulator.
+
+**Next.** A review of the branch, then a push to main.
+
 ## 2026-11-08 (Apple TV 1.0.31 candidate: OPEN ON LAST CHANNEL)
 
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
@@ -165,6 +185,43 @@ the Apple TV can ask without a switch because of the picker), Roku (a setting, t
 test; a stick run) and Android take their own change; queue items are in the internal notes. If the default is ever flipped
 to on, change `INCLUDE_HIDDEN_DEFAULT` and decide on a `LIBRARY_SCAN_REVISION` bump so saved Jellyfin libraries are read
 again. STOP WAITING during a slow scan (web parity) and Docker-held settings (I-080) are not small and are not in this release.
+
+## 2026-11-08 (Apple TV: the guide follows a channel change made in full screen, I-041)
+
+**Why.** Change channel in full screen (next channel with Right), press Menu, and the guide came back with its
+selection on the row the viewer had left from while the live bolt sat on the channel now playing (Trello I-041, first
+reported in June). Reproduced on main on a simulator in demo mode: focus on channel 4, Select, Select, Right, Right,
+Menu. The info panel read CH 04 with channel 6 playing. The app log showed focus go from the old row to none on
+entering full screen and from none back to the OLD row on leaving, with the live channel never assigned.
+
+**Approach.**
+- What is set: the focus ring goes to the live channel, as `anchorFocusToLiveChannel` already did when full screen closes.
+- When: once more, the moment tvOS hands focus back to the guide, i.e. `focusedChannelID` changing from none to a row
+  while the handout window is open. Closing full screen opens it; the handout, or 2 seconds, closes it. Each opening
+  has its own generation number and its timer only closes the opening it belongs to, so the timer of an earlier close
+  of full screen cannot shut a later window early (`GuideReturnFocus.HandoutWindow`).
+- Why it survives: a request made while nothing in the guide has focus does not stick, and tvOS then restores the row it
+  remembers. Acting on the handout puts our request after the engine's, not before it, and a viewer's own move is never
+  "from none", so it is left alone.
+- Where: `ChannelGuideView` (the window, three small hunks) and the pure rule and window in `GuideReturnFocus`.
+- Second commit, same flag and rule, set when the guide first appears: with the playing channel not the first, or a
+  seasonal invite above channel 1, tvOS gave first focus to the first row or the invite instead. Measured on a simulator in
+  demo mode (`-uiTestStartOnChannel 4`, `-uiTestSeasonalInvite`): focus on channel 1, or on the invite, for the 5 seconds
+  watched. On the basement Apple TV 4K (tvOS 27.2) both cases already land on the playing channel without this commit, so it
+  protects the simulator and any tvOS that behaves that way; not measured on another tvOS version.
+- The early return skips one `onFocusChanged` call, the one for the row tvOS handed focus to. Measured on a simulator with
+  timestamps: the call for the live channel follows 8 ms later after full screen, and 31 to 34 ms later when the guide first
+  appears, with or without the invite. The info panel goes from empty to the live channel and never shows the wrong row.
+  One case it did break, found by that measurement: when the playing channel has no row in the guide (its package was
+  switched off while it played), the anchor pointed at a row that is not there, the ring stayed on channel 1 and the info
+  panel stayed empty. The handout is now only acted on when the playing channel has a row (`GuideReturnFocus.liveRowID`).
+- Not touched: the packages panel and the rows changing behind an open guide.
+
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has the two cases above; the first fails on main with "the
+guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (7) covers the rule and the window, including a timer from an earlier opening firing while a later one is open.
+The return-from-full-screen case fails without the first commit and passes with it on a simulator and on a real Apple TV
+4K (3rd generation, tvOS 27.2). The two first-appearance cases fail without the second commit on the simulator and pass on
+the TV either way. TV runs use isolated app storage, so nothing the TV holds was touched.
 
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)
 

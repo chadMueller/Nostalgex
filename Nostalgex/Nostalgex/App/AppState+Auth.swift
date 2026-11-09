@@ -541,7 +541,9 @@ extension AppState {
         channels = demoChannels
         allItems = demoChannels.flatMap { $0.itemPool }
 
-        if currentChannel == nil, let first = channelToOpenFirst {
+        // The test-only start channel (-uiTestStartOnChannel) wins, then `channelToOpenFirst`
+        // (the remembered channel when OPEN ON LAST CHANNEL applies, else the first channel).
+        if currentChannel == nil, let first = DemoData.startChannel(in: channels) ?? channelToOpenFirst {
             selectChannel(first)
         }
 
