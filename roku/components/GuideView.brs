@@ -97,12 +97,10 @@ sub init()
     m.stopUrl = reg.Read("stopUrl")
     m.stopServer = reg.Read("stopServer").ToInt()
 
-    ' RETRO MODE's moving parts, as CRTOverlayView's: a flicker check every
-    ' 0.08 s, and a tracking glitch that may roll through every 6-15 s.
+    ' RETRO MODE's moving part, as CRTOverlayView's: a flicker check every
+    ' 0.08 s. The tracking (drift) line is not drawn, as on the Apple TV.
     m.flicker = newTimer(0.08, true, "onFlicker")
     m.flickerBack = newTimer(0.06, false, "onFlickerBack")
-    m.glitchTimer = newTimer(10, false, "onGlitchTimer")
-    m.top.FindNode("glitchAnim").ObserveField("state", "onGlitchDone")
     ' The tuning snow's frames, changed every 0.07 s as StaticScreenView's.
     m.snowTimer = newTimer(0.07, true, "onSnowTimer")
     m.snowFrame = 0
@@ -1497,7 +1495,6 @@ sub layoutVideo()
     crt = m.top.FindNode("crt")
     scan = m.top.FindNode("scanlines")
     vig = m.top.FindNode("vignette")
-    gl = m.top.FindNode("glitch")
     if m.fullscreen then
         m.video.translation = [0, 0]
         m.video.width = 1920
@@ -1510,8 +1507,6 @@ sub layoutVideo()
         vig.uri = "pkg:/images/look/vignette_full.png"
         vig.width = 1920
         vig.height = 1080
-        gl.width = 1920
-        m.crtHeight = 1080
     else
         if m.retro then
             m.video.translation = [1056.67, 0]
@@ -1529,16 +1524,12 @@ sub layoutVideo()
         vig.uri = "pkg:/images/look/vignette.png"
         vig.width = 740
         vig.height = 555
-        gl.width = 740
-        m.crtHeight = 555
     end if
     crt.visible = m.retro
     if m.retro then
         m.flicker.control = "start"
-        if m.glitchTimer.control <> "start" then scheduleGlitch()
     else
         m.flicker.control = "stop"
-        m.glitchTimer.control = "stop"
     end if
 end sub
 
@@ -1552,30 +1543,6 @@ end sub
 
 sub onFlickerBack()
     m.top.FindNode("scanlines").opacity = 1.0
-end sub
-
-sub scheduleGlitch()
-    m.glitchTimer.duration = 6 + Rnd(0) * 9
-    m.glitchTimer.control = "start"
-end sub
-
-sub onGlitchTimer()
-    ' RetroLook: 45% of the checks.
-    if Rnd(0) > 1 - 0.45 then
-        ' A band 150-400 px long, starting within 200 px of the middle.
-        y0! = m.crtHeight * 0.5 + (Rnd(0) * 400 - 200)
-        travel! = 150 + Rnd(0) * 250
-        m.top.FindNode("glitchMove").keyValue = [[0.0, y0!], [0.0, y0! + travel!]]
-        anim = m.top.FindNode("glitchAnim")
-        anim.duration = 0.5 + Rnd(0)
-        m.top.FindNode("glitch").visible = true
-        anim.control = "start"
-    end if
-    if m.retro then scheduleGlitch()
-end sub
-
-sub onGlitchDone()
-    if m.top.FindNode("glitchAnim").state = "stopped" then m.top.FindNode("glitch").visible = false
 end sub
 
 ' Settings may have switched RETRO MODE.

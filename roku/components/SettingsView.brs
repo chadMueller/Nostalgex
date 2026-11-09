@@ -918,7 +918,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         end if
     else if row.kind = "retro" then
         label = "RETRO MODE"
-        detail = "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio"
+        detail = "CRT scanlines, vignette, flicker, 4:3 aspect ratio"
         state = "OFF"
         stateColor = "0xFFFFFF59"
         if NxRetroMode() then

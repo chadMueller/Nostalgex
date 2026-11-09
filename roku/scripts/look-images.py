@@ -2,7 +2,7 @@
 """Draw the guide's overlay images into images/look/, from the Apple TV app's
 SwiftUI drawing code (upstream Nostalgex/Nostalgex/Views):
 
-  CRTOverlayView.swift   scanlines.png, vignette.png, vignette_full.png, glitch.png
+  CRTOverlayView.swift   scanlines.png, vignette.png, vignette_full.png
   ChannelGuideView.swift focus.9.png (row outline and glow), badge.9.png,
                          seasonal.9.png, seasonal_focus.9.png, capsule.9.png
   StaticScreenView.swift snow_0..2.png
@@ -37,13 +37,12 @@ def lerp(a, b, t):
 # ── CRT (CRTOverlayView.swift) ──────────────────────────────────────────────
 
 # RetroLook (upstream e48cdc1): the look picked on a TV on 2026-10-18, in the
-# guide and in full screen alike. The flicker and tracking chances are
-# components/GuideView.brs's.
+# guide and in full screen alike. The flicker chance is components/GuideView.brs's.
+# The tracking (drift) line is not drawn, as on the Apple TV.
 SCANLINE_OPACITY = 0.18
 CORNER_SHADOW = 0.78
 TOP_BOTTOM_SHADOW = 0.58
 SIDE_SHADOW = 0.48
-GLITCH_BRIGHTNESS = 0.22
 
 def scanlines(w, h):
     # Black lines at SCANLINE_OPACITY, 1.5 wide every 3 px, centred on y = 0,
@@ -94,25 +93,6 @@ def vignette(w, h, scale=1.0):
         [0, 0, sw * 4 - 1, sh * 4 - 1], radius=int(12 * scale * 4),
         outline=(255, 255, 255, round(255 * 0.04)), width=max(1, int(1 * scale * 4)))
     img.alpha_composite(edge.resize((sw, sh), Image.LANCZOS))
-    return img
-
-
-def glitch(w):
-    # TrackingGlitchLine at brightness b: a 12 px band (clear, 0.53 b, b,
-    # 0.53 b, clear), then 30 px from white 0.2 b to clear.
-    img = Image.new("RGBA", (w, 42), (0, 0, 0, 0))
-    px = img.load()
-    b = GLITCH_BRIGHTNESS
-    stops = [0, b * 0.53, b, b * 0.53, 0]
-    for y in range(42):
-        if y < 12:
-            t = (y + 0.5) / 12 * 4
-            k = min(int(t), 3)
-            a = lerp(stops[k], stops[k + 1], t - k)
-        else:
-            a = lerp(b * 0.2, 0, (y - 12 + 0.5) / 30)
-        for x in range(w):
-            px[x, y] = (255, 255, 255, round(255 * a))
     return img
 
 
@@ -330,7 +310,6 @@ save(scanlines(740, 555), "scanlines.png")
 save(scanlines(1920, 1080), "scanlines_full.png")
 save(vignette(740, 555), "vignette.png")
 save(vignette(1920, 1080, 0.5), "vignette_full.png")
-save(glitch(740), "glitch.png")
 save(outline(64, 6, 3, 2, 14, 0.7, 16), "focus.9.png")
 save(outline(64, 6, 2, 2, 7, 0.3, 16), "seasonal.9.png")
 save(outline(64, 6, 4, 2, 14, 0.7, 16), "seasonal_focus.9.png")

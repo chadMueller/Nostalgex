@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Roku: RETRO MODE no longer draws the tracking line)
+
+**Why.** Chad's decision, from viewer feedback: the white tracking (drift) line that rolled through the picture in
+RETRO MODE is very distracting, and it goes on every platform. Scanlines, vignette and flicker stay. The Apple TV and
+the web tuner have already dropped it (parity queue item 42).
+
+**Changed.** `GuideView.brs` loses the glitch timer, its scheduling and `m.crtHeight` (only the glitch used it);
+`GuideView.xml` loses the glitch poster and its animation; `scripts/look-images.py` no longer draws `glitch.png`, which
+is deleted from `images/look/`. The RETRO MODE row in Settings reads "CRT scanlines, vignette, flicker, 4:3 aspect
+ratio", the Apple TV's words. The flicker, scanlines and vignette are untouched.
+
+**Not changed.** The Roku store listing text still lists the VHS glitch under RETRO MODE; it changes with the next
+Roku release, not before.
+
 ## 2026-11-09 (site: the announcement bar is a yellow ticker; home buttons reordered)
 
 **Why.** Chad looked at the bar and wanted it brighter and a real ticker. He also wanted Roku before the web tuner on

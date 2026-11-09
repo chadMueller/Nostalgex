@@ -70,16 +70,12 @@
     <Rectangle id="screen" width="1920" height="1080" color="0x000000FF" />
     <Rectangle id="videoBg" translation="[1180,0]" width="740" height="555" color="0x05050DFF" />
     <Video id="video" translation="[1180,0]" width="740" height="555" />
-    <!-- RETRO MODE's CRT overlay (CRTOverlayView): scanlines, the tracking
-         glitch, vignette and edge. Images from scripts/look-images.py. -->
+    <!-- RETRO MODE's CRT overlay (CRTOverlayView): scanlines and vignette.
+         Images from scripts/look-images.py. -->
     <Group id="crt" translation="[1180,0]">
       <Poster id="scanlines" uri="pkg:/images/look/scanlines.png" width="740" height="555" />
-      <Poster id="glitch" uri="pkg:/images/look/glitch.png" width="740" height="42" visible="false" />
       <Poster id="vignette" uri="pkg:/images/look/vignette.png" width="740" height="555" />
     </Group>
-    <Animation id="glitchAnim" repeat="false" easeFunction="linear">
-      <Vector2DFieldInterpolator id="glitchMove" key="[0.0, 1.0]" fieldToInterp="glitch.translation" />
-    </Animation>
     <Group id="haze" visible="false" opacity="0">
       <Rectangle id="hazeBg" translation="[1180,0]" width="740" height="555" color="0x000000FF" />
       <Poster id="snow" uri="pkg:/images/look/snow_0.png" translation="[1180,0]" width="740" height="556" opacity="0.32" />
