@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: Retro mode loses the white tracking line)
+
+**Why.** Feedback that the white line which ran down the screen in Retro mode is very distracting. It drew the eye away from
+the picture: at each check, every 6 to 15 seconds, there was a 45 percent chance of a bright line that crossed the screen
+for half a second to a second and a half.
+
+**Removed.** The tracking line, completely: the view that drew it (`TrackingGlitchLine`), its state and timer, the
+scheduling that rolled for it, and the two constants `RetroLook.glitchChance` and `RetroLook.glitchBrightness`. Retro mode's
+overlay is scanlines, vignette and flicker, as before: the same constants and the same drawing code, nothing re-tuned. The
+RETRO MODE row's line in PLAYBACK & PICTURE read "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio" and now reads
+"CRT scanlines, vignette, flicker, 4:3 aspect ratio".
+
+**Test.** No test pinned the constants or the line. `CRTOverlayRenderTests` (3, new) renders the overlay over white and
+over black and reads the pixels: a dark scanline every third row at about the scanline opacity, a vignette that darkens the
+corners and the edges and leaves the middle alone, nothing lighter than what is under it, and no light across the picture
+over black. `NowPlayingPanelFocusTests` (3, the UI class that touches the RETRO MODE rows) pass. Simulator screenshots of
+the guide and of full screen with Retro mode on (it is on by default), a second apart, show the scanlines, the vignette and
+the edge still drawn. The whole unit suite was not run: the change is the overlay and one line of text.
+
+**Not changed here.** The web tuner and the Roku app still draw a tracking line, and their Retro mode text still lists it
+(the web tuner's Settings and `docs/WEB-TUNER-FEATURES.md`, the Roku's Settings row and its guide), as do two blog posts
+that describe Retro mode. On `appletv/retro-no-tracking-line`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build
+cut.
+
 ## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
 
 **Why.** The setting was written to be off until someone turned it on. The decision is the other way: a viewer who has not

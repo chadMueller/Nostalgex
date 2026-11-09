@@ -13,17 +13,12 @@ enum RetroLook {
     /// Chance per 80 ms tick that the scanlines dip, and how far.
     static let flickerChance = 0.08
     static let flickerRange = 0.76...0.88
-    /// Chance that a tracking line runs at each 6 to 15 s check, and its brightness.
-    static let glitchChance = 0.45
-    static let glitchBrightness = 0.22
 }
 
-/// CRT + VHS effect overlay: scanlines, vignette, flicker, tracking glitch.
+/// CRT effect overlay: scanlines, vignette, flicker. (A white VHS tracking line used to run
+/// down the screen now and then; it drew the eye and was taken out.)
 struct CRTOverlayView: View {
     @State private var flickerOpacity: Double = 1.0
-    @State private var trackingOffset: CGFloat = -200
-    @State private var showTracking: Bool = false
-    @State private var trackingTimer: Timer?
     let flickerTimer = Timer.publish(every: 0.08, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -31,11 +26,6 @@ struct CRTOverlayView: View {
             // Scanlines
             ScanlineLayer(opacity: RetroLook.scanlineOpacity)
                 .opacity(flickerOpacity)
-
-            // VHS tracking glitch line
-            if showTracking {
-                TrackingGlitchLine(yOffset: trackingOffset, brightness: RetroLook.glitchBrightness)
-            }
 
             // Vignette (dark edges, simulates tube curvature)
             VignetteLayer()
@@ -57,39 +47,6 @@ struct CRTOverlayView: View {
                     }
                 }
             }
-        }
-        .onAppear {
-            scheduleNextGlitch()
-        }
-        .onDisappear {
-            trackingTimer?.invalidate()
-        }
-    }
-
-    private func scheduleNextGlitch() {
-        let delay = Double.random(in: 6...15)
-        trackingTimer?.invalidate()
-        trackingTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
-            Task { @MainActor in
-                let roll = Double.random(in: 0...1)
-                if roll > 1 - RetroLook.glitchChance {
-                    triggerGlitch()
-                }
-                scheduleNextGlitch()
-            }
-        }
-    }
-
-    private func triggerGlitch() {
-        let duration = Double.random(in: 0.5...1.5)
-        let travel = CGFloat.random(in: 150...400)
-        trackingOffset = CGFloat.random(in: -200...200)
-        showTracking = true
-        withAnimation(.linear(duration: duration)) {
-            trackingOffset += travel
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-            showTracking = false
         }
     }
 }
@@ -171,51 +128,6 @@ private struct VignetteLayer: View {
                     .frame(width: w * 0.06)
                 }
             }
-        }
-    }
-}
-
-// MARK: - VHS tracking glitch line
-
-private struct TrackingGlitchLine: View {
-    let yOffset: CGFloat
-    let brightness: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                // Thin bright distortion band
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white.opacity(brightness * 0.53),
-                                .white.opacity(brightness),
-                                .white.opacity(brightness * 0.53),
-                                .clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: 12)
-
-                // Thicker warped band beneath
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(brightness * 0.2),
-                                .clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: 30)
-            }
-            .offset(y: geo.size.height * 0.5 + yOffset)
         }
     }
 }
