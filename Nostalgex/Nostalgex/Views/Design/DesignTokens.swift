@@ -12,9 +12,9 @@ import SwiftUI
 ///  - White with an opacity is not a text color. Secondary text is `text2`.
 ///  - A channel's own color is never text (see `NXColor.readableText(on:)` for text on it).
 ///
-/// The proposal is in `nowplaying-mock/tokens.md`. Adopted so far: Settings and the rating
-/// banner. The guide grid (its sizes follow row height and GUIDE TEXT SIZE) and the Now Playing
-/// panel (being redesigned) still use their own sizes and are migrated separately.
+/// The proposal is in `nowplaying-mock/tokens.md`. Adopted so far: Settings, the rating banner, the Now
+/// Playing panel and the guide grid (its sizes come through `GuideTextMetrics`, so GUIDE TEXT SIZE still
+/// works). Not yet: the guide's package list (the left jump rail).
 
 // MARK: - Type
 

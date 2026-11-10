@@ -35,6 +35,21 @@ details beside it, left-aligned against its right edge (the CH tag with its chan
 channel name, year and rating); UP NEXT sits under the poster across the column's 540 pt. With no poster the details take the poster's place
 and there is no empty hole. Token sizes and floors, the 560 pt row columns and everything else are as before.
 
+**The guide grid moved onto the design tokens (Chad, 2026-11-10, before 1.0.32 is cut).** Titles, channel numbers and names are body (29 pt,
+was 20 and 18), the time labels, the CHANNEL heading, the placeholder and the package names up the stripe are caption (25, was 20, 18 and 18).
+Text colors are text and text-2 only: the channel's own color is no longer text (the number and name are white, the color stays in the left
+bar), past programs are text-2 instead of white at 50%, and the near-black header and stripe backgrounds are the panel color. The row is the shared
+76 pt row height (was 80), the header 58 (was 60) and the channel column 340 (was 220), sized for a three-digit number box (54 pt), the live bolt
+and 15 characters of name at 29 pt (90% of the channels; the rest end in an ellipsis, on the live row at 13). Programme width goes from 1700 to 1580
+pt, so a 30 minute column is 395 pt (was 425); the window is still two hours, four columns. At 1080p the grid area is about 525 pt: 6.05 rows
+fit (was 5.7). The stripe slot at the rows' left edge is unchanged at 29.5 pt on the focused and live row (it depends on the header's paddings,
+not on the column width), so the 25 pt stripe names fit by cap height (about 17.5 pt in a 28 pt stripe). The seasonal invite row's 22 and 14 pt
+text is 29 and 25, in white (black when selected) instead of the season color. GUIDE TEXT SIZE still works: NORMAL is the token sizes, LARGE one
+step up (titles, number and name 34, times and heading 29), so LARGE no longer matches Roku's LARGE numbers (Roku's guide text is unchanged).
+Focus, order, the time cursor, stripes, snap-back, GUIDE TIMEOUT and the selected-row look are untouched, and no cell effects were added. Not
+migrated: the package list (the left jump rail, 22 and 24 pt), which was not in the scope. Compiled (simulator and TV), one simulator screenshot,
+no tests run; `GuideTextSizeTests` and the stripe slot test were updated to the new numbers and have not been run.
+
 **Up closes the Now Playing panel only when the focus engine had nowhere to go (a bug in the change above, found 2026-11-10).** While hunting a
 reported remote stall I logged the app on the simulator and saw the panel's Up handler read `FocusState` after the engine had already moved
 focus: Up from STREAM QUALITY (second row, right column) moved focus to RETRO MODE, the handler then saw RETRO MODE and closed the panel. The

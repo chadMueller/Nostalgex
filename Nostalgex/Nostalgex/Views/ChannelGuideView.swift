@@ -69,9 +69,13 @@ struct ChannelGuideView: View {
         return GuideReturnFocus.highlighted(focused: focusedChannelID, holdingLive: true, liveRow: liveRow)
     }
 
-    private let channelColumnWidth: CGFloat = 220
-    private let rowHeight: CGFloat = 80
-    private let headerHeight: CGFloat = 60
+    // The grid's sizes follow from the type (tokens, 2026-11-10). A row is the shared row height (76), which holds
+    // a 29 pt line with the 3 pt outline and its 2 pt inset. The header holds a 25 pt line (32.6 tall; a 29 pt LARGE line is 37.8) with 12 pt
+    // above and below. The channel column holds the live bolt (29), a three-digit number box (54), the gap (8) and
+    // 15 characters of name at 29 pt (261, the length 90% of the channels fit), plus its margins.
+    private let channelColumnWidth: CGFloat = 340
+    private let rowHeight: CGFloat = NXLayout.rowHeight
+    private let headerHeight: CGFloat = 58
     // 24-hour horizon, 30-min slots, 4 visible at a time → max scroll offset = 44.
     private let maxSlotOffset: Int = 44
 
@@ -99,7 +103,7 @@ struct ChannelGuideView: View {
 
                     // Divider under header
                     Rectangle()
-                        .fill(Color.white.opacity(0.25))
+                        .fill(Color.nxRestingOutline)
                         .frame(height: 1)
 
                     // Channel rows
@@ -108,8 +112,8 @@ struct ChannelGuideView: View {
                             VStack(spacing: 0) {
                                 if appState.channels.isEmpty {
                                     Text("NO CHANNELS AVAILABLE")
-                                        .font(.custom("DMMono-Medium", size: 20))
-                                        .foregroundStyle(.white.opacity(0.3))
+                                        .font(NXFont.captionMedium)
+                                        .foregroundStyle(Color.nxText2)
                                         .frame(maxWidth: .infinity, minHeight: 200)
                                         .focusable()
                                 }
@@ -708,14 +712,14 @@ struct ChannelGuideView: View {
         return HStack(spacing: 0) {
             Text("CHANNEL")
                 .font(.custom("DMMono-Medium", size: text.channelHeading))
-                .foregroundStyle(Color.white.opacity(0.7))
+                .foregroundStyle(Color.nxText2)
                 .frame(width: channelColumnWidth, alignment: .leading)
                 .padding(.leading, 12)
 
             ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
                 Text(label)
                     .font(.custom("DMMono-Medium", size: text.timeLabel))
-                    .foregroundStyle(Color.white.opacity(0.95))
+                    .foregroundStyle(Color.nxText)
                     .frame(width: programsWidth / 4, alignment: .leading)
                     .padding(.leading, 14)
                     .overlay(alignment: .leading) {
@@ -726,7 +730,7 @@ struct ChannelGuideView: View {
             }
         }
         .frame(height: headerHeight)
-        .background(Color(red: 0.04, green: 0.04, blue: 0.08))
+        .background(Color.nxPanel)
     }
 }
 
@@ -810,7 +814,7 @@ private struct EPGRow: View {
         // slot at the left (31.5 pt, 29.5 on the live and focused row); the stripe fills it, so nothing moves.
         .overlay(alignment: .topLeading) {
             if let stripe {
-                GuideStripeCell(cell: stripe, height: rowHeight + 1, background: Color(red: 0.05, green: 0.05, blue: 0.12))
+                GuideStripeCell(cell: stripe, height: rowHeight + 1, background: Color.nxPanel)
             }
         }
     }
@@ -831,13 +835,13 @@ private struct EPGRow: View {
 
             Text(String(format: "%d", channel.number))
                 .font(.custom("DMMono-Medium", size: text.number))
-                .foregroundStyle(isFocused ? Color.white : channel.color)
+                .foregroundStyle(Color.nxText)
                 .frame(width: text.numberWidth, alignment: .trailing)
                 .padding(.trailing, 8)
 
             Text(channel.name.uppercased())
                 .font(.custom("DMMono-Medium", size: text.name))
-                .foregroundStyle(isFocused ? Color.white : channel.color.opacity(0.95))
+                .foregroundStyle(Color.nxText)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -897,11 +901,9 @@ private struct EPGRow: View {
                             Text(entryTitle(entry))
                                 .font(.custom("DMMono-Medium", size: text.title))
                                 .foregroundStyle(
-                                    entry.isNowPlaying || isFocused
-                                        ? Color.white
-                                        : isPast
-                                            ? Color.white.opacity(0.5)
-                                            : Color.white.opacity(0.85)
+                                    entry.isNowPlaying || isFocused || !isPast
+                                        ? Color.nxText
+                                        : Color.nxText2
                                 )
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -940,7 +942,7 @@ private struct EPGRow: View {
 
             Text("BROADCASTS RESUME AT 9 PM")
                 .font(.custom("DMMono-Medium", size: text.placeholder))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(Color.nxText2)
                 .lineLimit(1)
                 .padding(.leading, 14)
 
@@ -1159,18 +1161,17 @@ struct SeasonalInviteRow: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(headline)
-                .font(.custom("DMMono-Medium", size: 22))
-                .foregroundStyle(isFocused ? .black : accent)
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(isFocused ? Color.black : Color.nxText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
 
             // One call to action, not two. "ADD THE SCREAM PACKAGE" next to "PRESS SELECT"
             // said the same thing twice.
             Text("PRESS TO ADD THE \(bundle.name) PACKAGE")
-                .font(.custom("DMMono-Medium", size: 14))
-                .foregroundStyle(isFocused ? .black.opacity(0.65) : .black)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
+                .font(NXFont.captionMedium)
+                .foregroundStyle(Color.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background(
                     Capsule().fill(isFocused ? Color.black.opacity(0.18) : accent)
                 )
