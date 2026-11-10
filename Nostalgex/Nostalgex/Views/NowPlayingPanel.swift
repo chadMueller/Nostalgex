@@ -149,6 +149,12 @@ struct NowPlayingPanel: View {
                 endPoint: .bottom
             )
         )
+        // The reverse of what opened it: the panel comes down with Down, so Up closes it, but only from the top
+        // row of a column (nothing above to move to), never from inside a list, and Up still moves between rows.
+        .onMoveCommand { direction in
+            guard direction == .up, NowPlayingPanelLayout.upClosesPanel(focus: focusedControl, pickerOpen: expandedPicker != nil) else { return }
+            onDismiss?()
+        }
         .onExitCommand {
             // Back closes an expanded picker first. Dropping straight out to bare
             // playback from inside a list would lose the panel on a mis-press.
@@ -176,52 +182,57 @@ struct NowPlayingPanel: View {
     // MARK: - Info zone (non-focusable)
 
     private var infoZone: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            // Poster only when the backend can serve one (Plex's thumbnail transcode
-            // carries the token in the URL, so AsyncImage needs no header support).
-            // The panel reads fine without it on Jellyfin/Emby.
-            if let poster = appState.posterURL(for: item) {
-                AsyncImage(url: poster) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.nxRow
+        VStack(alignment: .leading, spacing: 24) {
+            // The poster (Plex only: its thumbnail transcode carries the token in the URL, so AsyncImage needs no
+            // header support) with what is playing beside it, left-aligned to the poster's right edge. Without a
+            // poster the details sit where the poster would be, no empty hole.
+            HStack(alignment: .top, spacing: 24) {
+                if let poster = appState.posterURL(for: item) {
+                    AsyncImage(url: poster) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.nxRow
+                    }
+                    .frame(width: 150, height: 225)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
+                    )
                 }
-                .frame(width: 200, height: 300)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
-                )
-            }
 
-            // The channel's own color is a small bar beside the number, never the number.
-            HStack(spacing: 14) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(channel.color)
-                    .frame(width: 12, height: 36)
-                Text("CH \(channel.number)")
-                    .font(NXFont.tag)
-                    .foregroundStyle(Color.nxText)
-            }
+                VStack(alignment: .leading, spacing: 14) {
+                    // The channel's own color is a small bar beside the number, never the number.
+                    HStack(spacing: 14) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(channel.color)
+                            .frame(width: 12, height: 36)
+                        Text("CH \(channel.number)")
+                            .font(NXFont.tag)
+                            .foregroundStyle(Color.nxText)
+                    }
 
-            // Title leads as the big headline, channel name follows smaller below it
-            // (Discord feedback, 2026-10-29: viewers read this as "what's
-            // playing", so the title should dominate and the channel is secondary).
-            Text(titleLine)
-                .font(NXFont.title)
-                .foregroundStyle(Color.nxText)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+                    // Title leads as the big headline, channel name follows smaller below it
+                    // (Discord feedback, 2026-10-29: viewers read this as "what's
+                    // playing", so the title should dominate and the channel is secondary).
+                    Text(titleLine)
+                        .font(NXFont.title)
+                        .foregroundStyle(Color.nxText)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
 
-            Text(channel.name.uppercased())
-                .font(NXFont.bodyRegular)
-                .foregroundStyle(Color.nxText2)
-                .lineLimit(2)
+                    Text(channel.name.uppercased())
+                        .font(NXFont.bodyRegular)
+                        .foregroundStyle(Color.nxText2)
+                        .lineLimit(2)
 
-            if let meta = metaLine {
-                Text(meta)
-                    .font(NXFont.captionRegular)
-                    .foregroundStyle(Color.nxText2)
+                    if let meta = metaLine {
+                        Text(meta)
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let next = schedule?.upNext?.item {
@@ -235,7 +246,6 @@ struct NowPlayingPanel: View {
                         .foregroundStyle(Color.nxText)
                         .lineLimit(2)
                 }
-                .padding(.top, 6)
             }
         }
         .frame(width: infoWidth, alignment: .leading)

@@ -24,6 +24,17 @@ white as text. Not migrated, on purpose: the guide grid (its sizes follow row he
 panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
 pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
 
+**Full screen: the reverse direction closes what the direction opened; Now Playing identity column rearranged (Chad's TV check, 2026-11-10).**
+In full screen, Down opens the Now Playing panel at the top and Up opens the channel strip at the bottom (the code reads this way and the panel
+UI test presses Down to open it). The reverse now closes each: with the strip open, Down closes it (the strip handles only Down, so Left and
+Right keep moving along it); with the panel open, Up closes it, but only when focus is on the first row of a column (CC on the left, RETRO MODE
+on the right, `NowPlayingPanelLayout.upClosesPanel`), so Up still moves between rows everywhere else, and never from inside an open list. What
+opens them, Menu and Back, the touch surface and focus order are unchanged. Both are `onMoveCommand` handlers on the container, the pattern
+the guide already uses; not run on the TV or in a test, by request. In the panel's left column the poster is back to 150 x 225 pt with the
+details beside it, left-aligned against its right edge (the CH tag with its channel bar, the title at 44 pt wrapping to up to three lines, the
+channel name, year and rating); UP NEXT sits under the poster across the column's 540 pt. With no poster the details take the poster's place
+and there is no empty hole. Token sizes and floors, the 560 pt row columns and everything else are as before.
+
 **Smaller SETTINGS pill, narrower Now Playing columns (Chad's review, 2026-11-10).** The guide header's SETTINGS pill keeps 29 pt, the press
 floor, and its padding went from 36 across and 14 up and down to 22 and 6: measured in the simulator, 211 x 66 pt before, 183 x 50 pt
 after (13% narrower, 24% shorter). A 25 pt caption version was built and photographed as an option (about 160 x 43 pt, computed from

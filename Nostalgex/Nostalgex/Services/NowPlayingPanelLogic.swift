@@ -101,6 +101,14 @@ enum NowPlayingPanelLayout {
         return rows
     }
 
+    /// Up closes the panel (the reverse of Down, which opens it) only when focus is on the first row of
+    /// a column, CC on the left and RETRO MODE on the right, so Up still moves between rows everywhere
+    /// else, and never from inside an open list (Back closes that first).
+    static func upClosesPanel(focus: NowPlayingFocus?, pickerOpen: Bool) -> Bool {
+        guard !pickerOpen else { return false }
+        return focus == .cc || focus == .retro
+    }
+
     /// The audio row opens a track list only when there is a choice to make.
     static func audioRowOpensList(trackCount: Int) -> Bool { trackCount > 1 }
 }

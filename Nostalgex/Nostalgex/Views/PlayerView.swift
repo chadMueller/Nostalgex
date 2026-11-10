@@ -343,6 +343,11 @@ private struct MiniChannelStrip: View {
         .onExitCommand {
             onDismiss?()
         }
+        // The reverse of what opened it: the strip comes up with Up, so Down closes it. Left and Right are not
+        // handled here, so they keep moving along the strip.
+        .onMoveCommand { direction in
+            if direction == .down { onDismiss?() }
+        }
     }
 }
 
