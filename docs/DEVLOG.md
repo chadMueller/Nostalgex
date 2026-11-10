@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
+
+**Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on
+the channel the viewer last tuned, on by default on every platform since Chad's decision of 2026-11-09.
+
+**Changed.** `source/guide/LastChannel.brs` ports `LaunchChannelMemory` and `nostalgex-last-channel.js`: the switch
+(on unless a stored value says otherwise) and the channel's id and name, both in the registry's `player` section.
+`GuideView.viewerTune` saves the channel on OK in the guide, Left and Right in full screen and a mini strip pick,
+with the switch on or off. The first guide of a launch opens on it after a launch deep link and a rebuild's resume,
+when a channel in the guide has the same id and the same name, and on channel one otherwise. PLAYBACK & PICTURE has
+the row after AUDIO LANGUAGE with the Apple TV's line. Sign-out clears the channel and leaves the switch.
+
+**The power-loss start follows it.** `NxSeedChannel` takes the channel a launch opens on, so the seed (#155) holds
+the remembered channel's airings, or channel one's when the switch is off, nothing is remembered or the channel is
+not in the guide. After a channel change or the switch, the library task moves the seed at its next 30 s re-check
+(`followSeed`), not on the key press: one registry write of up to 10 KB at most each 30 s. A remembered channel with
+no airing to save (a WATERSHED hold) leaves the seed it had.
+
+**A deep link is not remembered.** It tunes through `pressTune` like the app's own tunes. The Apple TV has none to
+follow.
+
+**Privacy text.** The Roku paragraph in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` said the power-loss start
+keeps the details "of your first channel"; it now says "of the channel the app opens on". For Chad's review.
+
+**Tested off the TV.** A `last-channel` suite, 69 cases on a stand-in registry: the issue's list, the web smoke's
+match cases and every channel in `channels.json` finding itself, and the seed's channel. `tests/run.sh` ends in ALL
+TESTS PASSED.
+
+**Open.** Not run on a TV yet: the relaunch, the power pull, the switch off, the Settings row on screen, and what a
+registry write on each channel change costs on the render thread.
+
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 
 **Why.** `NxCleanMusicTitle` got steps 5 and 7 of the web cleanup the same day as the web tuner (N-034, the entry

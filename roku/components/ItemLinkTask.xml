@@ -17,5 +17,6 @@
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/LibrarySnapshot.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideSchedule.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
   <script type="text/brightscript" uri="pkg:/components/ItemLinkTask.brs" />
 </component>

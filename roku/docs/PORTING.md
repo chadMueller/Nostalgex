@@ -637,7 +637,11 @@ The Roku's own (#155); the Apple TV app has nothing like it to port. The
 saved guide, pools and library live in `cachefs:`, which is RAM, so a TV that
 lost power came back to a full scan behind the loading screen. Each build,
 and each new hour on a TV left on, also writes the next airings of the
-channel a launch opens on, the first in the guide, to the registry
+channel a launch opens on to the registry: the first in the guide, or with
+OPEN ON LAST CHANNEL on (#230, below) the channel the viewer last tuned while
+it is still in the guide. A channel change or the switch moves the seed at the
+library task's next 30 s re-check (`LibraryTask.followSeed`); a remembered
+channel with no airing to save (a WATERSHED hold) leaves the seed it had
 (`source/guide/ColdBootSeed.brs`, section `seed`): as many whole airings as
 fit in 10 KB from the one on now, each the guide block less its summary.
 It is written only when it changed, and keyed to the build, as the saved
@@ -658,6 +662,21 @@ seed's guide at once. When the seed's last
 airing ends first, the loading screen comes back; a load that fails takes
 the seed's guide down and shows its error. Sign-out clears the seed with the
 other caches.
+
+**OPEN ON LAST CHANNEL (#230)**, as `LaunchChannelMemory.swift` and
+`scripts/nostalgex-last-channel.js`: `source/guide/LastChannel.brs`. On unless
+switched off (PLAYBACK & PICTURE, after AUDIO LANGUAGE), per TV, in the
+registry's `player` section (`openLastChannel`, and `lastChannel` as the
+channel's id and name), sent nowhere. `GuideView.viewerTune` saves the channel
+on a tune the viewer makes: OK in the guide, Left and Right in full screen and
+a pick in the mini strip, whether the switch is on or off. The first channel
+after a load, a rebuild's resume, a deep link (the Apple TV has none) and a
+hand-over are the app's tunes and are not saved. The first guide of a launch
+opens on it after a launch deep link and a rebuild's resume, and only when a
+channel in the guide has the same id and the same name; otherwise channel one,
+as before. Sign-out, and a fresh sign-in over another account's saved library, clear the channel
+with the caches (`NxClearAccountCaches`) and leave the switch. The Roku has no
+demo mode, so the Apple TV's demo cases have nothing to port.
 
 Pressed on the 43S45 (OS 16.0.4, 2026-11-03), a test-data build of this work
 on main `84bac18` signed in to the lab Emby (5,509 items, 30 channels), with a
