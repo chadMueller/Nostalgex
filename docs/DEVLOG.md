@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
+
+**Why.** `NxCleanMusicTitle` got steps 5 and 7 of the web cleanup the same day as the web tuner (N-034, the entry
+below), checked by one title in the MediaBrowser fixture. The golden file `scripts/music-title-golden.json` is the
+contract for all three apps and nothing on the Roku read it.
+
+**Changed, tests only.** A `music-title` suite (`roku/tests/MusicTitleGoldenTests.brs`) runs the file's 37 clean
+cases against `NxCleanMusicTitle` and its 8 parse cases against `NxParseMusicTitle`. `roku/tests/gen-music-title.mjs`
+also asks the web module (`cleanTitle`, `parseTitle`) for every input in the file, 39 of them, and the suite holds the
+port to each answer, so a change to the module that the file doesn't cover still shows. The generator stops if the
+module and the file's clean cases disagree, and `tests/run.sh` runs the web's own smoke first.
+
+**Result.** Off the TV, on main at `259a3d0`: 46 and 79 checks pass, so the port needed no change. With
+`PlexLibrary.brs` as it was before `259a3d0`, 27 and 48 of them fail.
+
+**Not changed.** Anything in the channel package: `NxCleanMusicTitle` and `NxParseMusicTitle` are as they were.
+
+**Open.** Not run on a TV (`deploy.sh --test` lists the suite). The Roku job's path filter in `ci.yml` has
+`nostalgex-music-brainz.js` but not `music-title-golden.json`, so a change to the golden file alone doesn't start it.
+
 ## 2026-11-09 (Docker: settings kept on the server, I-080; looked at, not built; branch web/fixes-1109)
 
 **Not built, on purpose.** The ask (a Docker user on a Raspberry Pi: "I keep having to go into settings and turn stuff on and
