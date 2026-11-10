@@ -150,6 +150,26 @@ Saved auth shape:
 
 ---
 
+## One lineup for every browser (Docker only)
+
+In the Docker tuner the container holds one lineup, so a new browser or device starts ready. The hosted
+nostalgex.app does not: it keeps settings in each browser.
+
+- **Shared:** the packages that are on (`nostalgex_enabled_bundles`), the channel settings
+  (`plex90_channel_config`, `plex90_config_version`), the collections (`nostalgex_enabled_collections`) and the
+  franchises (`nostalgex_enabled_franchises`, `nostalgex_disabled_franchises`). Nothing else.
+- **Per browser, as before:** the sign-in, guide layout, retro mode, language, guide text size, sound, last
+  channel, watch reporting.
+- **How:** the page asks for `nostalgex-settings.json` once before its own script runs and writes the keys above
+  into localStorage; after the first tap or key press of a visit, a change to one of them is sent back (a PUT, a
+  moment after the last change). Last write wins. nginx keeps the file in the `/data` volume
+  (`docker/40-config.sh` writes the location; `scripts/nostalgex-server-settings.js` is the page's side).
+- **When it cannot work:** no `/data` volume or a read-only one, an image without the WebDAV module,
+  `NOSTALGEX_SHARED_SETTINGS=off`, a proxy in the way: the page behaves as it always did. A browser that could
+  not read the file never writes it.
+
+---
+
 ## Keyboard shortcuts
 
 | Key | Action |

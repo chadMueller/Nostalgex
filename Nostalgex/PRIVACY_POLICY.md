@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Effective: November 5, 2026
+Effective: November 10, 2026
 
 Nostalgex turns your own Plex, Jellyfin, or Emby library into live TV channels. We do not host, supply, or stream any media. Everything you watch comes off your own server.
 
@@ -9,7 +9,7 @@ This policy covers four separate things: the Nostalgex app on Apple TV, the Nost
 ## Summary
 
 - No accounts. Nothing is sold or rented to anyone.
-- Your server address and login token stay on your Apple TV, Roku or Android TV.
+- Your server address and login token stay on your Apple TV, Roku or Android TV, or in your browser if you use the web tuner or the Docker tuner.
 - The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku and Android TV apps send none.
 - The website uses two lightweight analytics scripts to count page visits.
 - Nothing we collect follows you into other companies' apps or across the web.
@@ -99,6 +99,8 @@ The marketing pages on nostalgex.app load one analytics script, statsngraphs: th
 If you sign up for update emails, your email address goes to Resend, the service that sends them. Along with it we store which signup form or QR code you used (for example the home page, the connect page, or the Apple TV app's settings screen), the page you signed up on, and any campaign tags that were on the link you followed. Nothing else about your visit is stored with it, and it is never joined to app analytics. Every email has an unsubscribe link.
 
 The web tuner itself does not load it. Once you are connected and watching, no analytics script is running on the page, so nothing about your library or what you play is measured. To sort titles onto channels, the web tuner looks up public movie and TV metadata the same way the app does: through the shared Supabase cache and the relay described below, sending only public TMDB and IMDb ids. No library titles, account, or server details are sent with them. For the music video channels it also looks up genres and years on MusicBrainz, then Deezer for any it can't place, the same as the app: for each music video your browser searches by song title and artist name. Nothing about you, your account or your server goes with it. The answers are kept in your browser, so it doesn't ask again every time you open it. The privacy policy page does not load them either. All of this is separate from the app, and nothing from the app is joined to anything from the website.
+
+The web tuner and the Docker tuner keep your sign-in in your browser: for Plex, your account token, and your server's name, address and token; for Jellyfin or Emby, your server's name and address, your user name, your user ID there and its access token. The sign-in stays until you press SIGN OUT in Settings or your server stops accepting it, and none of it is sent to us. Your password is never stored. The day schedules the tuner saves hold your library's item numbers and air times and carry your server's address in their names; SIGN OUT does not remove them, clearing this site's data in your browser does.
 
 ## What the app stores on your device
 

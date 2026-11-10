@@ -45,6 +45,90 @@ signed in to the lab Emby (5,657 items, 17 channels, CH 3 first):
 
 **Open.** The TV's power really pulled (the wipe stands in for it), a stick, a Plex library, and the 31 to 41 ms a
 tune now spends on the registry write.
+## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
+
+**Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
+never starts there. A guide left up for hours keeps the logo, header and grid lines still on screen, which can burn
+into an OLED. Fullscreen video keeps moving.
+
+**Changed.** New PLAYBACK & PICTURE row GUIDE TIMEOUT: OFF, 5 MIN (default) or 15 MIN, per Apple TV and never
+synced. After that long with no remote press on the guide, the playing channel goes fullscreen, the same as
+Play/Pause. It only runs while the guide is in front and a channel is playing; Settings, the loading screen and an
+empty guide are left alone. `RemoteActivityMonitor` notes every press and touch-surface swipe with a window gesture
+recognizer that never recognizes, so it never takes a press from the focus engine. `TunerView` checks every 5 seconds
+and restarts the clock when the guide comes back from fullscreen or Settings.
+
+**Tested.** `GuideTimeoutTests` (default, cycling, the timing rule) and `GuideTimeoutUITests` in demo mode with
+`-uiTestGuideTimeoutSeconds 20`: a guide left alone for 30 seconds goes fullscreen, and a guide pressed every 8 seconds
+for 40 seconds stays up. Both passed twice. `NostalgexTests` and the OPEN ON LAST CHANNEL UI tests pass with the new
+row. Not tried on a real Apple TV.
+
+**Not changed.** Roku and the web tuner keep the guide up indefinitely; they need the same setting for parity.
+
+## 2026-11-09 (Apple TV: settings values readable, focused settings row easy to find)
+
+**Why.** A design pass over demo mode on an Apple TV 4K simulator (tvOS 27.2, build 1.0.30) found two settings
+problems you notice from the couch. The current value on a settings row (NORMAL, AUTO, FOREIGN AUDIO, MATCH APPLE TV
+LANGUAGE) was VT323 20pt at 20% white, measured 1.98:1 against the row. The focused row was marked by a 1.5px cyan
+stroke at 50% and a fill only 1.12:1 lighter than an unfocused row, so it was hard to tell where the remote was.
+
+**Changed.** `SettingsToggleRow`'s detail text is DMMono-Medium 22 at 60% white, cyan when focused, the treatment
+`SettingsLinkRow` already gives OFF and 0 ON. A detail marked prominent (a price) is unchanged. Every settings row,
+the subtitle language and stream quality pickers, and the rating banner now focus with a solid BrandCyan 3px stroke
+and a 10% white fill. `NostalgexTests` pass.
+
+**Not changed.** Guide, player and Now Playing panel styling. Other findings from the pass are in an issue for Chad
+to decide on.
+
+## 2026-11-10 (privacy: the web tuner and Docker tuner's saved sign-in)
+
+**Why.** The policy said where the apps keep a sign-in and said nothing about the web tuner, which keeps one too (the
+web agent's I-024 measurement, entry of 2026-11-09 below).
+
+**Changed.** On Chad's yes, after one reviewer pass that checked every statement against `plex-tuner.html` and
+`web-tuner.html`. One paragraph in "This website", straight after the web tuner paragraph, in `privacy.html` and
+`Nostalgex/PRIVACY_POLICY.md`, the same words in both: the web tuner and the Docker tuner keep your sign-in in your
+browser (Plex: account token, server name, address and token; Jellyfin or Emby: server name and address, the user name
+typed, user ID and access token); it stays until SIGN OUT in Settings or the server stops accepting it; none of it is
+sent to us; the password is never stored. It also says the saved day schedules carry the server address in their names
+and that SIGN OUT does not remove them (clearing the site's data in the browser does). The Summary bullet about where the
+server address and login token stay now names the browser for the web tuner and the Docker tuner. The Effective date
+moves from November 5 to November 10, 2026. No tuner file changed and there is no `tuner-v` tag, so the Docker image is
+untouched.
+
+**Left alone, on purpose.** The Apple TV "What the app stores on your device" block, which is about the TV app and stays
+true.
+
+## 2026-11-10 (Docker: one lineup held by the container, I-080; branch web/docker-settings-1110)
+
+**Built, not pushed, not run in nginx.** Chad chose option 1 for I-080 (a Docker user on a Raspberry Pi had to turn the same
+packages on in every browser): one global lineup, last write wins, display preferences and the sign-in stay per browser, the
+hosted site unchanged. The container now holds `nostalgex-settings.json` in a `/data` volume. nginx serves it and takes a PUT of
+it with its WebDAV module, so there is no backend; `docker/40-config.sh` writes the location into `/tmp/nostalgex/settings.conf`
+only when `nginx -V` lists `--with-http_dav_module` (and `NOSTALGEX_SHARED_SETTINGS` is not off), and `docker/nginx.conf`
+includes that folder by glob. A missing module therefore leaves no location rather than an nginx that will not start. The page
+side is `scripts/nostalgex-server-settings.js`: it runs only when the page carries the selfhost marker, reads the file once
+with a synchronous request before the page's script (the page reads its packages from localStorage in its first lines), and
+sends the six shared keys back after the first tap or key press of a visit and a settled 1.5 s. It never sends anything outside
+those keys, drops any value that contains this browser's own token, and ignores anything outside them in what it reads. A read
+that failed (500, a newer file) turns writing off for the visit, three refused writes in a row do too, and a missing file, an
+image without the feature, no volume, or a read-only one all leave the page exactly as it was.
+
+**Measured.** `npm run test:server-settings` (84 checks, including the real entrypoint script run against a stand-in `nginx -V`
+with and without the module, with the feature off, and with a typo) and `npm run test:shared-lineup` (55 checks, headless, the
+real `vite build --mode selfhost` output at 960x540 and on a phone, against a stand-in container: read, a change sent once with
+no token, login or display preference in it, a third browser starting from it, nothing saved yet, an image without the
+feature, a failed read, a newer file, a refused PUT, the hosted page never asking for the file, and the page with the module
+removed as the negative control).
+
+**Not run.** nginx and Docker. Whether `nginxinc/nginx-unprivileged:1.30-alpine` has the WebDAV module is expected (nginx.org's
+packages build with it) but not confirmed; the `docker-smoke` job in `ci.yml` now does the real round trip with curl (a
+volume on `/data`, a PUT, the file back, still there after a restart, a DELETE refused, no volume refused, feature off) and
+runs on a pull request, not on a push to main. The synchronous read is one request to the same nginx that just served the page;
+it has no timeout of its own, since a synchronous request cannot be given one.
+
+**Behaviour to know.** The first browser to make a change after the container gains the feature becomes the shared lineup,
+whatever the other browsers held. Not shared, and not decided: per-user lineups.
 
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 

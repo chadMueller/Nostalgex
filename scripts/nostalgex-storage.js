@@ -122,8 +122,18 @@
 
   // `localStorage` itself throws in some browsers (cookies blocked), so it is read inside
   // the try, never passed in as an argument.
+  // Listeners told after each setLocal that saved. The Docker tuner's shared lineup
+  // (scripts/nostalgex-server-settings.js) hears about its keys here; nothing else uses it.
+  // A listener that throws is ignored: a write never fails because someone was listening.
+  const writeListeners = [];
+  function onLocalWrite(fn) {
+    if (typeof fn === 'function') writeListeners.push(fn);
+  }
   function setLocal(key, value) {
-    try { return set(global.localStorage, key, value); } catch (err) { warnOnce(key, err); return false; }
+    let saved;
+    try { saved = set(global.localStorage, key, value); } catch (err) { warnOnce(key, err); return false; }
+    if (saved) for (const fn of writeListeners) { try { fn(key); } catch (_) { /* ignored */ } }
+    return saved;
   }
   function setSession(key, value) {
     try { return set(global.sessionStorage, key, value); } catch (err) { warnOnce(key, err); return false; }
@@ -250,7 +260,7 @@
 
   const api = {
     EVICTABLE, LEGACY_LIBRARY_KEY, LIBRARY_MARKER_KEY, LIBRARY_DB,
-    isQuotaError, isEvictableKey, set, setLocal, setSession, purgeLegacy, createLibraryCache,
+    isQuotaError, isEvictableKey, set, setLocal, onLocalWrite, setSession, purgeLegacy, createLibraryCache,
     libraryCache: createLibraryCache({
       get indexedDB() { return global.indexedDB; },
       get localStorage() { return global.localStorage; },
