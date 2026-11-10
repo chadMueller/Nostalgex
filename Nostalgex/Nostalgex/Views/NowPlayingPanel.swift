@@ -115,10 +115,11 @@ struct NowPlayingPanel: View {
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
-    /// Two equal control columns with the identity column to their left: 360 + 44 + 650 + 36 + 650
-    /// fills the width inside the 90 pt safe margins.
-    private let infoWidth: CGFloat = 360
-    private let columnWidth: CGFloat = 650
+    /// The identity column gets the room: 540 + 44 + 560 + 36 + 560 fills the width inside the 90 pt safe
+    /// margins. 560 is what the longest row still needs at 29 pt (PLAYBACK INFORMATION, its value and its
+    /// chevron: 495 pt of the 504 pt inside the row's padding).
+    private let infoWidth: CGFloat = 540
+    private let columnWidth: CGFloat = 560
     private let columnGap: CGFloat = 36
 
     private var schedule: ChannelSchedule? {
@@ -185,7 +186,7 @@ struct NowPlayingPanel: View {
                 } placeholder: {
                     Color.nxRow
                 }
-                .frame(width: 150, height: 225)
+                .frame(width: 200, height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -279,7 +280,8 @@ struct NowPlayingPanel: View {
                 }
                 // Only as tall as the taller column, never the whole screen: the hint sits right under it.
                 .fixedSize(horizontal: false, vertical: true)
-                hintLine(NowPlayingPanelHints.hint(for: focusedControl) ?? " ", status: compatibilityHintOverride)
+                hintLine(NowPlayingPanelHints.hint(for: focusedControl) ?? " ", status: compatibilityHintOverride,
+                         width: columnWidth * 2 + columnGap)
             }
             .focusSection()
             .onAppear { focusedControl = .cc }
@@ -403,8 +405,9 @@ struct NowPlayingPanel: View {
         } label: {
             PanelRow(
                 label: "RETRY ORIGINAL VIDEO",
-                value: appState.compatibilityRetryInFlight ? .text("CHECKING SERVER") : .none,
-                trailing: appState.compatibilityRetryInFlight ? .none : .retry,
+                // While it runs the row shows a spinner; "CHECKING SERVER" is the hint line.
+                value: .none,
+                trailing: appState.compatibilityRetryInFlight ? .busy : .retry,
                 isFocused: focusedControl == .compatibilityRetry
             )
         }
@@ -439,14 +442,14 @@ struct NowPlayingPanel: View {
             appState.autoSubtitlesForForeignAudioEnabled.toggle()
         } label: {
             PanelRow(
-                label: "AUTO SUBTITLES (FOREIGN AUDIO)",
+                label: "AUTO SUBTITLES",
                 value: appState.autoSubtitlesForForeignAudioEnabled ? .on : .off,
                 isFocused: focusedControl == .autoSubtitles
             )
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .autoSubtitles)
-        .accessibilityLabel("AUTO SUBTITLES (FOREIGN AUDIO)")
+        .accessibilityLabel("AUTO SUBTITLES")
         .accessibilityValue(appState.autoSubtitlesForForeignAudioEnabled ? "ON" : "OFF")
     }
 
@@ -587,13 +590,11 @@ struct NowPlayingPanel: View {
             case .sleepTimer:
                 sleepOptions
             }
-            if picker == .playbackInformation {
-                hintLine(pickerHint(picker), lines: 4, width: columnWidth * 2 + columnGap)
-                    .padding(.top, 8)
-            } else {
-                hintLine(pickerHint(picker))
-                    .padding(.top, 8)
-            }
+            // A list that opens from the left spans both columns; one from the right sits under its column.
+            hintLine(pickerHint(picker),
+                     lines: (picker == .playbackInformation || picker == .streamQuality) ? 4 : 2,
+                     width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
+                .padding(.top, 8)
         }
         .padding(.leading, pickerOffset(picker))
         .focusSection()
@@ -866,7 +867,7 @@ private struct PanelRow: View {
         case warning(String)
     }
 
-    enum Trailing { case none, chevron, external, retry, check }
+    enum Trailing { case none, chevron, external, retry, check, busy }
 
     let label: String
     var value: Value = .none
@@ -876,7 +877,7 @@ private struct PanelRow: View {
     var isStatic: Bool = false
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 12) {
             Text(label)
                 .font(NXFont.bodyMedium)
                 .foregroundStyle(Color.nxText)
@@ -932,6 +933,8 @@ private struct PanelRow: View {
             Image(systemName: "arrow.clockwise").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .check:
             Image(systemName: "checkmark").font(NXFont.icon).foregroundStyle(Color.nxCyan)
+        case .busy:
+            ProgressView().tint(Color.nxCyan)
         }
     }
 }

@@ -24,6 +24,19 @@ white as text. Not migrated, on purpose: the guide grid (its sizes follow row he
 panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
 pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
 
+**Smaller SETTINGS pill, narrower Now Playing columns (Chad's review, 2026-11-10).** The guide header's SETTINGS pill keeps 29 pt, the press
+floor, and its padding went from 36 across and 14 up and down to 22 and 6: measured in the simulator, 211 x 66 pt before, 183 x 50 pt
+after (13% narrower, 24% shorter). A 25 pt caption version was built and photographed as an option (about 160 x 43 pt, computed from
+the 29 pt measurement) but breaks the 29 pt rule for pressed things, so it is not the default. In the Now Playing panel the two control
+columns went from 650 pt to 560 pt each and the identity column from 360 pt to 540 pt, which the poster uses (150 x 225 became 200 x 300).
+560 is what the longest row still needs at 29 pt: PLAYBACK INFORMATION with its value and chevron is 495 pt of the 504 pt inside a row's
+padding, so 540 or less would need that row's "VIEW" dropped. To get there the row's inner spacing went from 20 to 12 pt, the label "AUTO
+SUBTITLES (FOREIGN AUDIO)" became "AUTO SUBTITLES" (the parenthetical was already what its hint line says), the RETRY ORIGINAL VIDEO row shows a
+spinner while it runs instead of "CHECKING SERVER" (that wording is the hint line), and the hint line now spans both columns so a three
+sentence hint still fits in two lines. Floors (25 and 29 pt), row height 76, the 3 pt selected state with glow and lift (not clipped),
+focus order and Menu are unchanged. Compiled; the tests were not run for this change, by request, and no test names the old label. Before
+and after screenshots are in `.shots/nowplaying-a/` (`before-*`, `after-*`, `option-guide-pill25-*`) beside the three mocks.
+
 **Now Playing panel, Variant A (Chad's pick, 2026-11-10).** The in-player panel is rebuilt on the shared tokens, `DesignTokens.swift`
 being the one place it takes sizes, colors, row height and the selected state from. Layout: the identity column on the left (poster
 when the backend has one, a small channel-colored bar beside "CH n" in white, the title at 44 pt, channel name, "1987 . PG-13", UP NEXT

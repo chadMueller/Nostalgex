@@ -275,8 +275,9 @@ private struct NavItem: View {
             Text(label)
                 .font(NXFont.bodyMedium)
                 .foregroundStyle(Color.nxText)
-                .padding(.horizontal, 36)
-                .padding(.vertical, 14)
+                // 29 pt, the press floor, with the padding cut to a header control's: 22 across, 6 up and down.
+                .padding(.horizontal, 22)
+                .padding(.vertical, 6)
                 .nxRowSurface(isSelected: isFocused, cornerRadius: 40)
                 .contentShape(Capsule())
         }
