@@ -20,6 +20,12 @@ The exact-language rules are as they were, and a file with no commentary picks a
 (`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
 
 **Tested off the TV.** 19 new audio pick cases and 4 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+With main's `MediaBrowserPlayback.brs` 7 of the 19 fail, and with main's `SubtitleSettings.brs` 2 of the 4; the rest
+hold what main already did (a commentary alone in its language is used) or the new helper.
+
+**One reading of "fits" to confirm.** The viewer's language comes first, as before: a German viewer whose only German
+track is a commentary gets it over an English film track, as an English viewer gets an English commentary over a
+Portuguese film track.
 
 **Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
 `c699030`, with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
