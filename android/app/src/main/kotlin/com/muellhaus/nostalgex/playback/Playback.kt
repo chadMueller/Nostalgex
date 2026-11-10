@@ -10,6 +10,9 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import com.muellhaus.nostalgex.engine.PlexClientProfile
+import com.muellhaus.nostalgex.engine.PlexDecision
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
@@ -62,7 +65,7 @@ enum class Delivery(val label: String) { DIRECT_PLAY("DIRECT PLAY"), TRANSCODE("
  */
 @OptIn(UnstableApi::class)
 class Playback(
-    context: Context,
+    private val context: Context,
     private val plex: PlexClient,
     private val mediaBrowser: MediaBrowserClient,
     private val listener: Listener,
@@ -85,6 +88,8 @@ class Playback(
         fun onInfo(info: PlaybackInfo)
         /** The watchdog moved down the ladder: what it did next, the title and why (PlaybackDiagnostics.record). */
         fun onVerdict(outcome: String, title: String, detail: String) {}
+        /** Neither this TV nor the server can play this programme, for a known reason: skip it, no card (#193). */
+        fun onSkipped(item: MediaItem, reason: String) {}
     }
 
     /** The viewer's languages (AUDIO LANGUAGE, resolved), for the track a Jellyfin or Emby transcode carries. */
@@ -185,7 +190,8 @@ class Playback(
                             if (c.delivery == Delivery.TRANSCODE) hlsBase = PlaybackWatchdog.hlsBaseOffset(c.requestedOffsetSec, currentPosition / 1000.0)
                             info = info?.copy(ready = true)
                             Log.i(TAG, "STARTED ${c.delivery.label}${if (c.capped) " (capped at 1080p)" else ""} ${describe(c.item)} in " +
-                                "${System.currentTimeMillis() - c.startedAtMs} ms at ${currentPosition / 1000}s of ${duration / 1000}s")
+                                "${System.currentTimeMillis() - c.startedAtMs} ms at ${currentPosition / 1000}s of ${duration / 1000}s; " +
+                                arrived())
                             listener.onStarted(c.item, c.delivery)
                         }
                         Player.STATE_ENDED -> {
@@ -204,6 +210,10 @@ class Playback(
                         val groups = tracks.groups.filter { it.type == type }
                         if (groups.isNotEmpty() && groups.none { it.isSupported }) {
                             val formats = groups.flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).sampleMimeType } }
+                            // No Dolby Vision decoder for profile 5: the server stream mustn't copy
+                            // the HEVC either, or its base layer shows green and purple (#193).
+                            val codecs = groups.flatMap { g -> (0 until g.length).mapNotNull { g.getTrackFormat(it).codecs } }
+                            if (type == C.TRACK_TYPE_VIDEO && PlexClientProfile.withholdHevcFor(codecs)) noDolbyVisionDecoder = true
                             fallBack(c, "no decoder for ${if (type == C.TRACK_TYPE_VIDEO) "video" else "audio"} $formats", PlaybackInfo.Reason.DIRECT_PLAY_FAILED)
                             return
                         }
@@ -246,8 +256,50 @@ class Playback(
             })
         }
 
+    /**
+     * The Plex server stream's client profile for this TV, read at each start since a receiver
+     * can come and go (#192). AC-3 and E-AC-3 count when the TV passes them through or decodes
+     * them. HEVC is offered only off the capped rung, which asks for 1080p H.264 on purpose.
+     */
+    /**
+     * Set when this programme's direct play found no decoder for its Dolby Vision profile 5 video
+     * (PlexClientProfile.withholdHevcFor). Plex would then copy the HEVC for a TV that decodes HEVC,
+     * and profile 5's base layer (Dolby's own colour space) shows green and purple; without HEVC
+     * offered Plex refuses it (2003), which is a skip (measured on Plex 1.43.5). Profile 8 is
+     * copied as before: its base layer is HDR10.
+     */
+    private var noDolbyVisionDecoder = false
+
+    private fun plexProfileExtra(capped: Boolean): String {
+        val caps = androidx.media3.exoplayer.audio.AudioCapabilities.getCapabilities(context)
+        fun decodes(mime: String) = runCatching { MediaCodecUtil.getDecoderInfo(mime, false, false) != null }.getOrDefault(false)
+        val ac3 = caps.supportsEncoding(C.ENCODING_AC3) || decodes(MimeTypes.AUDIO_AC3)
+        val eac3 = caps.supportsEncoding(C.ENCODING_E_AC3) || decodes(MimeTypes.AUDIO_E_AC3)
+        val hevcInfo = runCatching { MediaCodecUtil.getDecoderInfo(MimeTypes.VIDEO_H265, false, false) }.getOrNull()
+        val hevc = !capped && !noDolbyVisionDecoder && hevcInfo != null
+        val hevc4k10 = hevc && hevcInfo!!.capabilities.let { c ->
+            c != null && c.profileLevels.any { it.profile == android.media.MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10 } &&
+                c.videoCapabilities?.isSizeSupported(3840, 2160) == true
+        }
+        Log.i(TAG, "SERVER STREAM offers hevc=$hevc 4k10=$hevc4k10 ac3=$ac3 eac3=$eac3")
+        return PlexClientProfile.extra(hevc, hevc4k10, ac3, eac3)
+    }
+
+    /**
+     * What reached the player once it is ready (#192): the audio track's codec and channel count
+     * and the video size, so `adb logcat -s Nostalgex` shows whether 5.1 or 4K arrived.
+     */
+    private fun arrived(): String {
+        val a = player.audioFormat
+        val v = player.videoFormat
+        val audio = a?.let { "audio ${it.sampleMimeType?.substringAfter('/') ?: "?"} ${it.channelCount}ch" } ?: "no audio"
+        val video = v?.let { "video ${it.sampleMimeType?.substringAfter('/') ?: "?"} ${it.width}x${it.height}" } ?: "no video"
+        return "$audio, $video"
+    }
+
     fun play(item: MediaItem, offsetSec: Long) {
         stopSession()
+        noDolbyVisionDecoder = false
         val q = quality
         if (demo) {
             // The demo's PLAYBACK INFORMATION: backend Demo, no source codecs (beginPlaybackInformation).
@@ -355,11 +407,44 @@ class Playback(
                     .appendQueryParameter("videoQuality", q.videoQualityIndex.toString())
                     .appendQueryParameter("videoResolution", q.resolutionString)
                     .appendQueryParameter("autoAdjustQuality", "0")
+                    // Copy what this TV takes, and keep 5.1 (#192): the Roku's request.
+                    .appendQueryParameter("directStream", "1")
+                    .appendQueryParameter("directStreamAudio", "1")
+                    .appendQueryParameter("X-Plex-Client-Profile-Extra", plexProfileExtra(capped))
                     .build()
-                ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+                return plexDecisionThenLoad(url, item, offsetSec, capped)
             }
         }
         load(exo, item, offsetSec, delivery, capped)
+    }
+
+    /**
+     * The Plex server stream starts once its decision is asked (PlexClient.decision), off the main
+     * thread. A decision that fails or doesn't answer still loads the stream, as before; a tune
+     * that moved on meanwhile loads nothing.
+     */
+    private fun plexDecisionThenLoad(url: Uri, item: MediaItem, offsetSec: Long, capped: Boolean) {
+        val a = attempt
+        val askedAt = System.currentTimeMillis()
+        // The old programme stops now, not when the answer comes.
+        player.stop()
+        handshakes.execute {
+            val answer = plex.decision(url.toString())
+            main.post {
+                if (a != attempt) return@post
+                val decision = PlexDecision.parse(answer?.second)
+                Log.i(TAG, "PLEX DECISION ${answer?.first ?: "no answer"} in ${System.currentTimeMillis() - askedAt} ms for ${describe(item)}" +
+                    (decision?.transcodeCode?.let { ": $it ${decision.transcodeText}" } ?: ""))
+                // Plex can't convert Dolby Vision profile 5, and this TV couldn't play it as it
+                // stands (direct play came first, or wasn't allowed): skip it, no card (#193).
+                if (PlexDecision.isDolbyVisionRefusal(decision)) {
+                    endAttempt()
+                    stopSession()
+                    return@post listener.onSkipped(item, "Plex can't convert Dolby Vision profile 5 and this TV didn't play it as it stands")
+                }
+                load(ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build(), item, offsetSec, Delivery.TRANSCODE, capped)
+            }
+        }
     }
 
     /**
@@ -556,6 +641,8 @@ class Playback(
                     .appendQueryParameter("ApiKey", mb.token)
                     .appendQueryParameter("VideoCodec", "h264")
                     .appendQueryParameter("AudioCodec", "aac")
+                    // 5.1 stays 5.1 (#192), as the handshake asks.
+                    .appendQueryParameter("TranscodingMaxAudioChannels", "6")
                     .appendQueryParameter("MaxWidth", (if (capped) 1920 else q.width).toString())
                     .appendQueryParameter("VideoBitrate", (if (capped) CAPPED_MEDIA_BROWSER_BPS else q.maxBitrateKbps * 1000L).toString())
                     .appendQueryParameter("SegmentContainer", "ts")

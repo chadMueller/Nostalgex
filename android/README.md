@@ -38,6 +38,13 @@ listing; it installs over `adb`.
   its first segment is served; a server that refuses it gets the film without
   the forced lines. The hand-built stream is used if it fails to answer in 12 s. The stream carries no start time and the player
   seeks, as on the Apple TV.
+- On Plex the server stream carries a client profile from what this TV takes
+  (#192, the Roku's shape): HEVC copied up to 4K 10-bit when the TV decodes it,
+  AC-3 and E-AC-3 when the TV or its receiver takes them (E-AC-3 capped at 6
+  channels), so a 5.1 film stays 5.1. Plex's decision is asked before each
+  server stream, because Plex 1.43.5 refuses a repeat start without one. A
+  Dolby Vision profile 5 film the TV can't decode, which Plex can't convert,
+  is skipped with no card (#193); a channel of nothing else stops after 5.
 - Opens on the Apple TV's tuner, at its measurements: the info panel for the
   focused channel, the picture in a 4:3 box, and the timeline guide below
   (two hours, a half hour at a time with Left and Right, the now line, the

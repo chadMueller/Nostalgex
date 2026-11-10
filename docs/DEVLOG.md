@@ -3,6 +3,79 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Android: the Plex server stream keeps 5.1 and 4K, asks its decision first, and skips Dolby Vision 5; #197, #192, #193 measured)
+
+**How it was measured.**
+- **Server:** a lab Plex Media Server 1.43.5 in Docker, with 13 generated 70-second films and a second library of six Dolby Vision profile 5 films.
+  - Audio: 5.1 AC-3, E-AC-3, DTS (core only; ffmpeg can't make DTS-HD MA) and TrueHD.
+  - Video: AAC 5.1, 10-bit H.264, AV1, MPEG-2 and 4K HEVC Main 10, plus a control and a High-profile H.264 with DTS 5.1.
+  - Dolby Vision: profiles 5 and 8.1, made with `dovi_tool` and `mkvmerge`. The profile 5 file's base layer is HDR10, not Dolby's IPT colour space, so it shows whether a decoder takes it but not what its colours look like.
+- **TVs:** a SHIELD (Android 11) and a Google TV emulator (Android 16). Not measured on a real Google TV.
+- **Method:** a throwaway build, not committed, that played one chosen film through the real playback path and logged the first rendered frame.
+- **The two TVs:**
+  - The SHIELD decodes Dolby Vision profiles 4, 5, 8 and 9 and has no AV1 decoder. It passes AC-3 and E-AC-3 through, but not DTS or TrueHD.
+  - The emulator has no Dolby Vision decoder and no AC-3 or E-AC-3, outputs stereo, and decodes HEVC (not 4K 10-bit) and AV1.
+
+**#197 (direct play decided by trying the file).** No code. On the SHIELD, tune to first frame:
+
+| File | First attempt | Fell back | First frame |
+|---|---|---|---|
+| H.264 + AAC (control) | direct play | no | 0.70 s |
+| AAC 5.1 | direct play | no | 1.09 s |
+| AC-3 5.1 | direct play | no | 0.66 s |
+| E-AC-3 5.1 | direct play | no | 0.69 s |
+| DTS 5.1 | direct play | yes, no audio decoder | 1.26 s |
+| TrueHD 5.1 | direct play | yes, no audio decoder | 1.69 s |
+| 10-bit H.264 | direct play | yes, no video decoder | 1.12 s |
+| AV1 | direct play | yes, no video decoder | 1.15 s |
+| MPEG-2 | direct play | no | 1.04 s |
+| 4K HEVC Main 10 | direct play | no | 2.91 s |
+| Dolby Vision 8.1 | direct play | no | 2.33 s |
+| Dolby Vision 5 | direct play | no | 1.96 s |
+
+Every failed attempt fell back within the track check, about a second; none waited for the 15 s watchdog. By the issue's own test this closes with the table. A Google TV whose decoder claims a file and then shows nothing was not met here.
+
+**#192 (Plex server stream client profile).** Measured first with today's request. Plex's decision and what reached the player both said that DTS 5.1, TrueHD 5.1 and 4K HEVC Main 10 came as 1080p 8-bit H.264 with stereo AAC. Changes:
+- `PlexClientProfile.extra` builds `X-Plex-Client-Profile-Extra` in the Roku's shape (codecs added to Plex's Android profile), with the Apple TV's raised HEVC limits and E-AC-3 cap:
+  - HEVC when the TV decodes it, with 3840x2160 and 10 bits when it decodes those;
+  - AC-3 and E-AC-3 when the TV passes them through or decodes them;
+  - no lossless target.
+- The Apple TV's form, a whole `add-transcode-target`, is ignored by Plex for `X-Plex-Platform=Android`: everything still came as stereo AAC.
+- The request adds `directStream=1` and `directStreamAudio=1`.
+- After, on the SHIELD through the server stream:
+  - DTS, TrueHD and AAC 5.1 arrive as E-AC-3 6ch, and AC-3 5.1 as AC-3 6ch.
+  - High-profile H.264 is copied.
+  - 4K HEVC Main 10 and Dolby Vision 8.1 are copied at 3840x2160 with E-AC-3 6ch, first frame in 2.3 s and 3.1 s.
+- On the emulator (stereo, no Dolby) the profile offers neither, and 5.1 comes as stereo AAC as before.
+- The STARTED log line now ends with the audio codec, channel count and video size that reached the player.
+- The Jellyfin and Emby hand-built stream asks `TranscodingMaxAudioChannels=6`. Not measured against a server.
+- The 8-bit H.264 test films were Constrained Baseline (ffmpeg's ultrafast). Plex re-encodes those even with the profile; High profile is copied.
+
+**Plex's decision before each server stream (found while measuring).**
+- Plex 1.43.5 refuses `start.m3u8` with HTTP 400 ("Denying access due to session lacking decision for transcode") when this client has started that film before and the session has no decision.
+- The app never asked one, before this change or after, so flipping back to a channel whose film was on the server stream showed "Your server wouldn't start this one".
+- Reproduced with curl and the old request: the first start 200, repeats 400 at 1 s, 60 s and 120 s, with one 200 at 30 s.
+- Now `PlexClient.decision` asks `/decision` with the same query and session first, capped at 5 s, off the main thread. The same film tuned six times in a row: 6 of 6 played, decision in 26 to 72 ms.
+- The web tuner, Apple TV and Roku don't ask either. Not checked whether they meet the 400.
+
+**#193 (Dolby Vision profile 5 from Plex).**
+- Plex answers 2003, "DoVi (Profile 5) color space is not supported", to a request that doesn't offer HEVC.
+- With the #192 profile it copies profile 5 as HEVC instead. A TV without a Dolby Vision decoder then shows the base layer through a plain HEVC decoder, which for real profile 5 is green and purple.
+- So when direct play finds no decoder for a track whose codecs say profile 5 (`dvhe.05`, `PlexClientProfile.withholdHevcFor`), the server stream offers no HEVC. Profile 8 (`dvhe.08`) is still offered HEVC: its base layer is HDR10.
+- A decision that is 2003 naming DoVi (`PlexDecision.isDolbyVisionRefusal`, as the Apple TV's) skips the programme: no card, not one of the channel's five failures, the next programme straight away.
+- The profile isn't read at scan: Plex's bulk listing doesn't carry `DOVIProfile`, only an item's own metadata does, and the decision answers it for nothing extra on the tune that needs it.
+- A channel of nothing but such titles stops after 5 skips in a row (`PlexDecision.SKIPS_BEFORE_STOP`) with the channel-stopped card. Its diagnostics line says "5 failures", though they were skips.
+- Measured on the emulator:
+  - **Before**, profile 5 failed direct play and was refused, and the card said "Your server wouldn't start this one".
+  - **After**: no decoder for `video/dolby-vision`, then a server stream without HEVC, then decision 2003 in 30 ms, a skip, and the next programme.
+  - **A channel of six profile 5 films:** 5 skips in about 15 s, then "Nothing on this channel will play right now".
+- On the SHIELD, which decodes profile 5, it direct plays as before.
+- Tests: `PlexDecisionTest` from decision answers saved from the lab server (`engine/src/test/resources/plex-decision`, library ids and identifiers taken out), `PlexClientProfileTest`.
+
+All 292 engine tests pass.
+
+**Next.** A real Google TV for #192 and #193. Chad to decide whether the other surfaces ask Plex's decision first. The lab server is to be removed from the Plex account afterwards.
+
 ## 2026-11-10 (Android: rebased onto main; open on last channel on by default, no tracking line, music video titles)
 
 **Changed.**

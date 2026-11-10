@@ -209,6 +209,23 @@ class PlexClient(private val clientId: String, versionName: String) {
         com.muellhaus.nostalgex.engine.Collections.fetchPlexCollections(server.url, { path -> kotlinx.coroutines.runBlocking { get(server, path) } })
     }
 
+    /**
+     * Asks Plex's decision for a server stream before starting it, with the same query and
+     * session (`/video/:/transcode/universal/decision`). Plex 1.43.5 refuses a start.m3u8 whose
+     * session has no decision ("Denying access due to session lacking decision for transcode")
+     * once this client has started that file before: measured on a lab server, a second tune of
+     * the same film within minutes answered HTTP 400 and the card said the server wouldn't start
+     * it; with the decision asked first, 4 of 4 starts answered 200. Blocking: call it off the
+     * main thread. Returns the HTTP status and body, or null when nothing answered.
+     */
+    fun decision(startUrl: String): Pair<Int, String>? = runCatching {
+        val url = startUrl.replace("/video/:/transcode/universal/start.m3u8", "/video/:/transcode/universal/decision")
+        decisionHttp.newCall(Request.Builder().url(url).build()).execute().use { it.code to (it.body?.string() ?: "") }
+    }.getOrNull()
+
+    /** At most 5 s: the startup watchdog only begins once the stream loads. */
+    private val decisionHttp by lazy { http.newBuilder().callTimeout(5, java.util.concurrent.TimeUnit.SECONDS).build() }
+
     /** Ends a transcode this app started, by its own session id only. */
     fun stopTranscode(server: String, token: String, session: String) {
         val url = "$server/video/:/transcode/universal/stop".toHttpUrl().newBuilder()

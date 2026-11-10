@@ -14,6 +14,7 @@ import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
+import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
 import com.muellhaus.nostalgex.engine.PlaybackDiagnostics
@@ -1739,6 +1740,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         channel = ch
         // The viewer chose a channel: count again (ChannelFailureRun.reset).
         failureRun.reset()
+        skipsInRow = 0
         tuneCount++
         play(l.tune(ch))
     }
@@ -1869,6 +1871,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     override fun onStarted(item: MediaItem, delivery: Delivery) {
         this.delivery = delivery
+        skipsInRow = 0
         watchReporter.onReady()
         // The guide follows what is on, as TunerView rebuilds on a change of current item.
         lineup?.let { l ->
@@ -1900,6 +1903,30 @@ class AppModel(private val context: Context) : Playback.Listener {
      * is now. The fifth failure in a row on a channel stops it, so a dead server isn't asked
      * again until the viewer tunes or selects the channel again.
      */
+    /** Programmes skipped in a row on this channel with none starting (PlexDecision.SKIPS_BEFORE_STOP). */
+    private var skipsInRow = 0
+
+    /**
+     * A programme neither this TV nor the server can play, for a known reason (#193: Dolby Vision
+     * profile 5 on a TV with no decoder for it). It isn't a failure: no card, nothing counted
+     * toward the channel's five, and the next programme straight away. A channel of nothing but
+     * such titles stops after SKIPS_BEFORE_STOP in a row, with the card saying why.
+     */
+    override fun onSkipped(item: MediaItem, reason: String) {
+        val ch = channel ?: return
+        skipJob?.cancel()
+        skipsInRow++
+        Log.i(TAG, "SKIP ${item.title} on CH ${ch.number} ($skipsInRow in a row): $reason")
+        if (skipsInRow >= PlexDecision.SKIPS_BEFORE_STOP) {
+            playback.stop()
+            val stopped = PlaybackFailure.ChannelStopped(PlaybackFailure.DeviceCannotRender("Dolby Vision profile 5"))
+            recordVerdict(stopped.diagnosticSummary, item.title, stopped.headline)
+            this.failure = stopped
+            return
+        }
+        play(lineup?.next(ch, item, fromNaturalEnd = false))
+    }
+
     override fun onFailed(item: MediaItem, failure: PlaybackFailure) {
         val ch = channel ?: return
         skipJob?.cancel()
