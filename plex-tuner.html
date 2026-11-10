@@ -21,6 +21,7 @@
 <script src="scripts/nostalgex-daily-manifest.js"></script>
 <script src="scripts/nostalgex-storage.js"></script>
 <script src="scripts/nostalgex-library-load.js"></script>
+<script src="scripts/nostalgex-load-stall.js"></script>
 <script src="scripts/nostalgex-utf8-repair.js"></script>
 <script src="scripts/nostalgex-season.js"></script>
 <script src="scripts/nostalgex-enrichment.js"></script>
@@ -498,6 +499,40 @@
     color: #fff;
     outline: none;
   }
+
+  /* STOP WAITING: appears once the scan has gone quiet for a minute (scripts/nostalgex-load-stall.js),
+     as on the Apple TV and Roku. A real button: a TV browser has no keys. */
+  .loading-library-stall {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: clamp(10px, 2vh, 18px);
+    max-width: 520px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .loading-library-stall.on { display: flex; }
+  .loading-library-stall-line,
+  .loading-library-stall-note {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.5);
+  }
+  .loading-library-stall-note { font-size: 11px; color: rgba(255,255,255,0.32); }
+  .loading-library-stop-waiting {
+    background: var(--cyan);
+    border: 2px solid var(--cyan);
+    color: #000F17;
+    padding: 12px 22px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+  }
+  .loading-library-stop-waiting:hover,
+  .loading-library-stop-waiting:focus-visible { background: #fff; border-color: #fff; outline: none; }
 
   /* Static noise overlay for channel switching */
   .static-overlay {
@@ -2929,6 +2964,7 @@
     .loading-library-coffee-lead { font-size: 11px; line-height: 1.5; }
     .loading-library-coffee-btn { min-height: 48px; padding: 14px 20px; }
     .loading-library-start-over { min-height: 48px; padding: 14px 20px; }
+    .loading-library-stop-waiting { min-height: 48px; padding: 14px 20px; }
   }
 
   /* Landscape phones: height is the scarce dimension on both screens, so the
@@ -3383,6 +3419,11 @@
               <div class="loading-library-progress" id="loading-library-progress"></div>
             </div>
             <div class="loading-library-progress-caption" id="loading-library-progress-caption"></div>
+          </div>
+          <div class="loading-library-stall" id="loading-library-stall">
+            <div class="loading-library-stall-line">Still waiting on your server. Nothing has come back for a while.</div>
+            <button type="button" class="loading-library-stop-waiting" id="loading-library-stop-waiting" onclick="stopWaitingForScan()">STOP WAITING</button>
+            <div class="loading-library-stall-note">Keeps whatever has loaded so far. The rest is read again next time.</div>
           </div>
         </div>
         <div class="loading-library-coffee">
@@ -8686,12 +8727,28 @@
     document.getElementById('server-picker')?.classList.remove('active');
     const actions = document.getElementById('plex-actions');
     if (actions) actions.style.display = 'flex';
+    const plexBtn = document.getElementById('plex-connect-btn');
+    if (plexBtn) plexBtn.style.display = '';
     const signinLabel = document.querySelector('.plex-signin-label');
     if (signinLabel) signinLabel.textContent = 'Sign in with your Plex account';
     // Clear any Jellyfin-specific reconnect button
     document.getElementById('plex-reconnect-jf')?.remove();
     hideEmptyGuideState();
     appState = 'connect';
+  }
+
+  // The server said no to the saved sign-in (401 or 403). The browser remembers a login until
+  // the viewer signs out, but not one the server has already refused: kept, it sends every
+  // reload and the RECONNECT link (web-tuner.html forwards a saved login straight back here)
+  // into the same refusal. Everything signOut() removes that is tied to the login goes.
+  function forgetRejectedLogin() {
+    for (const k of ['plex90_token', 'plex90_server_url', 'plex90_server_name', 'plex90_user_token',
+      'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id']) sessionStorage.removeItem(k);
+    try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    // The cached library belongs to credentials that no longer work, and the
+    // cache is consulted before the connect screen, so leaving it would build
+    // channels around dead tokens instead of asking the user to sign in.
+    clearLibraryCache();
   }
 
   async function checkStoredAuth() {
@@ -8834,16 +8891,7 @@
       } else if (tokenRevoked) {
         // Token was definitively rejected — clear both session AND localStorage so stale
         // credentials don't persist across page loads.
-        sessionStorage.removeItem('plex90_token');
-        sessionStorage.removeItem('plex90_server_url');
-        sessionStorage.removeItem('plex90_server_name');
-        sessionStorage.removeItem('plex90_user_token');
-        sessionStorage.removeItem('plex90_selected_servers');
-        try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
-        // The cached library belongs to credentials that no longer work, and the
-        // cache is consulted before the connect screen, so leaving it would build
-        // channels around dead tokens instead of asking the user to sign in.
-        clearLibraryCache();
+        forgetRejectedLogin();
       }
       // If neither valid nor tokenRevoked, leave credentials in place and show connect screen.
       // The user can retry without re-entering credentials.
@@ -8874,12 +8922,60 @@
     location.replace('web-tuner.html');
   }
 
+  // ══════════════════════════════════════
+  // STOP WAITING (scripts/nostalgex-load-stall.js)
+  // ══════════════════════════════════════
+  // The Apple TV and Roku watch a first library scan for silence: after a minute the loading
+  // screen offers STOP WAITING, after 3 min 30 s the scan is given up on its own. Either way what
+  // was read stays and the library is not saved as whole. Before this the web tuner had START OVER
+  // and nothing else: a server that answers a page, or never does (the page requests have no
+  // timeout), left a viewer waiting or signing out. One watch per scan, per server on Plex, so a
+  // press stops only the server it was made on (Apple TV #146). Foreground loads only: a refresh
+  // behind a cached guide has no loading screen to press anything on.
+  let scanWatch = null;   // { watch, controller, answers }
+  function startScanWatch(LL) {
+    endScanWatch();
+    const sw = { controller: new AbortController(), answers: 0, watch: null };
+    sw.watch = NostalgexLoadStall.watch({
+      sample: () => NostalgexLoadStall.sampleKey(LL.state, sw.answers),
+      onVerdict: (verdict) => setStopWaitingShown(verdict === 'slow'),
+      onAbandon: (userInitiated, quietMs) => {
+        console.warn(`[Nostalgex] STALL: ${userInitiated ? 'viewer stopped waiting on the library scan' : `no scan progress for ${Math.round(quietMs / 1000)}s, abandoning this scan`}`);
+        sw.controller.abort();
+      },
+    });
+    scanWatch = sw;
+    return sw;
+  }
+  function endScanWatch() {
+    if (!scanWatch) return;
+    scanWatch.watch.stop();
+    scanWatch = null;
+    setStopWaitingShown(false);
+  }
+  function setStopWaitingShown(on) {
+    const el = document.getElementById('loading-library-stall');
+    if (el) el.classList.toggle('on', !!on);
+  }
+  function stopWaitingForScan() { if (scanWatch) scanWatch.watch.stopWaiting(); }
+  /** The signal the scan's requests carry, or undefined when nothing is watching. */
+  function scanSignal() { return scanWatch ? scanWatch.controller.signal : undefined; }
+  function scanIsAbandoned() { return !!(scanWatch && scanWatch.watch.abandoned); }
+  /** A server answered something: the scan is moving, however slowly. */
+  function noteScanAnswer() { if (scanWatch) scanWatch.answers++; }
+  function abandonedScanError() {
+    const e = new Error('Stopped waiting for the server');
+    e.nxAbandoned = true;
+    return e;
+  }
+
   function signOut() {
     // Close modal first so user sees immediate feedback
     document.getElementById('config-overlay').classList.remove('open');
     configVisible = false;
     sleepTimer.cancel();
     closePlaybackInfo();
+    endScanWatch();
 
     plexToken = null;
     plexServerUrl = null;
@@ -9682,6 +9778,9 @@
   // ProviderIds.Tmdb becomes tmdbID so the same channel rules + membership manifest match
   // as on Plex. The one Emby difference here is where the libraries are listed.
   async function fetchJellyfinLibraryFromServer(options = {}) {
+    try { return await fetchJellyfinLibraryScan(options); } finally { endScanWatch(); }
+  }
+  async function fetchJellyfinLibraryScan(options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
@@ -9694,20 +9793,37 @@
     await LL.pulsePhase('scanningLibrary', `Connecting to ${backendDisplayName()}`);
 
     const headers = { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() };
+    // From here to the end of the library loop the scan is watched for silence (STOP WAITING).
+    if (!background) startScanWatch(LL);
 
     // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). Jellyfin
     // adds includeHidden=true only when the viewer has switched on INCLUDE LIBRARIES HIDDEN ON JELLYFIN
     // (point 13 there); off, the request is what it always was.
     const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
-    let viewsRes = await fetch(viewsUrl(mediaBackend), { headers });
+    let viewsRes;
+    try {
+      viewsRes = await fetch(viewsUrl(mediaBackend), { headers, signal: scanSignal() });
+    } catch (err) {
+      if (scanIsAbandoned()) throw abandonedScanError();
+      throw err;
+    }
+    noteScanAnswer();
     // Backstop for an Emby server still saved as Jellyfin, if the start-up check could not
     // tell: Emby answers /UserViews with a 404. One more request, only on that 404.
     if (viewsRes.status === 404 && mediaBackend === 'jellyfin') {
-      const embyRes = await fetch(viewsUrl('emby'), { headers });
+      const embyRes = await fetch(viewsUrl('emby'), { headers, signal: scanSignal() });
       if (embyRes.ok) {
         adoptMediaBrowserKind('emby');
         viewsRes = embyRes;
       }
+    }
+    // A refused sign-in ends the scan here too. Without this the answer was read as a list of
+    // libraries: an empty one on Jellyfin's `{}`, a parse error on an empty body, and either
+    // way not the SESSION ENDED screen, with the dead login still saved.
+    if (viewsRes.status === 401 || viewsRes.status === 403) {
+      const e = new Error(`HTTP ${viewsRes.status} from the library list`);
+      e.plexStatus = viewsRes.status;
+      throw e;
     }
     const viewsData = await viewsRes.json();
     const views = viewsData.Items || [];
@@ -9734,7 +9850,21 @@
           + `&IncludeItemTypes=${includeItemTypes}`
           + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
           + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
-        const r = await fetch(url, { headers });
+        let r, d;
+        try {
+          r = await fetch(url, { headers, signal: scanSignal() });
+          noteScanAnswer();
+          if (r.ok) d = await r.json();
+        } catch (err) {
+          // STOP WAITING, or 3 min 30 s of silence: keep the pages already read, as for any other
+          // page that fails, and say this library is not whole.
+          if (!scanIsAbandoned()) throw err;
+          const e = abandonedScanError();
+          if (collected.length === 0) throw e;
+          lostViews.push(scanningViewName);
+          lastViewError = e;
+          break;
+        }
         if (!r.ok) {
           // A refused sign-in ends the scan, as it does on Plex. Any other failure loses the
           // library; pages already read are kept, as the Apple TV keeps them.
@@ -9745,7 +9875,6 @@
           lastViewError = e;
           break;
         }
-        const d = await r.json();
         const items = d.Items || [];
         collected.push(...items);
         const total = d.TotalRecordCount ?? collected.length;
@@ -9892,6 +10021,7 @@
             }));
             batchResults.forEach(eps => { allItems.push(...eps); episodeCount += eps.length; });
             LL.state.scanItemsFound = allItems.length;
+            if (scanIsAbandoned()) throw abandonedScanError();   // this library is lost; the shows read so far stay
             LL.setPhase('scanningLibrary', `${view.Name} · ${episodeCount} eps`);
           }
         } else {
@@ -9960,8 +10090,11 @@
         if (err && err.plexStatus) throw err;
         lostViews.push(view.Name || 'Library');
         lastViewError = err;
+        if (scanIsAbandoned()) break;   // the libraries after this one are not read
       }
     }
+    const scanWasAbandoned = scanIsAbandoned();
+    endScanWatch();   // the scan is over; building channels is not watched
 
     if (lostViews.length) {
       console.warn(`[${backendDisplayName()}] lost ${lostViews.length} library(ies), ${lostViews.join(', ')}; kept ${allItems.length} items from the others`);
@@ -9980,7 +10113,8 @@
     librarySkippedNoRuntime = scanSkippedNoRuntime;
     allItems = await finalizeLibraryWithMusicBrainz(allItems, {
       buildAllChannels: buildAll,
-      skipMarkComplete: background,
+      // A scan given up on is not the first load either (Apple TV): the next visit does it again.
+      skipMarkComplete: background || scanWasAbandoned,
       // A library that lost a view is not saved as the whole library: the next visit reads it again.
       skipCacheSave: lostViews.length > 0,
     });
@@ -10046,6 +10180,10 @@
     for (const uri of candidates) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      // STOP WAITING also ends this request, and no other connection is tried after it.
+      const scan = scanSignal();
+      const onScanStop = () => controller.abort();
+      if (scan) { if (scan.aborted) controller.abort(); else scan.addEventListener('abort', onScanStop, { once: true }); }
       try {
         const res = await fetch(`${uri}${path}`, {
           headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
@@ -10067,11 +10205,15 @@
           console.log(`[Nostalgex] ${server.name}: fell back to ${uri}`);
           server.url = uri;
         }
+        noteScanAnswer();
         return data;
       } catch (err) {
         clearTimeout(timer);
         if (err.plexStatus) throw err;
+        if (scanIsAbandoned()) throw abandonedScanError();
         lastError = err;
+      } finally {
+        if (scan) scan.removeEventListener('abort', onScanStop);
       }
     }
     throw lastError || new Error(`No reachable connection for ${server.name}`);
@@ -10096,15 +10238,29 @@
       // no membership-manifest matches and nothing for enrichment to look up.
       const url = `${server.url}/library/sections/${section.key}/all?includeGuids=1`
         + `&X-Plex-Container-Start=${start}&X-Plex-Container-Size=${PLEX_PAGE_SIZE}`;
-      const res = await fetch(url, {
-        headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
-      });
+      let res;
+      try {
+        res = await fetch(url, {
+          headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+          signal: scanSignal(),
+        });
+      } catch (err) {
+        if (scanIsAbandoned()) throw abandonedScanError();
+        throw err;
+      }
+      noteScanAnswer();
       if (!res.ok) {
         const e = new Error(`Section ${section.title} returned HTTP ${res.status}`);
         if (res.status === 401 || res.status === 403) e.plexStatus = res.status;   // ends the scan, not just the section
         throw e;
       }
-      const data = await NostalgexUTF8Repair.json(res, `${section.key} page ${start}`);
+      let data;
+      try {
+        data = await NostalgexUTF8Repair.json(res, `${section.key} page ${start}`);
+      } catch (err) {
+        if (scanIsAbandoned()) throw abandonedScanError();
+        throw err;
+      }
       const container = (data && data.MediaContainer) || {};
       const page = container.Metadata || [];
       all.push(...page);
@@ -10120,7 +10276,23 @@
   }
 
   // Scan one Plex server and return its items, each tagged with serverUrl + serverToken.
-  async function scanOnePlexServer(server, LL, baseItemCount, multiServer, lostSections = []) {
+  // One watch per server's scan (Apple TV #146): a STOP WAITING press, or a stall, ends this
+  // server's scan and nothing else. `abandoned` is set on the array for the caller: true when the
+  // scan was given up on, so the library is built from what was read and is not saved as whole.
+  async function scanOnePlexServer(server, LL, baseItemCount, multiServer, lostSections = [], background = false) {
+    if (!background) startScanWatch(LL);
+    try {
+      const items = await scanOnePlexServerSections(server, LL, baseItemCount, multiServer, lostSections);
+      if (scanIsAbandoned()) lostSections.abandoned = true;
+      return items;
+    } catch (err) {
+      if (scanIsAbandoned() || (err && err.nxAbandoned)) lostSections.abandoned = true;
+      throw err;
+    } finally {
+      endScanWatch();
+    }
+  }
+  async function scanOnePlexServerSections(server, LL, baseItemCount, multiServer, lostSections = []) {
     let lastSectionError = null;
     // Sends X-Plex-Container-Size like the section pages below (Trello N-038); the helper pages.
     const NC = globalThis.NostalgexCollections;
@@ -10168,7 +10340,9 @@
                   const episodes = await NC.fetchPlexPaged(async (path, win) => {
                     const epRes = await fetch(`${server.url}${NC.plexWindowPath(path, win)}`, {
                       headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+                      signal: scanSignal(),
                     });
+                    noteScanAnswer();
                     if (!epRes.ok) throw new Error(`allLeaves ${show.ratingKey} returned HTTP ${epRes.status}`);
                     return NostalgexUTF8Repair.json(epRes, `allLeaves ${show.ratingKey}`);
                   }, `/library/metadata/${show.ratingKey}/allLeaves`, 'Metadata');
@@ -10247,6 +10421,7 @@
             });
 
             LL.state.scanItemsFound = baseItemCount + serverItems.length;
+            if (scanIsAbandoned()) throw abandonedScanError();   // this section is lost; the shows read so far stay
             LL.setPhase('scanningLibrary', `${serverPrefix}${section.title} · ${episodeCount} eps`);
           }
           continue;
@@ -10334,6 +10509,7 @@
         if (err && err.plexStatus) throw err;   // a refused sign-in ends the scan
         lostSections.push(multiServer ? `${server.name} · ${section.title}` : section.title);
         lastSectionError = err;
+        if (scanIsAbandoned()) break;   // the sections after this one are not read
       }
     }
 
@@ -10387,21 +10563,23 @@
     let merged = [];
     let successCount = 0;
     const lostSections = [];   // sections the server did not answer for: named below, and the library is not cached
+    let abandonedErr = null;   // set when a server's scan was stopped (STOP WAITING or a stall)
 
     for (const server of servers) {
       await LL.pulsePhase('scanningLibrary', multiServer ? `Connecting to ${server.name}` : 'Connecting to Plex');
       try {
-        const items = await scanOnePlexServer(server, LL, merged.length, multiServer, lostSections);
+        const items = await scanOnePlexServer(server, LL, merged.length, multiServer, lostSections, background);
         merged = merged.concat(items);
         successCount++;
         console.log(`[Nostalgex] ${server.name}: ${items.length} items`);
       } catch (err) {
         console.warn(`[Nostalgex] Scan failed for ${server.name}:`, err);
         if (err.plexStatus) throw err;
+        if (err.nxAbandoned) abandonedErr = err;
       }
     }
 
-    if (successCount === 0) throw new Error('All servers failed to scan');
+    if (successCount === 0) throw abandonedErr || new Error('All servers failed to scan');
     if (lostSections.length) {
       console.warn(`[Nostalgex] lost ${lostSections.length} section(s), ${lostSections.join(', ')}; kept ${merged.length} items from the others`);
     }
@@ -10409,7 +10587,8 @@
     librarySkippedNoRuntime = scanSkippedNoRuntime;
     let allItems = await finalizeLibraryWithMusicBrainz(merged, {
       buildAllChannels: buildAll,
-      skipMarkComplete: background,
+      // A scan given up on is not the first load either (Apple TV): the next visit does it again.
+      skipMarkComplete: background || lostSections.abandoned === true,
       // A library that lost a section is not saved as the whole library: the next visit reads it again.
       skipCacheSave: lostSections.length > 0,
     });
@@ -10444,6 +10623,7 @@
   //   server   anything else, which is a scan that got no answer
   function libraryFailureKind(err, errorSource) {
     if (err && err.plexStatus) return 'auth';
+    if (err && err.nxAbandoned) return 'abandoned';
     if (NostalgexStorage.isQuotaError(err)) return 'storage';
     if (errorSource === 'cache-restore' || (err && err.nxBuildFailed)) return 'local';
     return 'server';
@@ -10453,6 +10633,7 @@
   function libraryFailureText(kind) {
     if (kind === 'storage') return 'THIS BROWSER RAN OUT OF STORAGE. YOUR SERVER IS FINE. CLEAR THE SITE DATA FOR THIS PAGE AND RELOAD';
     if (kind === 'local') return 'THE LIBRARY LOADED, BUT THE GUIDE COULD NOT BE BUILT. THE BROWSER CONSOLE HAS THE ERROR';
+    if (kind === 'abandoned') return 'STOPPED WAITING BEFORE ANYTHING LOADED. CHECK THAT YOUR SERVER IS RUNNING AND TRY AGAIN';
     return null;
   }
 
@@ -10495,6 +10676,15 @@
       const errorEl = document.getElementById('plex-error-label');
       const failureKind = libraryFailureKind(err, errorSource);
       const notTheServer = libraryFailureText(failureKind);
+      // The server refused the login: forget it, so RECONNECT lands on the sign-in page.
+      // mediaBackend stays in memory, so the message below still says Jellyfin, Emby or Plex.
+      if (failureKind === 'auth') forgetRejectedLogin();
+      // Reset the connect screen first: it removes the RECONNECT button, so resetting it after
+      // the button is made (as this did) left a Jellyfin or Emby viewer with the message and
+      // only CONNECT WITH PLEX to press.
+      plexConnected = false;
+      document.getElementById('plex-connect').style.display = 'flex';
+      resetConnectScreen();
       if (isMediaBrowserBackend(mediaBackend)) {
         // A self-hosted tuner on plain http: no mixed content, and no nostalgex.app.
         const selfHttp = location.protocol === 'http:';
@@ -10510,8 +10700,10 @@
           : `COULD NOT REACH ${NAME} SERVER. IT HAS TO ANSWER OVER HTTPS. A PLAIN LAN SERVER NEEDS THE APPLE TV APP`;
         errorEl.style.display = 'block';
         // For Jellyfin and Emby errors don't show the Plex connect button. Send them back to the connect page.
-        const actionsEl = document.getElementById('plex-actions');
-        if (actionsEl) actionsEl.style.display = 'none';
+        // Only the Plex button goes: the error line and this RECONNECT link share its container
+        // (#plex-actions), and hiding the container hid both of them.
+        const plexBtnEl = document.getElementById('plex-connect-btn');
+        if (plexBtnEl) plexBtnEl.style.display = 'none';
         const reconnectEl = document.getElementById('plex-reconnect-jf');
         if (!reconnectEl) {
           const btn = document.createElement('a');
@@ -10531,9 +10723,6 @@
           : notTheServer || 'COULD NOT LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE';
         errorEl.style.display = 'block';
       }
-      plexConnected = false;
-      document.getElementById('plex-connect').style.display = 'flex';
-      resetConnectScreen();
     }
   }
 

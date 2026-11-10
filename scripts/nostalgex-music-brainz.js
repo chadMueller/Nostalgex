@@ -31,14 +31,27 @@
   // Mirrors MusicTitleParser.clean in the tvOS app: ripped filenames down to
   // searchable text (underscores, [MMV]/{smg} tags, "(Shindig 1964)" notes, scene
   // suffixes, a stray "video!"). Measured 2026-10-07: recovered 10 of 13 misses.
+  //
+  // N-034 (2026-11-09): "Song (Official Music Video)" came out as "Song ( Music )" and
+  // "Song (Official Video)" as "Song ( )", because the bare-word pass below took the
+  // words out of the parentheses and left the parentheses. That text went to MusicBrainz
+  // and Deezer as the search and into the guide as the title. A group made only of those
+  // words now goes whole (step 5), and any parentheses a word came out of are tidied
+  // (step 7). MusicTitleParser.clean (Swift) and NxCleanMusicTitle (Roku) have the old
+  // passes and need the same two steps; scripts/music-title-golden.json is the contract
+  // all three are to be tested against.
+  const NOISE_WORD = 'official|music|video|audio|visualizer|lyrics?|remaster(?:ed)?|hd|hq|mv|4k|uhd|xvid|dvdrip|vgb|prv';
+  const NOISE_GROUP = new RegExp('\\(\\s*(?:' + NOISE_WORD + ')(?:[\\s,&/+-]+(?:' + NOISE_WORD + '))*\\s*\\)', 'gi');
   function cleanTitle(raw) {
-    let t = String(raw || '').replace(/_/g, ' ');
-    t = t.replace(/\[[^\]]*\]|\{[^}]*\}/g, '');
-    t = t.replace(/\s*\((?:19|20)\d\d\)\s*$/, '');
-    t = t.replace(/\([^)]*(?:19|20)\d\d[^)]*\)/g, '');
-    t = t.replace(/\b(official|video|hd|hq|lyrics?|remaster(?:ed)?|mv|xvid|dvdrip|vgb|prv)\b!?/gi, '');
-    t = t.replace(/\s+/g, ' ');
-    return t.replace(/^[\s\-!.]+|[\s\-!.]+$/g, '');
+    let t = String(raw || '').replace(/_/g, ' ');                              // 1
+    t = t.replace(/\[[^\]]*\]|\{[^}]*\}/g, '');                                // 2
+    t = t.replace(/\s*\((?:19|20)\d\d\)\s*$/, '');                             // 3
+    t = t.replace(/\([^)]*(?:19|20)\d\d[^)]*\)/g, '');                         // 4
+    t = t.replace(NOISE_GROUP, '');                                            // 5
+    t = t.replace(/\b(official|video|hd|hq|lyrics?|remaster(?:ed)?|mv|xvid|dvdrip|vgb|prv)\b!?/gi, '');   // 6
+    t = t.replace(/\(\s*\)/g, '').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');   // 7
+    t = t.replace(/\s+/g, ' ');                                                // 8
+    return t.replace(/^[\s\-!.]+|[\s\-!.]+$/g, '');                            // 9
   }
 
   // The "(1988)" a filename carries: the one year source besides MusicBrainz that the
