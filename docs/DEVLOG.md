@@ -43,12 +43,15 @@ of `c21c2a9` plus the scratch aids. The English Opus track is picked, so each ru
   captions, which the app switched On for it (On 15 s in) and back Off when the clip ended, and no forced line was
   drawn.
 - A long track, made on the TV: 2,000 cues (186 KB) were read in 322 ms, and 100 looks near its end took 307 ms.
-  So `NxSrtTextAt` now finds the last cue to have started by halving and looks at the 16 before it. That change has
-  not been compiled on a TV.
+  So `NxSrtTextAt` now finds the last cue to have started by halving and looks at the 16 before it.
+- An unchanged build of `6ebdd4a` (no scratch aids), the same clip on Emby, TV captions On: it compiled and ran; the
+  node tree had the first line up with the player at 13.0 s and hidden at 16.5 s, the second up at 41.0 s and
+  hidden at 48.0 s (one look every 2 to 3 s); captions On before, during and after; and a dev screenshot at 13.0 s
+  shows LAB FORCED LINE ONE at the foot of the screen.
 
 **Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
-times are the player's). A stick, a real film with a long forced track, and a dev screenshot with the TV's captions
-On (both screenshots were taken with them Off).
+times are the player's). A stick, and a real film with a long forced track. The timings above are from the builds
+with the scratch log line; the unchanged build was looked at only through the node tree and one screenshot.
 
 ## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
 
