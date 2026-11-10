@@ -68,6 +68,7 @@ location = /nostalgex-settings.json {
     default_type application/json;
     expires -1;
     add_header X-Nostalgex-Settings "on" always;
+    add_header X-Content-Type-Options "nosniff" always;
     dav_methods PUT;
     create_full_put_path off;
     client_max_body_size 256k;
