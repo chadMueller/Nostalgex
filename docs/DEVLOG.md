@@ -47,6 +47,43 @@ the server's track lists main's pick is a commentary on these two.
 
 **Open.** Not run on a TV: a film whose only English track is a commentary, Emby, a Plex stream, and whether a
 Roku's `availableAudioTracks` names a commentary by its title (both direct plays went by position).
+
+## 2026-11-10 (Roku: the Plex link code is waited for as long as plex.tv keeps it, #240)
+
+**Why.** The code on screen gave up after 150 polls, 5 minutes, while plex.tv keeps a code for 15 (`expiresIn: 900`,
+measured for the Apple TV, N-007). A viewer who took longer to reach plex.tv/link entered a code the TV had already
+dropped.
+
+**Changed.** `NxPlexCreatePin` keeps the PIN's `expiresIn`, and the wait goes by the clock (`NxPlexPinWait` in
+`source/mediabrowser/SignInFlow.brs`): a poll every 2 s until `expiresIn` seconds have passed, 300 when plex.tv
+doesn't say and never more than 1,800, as the Apple TV. A 404 from the PIN check still ends it on that poll, and both
+ends show the same "The code expired. Press CONNECT TO PLEX for a new one." A poll that couldn't reach plex.tv is not
+an answer and waits on, as before. Jellyfin's Quick Connect keeps its 150 polls.
+
+**Tested off the TV.** 17 new cases in the sign-in flow suite, the wait run against a faked plex.tv and a faked clock:
+a code entered after 10 minutes signs in, one never entered expires at 900 s, a PIN dropped at 40 s stops the wait on
+that poll with nothing asked after it, no `expiresIn` waits 300 s, a day-long one stops at 1,800 s, and slow polls
+still end by the clock.
+
+**Pressed** on the 43S45 (OS 16.0.4), a test-data build of `dd17385`, signed out, CONNECT TO PLEX, the code left
+unentered:
+- The console said `waiting up to 900 s for the code (plex.tv keeps it 900 s)`.
+- 6 min 4 s in, past where 150 polls gave up, the code was still on screen.
+- 899 s in, plex.tv answered the PIN check 404 and the wait ended on that poll: `the code expired after 899 s
+  (439 polls)`. So on a real code the 404 ended it, a second before the clock would have.
+- The screen did not change then. It showed "The code expired. Press CONNECT TO PLEX for a new one." on the first
+  page 4 min 29 s later, the moment a key was pressed.
+
+**Why the screen waited for a key: the TV's screensaver, by inference.** This TV's screensaver starts 10 minutes
+after the last key (measured afterwards: last key 12:22:47, Roku City up between 12:32:45 and 12:32:54), so it was
+up from about 10 minutes into the wait. The sign-in task went on polling under it (439 polls in 899 s), and its
+answer reached the screen only when the key woke the TV. The screensaver was not looked at during the wait itself.
+So with a 15 minute wait the screensaver covers the code for its last 5 minutes on this TV, which a 5 minute wait
+never reached. The loading screen holds the screensaver off (`LoadingView.xml`); the code screen does not.
+
+**Open.** A code entered late (after 5 minutes) on a TV, a stick, and whether the code screen should hold the
+screensaver off.
+
 ## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
 
 **Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with

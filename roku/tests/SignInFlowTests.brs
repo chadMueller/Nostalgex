@@ -222,6 +222,38 @@ function NxRunSignInFlowTests() as Integer
     NxCheck(r, "Quick Connect code expired", c.codeExpired, "The code expired. Press USE QUICK CONNECT for a new one, or sign in with your password.")
     NxCheck(r, "msg refused", Left(NxSignInCheckMessage("refused", 0, "emby"), 40), "Nostalgex reaches a server over HTTPS, o")
 
+    ' ── The plex.tv/link code's wait (#240), against a faked plex.tv ──
+    NxCheck(r, "plex wait: as long as plex.tv keeps the code", NxPlexPinWaitSeconds(900).ToStr(), "900")
+    NxCheck(r, "plex wait: 300 s when plex.tv doesn't say", NxPlexPinWaitSeconds(invalid).ToStr(), "300")
+    NxCheck(r, "plex wait: 300 s for a nonsense answer", NxPlexPinWaitSeconds(0).ToStr() + " " + NxPlexPinWaitSeconds(-5).ToStr() + " " + NxPlexPinWaitSeconds("900").ToStr(), "300 300 300")
+    NxCheck(r, "plex wait: never more than 1,800 s", NxPlexPinWaitSeconds(86400).ToStr(), "1800")
+    NxCheck(r, "plex wait: a fraction of a second is dropped", NxPlexPinWaitSeconds(899.6).ToStr(), "899")
+    NxCheck(r, "plex step: still waiting", NxPlexPinStep(10, 900, ""), "waiting")
+    NxCheck(r, "plex step: a token", NxPlexPinStep(10, 900, "tok"), "approved")
+    NxCheck(r, "plex step: a 404 ends it at once", NxPlexPinStep(2, 900, invalid), "expired")
+    NxCheck(r, "plex step: the time is up", NxPlexPinStep(900, 900, ""), "expired")
+    NxCheck(r, "plex step: a token on the last poll still counts", NxPlexPinStep(900, 900, "tok"), "approved")
+    ' The code entered 10 minutes in: 150 polls would have given up at 5.
+    w = NxFakePlexRun(900, 600, -1, 0)
+    NxCheck(r, "faked plex.tv: a code entered after 10 minutes signs in", w.token + " " + w.elapsed.ToStr() + " " + w.polls.ToStr(), "tok-7 600 300")
+    ' Never entered: the wait ends when plex.tv's 15 minutes have passed.
+    w = NxFakePlexRun(900, -1, -1, 0)
+    NxCheck(r, "faked plex.tv: a code never entered expires at 15 minutes", "[" + w.token + "] " + w.elapsed.ToStr() + " " + w.polls.ToStr(), "[] 900 450")
+    ' plex.tv drops the PIN (404, error 1020) 40 s in: the wait stops on that poll.
+    w = NxFakePlexRun(900, -1, 40, 0)
+    NxCheck(r, "faked plex.tv: a dropped PIN stops the wait at once", "[" + w.token + "] " + w.elapsed.ToStr() + " " + w.polls.ToStr(), "[] 40 20")
+    NxCheck(r, "faked plex.tv: nothing is asked after the 404", w.asked.ToStr(), "20")
+    ' plex.tv doesn't say how long: the old 5 minutes.
+    w = NxFakePlexRun(invalid, -1, -1, 0)
+    NxCheck(r, "faked plex.tv: no expiresIn waits 5 minutes", "[" + w.token + "] " + w.elapsed.ToStr(), "[] 300")
+    ' A day-long expiresIn is capped at 30 minutes.
+    w = NxFakePlexRun(86400, -1, -1, 0)
+    NxCheck(r, "faked plex.tv: a long expiresIn stops at 30 minutes", "[" + w.token + "] " + w.elapsed.ToStr(), "[] 1800")
+    ' The time goes by the clock, not the count: polls that each take 10 s
+    ' (a slow network) still end at 15 minutes, after far fewer polls.
+    w = NxFakePlexRun(900, -1, -1, 8)
+    NxCheck(r, "faked plex.tv: slow polls end by the clock", "[" + w.token + "] " + w.elapsed.ToStr() + " " + w.polls.ToStr(), "[] 900 90")
+
     ' ── Quick Connect polling ──
     NxCheck(r, "approved", NxSignInQuickConnectStep(1, true), "approved")
     NxCheck(r, "not yet", NxSignInQuickConnectStep(1, false), "waiting")
@@ -455,4 +487,46 @@ function NxSignInRegistryDigest() as String
         end for
     end for
     return d.Final()
+end function
+
+' A stand-in for plex.tv's PIN check (#240), read against `clock`'s time: ""
+' until `approveAt` seconds, then the token; invalid (the 404) from `goneAt`
+' seconds. -1 for never. `asked` counts the requests.
+function NxFakePlexTv(approveAt as Integer, goneAt as Integer) as Object
+    return {
+        approveAt: approveAt, goneAt: goneAt, asked: 0, clock: invalid,
+        checkPin: function(id as Dynamic) as Dynamic
+            m.asked = m.asked + 1
+            now = m.clock.seconds()
+            if m.goneAt >= 0 and now >= m.goneAt then return invalid
+            if m.approveAt >= 0 and now >= m.approveAt then return "tok-" + NxToStr(id)
+            return ""
+        end function
+    }
+end function
+
+' NxPlexPinWait for PIN 7 against a faked plex.tv and clock that share their
+' time: its answer, plus `asked`, the requests plex.tv got.
+function NxFakePlexRun(expiresIn as Dynamic, approveAt as Integer, goneAt as Integer, perPoll as Integer) as Object
+    clock = NxFakeClock()
+    clock.perPoll = perPoll
+    fake = NxFakePlexTv(approveAt, goneAt)
+    fake.clock = clock
+    w = NxPlexPinWait({ id: 7, expiresIn: expiresIn }, fake, clock)
+    w.asked = fake.asked
+    return w
+end function
+
+' A clock that only moves when slept on, plus `perPoll` seconds for each
+' reading (a request's own time).
+function NxFakeClock() as Object
+    return {
+        ms: 0, perPoll: 0,
+        seconds: function() as Integer
+            return Int(m.ms / 1000)
+        end function,
+        sleep: sub(ms as Integer)
+            m.ms = m.ms + ms + m.perPoll * 1000
+        end sub
+    }
 end function
