@@ -66,27 +66,27 @@ final class GuideTextSizeTests: XCTestCase {
 
     // MARK: Metrics
 
-    /// NORMAL is the shared type scale (tokens, 2026-11-10): body for titles, numbers and names, caption for the rest.
-    func testNormalIsTheTokenSizes() {
+    /// NORMAL is the 25 pt floor everywhere (Chad 2026-11-10: body read too big in the grid).
+    func testNormalIsTheFloor() {
         let n = GuideTextSize.normal.metrics
-        XCTAssertEqual(n.title, NXType.body)
+        XCTAssertEqual(n.title, NXType.caption)
         XCTAssertEqual(n.timeLabel, NXType.caption)
         XCTAssertEqual(n.channelHeading, NXType.caption)
-        XCTAssertEqual(n.number, NXType.body)
-        XCTAssertEqual(n.numberWidth, 54)
-        XCTAssertEqual(n.name, NXType.body)
+        XCTAssertEqual(n.number, NXType.caption)
+        XCTAssertEqual(n.numberWidth, 46)
+        XCTAssertEqual(n.name, NXType.caption)
         XCTAssertEqual(n.placeholder, NXType.caption)
     }
 
-    /// LARGE is one step up the same scale. (It no longer matches Roku's GuideText.brs LARGE.)
+    /// LARGE is one step up the same scale: body everywhere. (It no longer matches Roku's GuideText.brs LARGE.)
     func testLargeIsOneStepUpTheScale() {
         let l = GuideTextSize.large.metrics
-        XCTAssertEqual(l.title, NXType.heading)
+        XCTAssertEqual(l.title, NXType.body)
         XCTAssertEqual(l.timeLabel, NXType.body)
         XCTAssertEqual(l.channelHeading, NXType.body)
-        XCTAssertEqual(l.number, NXType.heading)
-        XCTAssertEqual(l.numberWidth, 64)
-        XCTAssertEqual(l.name, NXType.heading)
+        XCTAssertEqual(l.number, NXType.body)
+        XCTAssertEqual(l.numberWidth, 54)
+        XCTAssertEqual(l.name, NXType.body)
         XCTAssertEqual(l.placeholder, NXType.body)
     }
 

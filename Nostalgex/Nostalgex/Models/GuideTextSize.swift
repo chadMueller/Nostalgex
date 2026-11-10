@@ -30,7 +30,7 @@ enum GuideTextSize: String, CaseIterable {
 
 /// Type sizes (points, DM Mono Medium) for the text the guide grid draws, all from the shared type scale
 /// (`NXType`, Chad 2026-11-10): nothing is below the 25 pt floor, and a program's title and a channel's number
-/// and name are body (29), the rest caption (25).
+/// and name are caption (25) in NORMAL and body (29) in LARGE.
 ///
 /// Only text changes with the setting. The row stays `NXLayout.rowHeight` (76) and the header 58, the channel
 /// column stays 340, and program blocks are laid out by ProgramRowLayout from times alone, so LARGE never moves a
@@ -50,18 +50,18 @@ struct GuideTextMetrics: Equatable {
     /// BROADCASTS RESUME AT 9 PM, on a row Watershed has emptied.
     let placeholder: CGFloat
 
-    /// The token sizes: body for titles, numbers and names, caption for times, the heading and the placeholder.
-    /// The box holds three digits at 29 pt (52.2 pt measured with DM Mono).
+    /// Everything at the 25 pt floor (caption), Chad 2026-11-10: body (29) read too big in the grid.
+    /// The box holds three digits at 25 pt (45 pt measured with DM Mono).
     static let normal = GuideTextMetrics(
-        title: NXType.body, timeLabel: NXType.caption, channelHeading: NXType.caption,
-        number: NXType.body, numberWidth: 54, name: NXType.body, placeholder: NXType.caption
+        title: NXType.caption, timeLabel: NXType.caption, channelHeading: NXType.caption,
+        number: NXType.caption, numberWidth: 46, name: NXType.caption, placeholder: NXType.caption
     )
 
-    /// One step up the scale for a couch further from the screen: titles, number and name at heading (34), the
-    /// times, heading and placeholder at body (29). The channel column cannot widen, so the name gives up
-    /// characters to the ellipsis. Roku's LARGE is still its own (GuideText.brs): the two no longer share numbers.
+    /// One step up the scale for a couch further from the screen: everything at body (29). The channel column
+    /// cannot widen, so the name gives up characters to the ellipsis. Roku's LARGE is still its own
+    /// (GuideText.brs): the two no longer share numbers.
     static let large = GuideTextMetrics(
-        title: NXType.heading, timeLabel: NXType.body, channelHeading: NXType.body,
-        number: NXType.heading, numberWidth: 64, name: NXType.heading, placeholder: NXType.body
+        title: NXType.body, timeLabel: NXType.body, channelHeading: NXType.body,
+        number: NXType.body, numberWidth: 54, name: NXType.body, placeholder: NXType.body
     )
 }
