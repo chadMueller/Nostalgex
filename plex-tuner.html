@@ -3548,6 +3548,57 @@
     .setup-title { font-size: max(26px, var(--nx-fs)); }
     .plex-connect .plex-btn, .plex-connect .server-picker-connect { font-size: max(18px, var(--nx-fs)); padding: 18px 20px; }
   }
+
+  /* ══════════════════════════════════════
+     PACKAGE STRIPES and the PACKAGE LIST (Apple TV: GuideStripes, GuideStripeViews, BundleJumpSidebar).
+     The stripe is 28pt wide on 80pt rows there; here 20px on the 50px rows. The name is DM Mono Medium
+     written up the stripe, black or white, whichever reads better (4.5:1 or more on every colour).
+  ══════════════════════════════════════ */
+  :root { --g-stripe: 20px; }
+  @media (max-width: 1024px) and (orientation: portrait), (max-width: 1024px) and (pointer: coarse), (orientation: landscape) and (max-height: 500px) { :root { --g-stripe: 14px; } }
+  .guide-grid { position: relative; }
+  .grid-body { position: relative; }
+  .grid-header { padding-left: var(--g-stripe); position: relative; }
+  .grid-stripe-cell { width: var(--g-stripe); flex-shrink: 0; background: var(--stripe, rgba(255,255,255,0.10)); }
+  .grid-stripe-cell.starts { box-shadow: inset 0 2px 0 #0a0a2a; }
+  .grid-stripe-overlay { position: absolute; left: 0; top: var(--g-head); bottom: 0; width: calc(var(--g-stripe) + 10px); pointer-events: none; overflow: hidden; z-index: 3; }
+  .grid-stripe-label {
+    position: absolute; left: 0; width: var(--g-stripe); display: flex; align-items: center; justify-content: flex-start;
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-family: 'DM Mono', monospace; font-weight: 500; font-size: max(12px, var(--nx-fs)); letter-spacing: 0.08em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 0; box-sizing: border-box;
+  }
+  .grid-stripe-label.focused { width: calc(var(--g-stripe) + 8px); outline: 3px solid var(--cyan); outline-offset: -1px; box-shadow: 0 0 14px rgba(0,196,255,0.9); border-radius: 8px; }
+  .grid-pkg-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font-family: 'DM Mono', monospace; font-weight: 500; font-size: max(13px, var(--nx-fs)); letter-spacing: 0.08em;
+    color: var(--cyan); background: rgba(0,0,0,0.6); border: 2px solid var(--cyan); padding: 4px 12px; cursor: pointer;
+  }
+  .grid-pkg-btn:hover, .grid-pkg-btn:focus-visible { background: var(--cyan); color: #000; }
+  .pkg-list {
+    display: none; position: absolute; left: 0; top: 0; bottom: 0; z-index: 20;
+    width: min(380px, 82%); flex-direction: column; overflow-y: auto;
+    background: rgba(8,8,20,0.97); border-right: 1px solid rgba(255,255,255,0.14);
+  }
+  .pkg-list.open { display: flex; }
+  .pkg-head { font-family: 'DM Mono', monospace; font-weight: 500; font-size: var(--fs-cap); letter-spacing: 0.08em; color: rgba(255,255,255,0.7); padding: 16px 24px; }
+  .pkg-rule { height: 1px; background: rgba(255,255,255,0.14); margin: 2px 16px 6px; flex-shrink: 0; }
+  .pkg-row {
+    --ch: var(--cyan);
+    position: relative; display: block; width: 100%; text-align: left; flex-shrink: 0;
+    min-height: 56px; padding: 0 16px 0 28px; margin-bottom: 2px;
+    font-family: 'DM Mono', monospace; font-weight: 500; font-size: var(--fs-body); letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.85); background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pkg-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--ch); opacity: 0.4; }
+  .pkg-row--settings { --ch: var(--yellow); }
+  /* the one selected look, as a guide row: the channel's colour at a third, a 3px outline, a wider bar */
+  .pkg-row:hover, .pkg-row:focus, .pkg-row:focus-visible {
+    outline: 3px solid var(--ch); outline-offset: -3px; color: #fff;
+    background: color-mix(in srgb, var(--ch) 32%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--ch) 70%, transparent);
+  }
+  .pkg-row:focus::before, .pkg-row:focus-visible::before { width: 8px; opacity: 1; }
 </style>
 </head>
 <body>
@@ -3888,7 +3939,12 @@
     <div class="grid-header">
       <div class="grid-channel-col">CHANNEL</div>
       <div class="grid-time-slots" id="grid-time-slots"></div>
+      <button class="grid-pkg-btn" id="grid-pkg-btn" type="button" onclick="openPackageList()" aria-haspopup="dialog">PACKAGES</button>
     </div>
+    <!-- The package stripe's names, written up the stripe (GuideStripeViews.swift); placed from the scroll. -->
+    <div class="grid-stripe-overlay" id="grid-stripe-overlay" aria-hidden="true"></div>
+    <!-- The package list (the Apple TV's BundleJumpSidebar): Left at the start of the guide. -->
+    <div class="pkg-list" id="pkg-list" role="dialog" aria-modal="true" aria-label="Packages"></div>
     <div class="grid-body" id="grid-body" tabindex="0" aria-label="Channel guide. Up and Down browse, Enter tunes in."></div>
     <div class="grid-footer">
       <div class="grid-page-btns">
@@ -4207,6 +4263,7 @@
         <div class="help-row"><div class="help-key">G</div><div class="help-desc">Fullscreen + guide overlay</div></div>
         <div class="help-row"><div class="help-key">UP / DOWN</div><div class="help-desc">Browse channels, and the support and info rows between them</div></div>
         <div class="help-row"><div class="help-key">LEFT / RIGHT</div><div class="help-desc">Move the guide earlier or later, 30 minutes a press</div></div>
+        <div class="help-row"><div class="help-key">LEFT AT THE START</div><div class="help-desc">The package stripe: Up and Down jump between packages, Left again opens the package list, Right goes back</div></div>
         <div class="help-row"><div class="help-key">ENTER</div><div class="help-desc">Tune in. On the channel that is playing: full screen</div></div>
         <div class="help-row"><div class="help-key">TAB</div><div class="help-desc">Move between the controls; Enter or Space presses one</div></div>
 
@@ -5839,6 +5896,7 @@
       // selfhost:strip:end
     });
     gridBody.appendChild(fragment);
+    addStripeCells(gridBody);
   }
 
   let renderGuideTimer = null;
@@ -6889,6 +6947,7 @@
     guideVisible = true;
     guidePromoKey = null;
     guideSlotOffset = 0;
+    guideStripeMode = false;
 
     // Pre-select current channel in guide
     const enabled = getEnabledChannels();
@@ -6954,6 +7013,11 @@
   }
 
   function updateGuideFocus(wrapped = false) {
+    if (guideStripeMode) {
+      document.querySelectorAll('.grid-row').forEach(r => r.classList.remove('focused'));
+      updateStripeLabels();
+      return;
+    }
     // `guideFocusIndex` indexes getEnabledChannels(), but the promo rows share the
     // .grid-row class, so walking the full NodeList by position drifted one row per
     // promo row above the cursor. The highlight then sat on the channel before the
@@ -11527,8 +11591,27 @@
       return;
     }
 
+    // The package list: Up and Down walk it, Enter (a button) jumps, Esc or Right closes it.
+    if (isPackageListOpen()) {
+      if (key === 'Escape' || key === 'ArrowRight' || key === 'ArrowLeft') { closePackageList(); e.preventDefault(); return; }
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        const items = [...document.querySelectorAll('#pkg-list .pkg-row')];
+        const at = items.indexOf(document.activeElement);
+        const to = Math.min(Math.max((at === -1 ? 0 : at) + (key === 'ArrowDown' ? 1 : -1), 0), items.length - 1);
+        if (items[to]) items[to].focus({ preventScroll: false });
+        e.preventDefault();
+      }
+      return;
+    }
+
     // Guide navigation (when guide is visible and focused)
     if (appState === 'guide' || (guideVisible && appState === 'player')) {
+      // On the package stripe: Up and Down jump between packages, Right (or Enter) goes back to the rows, Left opens the list.
+      if (guideStripeMode) {
+        if (key === 'ArrowUp' || key === 'ArrowDown') { jumpPackage(key === 'ArrowDown' ? 1 : -1); e.preventDefault(); return; }
+        if (key === 'ArrowRight' || key === 'Enter' || key === ' ' || key === 'Escape') { returnFromStripe(); e.preventDefault(); return; }
+        if (key === 'ArrowLeft') { openPackageList(); e.preventDefault(); return; }
+      }
       if (key === 'g' || key === 'G') {
         toggleFsOverlay();
         e.preventDefault();
@@ -11564,6 +11647,8 @@
       // Left and Right move the guide's time cursor, as on the Apple TV. Full screen has no guide: there they
       // still change channel (the player branch below).
       if ((key === 'ArrowLeft' || key === 'ArrowRight') && !isVideoFullscreen()) {
+        // Left at the start of the guide goes to the package stripe (or the list, with no packages), as the Apple TV does.
+        if (key === 'ArrowLeft' && guideSlotOffset === 0) { if (guideHasPackages()) enterStripe(); else openPackageList(); e.preventDefault(); return; }
         moveGuideTime(key === 'ArrowRight' ? 1 : -1);
         e.preventDefault();
         return;
@@ -11688,6 +11773,188 @@
   });
 
 
+
+  // ══════════════════════════════════════
+  // PACKAGE STRIPES and the PACKAGE LIST
+  // ══════════════════════════════════════
+  // Which package a channel is in, the runs of rows that make a stripe, a name's colour, the jump list.
+  // All of it from the web's own bundles data (bundles, enabledBundleIDs: the CHANNELS & BUNDLES rows), so
+  // the stripes and the list agree with Settings. A channel is in the first package, in bundle order, that
+  // lists it. FRANCHISES also holds the franchise channels the library scan found.
+  const STRIPE_PALETTE = ['#FF2DB4', '#E74C3C', '#E67E22', '#F1C40F', '#2ECC71', '#2DC7B0', '#00BFFF', '#7B68EE', '#8E44AD', '#B9770E'];
+  function stripeHex(name) {   // FNV-1a over the upper-cased name, halves folded, mod 10: the Apple TV's, so a name is the same colour
+    let h = 0x811c9dc5;
+    for (const b of new TextEncoder().encode(String(name).toUpperCase())) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+    return STRIPE_PALETTE[(((h >>> 16) ^ (h & 0xffff)) >>> 0) % STRIPE_PALETTE.length];
+  }
+  function hexLum(hex) {
+    const v = parseInt(hex.slice(1), 16);
+    const c = [(v >> 16) & 255, (v >> 8) & 255, v & 255].map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function stripeNameColor(hex) { const l = hexLum(hex); return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? '#000' : '#fff'; }
+  function stripeFocusedHex(hex) {
+    const v = parseInt(hex.slice(1), 16);
+    const lift = x => Math.round(x + (255 - x) * 0.22);
+    return '#' + [lift((v >> 16) & 255), lift((v >> 8) & 255), lift(v & 255)].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  function guidePackageEntries() {
+    const found = CHANNELS.filter(c => c.foundFranchise).map(c => c.id);
+    const out = [];
+    for (const b of bundles) {
+      if (!enabledBundleIDs.has(b.id)) continue;
+      let ids = [...(b.channelIDs || [])];
+      if (b.id === FRANCHISES_BUNDLE_ID) ids = ids.concat(found);
+      out.push({ id: b.id, name: b.name, ids });
+    }
+    return out;
+  }
+  // The runs: consecutive guide rows in the same package (or in none, which draws a plain stripe).
+  function guideStripeGroups() {
+    const channels = getEnabledChannels();
+    const member = new Map();
+    for (const e of guidePackageEntries()) for (const id of e.ids) if (!member.has(id)) member.set(id, e);
+    const groups = [];
+    channels.forEach((ch, i) => {
+      const pkg = member.get(ch.id) || null;
+      const last = groups[groups.length - 1];
+      if (last && last.pkg === pkg) last.count++;
+      else groups.push({ pkg, first: i, count: 1 });
+    });
+    return groups;
+  }
+  function guideHasPackages() { return guideStripeGroups().some(g => g.pkg); }
+  let guideStripeMode = false, guideStripeGroup = null, guideStripeJumped = false, guideStripeReturn = 0;
+
+  function addStripeCells(gridBody) {
+    const groups = guideStripeGroups();
+    const rowGroup = new Map();
+    groups.forEach(g => { for (let k = 0; k < g.count; k++) rowGroup.set(g.first + k, g); });
+    let k = -1;
+    for (const row of gridBody.children) {
+      if (!row.classList.contains('grid-row')) continue;
+      const cell = document.createElement('div');
+      cell.className = 'grid-stripe-cell';
+      if (row.dataset.channelId) {
+        k++;
+        const g = rowGroup.get(k);
+        if (g && g.pkg) cell.style.setProperty('--stripe', stripeHex(g.pkg.name));
+        if (g && g.first === k) cell.classList.add('starts');
+        cell.dataset.group = String(groups.indexOf(g));
+      }
+      row.insertBefore(cell, row.firstChild);
+    }
+    updateStripeLabels();
+  }
+  // Names are placed from the scroll: a package whose first rows scrolled away keeps its name on the rows left.
+  function updateStripeLabels() {
+    const overlay = document.getElementById('grid-stripe-overlay');
+    const body = document.getElementById('grid-body');
+    if (!overlay || !body) return;
+    overlay.innerHTML = '';
+    const groups = guideStripeGroups();
+    const rows = [...body.children].filter(r => r.dataset.channelId);
+    const min = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--g-row')) * 0.6 || 30;
+    groups.forEach((g, gi) => {
+      if (!g.pkg || !rows[g.first] || !rows[g.first + g.count - 1]) return;
+      const top = rows[g.first].offsetTop, bottom = rows[g.first + g.count - 1].offsetTop + rows[g.first + g.count - 1].offsetHeight;
+      const vt = Math.max(top - body.scrollTop, 0), vb = Math.min(bottom - body.scrollTop, body.clientHeight);
+      if (vb - vt < min) return;
+      const hex = guideStripeMode && guideStripeGroup === gi ? stripeFocusedHex(stripeHex(g.pkg.name)) : stripeHex(g.pkg.name);
+      const el = document.createElement('div');
+      el.className = 'grid-stripe-label' + (guideStripeMode && guideStripeGroup === gi ? ' focused' : '');
+      el.style.top = vt + 'px'; el.style.height = (vb - vt) + 'px';
+      el.style.background = hex; el.style.color = stripeNameColor(hex);
+      el.textContent = g.pkg.name;
+      overlay.appendChild(el);
+    });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.getElementById('grid-body');
+    if (b) b.addEventListener('scroll', () => requestAnimationFrame(updateStripeLabels), { passive: true });
+  });
+
+  // Left at the start of the guide: onto the stripe, on the package of the row the cursor was on.
+  function enterStripe() {
+    const groups = guideStripeGroups();
+    const here = groups.findIndex(g => guideFocusIndex >= g.first && guideFocusIndex < g.first + g.count);
+    guideStripeReturn = guideFocusIndex;
+    guideStripeJumped = false;
+    guideStripeGroup = here >= 0 && groups[here].pkg ? here : groups.findIndex(g => g.pkg);
+    guideStripeMode = true;
+    guidePromoKey = null;
+    updateGuideFocus();
+  }
+  function jumpPackage(step) {
+    const groups = guideStripeGroups();
+    let i = guideStripeGroup + step;
+    while (i >= 0 && i < groups.length && !groups[i].pkg) i += step;
+    if (i < 0 || i >= groups.length) return;
+    guideStripeGroup = i; guideStripeJumped = true;
+    const rows = [...document.querySelectorAll('#grid-body > .grid-row[data-channel-id]')];
+    const body = document.getElementById('grid-body');
+    const row = rows[groups[i].first];
+    if (body && row) body.scrollTo({ top: groups[i].first === 0 ? 0 : row.offsetTop, behavior: 'smooth' });
+    document.querySelectorAll('.grid-stripe-cell').forEach(c => { const g = groups[Number(c.dataset.group)]; c.style.setProperty('--stripe', g && g.pkg ? (Number(c.dataset.group) === i ? stripeFocusedHex(stripeHex(g.pkg.name)) : stripeHex(g.pkg.name)) : 'rgba(255,255,255,0.10)'); });
+    updateStripeLabels();
+  }
+  // Right from the stripe: back to the row it left, or, after Up or Down moved it, the package's first channel.
+  function returnFromStripe() {
+    const groups = guideStripeGroups();
+    guideStripeMode = false;
+    if (guideStripeJumped && groups[guideStripeGroup]) guideFocusIndex = groups[guideStripeGroup].first;
+    else guideFocusIndex = guideStripeReturn;
+    guideStripeGroup = null;
+    document.querySelectorAll('.grid-stripe-cell').forEach(c => { const g = groups[Number(c.dataset.group)]; c.style.setProperty('--stripe', g && g.pkg ? stripeHex(g.pkg.name) : 'rgba(255,255,255,0.10)'); });
+    updateGuideFocus();
+    updateStripeLabels();
+  }
+
+  // ---- the package list ----
+  function packageListTargets() {
+    const channels = getEnabledChannels();
+    const pos = new Map(); channels.forEach((c, i) => { if (!pos.has(c.id)) pos.set(c.id, i); });
+    return guidePackageEntries().map(e => {
+      const at = Math.min(...e.ids.map(id => pos.has(id) ? pos.get(id) : Infinity));
+      return at === Infinity ? null : { id: e.id, name: e.name, at, ch: channels[at] };
+    }).filter(Boolean).sort((a, b) => a.at - b.at);
+  }
+  function isPackageListOpen() { const l = document.getElementById('pkg-list'); return !!l && l.classList.contains('open'); }
+  function openPackageList() {
+    const list = document.getElementById('pkg-list');
+    if (!list || isPackageListOpen()) return;
+    guideStripeMode = false; guideStripeGroup = null; updateGuideFocus();
+    list.innerHTML = '<div class="pkg-head">PACKAGES</div><button class="pkg-row pkg-row--settings" type="button" data-settings="1">SETTINGS</button><div class="pkg-rule"></div>';
+    for (const t of packageListTargets()) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pkg-row'; b.textContent = t.name; b.dataset.channel = String(t.ch.id);
+      b.style.setProperty('--ch', t.ch.colorHex || '#00C4FF');
+      list.appendChild(b);
+    }
+    list.onclick = (e) => {
+      const b = e.target.closest('.pkg-row'); if (!b) return;
+      if (b.dataset.settings) { closePackageList(); showConfig(); return; }
+      jumpGuideToChannel(Number(b.dataset.channel));
+    };
+    list.classList.add('open');
+    const first = list.querySelector('.pkg-row[data-channel]') || list.querySelector('.pkg-row');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closePackageList() {
+    const list = document.getElementById('pkg-list');
+    if (list) list.classList.remove('open');
+  }
+  function jumpGuideToChannel(channelId) {
+    closePackageList();
+    const enabled = getEnabledChannels();
+    const idx = enabled.findIndex(c => c.id === channelId);
+    if (idx < 0) return;
+    guideFocusIndex = idx; guidePromoKey = null; guideStripeMode = false;
+    updateGuideFocus();
+    const row = document.querySelector('#grid-body > .grid-row[data-channel-id="' + channelId + '"]');
+    if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
   // ══════════════════════════════════════
   // DIALOG FOCUS: kept inside, and handed back
   // ══════════════════════════════════════
@@ -11695,7 +11962,7 @@
   // email sign-up, the STILL WATCHING card) is watched here, so none of them needs its own code for
   // two rules: while one is open focus starts inside it and Tab cannot leave it, and when the last
   // one closes focus goes back to what had it before (or to the guide).
-  const NX_MODALS = ['#sleep-grace:not([hidden])', '#promo-modal.open', '.nx-dialog:not([hidden])', '#config-overlay.open', 'body.drawer-open #m-drawer'];
+  const NX_MODALS = ['#sleep-grace:not([hidden])', '#promo-modal.open', '.nx-dialog:not([hidden])', '#config-overlay.open', '#pkg-list.open', 'body.drawer-open #m-drawer'];
   const NX_FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   let nxModalOpen = null, nxOpener = null;
   function nxTopModal() {
@@ -11728,7 +11995,7 @@
     }
   }
   (function watchModals() {
-    const watch = ['sleep-grace', 'promo-modal', 'config-overlay', 'm-drawer'].map(id => document.getElementById(id)).filter(Boolean);
+    const watch = ['sleep-grace', 'promo-modal', 'config-overlay', 'm-drawer', 'pkg-list'].map(id => document.getElementById(id)).filter(Boolean);
     document.querySelectorAll('.nx-dialog').forEach(d => watch.push(d));
     const mo = new MutationObserver(() => nxSyncModals());
     watch.forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class', 'hidden', 'style', 'aria-hidden'] }));
@@ -11738,7 +12005,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Tab' || e.defaultPrevented) return;
     const m = nxModalOpen;
-    if (!m || !(m.id === 'config-overlay' || m.id === 'promo-modal')) return;
+    if (!m || !(m.id === 'config-overlay' || m.id === 'promo-modal' || m.id === 'pkg-list')) return;
     const items = nxFocusables(m);
     if (!items.length) { e.preventDefault(); return; }
     const first = items[0], last = items[items.length - 1], at = document.activeElement;
