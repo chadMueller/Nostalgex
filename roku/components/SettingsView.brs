@@ -261,7 +261,7 @@ sub buildRows()
     end for
 
     m.addPage = "packages"
-    add({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" }, "channels")
+    add({ kind: "header", title: "CHANNEL BUNDLES", subtitle: "Toggle bundles to customize your lineup" }, "channels")
     franchisesAt = -1
     for i = 0 to m.top.bundles.Count() - 1
         if m.top.bundles[i].id = NxFranchisesBundleID() then
@@ -791,7 +791,7 @@ sub renderPane()
                 ' Read-only but focusable, as the Apple TV's, so focus has
                 ' somewhere to be on the page.
                 if i = m.focus and m.where = "rows" then page.AppendChild(newRect(0, y, m.rowW, 54, "0xFFFFFF12"))
-                page.AppendChild(newLabel("Every channel in your packages is on air.", m.tk.font.text, m.sz.body, m.t2, 20, y + 10))
+                page.AppendChild(newLabel("Every channel in your bundles is on air.", m.tk.font.text, m.sz.body, m.t2, 20, y + 10))
             else
                 drawRow(page, i, row, y)
             end if

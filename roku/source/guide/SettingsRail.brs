@@ -22,7 +22,7 @@ function NxSettingsTabs() as Object
     return [
         { id: "support", title: "SUPPORT NOSTALGEX", line: "News, help and the Apple TV app are on its site", hero: "support", pinned: true },
         { id: "playback", title: "PLAYBACK & PICTURE", line: "Picture, quality, subtitles and audio", hero: "playback", pinned: false },
-        { id: "channels", title: "CHANNELS & BUNDLES", line: "Packages, franchises, collections and the schedule", hero: "channels", pinned: false },
+        { id: "channels", title: "CHANNELS & BUNDLES", line: "Bundles, franchises, collections and the schedule", hero: "channels", pinned: false },
         { id: "servers", title: "SERVERS & ACCOUNTS", line: "Servers, libraries, rescans and sign out", hero: "servers", pinned: false },
         { id: "about", title: "ABOUT", line: "Version and links", hero: "about", pinned: false }
     ]

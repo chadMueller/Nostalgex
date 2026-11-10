@@ -214,7 +214,7 @@ sub onGuide()
     if m.channels = invalid then m.channels = []
     if m.channels.Count() = 0 then
         ' Upstream's NO CHANNELS FOUND, with OK for its OPEN SETTINGS (#60).
-        m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
+        m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
         keepFocusVisible()
         renderGrid()
         return
@@ -755,7 +755,7 @@ function renderInvite(y as Integer) as Object
     head = newLabel(NxSeasonalHeadline(m.offer, NxSeasonNow()), "DMMono-Medium", 22, hc, 20, NxGuideLineTop(m.rowH, 22), 0)
     row.AppendChild(head)
     px = 20 + head.boundingRect().width + 14
-    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " PACKAGE", "DMMono-Medium", 14, "0x000000FF", px + 11, (m.rowH - 28) \ 2 + 5, 0)
+    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " BUNDLE", "DMMono-Medium", 14, "0x000000FF", px + 11, (m.rowH - 28) \ 2 + 5, 0)
     if focused then cta.color = "0x000000A6"
     pill = CreateObject("roSGNode", "Poster")
     pill.uri = "pkg:/images/look/capsule.9.png"
@@ -2444,7 +2444,7 @@ sub renderSidebar()
     side.RemoveChildrenIndex(side.GetChildCount(), 0)
     side.AppendChild(newRect(0, 0, 380, 525, tk.color.panel))
     side.AppendChild(newRect(380, 0, 1, 525, "0xFFFFFF1A"))
-    side.AppendChild(newLabel("PACKAGES", tk.font.label, tk.compactSize.body, tk.color.text2, 24, 16, 0))
+    side.AppendChild(newLabel("BUNDLES", tk.font.label, tk.compactSize.body, tk.color.text2, 24, 16, 0))
     first = m.sideFocus - 4
     if first < 0 then first = 0
     y = 62
@@ -2620,7 +2620,7 @@ sub renderBuildNotice()
     if names.Count() = 1 then
         label.text = "BUILDING " + names[0] + " · ITS CHANNELS SHOW UP WHEN READY"
     else
-        label.text = "BUILDING " + m.building.Count().ToStr() + " PACKAGES · THEIR CHANNELS SHOW UP WHEN READY"
+        label.text = "BUILDING " + m.building.Count().ToStr() + " BUNDLES · THEIR CHANNELS SHOW UP WHEN READY"
     end if
     label.visible = true
 end sub

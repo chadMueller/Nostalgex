@@ -74,7 +74,7 @@ function NxRunSettingsChannelsTests(configPath as String) as Integer
 
     ' ── ChannelsHomePage: the link rows and their values ────────────────────
     NxCheck(r, "links: the three pages, in the list's order", NxPageIds(NxChannelsPages()), "packages|franchises|collections")
-    NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL PACKAGES|FRANCHISES|MY COLLECTIONS")
+    NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL BUNDLES|FRANCHISES|MY COLLECTIONS")
     n = { packagesOn: 3, franchisesOn: true, franchiseRowsOn: 5, franchiseCollectionsOn: 2, collectionsOn: 4 }
     NxCheck(r, "links: CHANNEL PACKAGES counts the packages on", NxChannelsLinkValue("packages", n), "3 ON")
     NxCheck(r, "links: FRANCHISES counts franchise rows and franchise collections", NxChannelsLinkValue("franchises", n), "7 ON")

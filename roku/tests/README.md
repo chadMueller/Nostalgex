@@ -61,7 +61,7 @@ Static analysis runs when `java` (Temurin 21) is on the path and Roku's `sca-cmd
 
 ### What stays manual
 
-Anything on a TV: `scripts/deploy.sh --test`, scrolling Settings to CHANNEL PACKAGES and back, a plain-deploy smoke test, playback. Also reading the change itself, the privacy wording, and whether a conflict kept the intended side. The checks above only catch mistakes that leave a signature.
+Anything on a TV: `scripts/deploy.sh --test`, scrolling Settings to CHANNEL BUNDLES and back, a plain-deploy smoke test, playback. Also reading the change itself, the privacy wording, and whether a conflict kept the intended side. The checks above only catch mistakes that leave a signature.
 
 ### CI
 
