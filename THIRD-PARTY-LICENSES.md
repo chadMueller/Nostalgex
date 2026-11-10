@@ -9,7 +9,7 @@ Nostalgex itself is MIT (see `LICENSE`). It ships with the following third-party
 | VT323 | 2011, The VT323 Project Authors (peter.hull@oikoi.com) | SIL Open Font License 1.1, `Nostalgex/Nostalgex/OFL-VT323.txt` |
 | DM Mono | 2020, The DM Mono Project Authors (github.com/googlefonts/dm-mono) | SIL Open Font License 1.1, `Nostalgex/Nostalgex/OFL-DMMono.txt` |
 
-The web tuner and site load their fonts from Google Fonts at runtime and do not redistribute them.
+The web tuner serves DM Mono (Regular and Medium) itself, from `tuner/fonts/`, with the license text beside the files (`tuner/fonts/OFL-DMMono.txt`). The same files are in the Docker image. VT323 for the tuner and the site's other fonts load from Google Fonts at runtime on nostalgex.app and are not redistributed there.
 
 ## Self-hosted web tuner (Docker image)
 
@@ -19,7 +19,8 @@ The image (`npm run build:selfhost`) bundles these from npm instead of loading t
 |---|---|
 | hls.js 1.5.17 | Apache License 2.0 |
 | qrcodejs 1.0.0 | MIT |
-| VT323, Press Start 2P, Silkscreen, Space Mono, Bricolage Grotesque (via @fontsource) | SIL Open Font License 1.1 |
+| VT323, Space Mono, Bricolage Grotesque (via @fontsource) | SIL Open Font License 1.1 |
+| DM Mono Regular and Medium (`tuner/fonts/`, license in `vendor/licenses/OFL-DMMono.txt`) | SIL Open Font License 1.1 |
 | nginx (base image `nginxinc/nginx-unprivileged`) | 2-clause BSD |
 
 ## Roku app (`roku/`)

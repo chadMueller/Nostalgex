@@ -1,0 +1,19 @@
+/* The web tuner's text face: the Apple TV's DM Mono, Regular (values, text) and Medium (labels).
+   The files are the same TTFs the tvOS app (Nostalgex/Nostalgex/) and the Roku package
+   (roku/fonts/) ship, with the SIL Open Font License beside them (fonts/OFL-DMMono.txt).
+   Tuner pages only (Chad, 2026-10-21): the marketing site never loads this.
+   font-display: swap draws the fallback monospace at once and swaps when the file lands. */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/DMMono-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/DMMono-Medium.ttf') format('truetype');
+}

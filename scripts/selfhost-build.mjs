@@ -98,9 +98,6 @@ const FONT_SHEETS = [
     out: 'vendor/fonts/tuner.css',
     css: [
       { file: '@fontsource/vt323/400.css' },
-      { file: '@fontsource/press-start-2p/400.css' },
-      { file: '@fontsource/silkscreen/400.css' },
-      { file: '@fontsource/silkscreen/700.css' },
     ],
   },
   {
@@ -116,8 +113,6 @@ const FONT_SHEETS = [
 ]
 const FONT_LICENSES = [
   '@fontsource/vt323/LICENSE',
-  '@fontsource/press-start-2p/LICENSE',
-  '@fontsource/silkscreen/LICENSE',
   '@fontsource-variable/bricolage-grotesque/LICENSE',
   '@fontsource/space-mono/LICENSE',
 ]
@@ -267,6 +262,10 @@ export function selfhostPlugins({ root, version }) {
         for (const lic of FONT_LICENSES) {
           copyInto(outDir, mod(lic), `vendor/licenses/${lic.split('/')[1]}.txt`)
         }
+        // DM Mono is not an npm font here: the tuner ships the same TTFs as the tvOS app and the
+        // Roku package (tuner/fonts/, linked from tuner/fonts.css, which Vite bundles), so the
+        // licence text comes from beside them.
+        copyInto(outDir, resolve(root, 'tuner/fonts/OFL-DMMono.txt'), 'vendor/licenses/OFL-DMMono.txt')
 
         // Defaults for running dist-selfhost/ without the container. In the image,
         // docker/40-config.sh writes the real one from the environment at start.

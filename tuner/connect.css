@@ -67,6 +67,9 @@
   --final-grad: linear-gradient(100deg, #d31f92 5%, #e56f24 48%, #e9bd0f 95%);
   --final-note: rgba(16, 14, 10, 0.8);
 }
+/* The text floor (Chad, 2026-11-10): 12 screen px for DM Mono, Space Mono and any other face. The two TV
+   steps below zoom the page, so they set --nx-z and the floor grows to match (see plex-tuner.html). */
+:root { --nx-z: 1; --nx-fs: calc(12px / var(--nx-z)); }
 *, *::before, *::after { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -76,7 +79,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: max(17px, var(--nx-fs));
   line-height: 1.6;
   border: 2px solid var(--ink);
   min-height: 100vh;
@@ -108,7 +111,7 @@ a { color: inherit; }
   gap: 10px;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 14px;
+  font-size: max(14px, var(--nx-fs));
   letter-spacing: 0.02em;
   text-decoration: none;
   border: 2px solid var(--ink);
@@ -117,7 +120,7 @@ a { color: inherit; }
   white-space: nowrap;
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
 }
-.btn-sm { padding: 8px 15px; font-size: 12.5px; }
+.btn-sm { padding: 8px 15px; font-size: max(12.5px, var(--nx-fs)); }
 
 .btn-ink {
   background: var(--ink);
@@ -279,13 +282,13 @@ a { color: inherit; }
   margin-top: 12px;
   font-family: var(--font-mono);
   color: var(--ink-faint);
-  font-size: 12.5px;
+  font-size: max(12.5px, var(--nx-fs));
 }
 .footer-links { display: flex; gap: 26px; flex-wrap: wrap; }
 .footer-links a {
   font-family: var(--font-mono);
   text-decoration: none;
-  font-size: 13px;
+  font-size: max(13px, var(--nx-fs));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -296,7 +299,7 @@ a { color: inherit; }
 .footer-note {
   width: 100%;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--nx-fs);
   color: var(--ink-faint);
 }
 .visually-hidden {
@@ -316,7 +319,7 @@ a { color: inherit; }
   flex: 1;
   min-width: 200px;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: max(14px, var(--nx-fs));
   padding: 13px 16px;
   border: 2px solid var(--ink);
   border-radius: 8px;
@@ -325,11 +328,11 @@ a { color: inherit; }
 }
 .subscribe-input::placeholder { color: var(--ink-faint); }
 .subscribe-btn { justify-content: center; padding: 13px 22px; }
-.footer-signup .subscribe-btn { padding: 8px 15px; font-size: 12.5px; }
+.footer-signup .subscribe-btn { padding: 8px 15px; font-size: max(12.5px, var(--nx-fs)); }
 
 .subscribe-msg {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: max(13px, var(--nx-fs));
   font-weight: 700;
   color: var(--ink-soft);
   margin-top: 14px;
@@ -340,18 +343,20 @@ a { color: inherit; }
 .footer-signup { max-width: 360px; }
 .footer-signup-label {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: max(12.5px, var(--nx-fs));
   color: var(--ink-faint);
   margin-bottom: 12px;
 }
-.footer-signup .subscribe-input { font-size: 12.5px; padding: 8px 12px; min-width: 160px; }
-.footer-signup .subscribe-msg { margin-top: 10px; font-size: 12px; }
+.footer-signup .subscribe-input { font-size: max(12.5px, var(--nx-fs)); padding: 8px 12px; min-width: 160px; }
+.footer-signup .subscribe-msg { margin-top: 10px; font-size: max(12px, var(--nx-fs)); }
 .page-connect { display: flex; flex-direction: column; min-height: 100vh; }
 @media (pointer: fine) and (orientation: landscape) and (max-width: 1280px) and (max-height: 720px) {
+  :root { --nx-z: 0.875; }
   .page-connect { zoom: 0.875; min-height: calc(100vh / 0.875); }
   .page-connect .connect-main { padding: 32px 0 48px; }
 }
 @media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) {
+  :root { --nx-z: 0.6667; }
   .page-connect { zoom: 0.6667; min-height: calc(100vh / 0.6667); }
 }
 
@@ -377,7 +382,7 @@ a { color: inherit; }
 .connect-lede {
   margin: 16px auto 40px;
   max-width: 44ch;
-  font-size: 17px;
+  font-size: max(17px, var(--nx-fs));
   font-weight: 500;
   color: var(--ink-soft);
 }
@@ -385,12 +390,12 @@ a { color: inherit; }
 .connect-lede--follow { margin-top: -24px; }
 .connect-how { margin-top: 40px; }
 .connect-how-title { font-size: clamp(22px, 3vw, 28px); margin-bottom: 12px; }
-.connect-how p { color: var(--ink-soft); font-size: 15px; line-height: 1.6; font-weight: 500; margin: 0 auto 12px; max-width: 52ch; }
+.connect-how p { color: var(--ink-soft); font-size: max(15px, var(--nx-fs)); line-height: 1.6; font-weight: 500; margin: 0 auto 12px; max-width: 52ch; }
 
 .connect-privacy {
   margin-top: 32px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: max(12px, var(--nx-fs));
   line-height: 1.6;
   color: var(--ink-faint);
 }
@@ -401,7 +406,7 @@ a { color: inherit; }
 @media (max-width: 480px) {
   .connect-main { padding: 48px 0 64px; }
   .connect-wrap { width: calc(100% - 40px); }
-  .page-connect .nav-actions .btn-sm { padding: 8px 10px; font-size: 11.5px; }
+  .page-connect .nav-actions .btn-sm { padding: 8px 10px; font-size: var(--nx-fs); }
 }
 @media (max-width: 1024px) {
   .nav-social { display: none; }
@@ -414,7 +419,7 @@ a { color: inherit; }
 }
 
 @media (max-width: 480px) {
-  body { font-size: 16px; border-width: 0; }
+  body { font-size: max(16px, var(--nx-fs)); border-width: 0; }
   .container, .nav-inner, .hero-grid { width: calc(100% - 40px); }
   .nav-inner { gap: 12px; }
   .nav-actions { gap: 8px; }

@@ -3,6 +3,39 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner and Docker: first visual batch, branch only)
+
+**Why.** The Apple TV and the web tuner had drifted apart on type, contrast and states. Chad asked for the audit's first
+batch, and then for the web tuner to use the Apple TV's face. Branch `web/visual-batch-1-1110`, off main at `8a06696d`,
+not pushed: hosted and Docker take the same two pages, so it ships as one change when Chad says go.
+
+**Changed.**
+- **Face.** DM Mono Regular (values and text) and Medium (labels) are served by the tuner itself, `tuner/fonts/` and
+  `tuner/fonts.css`, the same TTFs the tvOS app and the Roku package ship, with the OFL text beside them and in the
+  Docker image's `vendor/licenses/`. Before this the CSS named DM Mono and never loaded it, so those lines drew in the
+  browser's monospace. VT323 stays for channel numbers, CH tags, times, countdowns and the guide rows. Press Start 2P and
+  Silkscreen are gone from the tuner pages and from the Google Fonts request and the Docker font sheet. The sign-in panel
+  on `web-tuner.html` follows (it called Space Mono a stand-in for DM Mono).
+- **Floors, in screen pixels.** DM Mono and anything carrying state 12px, VT323 16px (Chad's rule: 1 Apple TV pt is 0.5
+  CSS px on a desktop and on a TV browser). The two TV-browser steps zoom the whole page (0.875 and 0.6667), so the audit's
+  px numbers were not what the screen drew; `--nx-z`, `--nx-fs` and `--nx-fs-tag` keep the floors true to the screen at
+  every step. Guide rows keep their own sizes (GUIDE TEXT SIZE owns them).
+- **The rail** is a list of rows, label left and value right, so SETTINGS can no longer run into QUALITY (they shared two
+  58px tiles). On a 960x540 TV browser it is two columns of 48px cells with no key hints and no APPLE TV tile.
+- **Text colour.** Every white text alpha is now one of four steps (0.55, 0.7, 0.85, 1), channel colours used as text are
+  mixed toward white until they reach 4.5:1, the playing cell of a selected guide row is 45% of the channel colour on the
+  page background (white on it is 5.19:1 or better on all 97 colours in channels.json).
+- **States.** One look for every ON/OFF button: OFF grey, ON cyan outline, focus the cyan slab. Chips: chosen is a bar under
+  the chip, never a fill, so a focused chip cannot look chosen. A 3px white focus ring replaces the browser's 1px one.
+- **Phone Settings tabs** share the width (they ran 9px off both edges at 390) and are 44px high.
+
+**Half-done / not done.** Guide rows at the 960x540 step draw VT323 at 12 screen px (floor 16): the fix is a taller row and a
+Large default for that class, which halves the visible rows, so it waits for Chad. A few glyphs DM Mono and VT323 lack
+(arrows, star, check, cup, triangles) still come from the system font. The unused @fontsource packages for Press Start 2P
+and Silkscreen are still in package.json.
+
+**Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
 **Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on
