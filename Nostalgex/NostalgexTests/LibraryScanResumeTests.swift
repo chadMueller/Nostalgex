@@ -197,6 +197,114 @@ final class LibraryScanResumeTests: XCTestCase {
         }
     }
 
+    // MARK: A short section is not a kept section (reviewer blocker 1)
+
+    /// A TV section where one show's episodes cannot be read, and a movie section that is fine.
+    /// `failShow` nil = every show answers. `shortTotal`: the movie list says 100 but stops at 40.
+    private func tvServer(_ backend: Backend, failShow: Bool, shortMovies: Bool = false) throws -> LoopbackJSONServer {
+        switch backend {
+        case .plex:
+            return try LoopbackJSONServer { path, query in
+                let parts = path.split(separator: "/")
+                if path == "/library/sections" {
+                    return LoopbackReply(delayMs: 0, body: ["MediaContainer": ["Directory": [
+                        ["key": "1", "title": "TV", "type": "show"], ["key": "2", "title": "Movies", "type": "movie"]]]])
+                }
+                if parts.count == 4, parts[2] == "1" {
+                    // The shows; the bulk episode sweep (type=4) comes back empty, so the scan crawls show by show.
+                    let rows = query["type"] == "4" ? [] : (0..<3).map { StopWaitingHarnessTests.show("1", $0) }
+                    return LoopbackReply(delayMs: 0, body: ["MediaContainer": ["totalSize": rows.count, "Metadata": rows]])
+                }
+                if parts.count == 4, parts[0] == "library", parts[1] == "metadata", parts[3] == "allLeaves" {
+                    let show = String(parts[2])
+                    if failShow, show == "s1-1" { return nil }
+                    let n = Int(show.dropFirst(3)) ?? 0
+                    let eps = (0..<4).map { StopWaitingHarnessTests.episode("1", n, $0) }
+                    return LoopbackReply(delayMs: 0, body: ["MediaContainer": ["size": 4, "totalSize": 4, "Metadata": eps]])
+                }
+                if parts.count == 4, parts[2] == "2" {
+                    let total = shortMovies ? 100 : 40
+                    let start = Int(query["X-Plex-Container-Start"] ?? "0") ?? 0
+                    let size = Int(query["X-Plex-Container-Size"] ?? "500") ?? 500
+                    let end = shortMovies ? min(40, start + size) : min(total, start + size)
+                    let rows = start < end ? (start..<end).map { StopWaitingHarnessTests.movie("2", $0) } : []
+                    return LoopbackReply(delayMs: 0, body: ["MediaContainer": ["totalSize": total, "Metadata": rows]])
+                }
+                return nil
+            }
+        case .jellyfin, .emby:
+            return try LoopbackJSONServer { path, query in
+                if path.hasSuffix("/UserViews") || path.hasSuffix("/Views") {
+                    return LoopbackReply(delayMs: 0, body: ["Items": [
+                        ["Id": "1", "Name": "TV", "CollectionType": "tvshows"], ["Id": "2", "Name": "Movies", "CollectionType": "movies"]],
+                        "TotalRecordCount": 2])
+                }
+                guard path.hasSuffix("/Items"), let parent = query["ParentId"] else { return nil }
+                let ticks = Int64(30) * 60 * 10_000_000
+                if parent == "1" {
+                    let series = (0..<3).map { ["Id": "se\($0)", "Name": "Show \($0)", "Type": "Series"] as [String: Any] }
+                    return LoopbackReply(delayMs: 0, body: ["Items": series, "TotalRecordCount": 3])
+                }
+                if parent.hasPrefix("se") {
+                    if failShow, parent == "se1" { return nil }
+                    let eps = (0..<4).map { i -> [String: Any] in
+                        ["Id": "\(parent)-e\(i)", "Name": "Episode \(i + 1)", "Type": "Episode", "RunTimeTicks": ticks,
+                         "ParentIndexNumber": 1, "IndexNumber": i + 1,
+                         "MediaSources": [["Id": "ms\(parent)-\(i)", "Container": "mkv", "RunTimeTicks": ticks]]]
+                    }
+                    return LoopbackReply(delayMs: 0, body: ["Items": eps, "TotalRecordCount": 4])
+                }
+                if parent == "2" {
+                    let total = shortMovies ? 100 : 40
+                    let start = Int(query["StartIndex"] ?? "0") ?? 0
+                    let limit = Int(query["Limit"] ?? "200") ?? 200
+                    let end = shortMovies ? min(40, start + limit) : min(total, start + limit)
+                    let page = start < end ? (start..<end).map { i -> [String: Any] in
+                        ["Id": "2-\(i)", "Name": "Movie \(i)", "Type": "Movie", "RunTimeTicks": ticks,
+                         "MediaSources": [["Id": "ms2-\(i)", "Container": "mkv", "RunTimeTicks": ticks]]]
+                    } : []
+                    return LoopbackReply(delayMs: 0, body: ["Items": page, "TotalRecordCount": total])
+                }
+                return nil
+            }
+        }
+    }
+
+    private func scan(_ backend: Backend, failShow: Bool, shortMovies: Bool = false) async throws -> (items: [PlexMediaItem], next: LibraryScanProgressStore.Checkpoint) {
+        LibraryScanProgressStore.clearAll()
+        let s = try tvServer(backend, failShow: failShow, shortMovies: shortMovies)
+        try await s.start()
+        defer { s.stop() }
+        let svc = service(backend, s)
+        let items = try await svc.loadLibrary(excludedSectionKeys: [], checkpoint: checkpoint(backend, serverID: svc.serverID), progress: nil)
+        LibraryScanProgressStore.waitForPendingWrites()
+        return (items, checkpoint(backend, serverID: svc.serverID))
+    }
+
+    func testASectionWithAShowThatFailedIsNotKept() async throws {
+        for backend in Backend.allCases {
+            let healthy = try await scan(backend, failShow: false)
+            XCTAssertEqual(healthy.items.filter { $0.type == .episode }.count, 12, "\(backend): control, 3 shows x 4 episodes")
+            XCTAssertNotNil(healthy.next.resumable(sectionKey: "1", signature: nil), "\(backend): control, a whole TV section is kept")
+
+            let short = try await scan(backend, failShow: true)
+            XCTAssertEqual(short.items.filter { $0.type == .episode }.count, 8, "\(backend): the guide still gets the shows that answered")
+            XCTAssertNil(short.next.resumable(sectionKey: "1", signature: nil), "\(backend): a TV section missing a show is not kept as whole")
+            XCTAssertNotNil(short.next.resumable(sectionKey: "2", signature: nil), "\(backend): the movie section beside it still is")
+        }
+    }
+
+    func testASectionThatEndedShortOfTheServersTotalIsNotKept() async throws {
+        for backend in Backend.allCases {
+            let control = try await scan(backend, failShow: false)
+            XCTAssertNotNil(control.next.resumable(sectionKey: "2", signature: nil), "\(backend): control")
+            let short = try await scan(backend, failShow: false, shortMovies: true)
+            XCTAssertEqual(short.items.filter { $0.type == .movie }.count, 40, "\(backend): the 40 that came are used")
+            XCTAssertNil(short.next.resumable(sectionKey: "2", signature: nil), "\(backend): 40 of 100 is not a whole section")
+            XCTAssertNotNil(short.next.resumable(sectionKey: "1", signature: nil), "\(backend): the TV section is fine")
+        }
+    }
+
     // MARK: Through the app
 
     private final class Memory: Nostalgex.CredentialStoring, @unchecked Sendable {

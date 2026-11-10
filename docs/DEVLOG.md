@@ -82,6 +82,22 @@ old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSecti
 default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
 interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
 
+**Review fixes for the kept sections (I-076, second commit).** The reviewer found two ways a kept section could be wrong.
+(1) A TV section missing a show could be kept as whole: the Plex per-show crawl and the Jellyfin and Emby episode fetch
+catch a failing show and return nothing, so the section came back short and was reused for up to an hour (six on Plex).
+Each backend now counts those failures, and also a page list that stops before the server's own total, in
+`incompleteReads`; a section is kept only if that counter did not move while it was read. `testASectionWithAShowThatFailedIsNotKept`
+(one show's episodes 404, all three backends) and `testASectionThatEndedShortOfTheServersTotalIsNotKept` (40 of 100) each
+have a healthy control that is kept. (2) The write epoch was read when a section finished, so a section that finished
+after Disconnect but before the cancelled scan noticed (up to 2 s) survived, and on Plex the key has no account, so
+another account on the same server could reuse it. A checkpoint now takes the epoch once, when its load starts, and a
+`clearAll()` after that drops every later write from it, without recreating the directory
+(`testAClearAfterTheLoadStartedDropsEveryLaterWriteFromThatCheckpoint`). With both fixes taken out, those three tests fail.
+Known and not changed: the files live in Library/Caches, so tvOS can purge them, which is a discard and not corruption; there
+is no cap on directories nobody reads again (the next completed scan or any clear removes them); memory rises by up to one
+section while it is queued to write, and that has not been measured on an Apple TV. Run the big-library harness once on a
+device before the next release.
+
 **Music video titles no longer end in "( Music )" or "( )" (N-034, Trello 6aeaadc1).** Reproduced in Swift first
 (`MusicTitleSuffixTests` failed on the 1.0.32-links source): `MusicTitleParser.clean` strips the words "official" and
 "video" but left the bracket, so "Song (Official Music Video)" became "Song ( Music )" and "Song (Official Video)" became

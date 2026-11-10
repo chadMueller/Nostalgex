@@ -112,6 +112,10 @@ enum LibraryScanProgressStore {
         private let scanFieldsVersion: Int
         private let build: String
         private let now: @Sendable () -> Date
+        /// The write epoch when this checkpoint was made, i.e. when its load started. A
+        /// `clearAll()` after that (Disconnect, START OVER, RESCAN) drops every later write from
+        /// it, including a section that finishes while the cancelled scan has not noticed yet.
+        private let epoch: UInt64
         private let lock = NSLock()
         private var resumedKeys: [String] = []
         private var sweptUncommitted = false
@@ -126,6 +130,7 @@ enum LibraryScanProgressStore {
             self.scanFieldsVersion = scanFieldsVersion
             self.build = build
             self.now = now
+            self.epoch = LibraryScanProgressStore.currentEpoch()
         }
 
         /// Section keys this scan took from disk instead of reading from the server.
@@ -196,7 +201,7 @@ enum LibraryScanProgressStore {
         /// background queue and returns at once.
         func record(sectionKey: String, sectionTitle: String, signature: String?, skippedNoRuntime: Int, items: [PlexMediaItem]) {
             guard let dir = dir(for: sectionKey), let root else { return }
-            let e = LibraryScanProgressStore.currentEpoch()
+            let e = epoch
             let done = Done(format: LibraryScanProgressStore.formatVersion, build: build, scanFieldsVersion: scanFieldsVersion,
                             sectionKey: sectionKey, sectionTitle: sectionTitle, signature: signature,
                             savedAtUnix: Int(now().timeIntervalSince1970), itemCount: items.count,
@@ -218,6 +223,8 @@ enum LibraryScanProgressStore {
 
     private static func write(_ template: Done, items: [PlexMediaItem], to dir: URL, root: URL, epoch e: UInt64) throws {
         let fm = FileManager.default
+        // Cleared since this checkpoint was made: write nothing, and do not recreate the directory.
+        guard currentEpoch() == e else { throw WriteError.superseded }
         try? fm.removeItem(at: dir)
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         let encoder = JSONEncoder()

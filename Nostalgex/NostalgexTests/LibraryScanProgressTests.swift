@@ -206,7 +206,7 @@ final class LibraryScanProgressTests: XCTestCase {
         XCTAssertNil(checkpoint(build: "100", scanVersion: 2).resumable(sectionKey: "1", signature: nil), "items read by an older scan request are not merged")
 
         LibraryScanProgressStore.clearAll()
-        c.record(sectionKey: "1", sectionTitle: "Movies", signature: nil, skippedNoRuntime: 0, items: items("1", 10))
+        checkpoint(build: "100").record(sectionKey: "1", sectionTitle: "Movies", signature: nil, skippedNoRuntime: 0, items: items("1", 10))
         LibraryScanProgressStore.waitForPendingWrites()
         XCTAssertNil(checkpoint(server: "other").resumable(sectionKey: "1", signature: nil))
         XCTAssertNil(checkpoint(identity: "plex|someone-else").resumable(sectionKey: "1", signature: nil))
@@ -237,6 +237,31 @@ final class LibraryScanProgressTests: XCTestCase {
         LibraryScanProgressStore.afterChunkWritten = nil
         XCTAssertTrue(sectionDirs().isEmpty, "the old library's section did not come back after Disconnect")
         XCTAssertNil(checkpoint().resumable(sectionKey: "1", signature: nil))
+    }
+
+    /// The reviewer's second blocker: a section that finishes after Disconnect but before the
+    /// cancelled scan notices (up to 2 s) must not be kept, and must not be reusable by another
+    /// account on the same server.
+    func testAClearAfterTheLoadStartedDropsEveryLaterWriteFromThatCheckpoint() throws {
+        let c = checkpoint()                  // the load starts
+        c.record(sectionKey: "1", sectionTitle: "Movies", signature: nil, skippedNoRuntime: 0, items: items("1", 10))
+        LibraryScanProgressStore.waitForPendingWrites()
+        XCTAssertEqual(sectionDirs().count, 1, "control: before the clear the section is kept")
+
+        LibraryScanProgressStore.clearAll()   // Disconnect
+        c.record(sectionKey: "2", sectionTitle: "Docs", signature: nil, skippedNoRuntime: 0, items: items("2", 10))
+        c.record(sectionKey: "3", sectionTitle: "Classics", signature: nil, skippedNoRuntime: 0, items: [])
+        LibraryScanProgressStore.waitForPendingWrites()
+        XCTAssertTrue(sectionDirs().isEmpty, "nothing from the old load comes back after the clear")
+        if let dir = LibraryScanProgressStore.directoryURL {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path), "and no directory is recreated")
+        }
+        // Another account on the same server (same Plex key) starts a load: finds nothing.
+        XCTAssertNil(checkpoint().resumable(sectionKey: "2", signature: nil))
+        // A checkpoint made after the clear writes normally.
+        checkpoint().record(sectionKey: "2", sectionTitle: "Docs", signature: nil, skippedNoRuntime: 0, items: items("2", 10))
+        LibraryScanProgressStore.waitForPendingWrites()
+        XCTAssertEqual(sectionDirs().count, 1)
     }
 
     func testTheKeptSectionsGoOnlyWhenTheSnapshotHasCommitted() throws {

@@ -22,6 +22,10 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     var hiddenSectionsOnByDefault: Bool = LibrarySectionSelectionStore.hiddenSectionsOnByDefault
     /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
     let scanSkips = ScanSkipCounter()
+    /// Reads that came back short without failing the section: a show whose episodes could not
+    /// be read, or a page list that ended before the server's own total. A section whose scan
+    /// moved this is not kept by `LibraryScanProgressStore` (I-076): kept sections must be whole.
+    let incompleteReads = ScanSkipCounter()
     var skippedNoRuntime: Int { scanSkips.count }
 
     /// Stable per-install device id. Reuses the same UUID Plex uses so the value is
@@ -212,6 +216,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
 
     func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
+        incompleteReads.reset()
         let allSections = try await loadSections()
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
@@ -245,6 +250,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 continue
             }
             let skipsBeforeSection = scanSkips.count
+            let incompleteBeforeSection = incompleteReads.count
             let items: [PlexMediaItem]
             do {
                 if section.type == "show" {
@@ -289,7 +295,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             allItems.append(contentsOf: items)
             // Kept only when the section was read to the end: a cancel makes the fetch hand
             // back the pages it had, which is not the section.
-            if !Task.isCancelled {
+            if !Task.isCancelled, incompleteReads.count == incompleteBeforeSection {
                 checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: nil,
                                    skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
             }
@@ -358,7 +364,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             // section discarded the whole scan, because the caller only preserved
             // partials once at least one section had completed.
             if Task.isCancelled { break }
-            if items.isEmpty || collected.count >= total { break }
+            if items.isEmpty {
+                // The server said there were more and sent none: a short list.
+                if collected.count < total { incompleteReads.add() }
+                break
+            }
+            if collected.count >= total { break }
         }
         return collected
     }
@@ -439,6 +450,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 )
             }
         } catch {
+            incompleteReads.add()   // the section goes on without this show and is no longer whole
             return []   // skip shows that fail individually, matching the Plex path
         }
     }

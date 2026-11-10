@@ -12,6 +12,10 @@ struct PlexAPIService: MediaBackend {
     var reportTransport: any ReportTransport = URLSessionReportTransport.shared
     /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
     let scanSkips = ScanSkipCounter()
+    /// Reads that came back short without failing the section: a show whose episodes could not
+    /// be read, or a page list that ended before the server's own total. A section whose scan
+    /// moved this is not kept by `LibraryScanProgressStore` (I-076): kept sections must be whole.
+    let incompleteReads = ScanSkipCounter()
     var skippedNoRuntime: Int { scanSkips.count }
 
     /// URLSession with timeout configured for Plex API calls
@@ -213,6 +217,7 @@ struct PlexAPIService: MediaBackend {
 
     func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
+        incompleteReads.reset()
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
         // handful of rows, so its duration is essentially pure round-trip latency.
@@ -256,6 +261,7 @@ struct PlexAPIService: MediaBackend {
                 continue
             }
             let skipsBeforeSection = scanSkips.count
+            let incompleteBeforeSection = incompleteReads.count
             let items: [PlexMediaItem]
             do {
                 items = try await fetchSection(section, pageSize: pageSize) { showsDone, totalShows, episodesSoFar in
@@ -283,7 +289,7 @@ struct PlexAPIService: MediaBackend {
             allItems.append(contentsOf: items)
             // Kept only when the section was read to the end: a cancel (Stop Waiting, the stall
             // watch) makes the fetch hand back the pages it had, which is not the section.
-            if !Task.isCancelled {
+            if !Task.isCancelled, incompleteReads.count == incompleteBeforeSection {
                 checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: signature,
                                    skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
             }
@@ -361,7 +367,11 @@ struct PlexAPIService: MediaBackend {
             // the entire scan, because the caller's partial list was still empty.
             if Task.isCancelled { break }
 
-            if page.isEmpty { break }
+            if page.isEmpty {
+                // The server said there were more and sent none: a short section.
+                if let total = container.totalSize, all.count < total { incompleteReads.add() }
+                break
+            }
             if let total = container.totalSize, all.count >= total { break }
             // Servers that omit totalSize: stop on the first short page.
             if container.totalSize == nil, page.count < pageSize { break }
@@ -548,6 +558,7 @@ struct PlexAPIService: MediaBackend {
             }
             return episodes.compactMap { makeEpisodeItem($0, show: show) }
         } catch {
+            incompleteReads.add()   // the guide goes on without this show; the section is no longer whole
             return [] // skip shows that fail individually
         }
     }
