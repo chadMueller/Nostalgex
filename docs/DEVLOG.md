@@ -27,9 +27,17 @@ came out of are tidied ("(Official Live at Wembley)" becomes "(Live at Wembley)"
 `npm run test:music-title` against the new `scripts/music-title-golden.json` (37 clean cases, 8 parse cases), and the cleanup
 as it was fails 22 of the 37.
 
-**Swift and Roku have the same bug and are not changed here.** `MusicTitleParser.clean` (Swift) and `NxCleanMusicTitle`
-(`roku/source/plex/PlexLibrary.brs`) are the same five passes. The golden file lists the exact cases and the nine steps in its
-`note`, for both ports to be tested against.
+**Swift still has the same bug. Roku was ported the same day (main was red until then).** `MusicTitleParser.clean` (Swift) is
+the same five passes as the web had; the golden file lists the exact cases and the nine steps in its `note`, for the Apple TV
+port to be tested against. Main went red on the Roku port job after the push of the three web fixes, for two reasons, both
+found by running only the vector generator and then the MediaBrowser suite in the interpreter: (1) the generator
+`roku/tests/gen-mediabrowser.mjs` lifts `fetchJellyfinLibraryFromServer` out of the page, which since STOP WAITING is a wrapper
+around `fetchJellyfinLibraryScan` and calls `endScanWatch()` ("ReferenceError: endScanWatch is not defined"); it now lifts both
+and stubs the six watch helpers, like the four web smokes. (2) With that fixed, the vectors differ from those of the commit
+before the three fixes in exactly one value, the Jellyfin music video "Artist Name - Song Name (Official Video)": title
+"Song Name ( )" became "Song Name", and the Roku port, still on the old cleanup, answered "Song Name ( )" (5,987 passed, 1
+failed). `NxCleanMusicTitle` now has steps 5 and 7 (5,988 passed, 0 failed). The Roku golden-file test for the cleanup
+itself (all 45 cases, not the one in the fixture) is not written.
 
 **Found, not changed.** The bare-word pass removes a word anywhere in a title: "Artist - Video Killed The Radio Star (Official
 Video)" now gives "Artist - Killed The Radio Star", and "Song - Official Music Video" gives "Song - Music". Both are as before;

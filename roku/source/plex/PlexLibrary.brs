@@ -495,13 +495,21 @@ function NxParseMusicVideoFromPlex(item as Object, rawTitle as String) as Object
     return { title: title, artist: artist }
 end function
 
-' Ripped filenames down to searchable text, as MusicTitleParser.clean.
+' Ripped filenames down to searchable text, as MusicTitleParser.clean. The nine steps are the
+' web tuner's cleanTitle (scripts/nostalgex-music-brainz.js) and its cases are
+' scripts/music-title-golden.json: 5 deletes a (..) group made only of noise words, 7 tidies the
+' parentheses a word came out of ("Song (Official Video)" was "Song ( )", N-034).
 function NxCleanMusicTitle(raw as String) as String
+    noise = "official|music|video|audio|visualizer|lyrics?|remaster(?:ed)?|hd|hq|mv|4k|uhd|xvid|dvdrip|vgb|prv"
     t = raw.Replace("_", " ")
     t = CreateObject("roRegex", "\[[^\]]*\]|\{[^}]*\}", "").ReplaceAll(t, "")
     t = CreateObject("roRegex", "\s*\((?:19|20)\d\d\)\s*$", "").ReplaceAll(t, "")
     t = CreateObject("roRegex", "\([^)]*(?:19|20)\d\d[^)]*\)", "").ReplaceAll(t, "")
+    t = CreateObject("roRegex", "\(\s*(?:" + noise + ")(?:[\s,&/+-]+(?:" + noise + "))*\s*\)", "i").ReplaceAll(t, "")
     t = CreateObject("roRegex", "\b(official|video|hd|hq|lyrics?|remaster(?:ed)?|mv|xvid|dvdrip|vgb|prv)\b!?", "i").ReplaceAll(t, "")
+    t = CreateObject("roRegex", "\(\s*\)", "").ReplaceAll(t, "")
+    t = CreateObject("roRegex", "\(\s+", "").ReplaceAll(t, "(")
+    t = CreateObject("roRegex", "\s+\)", "").ReplaceAll(t, ")")
     t = CreateObject("roRegex", "\s+", "").ReplaceAll(t, " ")
     return CreateObject("roRegex", "^[\s\-!.]+|[\s\-!.]+$", "").ReplaceAll(t, "")
 end function
