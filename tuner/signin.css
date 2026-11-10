@@ -19,7 +19,7 @@
   --sg-warn: #ffb020;
   --sg-wait: #00c4ff;
   --sg-ease: 0.14s ease-out;
-  --sg-mono: "DM Mono", "Space Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sg-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   width: 100%;
   padding: 36px 32px;
@@ -293,3 +293,21 @@
   .signin-btn--primary { font-size: 18px; }
   .signin-server { font-size: 22px; }
 }
+
+
+/* The panel is the right-hand list of the Apple TV's setup layout: no card, left-aligned. */
+.page-connect .signin {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  text-align: left;
+}
+.page-connect .signin-screen { align-items: stretch; }
+.page-connect .signin-title { font-size: max(28px, var(--nx-fs)); }
+.page-connect .signin-btn--quiet { align-self: flex-start; }
+.page-connect .signin-code { text-align: left; }
+.page-connect .signin-qr { align-items: flex-start; }
+.page-connect .signin-or { text-align: left; }
+.page-connect .signin-tiles { grid-template-columns: repeat(2, 1fr); }
+.signin-btn:not(:disabled):focus-visible, .signin-row:focus-visible, .signin-tile:focus-visible { outline: none; }

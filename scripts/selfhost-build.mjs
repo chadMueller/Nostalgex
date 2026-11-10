@@ -100,21 +100,9 @@ const FONT_SHEETS = [
       { file: '@fontsource/vt323/400.css' },
     ],
   },
-  {
-    key: 'Bricolage+Grotesque',
-    out: 'vendor/fonts/site.css',
-    css: [
-      // Google serves the opsz axis; the fontsource-variable opsz file is the same font.
-      { file: '@fontsource-variable/bricolage-grotesque/opsz.css', family: ['Bricolage Grotesque Variable', 'Bricolage Grotesque'] },
-      { file: '@fontsource/space-mono/400.css' },
-      { file: '@fontsource/space-mono/700.css' },
-    ],
-  },
 ]
 const FONT_LICENSES = [
   '@fontsource/vt323/LICENSE',
-  '@fontsource-variable/bricolage-grotesque/LICENSE',
-  '@fontsource/space-mono/LICENSE',
 ]
 
 const GOOGLE_FONTS_LINK = /<link href="https:\/\/fonts\.googleapis\.com\/css2\?([^"]*)" rel="stylesheet">/g

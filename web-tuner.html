@@ -45,9 +45,6 @@
   })();
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <!-- The tuner's own styles. Nothing from the marketing site loads here (tuner/connect.css says why). -->
 <link rel="stylesheet" href="./tuner/fonts.css">
 <link rel="stylesheet" href="./tuner/connect.css">
@@ -220,12 +217,16 @@
   <main class="connect-main">
     <div class="connect-wrap">
 
+      <!-- The Apple TV's setup layout: logo, title and a line of copy on the left, the choices on the right. -->
+      <div class="connect-brand">
+      <img class="connect-logo" src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
       <h1 class="connect-title">Watch your library as live TV in a browser.</h1>
       <!-- selfhost:strip:start -->
       <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide, right in your browser. It's free and needs no account. Plex works as is. Jellyfin and Emby need an https address.</p>
       <!-- selfhost:strip:end -->
       <!-- selfhost:only: <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide. This copy runs on your own server, so a plain http:// Jellyfin or Emby address on your network works.</p> -->
       <p class="connect-lede connect-lede--follow">Sign in once and Nostalgex turns your library into channels, then drops you straight into the guide.</p>
+      </div>
 
       <!-- The sign-in, screen by screen, as on Apple TV (nostalgex-internal SIGNIN-FLOW.md).
            One <section data-screen> shows at a time; the connect script at the bottom of
@@ -337,6 +338,7 @@
 
       </div>
 
+      <div class="connect-extra">
       <p class="connect-privacy">Your credentials go straight from this browser to your server. Nothing lands on ours.</p>
 
       <!-- selfhost:strip:start -->
@@ -359,6 +361,7 @@
         <p class="subscribe-msg" role="status" aria-live="polite"></p>
       </div>
       <!-- selfhost:strip:end -->
+      </div>
     </div>
   </main>
 
@@ -430,7 +433,9 @@
   document.addEventListener('keydown', (e) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === 'Escape' && BACK[screen]) { e.preventDefault(); BACK[screen](); return; }
-    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    // Left goes back a step too, the Apple TV's pattern, unless the caret is in a field.
+    if (e.key === 'ArrowLeft' && BACK[screen] && !(document.activeElement && document.activeElement.tagName === 'INPUT')) { e.preventDefault(); BACK[screen](); return; }
+    if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
     const box = document.querySelector(`#signin [data-screen="${screen}"]`);
     const active = document.activeElement;
     if (!box || !box.contains(active)) return;
@@ -438,7 +443,7 @@
     const items = [...box.querySelectorAll('button, input, a[href]')]
       .filter((el) => !el.disabled && el.getClientRects().length > 0);
     const i = items.indexOf(active);
-    const next = items[i + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1)];
+    const next = items[i + (e.key === 'ArrowDown' ? 1 : -1)];
     if (i >= 0 && next) { e.preventDefault(); focusOn(next); }
   });
 

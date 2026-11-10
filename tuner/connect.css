@@ -40,8 +40,8 @@
   --grad-sunset: linear-gradient(100deg, var(--pink) 5%, var(--orange) 48%, var(--yellow) 95%);
   --final-grad: var(--grad-sunset);
   --final-note: rgba(20, 20, 20, 0.78);
-  --font-display: "Bricolage Grotesque", "Arial Black", system-ui, sans-serif;
-  --font-mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --container: 1200px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -432,4 +432,60 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
+}
+
+
+/* ==========================================================================
+   The Apple TV's setup look (round 4, Chad 2026-11-10): black page, DM Mono, the logo and a short title on
+   the left, the choices on the right. The page used to be a pink and yellow marketing page with
+   Bricolage Grotesque and Space Mono; the sign-in panel inside it already followed the Apple TV.
+   ========================================================================== */
+.page-connect {
+  color-scheme: dark;
+  --paper: #000;
+  --paper-deep: #0a0a0a;
+  --ink: #ffffff;
+  --ink-soft: #b9c3de;
+  --ink-faint: #b9c3de;
+  --hairline: rgba(255, 255, 255, 0.22);
+  --rule: rgba(255, 255, 255, 0.3);
+  --hero-glow-a: transparent;
+  --hero-glow-b: transparent;
+  --pink: #00d4ff;
+  --font-display: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-mono);
+}
+.page-connect .connect-main { background: #000; }
+.page-connect .theme-toggle { display: none; }
+.page-connect .brand { display: none; }
+.page-connect .footer-logo-day { display: none; }
+.page-connect .footer-logo-nite { display: block; }
+.page-connect h1, .page-connect h2 { font-family: var(--font-display); font-weight: 500; }
+.page-connect .connect-wrap {
+  width: min(1280px, 100% - 120px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 80px;
+  row-gap: 40px;
+  align-items: center;
+  text-align: left;
+}
+.page-connect .connect-brand { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.page-connect .connect-logo { width: min(440px, 100%); height: auto; margin-bottom: 28px; }
+.page-connect .connect-title { font-size: max(40px, var(--nx-fs)); line-height: 1.15; letter-spacing: 0.01em; margin: 0 0 14px; }
+.page-connect .connect-lede { margin: 0 0 12px; max-width: 46ch; font-weight: 400; font-size: max(20px, var(--nx-fs)); color: #b9c3de; line-height: 1.5; }
+.page-connect .connect-lede--follow { margin-top: 0; }
+.page-connect .signin { grid-column: 2; grid-row: 1; max-width: 620px; }
+.page-connect .connect-extra { grid-column: 1 / -1; text-align: left; }
+.page-connect .connect-privacy { color: #b9c3de; font-size: max(16px, var(--nx-fs)); margin-top: 0; }
+.page-connect .connect-how p, .page-connect .connect-lede { text-align: left; margin-left: 0; margin-right: 0; }
+.page-connect .connect-signup .subscribe-form { justify-content: flex-start; }
+.page-connect .connect-signup { margin-left: 0; }
+@media (max-width: 860px) {
+  .page-connect .connect-wrap { width: calc(100% - 40px); grid-template-columns: 1fr; row-gap: 28px; }
+  .page-connect .connect-brand, .page-connect .signin, .page-connect .connect-extra { grid-column: 1; grid-row: auto; }
+  .page-connect .connect-title { font-size: max(28px, var(--nx-fs)); }
 }
