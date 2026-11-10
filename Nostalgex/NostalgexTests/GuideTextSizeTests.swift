@@ -66,15 +66,16 @@ final class GuideTextSizeTests: XCTestCase {
 
     // MARK: Metrics
 
-    /// NORMAL is the 25 pt floor everywhere (Chad 2026-11-10: body read too big in the grid).
-    func testNormalIsTheFloor() {
+    /// NORMAL row text is 22 pt (Chad 2026-11-10, an exception to the 25 pt floor for the guide's rows only); times,
+    /// heading and placeholder stay at the 25 pt floor.
+    func testNormalSizes() {
         let n = GuideTextSize.normal.metrics
-        XCTAssertEqual(n.title, NXType.caption)
+        XCTAssertEqual(n.title, 22)
         XCTAssertEqual(n.timeLabel, NXType.caption)
         XCTAssertEqual(n.channelHeading, NXType.caption)
-        XCTAssertEqual(n.number, NXType.caption)
-        XCTAssertEqual(n.numberWidth, 46)
-        XCTAssertEqual(n.name, NXType.caption)
+        XCTAssertEqual(n.number, 22)
+        XCTAssertEqual(n.numberWidth, 40)
+        XCTAssertEqual(n.name, 22)
         XCTAssertEqual(n.placeholder, NXType.caption)
     }
 
@@ -90,11 +91,12 @@ final class GuideTextSizeTests: XCTestCase {
         XCTAssertEqual(l.placeholder, NXType.body)
     }
 
-    /// Nothing the guide draws is below the 25 pt floor, at either size.
+    /// Header text and the placeholder are never below the 25 pt floor, and row text never below 22, at either size.
     func testNoGuideTextIsBelowTheFloor() {
         for size in GuideTextSize.allCases {
             let m = size.metrics
-            for s in [m.title, m.timeLabel, m.channelHeading, m.number, m.name, m.placeholder] {
+            for s in [m.title, m.number, m.name] { XCTAssertGreaterThanOrEqual(s, 22, "\(size) \(s) pt") }
+            for s in [m.timeLabel, m.channelHeading, m.placeholder] {
                 XCTAssertGreaterThanOrEqual(s, NXType.floor, "\(size) \(s) pt")
             }
         }
@@ -135,7 +137,7 @@ final class GuideTextSizeTests: XCTestCase {
     /// A line is never taller than its row once the focus outline (3 pt, inset 2 pt) is
     /// taken off top and bottom, nor than the 58 pt header (which keeps at least 8 pt above and below a header line).
     func testLinesFitTheRowAndTheHeader() throws {
-        let rowRoom: CGFloat = NXLayout.rowHeight - 2 * (3 + 2)
+        let rowRoom: CGFloat = GuideTextMetrics.rowHeight - 2 * (3 + 2)
         for size in GuideTextSize.allCases {
             let m = size.metrics
             for s in [m.title, m.number, m.name, m.placeholder] {

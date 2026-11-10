@@ -50,11 +50,15 @@ struct GuideTextMetrics: Equatable {
     /// BROADCASTS RESUME AT 9 PM, on a row Watershed has emptied.
     let placeholder: CGFloat
 
-    /// Everything at the 25 pt floor (caption), Chad 2026-11-10: body (29) read too big in the grid.
-    /// The box holds three digits at 25 pt (45 pt measured with DM Mono).
+    /// The guide's own row, shorter than the shared 76 (Chad 2026-11-10: the grid read too big), so more rows fit.
+    static let rowHeight: CGFloat = 64
+
+    /// Row text (titles, numbers, names) at 22 pt, an exception to the 25 pt floor for the guide's dense grid only
+    /// (Chad 2026-11-10). Times, the heading and the placeholder keep the 25 pt floor. The box holds three digits at
+    /// 22 pt (39.6 pt measured with DM Mono).
     static let normal = GuideTextMetrics(
-        title: NXType.caption, timeLabel: NXType.caption, channelHeading: NXType.caption,
-        number: NXType.caption, numberWidth: 46, name: NXType.caption, placeholder: NXType.caption
+        title: 22, timeLabel: NXType.caption, channelHeading: NXType.caption,
+        number: 22, numberWidth: 40, name: 22, placeholder: NXType.caption
     )
 
     /// One step up the scale for a couch further from the screen: everything at body (29). The channel column

@@ -74,7 +74,9 @@ struct ChannelGuideView: View {
     // above and below. The channel column holds the live bolt (29), a three-digit number box (54), the gap (8) and
     // 15 characters of name at 29 pt (261, the length 90% of the channels fit), plus its margins.
     private let channelColumnWidth: CGFloat = 340
-    private let rowHeight: CGFloat = NXLayout.rowHeight
+    // The guide's own row (Chad 2026-11-10: the grid read too big). Not the shared NXLayout.rowHeight (76), which
+    // the Now Playing panel keeps. 64 holds a 29 pt LARGE line inside the 3 pt outline and 2 pt inset.
+    private let rowHeight: CGFloat = GuideTextMetrics.rowHeight
     private let headerHeight: CGFloat = 58
     // 24-hour horizon, 30-min slots, 4 visible at a time → max scroll offset = 44.
     private let maxSlotOffset: Int = 44
