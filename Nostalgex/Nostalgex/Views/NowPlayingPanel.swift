@@ -115,12 +115,11 @@ struct NowPlayingPanel: View {
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
-    /// The identity column gets the room: 708 + 40 + 480 + 32 + 480 fills the width inside the 90 pt safe
-    /// margins. 480 is what the longest row needs at the compact 25 pt (PLAYBACK INFORMATION, its value and its
-    /// chevron: about 430 pt of the 440 pt inside the row's padding), 80 pt less per column than at 29 pt, which
-    /// the metadata column takes.
-    private let infoWidth: CGFloat = 708
-    private let columnWidth: CGFloat = 480
+    /// 628 + 40 + 520 + 32 + 520 fills the width inside the 90 pt safe margins. A row needs about 440 pt of its
+    /// width at the compact 25 pt (PLAYBACK INFORMATION, its value and its chevron), so 520 leaves it room; the
+    /// identity column (poster, CH line, title, UP NEXT) takes the rest.
+    private let infoWidth: CGFloat = 628
+    private let columnWidth: CGFloat = 520
     private let columnGap: CGFloat = 32
 
     var body: some View {
@@ -204,46 +203,19 @@ struct NowPlayingPanel: View {
                         Text("CH \(channel.number)")
                             .font(SettingsFont.tag)
                             .foregroundStyle(Color.nxText)
+                        Text(channel.name.uppercased())
+                            .font(SettingsFont.bodyRegular)
+                            .foregroundStyle(Color.nxText2)
+                            .lineLimit(1)
                     }
 
-                    // Title leads as the big headline, channel name follows smaller below it
-                    // (Discord feedback, 2026-10-29: viewers read this as "what's
-                    // playing", so the title should dominate and the channel is secondary).
+                    // Title leads as the big headline under the channel line (Discord feedback, 2026-10-29:
+                    // viewers read this as "what's playing", so the title should dominate).
                     Text(titleLine)
                         .font(SettingsFont.title)
                         .foregroundStyle(Color.nxText)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Text(channel.name.uppercased())
-                        .font(SettingsFont.bodyRegular)
-                        .foregroundStyle(Color.nxText2)
-                        .lineLimit(2)
-
-                    if let meta = metaLine {
-                        Text(meta)
-                            .font(NXFont.captionRegular)
-                            .foregroundStyle(Color.nxText2)
-                    }
-
-                    // The room the compact scale frees: the description runs to six lines before it ends in an
-                    // ellipsis, and the genres sit under it.
-                    if !item.summary.isEmpty {
-                        Text(item.summary)
-                            .font(NXFont.captionRegular)
-                            .foregroundStyle(Color.nxText2)
-                            .lineLimit(6)
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 2)
-                    }
-                    if let genres = genreLine {
-                        Text(genres)
-                            .font(NXFont.captionMedium)
-                            .tracking(1)
-                            .foregroundStyle(Color.nxText2)
-                            .lineLimit(1)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -291,23 +263,6 @@ struct NowPlayingPanel: View {
     /// The title, or the artist and song for a music video.
     private var titleLine: String {
         item.isMusicVideo ? item.musicDisplayLine : item.title
-    }
-
-    /// "1985 · PG-13 · 1 HR 52 MIN": the year (not for a music video), the content rating and the runtime,
-    /// whichever exist.
-    private var metaLine: String? {
-        var parts: [String] = []
-        if !item.isMusicVideo, let year = item.year { parts.append(String(year)) }
-        if let rating = item.contentRating, !rating.isEmpty { parts.append(rating.uppercased()) }
-        if let runtime = UpNextLabel.runtime(minutes: item.duration) { parts.append(runtime) }
-        return parts.isEmpty ? nil : parts.joined(separator: "  \u{00B7}  ")
-    }
-
-    /// Up to three genres, "ACTION · COMEDY · CRIME". Nothing for a music video.
-    private var genreLine: String? {
-        guard !item.isMusicVideo else { return nil }
-        let names = item.genres.filter { !$0.isEmpty }.prefix(3)
-        return names.isEmpty ? nil : names.map { $0.uppercased() }.joined(separator: "  \u{00B7}  ")
     }
 
     // MARK: - Controls zone

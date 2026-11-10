@@ -212,7 +212,7 @@ enum SleepTimerLogic {
     }
 }
 
-/// The words the Now Playing panel uses for time: minutes until the next programme and a runtime. Pure, so the
+/// The words the Now Playing panel uses for time: the time until the next programme. Pure, so the
 /// wording is decided in one place.
 enum UpNextLabel {
     /// "UP NEXT IN 12 MIN", "UP NEXT IN 1 HR 5 MIN", "UP NEXT IN 2 HR", "UP NEXT IN LESS THAN 1 MIN". Whole minutes
@@ -221,11 +221,6 @@ enum UpNextLabel {
         guard seconds >= 60 else { return "UP NEXT IN LESS THAN 1 MIN" }
         let minutes = Int(seconds / 60)
         return "UP NEXT IN \(span(minutes: minutes))"
-    }
-
-    /// "52 MIN", "1 HR 5 MIN", "2 HR". Nil for no runtime.
-    static func runtime(minutes: Int) -> String? {
-        minutes > 0 ? span(minutes: minutes) : nil
     }
 
     private static func span(minutes: Int) -> String {
