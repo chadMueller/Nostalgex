@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Apple TV 1.0.32: bug decisions folded into appletv/1.0.32-design)
+
+Simulator tests only; nothing here has run on an Apple TV.
+
+**Already in the branch, confirmed.** The RATE link (I-090) is the `b711a983` itms-apps form with the single `AppStoreLink.openRate` path from
+`eadb7e88`; the variants are `AppStoreLink.RateLinkVariant` from `226d7709`. The franchise collections grey-out while FRANCHISES is off (N-032)
+is in (`ef8d73d4`, devlog `1768d7be`). Jellyfin and Emby views that hold no videos are not scanned as films (I-085, #205/#206, `ca781c9c`:
+`JellyfinAPIService.sectionType`/`itemTypes`/`isAskedType`, pinned by `scripts/jellyfin-library-golden.json`), and the Emby scan names
+`OfficialRating` and `CommunityRating` with `LibrarySnapshotStore.scanFieldsVersion = 2` so a saved library from before rescans once (I-087.2,
+#204, `98e73809`). Re-run on the simulator for this entry, 45 test cases, 0 failures: `JellyfinPlaylistLeakTests` (2: an audio playlist in a
+Playlists view reaches neither VHS VAULT nor any channel, on Jellyfin and on Emby), `JellyfinLibraryGoldenTests` (5), `EmbyRatingFieldsTests`
+(10: a fake Emby 4.10 sends the two ratings only when Fields names them; SAT MORNING CARTOONS drops TV-MA and TV-14, VHS VAULT holds its R
+titles before 9 PM), `SnapshotUpgradePathTests` (2). Not verified: a real Jellyfin or Emby with a Playlists view, no TV run (nobody could test it).
+
+**Merged now.** `fix/clear-playback-failures`: Disconnect clears the last playback failure, and so does moving to a server list that shares no
+server with the old one (`PlaybackFailureClearingTests` 4, `PlaybackDiagnosticsTests` 5, 0 failures). `investigate/issue-146-stop-waiting`:
+STOP WAITING ends the whole scan instead of the current server, and `LibraryScanInterrupted` now carries `userInitiated`, stamped by
+`withLibraryLoadStallWatch` from the watchdog's own verdict. The branch overlapped the section-failure work already here (`failedSections`);
+kept both: a failed section is still reported and the scan goes on, a viewer's STOP WAITING breaks out of the server loop, and the abandoned-load
+event counts as user-initiated only when the scan was stamped so and no section failed. New `StopWaitingVerdictStampTests` (3): the viewer's tap
+stamps `true`, the watchdog giving up stamps `false`, a section that failed for good keeps its name; with the stamp line taken out the first one
+fails, with it all three pass. The older stop-waiting tests still pass (`StopWaitingCancellationIsolationTests` 1, `StopWaitingHarnessTests` 2,
+`LibraryLoadStallDetectorTests` 12). Not verified: pressing STOP WAITING on a real multi-server scan.
+
 ## 2026-11-10 (Apple TV 1.0.32 design branch: appletv/1.0.32-design, off appletv/1.0.32-fixes)
 
 Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per change.
