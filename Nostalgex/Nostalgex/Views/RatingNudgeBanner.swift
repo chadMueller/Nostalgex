@@ -21,15 +21,16 @@ struct RatingNudgeBanner: View {
         HStack(spacing: 32) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Enjoying Nostalgex?")
-                    .font(.custom("DMMono-Medium", size: 22))
-                    .foregroundStyle(.white)
+                    .font(NXFont.bodyMedium)
+                    .foregroundStyle(Color.nxText)
                 Text("A star rating helps other people find it. Back brings you right here.")
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
+                    .fixedSize(horizontal: false, vertical: true)
                 if RatingNudgePolicy.showsScrollHint {
                     Text(RatingNudgePolicy.scrollHint)
-                        .font(.custom("DMMono-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .font(NXFont.captionRegular)
+                        .foregroundStyle(Color.nxText2)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("ratingNudgeHint")
                 }
@@ -60,11 +61,11 @@ struct RatingNudgeBanner: View {
         .frame(maxWidth: 1240)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.05, green: 0.05, blue: 0.12).opacity(0.97))
+                .fill(Color.nxPanel.opacity(0.97))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color("BrandCyan").opacity(focused == nil ? 0.25 : 0.5), lineWidth: 1.5)
+                .stroke(focused == nil ? Color.nxRestingOutline : Color.nxCyan.opacity(0.6), lineWidth: 1.5)
         )
         .focusSection()
         .defaultFocus($focused, .rate)
@@ -112,18 +113,11 @@ struct RatingNudgeBanner: View {
         let isFocused = focused == choice
         return Button(action: action) {
             Text(title)
-                .font(.custom("DMMono-Medium", size: 22))
-                .foregroundStyle(isFocused ? .white : .white.opacity(0.6))
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
-                )
+                .nxRowSurface(isSelected: isFocused)
                 .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(NoHighlightButtonStyle())

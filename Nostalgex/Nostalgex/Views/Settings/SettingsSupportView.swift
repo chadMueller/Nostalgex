@@ -72,8 +72,8 @@ struct SettingsSupportView: View {
     @ViewBuilder
     private var supportGrid: some View {
         Text("Tips help keep Nostalgex maintained.")
-            .font(.custom("DMMono-Regular", size: 20))
-            .foregroundStyle(.white.opacity(0.7))
+            .font(NXFont.captionRegular)
+            .foregroundStyle(Color.nxText2)
             .fixedSize(horizontal: false, vertical: true)
 
         HStack(spacing: 24) {
@@ -109,8 +109,8 @@ struct SettingsSupportView: View {
 
         if let line = tipJar.statusLine {
             Text(line)
-                .font(.custom("DMMono-Regular", size: 20))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(NXFont.captionRegular)
+                .foregroundStyle(Color.nxText2)
                 .padding(.leading, 24)
         }
     }

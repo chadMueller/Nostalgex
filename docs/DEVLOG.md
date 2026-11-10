@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Apple TV 1.0.32 design branch: appletv/1.0.32-design, off appletv/1.0.32-fixes)
+
+Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per change.
+
+**Shared design tokens, Settings first.** One file, `Views/Design/DesignTokens.swift`, holds the type scale (hero 96, title 44,
+heading 34, body 29, caption 25, tag VT323 36), the color list (text #FFFFFF, text-2 #B9C3DE, cyan #00D4FF, yellow, amber,
+red-text, on-cyan; surfaces panel #0A0F1E, row #141B33, selected row #0B2A3A, chosen-neutral #2B3760) and one row surface:
+resting is the row fill with a 1.5 pt quiet outline; selected is the cyan-tinted fill, a 3 pt solid cyan outline, a 30 pt
+cyan glow and a 3% lift. Rules: nothing the viewer reads is below 25 pt, nothing pressed is below 29 pt, every text color is
+at least 4.5:1 on every surface it sits on, white with an opacity is not a text color, a channel's own color is never text.
+Moved onto it: the shared Settings rows (toggle, link, franchise buttons, channel requirement cards, the SUPPORT tiles
+including RATE, the language and stream quality pickers), the rail, the SUPPORT, ABOUT and LINKS pages (they use those rows),
+the page titles in the container, and the rating banner. Row text went from 18 to 22 pt up to 25 and 29 pt, so rows are taller
+and long subtitles wrap to two lines; the RATE tile wraps its title and instruction. The old low-contrast grays (white at
+0.2 to 0.85) are gone from these files: for example the title of a switched-off row was white at 0.35, about 3:1, and is now text-2 at 10.8:1. `DesignTokensTests`
+(8) checks every text/background pair in `NXColor.textPairs` (21 pairs) at 4.5:1, the proposal's published ratios, that cyan is
+the BrandCyan asset, the six sizes and the 25 and 29 floors, and scans the migrated files for literal font sizes and faded
+white as text. Not migrated, on purpose: the guide grid (its sizes follow row height and GUIDE TEXT SIZE), the Now Playing
+panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
+pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
+
 ## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
 
 Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.

@@ -21,8 +21,8 @@ struct SettingsRailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("SETTINGS")
-                .font(.custom("VT323-Regular", size: 44))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(NXFont.tag)
+                .foregroundStyle(Color.nxText2)
                 .padding(.horizontal, 40)
                 .padding(.top, 70)
                 .padding(.bottom, 24)
@@ -79,11 +79,11 @@ struct SettingsRailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 26, height: 26)
-                    .foregroundStyle(isFocused || isSelected ? .white : .white.opacity(0.6))
+                    .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
 
                 Text(category.title)
-                    .font(.custom("DMMono-Medium", size: 24))
-                    .foregroundStyle(isFocused || isSelected ? .white : .white.opacity(0.7))
+                    .font(NXFont.bodyMedium)
+                    .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
@@ -93,19 +93,18 @@ struct SettingsRailView: View {
             .frame(height: Self.rowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        isFocused ? accent.opacity(0.22)
-                            : (isSelected ? Color.white.opacity(0.06) : .clear)
-                    )
+                    .fill(isFocused ? Color.nxSelectedRow : (isSelected ? Color.nxChosenNeutral : .clear))
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // The same selected state as every Settings row: 3 pt cyan outline, glow, 3% lift.
             .overlay {
                 if isFocused {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(accent, lineWidth: 3)
-                        .shadow(color: accent.opacity(0.7), radius: 14)
+                        .strokeBorder(Color.nxCyan, lineWidth: 3)
                 }
             }
+            .shadow(color: isFocused ? Color.nxCyan.opacity(0.55) : .clear, radius: isFocused ? 30 : 0)
+            .scaleEffect(isFocused ? 1.03 : 1)
             .zIndex(isFocused ? 1 : 0)
             .animation(.easeInOut(duration: 0.12), value: isFocused)
         }

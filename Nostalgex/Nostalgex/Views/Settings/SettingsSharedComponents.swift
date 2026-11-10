@@ -20,12 +20,12 @@ struct SettingsLinkRow: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.custom("DMMono-Medium", size: 22))
-                        .foregroundStyle(.white)
+                        .font(NXFont.bodyMedium)
+                        .foregroundStyle(Color.nxText)
                     if let subtitle {
                         Text(subtitle)
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
                             .lineLimit(1)
                     }
                 }
@@ -33,23 +33,16 @@ struct SettingsLinkRow: View {
                 Spacer()
 
                 Text(value)
-                    .font(.custom("DMMono-Medium", size: 22))
-                    .foregroundStyle(isFocused ? Color("BrandCyan") : .white.opacity(0.6))
+                    .font(NXFont.bodyMedium)
+                    .foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(isFocused ? Color("BrandCyan") : .white.opacity(0.35))
+                    .font(NXFont.icon)
+                    .foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 22)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
-            )
+            .nxRowSurface(isSelected: isFocused)
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
@@ -76,34 +69,27 @@ struct ChannelRequirementCard: View {
                     .fill(channel.color)
                     .frame(width: 4, height: 18)
                 Text(channel.name.uppercased())
-                    .font(.custom("DMMono-Medium", size: 20))
-                    .foregroundStyle(.white)
+                    .font(NXFont.captionMedium)
+                    .foregroundStyle(Color.nxText)
             }
 
             Text(matchedCount.map { "Needs \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). You have \($0)." }
                  ?? "Needs \(channel.minItems) matching title\(channel.minItems == 1 ? "" : "s"). Counting yours…")
-                .font(.custom("DMMono-Regular", size: 18))
-                .foregroundStyle(Color(hex: "#FFB020"))
+                .font(NXFont.captionRegular)
+                .foregroundStyle(Color.nxAmber)
                 .fixedSize(horizontal: false, vertical: true)
 
             ForEach(Array((channel.rules?.plainLanguageRequirements ?? []).enumerated()), id: \.offset) { _, line in
                 Text("\u{2022} \(line)")
-                    .font(.custom("DMMono-Regular", size: 18))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isFocused ? Color.white.opacity(0.10) : Color.white.opacity(0.03))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isFocused ? Color("BrandCyan") : Color.clear, lineWidth: 3)
-        )
+        .nxRowSurface(isSelected: isFocused)
         .focusable(true)
         .animation(.easeInOut(duration: 0.12), value: isFocused)
         .accessibilityElement(children: .combine)
@@ -127,25 +113,18 @@ struct FranchiseActionButton: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.custom("DMMono-Medium", size: 22))
-                    .foregroundStyle(isEnabled ? .white : .white.opacity(0.35))
+                    .font(NXFont.bodyMedium)
+                    .foregroundStyle(isEnabled ? Color.nxText : Color.nxText2)
                 Text(subtitle)
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(isEnabled ? 0.8 : 0.5))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
             .padding(.vertical, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
-            )
+            .nxRowSurface(isSelected: isFocused)
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
@@ -159,7 +138,7 @@ struct FranchiseActionButton: View {
 // MARK: - Support tile
 
 /// One of the four SUPPORT NOSTALGEX tiles: a pixel icon, a title and one short line.
-/// Focus matches SettingsToggleRow (cyan stroke, lighter fill) plus a small lift.
+/// Focus is the shared row surface (`nxRowSurface`): cyan outline, glow and a small lift.
 struct SupportTile: View {
     let art: PixelArt
     let title: String
@@ -178,20 +157,22 @@ struct SupportTile: View {
 
                 VStack(spacing: 6) {
                     Text(title)
-                        .font(.custom("DMMono-Medium", size: 22))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                        .font(NXFont.bodyMedium)
+                        .foregroundStyle(Color.nxText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.8)
 
                     Text(caption)
-                        .font(captionIsPrice ? .custom("DMMono-Medium", size: 22) : .custom("DMMono-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(captionIsPrice ? 0.85 : 0.75))
-                        .lineLimit(1)
+                        .font(captionIsPrice ? NXFont.bodyMedium : NXFont.captionRegular)
+                        .foregroundStyle(captionIsPrice ? Color.nxText : Color.nxText2)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.8)
                     if let hint {
                         Text(hint)
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(0.75))
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("supportTileHint")
@@ -204,19 +185,8 @@ struct SupportTile: View {
             .padding(.horizontal, 16)
             .padding(.top, 30)
             .padding(.bottom, 26)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isFocused ? .white.opacity(0.08) : .white.opacity(0.03))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        isFocused ? Color("BrandCyan").opacity(0.6) : .white.opacity(0.06),
-                        lineWidth: isFocused ? 2 : 1
-                    )
-            )
+            .nxRowSurface(isSelected: isFocused)
             .contentShape(RoundedRectangle(cornerRadius: 12))
-            .scaleEffect(isFocused ? 1.04 : 1.0)
         }
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
         .accessibilityLabel(title)
@@ -272,20 +242,20 @@ struct SettingsToggleRow: View {
                 // Label
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.custom("DMMono-Medium", size: 22))
-                        .foregroundStyle(isOn ? .white : .white.opacity(0.35))
+                        .font(NXFont.bodyMedium)
+                        .foregroundStyle(isOn ? Color.nxText : Color.nxText2)
 
                     if let subtitle {
                         Text(subtitle)
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(isOn ? 0.8 : 0.5))
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
                             .lineLimit(subtitleLineLimit)
                     }
 
                     if let warning {
                         Text(warning)
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(Color(hex: "#FFB020"))
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxAmber)
                             .lineLimit(2)
                     }
 
@@ -303,8 +273,8 @@ struct SettingsToggleRow: View {
                         ProgressView()
                             .tint(Color("BrandCyan"))
                         Text(msg)
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(Color("BrandCyan").opacity(0.7))
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxCyan)
                     }
                 } else if isLoading {
                     ProgressView()
@@ -315,10 +285,10 @@ struct SettingsToggleRow: View {
                     }
                     if let detail {
                         Text(detail)
-                            .font(.custom("DMMono-Medium", size: 22))
+                            .font(NXFont.bodyMedium)
                             .foregroundStyle(
-                                detailIsProminent ? .white.opacity(0.85)
-                                    : isFocused ? Color("BrandCyan") : .white.opacity(0.6)
+                                detailIsProminent ? Color.nxText2
+                                    : isFocused ? Color.nxCyan : Color.nxText2
                             )
                     }
                 }
@@ -332,17 +302,7 @@ struct SettingsToggleRow: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        isFocused ? Color("BrandCyan") : .clear,
-                        lineWidth: 3
-                    )
-            )
+            .nxRowSurface(isSelected: isFocused)
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
@@ -376,12 +336,12 @@ extension View {
 /// a look. Sized to read from the couch next to a row's detail text.
 struct AlertCountBadge: View {
     let count: Int
-    private let amber = Color(hex: "#FFB020")
+    private let amber = Color.nxAmber
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(.custom("DMMono-Medium", size: 20))
-            .foregroundStyle(Color(hex: "#0A0A1A"))
+            .font(NXFont.captionMedium)
+            .foregroundStyle(Color.nxOnCyan)
             .padding(.horizontal, count > 9 ? 9 : 0)
             .frame(minWidth: 34, minHeight: 34)
             .background(Capsule().fill(amber))
@@ -393,7 +353,7 @@ struct AlertCountBadge: View {
 
 /// A lock and a PRO pill, in amber so Pro reads apart from the free rows' cyan.
 struct ProLockBadge: View {
-    private let amber = Color(hex: "#FFB020")
+    private let amber = Color.nxAmber
 
     var body: some View {
         HStack(spacing: 10) {
@@ -403,7 +363,7 @@ struct ProLockBadge: View {
                 .frame(width: 18, height: 22)
                 .foregroundStyle(amber)
             Text("PRO")
-                .font(.custom("VT323-Regular", size: 24))
+                .font(NXFont.tag)
                 .foregroundStyle(amber)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 1)
@@ -423,12 +383,12 @@ struct SettingsSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.custom("DMMono-Medium", size: 28))
-                .foregroundStyle(.white.opacity(0.8))
+                .font(NXFont.heading)
+                .foregroundStyle(Color.nxText2)
             if let subtitle {
                 Text(subtitle)
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -451,8 +411,8 @@ struct SettingsSubheader: View {
 
     var body: some View {
         Text(text)
-            .font(.custom("DMMono-Regular", size: 20))
-            .foregroundStyle(.white.opacity(0.7))
+            .font(NXFont.captionRegular)
+            .foregroundStyle(Color.nxText2)
             .padding(.top, 4)
     }
 }
@@ -498,11 +458,11 @@ struct EnrichmentStatusView: View {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("ENRICHMENT")
-                        .font(.custom("DMMono-Medium", size: 28))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .font(NXFont.heading)
+                        .foregroundStyle(Color.nxText2)
                     Text("Improving channel accuracy with TMDB + OMDb metadata")
-                        .font(.custom("DMMono-Regular", size: 20))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(NXFont.captionRegular)
+                        .foregroundStyle(Color.nxText2)
                 }
 
                 HStack(spacing: 16) {
@@ -512,8 +472,8 @@ struct EnrichmentStatusView: View {
                         .focusable(false)
 
                     Text("\(enrichmentService.enrichedCount)/\(enrichmentService.totalToEnrich)")
-                        .font(.custom("DMMono-Medium", size: 20))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(NXFont.captionMedium)
+                        .foregroundStyle(Color.nxText2)
                 }
             }
         }
@@ -562,12 +522,12 @@ struct LanguagePickerSheet: View {
 
             VStack(alignment: .leading, spacing: 20) {
                 Text(title)
-                    .font(.custom("DMMono-Medium", size: 28))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(NXFont.heading)
+                    .foregroundStyle(Color.nxText2)
 
                 Text(subtitle)
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 6) {
@@ -579,30 +539,20 @@ struct LanguagePickerSheet: View {
                             } label: {
                                 HStack(spacing: 16) {
                                     Text(preset.label)
-                                        .font(.custom("DMMono-Medium", size: 22))
-                                        .foregroundStyle(isSel ? Color("BrandCyan") : .white.opacity(0.85))
+                                        .font(NXFont.bodyMedium)
+                                        .foregroundStyle(isSel ? Color.nxCyan : Color.nxText2)
 
                                     Spacer()
 
                                     if isSel {
                                         Text("ACTIVE")
-                                            .font(.custom("VT323-Regular", size: 20))
-                                            .foregroundStyle(Color("BrandCyan").opacity(0.7))
+                                            .font(NXFont.tag)
+                                            .foregroundStyle(Color.nxCyan)
                                     }
                                 }
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 18)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(focusedID == preset.id ? .white.opacity(0.10) : .white.opacity(0.02))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(
-                                            focusedID == preset.id ? Color("BrandCyan") : .clear,
-                                            lineWidth: 3
-                                        )
-                                )
+                                .nxRowSurface(isSelected: focusedID == preset.id)
                             }
                             .buttonStyle(SettingsButtonStyle(isFocused: focusedID == preset.id))
                             .focused($focusedID, equals: preset.id)
@@ -639,12 +589,12 @@ struct StreamQualityPickerSheet: View {
 
             VStack(alignment: .leading, spacing: 20) {
                 Text("STREAM QUALITY")
-                    .font(.custom("DMMono-Medium", size: 28))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(NXFont.heading)
+                    .foregroundStyle(Color.nxText2)
 
                 Text("Lower quality uses less bandwidth. Auto adjusts as your connection changes.")
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 6) {
@@ -655,9 +605,9 @@ struct StreamQualityPickerSheet: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(localOriginalVideo ? "Original (local Plex) · ACTIVE" : "Original (local Plex)")
-                                        .font(.custom("DMMono-Medium", size: 22))
+                                        .font(NXFont.bodyMedium)
                                     Text(LocalPlexOriginalQuality.detail)
-                                        .font(.custom("DMMono-Regular", size: 20))
+                                        .font(NXFont.captionRegular)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -675,35 +625,25 @@ struct StreamQualityPickerSheet: View {
                                 HStack(spacing: 16) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(quality.displayName)
-                                            .font(.custom("DMMono-Medium", size: 22))
-                                            .foregroundStyle(isSel ? Color("BrandCyan") : .white.opacity(0.85))
+                                            .font(NXFont.bodyMedium)
+                                            .foregroundStyle(isSel ? Color.nxCyan : Color.nxText2)
 
                                         Text(quality.detail)
-                                            .font(.custom("DMMono-Regular", size: 20))
-                                            .foregroundStyle(.white.opacity(0.7))
+                                            .font(NXFont.captionRegular)
+                                            .foregroundStyle(Color.nxText2)
                                     }
 
                                     Spacer()
 
                                     if isSel {
                                         Text("ACTIVE")
-                                            .font(.custom("VT323-Regular", size: 20))
-                                            .foregroundStyle(Color("BrandCyan").opacity(0.7))
+                                            .font(NXFont.tag)
+                                            .foregroundStyle(Color.nxCyan)
                                     }
                                 }
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 18)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(focusedID == quality.id ? .white.opacity(0.10) : .white.opacity(0.02))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(
-                                            focusedID == quality.id ? Color("BrandCyan") : .clear,
-                                            lineWidth: 3
-                                        )
-                                )
+                                .nxRowSurface(isSelected: focusedID == quality.id)
                             }
                             .buttonStyle(SettingsButtonStyle(isFocused: focusedID == quality.id))
                             .focused($focusedID, equals: quality.id)

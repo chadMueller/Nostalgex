@@ -266,13 +266,13 @@ struct SettingsContainerView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(selected.title)
-                    .font(.custom("DMMono-Medium", size: 34))
-                    .foregroundStyle(.white)
+                    .font(NXFont.heading)
+                    .foregroundStyle(Color.nxText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(selected.subtitle)
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .id(selected)
@@ -308,7 +308,7 @@ struct SettingsContainerView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 110, height: 110)
-                .foregroundStyle(Color("BrandCyan"))
+                .foregroundStyle(Color.nxCyan)
         }
     }
 }
