@@ -22,6 +22,37 @@ untouched.
 **Left alone, on purpose.** The Apple TV "What the app stores on your device" block, which is about the TV app and stays
 true.
 
+## 2026-11-10 (Docker: one lineup held by the container, I-080; branch web/docker-settings-1110)
+
+**Built, not pushed, not run in nginx.** Chad chose option 1 for I-080 (a Docker user on a Raspberry Pi had to turn the same
+packages on in every browser): one global lineup, last write wins, display preferences and the sign-in stay per browser, the
+hosted site unchanged. The container now holds `nostalgex-settings.json` in a `/data` volume. nginx serves it and takes a PUT of
+it with its WebDAV module, so there is no backend; `docker/40-config.sh` writes the location into `/tmp/nostalgex/settings.conf`
+only when `nginx -V` lists `--with-http_dav_module` (and `NOSTALGEX_SHARED_SETTINGS` is not off), and `docker/nginx.conf`
+includes that folder by glob. A missing module therefore leaves no location rather than an nginx that will not start. The page
+side is `scripts/nostalgex-server-settings.js`: it runs only when the page carries the selfhost marker, reads the file once
+with a synchronous request before the page's script (the page reads its packages from localStorage in its first lines), and
+sends the six shared keys back after the first tap or key press of a visit and a settled 1.5 s. It never sends anything outside
+those keys, drops any value that contains this browser's own token, and ignores anything outside them in what it reads. A read
+that failed (500, a newer file) turns writing off for the visit, three refused writes in a row do too, and a missing file, an
+image without the feature, no volume, or a read-only one all leave the page exactly as it was.
+
+**Measured.** `npm run test:server-settings` (84 checks, including the real entrypoint script run against a stand-in `nginx -V`
+with and without the module, with the feature off, and with a typo) and `npm run test:shared-lineup` (55 checks, headless, the
+real `vite build --mode selfhost` output at 960x540 and on a phone, against a stand-in container: read, a change sent once with
+no token, login or display preference in it, a third browser starting from it, nothing saved yet, an image without the
+feature, a failed read, a newer file, a refused PUT, the hosted page never asking for the file, and the page with the module
+removed as the negative control).
+
+**Not run.** nginx and Docker. Whether `nginxinc/nginx-unprivileged:1.30-alpine` has the WebDAV module is expected (nginx.org's
+packages build with it) but not confirmed; the `docker-smoke` job in `ci.yml` now does the real round trip with curl (a
+volume on `/data`, a PUT, the file back, still there after a restart, a DELETE refused, no volume refused, feature off) and
+runs on a pull request, not on a push to main. The synchronous read is one request to the same nginx that just served the page;
+it has no timeout of its own, since a synchronous request cannot be given one.
+
+**Behaviour to know.** The first browser to make a change after the container gains the feature becomes the shared lineup,
+whatever the other browsers held. Not shared, and not decided: per-user lineups.
+
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 
 **Why.** `NxCleanMusicTitle` got steps 5 and 7 of the web cleanup the same day as the web tuner (N-034, the entry

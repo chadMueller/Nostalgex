@@ -7,6 +7,12 @@
 #                             the nostalgex.app relay. Only TMDB and IMDb ids are sent.
 #   NOSTALGEX_ENRICHMENT=off  no Supabase or relay requests at all.
 #
+#   NOSTALGEX_SHARED_SETTINGS=on   (default) the container holds one lineup (which packages
+#                             are on, the channel settings, collections, franchises) in the
+#                             /data volume, and every browser starts from it. Needs /data to be
+#                             writable (mount a volume on it); without that each browser keeps
+#                             its own, as before. Never holds a sign-in. off: no shared file.
+#
 # tunerVersion is what Settings shows as WEB TUNER 1.0.3 · DOCKER. It comes from
 # NOSTALGEX_TUNER_VERSION, which the image sets from its build arg (the release tag's
 # version), else from the config.json the build wrote next to the pages (package.json
@@ -40,6 +46,39 @@ fi
 mkdir -p /tmp/nostalgex
 printf '{"tunerVersion":"%s","musicLookups":false,"enrichment":%s}\n' "$version" "$enrichment" \
   > /tmp/nostalgex/config.json
+
+# The shared lineup: one location for one file, written only when it can work. A nginx
+# without the WebDAV module (the PUT) would refuse to start on the directive, so it is
+# checked here and the location is simply left out.
+rm -f /tmp/nostalgex/settings.conf
+shared_raw="${NOSTALGEX_SHARED_SETTINGS:-on}"
+case "$(printf '%s' "$shared_raw" | tr '[:upper:]' '[:lower:]')" in
+  on|true|1|yes) shared=on ;;
+  off|false|0|no) shared=off ;;
+  *)
+    echo "$0: NOSTALGEX_SHARED_SETTINGS must be on or off, got '$shared_raw'. Treating it as off." >&2
+    shared=off
+    ;;
+esac
+if [ "$shared" = on ]; then
+  if nginx -V 2>&1 | grep -q -- '--with-http_dav_module'; then
+    cat > /tmp/nostalgex/settings.conf <<'CONF'
+location = /nostalgex-settings.json {
+    root /data;
+    default_type application/json;
+    expires -1;
+    add_header X-Nostalgex-Settings "on" always;
+    dav_methods PUT;
+    create_full_put_path off;
+    client_max_body_size 256k;
+    limit_except GET HEAD PUT { deny all; }
+}
+CONF
+    echo "$0: shared lineup on (/data/nostalgex-settings.json; mount a writable volume on /data to keep it)"
+  else
+    echo "$0: this nginx has no WebDAV module, so the shared lineup is off; each browser keeps its own" >&2
+  fi
+fi
 
 label="${version:-(no version)}"
 if [ "$enrichment" = true ]; then
