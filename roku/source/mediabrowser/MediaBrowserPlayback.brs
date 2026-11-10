@@ -157,12 +157,42 @@ end function
 ' two letters, so "est" is not Spanish (issue #119). invalid when there is
 ' nothing to choose between, which leaves the server's own choice.
 ' `tracks` as NxMbAudioTracks keeps them.
+'
+' A commentary (a track's `commentary`, #236) is never in the pool while the
+' file has another audio track: NxMbSkipCommentary drops them before any
+' language or default step, as the Apple TV's
+' AudioTrackCommentary.skippingCommentary. So an English viewer's film with an
+' English commentary and a Portuguese film track plays the Portuguese track.
+' A file whose every track is a commentary picks among them as before.
 function NxMbPreferredAudioIndex(tracks as Object, languages as Object) as Dynamic
     if tracks.Count() < 2 then return invalid
+    pool = NxMbSkipCommentary(tracks)
     wanted = { en: true }
     for each l in languages
         if NxIsString(l) and l <> "" then wanted[LCase(l)] = true
     end for
+    best = NxMbBestInLanguages(pool, wanted)
+    if best <> invalid then return best.index
+    for each t in pool
+        if t.isDefault = true then return t.index
+    end for
+    return pool[0].index
+end function
+
+' `tracks` less those marked a commentary, when at least one other track is
+' left; all of them when every track is a commentary (or none is).
+function NxMbSkipCommentary(tracks as Object) as Object
+    pool = []
+    for each t in tracks
+        if t.commentary <> true then pool.Push(t)
+    end for
+    if pool.Count() = 0 then return tracks
+    return pool
+end function
+
+' The track in one of `wanted` (comparable tags) with the most channels, the
+' first of equals, or invalid when no track is in a wanted language.
+function NxMbBestInLanguages(tracks as Object, wanted as Object) as Dynamic
     best = invalid
     for each t in tracks
         tag = NxSubComparableTag(t.language)
@@ -174,11 +204,7 @@ function NxMbPreferredAudioIndex(tracks as Object, languages as Object) as Dynam
             end if
         end if
     end for
-    if best <> invalid then return best.index
-    for each t in tracks
-        if t.isDefault = true then return t.index
-    end for
-    return tracks[0].index
+    return best
 end function
 
 ' AUDIO LANGUAGE first (issue #62): a track in one of `languages`, most
@@ -193,17 +219,7 @@ function NxMbChosenAudioIndex(tracks as Object, languages as Object) as Dynamic
     for each l in languages
         if NxIsString(l) and l <> "" then wanted[LCase(l)] = true
     end for
-    best = invalid
-    for each t in tracks
-        tag = NxSubComparableTag(t.language)
-        if tag <> invalid and wanted.DoesExist(tag) then
-            if best = invalid then
-                best = t
-            else if NxNumberOr0(t.channels) > NxNumberOr0(best.channels) then
-                best = t
-            end if
-        end if
-    end for
+    best = NxMbBestInLanguages(NxMbSkipCommentary(tracks), wanted)
     if best <> invalid then return best.index
     return NxMbPreferredAudioIndex(tracks, languages)
 end function
@@ -243,7 +259,8 @@ function NxAudioTrackToSelect(listed as Object, want as Dynamic) as Dynamic
     if listed.Count() = want.count then return listed[want.position].Track
     tag = NxSubComparableTag(want.language)
     if tag = invalid then return invalid
-    for each t in listed
+    ' Never a track named a commentary while another track is listed (#236).
+    for each t in NxListedSkipCommentary(listed)
         if NxSubComparableTag(t.Language) = tag then return t.Track
     end for
     return invalid

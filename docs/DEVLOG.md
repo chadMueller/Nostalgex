@@ -148,6 +148,125 @@ yellow, cyan, black) and a bad hex, that a color that already reads is not chang
 further than needed. The focus outline and glow stay in the channel's color, and the guide's sizes and GUIDE TEXT SIZE are
 untouched. The "now line through titles" item was skipped, as asked.
 
+## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
+
+**Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
+channels than the film's own track in the same language, and the pick goes by language, channels and default (#153).
+
+**Changed.** A track whose title holds "commentary", in any case, is dropped from the pool while the file has any
+other audio track, before any language or default step, as the Apple TV's `AudioTrackCommentary.skippingCommentary`
+(Chad on PR #245, stricter than the issue's wording). A file whose every track is a commentary picks among them as
+before. On Jellyfin and Emby the scan marks the track from the stream's `Title` or `DisplayTitle`
+(`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pick from `NxMbSkipCommentary`'s pool.
+That pick is the server stream's `AudioStreamIndex` and the direct play's track. On the player's own list (a Plex
+stream, a direct play that listed fewer tracks than the file has, and AUDIO LANGUAGE in the Now Playing panel)
+`NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name` (`NxListedSkipCommentary`); with only a
+commentary in the language they leave the player's own choice. The exact-language rules are as they were, and a file
+with no commentary picks as before.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose. The Apple TV's cases
+(`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
+
+**Tested off the TV.** 29 new audio pick cases and 5 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**The first cut read "fits" by language** (`c699030`, the build the TV runs below used): a commentary alone in the
+viewer's language was still picked over a film track in another. Chad's rule replaced that, and six cases written
+for the first reading were turned round with it: an English commentary now loses to a Portuguese film track (three
+cases), a German commentary to an English film track, and on the player's list a commentary beside another track is
+never picked (two cases).
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
+`c699030` (the first cut, above), with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
+mono", index 2) beside three English stereo commentaries (3 to 5). Item-linked, the pick read from the console and
+from Jellyfin's ffmpeg log, where the mono is stream 0:1 and the first commentary 0:2. Volume at zero: nothing was
+listened to.
+
+| | main `9b5292a` | `c699030` |
+|---|---|---|
+| Direct play (STREAM QUALITY Auto) | `audio track 3 of 2=eng 3=eng 4=eng 5=eng, was 2`: switched to a commentary | `audio track 2 of 2=eng 3=eng 4=eng 5=eng, was 2`: stays on the film's track |
+| Server stream (STREAM QUALITY High) | ffmpeg `-map 0:0 -map 0:2`: a commentary | ffmpeg `-map 0:0 -map 0:1`: the film's track |
+
+On `c699030` Videodrome (English mono, German stereo, two English stereo commentaries) direct-played on track 2 of
+`2=eng 3=ger 4=eng 5=eng`. It was not run on main. In that library 143 films have a track titled commentary, and by
+the server's track lists main's pick is a commentary on these two.
+
+**Open.** Not run on a TV: a film whose only English track is a commentary, Emby, a Plex stream, and whether a
+Roku's `availableAudioTracks` names a commentary by its title (both direct plays went by position).
+
+## 2026-11-10 (Roku: the Plex link code is waited for as long as plex.tv keeps it, #240)
+
+**Why.** The code on screen gave up after 150 polls, 5 minutes, while plex.tv keeps a code for 15 (`expiresIn: 900`,
+measured for the Apple TV, N-007). A viewer who took longer to reach plex.tv/link entered a code the TV had already
+dropped.
+
+**Changed.** `NxPlexCreatePin` keeps the PIN's `expiresIn`, and the wait goes by the clock (`NxPlexPinWait` in
+`source/mediabrowser/SignInFlow.brs`): a poll every 2 s until `expiresIn` seconds have passed, 300 when plex.tv
+doesn't say and never more than 1,800, as the Apple TV. A 404 from the PIN check still ends it on that poll, and both
+ends show the same "The code expired. Press CONNECT TO PLEX for a new one." A poll that couldn't reach plex.tv is not
+an answer and waits on, as before. Jellyfin's Quick Connect keeps its 150 polls.
+
+**Tested off the TV.** 17 new cases in the sign-in flow suite, the wait run against a faked plex.tv and a faked clock:
+a code entered after 10 minutes signs in, one never entered expires at 900 s, a PIN dropped at 40 s stops the wait on
+that poll with nothing asked after it, no `expiresIn` waits 300 s, a day-long one stops at 1,800 s, and slow polls
+still end by the clock.
+
+**Pressed** on the 43S45 (OS 16.0.4), a test-data build of `dd17385`, signed out, CONNECT TO PLEX, the code left
+unentered:
+- The console said `waiting up to 900 s for the code (plex.tv keeps it 900 s)`.
+- 6 min 4 s in, past where 150 polls gave up, the code was still on screen.
+- 899 s in, plex.tv answered the PIN check 404 and the wait ended on that poll: `the code expired after 899 s
+  (439 polls)`. So on a real code the 404 ended it, a second before the clock would have.
+- The screen did not change then. It showed "The code expired. Press CONNECT TO PLEX for a new one." on the first
+  page 4 min 29 s later, the moment a key was pressed.
+
+**Why the screen waited for a key: the TV's screensaver, by inference.** This TV's screensaver starts 10 minutes
+after the last key (measured afterwards: last key 12:22:47, Roku City up between 12:32:45 and 12:32:54), so it was
+up from about 10 minutes into the wait. The sign-in task went on polling under it (439 polls in 899 s), and its
+answer reached the screen only when the key woke the TV. The screensaver was not looked at during the wait itself.
+So with a 15 minute wait the screensaver covers the code for its last 5 minutes on this TV, which a 5 minute wait
+never reached. The loading screen holds the screensaver off (`LoadingView.xml`); the code screen does not.
+
+**Open.** A code entered late (after 5 minutes) on a TV, a stick, and whether the code screen should hold the
+screensaver off.
+
+## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
+
+**Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with
+`includeHidden=true`, so the Roku scan never read it. The web tuner (1.0.15) and the Apple TV already ask.
+
+**Changed.** `NxMbViewsPath` takes the switch and adds `&includeHidden=true` for Jellyfin only; off, the request is
+byte for byte what it was, and Emby's never changes. The switch is `source/mediabrowser/HiddenLibraries.brs`, off
+unless turned on, in the registry's `player` section. The row INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's
+line, is on SERVERS & ACCOUNTS between the servers and RESCAN LIBRARY, on a Jellyfin sign-in only. A press saves the
+switch and reads the library again in the background, as RESCAN LIBRARY does; while a load runs the row reads
+UPDATING… and a press does nothing, so no load is ever for the other position.
+
+**A library saved with the other position.** Read from the code, not run: if the app closes before the re-read ends,
+the next launch shows the saved guide, and its background refresh scans Jellyfin again (a Jellyfin library is scanned
+on every load) with the switch as it now is.
+
+**Tested off the TV.** The golden file's nine `views` cases are read with its `sections` and `types`. A
+`hidden-libraries` suite, 19 cases: the switch on a stand-in registry, and a scan against a stub that lists two hidden
+libraries only with `includeHidden=true` and never lists a third. On, the hidden films and episodes are scanned; off,
+none is and no hidden library is asked for items; the unlisted library is never asked. With the parameter taken out,
+3 of the 19 and 3 of the golden cases fail.
+
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `b72d36f`, against the lab Jellyfin 12.2.0 as a user
+who hides Shows (4,755 episodes) from the home screen and has no access to Lab Music Videos (4 items):
+- Signed in to the lab Emby first, SERVERS & ACCOUNTS had no such row: the server, RESCAN LIBRARY, SIGN OUT OF EMBY.
+- On Jellyfin the row is between the server and RESCAN LIBRARY and read OFF. The load read 834 items and built a
+  guide of 11 channels (the server counts 836 in the two libraries it listed; the scan kept 834).
+- OK on the row: it read UPDATING…, then ON. The re-read had 5,589 items 17.5 s after the press, 4,755 more, and
+  its guide of 17 channels was handed over 28.7 s after the press with no retune of the channel playing.
+- OK again: OFF, 834 items and the same pools fingerprint as before the switch.
+- Nothing of Lab Music Videos was read in either position: 4,755 is Shows alone.
+
+The row's words and states were read from the node tree (port 8080), not a screenshot.
+
+**Open.** A stick. Not looked at: the row as drawn (no screenshot), a hidden library's title on a channel on screen
+(the counts and the six more channels stand in), the request on the wire, a press while a load runs (ignored, by the
+code), and the app closed before the re-read ends.
+
 ## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
 
 Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.
@@ -286,6 +405,50 @@ produced a bundle; the upload itself has not run, because that needs a CI run on
 for that: (2) remove the skip in `PlexDiscoveryDeadLocalHarnessTests` for one CI run, let it fail, download the artifact,
 read the attached timeline and fix the real cause; (3) then delete `TEST_RUNNER_NOSTALGEX_SKIP_TIMING` from `ci.yml`.
 
+## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
+
+**Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on
+the channel the viewer last tuned, on by default on every platform since Chad's decision of 2026-11-09.
+
+**Changed.** `source/guide/LastChannel.brs` ports `LaunchChannelMemory` and `nostalgex-last-channel.js`: the switch
+(on unless a stored value says otherwise) and the channel's id and name, both in the registry's `player` section.
+`GuideView.viewerTune` saves the channel on OK in the guide, Left and Right in full screen and a mini strip pick,
+with the switch on or off. The first guide of a launch opens on it after a launch deep link and a rebuild's resume,
+when a channel in the guide has the same id and the same name, and on channel one otherwise. PLAYBACK & PICTURE has
+the row after AUDIO LANGUAGE with the Apple TV's line. Sign-out clears the channel and leaves the switch.
+
+**The power-loss start follows it.** `NxSeedChannel` takes the channel a launch opens on, so the seed (#155) holds
+the remembered channel's airings, or channel one's when the switch is off, nothing is remembered or the channel is
+not in the guide. After a channel change or the switch, the library task moves the seed at its next 30 s re-check
+(`followSeed`), not on the key press, so a run of channel changes writes the seed (up to 10 KB of registry) once per
+re-check; closing Settings asks for a re-check too. Read from the code, not run: a remembered channel with no airing
+to save (a WATERSHED hold) leaves the seed it had.
+
+**A deep link is not remembered.** It tunes through `pressTune` like the app's own tunes. The Apple TV has none to
+follow.
+
+**Privacy text.** The Roku paragraph in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` said the power-loss start
+keeps the details "of your first channel"; it now says "of the channel the app opens on". For Chad's review.
+
+**Tested off the TV.** A `last-channel` suite, 69 cases on a stand-in registry: the issue's list, the web smoke's
+match cases and every channel in `channels.json` finding itself, and the seed's channel. `tests/run.sh` ends in ALL
+TESTS PASSED.
+
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `3690863` plus two scratch lines (a launch switch that
+deletes the `cachefs:` files a power loss takes and keeps the registry, as #155's run had, and a timing print),
+signed in to the lab Emby (5,657 items, 17 channels, CH 3 first):
+- With nothing remembered the launch opened on CH 3 and saved CH 3's airings for a cold start.
+- OK on CH 6 in the guide, Home, launch: it opened on CH 6, tuned 1.7 s after the app started (picture 3.2 s later).
+- The seed moved to CH 6 at the next re-check, 5.7 s after that OK.
+- Launched with the files wiped: CH 6 was tuned from the seed (16 airings) 1.1 s after the app started (picture
+  3.6 s later), and the full guide's hand-over 27 s after the tune made no second tune.
+- The row is after AUDIO LANGUAGE and read ON before anyone pressed it. Switched OFF, the seed moved back to CH 3
+  10.6 s later, after Settings closed, and the next launch opened on CH 3.
+- Saving the channel on a tune took 37, 41, 31 and 33 ms on the render thread (four tunes).
+
+**Open.** The TV's power really pulled (the wipe stands in for it), a stick, a Plex library, and the 31 to 41 ms a
+tune now spends on the registry write. Not pressed on a TV: Left and Right in full screen and the mini strip (only OK
+in the guide was), sign-out, a deep link, and a remembered channel that is renamed or gone.
 ## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
 
 **Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
@@ -339,6 +502,37 @@ untouched.
 
 **Left alone, on purpose.** The Apple TV "What the app stores on your device" block, which is about the TV app and stays
 true.
+
+## 2026-11-10 (Docker: one lineup held by the container, I-080; branch web/docker-settings-1110)
+
+**Built, not pushed, not run in nginx.** Chad chose option 1 for I-080 (a Docker user on a Raspberry Pi had to turn the same
+packages on in every browser): one global lineup, last write wins, display preferences and the sign-in stay per browser, the
+hosted site unchanged. The container now holds `nostalgex-settings.json` in a `/data` volume. nginx serves it and takes a PUT of
+it with its WebDAV module, so there is no backend; `docker/40-config.sh` writes the location into `/tmp/nostalgex/settings.conf`
+only when `nginx -V` lists `--with-http_dav_module` (and `NOSTALGEX_SHARED_SETTINGS` is not off), and `docker/nginx.conf`
+includes that folder by glob. A missing module therefore leaves no location rather than an nginx that will not start. The page
+side is `scripts/nostalgex-server-settings.js`: it runs only when the page carries the selfhost marker, reads the file once
+with a synchronous request before the page's script (the page reads its packages from localStorage in its first lines), and
+sends the six shared keys back after the first tap or key press of a visit and a settled 1.5 s. It never sends anything outside
+those keys, drops any value that contains this browser's own token, and ignores anything outside them in what it reads. A read
+that failed (500, a newer file) turns writing off for the visit, three refused writes in a row do too, and a missing file, an
+image without the feature, no volume, or a read-only one all leave the page exactly as it was.
+
+**Measured.** `npm run test:server-settings` (84 checks, including the real entrypoint script run against a stand-in `nginx -V`
+with and without the module, with the feature off, and with a typo) and `npm run test:shared-lineup` (55 checks, headless, the
+real `vite build --mode selfhost` output at 960x540 and on a phone, against a stand-in container: read, a change sent once with
+no token, login or display preference in it, a third browser starting from it, nothing saved yet, an image without the
+feature, a failed read, a newer file, a refused PUT, the hosted page never asking for the file, and the page with the module
+removed as the negative control).
+
+**Not run.** nginx and Docker. Whether `nginxinc/nginx-unprivileged:1.30-alpine` has the WebDAV module is expected (nginx.org's
+packages build with it) but not confirmed; the `docker-smoke` job in `ci.yml` now does the real round trip with curl (a
+volume on `/data`, a PUT, the file back, still there after a restart, a DELETE refused, no volume refused, feature off) and
+runs on a pull request, not on a push to main. The synchronous read is one request to the same nginx that just served the page;
+it has no timeout of its own, since a synchronous request cannot be given one.
+
+**Behaviour to know.** The first browser to make a change after the container gains the feature becomes the shared lineup,
+whatever the other browsers held. Not shared, and not decided: per-user lineups.
 
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 

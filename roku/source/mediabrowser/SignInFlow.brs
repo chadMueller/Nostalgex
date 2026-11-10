@@ -287,14 +287,62 @@ end function
 ' Polling as upstream's startJellyfinQuickConnect: every 2 s, up to 150 polls
 ' (5 minutes). A poll that fails is not an answer, so it waits on; past the
 ' last poll the code has expired. attempt counts from 1; approved is true,
-' false or invalid. Plex's plex.tv/link code polls the same way
-' (PlexSignInTask), with a token for true.
+' false or invalid. Plex's plex.tv/link code waits by the clock instead
+' (NxPlexPinWait, below).
 function NxSignInQuickConnectStep(attempt as Integer, approved as Dynamic) as String
     if attempt > 150 then return "expired"
     if NxSignInIsBool(approved) then
         if approved then return "approved"
     end if
     return "waiting"
+end function
+
+' ── The plex.tv/link code's wait (#240) ─────────────────────────────────────
+
+' How long a plex.tv/link code is waited for, in seconds: as long as plex.tv
+' keeps it (the PIN's expiresIn, 900 on 2026-11-09), where a count of 150
+' polls gave up after 5 minutes. 300 when plex.tv doesn't say, and never more
+' than 1,800, as the Apple TV's wait.
+function NxPlexPinWaitSeconds(expiresIn as Dynamic) as Integer
+    if not NxIsNumber(expiresIn) then return 300
+    if expiresIn <= 0 then return 300
+    if expiresIn > 1800 then return 1800
+    return Int(expiresIn)
+end function
+
+' One poll's answer, `elapsed` seconds after the code went up: `got` is
+' NxPlexCheckPin's, a token, "" while plex.tv still waits (or couldn't be
+' reached: not an answer, so it waits on), or invalid when plex.tv says the
+' PIN is gone (404, error 1020), which ends the wait at once. A token counts
+' even on the last poll.
+function NxPlexPinStep(elapsed as Integer, waitSeconds as Integer, got as Dynamic) as String
+    if got = invalid then return "expired"
+    if NxIsString(got) then
+        if got <> "" then return "approved"
+    end if
+    if elapsed >= waitSeconds then return "expired"
+    return "waiting"
+end function
+
+' Waits for the code to be entered at plex.tv/link: a poll every 2 s, as
+' upstream does, until NxPlexPinStep says otherwise. `plex` is what the wait
+' reads the PIN through (checkPin(id)) and `clock` what it waits on
+' (seconds(), sleep(ms)), so the tests run it against a faked plex.tv and a
+' faked clock. Returns { token, polls, elapsed }; token is "" when the code
+' expired.
+function NxPlexPinWait(pin as Object, plex as Object, clock as Object) as Object
+    waitSeconds = NxPlexPinWaitSeconds(pin.expiresIn)
+    polls = 0
+    while true
+        clock.sleep(2000)
+        polls = polls + 1
+        got = plex.checkPin(pin.id)
+        elapsed = clock.seconds()
+        action = NxPlexPinStep(elapsed, waitSeconds, got)
+        if action = "approved" then return { token: got, polls: polls, elapsed: elapsed }
+        if action = "expired" then return { token: "", polls: polls, elapsed: elapsed }
+    end while
+    return { token: "", polls: polls, elapsed: 0 }
 end function
 
 ' ── Finishing a sign-in ─────────────────────────────────────────────────────

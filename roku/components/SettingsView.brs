@@ -239,6 +239,8 @@ sub buildRows()
     ' SUBTITLE LANGUAGE only while subtitles can show, as upstream's.
     if m.subs.always or m.subs.foreign then pushLanguage("subsLanguage")
     pushLanguage("audioLanguage")
+    ' OPEN ON LAST CHANNEL (#230), after AUDIO LANGUAGE as on the Apple TV.
+    add({ kind: "lastChannel" })
     ' Upstream's two reporting switches, both off by default (issue #72,
     ' source/guide/PlaybackReport.brs), under WATCH HISTORY as on the Apple TV.
     add({ kind: "header", title: "WATCH HISTORY", subtitle: "What " + NxKindName(NxSignedInKind()) + " is told about what you watch" }, "playback")
@@ -291,6 +293,9 @@ sub buildRows()
     for i = 0 to m.servers.Count() - 1
         add({ kind: "server", index: i })
     end for
+    ' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231), with the servers, where the
+    ' Apple TV lists its libraries. On a Jellyfin sign-in only.
+    if NxSignedInKind() = "jellyfin" then add({ kind: "includeHidden" })
     ' Upstream's RESCAN LIBRARY, after the servers.
     add({ kind: "rescan" })
     add({ kind: "signOut" })
@@ -487,7 +492,7 @@ function rowHeight(row as Object) as Integer
         return 74 + 26 * n
     end if
     ' Upstream's subtitle in two lines.
-    if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" then return 100
+    if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" or row.kind = "includeHidden" then return 100
     return 74
 end function
 
@@ -925,6 +930,28 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "includeHidden" then
+        ' The web tuner's row and line (plex-tuner.html).
+        label = "INCLUDE LIBRARIES HIDDEN ON JELLYFIN"
+        detail = "Jellyfin lets you hide a library from your home screen."
+        extra = ["Off keeps those out of your channels."]
+        state = "OFF"
+        stateColor = "0xFFFFFF59"
+        if NxIncludeHidden(NxHiddenLibrariesRegistry()) then
+            state = "ON"
+            stateColor = m.accent + "FF"
+        end if
+        ' The library is read again after a press; no second press meanwhile.
+        if m.top.rescanning then state = "UPDATING…"
+    else if row.kind = "lastChannel" then
+        label = "OPEN ON LAST CHANNEL"
+        detail = "Start on the channel you were last watching"
+        state = "OFF"
+        stateColor = "0xFFFFFF59"
+        if NxLastChannelOn(NxLastChannelRegistry()) then
+            state = "ON"
+            stateColor = m.accent + "FF"
+        end if
     else if row.kind = "watershed" then
         label = "WATERSHED"
         detail = "18 and R-rated titles wait until 9 PM"
@@ -1258,6 +1285,17 @@ sub pressRow()
         end if
     else if row.kind = "rescan" then
         if not m.top.rescanning then m.top.rescan = true
+    else if row.kind = "includeHidden" then
+        ' Saved, then the library is read again in the background, as RESCAN
+        ' LIBRARY does: the scan reads the switch (NxScanServerFor). A press
+        ' while a load runs does nothing, as on RESCAN LIBRARY, so the load on
+        ' its way is never for the other position.
+        if not m.top.rescanning then
+            NxSaveIncludeHidden(NxHiddenLibrariesRegistry(), not NxIncludeHidden(NxHiddenLibrariesRegistry()))
+            print "settings: include libraries hidden on Jellyfin "; NxIncludeHidden(NxHiddenLibrariesRegistry())
+            render()
+            m.top.rescan = true
+        end if
     else if row.kind = "reportNowPlaying" then
         m.report.nowPlaying = not (m.report.nowPlaying = true)
         NxSaveReportPrefs(m.report)
@@ -1270,6 +1308,12 @@ sub pressRow()
         render()
     else if row.kind = "retro" then
         NxSaveRetroMode(not NxRetroMode())
+        render()
+    else if row.kind = "lastChannel" then
+        ' The library task reads it on its next re-check too, for the
+        ' cold-start seed's channel (LibraryTask.followSeed).
+        NxSaveLastChannelOn(NxLastChannelRegistry(), not NxLastChannelOn(NxLastChannelRegistry()))
+        print "settings: open on last channel "; NxLastChannelOn(NxLastChannelRegistry())
         render()
     else if row.kind = "watershed" then
         ' The library task reads it on its next re-check, which closing

@@ -157,3 +157,12 @@ end sub
 function NxScanSkips() as Integer
     return NxNumberOr0(GetGlobalAA().nxScanSkipped)
 end function
+
+' Whether an audio track's title names a commentary (#236): "commentary"
+' anywhere in it, in any case, so "Director's Commentary" too. The picks drop
+' such a track while the file has another (NxMbSkipCommentary,
+' NxListedSkipCommentary).
+function NxIsCommentaryTitle(title as Dynamic) as Boolean
+    if not NxIsString(title) then return false
+    return Instr(1, LCase(title), "commentary") > 0
+end function

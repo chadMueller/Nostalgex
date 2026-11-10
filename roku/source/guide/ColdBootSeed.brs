@@ -22,9 +22,13 @@ function NxSeedBudget() as Integer
 end function
 
 ' The channel the seed holds: the one a launch tunes (GuideView.onGuide
-' presses channel one when no deep link or rebuild names another).
-function NxSeedChannel(channels as Dynamic) as Dynamic
+' presses it when no deep link or rebuild names another). `open` is
+' NxChannelToOpen's answer (source/guide/LastChannel.brs, #230): the channel
+' the viewer last tuned while OPEN ON LAST CHANNEL is on and it is still in
+' the guide, else -1 and the seed holds channel one, as a launch opens on it.
+function NxSeedChannel(channels as Dynamic, open = -1 as Integer) as Dynamic
     if type(channels) <> "roArray" or channels.Count() = 0 then return invalid
+    if open >= 0 and open < channels.Count() then return channels[open]
     return channels[0]
 end function
 

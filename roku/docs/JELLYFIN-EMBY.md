@@ -45,6 +45,14 @@ code path.
 
 - The libraries come from `/UserViews?userId=` on Jellyfin and
   `/Users/{id}/Views` on Emby. Emby answers 404 to the first.
+  With INCLUDE LIBRARIES HIDDEN ON JELLYFIN on (#231, SERVERS & ACCOUNTS, off
+  by default, `source/mediabrowser/HiddenLibraries.brs`), Jellyfin's request
+  ends `&includeHidden=true` and lists the libraries the user hides from the
+  home screen; a library the user has no access to is in neither answer.
+  Emby's request is the same either way. Pressed on the 55R617
+  (2026-11-10) against the lab Jellyfin 12.2.0, a user hiding Shows: 834
+  items off, 5,589 on, 834 off again; a library the user can't open was read
+  in neither.
 - Items: `GET /Items?userId=&ParentId=&Recursive=true&IncludeItemTypes=` with
   the `Fields` list (`ProviderIds,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`),
   in pages of 200. A library of type `musicvideos` is asked for
@@ -367,7 +375,19 @@ channels first, then the default, then the first (`NxMbPreferredAudioIndex`
 in `MediaBrowserPlayback.brs`). Since #62 the language is Settings > AUDIO
 LANGUAGE, the TV's until chosen, and a track in it comes before English
 (`NxMbChosenAudioIndex`): a German viewer gets the German stereo track over
-an English 5.1 one, where upstream's order, which wants both, takes the 5.1. The scan keeps those files' tracks
+an English 5.1 one, where upstream's order, which wants both, takes the 5.1.
+A track the server titles a commentary ("commentary" anywhere in its Title or
+DisplayTitle, any case) is dropped before any of those steps while the file
+has another audio track (`NxMbSkipCommentary`, as the Apple TV's
+`skippingCommentary`; #236, from #153: a commentary marked default, or with
+more channels than the film's track, was picked). So a German viewer's film
+with a German commentary and an English film track plays the English track.
+A file of commentaries alone picks among them. The player-side picks do the
+same by the track's Name (`NxAudioTrackForLanguage`, which a Plex stream goes
+by, and `NxAudioTrackToSelect`'s short list). On the 43S45 (2026-11-10, lab Jellyfin
+12.2.0) The Hills Have Eyes (1977), English mono beside three English stereo
+commentaries, played a commentary on main on both a direct play and a server
+stream, and the film's track with this. The scan keeps those files' tracks
 (`NxMbAudioTracks`; one-track files keep nothing extra). The server stream
 asks for the pick with `AudioStreamIndex`, and direct play is decided on the
 picked track's codec, so an English Opus track behind a dubbed AAC default

@@ -476,15 +476,16 @@ end function
 
 ' ── plex.tv ─────────────────────────────────────────────────────────────────
 
-' A new link PIN: { id, code } or invalid.
-' A new plex.tv/link PIN as { id, code }, or invalid. out, when given, gets
-' the request's code (an HTTP status, or curl's when nothing answered).
+' A new plex.tv/link PIN as { id, code, expiresIn }, or invalid. expiresIn is
+' how many seconds plex.tv keeps the code (900 on 2026-11-09, #240), invalid
+' when it doesn't say. out, when given, gets the request's code (an HTTP
+' status, or curl's when nothing answered).
 function NxPlexCreatePin(out = invalid as Dynamic) as Dynamic
     res = NxHttp("POST", "https://plex.tv/api/v2/pins", NxPlexHeaders(""))
     if out <> invalid then out.code = res.code
     if res.code < 200 or res.code > 299 or type(res.json) <> "roAssociativeArray" then return invalid
     if res.json.id = invalid or res.json.code = invalid then return invalid
-    return { id: res.json.id, code: UCase(res.json.code) }
+    return { id: res.json.id, code: UCase(res.json.code), expiresIn: res.json.expiresIn }
 end function
 
 ' The PIN's token once the user has entered the code at plex.tv/link: a

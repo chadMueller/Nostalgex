@@ -12,9 +12,21 @@ services:
       #     Only TMDB and IMDb ids leave your network, to the shared cache and the
       #     nostalgex.app relay. off: no outside requests except plex.tv for Plex sign-in.
       NOSTALGEX_ENRICHMENT: "on"
+      # on: one lineup for every browser. Which packages are on, the channel settings,
+      #     collections and franchises are kept in the /data volume below, so a new browser
+      #     or device starts ready. Display choices (guide layout, language, retro mode)
+      #     and your sign-in stay in each browser. off: every browser keeps its own.
+      NOSTALGEX_SHARED_SETTINGS: "on"
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      # The shared lineup. A named volume works as is. For a folder on the host instead
+      # (./nostalgex-data:/data) run `chown 101:101 nostalgex-data` first.
+      - nostalgex-data:/data
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+
+volumes:
+  nostalgex-data:
