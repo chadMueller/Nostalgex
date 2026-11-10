@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: THEME, four retro looks for the guide and the Now Playing panel)
+
+**Why.** A request for the guide to look like the cable and satellite guides people remember. Four themes, loose nods
+to late-90s and 2000s guides, built only from fonts tvOS ships and with no logos or brand art.
+
+**Changed.** New PLAYBACK & PICTURE row THEME: NOSTALGEX (default), SATELLITE, CABLE BOX, 1998, Y2K, per Apple TV and
+never synced. `GuideTheme` holds optional colors, fonts, a text shadow and a cell gap; a nil field draws the original
+way, and NOSTALGEX sets none, so the default guide runs the same code it did before. Themed: the guide grid (header,
+channel column, boxed program cells, a selected-cell color in place of the channel-color outline, the now-line), the
+info panel and its backdrop, the SETTINGS label, and the Now Playing panel. Not themed: Settings, the connect screen,
+the fullscreen channel bug, the video.
+
+**Tested.** `GuideThemeTests` (default, cycle, NOSTALGEX overrides nothing, every named font exists on tvOS).
+`NostalgexTests`, `ChannelGuideWrapFocusTests`, `NowPlayingPanelFocusTests` and the OPEN ON LAST CHANNEL UI tests pass.
+Each theme was screenshotted in demo mode on the guide, a focused row and the Now Playing panel. Not tried on a real
+Apple TV, and not against long real-library titles.
+
 ## 2026-11-09 (Roku: RETRO MODE no longer draws the tracking line)
 
 **Why.** Chad's decision, from viewer feedback: the white tracking (drift) line that rolled through the picture in

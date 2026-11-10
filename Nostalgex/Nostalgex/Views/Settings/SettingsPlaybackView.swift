@@ -28,6 +28,20 @@ struct SettingsPlaybackView: View {
             }
             .settingsRow("retro", focus: focus)
 
+            // NOSTALGEX, SATELLITE, CABLE BOX, 1998, Y2K; select moves to the next.
+            SettingsToggleRow(
+                title: "THEME",
+                subtitle: "Colors and type for the guide and the Now Playing panel",
+                detail: appState.guideTheme.label,
+                isOn: true,
+                isFocused: isFocused("guide_theme"),
+                showToggle: false
+            ) {
+                appState.guideTheme = appState.guideTheme.next
+            }
+            .settingsRow("guide_theme", focus: focus)
+            .accessibilityValue(appState.guideTheme.label)
+
             // Two built-in sizes, NORMAL and LARGE; select switches between them.
             SettingsToggleRow(
                 title: "GUIDE TEXT SIZE",

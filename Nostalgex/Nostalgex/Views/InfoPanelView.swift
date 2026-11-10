@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct InfoPanelView: View {
+    @Environment(AppState.self) private var appState
     let channel: Channel
     let schedule: ChannelSchedule
     /// When showing the active channel, pass the actual playing item so the title
@@ -10,19 +11,26 @@ struct InfoPanelView: View {
 
     // MARK: - Typography
 
-    private enum Typo {
+    /// The panel's type, through THEME. NOSTALGEX gives back these exact faces and sizes.
+    private struct Typo {
+        let theme: GuideTheme
         // VT323 accent font -- retro CRT vibe for labels, badges, timestamps
-        static let channelTag   = Font.custom("VT323-Regular", size: 36)
-        static let metaBadge    = Font.custom("VT323-Regular", size: 24)
-        static let progressTime = Font.custom("VT323-Regular", size: 24)
-        static let upNextLabel  = Font.custom("VT323-Regular", size: 24)
+        var channelTag: Font   { theme.font("VT323-Regular", size: 36) }
+        var metaBadge: Font    { theme.font("VT323-Regular", size: 24) }
+        var progressTime: Font { theme.font("VT323-Regular", size: 24) }
+        var upNextLabel: Font  { theme.font("VT323-Regular", size: 24) }
 
         // DM Mono -- clean readability for titles and body
-        static let title        = Font.custom("DMMono-Medium", size: 38)
-        static let episode      = Font.custom("DMMono-Regular", size: 22)
-        static let description  = Font.custom("DMMono-Regular", size: 20)
-        static let upNextTitle  = Font.custom("DMMono-Regular", size: 18)
+        var title: Font        { theme.font("DMMono-Medium", size: 38) }
+        var episode: Font      { theme.font("DMMono-Regular", size: 22) }
+        var description: Font  { theme.font("DMMono-Regular", size: 20) }
+        var upNextTitle: Font  { theme.font("DMMono-Regular", size: 18) }
     }
+
+    private var theme: GuideTheme { appState.guideTheme }
+    private var typo: Typo { Typo(theme: theme) }
+    private var accent: Color { theme.accent(for: channel) }
+    private var body_: Color { theme.infoBody ?? .white }
 
     // MARK: - Spacing
 
@@ -38,9 +46,10 @@ struct InfoPanelView: View {
 
             // Channel tag
             Text("CH \(String(format: "%02d", channel.number)) \u{2014} \(channel.name.uppercased())")
-                .font(Typo.channelTag)
+                .font(typo.channelTag)
                 .tracking(2)
-                .foregroundStyle(channel.color)
+                .foregroundStyle(accent)
+                .themeTextShadow(theme.textShadow)
                 .padding(.bottom, Spacing.sectionGap)
 
             if let now = schedule.nowPlaying {
@@ -50,24 +59,25 @@ struct InfoPanelView: View {
 
                 // Title (+ artist for music videos)
                 Text(displayItem.title)
-                    .font(Typo.title)
-                    .foregroundStyle(.white)
+                    .font(typo.title)
+                    .foregroundStyle(theme.infoTitle ?? .white)
+                    .themeTextShadow(theme.textShadow)
                     .lineLimit(2)
                     .lineSpacing(2)
                     .padding(.bottom, Spacing.innerGap)
 
                 if let artist = displayItem.artist, !artist.isEmpty {
                     Text(artist)
-                        .font(Typo.episode)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(typo.episode)
+                        .foregroundStyle(body_.opacity(0.7))
                         .lineLimit(1)
                         .padding(.bottom, Spacing.innerGap)
                 }
 
                 if let genres = displayItem.musicGenreDisplay {
                     Text(genres)
-                        .font(Typo.episode)
-                        .foregroundStyle(channel.color.opacity(0.75))
+                        .font(typo.episode)
+                        .foregroundStyle(accent.opacity(0.75))
                         .lineLimit(2)
                         .padding(.bottom, Spacing.innerGap)
                 }
@@ -79,8 +89,8 @@ struct InfoPanelView: View {
                         .joined(separator: "  ")
                     if !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(Typo.episode)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .font(typo.episode)
+                            .foregroundStyle(body_.opacity(0.7))
                             .lineLimit(1)
                             .padding(.bottom, Spacing.innerGap)
                     }
@@ -88,15 +98,15 @@ struct InfoPanelView: View {
 
                 // Divider
                 Rectangle()
-                    .fill(channel.color.opacity(0.3))
+                    .fill(accent.opacity(0.3))
                     .frame(height: 1)
                     .padding(.bottom, Spacing.sectionGap)
 
                 // Description (reserve up to 2 lines so layout doesn't collapse to one)
                 if !displayItem.summary.isEmpty {
                     Text(displayItem.summary)
-                        .font(Typo.description)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(typo.description)
+                        .foregroundStyle(body_.opacity(0.65))
                         .lineSpacing(4)
                         .lineLimit(2)
                         .truncationMode(.tail)
@@ -113,12 +123,12 @@ struct InfoPanelView: View {
                 if let next = schedule.upNext {
                     HStack(spacing: 10) {
                         Text("UP NEXT")
-                            .font(Typo.upNextLabel)
+                            .font(typo.upNextLabel)
                             .tracking(3)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(body_.opacity(0.5))
                         Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                            .font(Typo.upNextTitle)
-                            .foregroundStyle(.white.opacity(0.75))
+                            .font(typo.upNextTitle)
+                            .foregroundStyle(body_.opacity(0.75))
                             .lineLimit(1)
                     }
                 }
@@ -129,7 +139,7 @@ struct InfoPanelView: View {
         .padding(Spacing.panelPadding)
         .background(
             LinearGradient(
-                colors: [
+                colors: theme.infoBackground ?? [
                     Color(red: 0.04, green: 0.04, blue: 0.10),
                     Color(red: 0.05, green: 0.05, blue: 0.12)
                 ],
@@ -154,9 +164,9 @@ struct InfoPanelView: View {
                     Text("\u{2605}")
                         .foregroundStyle(Color(hex: "#FFE500"))
                     Text(String(format: "%.1f", item.rating))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(body_.opacity(0.6))
                 }
-                .font(Typo.metaBadge)
+                .font(typo.metaBadge)
             }
 
             // Inline progress bar + time (wall clock, updates every second)
@@ -173,7 +183,7 @@ struct InfoPanelView: View {
                                 .fill(.white.opacity(0.08))
                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                             Rectangle()
-                                .fill(channel.color)
+                                .fill(accent)
                                 .frame(width: geo.size.width * progress)
                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                         }
@@ -181,8 +191,8 @@ struct InfoPanelView: View {
                     .frame(height: 4)
 
                     Text("\(formatTime(elapsed)) / \(formatTime(total))")
-                        .font(Typo.progressTime)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .font(typo.progressTime)
+                        .foregroundStyle(body_.opacity(0.55))
                 }
             }
         }
@@ -190,8 +200,8 @@ struct InfoPanelView: View {
 
     private func metaBadge(_ text: String) -> some View {
         Text(text)
-            .font(Typo.metaBadge)
-            .foregroundStyle(.white.opacity(0.7))
+            .font(typo.metaBadge)
+            .foregroundStyle(body_.opacity(0.7))
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
             .overlay(

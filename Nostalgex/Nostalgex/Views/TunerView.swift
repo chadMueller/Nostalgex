@@ -46,7 +46,7 @@ struct TunerView: View {
                         .frame(width: panelWidth)
                         .background(
                             LinearGradient(
-                                colors: [
+                                colors: appState.guideTheme.infoBackground ?? [
                                     Color(red: 0.04, green: 0.04, blue: 0.10),
                                     Color(red: 0.05, green: 0.05, blue: 0.12)
                                 ],
@@ -225,6 +225,7 @@ private struct NavBar: View {
 }
 
 private struct NavItem: View {
+    @Environment(AppState.self) private var appState
     let label: String
     var isActive: Bool = false
     var action: (() -> Void)? = nil
@@ -235,9 +236,11 @@ private struct NavItem: View {
             action?()
         } label: {
             Text(label)
-                .font(.custom("DMMono-Medium", size: 24))
+                .font(appState.guideTheme.font("DMMono-Medium", size: 24))
                 .foregroundStyle(
-                    isFocused ? Color(hex: "#FFE500") : .white.opacity(0.5)
+                    isFocused
+                        ? (appState.guideTheme.navFocused ?? Color(hex: "#FFE500"))
+                        : (appState.guideTheme.navText ?? .white.opacity(0.5))
                 )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

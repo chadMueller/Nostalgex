@@ -110,6 +110,11 @@ struct NowPlayingPanel: View {
     /// AUDIO)", without truncating its value.
     private let controlColumnWidth: CGFloat = 420
 
+    /// THEME. NOSTALGEX sets nothing, so every `??` falls back to the original look.
+    private var theme: GuideTheme { appState.guideTheme }
+    private var accent: Color { theme.panelAccent ?? theme.accent(for: channel) }
+    private var ink: Color { theme.panelText ?? .white }
+
     private var schedule: ChannelSchedule? {
         ChannelScheduleBuilder.buildSchedule(
             for: channel,
@@ -129,7 +134,7 @@ struct NowPlayingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.black.opacity(0.92), .clear],
+                colors: theme.panelBackground ?? [.black.opacity(0.92), .clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -177,36 +182,36 @@ struct NowPlayingPanel: View {
 
             VStack(alignment: .leading, spacing: 8) {
             Rectangle()
-                .fill(channel.color)
+                .fill(accent)
                 .frame(width: 48, height: 4)
 
             Text("CH \(channel.number)")
-                .font(.custom("DMMono-Medium", size: 23))
-                .foregroundStyle(channel.color)
+                .font(theme.font("DMMono-Medium", size: 23))
+                .foregroundStyle(accent)
 
             // Title leads as the big headline, channel name follows smaller below it
             // (Discord feedback, 2026-10-29: viewers read this as "what's
             // playing", so the title should dominate and the channel is secondary).
             Text(nowPlayingLine)
-                .font(.custom("DMMono-Medium", size: 30))
-                .foregroundStyle(.white)
+                .font(theme.font("DMMono-Medium", size: 30))
+                .foregroundStyle(ink)
                 .lineLimit(2)
 
             Text(channel.name)
-                .font(.custom("DMMono-Regular", size: 25))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(theme.font("DMMono-Regular", size: 25))
+                .foregroundStyle(ink.opacity(0.9))
                 .lineLimit(1)
 
             if let rating = item.contentRating, !rating.isEmpty {
                 Text(rating.uppercased())
-                    .font(.custom("DMMono-Regular", size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(theme.font("DMMono-Regular", size: 18))
+                    .foregroundStyle(ink.opacity(0.7))
             }
 
             if let next = schedule?.upNext?.item {
                 Text("UP NEXT: \(next.isMusicVideo ? next.musicDisplayLine : next.title)")
-                    .font(.custom("DMMono-Regular", size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(theme.font("DMMono-Regular", size: 18))
+                    .foregroundStyle(ink.opacity(0.7))
                     .lineLimit(1)
                     .padding(.top, 4)
             }
@@ -553,8 +558,8 @@ struct NowPlayingPanel: View {
             controlHeader(pickerTitle(picker))
 
             Text(pickerSubtitle(picker))
-                .font(.custom("DMMono-Regular", size: 17))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(theme.font("DMMono-Regular", size: 17))
+                .foregroundStyle(ink.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 2)
 
@@ -585,18 +590,18 @@ struct NowPlayingPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if appState.playbackInformationRows.isEmpty {
                         Text("Playback information is unavailable.")
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(theme.font("DMMono-Regular", size: 20))
+                            .foregroundStyle(ink.opacity(0.8))
                     } else {
                         ForEach(appState.playbackInformationRows) { row in
                             HStack(alignment: .top, spacing: 16) {
                                 Text(row.label)
-                                    .font(.custom("DMMono-Medium", size: 17))
-                                    .foregroundStyle(.white.opacity(0.6))
+                                    .font(theme.font("DMMono-Medium", size: 17))
+                                    .foregroundStyle(ink.opacity(0.6))
                                     .frame(width: 220, alignment: .leading)
                                 Text(row.value)
-                                    .font(.custom("DMMono-Regular", size: 21))
-                                    .foregroundStyle(.white)
+                                    .font(theme.font("DMMono-Regular", size: 21))
+                                    .foregroundStyle(ink)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .accessibilityElement(children: .combine)
@@ -735,8 +740,8 @@ struct NowPlayingPanel: View {
 
     private func controlHeader(_ text: String) -> some View {
         Text(text)
-            .font(.custom("DMMono-Medium", size: 16))
-            .foregroundStyle(.white.opacity(0.6))
+            .font(theme.font("DMMono-Medium", size: 16))
+            .foregroundStyle(ink.opacity(0.6))
             .tracking(1.5)
     }
 
@@ -750,17 +755,21 @@ struct NowPlayingPanel: View {
         disabled: Bool,
         note: String? = nil
     ) -> some View {
-        let fill: Color = isFocused ? Color(red: 0.05, green: 0.05, blue: 0.07) : Color.white.opacity(0.14)
+        let fill: Color = isFocused
+            ? (theme.panelRowFocused ?? Color(red: 0.05, green: 0.05, blue: 0.07))
+            : (theme.panelRow ?? Color.white.opacity(0.14))
         let border: Color = isFocused
-            ? channel.color
-            : isActive ? channel.color.opacity(0.5) : Color.white.opacity(0.22)
+            ? (theme.panelFocusBorder ?? channel.color)
+            : isActive ? accent.opacity(0.5) : Color.white.opacity(0.22)
         let labelOpacity: Double = disabled ? 0.35 : 1.0
+        // A theme with a bright focused fill needs dark text on it.
+        let rowInk: Color = isFocused ? (theme.focusedCellText ?? ink) : ink
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
-                    .font(.custom("DMMono-Medium", size: 20))
-                    .foregroundStyle(.white.opacity(labelOpacity))
+                    .font(theme.font("DMMono-Medium", size: 20))
+                    .foregroundStyle(rowInk.opacity(labelOpacity))
                     .lineLimit(1)
                     // The longest titles ("AUTO SUBTITLES (FOREIGN AUDIO)") only just fit;
                     // shrink rather than truncate if a localized value runs longer.
@@ -768,16 +777,16 @@ struct NowPlayingPanel: View {
                 Spacer()
                 if let value {
                     Text(value)
-                        .font(.custom("DMMono-Regular", size: 18))
-                        .foregroundStyle(isActive ? channel.color : .white.opacity(0.75))
+                        .font(theme.font("DMMono-Regular", size: 18))
+                        .foregroundStyle(isActive ? accent : rowInk.opacity(0.75))
                         .lineLimit(1)
                 }
             }
 
             if let note {
                 Text(note)
-                    .font(.custom("DMMono-Regular", size: 16))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(theme.font("DMMono-Regular", size: 16))
+                    .foregroundStyle(rowInk.opacity(0.6))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }

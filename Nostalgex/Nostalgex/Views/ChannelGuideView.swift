@@ -50,7 +50,7 @@ struct ChannelGuideView: View {
 
                     // Divider under header
                     Rectangle()
-                        .fill(Color.white.opacity(0.25))
+                        .fill(appState.guideTheme.gridBackground ?? Color.white.opacity(0.25))
                         .frame(height: 1)
 
                     // Channel rows
@@ -93,6 +93,7 @@ struct ChannelGuideView: View {
                                             schedule: schedules[channel.id],
                                             isFocused: focusedChannelID == channel.id,
                                             isEvenRow: index % 2 == 0,
+                                            rowIndex: index,
                                             channelColumnWidth: channelColumnWidth,
                                             programsWidth: programsWidth,
                                             visibleWindowStart: visibleStart,
@@ -199,7 +200,7 @@ struct ChannelGuideView: View {
                 if nowFraction >= 0 && nowFraction <= 1 {
                     let nowX = channelColumnWidth + (nowFraction * (geo.size.width - channelColumnWidth))
                     Rectangle()
-                        .fill(Color("BrandCyan"))
+                        .fill(appState.guideTheme.nowLine ?? Color("BrandCyan"))
                         .frame(width: 2)
                         .offset(x: nowX)
                         .allowsHitTesting(false)
@@ -352,28 +353,31 @@ struct ChannelGuideView: View {
 
     private func gridHeader(labels: [String], programsWidth: CGFloat) -> some View {
         let text = appState.guideTextSize.metrics
+        let theme = appState.guideTheme
         return HStack(spacing: 0) {
             Text("CHANNEL")
-                .font(.custom("DMMono-Medium", size: text.channelHeading))
-                .foregroundStyle(Color.white.opacity(0.7))
+                .font(theme.font("DMMono-Medium", size: text.channelHeading))
+                .foregroundStyle(theme.headerText ?? Color.white.opacity(0.7))
+                .themeTextShadow(theme.textShadow)
                 .frame(width: channelColumnWidth, alignment: .leading)
                 .padding(.leading, 12)
 
             ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
                 Text(label)
-                    .font(.custom("DMMono-Medium", size: text.timeLabel))
-                    .foregroundStyle(Color.white.opacity(0.95))
+                    .font(theme.font("DMMono-Medium", size: text.timeLabel))
+                    .foregroundStyle(theme.headerText ?? Color.white.opacity(0.95))
+                    .themeTextShadow(theme.textShadow)
                     .frame(width: programsWidth / 4, alignment: .leading)
                     .padding(.leading, 14)
                     .overlay(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 1)
+                            .fill(theme.gridBackground ?? Color.white.opacity(0.2))
+                            .frame(width: theme.cellGap > 0 ? theme.cellGap : 1)
                     }
             }
         }
         .frame(height: headerHeight)
-        .background(Color(red: 0.04, green: 0.04, blue: 0.08))
+        .background(theme.headerBackground ?? Color(red: 0.04, green: 0.04, blue: 0.08))
     }
 }
 
@@ -385,6 +389,7 @@ private struct EPGRow: View {
     let schedule: ChannelSchedule?
     let isFocused: Bool
     let isEvenRow: Bool
+    var rowIndex: Int = 0
     let channelColumnWidth: CGFloat
     let programsWidth: CGFloat
     let visibleWindowStart: Date
@@ -395,8 +400,13 @@ private struct EPGRow: View {
 
     /// GUIDE TEXT SIZE. NORMAL is the sizes this row always drew.
     private var text: GuideTextMetrics { appState.guideTextSize.metrics }
+    /// THEME. NOSTALGEX sets nothing, so every `??` below falls back to the original look.
+    private var theme: GuideTheme { appState.guideTheme }
+    /// A theme with its own cell colors draws boxed cells instead of channel-color tints.
+    private var boxed: Bool { theme.cellColors != nil }
     /// Background for alternating rows
     private var rowBackground: Color {
+        if boxed { return theme.gridBackground ?? .clear }
         if isFocused {
             // The focused row must read from the couch at a glance. A 15% tint of the
             // channel colour disappeared on a bright TV; a third-strength fill plus the
@@ -413,7 +423,7 @@ private struct EPGRow: View {
             HStack(spacing: 0) {
                 // Colored left accent bar using channel color
                 Rectangle()
-                    .fill(isLive || isFocused ? channel.color : channel.color.opacity(0.4))
+                    .fill(boxed ? channelColumnFill : isLive || isFocused ? channel.color : channel.color.opacity(0.4))
                     .frame(width: isLive || isFocused ? 8 : 4)
 
                 // Channel column
@@ -421,7 +431,7 @@ private struct EPGRow: View {
 
                 // Vertical divider
                 Rectangle()
-                    .fill(Color.white.opacity(0.15))
+                    .fill(theme.gridBackground ?? Color.white.opacity(0.15))
                     .frame(width: 1)
 
                 // Program blocks
@@ -430,7 +440,7 @@ private struct EPGRow: View {
             .frame(height: rowHeight)
             .background(rowBackground)
             .overlay {
-                if isFocused {
+                if isFocused && !boxed {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(channel.color, lineWidth: 3)
                         .padding(2)
@@ -441,8 +451,8 @@ private struct EPGRow: View {
 
             // Row divider
             Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
+                .fill(theme.gridBackground ?? Color.white.opacity(0.08))
+                .frame(height: boxed ? max(1, theme.cellGap) : 1)
         }
     }
 
@@ -461,14 +471,16 @@ private struct EPGRow: View {
             }
 
             Text(String(format: "%d", channel.number))
-                .font(.custom("DMMono-Medium", size: text.number))
-                .foregroundStyle(isFocused ? Color.white : channel.color)
+                .font(theme.font("DMMono-Medium", size: text.number))
+                .foregroundStyle((isFocused ? theme.channelTextFocused : nil) ?? theme.channelText ?? (isFocused ? Color.white : channel.color))
+                .themeTextShadow(theme.textShadow)
                 .frame(width: text.numberWidth, alignment: .trailing)
                 .padding(.trailing, 8)
 
             Text(channel.name.uppercased())
-                .font(.custom("DMMono-Medium", size: text.name))
-                .foregroundStyle(isFocused ? Color.white : channel.color.opacity(0.95))
+                .font(theme.font("DMMono-Medium", size: text.name))
+                .foregroundStyle((isFocused ? theme.channelTextFocused : nil) ?? theme.channelText ?? (isFocused ? Color.white : channel.color.opacity(0.95)))
+                .themeTextShadow(theme.textShadow)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -480,6 +492,28 @@ private struct EPGRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(width: channelColumnWidth - 4, alignment: .leading)
         .padding(.trailing, 4)
+        .frame(maxHeight: boxed ? .infinity : nil)
+        .background(boxed ? channelColumnFill : Color.clear)
+    }
+
+    /// A program title's color: the original channel-tint rules, or the theme's boxed-cell ones.
+    private func cellText(entry: ScheduleEntry, isPast: Bool, isSelected: Bool) -> Color {
+        if isSelected { return theme.focusedCellText ?? .white }
+        if boxed { return isPast ? (theme.pastCellText ?? .white.opacity(0.6)) : (theme.cellText ?? .white) }
+        if entry.isNowPlaying || isFocused { return .white }
+        return isPast ? Color.white.opacity(0.5) : Color.white.opacity(0.85)
+    }
+
+    /// A program block's fill: the original channel tint, or the theme's cell color.
+    private func cellBackground(entry: ScheduleEntry, isPast: Bool, isSelected: Bool) -> Color {
+        if boxed { return isSelected ? (theme.focusedCell ?? .white) : (theme.cellColor(row: rowIndex) ?? .clear) }
+        if entry.isNowPlaying { return channel.color.opacity(isFocused ? 0.55 : 0.25) }
+        return isPast ? Color.white.opacity(0.02) : Color.clear
+    }
+
+    /// A boxed theme's channel column, lighter on the focused row so it reads as selected.
+    private var channelColumnFill: Color {
+        (isFocused ? theme.channelColumnFocused : nil) ?? theme.channelColumn ?? .clear
     }
 
     /// Compact tuned-in marker — only shown on the active channel row.
@@ -520,20 +554,16 @@ private struct EPGRow: View {
                         let entry = schedule.entries[index]
                         let isPast = entry.endTime < now && !entry.isNowPlaying
 
+                        let isSelectedCell = boxed && isFocused && entry.isNowPlaying
                         HStack(spacing: 0) {
                             Rectangle()
-                                .fill(Color.white.opacity(0.12))
-                                .frame(width: 1)
+                                .fill(boxed ? (theme.gridBackground ?? .clear) : Color.white.opacity(0.12))
+                                .frame(width: boxed ? max(1, theme.cellGap) : 1)
 
                             Text(entryTitle(entry))
-                                .font(.custom("DMMono-Medium", size: text.title))
-                                .foregroundStyle(
-                                    entry.isNowPlaying || isFocused
-                                        ? Color.white
-                                        : isPast
-                                            ? Color.white.opacity(0.5)
-                                            : Color.white.opacity(0.85)
-                                )
+                                .font(theme.font("DMMono-Medium", size: text.title))
+                                .foregroundStyle(cellText(entry: entry, isPast: isPast, isSelected: isSelectedCell))
+                                .themeTextShadow(isSelectedCell ? nil : theme.textShadow)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .padding(.leading, 14)
@@ -542,13 +572,7 @@ private struct EPGRow: View {
                         }
                         .frame(width: max(fraction * programsWidth, 1), height: rowHeight, alignment: .leading)
                         .clipped()
-                        .background(
-                            entry.isNowPlaying
-                                ? channel.color.opacity(isFocused ? 0.55 : 0.25)
-                                : isPast
-                                    ? Color.white.opacity(0.02)
-                                    : Color.clear
-                        )
+                        .background(cellBackground(entry: entry, isPast: isPast, isSelected: isSelectedCell))
                     }
                 }
             } else if channel.isWatershedHold(watershedEnabled: appState.watershedEnabled) {

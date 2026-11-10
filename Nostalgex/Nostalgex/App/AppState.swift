@@ -596,6 +596,17 @@ class AppState {
         }
     }
 
+    /// THEME: the guide screen's and Now Playing panel's colors and type. Per Apple TV,
+    /// never synced. NOSTALGEX unless a viewer picked another. See `GuideTheme`.
+    var guideTheme: GuideTheme = GuideTheme.current() {
+        didSet {
+            AppDefaults.standard.set(guideTheme.id, forKey: GuideTheme.storageKey)
+            if oldValue != guideTheme {
+                Analytics.track(.settingChanged(key: "guide_theme", value: guideTheme.id))
+            }
+        }
+    }
+
     /// Watershed: an opt-in broadcast-realism setting, off by default because it changes
     /// what airs when, that should be a deliberate choice, not a surprise after an
     /// update. While on, 18/R-rated content on every channel waits for 9 PM the way VHS
