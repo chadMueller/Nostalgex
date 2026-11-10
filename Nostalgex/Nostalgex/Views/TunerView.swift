@@ -270,13 +270,15 @@ private struct NavItem: View {
         Button {
             action?()
         } label: {
+            // A real button: the pill every selectable thing is (resting fill and outline), with the
+            // shared selected state when it has focus (3 pt cyan outline, glow, 3% lift).
             Text(label)
-                .font(.custom("DMMono-Medium", size: 24))
-                .foregroundStyle(
-                    isFocused ? Color(hex: "#FFE500") : .white.opacity(0.5)
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(Color.nxText)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 14)
+                .nxRowSurface(isSelected: isFocused, cornerRadius: 40)
+                .contentShape(Capsule())
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($isFocused)

@@ -24,6 +24,11 @@ white as text. Not migrated, on purpose: the guide grid (its sizes follow row he
 panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
 pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
 
+**SETTINGS on the guide's header is a real button.** It was plain gray text that turned yellow when focused. It is now a pill
+(the row's resting fill and outline, white 29 pt text) with the shared selected state, a 3 pt cyan outline, glow and 3% lift.
+Reached as before: Up out of the top channel row; the id `tunerSettingsButton` and the focus section are unchanged, and the
+wrap tests that go up to it (`ChannelGuideWrapFocusTests`) pass. Simulator screenshots in the scratchpad `links-shots` folder.
+
 ## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
 
 Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.
