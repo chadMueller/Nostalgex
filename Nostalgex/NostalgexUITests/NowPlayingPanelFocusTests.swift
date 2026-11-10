@@ -64,11 +64,14 @@ final class NowPlayingPanelFocusTests: XCTestCase {
     private func walk(
         _ app: XCUIApplication,
         _ direction: XCUIRemote.Button,
-        steps: Int
+        steps: Int,
+        stopAt: String? = nil
     ) -> [String] {
         var seen: [String] = []
         if let start = focusedLabel(app) { seen.append(start) }
         for _ in 0..<steps {
+            // Up on a column's first row closes the panel, so a walk up stops on it instead of pressing.
+            if let stopAt, focusedLabel(app)?.localizedCaseInsensitiveContains(stopAt) == true { break }
             XCUIRemote.shared.press(direction)
             guard let label = focusedLabel(app) else {
                 XCTFail("focus was lost after pressing \(direction)")
@@ -101,7 +104,7 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         // Cross into the device column and walk it top to bottom.
         XCUIRemote.shared.press(.right)
         XCTAssertNotNil(focusedLabel(app), "focus was lost crossing to the device column")
-        walk(app, .up, steps: 12)
+        walk(app, .up, steps: 12, stopAt: "RETRO MODE")
 
         let deviceColumn = walk(app, .down, steps: 12).joined(separator: " | ")
         for expected in ["RETRO MODE", "STREAM QUALITY", "PLAYBACK INFORMATION", "SLEEP TIMER"] {
@@ -114,6 +117,29 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         // And back again — the two columns are one focus section, not two islands.
         XCUIRemote.shared.press(.left)
         XCTAssertNotNil(focusedLabel(app), "focus was lost crossing back to the program column")
+    }
+
+    /// Up closes the panel only when Up had nowhere to go. On 2026-11-10 it also closed it from the second row of a
+    /// column, because the handler read a focus that had already moved to the first row.
+    func testPanelFocus_upMovesBetweenRowsAndClosesOnlyFromTheTopRow() {
+        let app = launchIntoPanel()
+        let retro = app.buttons.matching(labelContains("RETRO MODE")).firstMatch
+        let quality = app.buttons.matching(labelContains("STREAM QUALITY")).firstMatch
+
+        // Into the device column, down to its second row, then Up: focus moves to the first row and the panel stays.
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(retro.hasFocus, "Right from CC should land on RETRO MODE")
+        XCUIRemote.shared.press(.down)
+        XCTAssertTrue(quality.hasFocus, "Down from RETRO MODE should land on STREAM QUALITY")
+        XCUIRemote.shared.press(.up)
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertTrue(retro.exists, "Up from the second row closed the panel")
+        XCTAssertTrue(retro.hasFocus, "Up from STREAM QUALITY should land on RETRO MODE")
+
+        // Up again, from the first row: nothing above, so the panel closes.
+        XCUIRemote.shared.press(.up)
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: retro)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 10), .completed, "Up from the first row did not close the panel")
     }
 
     func testPanelFocus_expandingAndClosingAPickerKeepsFocus() {
@@ -171,7 +197,7 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         XCTAssertLessThan(information.frame.maxY, sleep.frame.minY, "SLEEP TIMER is the last row, set apart below PLAYBACK INFORMATION")
 
         XCUIRemote.shared.press(.right)
-        walk(app, .up, steps: 15)
+        walk(app, .up, steps: 15, stopAt: "RETRO MODE")
         let labels = walk(app, .down, steps: 15)
         let visited = labels.joined(separator: " | ")
         for expected in ["RETRO MODE", "STREAM QUALITY", "PLAYBACK INFORMATION", "SLEEP TIMER"] {

@@ -35,6 +35,19 @@ details beside it, left-aligned against its right edge (the CH tag with its chan
 channel name, year and rating); UP NEXT sits under the poster across the column's 540 pt. With no poster the details take the poster's place
 and there is no empty hole. Token sizes and floors, the 560 pt row columns and everything else are as before.
 
+**Up closes the Now Playing panel only when the focus engine had nowhere to go (a bug in the change above, found 2026-11-10).** While hunting a
+reported remote stall I logged the app on the simulator and saw the panel's Up handler read `FocusState` after the engine had already moved
+focus: Up from STREAM QUALITY (second row, right column) moved focus to RETRO MODE, the handler then saw RETRO MODE and closed the panel. The
+state it reads lags the move unevenly (sometimes stale, sometimes new), so it cannot say "nothing above". The engine itself says it: it posts
+`UIFocusSystem.movementDidFailNotification` in the same turn, just before SwiftUI calls the handler (seen in the log on every press that
+could not move). `FocusMoveFailureMonitor` records that, and `NowPlayingPanelLayout.upClosesPanel(moveFailed:pickerOpen:)` closes only on a
+failed Up and never from an open list. `NowPlayingPanelLogicTests` has two tests (the rule, and the monitor's heading and 0.25 s window);
+making the rule ignore `moveFailed` fails the first. The old behaviour had no seam to test, so there is no "before" run of the same test;
+the evidence of the bug is the simulator log. `NowPlayingPanelFocusTests` walks up a column with a `stopAt` so it no longer presses Up on the
+first row (which now closes the panel), and has a UI test for the Up-from-second-row case; that test passed on the old code on the row path
+I used (Right from CC), so it is not proof of the fix. Not run on the TV. The remote stall that started the hunt did not reproduce
+(diagnostic build on the TV, 19 minute session, no blocked main thread); the `appletv/stall-diag` branch is kept for if it returns.
+
 **Smaller SETTINGS pill, narrower Now Playing columns (Chad's review, 2026-11-10).** The guide header's SETTINGS pill keeps 29 pt, the press
 floor, and its padding went from 36 across and 14 up and down to 22 and 6: measured in the simulator, 211 x 66 pt before, 183 x 50 pt
 after (13% narrower, 24% shorter). A 25 pt caption version was built and photographed as an option (about 160 x 43 pt, computed from

@@ -149,10 +149,10 @@ struct NowPlayingPanel: View {
                 endPoint: .bottom
             )
         )
-        // The reverse of what opened it: the panel comes down with Down, so Up closes it, but only from the top
-        // row of a column (nothing above to move to), never from inside a list, and Up still moves between rows.
+        // The reverse of what opened it: the panel comes down with Down, so Up closes it, but only when Up had
+        // nowhere to go (the top row of a column), never from inside a list, and Up still moves between rows.
         .onMoveCommand { direction in
-            guard direction == .up, NowPlayingPanelLayout.upClosesPanel(focus: focusedControl, pickerOpen: expandedPicker != nil) else { return }
+            guard direction == .up, NowPlayingPanelLayout.upClosesPanel(moveFailed: FocusMoveFailureMonitor.didFail(.up), pickerOpen: expandedPicker != nil) else { return }
             onDismiss?()
         }
         .onExitCommand {

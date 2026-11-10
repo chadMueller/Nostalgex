@@ -101,12 +101,12 @@ enum NowPlayingPanelLayout {
         return rows
     }
 
-    /// Up closes the panel (the reverse of Down, which opens it) only when focus is on the first row of
-    /// a column, CC on the left and RETRO MODE on the right, so Up still moves between rows everywhere
-    /// else, and never from inside an open list (Back closes that first).
-    static func upClosesPanel(focus: NowPlayingFocus?, pickerOpen: Bool) -> Bool {
-        guard !pickerOpen else { return false }
-        return focus == .cc || focus == .retro
+    /// Up closes the panel (the reverse of Down, which opens it) only when Up had nowhere to go, the focus engine
+    /// having just failed to move up: that is the first row of a column, CC on the left and RETRO MODE on the right.
+    /// Up still moves between rows everywhere else, and never closes from inside an open list (Back closes that
+    /// first). `moveFailed` comes from `FocusMoveFailureMonitor`, not from `FocusState`, which lags the move.
+    static func upClosesPanel(moveFailed: Bool, pickerOpen: Bool) -> Bool {
+        !pickerOpen && moveFailed
     }
 
     /// The audio row opens a track list only when there is a choice to make.

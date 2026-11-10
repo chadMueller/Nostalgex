@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Nostalgex
 
 /// Unit tests for the pure logic behind the in-player Now Playing panel:
@@ -283,5 +284,26 @@ final class NowPlayingPanelLogicTests: XCTestCase {
         // rows the same focus identity.
         let codes = SubtitleLanguagePreset.all.map(\.code)
         XCTAssertEqual(Set(codes).count, codes.count)
+    }
+
+    // MARK: - Up closes the panel only when Up had nowhere to go
+
+    func testUpClosesPanel_onlyWhenTheMoveFailed() {
+        XCTAssertTrue(NowPlayingPanelLayout.upClosesPanel(moveFailed: true, pickerOpen: false))
+        XCTAssertFalse(NowPlayingPanelLayout.upClosesPanel(moveFailed: false, pickerOpen: false),
+                       "Up that moved focus to a row above must not close the panel")
+        XCTAssertFalse(NowPlayingPanelLayout.upClosesPanel(moveFailed: true, pickerOpen: true),
+                       "Up from the first option of an open list must not close the panel")
+    }
+
+    func testFocusMoveFailureMonitor_answersForTheHeadingAndOnlyBrieflyAfterwards() {
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        FocusMoveFailureMonitor.record(heading: .up, at: t0)
+        XCTAssertTrue(FocusMoveFailureMonitor.didFail(.up, now: t0.addingTimeInterval(0.05)))
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.down, now: t0.addingTimeInterval(0.05)), "a failed Up is not a failed Down")
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.up, now: t0.addingTimeInterval(FocusMoveFailureMonitor.window + 0.1)),
+                       "an old failure must not close the panel on a later press")
+        FocusMoveFailureMonitor.forget()
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.up, now: t0))
     }
 }
