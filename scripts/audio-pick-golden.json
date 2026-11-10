@@ -1,0 +1,45 @@
+{
+  "note": "Vectors for scripts/nostalgex-audio-pick.js, from Nostalgex/NostalgexTests/AudioTrackSelectionTests.swift. A Roku or Android port should return the same answers. expect is the stream index (Jellyfin and Emby) or id (Plex) to pin, or null to leave the server's choice.",
+  "commentaryTitles": {
+    "yes": ["Commentary", "commentary", "COMMENTARY", "Director's Commentary", "Audio Commentary with the cast", "English - Commentary - AC3 - Stereo - Default"],
+    "no": ["English - Dolby Digital - 5.1", "Surround 5.1", "Comment", "", "Descriptive"]
+  },
+  "jellyfinAndEmby": [
+    { "name": "English beats a default-flagged Spanish track (the Joe Dirt layout)", "preferredLanguages": ["en-US"],
+      "streams": [{"index":1,"lang":"spa","channels":2,"isDefault":true},{"index":2,"lang":"eng","channels":6,"isDefault":false}], "expect": 2 },
+    { "name": "more channels wins among tracks in the viewer's language", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","channels":2,"isDefault":true},{"index":2,"lang":"eng","channels":6}], "expect": 2 },
+    { "name": "en-GB matches a track tagged eng", "preferredLanguages": ["en-GB"],
+      "streams": [{"index":1,"lang":"fre","isDefault":true},{"index":2,"lang":"eng"}], "expect": 2 },
+    { "name": "a French viewer keeps the French track", "preferredLanguages": ["fr-CA"],
+      "streams": [{"index":1,"lang":"fre","isDefault":true},{"index":2,"lang":"eng"}], "expect": 1 },
+    { "name": "no track in the viewer's language or English: the file's default", "preferredLanguages": ["de"],
+      "streams": [{"index":1,"lang":"jpn"},{"index":2,"lang":"kor","isDefault":true}], "expect": 2 },
+    { "name": "one audio track is left to the server", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng"}], "expect": null },
+    { "name": "a commentary the file marks default is passed over", "preferredLanguages": ["en-US"],
+      "streams": [{"index":1,"lang":"eng","channels":2,"isDefault":true,"title":"Director's Commentary"},{"index":2,"lang":"eng","channels":2,"title":"English"}], "expect": 2 },
+    { "name": "a 5.1 commentary does not win", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","channels":6,"displayTitle":"English - Commentary - Dolby Digital - 5.1"},{"index":2,"lang":"eng","channels":2,"displayTitle":"English - AAC - Stereo"}], "expect": 2 },
+    { "name": "one real track beside a commentary is pinned", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","isDefault":true,"title":"commentary"},{"index":2,"lang":"eng"}], "expect": 2 },
+    { "name": "AUDIO LANGUAGE fr picks the French track that is not a commentary", "audioLanguage": "fr", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","isDefault":true,"channels":6,"title":"Commentary"},{"index":2,"lang":"eng","channels":2},{"index":3,"lang":"fre","channels":6},{"index":4,"lang":"fre","channels":2,"title":"Commentaire audio / Commentary"}], "expect": 3 },
+    { "name": "AUDIO LANGUAGE en picks the English track that is not a commentary", "audioLanguage": "en", "preferredLanguages": ["fr"],
+      "streams": [{"index":1,"lang":"eng","isDefault":true,"channels":6,"title":"Commentary"},{"index":2,"lang":"eng","channels":2},{"index":3,"lang":"fre","channels":6},{"index":4,"lang":"fre","channels":2,"title":"Commentaire audio / Commentary"}], "expect": 2 },
+    { "name": "AUDIO language Auto with an English browser", "preferredLanguages": ["en-GB"],
+      "streams": [{"index":1,"lang":"eng","isDefault":true,"channels":6,"title":"Commentary"},{"index":2,"lang":"eng","channels":2},{"index":3,"lang":"fre","channels":6},{"index":4,"lang":"fre","channels":2,"title":"Commentaire audio / Commentary"}], "expect": 2 },
+    { "name": "every track a commentary: the language rules run over all of them", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","channels":2,"title":"Commentary"},{"index":2,"lang":"eng","channels":6,"title":"Cast commentary"}], "expect": 2 },
+    { "name": "a lone commentary is left to the server", "preferredLanguages": ["en"],
+      "streams": [{"index":1,"lang":"eng","title":"Commentary"}], "expect": null },
+    { "name": "no commentary anywhere: earlier answers hold", "preferredLanguages": ["en-US"],
+      "streams": [{"index":1,"lang":"spa","isDefault":true,"channels":2,"title":"Spanish [Latinoamericano]"},{"index":2,"lang":"eng","channels":6,"title":"English [US]"}], "expect": 2 }
+  ],
+  "plex": [
+    { "name": "a selected commentary is skipped", "streams": [{"id":21,"selected":0,"title":"English"},{"id":22,"selected":1,"title":"Commentary"}], "expect": 21 },
+    { "name": "the selected track is kept when it is not a commentary", "streams": [{"id":21,"selected":0,"title":"Commentary"},{"id":22,"selected":1,"title":"English"}], "expect": 22 },
+    { "name": "no selected track: the first", "streams": [{"id":21,"title":"English"},{"id":22,"title":"French"}], "expect": 21 },
+    { "name": "a lone commentary is kept", "streams": [{"id":21,"selected":1,"title":"Commentary"}], "expect": 21 }
+  ]
+}

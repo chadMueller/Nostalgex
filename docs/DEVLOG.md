@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 1, the audio pick, Plex tracks and the /decision check, same branch)
+
+**Why.** Chad asked for all the web parity issues (#248 to #261) to be worked and closed before the next web and Docker release.
+This is the first group: #256, #250, #249.
+
+**#256, Plex and `/decision`.** Measured, no change needed. `scripts/plex-start-decision-probe.mjs` sends the web tuner's own
+`start.m3u8` request (same query, same order) to a real Plex server for a channel change every 1.5 s and every 0.3 s, 20 changes each, with and
+without the old session stopped (12 changes at 0.4 s with the stop lost), plain and with `/decision` first. Lab Plex 1.43.5 in a Linux
+container, software transcode: 0 of 92 `start.m3u8` answers were not 200 in either mode, median 10 ms plain and 15 ms with the
+decision call. The Apple TV saw its 400s on a Mac with a hardware encoder, so this does not prove a hardware encoder behaves the same;
+the probe takes `PLEX_URL`, so it can be pointed at any server.
+
+**#250, commentary.** New `scripts/nostalgex-audio-pick.js` (`isCommentary`, `skippingCommentary`, `preferredAudioStream`,
+`plexAudioStream`), a JS port of `AudioTrackCommentary.swift` and `JellyfinPlaybackResolver.preferredAudioIndex`, with
+`scripts/audio-pick-golden.json` (the Apple TV test vectors) and `nostalgex-audio-pick-smoke.mjs` (33 checks, in `npm test`). The web's
+Jellyfin and Emby pick now follows the Apple TV: never a commentary while another track exists, then AUDIO LANGUAGE, then a track in the
+browser's language or English with the most channels, then the file's default. Auto used to leave the server's default alone; it now
+pins like the Apple TV. `jellyfin-audio-streams-browser-smoke.mjs` expects that and has a default-flagged commentary case.
+
+**#249, Plex tracks.** At tune time a Plex program's metadata is read (2.5 s cap, cached) for its audio and subtitle streams. AUDIO
+LANGUAGE, the Apple TV's pick and the commentary rule choose an audio track and the server stream is asked for it (`audioStreamID`); a
+file that would play directly but needs another track goes to a server stream. Subtitles inside the file are burned into the server stream
+(`subtitles=burn`, `subtitleStreamID`), a subtitle file beside the film (SRT) is fetched from `/library/streams/<id>` and drawn by the page.
+Plex accepts both parameters (200 playlist on the lab server); `plex-tracks-browser-smoke.mjs` (11 checks) covers the requests
+against a stub. Not verified: that the burned text shows in the picture, and an image subtitle (PGS) burn. The "Jellyfin and Emby only"
+wording is gone from Settings and the keyboard list. **Roku and Android** port `audio-pick-golden.json` (#236, #245, #246 on the Roku side).
+
 ## 2026-11-10 (web tuner: text one step smaller, same branch)
 
 **Why.** Chad, on the preview: the guide text is too big, and the font increases overall were more than he wanted. The Apple TV took

@@ -38,6 +38,7 @@
 <script src="scripts/nostalgex-last-channel.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
+<script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -4041,7 +4042,7 @@
         <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Audio language</div>
-            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Preferred audio track when multiple languages are available (Jellyfin and Emby)</div>
+            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Preferred audio track when multiple languages are available</div>
           </div>
           <select id="cfg-audio-lang" style="background: rgba(0,0,0,0.6); color: #fff; border: 2px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px 12px; font-family: inherit; font-size: var(--fs-cap); cursor: pointer;" onchange="setAudioLanguage(this.value)">
             <option value="__system__">Auto</option>
@@ -4068,7 +4069,7 @@
         <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Subtitle language</div>
-            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Language for subtitles when enabled (C key in fullscreen, Jellyfin and Emby)</div>
+            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Language for subtitles when enabled (C key in fullscreen)</div>
           </div>
           <select id="cfg-subtitle-lang" style="background: rgba(0,0,0,0.6); color: #fff; border: 2px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 8px 12px; font-family: inherit; font-size: var(--fs-cap); cursor: pointer;" onchange="setSubtitleLanguage(this.value)">
             <option value="__system__">Auto (browser)</option>
@@ -4095,7 +4096,7 @@
         <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Auto subtitles for foreign audio</div>
-            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">If nothing plays in your audio language, show subtitles automatically (Jellyfin and Emby, fullscreen)</div>
+            <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">If nothing plays in your audio language, show subtitles automatically (fullscreen)</div>
           </div>
           <button class="plex-btn plex-btn--toggle" id="cfg-auto-subs" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleAutoSubsForeignAudio()">ON</button>
         </div>
@@ -4190,7 +4191,7 @@
         <div class="help-row"><div class="help-key">M</div><div class="help-desc">Mute / unmute</div></div>
         <div class="help-row"><div class="help-key">F</div><div class="help-desc">Fullscreen</div></div>
         <div class="help-row"><div class="help-key">B</div><div class="help-desc">Toggle retro mode (4:3 + CRT)</div></div>
-        <div class="help-row"><div class="help-key">C</div><div class="help-desc">Toggle subtitles (Jellyfin and Emby, in fullscreen)</div></div>
+        <div class="help-row"><div class="help-key">C</div><div class="help-desc">Toggle subtitles (in fullscreen)</div></div>
 
         <div class="help-section-label">GUIDE</div>
         <div class="help-row"><div class="help-key">G</div><div class="help-desc">Fullscreen + guide overlay</div></div>
@@ -6497,13 +6498,32 @@
         activeTranscodeSession = resolved.session;
       }
     } else {
-      canDirectPlay = !item._forceTranscode && item.partKey && ['mp4', 'webm', 'mov'].includes(item.container)
-        && NostalgexStreamQuality.directPlayAllowed(NostalgexStreamQuality.current(), item.bitrate);
-      beginInfoAttempt();
-
       // Use per-item server credentials for multi-server support; fall back to primary
       const itemServerUrl = item.serverUrl || plexServerUrl;
       const itemServerToken = item.serverToken || plexToken;
+
+      // The file's own tracks, so the audio and subtitle language settings and the commentary rule can act on Plex too
+      // (a library scan does not keep them). One small request; a server that is slow to answer is played without it.
+      const plexStreams = await loadPlexStreams(item, itemServerUrl, itemServerToken);
+      if (!ownsPlaybackRequest(request)) return;
+      if (plexStreams) {
+        Object.defineProperty(item, 'audioStreams', { value: plexStreams.audio, enumerable: false, writable: true, configurable: true });
+        Object.defineProperty(item, 'subtitles', { value: plexStreams.subtitles, enumerable: false, writable: true, configurable: true });
+      }
+      // A track other than the one Plex starts on can only be had from a server stream: a browser cannot pick a track of a
+      // file it plays directly. Subtitles that live inside the file are burned into the server stream, the way a forced
+      // track is on Jellyfin; a subtitle file beside the film is drawn by the page.
+      const audioPick = pickAudioStream(item.audioStreams || []);
+      const audioNeedsServer = !!(audioPick && !audioPick.isDefault);
+      const wantsSubtitles = subtitlesEnabled || shouldAutoEnableSubs(item.audioStreams || []);
+      const subtitlePick = wantsSubtitles ? pickPlexSubtitle(item.subtitles) : null;
+      const subtitleBurned = !!(subtitlePick && !subtitlePick.external);
+      request.burnedSubtitleIndex = subtitleBurned ? subtitlePick.index : null;
+
+      canDirectPlay = !item._forceTranscode && item.partKey && ['mp4', 'webm', 'mov'].includes(item.container)
+        && !audioNeedsServer && !subtitleBurned
+        && NostalgexStreamQuality.directPlayAllowed(NostalgexStreamQuality.current(), item.bitrate);
+      beginInfoAttempt();
 
       if (canDirectPlay) {
         streamUrl = `${itemServerUrl}${item.partKey}?X-Plex-Token=${itemServerToken}`;
@@ -6524,6 +6544,8 @@
           + `&X-Plex-Product=Plex%2090`
           + `&X-Plex-Platform=Web&X-Plex-Platform-Version=1.0`
           + `&X-Plex-Device=Browser&X-Plex-Device-Name=Plex90`
+          + (audioPick ? `&audioStreamID=${audioPick.index}` : '')
+          + (subtitleBurned ? `&subtitles=burn&subtitleStreamID=${subtitlePick.index}` : '')
           + NostalgexStreamQuality.plexTranscodeQuery(NostalgexStreamQuality.current());
 
       }
@@ -8022,11 +8044,65 @@
         || null;
   }
 
+  // Plex: the tracks of the file about to play, from its metadata. Cached per item. Null when the server does not answer in
+  // time, so a slow server never holds a channel back.
+  const plexStreamCache = new Map();
+  async function loadPlexStreams(item, serverUrl, token) {
+    const key = `${serverUrl}|${item.ratingKey}`;
+    if (plexStreamCache.has(key)) return plexStreamCache.get(key);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    try {
+      const res = await fetch(`${serverUrl}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`,
+        { headers: { Accept: 'application/json' }, signal: controller.signal });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const meta = ((data.MediaContainer || {}).Metadata || [])[0];
+      const part = meta && meta.Media && meta.Media[0] && meta.Media[0].Part && meta.Media[0].Part[0];
+      const out = { audio: [], subtitles: [] };
+      for (const st of ((part && part.Stream) || [])) {
+        const lang = String(st.languageCode || '').toLowerCase();
+        if (st.streamType === 2) {
+          out.audio.push({ index: st.id, lang, codec: String(st.codec || '').toLowerCase(), channels: st.channels || 0,
+            title: st.displayTitle || st.title || 'Audio', rawTitle: st.title || '', isDefault: st.selected === true || st.selected === 1 });
+        } else if (st.streamType === 3) {
+          out.subtitles.push({ index: st.id, lang, forced: st.forced === true || st.forced === 1, codec: String(st.codec || st.format || '').toLowerCase(),
+            external: !!st.key, plexKey: st.key || '' });
+        }
+      }
+      plexStreamCache.set(key, out);
+      return out;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // The Plex subtitle track to show: the viewer's language, not forced first, then forced; never the wrong language.
+  // A track beside the film is only usable as SRT (the page draws it); a track inside the file is burned in by the server,
+  // so any of its formats will do.
+  function pickPlexSubtitle(subs) {
+    const usable = (Array.isArray(subs) ? subs : []).filter(s => !s.external || ['srt', 'subrip'].includes(s.codec));
+    if (usable.length === 0) return null;
+    const pref = resolveSubtitleLanguage();
+    return usable.find(s => !s.forced && langMatches(s.lang, pref))
+        || usable.find(s => s.forced && langMatches(s.lang, pref))
+        || null;
+  }
+
+  function srtToVtt(text) {
+    return 'WEBVTT\n\n' + String(text).replace(/\r+/g, '').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  }
+
+  // The audio track to pin on a Jellyfin or Emby stream, or null to leave the server's choice alone. The Apple TV's rule
+  // (scripts/nostalgex-audio-pick.js): a commentary is never it while another track exists, then AUDIO LANGUAGE, then a
+  // track in the browser's language or English with the most channels, then the file's default.
   function pickAudioStream(audioStreams) {
-    if (!Array.isArray(audioStreams) || audioStreams.length === 0) return null;
-    if (audioLanguage === '__system__') return null;
-    const pref = audioLanguage.toLowerCase();
-    return audioStreams.find(s => langMatches(s.lang, pref)) || null;
+    return NostalgexAudioPick.preferredAudioStream(audioStreams, {
+      audioLanguage,
+      preferredLanguages: (navigator.languages && navigator.languages.length) ? [...navigator.languages] : [navigator.language || 'en'],
+    });
   }
 
   function resolveAudioLanguage() {
@@ -8052,6 +8128,11 @@
   // external .srt came back text/vtt, measured). partKey holds the MediaSourceId.
   function buildSubtitleUrl(item, sub) {
     return `${plexServerUrl}/Videos/${item.ratingKey}/${item.partKey}/Subtitles/${sub.index}/Stream.vtt?api_key=${plexToken}`;
+  }
+
+  // Plex serves a subtitle file that sits beside the film at the stream's own key, as SRT.
+  function buildPlexSubtitleUrl(item, sub) {
+    return `${item.serverUrl || plexServerUrl}${sub.plexKey}?X-Plex-Token=${encodeURIComponent(item.serverToken || plexToken)}`;
   }
 
   function clearSubtitleTracks() {
@@ -8082,16 +8163,19 @@
     const ownsSubtitle = () => ownsPlaybackRequest(request) && currentPlayingItem === item
       && generation === subtitleRequestGeneration && !controller.signal.aborted && isVideoFullscreen();
     const autoForeign = item && shouldAutoEnableSubs(item.audioStreams || []);
-    if ((!subtitlesEnabled && !autoForeign) || !isMediaBrowserBackend(mediaBackend)) return;
+    if (!subtitlesEnabled && !autoForeign) return;
     if (!isVideoFullscreen()) return;  // fullscreen-only, matching tvOS
     if (!item || !Array.isArray(item.subtitles) || item.subtitles.length === 0) return;
-    const sub = pickSubtitle(item.subtitles);
+    const isPlex = mediaBackend === 'plex';
+    const sub = isPlex ? pickPlexSubtitle(item.subtitles) : pickSubtitle(item.subtitles);
     if (!sub) return;
     if (request.burnedSubtitleIndex === sub.index) return;  // already in the picture
+    if (isPlex && !sub.external) return;                    // inside the file: the server stream burns it (see playCurrentItem)
     try {
-      const res = await fetch(buildSubtitleUrl(item, sub), { signal: controller.signal });
+      const res = await fetch(isPlex ? buildPlexSubtitleUrl(item, sub) : buildSubtitleUrl(item, sub), { signal: controller.signal });
       if (!ownsSubtitle() || !res.ok) return;
-      const vtt = await res.text();
+      let vtt = await res.text();
+      if (isPlex && !vtt.startsWith('WEBVTT')) vtt = srtToVtt(vtt);
       if (!ownsSubtitle()) return;
       const url = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
       const video = document.getElementById('plex-video');
@@ -8116,7 +8200,7 @@
     audioLanguage = val;
     lsSet('plex90_audio_language', val);
     // Restart playback on current item so the new audio track takes effect
-    if (currentPlayingItem && isMediaBrowserBackend(mediaBackend) && currentChannel) {
+    if (currentPlayingItem && currentChannel) {
       const ch = CHANNELS.find(c => c.id === currentChannel);
       if (ch) playCurrentItem(currentPlayingItem, ch);
     }
@@ -8127,6 +8211,7 @@
     lsSet('plex90_subtitle_language', val);
     clearSubtitleTracks();
     loadSubtitleForCurrentItem(currentPlayingItem); // self-gates (toggle or foreign-audio auto)
+    retunePlexForEmbeddedSubtitles();
   }
 
   function toggleSubtitles() {
@@ -8136,13 +8221,27 @@
     const toast = document.getElementById('retro-toast');
     if (toast) {
       toast.textContent = subtitlesEnabled
-        ? (isMediaBrowserBackend(mediaBackend) ? 'CAPTIONS ON (FULLSCREEN)' : 'CAPTIONS: JELLYFIN AND EMBY ONLY')
+        ? 'CAPTIONS ON (FULLSCREEN)'
         : (autoForeign ? 'CAPTIONS OFF (AUTO: FOREIGN AUDIO)' : 'CAPTIONS OFF');
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 1400);
     }
     clearSubtitleTracks();
     loadSubtitleForCurrentItem(currentPlayingItem); // self-gates (toggle or foreign-audio auto)
+    retunePlexForEmbeddedSubtitles();
+  }
+
+  // A Plex subtitle track that lives inside the file is burned into the server stream, so a change to the subtitle settings
+  // needs the stream asked for again. A track beside the film is drawn by the page and needs nothing.
+  function retunePlexForEmbeddedSubtitles() {
+    if (mediaBackend !== 'plex' || !currentPlayingItem || !currentChannel) return;
+    const pick = pickPlexSubtitle(currentPlayingItem.subtitles);
+    const burning = !!(activePlaybackRequest && activePlaybackRequest.burnedSubtitleIndex != null);
+    const wanted = (subtitlesEnabled || shouldAutoEnableSubs(currentPlayingItem.audioStreams || [])) && pick && !pick.external;
+    if (!!wanted !== burning || (wanted && activePlaybackRequest.burnedSubtitleIndex !== pick.index)) {
+      const ch = CHANNELS.find(c => c.id === currentChannel);
+      if (ch) playCurrentItem(currentPlayingItem, ch);
+    }
   }
 
   let fsOverlayVisible = false;
@@ -10747,6 +10846,10 @@
           codec: String(s.Codec || '').toLowerCase(),
           channels: s.Channels || 0,
           title: s.DisplayTitle || s.Title || String(s.Language || 'Audio'),
+          // What the commentary rule reads, and what the pick needs: the track's own Title (DisplayTitle can leave it out),
+          // and whether the file marks it default.
+          rawTitle: s.Title || '',
+          isDefault: !!s.IsDefault,
         }));
         subtitles = src.MediaStreams
           .filter(s => s.Type === 'Subtitle')

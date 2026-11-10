@@ -11,7 +11,7 @@
  * server (the same API, with Emby's own library list) that record every request, and checks, on
  * each backend:
  *   - a scanned movie and a scanned episode carry their audio tracks (index and language);
- *   - AUDIO LANGUAGE Auto asks for no track (the file's default plays); English, picked in
+ *   - AUDIO LANGUAGE Auto asks for the Apple TV's track (the English one, not the file's French default); English, picked in
  *     Settings by click, asks the server for the English track (`AudioStreamIndex` in the
  *     PlaybackInfo body), then German, then French on an episode;
  *   - a film whose audio is all in other languages turns the subtitles on by itself (the request
@@ -57,6 +57,13 @@ const FOREIGN = [
   { Type: "Subtitle", Codec: "srt", Language: "eng", Index: 3, IsForced: false, IsExternal: false },
 ];
 
+/** Two English stereo tracks, the first a director's commentary the file marks default (#153, #250). */
+const COMMENTARY = [
+  { Type: "Video", Codec: "h264", Width: 1920, Height: 1080, Index: 0, IsDefault: true },
+  { Type: "Audio", Codec: "aac", Language: "eng", Channels: 2, Index: 1, IsDefault: true, Title: "Director's Commentary", DisplayTitle: "English - Commentary - AAC - Stereo" },
+  { Type: "Audio", Codec: "aac", Language: "eng", Channels: 2, Index: 2, DisplayTitle: "English - AAC - Stereo" },
+];
+
 function film(id, name, streams, extra = {}) {
   return {
     Id: id, Name: name, Type: "Movie", ProductionYear: 1990 + (Number(id.replace(/\D/g, "")) % 9), Genres: ["Drama"], OfficialRating: "PG",
@@ -67,6 +74,7 @@ function film(id, name, streams, extra = {}) {
 const movies = [];
 for (let i = 0; i < 24; i++) movies.push(film(`mm${i}`, `Multi Film ${i}`, MULTI));
 for (let i = 0; i < 6; i++) movies.push(film(`mf${i}`, `Foreign Film ${i}`, FOREIGN));
+for (let i = 0; i < 2; i++) movies.push(film(`mc${i}`, `Commentary Film ${i}`, COMMENTARY));
 const episodes = [];
 for (let i = 0; i < 6; i++) {
   episodes.push({
@@ -235,14 +243,18 @@ for (const backend of ["jellyfin", "emby"]) try {
   check(`${tag}: foreign-audio fallback is off for a film with an English track`, info.autoMulti === false, String(info.autoMulti));
   check(`${tag}: foreign-audio fallback is on for a film with no English track`, info.autoForeign === true, String(info.autoForeign));
 
-  // Auto leaves the file's own default track: no track is asked for.
+  // Auto is the Apple TV's rule: the English track (the browser's language), not the file's French default.
   await playItem(page, "Multi Film 0");
   let body = lastBody("mm0");
-  check(`${tag}: AUDIO LANGUAGE Auto asks for no particular track`, !!body && body.AudioStreamIndex === undefined, JSON.stringify(body && body.AudioStreamIndex));
+  check(`${tag}: AUDIO LANGUAGE Auto asks for the English track (AudioStreamIndex 2), not the file's French default`, !!body && body.AudioStreamIndex === 2, JSON.stringify(body && body.AudioStreamIndex));
+  // A commentary the file marks default is never the pick while another track exists (#250).
+  await playItem(page, "Commentary Film 0");
+  body = lastBody("mc0");
+  check(`${tag}: a default-flagged commentary is passed over (AudioStreamIndex 2)`, !!body && body.AudioStreamIndex === 2, JSON.stringify(body && body.AudioStreamIndex));
   // English, chosen in Settings by click: the English track, index 2 (the file's default is French).
   await page.locator(".v-btn:has(.v-btn-label:text-is('SETTINGS'))").first().click();
   await page.waitForTimeout(300);
-  await page.locator("#tab-general").click();
+  if (await page.locator("#rail-general").isVisible().catch(() => false)) await page.locator("#rail-general").click(); else await page.locator("#tab-general").click();
   await page.waitForTimeout(300);
   await page.locator("#cfg-audio-lang").selectOption("en");
   await page.waitForTimeout(300);
