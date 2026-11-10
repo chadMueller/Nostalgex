@@ -2,7 +2,6 @@ package com.muellhaus.nostalgex.ui
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -22,7 +21,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -55,12 +53,12 @@ private object RetroLook {
     /** Chance per 80 ms tick that the scanlines dip, and how far. */
     const val FLICKER_CHANCE = 0.08
     val FLICKER_RANGE = 0.76f..0.88f
-    /** Chance that a tracking line runs at each 6 to 15 s check, and its brightness. */
-    const val GLITCH_CHANCE = 0.45
-    const val GLITCH_BRIGHTNESS = 0.22f
 }
 
-/** Scanlines, vignette, flicker and the VHS tracking line, over the picture. */
+/**
+ * Scanlines, vignette and flicker, over the picture. (A white VHS tracking line used to run down
+ * the screen now and then; viewers found it distracting, and it was taken out on every surface.)
+ */
 @Composable
 internal fun CrtOverlay() {
     var flicker by remember { mutableFloatStateOf(1f) }
@@ -74,24 +72,6 @@ internal fun CrtOverlay() {
             }
         }
     }
-    // The tracking line: from a random height, moving down 150 to 400 points over 0.5 to 1.5 s.
-    var glitchFrom by remember { mutableFloatStateOf(0f) }
-    var glitchOn by remember { mutableStateOf(false) }
-    val travel = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(Random.nextLong(6_000, 15_000))
-            if (Random.nextDouble() > 1 - RetroLook.GLITCH_CHANCE) {
-                val duration = Random.nextInt(500, 1_500)
-                glitchFrom = Random.nextInt(-200, 200).toFloat()
-                travel.snapTo(0f)
-                glitchOn = true
-                travel.animateTo(Random.nextInt(150, 400).toFloat(), tween(duration, easing = LinearEasing))
-                glitchOn = false
-            }
-        }
-    }
-
     val unit = u(1)
     Box(Modifier.fillMaxSize()) {
         // Scanlines every 3 points, 1.5 wide; the path is built once per size.
@@ -112,25 +92,6 @@ internal fun CrtOverlay() {
                     onDrawBehind { drawPath(path, Color.Black.copy(alpha = RetroLook.SCANLINE_OPACITY), style = stroke) }
                 },
         )
-        if (glitchOn) {
-            Canvas(Modifier.fillMaxSize()) {
-                val u1 = unit.toPx()
-                val top = size.height * 0.5f + (glitchFrom + travel.value) * u1
-                val b = RetroLook.GLITCH_BRIGHTNESS
-                // A thin bright band, and a fainter one beneath.
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = b * 0.53f), Color.White.copy(alpha = b), Color.White.copy(alpha = b * 0.53f), Color.Transparent),
-                        startY = top, endY = top + 12 * u1,
-                    ),
-                    topLeft = Offset(0f, top), size = Size(size.width, 12 * u1),
-                )
-                drawRect(
-                    Brush.verticalGradient(listOf(Color.White.copy(alpha = b * 0.2f), Color.Transparent), startY = top + 12 * u1, endY = top + 42 * u1),
-                    topLeft = Offset(0f, top + 12 * u1), size = Size(size.width, 30 * u1),
-                )
-            }
-        }
         // The vignette: heavy corners, darker top and bottom, lighter sides.
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width

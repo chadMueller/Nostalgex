@@ -314,7 +314,7 @@ private fun PlaybackRows(model: AppModel) {
     Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
         ToggleRow(
             title = "RETRO MODE",
-            subtitle = "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio",
+            subtitle = "CRT scanlines, vignette, flicker, 4:3 aspect ratio",
             on = model.retroMode,
             modifier = Modifier.paneRow(model, "retro_mode"),
         ) { model.toggleRetroMode() }
