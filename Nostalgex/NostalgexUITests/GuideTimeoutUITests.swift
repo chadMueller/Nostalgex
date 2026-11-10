@@ -18,9 +18,7 @@ final class GuideTimeoutUITests: XCTestCase {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "guide-timeout-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestGuideTimeoutSeconds", "20"]
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestGuideTimeoutSeconds", "20"])
         app.launch()
         let demo = app.buttons["demo mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 30), "connect screen never appeared")
