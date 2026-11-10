@@ -12,6 +12,8 @@ struct TunerView: View {
     @State private var previewChannelID: Int? = nil
     // Refresh schedules every 30 seconds (progress bar + entry transitions)
     let scheduleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    /// GUIDE TIMEOUT's check. Every 5 seconds, so a 5-minute timeout fires within 5 seconds of it.
+    let guideTimeoutTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         GeometryReader { geo in
@@ -99,6 +101,8 @@ struct TunerView: View {
         .ignoresSafeArea()
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            RemoteActivityMonitor.install()
+            RemoteActivityMonitor.noteActivity()
             buildAllSchedules()
             // Resume playback if player exists but isn't playing (e.g., returning from Settings)
             if let player = appState.player,
@@ -113,10 +117,29 @@ struct TunerView: View {
         .onReceive(scheduleTimer) { _ in
             buildAllSchedules()
         }
+        .onReceive(guideTimeoutTimer) { now in
+            // GUIDE TIMEOUT: a guide left alone goes fullscreen on the playing channel, the
+            // same as Play/Pause, so its still parts don't burn into an OLED.
+            let goFullscreen = GuideTimeout.shouldGoFullscreen(
+                interval: GuideTimeout.current().interval,
+                lastActivity: RemoteActivityMonitor.lastActivity,
+                now: now,
+                guideIsFrontmost: navigationPath.isEmpty && !appState.isFullScreen,
+                isPlaying: appState.playbackState == .playing && appState.currentChannel != nil
+            )
+            if goFullscreen {
+                appState.isFullScreen = true
+            }
+        }
+        .onChange(of: navigationPath.isEmpty) { _, isEmpty in
+            // Back from Settings: the guide gets the full timeout again.
+            if isEmpty { RemoteActivityMonitor.noteActivity() }
+        }
         .onChange(of: appState.isFullScreen) { _, isFullScreen in
             // When fullscreen cover is presented, this view can stop receiving the 30s timer.
             // Rebuild immediately on return so the guide header + grid window stay aligned.
             if !isFullScreen {
+                RemoteActivityMonitor.noteActivity()
                 buildAllSchedules()
                 // The rating nudge's only trigger. Waits until the guide has re-anchored
                 // focus on the live row (0.3s in ChannelGuideView), so the banner takes
