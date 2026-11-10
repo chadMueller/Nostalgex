@@ -16,7 +16,7 @@ struct SettingsSupportView: View {
     static let firstRowID = "rate"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             if showTips {
                 supportGrid
             } else {
@@ -88,7 +88,7 @@ struct SettingsSupportView: View {
         .settingsRow("rate", focus: focus)
         .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
 
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             ForEach(tipJar.products, id: \.id) { product in
                 if let tip = TipProduct(rawValue: product.id) {
                     SupportTile(
@@ -111,7 +111,7 @@ struct SettingsSupportView: View {
             Text(line)
                 .font(NXFont.captionRegular)
                 .foregroundStyle(Color.nxText2)
-                .padding(.leading, 24)
+                .padding(.leading, 20)
         }
     }
 }

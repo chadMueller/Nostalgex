@@ -11,7 +11,7 @@ struct SettingsAboutView: View {
     static let firstRowID = "about_version"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             // Focusable so the remote has somewhere to land; select does nothing.
             SettingsToggleRow(
                 title: "VERSION",
@@ -26,7 +26,7 @@ struct SettingsAboutView: View {
             .accessibilityLabel("App version \(appVersionLabel)")
 
             SettingsSectionHeader(title: "LINKS")
-                .padding(.top, 24)
+                .padding(.top, 20)
 
             ForEach(AboutLinks.all) { link in
                 SettingsToggleRow(

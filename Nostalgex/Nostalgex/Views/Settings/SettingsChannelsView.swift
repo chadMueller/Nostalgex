@@ -141,7 +141,7 @@ private struct ChannelsPackagesPage: View {
     var body: some View {
         let missingCount = ChannelsMissingPage.groups(appState: appState).reduce(0) { $0 + $1.channels.count }
 
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsSectionHeader(title: ChannelsPage.packages.title, subtitle: "Each package adds a set of channels")
 
             VStack(spacing: 4) {
@@ -250,7 +250,7 @@ private struct ChannelsMissingPage: View {
     var body: some View {
         let groups = Self.groups(appState: appState)
 
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsSectionHeader(
                 title: ChannelsPage.missing.title,
                 subtitle: "A channel goes on air once your library has enough titles that fit it"
@@ -377,7 +377,7 @@ private struct ChannelsFranchisesPage: View {
             .sorted { $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending }
 
         // No page heading: the FRANCHISES switch heads the page.
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(spacing: 4) {
                 masterRow
 
@@ -541,7 +541,7 @@ private struct ChannelsCollectionsPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsSectionHeader(
                 title: ChannelsPage.collections.title,
                 subtitle: "Turn your server's collections into channels"
@@ -652,8 +652,8 @@ private struct ChannelsCollectionsPage: View {
                         .foregroundStyle(Color.white.opacity(canTap ? 0.42 : 0.22))
                 }
             }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 22)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

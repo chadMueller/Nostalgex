@@ -14,18 +14,18 @@ struct SettingsRailView: View {
     /// Select on a rail row: move focus into that category's rows.
     let onActivate: (SettingsCategory) -> Void
 
-    static let width: CGFloat = 470
-    private static let rowHeight: CGFloat = 76
+    static let width: CGFloat = 420
+    private static let rowHeight: CGFloat = 64
     private let accent = Color("BrandCyan")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("SETTINGS")
-                .font(NXFont.tag)
+                .font(SettingsFont.tag)
                 .foregroundStyle(Color.nxText2)
-                .padding(.horizontal, 40)
-                .padding(.top, 70)
-                .padding(.bottom, 24)
+                .padding(.horizontal, 34)
+                .padding(.top, 60)
+                .padding(.bottom, 20)
 
             VStack(spacing: 4) {
                 ForEach(SettingsCategory.pinned) { category in
@@ -35,8 +35,8 @@ struct SettingsRailView: View {
                 Rectangle()
                     .fill(Color.white.opacity(0.1))
                     .frame(height: 1)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
 
                 ForEach(SettingsCategory.unpinned) { category in
                     row(category)
@@ -70,7 +70,7 @@ struct SettingsRailView: View {
         return Button {
             onActivate(category)
         } label: {
-            HStack(spacing: 18) {
+            HStack(spacing: 14) {
                 Rectangle()
                     .fill(isFocused || isSelected ? accent : accent.opacity(0.3))
                     .frame(width: isFocused ? 8 : (isSelected ? 6 : 4))
@@ -78,18 +78,18 @@ struct SettingsRailView: View {
                 Image(systemName: category.sfSymbolPlaceholder)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 26, height: 26)
+                    .frame(width: 22, height: 22)
                     .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
 
                 Text(category.title)
-                    .font(NXFont.bodyMedium)
+                    .font(SettingsFont.bodyMedium)
                     .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
                 Spacer(minLength: 0)
             }
-            .padding(.trailing, 16)
+            .padding(.trailing, 14)
             .frame(height: Self.rowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
