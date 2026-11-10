@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: the Plex link code is waited for as long as plex.tv keeps it, #240)
+
+**Why.** The code on screen gave up after 150 polls, 5 minutes, while plex.tv keeps a code for 15 (`expiresIn: 900`,
+measured for the Apple TV, N-007). A viewer who took longer to reach plex.tv/link entered a code the TV had already
+dropped.
+
+**Changed.** `NxPlexCreatePin` keeps the PIN's `expiresIn`, and the wait goes by the clock (`NxPlexPinWait` in
+`source/mediabrowser/SignInFlow.brs`): a poll every 2 s until `expiresIn` seconds have passed, 300 when plex.tv
+doesn't say and never more than 1,800, as the Apple TV. A 404 from the PIN check still ends it on that poll, and both
+ends show the same "The code expired. Press CONNECT TO PLEX for a new one." A poll that couldn't reach plex.tv is not
+an answer and waits on, as before. Jellyfin's Quick Connect keeps its 150 polls.
+
+**Tested off the TV.** 17 new cases in the sign-in flow suite, the wait run against a faked plex.tv and a faked clock:
+a code entered after 10 minutes signs in, one never entered expires at 900 s, a PIN dropped at 40 s stops the wait on
+that poll with nothing asked after it, no `expiresIn` waits 300 s, a day-long one stops at 1,800 s, and slow polls
+still end by the clock.
+
+**Open.** Not run on a TV with a real plex.tv code.
+
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
 **Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on

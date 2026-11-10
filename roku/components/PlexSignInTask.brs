@@ -81,26 +81,32 @@ sub runLinkSignIn()
         end if
         m.top.code = pin.code
         m.top.status = "code"
-        ' Poll every 2 s, as upstream does. After 150 polls (5 minutes), or
-        ' when plex.tv says the PIN is gone, the code has expired: back to
-        ' the first screen, where CONNECT TO PLEX makes a new one.
-        attempt = 0
-        while token = ""
-            Sleep(2000)
-            attempt = attempt + 1
-            got = ""
-            if attempt <= 150 then got = NxPlexCheckPin(pin.id)
-            ' Two checks: got may be invalid, which can't be compared to text.
-            if got = invalid then
-                fail(NxSignInCopy().plexCodeExpired)
-                return
-            end if
-            if NxSignInQuickConnectStep(attempt, got <> "") = "expired" then
-                fail(NxSignInCopy().plexCodeExpired)
-                return
-            end if
-            token = got
-        end while
+        ' Poll every 2 s, as upstream does, for as long as plex.tv keeps the
+        ' code (its expiresIn, 15 minutes; #240), not a count of polls. When
+        ' that has passed, or at once when plex.tv says the PIN is gone, the
+        ' code has expired: back to the first screen, where CONNECT TO PLEX
+        ' makes a new one.
+        print "plex: waiting up to "; NxPlexPinWaitSeconds(pin.expiresIn); " s for the code (plex.tv keeps it "; NxToStr(pin.expiresIn); " s)"
+        timer = CreateObject("roTimespan")
+        waited = NxPlexPinWait(pin, {
+            checkPin: function(id as Dynamic) as Dynamic
+                return NxPlexCheckPin(id)
+            end function
+        }, {
+            timer: timer,
+            seconds: function() as Integer
+                return m.timer.TotalSeconds()
+            end function,
+            sleep: sub(ms as Integer)
+                Sleep(ms)
+            end sub
+        })
+        token = waited.token
+        if token = "" then
+            print "plex: the code expired after "; waited.elapsed; " s ("; waited.polls; " polls)"
+            fail(NxSignInCopy().plexCodeExpired)
+            return
+        end if
     end if
     finishSignIn(token, account, fresh)
 end sub
