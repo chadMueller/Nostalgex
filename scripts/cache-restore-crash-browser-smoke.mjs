@@ -163,7 +163,7 @@ async function run({ query = "" } = {}) {
   const state = await page.evaluate(() => ({
     errorShown: document.getElementById("plex-error-label").style.display === "block",
     errorText: document.getElementById("plex-error-label").textContent,
-    connectShown: document.getElementById("plex-connect").style.display === "flex",
+    connectShown: document.getElementById("plex-connect").style.display === "grid",
     loadingHidden: document.getElementById("loading-library").style.display === "none",
   }));
   await ctx.close();

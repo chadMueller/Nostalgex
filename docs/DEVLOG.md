@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: setup pickers in two columns, one server on by default, same branch)
+
+**Why.** The setup pickers were a single stacked column on desktop and the TV browser, although the layout (logo, title and
+copy left, list and CONTINUE right) was already in the CSS. Four places set the connect screen's inline `display` to `flex`,
+which beat the stylesheet's `grid`; they now set `grid`. Chad also wanted a first setup to start with one server on, not all.
+
+**Changed.** The server list starts with exactly one server on: the first one you own, else the first listed; the rest are OFF.
+All off is allowed and disables CONTINUE (Up and Down skip a disabled button). The list height now follows the screen instead
+of a `vh` cap, which came out too short on a TV browser where the page is zoomed (a third row was cut off at 960x540). One
+column only at 760px wide and under (and short portrait). Saved selection keys and ids are untouched. CHOOSE YOUR LIBRARIES
+still starts with every library on, because it is opting a library out; only the server step changed.
+
+**Tests.** `plex-resolve-browser-smoke.mjs` switches the other servers on before CONTINUE for its multi-server cases, and
+three browser smokes read the connect screen's display as `grid`. `empty-guide-browser-smoke.mjs` already fails 5 checks on
+this branch without this change (the empty-guide copy line); not touched here.
+
+**Apple TV / Roku.** Apple TV still defaults to owned servers (all if none owned). Roku and Android pickers are not ported.
+
 ## 2026-11-10 (web tuner: CHOOSE YOUR LIBRARIES, same branch)
 
 **Why.** Chad asked for the library pick the Apple TV has: choose which libraries become channels, so a library you do not

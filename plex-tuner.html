@@ -3529,7 +3529,13 @@
   .plex-connect .plex-pin-block { align-items: flex-start; }
   .server-picker { display: none; gap: 24px; }
   .server-picker.active { display: flex; flex-direction: column; }
-  .server-picker-list { display: flex; flex-direction: column; gap: 12px; max-height: 56vh; overflow-y: auto; padding: 4px 8px 4px 4px; }
+  /* The list takes what the screen leaves (the page is zoomed on a TV browser, so a vh cap is the wrong
+     measure there): the grid row is exactly the screen minus the padding, the picker may not outgrow it,
+     and the list scrolls inside it while CONTINUE stays in view. */
+  .plex-connect { grid-template-rows: minmax(0, 1fr); }
+  .plex-connect .server-picker { max-height: 100%; min-height: 0; }
+  .server-picker-list { display: flex; flex-direction: column; gap: 12px; flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 4px 8px 4px 4px; }
+  .server-picker-connect { flex-shrink: 0; }
   .setup-row {
     display: flex; align-items: center; gap: 16px; justify-content: space-between;
     padding: 22px 30px; border-radius: 14px; cursor: pointer;
@@ -3549,7 +3555,9 @@
   .setup-row:focus .setup-row-sub, .setup-row:hover .setup-row-sub, .setup-row:focus .setup-row-state, .setup-row:hover .setup-row-state { color: #00101a; }
   .plex-connect .server-picker-connect:focus, .plex-connect .server-picker-connect:focus-visible { background: var(--cyan); color: #00101a; box-shadow: 0 0 30px var(--cyan); outline: none; }
   @media (max-width: 760px), (max-height: 520px) and (orientation: portrait) {
-    .plex-connect { grid-template-columns: 1fr; row-gap: 24px; padding: 24px 20px; align-content: safe center; }
+    .plex-connect { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 24px; padding: 24px 20px; align-content: safe center; }
+    .plex-connect .server-picker { max-height: none; }
+    .server-picker-list { max-height: 56vh; }
     .plex-connect > .plex-brand, .plex-connect > :not(.plex-brand) { grid-column: 1; grid-row: auto; }
     .setup-title { font-size: max(26px, var(--nx-fs)); }
     .plex-connect .plex-btn, .plex-connect .server-picker-connect { font-size: max(18px, var(--nx-fs)); padding: 18px 20px; }
@@ -5320,7 +5328,7 @@
       sessionStorage.removeItem('plex90_pick_server');
       plexToken = sessionStorage.getItem('plex90_token');
       ssSet('plex90_user_token', plexToken);
-      document.getElementById('plex-connect').style.display = 'flex';
+      document.getElementById('plex-connect').style.display = 'grid';
       document.getElementById('plex-actions').style.display = 'none';
       discoverServers();
     } else {
@@ -9427,8 +9435,10 @@
         selectedServerIndices = new Set([0]);
         confirmMultiServerSelection();
       } else {
-        // Default: all servers selected
-        selectedServerIndices = new Set(discoveredServers.map((_, i) => i));
+        // Default: exactly one server on, the first one you own (else the first listed). The rest
+        // start OFF and are one press away, so a first setup never scans a friend's server by surprise.
+        const firstOwned = discoveredServers.findIndex(sv => sv.owned);
+        selectedServerIndices = new Set([firstOwned >= 0 ? firstOwned : 0]);
         showServerPicker();
       }
     } catch (err) {
@@ -9513,13 +9523,14 @@
     connectBtn.className = 'server-picker-connect plex-btn';
     connectBtn.type = 'button';
     connectBtn.textContent = 'CONTINUE';
+    connectBtn.disabled = selectedServerIndices.size === 0;
     connectBtn.addEventListener('click', confirmMultiServerSelection);
     picker.appendChild(connectBtn);
   }
 
   function toggleServerOption(index) {
     if (selectedServerIndices.has(index)) {
-      if (selectedServerIndices.size > 1) selectedServerIndices.delete(index);
+      selectedServerIndices.delete(index);   // all off is allowed; CONTINUE is disabled until one is on
     } else {
       selectedServerIndices.add(index);
     }
@@ -9538,6 +9549,7 @@
   }
 
   async function confirmMultiServerSelection() {
+    if (selectedServerIndices.size === 0) return;
     document.getElementById('server-picker').classList.remove('active');
     document.getElementById('plex-waiting').classList.add('active');
     document.querySelector('#plex-waiting .plex-waiting-text').textContent = 'TESTING CONNECTIONS...';
@@ -9911,7 +9923,7 @@
     clearVideoError();
     document.getElementById('player-screen').classList.remove('has-channel');
     document.getElementById('channel-display').classList.remove('active');
-    document.getElementById('plex-connect').style.display = 'flex';
+    document.getElementById('plex-connect').style.display = 'grid';
     document.getElementById('key-hints').style.display = 'none';
     resetConnectScreen();
     updateConfigPlexStatus();
@@ -11432,7 +11444,7 @@
     document.getElementById('plex-error-label').style.display = 'none';
     document.getElementById('plex-actions').style.display = 'none';
     document.getElementById('plex-empty').style.display = 'flex';
-    document.getElementById('plex-connect').style.display = 'flex';
+    document.getElementById('plex-connect').style.display = 'grid';
     appState = 'connect';
   }
   function hideEmptyGuideState() {
@@ -11584,7 +11596,7 @@
       // the button is made (as this did) left a Jellyfin or Emby viewer with the message and
       // only CONNECT WITH PLEX to press.
       plexConnected = false;
-      document.getElementById('plex-connect').style.display = 'flex';
+      document.getElementById('plex-connect').style.display = 'grid';
       resetConnectScreen();
       if (isMediaBrowserBackend(mediaBackend)) {
         // A self-hosted tuner on plain http: no mixed content, and no nostalgex.app.
@@ -11910,7 +11922,7 @@
     if (appState === 'server-picker') {
       if (key === 'Escape' || key === 'ArrowLeft') { cancelServerPicker(); e.preventDefault(); return; }
       if (key === 'ArrowDown' || key === 'ArrowUp') {
-        const items = [...document.querySelectorAll('#server-picker .setup-row, #server-picker .server-picker-connect')];
+        const items = [...document.querySelectorAll('#server-picker .setup-row, #server-picker .server-picker-connect')].filter(el => !el.disabled);
         const at = items.indexOf(document.activeElement);
         const to = at === -1 ? 0 : Math.min(Math.max(at + (key === 'ArrowDown' ? 1 : -1), 0), items.length - 1);
         if (items[to]) { items[to].focus({ preventScroll: false }); const i = Number(items[to].dataset.index); if (!isNaN(i)) serverFocusIndex = i; }

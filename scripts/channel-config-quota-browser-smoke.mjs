@@ -145,7 +145,7 @@ async function run({ query = "" } = {}) {
   await page.waitForTimeout(250);
   const state = await page.evaluate(() => ({
     loadingDone: document.getElementById("loading-library").style.display === "none",
-    connectShown: document.getElementById("plex-connect").style.display === "flex",
+    connectShown: document.getElementById("plex-connect").style.display === "grid",
     errorShown: document.getElementById("plex-error-label").style.display === "block",
     errorText: document.getElementById("plex-error-label").textContent,
     channelConfigSaved: localStorage.getItem("plex90_channel_config") !== null,
