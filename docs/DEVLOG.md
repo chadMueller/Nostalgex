@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
+
+**Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
+never starts there. A guide left up for hours keeps the logo, header and grid lines still on screen, which can burn
+into an OLED. Fullscreen video keeps moving.
+
+**Changed.** New PLAYBACK & PICTURE row GUIDE TIMEOUT: OFF, 5 MIN (default) or 15 MIN, per Apple TV and never
+synced. After that long with no remote press on the guide, the playing channel goes fullscreen, the same as
+Play/Pause. It only runs while the guide is in front and a channel is playing; Settings, the loading screen and an
+empty guide are left alone. `RemoteActivityMonitor` notes every press and touch-surface swipe with a window gesture
+recognizer that never recognizes, so it never takes a press from the focus engine. `TunerView` checks every 5 seconds
+and restarts the clock when the guide comes back from fullscreen or Settings.
+
+**Tested.** `GuideTimeoutTests` (default, cycling, the timing rule) and `GuideTimeoutUITests` in demo mode with
+`-uiTestGuideTimeoutSeconds 20`: a guide left alone for 30 seconds goes fullscreen, and a guide pressed every 8 seconds
+for 40 seconds stays up. Both passed twice. `NostalgexTests` and the OPEN ON LAST CHANNEL UI tests pass with the new
+row. Not tried on a real Apple TV.
+
+**Not changed.** Roku and the web tuner keep the guide up indefinitely; they need the same setting for parity.
+
 ## 2026-11-09 (Apple TV: settings values readable, focused settings row easy to find)
 
 **Why.** A design pass over demo mode on an Apple TV 4K simulator (tvOS 27.2, build 1.0.30) found two settings

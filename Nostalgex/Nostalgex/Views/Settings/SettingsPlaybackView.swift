@@ -10,6 +10,8 @@ struct SettingsPlaybackView: View {
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
     /// OPEN ON LAST CHANNEL (I-017). Per Apple TV, never synced; see LaunchChannelMemory.
     @AppStorage(LaunchChannelMemory.enabledKey, store: AppDefaults.standard) private var openOnLastChannel = LaunchChannelMemory.enabledByDefault
+    /// GUIDE TIMEOUT. Per Apple TV, never synced; see GuideTimeout.
+    @AppStorage(GuideTimeout.storageKey, store: AppDefaults.standard) private var guideTimeout = GuideTimeout.defaultValue.rawValue
     @State private var showStreamQualityPicker = false
     @State private var showSubtitleLanguagePicker = false
     @State private var showAudioLanguagePicker = false
@@ -41,6 +43,21 @@ struct SettingsPlaybackView: View {
             }
             .settingsRow("guide_text_size", focus: focus)
             .accessibilityValue(appState.guideTextSize.label)
+
+            // OFF, 5 MIN, 15 MIN; select moves to the next.
+            let timeout = GuideTimeout(stored: guideTimeout)
+            SettingsToggleRow(
+                title: "GUIDE TIMEOUT",
+                subtitle: "Go fullscreen when the guide is left alone, to protect OLED screens",
+                detail: timeout.label,
+                isOn: true,
+                isFocused: isFocused("guide_timeout"),
+                showToggle: false
+            ) {
+                guideTimeout = timeout.next.rawValue
+            }
+            .settingsRow("guide_timeout", focus: focus)
+            .accessibilityValue(timeout.label)
 
             SettingsToggleRow(
                 title: "STREAM QUALITY",
