@@ -8686,12 +8686,28 @@
     document.getElementById('server-picker')?.classList.remove('active');
     const actions = document.getElementById('plex-actions');
     if (actions) actions.style.display = 'flex';
+    const plexBtn = document.getElementById('plex-connect-btn');
+    if (plexBtn) plexBtn.style.display = '';
     const signinLabel = document.querySelector('.plex-signin-label');
     if (signinLabel) signinLabel.textContent = 'Sign in with your Plex account';
     // Clear any Jellyfin-specific reconnect button
     document.getElementById('plex-reconnect-jf')?.remove();
     hideEmptyGuideState();
     appState = 'connect';
+  }
+
+  // The server said no to the saved sign-in (401 or 403). The browser remembers a login until
+  // the viewer signs out, but not one the server has already refused: kept, it sends every
+  // reload and the RECONNECT link (web-tuner.html forwards a saved login straight back here)
+  // into the same refusal. Everything signOut() removes that is tied to the login goes.
+  function forgetRejectedLogin() {
+    for (const k of ['plex90_token', 'plex90_server_url', 'plex90_server_name', 'plex90_user_token',
+      'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id']) sessionStorage.removeItem(k);
+    try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    // The cached library belongs to credentials that no longer work, and the
+    // cache is consulted before the connect screen, so leaving it would build
+    // channels around dead tokens instead of asking the user to sign in.
+    clearLibraryCache();
   }
 
   async function checkStoredAuth() {
@@ -8834,16 +8850,7 @@
       } else if (tokenRevoked) {
         // Token was definitively rejected — clear both session AND localStorage so stale
         // credentials don't persist across page loads.
-        sessionStorage.removeItem('plex90_token');
-        sessionStorage.removeItem('plex90_server_url');
-        sessionStorage.removeItem('plex90_server_name');
-        sessionStorage.removeItem('plex90_user_token');
-        sessionStorage.removeItem('plex90_selected_servers');
-        try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
-        // The cached library belongs to credentials that no longer work, and the
-        // cache is consulted before the connect screen, so leaving it would build
-        // channels around dead tokens instead of asking the user to sign in.
-        clearLibraryCache();
+        forgetRejectedLogin();
       }
       // If neither valid nor tokenRevoked, leave credentials in place and show connect screen.
       // The user can retry without re-entering credentials.
@@ -9709,6 +9716,14 @@
         viewsRes = embyRes;
       }
     }
+    // A refused sign-in ends the scan here too. Without this the answer was read as a list of
+    // libraries: an empty one on Jellyfin's `{}`, a parse error on an empty body, and either
+    // way not the SESSION ENDED screen, with the dead login still saved.
+    if (viewsRes.status === 401 || viewsRes.status === 403) {
+      const e = new Error(`HTTP ${viewsRes.status} from the library list`);
+      e.plexStatus = viewsRes.status;
+      throw e;
+    }
     const viewsData = await viewsRes.json();
     const views = viewsData.Items || [];
     LL.state.scanTotalSections = views.length;
@@ -10495,6 +10510,15 @@
       const errorEl = document.getElementById('plex-error-label');
       const failureKind = libraryFailureKind(err, errorSource);
       const notTheServer = libraryFailureText(failureKind);
+      // The server refused the login: forget it, so RECONNECT lands on the sign-in page.
+      // mediaBackend stays in memory, so the message below still says Jellyfin, Emby or Plex.
+      if (failureKind === 'auth') forgetRejectedLogin();
+      // Reset the connect screen first: it removes the RECONNECT button, so resetting it after
+      // the button is made (as this did) left a Jellyfin or Emby viewer with the message and
+      // only CONNECT WITH PLEX to press.
+      plexConnected = false;
+      document.getElementById('plex-connect').style.display = 'flex';
+      resetConnectScreen();
       if (isMediaBrowserBackend(mediaBackend)) {
         // A self-hosted tuner on plain http: no mixed content, and no nostalgex.app.
         const selfHttp = location.protocol === 'http:';
@@ -10510,8 +10534,10 @@
           : `COULD NOT REACH ${NAME} SERVER. IT HAS TO ANSWER OVER HTTPS. A PLAIN LAN SERVER NEEDS THE APPLE TV APP`;
         errorEl.style.display = 'block';
         // For Jellyfin and Emby errors don't show the Plex connect button. Send them back to the connect page.
-        const actionsEl = document.getElementById('plex-actions');
-        if (actionsEl) actionsEl.style.display = 'none';
+        // Only the Plex button goes: the error line and this RECONNECT link share its container
+        // (#plex-actions), and hiding the container hid both of them.
+        const plexBtnEl = document.getElementById('plex-connect-btn');
+        if (plexBtnEl) plexBtnEl.style.display = 'none';
         const reconnectEl = document.getElementById('plex-reconnect-jf');
         if (!reconnectEl) {
           const btn = document.createElement('a');
@@ -10531,9 +10557,6 @@
           : notTheServer || 'COULD NOT LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE';
         errorEl.style.display = 'block';
       }
-      plexConnected = false;
-      document.getElementById('plex-connect').style.display = 'flex';
-      resetConnectScreen();
     }
   }
 

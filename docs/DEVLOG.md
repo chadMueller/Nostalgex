@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Web tuner and Docker: saved login audit and a refused login, I-024; branch web/fixes-1109)
+
+**Saved login (I-024).** The web tuner already keeps the viewer signed in; the card was written before anyone measured it. Measured
+on the real pages, headless, against a Jellyfin-shaped server (`scripts/saved-login-browser-smoke.mjs`, `npm run test:saved-login`):
+signing in writes `plex90_saved_auth` in localStorage (backend, token, server address and name, user id, plus the typed address
+and user name for the next sign-in form; for Plex also the account token) and a working copy of the token in sessionStorage. No
+password is stored anywhere. A browser restart (localStorage and IndexedDB kept, sessionStorage gone) forwards web-tuner.html
+to the guide, signed in, no connect screen. The login stays until the viewer signs out or the server refuses it; there is no
+timer. SIGN OUT leaves no copy of the token or the user id in localStorage, sessionStorage, IndexedDB or cookies, and empties
+the library cache. It does not clear the channel settings, the install id, or the saved day schedules (`plex90_manifest_*`,
+whose keys carry the server address and whose rows carry item ids); those stay in the browser. Not measured: Safari, which
+may clear script-written storage after seven days without a visit, and a TV browser that wipes site data on exit.
+
+**Fixed: a refused login was remembered.** Measured with a server that answers 401 to everything after sign-in: the first
+request, the library list, was read as a library list. Jellyfin's `{}` made an empty library (NO CHANNELS FOUND, nothing says
+why), and the saved login stayed. Where the screen did say SESSION ENDED, two things made it a dead end: the RECONNECT link
+was created and then removed by `resetConnectScreen()` a line later, leaving the message beside CONNECT WITH PLEX (the Plex
+button, for a Jellyfin or Emby viewer); and even with the link, web-tuner.html forwards a saved login straight back to the
+tuner. Now a 401 or 403 on the library list ends the scan like the item pages already did, the refused login is forgotten (the
+same removal Plex already did when plex.tv refused the token, now one function), the connect screen is reset before the
+RECONNECT link is made, and only the Plex button is hidden, not the container that also holds the error line and the link.
+Smoke: 43 checks, Jellyfin and Emby at 960x540 and a phone, Plex through plex.tv, and a negative control with the 401 handling
+taken out. Not done: a revoked login while a cached library is showing still plays the cached guide and fails at playback
+with the existing "sign in again" card.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

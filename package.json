@@ -38,6 +38,7 @@
     "test:schedule-lineup": "node scripts/nostalgex-schedule-lineup-smoke.mjs",
     "test:start-over": "node scripts/start-over-smoke.mjs",
     "test:start-over:browser": "node scripts/start-over-browser-smoke.mjs",
+    "test:saved-login": "node scripts/saved-login-browser-smoke.mjs",
     "test:empty-lineup": "node scripts/empty-lineup-browser-smoke.mjs",
     "test:utf8-repair": "node scripts/nostalgex-utf8-repair-smoke.mjs",
     "test:plex-bad-byte": "node scripts/plex-bad-byte-browser-smoke.mjs",
