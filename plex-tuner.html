@@ -1607,6 +1607,7 @@
   }
 
   /* Grid body - scrolling channel rows */
+  .grid-body:focus-visible { outline: 3px solid #fff; outline-offset: -3px; }
   .grid-body {
     flex: 1;
     overflow-y: auto;
@@ -3733,7 +3734,7 @@
       <div class="grid-channel-col">CHANNEL</div>
       <div class="grid-time-slots" id="grid-time-slots"></div>
     </div>
-    <div class="grid-body" id="grid-body"></div>
+    <div class="grid-body" id="grid-body" tabindex="0" aria-label="Channel guide. Up and Down browse, Enter tunes in."></div>
     <div class="grid-footer">
       <div class="grid-key-hints"><span>[ENTER]</span> TUNE IN  <span>[UP/DOWN]</span> BROWSE</div>
       <div class="grid-page-btns">
@@ -4833,6 +4834,8 @@
   let guideVisible = false;
   let configVisible = false;
   let guideFocusIndex = 0;
+  // The cursor is on a promo row (support, info, the seasonal invite) instead of a channel: its data-promo.
+  let guidePromoKey = null;
   let configFocusIndex = 0;
   let connectFocusIndex = 0;
   let overlayTimeout = null;
@@ -5501,6 +5504,7 @@
       const row = document.createElement('div');
       row.className = 'grid-row grid-row--promo grid-row--seasonal';
       row.dataset.promo = 'seasonal';
+      if (guideVisible && guidePromoKey === 'seasonal') row.classList.add('focused');
       const content = document.createElement('div');
       content.className = 'grid-promo-content';
       const headline = document.createElement('span');
@@ -5540,6 +5544,7 @@
       const row = document.createElement('div');
       row.className = 'grid-row grid-row--promo';
       row.dataset.promo = type;
+      if (guideVisible && guidePromoKey === type) row.classList.add('focused');
       const content = document.createElement('div');
       content.className = 'grid-promo-content';
       const dot = document.createElement('div');
@@ -5568,7 +5573,7 @@
 
     enabledChannels.forEach((ch, i) => {
       const isActive = currentChannel === ch.id;
-      const isFocused = guideVisible && i === guideFocusIndex;
+      const isFocused = guideVisible && !guidePromoKey && i === guideFocusIndex;
 
       const row = document.createElement('div');
       row.className = `grid-row${isActive ? ' active' : ''}${isFocused ? ' focused' : ''}`;
@@ -6684,6 +6689,7 @@
   function showGuide() {
     if (guideVisible) return;
     guideVisible = true;
+    guidePromoKey = null;
 
     // Pre-select current channel in guide
     const enabled = getEnabledChannels();
@@ -6714,6 +6720,32 @@
     }
   }
 
+  // Up and Down walk every row of the guide in order: channels, and the promo rows between them
+  // (the seasonal invite above channel one, SUPPORT, INFO). Both ends wrap. A promo row takes the
+  // same cyan focus a channel row does, and Enter presses it.
+  function moveGuideFocus(step) {
+    const rows = [...document.querySelectorAll('#grid-body > .grid-row')];
+    if (!rows.length) return;
+    const enabled = getEnabledChannels();
+    const focusedId = enabled[Math.min(Math.max(guideFocusIndex, 0), Math.max(enabled.length - 1, 0))];
+    let at = rows.findIndex(r => guidePromoKey
+      ? r.dataset.promo === guidePromoKey
+      : focusedId && Number(r.dataset.channelId) === focusedId.id);
+    if (at === -1) at = step === 1 ? -1 : 0;
+    const to = (at + step + rows.length) % rows.length;
+    const wrapped = step === 1 ? at === rows.length - 1 : at === 0;
+    const row = rows[to];
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.grid-row--seasonal')) document.activeElement.blur();
+    if (row.dataset.promo) {
+      guidePromoKey = row.dataset.promo;
+    } else {
+      guidePromoKey = null;
+      const idx = enabled.findIndex(c => c.id === Number(row.dataset.channelId));
+      if (idx >= 0) guideFocusIndex = idx;
+    }
+    updateGuideFocus(wrapped);
+  }
+
   function updateGuideFocus(wrapped = false) {
     // `guideFocusIndex` indexes getEnabledChannels(), but the promo rows share the
     // .grid-row class, so walking the full NodeList by position drifted one row per
@@ -6729,7 +6761,9 @@
 
     let focusedRow = null;
     document.querySelectorAll('.grid-row').forEach((row) => {
-      const isFocused = focusedId !== null && Number(row.dataset.channelId) === focusedId;
+      const isFocused = guidePromoKey
+        ? row.dataset.promo === guidePromoKey
+        : focusedId !== null && Number(row.dataset.channelId) === focusedId;
       row.classList.toggle('focused', isFocused);
       if (isFocused) focusedRow = row;
     });
@@ -10995,11 +11029,22 @@
   // KEYBOARD NAVIGATION
   // ══════════════════════════════════════
   document.addEventListener('keydown', (e) => {
-    // Don't intercept keystrokes when a text input is focused
-    const tag = document.activeElement && document.activeElement.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    // A shortcut never fires while the viewer is typing or choosing in a field, and never with a
+    // modifier held (Ctrl+R, Cmd+F and the rest belong to the browser).
+    const focused = document.activeElement;
+    const tag = focused && focused.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (focused && focused.isContentEditable)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     const key = e.key;
+
+    // Enter and Space press whatever has focus. A real button or link does that itself, so the
+    // guide's own Enter (tune in) must not take it; a div with a role gets the click here.
+    if ((key === 'Enter' || key === ' ') && focused && focused !== document.body) {
+      if (focused.matches('button, a[href], summary')) return;
+      const pressable = focused.closest('[role="button"], [role="tab"], [role="option"], [role="checkbox"], [role="menuitem"]');
+      if (pressable && !(appState === 'server-picker' && key === 'Enter')) { pressable.click(); e.preventDefault(); return; }
+    }
 
     // The two small dialogs sit above everything and keep the keys while they are open.
     // Enter and Space reach the focused button on their own.
@@ -11113,19 +11158,29 @@
       const nextKey = 'ArrowDown';
 
       if (key === prevKey || key === nextKey) {
-        const count = getEnabledChannels().length;
-        if (count > 0) {
-          // The index can sit past the end after channels were switched off.
-          const from = Math.min(Math.max(guideFocusIndex, 0), count - 1);
-          const step = key === nextKey ? 1 : -1;
-          const wrapped = step === 1 ? from === count - 1 : from === 0;
-          guideFocusIndex = (from + step + count) % count;
-          updateGuideFocus(wrapped);
-        }
+        moveGuideFocus(key === nextKey ? 1 : -1);
         e.preventDefault();
         return;
       }
-      if (key === 'Enter') {
+      // The seasonal invite has three buttons; Left and Right walk them (Enter then presses the focused one).
+      if ((key === 'ArrowLeft' || key === 'ArrowRight') && guidePromoKey === 'seasonal') {
+        const btns = [...document.querySelectorAll('.grid-row--seasonal button')];
+        if (btns.length) {
+          const at = btns.indexOf(document.activeElement);
+          const next = at === -1 ? (key === 'ArrowRight' ? 0 : btns.length - 1) : (at + (key === 'ArrowRight' ? 1 : -1) + btns.length) % btns.length;
+          btns[next].focus({ preventScroll: true });
+          e.preventDefault();
+          return;
+        }
+      }
+      if (key === 'Enter' || key === ' ') {
+        if (guidePromoKey) {
+          const row = document.querySelector('.grid-row[data-promo="' + guidePromoKey + '"]');
+          if (row) row.click();
+          e.preventDefault();
+          return;
+        }
+        if (key === ' ' && appState !== 'guide' && !(guideVisible && appState === 'player')) return;
         const enabled = getEnabledChannels();
         const ch = enabled[guideFocusIndex];
         if (ch) tuneFromGuide(ch.id);
@@ -11241,6 +11296,65 @@
       return;
     }
   });
+
+
+  // ══════════════════════════════════════
+  // DIALOG FOCUS: kept inside, and handed back
+  // ══════════════════════════════════════
+  // Every overlay (Settings, the sleep, quality and playback info dialogs, the controls drawer, the
+  // email sign-up, the STILL WATCHING card) is watched here, so none of them needs its own code for
+  // two rules: while one is open focus starts inside it and Tab cannot leave it, and when the last
+  // one closes focus goes back to what had it before (or to the guide).
+  const NX_MODALS = ['#sleep-grace:not([hidden])', '#promo-modal.open', '.nx-dialog:not([hidden])', '#config-overlay.open', 'body.drawer-open #m-drawer'];
+  const NX_FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  let nxModalOpen = null, nxOpener = null;
+  function nxTopModal() {
+    for (const sel of NX_MODALS) {
+      const all = [...document.querySelectorAll(sel)].filter(el => el.getClientRects().length);
+      if (all.length) return all[all.length - 1];
+    }
+    return null;
+  }
+  function nxFocusables(root) {
+    return [...root.querySelectorAll(NX_FOCUSABLE)].filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+  }
+  document.addEventListener('focusin', (e) => {
+    if (!nxModalOpen && !nxTopModal()) nxOpener = e.target;
+  });
+  function nxSyncModals() {
+    const m = nxTopModal();
+    if (m === nxModalOpen) return;
+    const was = nxModalOpen;
+    nxModalOpen = m;
+    if (m) {
+      if (m.id !== 'config-overlay' && !m.contains(document.activeElement)) {   // Settings places its own focus
+        const first = nxFocusables(m)[0];
+        if (first) first.focus({ preventScroll: true });
+        else if (m.tabIndex < 0 || m.hasAttribute('tabindex')) m.focus({ preventScroll: true });
+      }
+    } else if (was) {
+      const back = nxOpener && document.contains(nxOpener) && nxOpener.getClientRects().length ? nxOpener : document.getElementById('grid-body');
+      if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    }
+  }
+  (function watchModals() {
+    const watch = ['sleep-grace', 'promo-modal', 'config-overlay', 'm-drawer'].map(id => document.getElementById(id)).filter(Boolean);
+    document.querySelectorAll('.nx-dialog').forEach(d => watch.push(d));
+    const mo = new MutationObserver(() => nxSyncModals());
+    watch.forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class', 'hidden', 'style', 'aria-hidden'] }));
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  })();
+  // Tab stays inside the overlays that do not trap it themselves (the drawer and the two small dialogs do).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || e.defaultPrevented) return;
+    const m = nxModalOpen;
+    if (!m || !(m.id === 'config-overlay' || m.id === 'promo-modal')) return;
+    const items = nxFocusables(m);
+    if (!items.length) { e.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1], at = document.activeElement;
+    if (e.shiftKey && (at === first || !m.contains(at))) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && (at === last || !m.contains(at))) { first.focus(); e.preventDefault(); }
+  }, true);
 
   // ══════════════════════════════════════
   // START
