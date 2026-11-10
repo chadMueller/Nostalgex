@@ -31,14 +31,18 @@
 ' request. Two failures on the home-network address drop it for the rest of
 ' the load (on the server object only: the next load starts from the saved
 ' address again). Returns the MediaContainer, or invalid. Sets err.auth when the
-' server rejected the token.
+' server rejected the token, and err.code to the last try's status (negative when
+' nothing answered: -28 is a timeout).
 function NxPlexGetContainer(server as Object, path as String, err = invalid as Dynamic, timeoutMs = 15000 as Integer) as Dynamic
     base = NxPlexBase(server)
     for attempt = 1 to 3
         res = NxPlexServerGet(base + path, NxToStr(server.accessToken), timeoutMs)
         ' A scan told to stop waiting keeps an answer that came, and tries
         ' nothing again.
-        if NxLoadStopped() and (res.code < 200 or res.code > 299) then return invalid
+        if NxLoadStopped() and (res.code < 200 or res.code > 299) then
+            if err <> invalid then err.code = res.code
+            return invalid
+        end if
         if res.code = 401 or res.code = 403 or (res.code >= 200 and res.code <= 299) then exit for
         print "plex: a library request failed ("; res.code; "), try "; attempt; " of 3"
         if attempt = 2 and base <> NxToStr(server.uri) then
@@ -49,6 +53,7 @@ function NxPlexGetContainer(server as Object, path as String, err = invalid as D
             print "plex: the home-network address failed twice; using HTTPS for the rest of this load"
         end if
     end for
+    if err <> invalid then err.code = res.code
     if res.code = 401 or res.code = 403 then
         if err <> invalid then err.auth = true
         return invalid
@@ -561,29 +566,92 @@ end function
 ' gives { MediaContainer } or invalid, as upstream's getJSON gives the document
 ' or throws. The window ({ start, size }, or invalid) goes on the request as
 ' NxPlexWindowPath puts it.
-function NxPlexCollectionsFetcher(server as Object) as Object
+'
+' A server that answers the lists but never a collection's children (I-068: a
+' first launch sat on DISCOVERING COLLECTIONS) cost three tries of 15 s for
+' each of the 318 collections, about 4 hours, with no way out. So this gives up
+' on the rest once NxCollectionsSilentLimit() one-at-a-time reads in a row got
+' no answer at all (a timeout, not an error status, which costs nothing): the
+' lists it still has to read answer invalid, and `dead` says so, so the caller
+' drops this server's collections and reads them again on the next launch.
+' The five-at-a-time first reads don't count: a server may time out under five
+' smart collections at once and still answer them one by one.
+'
+' `net` is how it talks: many(urls, token) like NxPlexServerGetMany, and
+' one(server, path, err) like NxPlexGetContainer, which sets err.code. Without
+' one it is the real one; tests give a clock instead of a network.
+function NxPlexCollectionsFetcher(server as Object, net = invalid as Dynamic) as Object
+    if net = invalid then net = NxPlexCollectionsNet()
     return {
         server: server,
+        net: net,
+        silent: 0,
+        dead: false,
+        ' One read's outcome: an answer of any status clears the count, no
+        ' answer adds to it.
+        note: sub(code as Integer)
+            if code < 0 then
+                m.silent = m.silent + 1
+                if m.silent >= NxCollectionsSilentLimit() then m.dead = true
+            else
+                m.silent = 0
+            end if
+        end sub,
+        readOne: function(path as String) as Dynamic
+            if m.dead then return invalid
+            err = { code: 0 }
+            mc = m.net.one(m.server, path, err)
+            m.note(err.code)
+            return mc
+        end function,
         getJSON: function(path as String, win = invalid as Dynamic) as Dynamic
-            mc = NxPlexGetContainer(m.server, NxPlexWindowPath(path, win))
+            mc = m.readOne(NxPlexWindowPath(path, win))
             if mc = invalid then return invalid
             return { MediaContainer: mc }
         end function,
         ' Five at a time, as the episodes are; one that failed gets the usual
         ' three tries on its own.
         getMany: function(paths as Object, win = invalid as Dynamic) as Object
+            out = []
+            if m.dead then
+                for each path in paths
+                    out.Push(invalid)
+                end for
+                return out
+            end if
             urls = []
             for each path in paths
                 urls.Push(NxPlexBase(m.server) + NxPlexWindowPath(path, win))
             end for
-            answers = NxPlexServerGetMany(urls, NxToStr(m.server.accessToken), 5)
-            out = []
+            answers = m.net.many(urls, NxToStr(m.server.accessToken), 5)
             for i = 0 to paths.Count() - 1
+                ' An answer clears the count; no answer here doesn't add to it
+                ' (see above), only the read on its own below does.
+                if answers[i].code >= 0 then m.note(answers[i].code)
                 mc = NxPlexContainerOf(answers[i])
-                if mc = invalid then mc = NxPlexGetContainer(m.server, NxPlexWindowPath(paths[i], win))
+                if mc = invalid then mc = m.readOne(NxPlexWindowPath(paths[i], win))
                 if mc = invalid then out.Push(invalid) else out.Push({ MediaContainer: mc })
             end for
             return out
+        end function
+    }
+end function
+
+' Reads in a row with no answer before the rest of a server's collections are
+' given up. Three, so a server that is only slow keeps going: it takes nine
+' timeouts in a row (about 2 minutes) to stop.
+function NxCollectionsSilentLimit() as Integer
+    return 3
+end function
+
+' The real transport for NxPlexCollectionsFetcher.
+function NxPlexCollectionsNet() as Object
+    return {
+        many: function(urls as Object, token as String, width as Integer) as Object
+            return NxPlexServerGetMany(urls, token, width)
+        end function,
+        one: function(server as Object, path as String, err as Object) as Dynamic
+            return NxPlexGetContainer(server, path, err)
         end function
     }
 end function

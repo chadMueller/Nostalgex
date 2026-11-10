@@ -480,7 +480,16 @@ sub loadLibrary()
     for each s in scanned
         ' Plex collections, or Jellyfin and Emby BoxSets.
         if NxServerKind(servers[s.index]) = "plex" then
-            got = NxCollectionsFetchPlex(s.key, NxPlexCollectionsFetcher(servers[s.index]), m.top)
+            fetcher = NxPlexCollectionsFetcher(servers[s.index])
+            got = NxCollectionsFetchPlex(s.key, fetcher, m.top)
+            ' A server that stopped answering part way (I-068): none of its
+            ' collections this time, and no save that says it was read, so the
+            ' next launch reads them again.
+            if fetcher.dead then
+                print "library: server "; s.index; " stopped answering for its collections; leaving them out this time"
+                got = invalid
+                s.signature = invalid
+            end if
         else
             got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top)
         end if

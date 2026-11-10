@@ -73,6 +73,7 @@ function NxRunCollectionTests(vectorsPath as String, configPath as String, dicti
     NxClClassifierCases(r)
     NxClSplitCases(r)
     NxClPagingCases(r)
+    NxClSyntheticPlexCases(r)
 
     print "collection cases (upstream vectors and Swift tests): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
@@ -951,4 +952,241 @@ function NxClCountFor(calls as Object, prefix as String) as Integer
         if Left(c, prefix.Len()) = prefix then n = n + 1
     end for
     return n
+end function
+
+' ── A big Plex library, I-068 ────────────────────────────────────────────────
+
+' captamajora's library (Discussion #8): 318 collections, 4,535 movies and 399
+' shows, on Plex 1.43.5. The real NxPlexCollectionsFetcher and
+' NxCollectionsFetchPlex read a model of that server through a clock, not a
+' network. The model answers what 1.43.5 was measured to answer: a list read
+' with no size is refused (the 400 the server logs it will send), a size over
+' 1000 for the lists or 120 for the children is refused, and anything else is
+' one window. A request that gets no answer costs what the real transport
+' costs: 15 s for the five-at-a-time read, and three tries of 15 s for a read
+' on its own (NxPlexGetContainer).
+'
+' What this does not show is a real server or a TV. Nobody has said what
+' their server did when the launch hung; these are the ways a hang can be
+' built from the code, each one tried.
+function NxClSyntheticPlexCases(r as Object)
+    lib = NxClBigLibrary()
+
+    ' 1. A server that answers: all 318 collections, every request sized, no
+    ' request refused, every child key a film or show in the library.
+    net = NxClPlexNet(lib, {})
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    got = NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "318: collections read", NxToStr(got.Count()), "318")
+    NxCheck(r, "318: none refused for size", NxToStr(net.refused), "0")
+    NxCheck(r, "318: the server isn't given up on", NxClBool(f.dead), "false")
+    kids = 0
+    for each c in got
+        kids = kids + c.childKeys.Count()
+    end for
+    NxCheck(r, "318: every child key read", NxToStr(kids), NxToStr(lib.kids))
+    index = NxCollectionsIndexLibrary(lib.items, { "0": "mid" })
+    NxCheck(r, "318: 4,535 films and 399 shows indexed", NxToStr(index.mid.byKey.Count()) + "/" + NxToStr(index.mid.byShow.Count()), "5333/399")
+    missing = 0
+    for each c in got
+        if NxCollectionsResolve(c.childKeys, index.mid).Count() = 0 then missing = missing + 1
+    end for
+    NxCheck(r, "318: every collection resolves to library items", NxToStr(missing), "0")
+    NxCheck(r, "318: under a minute at 120 ms a request", NxClBool(net.clock < 60000), "true")
+
+    ' 2. Children that never answer. The first five-at-a-time read gets no
+    ' answer in 15 s, then three one-on-one reads of three tries each end it:
+    ' 15 s + 3 x 45 s. Without the give-up the same server costs 318 x 45 s
+    ' + 13 x 15 s = 4 hours with the loading screen on DISCOVERING
+    ' COLLECTIONS and no way out (the scan's stall watch ends before this
+    ' step starts).
+    net = NxClPlexNet(lib, { silentChildren: true })
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    got = NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "silent children: given up on", NxClBool(f.dead), "true")
+    NxCheck(r, "silent children: ends in 150 s", NxToStr(net.clock), "150360")
+    NxCheck(r, "silent children: no collection kept", NxToStr(got.Count()), "0")
+    net = NxClPlexNet(lib, { silentChildren: true })
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    f.note = sub(code as Integer)
+    end sub
+    NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "silent children: without the give-up it is 14505 s", NxToStr(net.clock \ 1000), "14505")
+
+    ' 3. A server that is only slow under five requests at once answers them
+    ' one by one: nothing given up, everything read.
+    net = NxClPlexNet(lib, { silentBurst: true })
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    got = NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "burst timeouts: not given up on", NxClBool(f.dead), "false")
+    NxCheck(r, "burst timeouts: all 318 read", NxToStr(got.Count()), "318")
+
+    ' 4. Two collections that don't answer in a row, then the rest do: the
+    ' count starts over at an answer. Those two are dropped.
+    net = NxClPlexNet(lib, { silentIds: { "100010": true, "100011": true } })
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    got = NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "two silent: not given up on", NxClBool(f.dead), "false")
+    NxCheck(r, "two silent: 316 read", NxToStr(got.Count()), "316")
+
+    ' 5. An error status is an answer, not silence: ten in a row cost nothing
+    ' and never give up.
+    ids = {}
+    for i = 20 to 29
+        ids[(100000 + i).ToStr()] = true
+    end for
+    net = NxClPlexNet(lib, { errorIds: ids })
+    f = NxPlexCollectionsFetcher({ uri: "https://plex.test", accessToken: "t" }, net)
+    got = NxCollectionsFetchPlex("mid", f)
+    NxCheck(r, "ten errors: not given up on", NxClBool(f.dead), "false")
+    NxCheck(r, "ten errors: 308 read", NxToStr(got.Count()), "308")
+end function
+
+' { items, kids, kidRows, collections }: 4,535 films (keys 1 to 4535), 399 shows (20001 to 20399)
+' of two episodes each, and what the 318 collections list, as
+' NxClPlexNet builds them.
+function NxClBigLibrary() as Object
+    items = []
+    for k = 1 to 4535
+        items.Push({ ratingKey: k.ToStr(), type: "movie", serverIndex: 0 })
+    end for
+    for s = 20001 to 20399
+        for e = 1 to 2
+            items.Push({ ratingKey: (s * 10 + e).ToStr(), type: "episode", showKey: s.ToStr(), serverIndex: 0 })
+        end for
+    end for
+    total = 0
+    rows = {}
+    for i = 1 to 318
+        kids = []
+        for each k in NxClChildKeys(i)
+            kids.Push({ ratingKey: k })
+        end for
+        rows[(100000 + i).ToStr()] = kids
+        total = total + kids.Count()
+    end for
+    cols = []
+    for i = 1 to 318
+        cols.Push({ ratingKey: (100000 + i).ToStr(), title: "Collection " + i.ToStr() })
+    end for
+    return { items: items, kids: total, kidRows: rows, collections: cols }
+end function
+
+' Collection i's children: a film collection (1 to 280) of 1 to 40 films, now
+' and then 150 or 400; a show collection (281 to 318) of 1 to 12 shows.
+function NxClChildKeys(i as Integer) as Object
+    keys = []
+    if i <= 280 then
+        n = 1 + ((i * 7) mod 40)
+        if i mod 50 = 0 then n = 150
+        if i = 100 then n = 400
+        for k = 1 to n
+            keys.Push((((i * 37) + k) mod 4535 + 1).ToStr())
+        end for
+    else
+        n = 1 + ((i * 5) mod 12)
+        for k = 1 to n
+            keys.Push((20001 + ((i * 5) + k) mod 399).ToStr())
+        end for
+    end if
+    return keys
+end function
+
+' The transport NxPlexCollectionsFetcher takes, over the model. opts:
+' silentChildren (no children read is answered), silentBurst (no five-at-a-time
+' read is answered, one-on-one reads are), silentIds and errorIds (a collection
+' by ratingKey whose children get no answer, or a 500). clock counts the
+' milliseconds the requests would have taken; refused, the requests the model
+' turned away for their size.
+function NxClPlexNet(lib as Object, opts as Object) as Object
+    return {
+        lib: lib, opts: opts, clock: 0, refused: 0,
+        ' A request's answer: { code, json }, from "<path>?<query>" with the
+        ' base address already off.
+        answer: function(pathQuery as String, burst as Boolean) as Object
+            q = pathQuery.Split("?")
+            path = q[0]
+            size = invalid
+            start = 0
+            if q.Count() > 1 then
+                for each pair in q[1].Split("&")
+                    kv = pair.Split("=")
+                    if kv.Count() = 2 then
+                        if kv[0] = "X-Plex-Container-Size" then size = Val(kv[1], 10)
+                        if kv[0] = "X-Plex-Container-Start" then start = Val(kv[1], 10)
+                    end if
+                end for
+            end if
+            isKids = Right(path, 9) = "/children"
+            id = ""
+            if isKids then
+                parts = path.Split("/")
+                id = parts[3]
+                if m.opts.silentChildren = true then return { code: -28, json: invalid }
+                if m.opts.silentBurst = true and burst then return { code: -28, json: invalid }
+                if m.opts.silentIds <> invalid and m.opts.silentIds[id] = true then return { code: -28, json: invalid }
+                if m.opts.errorIds <> invalid and m.opts.errorIds[id] = true then return { code: 500, json: invalid }
+            end if
+            cap = 1000
+            if isKids then cap = 120
+            if size = invalid or size > cap then
+                m.refused = m.refused + 1
+                return { code: 400, json: invalid }
+            end if
+            rows = []
+            key = "Metadata"
+            if path = "/library/sections" then
+                key = "Directory"
+                rows = [{ key: "1", type: "movie" }, { key: "2", type: "show" }, { key: "3", type: "artist" }]
+            else if path = "/library/sections/1/collections" then
+                for i = 0 to 279
+                    rows.Push(m.lib.collections[i])
+                end for
+            else if path = "/library/sections/2/collections" then
+                for i = 280 to 317
+                    rows.Push(m.lib.collections[i])
+                end for
+            else if isKids then
+                rows = m.lib.kidRows[id]
+            else
+                return { code: 404, json: invalid }
+            end if
+            page = []
+            for i = start to start + size - 1
+                if i < rows.Count() then page.Push(rows[i])
+            end for
+            mc = { size: page.Count(), totalSize: rows.Count() }
+            mc[key] = page
+            return { code: 200, json: { MediaContainer: mc } }
+        end function,
+        ' Five at a time: the batch costs a round of 120 ms per five, or 15 s
+        ' if any of it gets no answer.
+        many: function(urls as Object, token as String, width as Integer) as Object
+            out = []
+            silent = false
+            for each u in urls
+                a = m.answer(Mid(u, Len("https://plex.test") + 1), true)
+                if a.code < 0 then silent = true
+                out.Push(a)
+            end for
+            if silent then
+                m.clock = m.clock + 15000
+            else
+                m.clock = m.clock + 120 * ((urls.Count() + width - 1) \ width)
+            end if
+            return out
+        end function,
+        ' One on its own, as NxPlexGetContainer: three tries, 15 s each when
+        ' nothing answers.
+        one: function(server as Object, path as String, err as Object) as Dynamic
+            a = m.answer(path, false)
+            err.code = a.code
+            if a.code < 0 then
+                m.clock = m.clock + 45000
+            else
+                m.clock = m.clock + 120
+            end if
+            return NxPlexContainerOf(a)
+        end function
+    }
 end function

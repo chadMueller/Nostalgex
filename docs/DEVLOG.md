@@ -2714,6 +2714,33 @@ Smoke: 43 checks, Jellyfin and Emby at 960x540 and a phone, Plex through plex.tv
 taken out. Not done: a revoked login while a cached library is showing still plays the cached guide and fails at playback
 with the existing "sign in again" card.
 
+## 2026-11-09 (Roku: a server that stops answering for its collections no longer holds the first launch, I-068)
+
+**Why.** captamajora's first launch (Discussion #8: Plex 1.43.5, 318 collections, 4,535 movies, 399 shows) sat on
+DISCOVERING COLLECTIONS. They never retested, so what their server did is not known. What main already does was tried
+against a model of that library (`NxClSyntheticPlexCases`, the real fetcher and `NxCollectionsFetchPlex`, a clock in
+place of the network): the collections lists and each collection's children go out in sized windows (#189, #212), none
+refused at 1000 and 120, all 318 read, every child key a title in the library. So the Container-Size warning and the
+paging are not the hang. What the model does show: the collections step runs after the scan's stall watch has ended
+(`scanning` is false by then), and a server that answers the lists but not a collection's children costs the
+five-at-a-time read 15 s and then three tries of 15 s on each of the 318, 14,505 s, 4 hours, on one screen with no
+STOP WAITING.
+
+**Changed.** `NxPlexCollectionsFetcher` counts reads on their own that got no answer at all (a timeout, not an error
+status). After 3 in a row it gives up on the rest, and `LibraryTask` drops that server's collections for this load and
+leaves its save without a fresh signature, so the next launch reads them again. 3 in a row is 135 s at most; the
+model's silent server now ends at 150 s. An answer of any status starts the count over, so a few collections that time
+out among many that answer, ten error statuses in a row, and a server that only times out under five requests at once
+(the batch fails, the one-on-one reads answer) all read every collection they can. `NxPlexGetContainer` sets `err.code`
+to the last status so the fetcher can tell silence from an error.
+
+**Not changed.** The paging, the windows, the collections the guide builds, the scan and its stall watch. The other
+list reads with no size (`/library/sections`, each show's `allLeaves`) are not touched: nobody has measured what 1.43.5
+does with them.
+
+**Test.** `tests/run.sh` collections suite, 1,709 passed, 0 failed (17 of them new). Off the TV only: no stick, no Plex
+server. The hang itself is not reproduced on a real server.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
