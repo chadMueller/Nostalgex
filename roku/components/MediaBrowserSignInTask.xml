@@ -32,5 +32,6 @@
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/MediaBrowserApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/ServerKind.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/SignInFlow.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
   <script type="text/brightscript" uri="pkg:/components/MediaBrowserSignInTask.brs" />
 </component>

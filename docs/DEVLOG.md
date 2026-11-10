@@ -3,6 +3,50 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
+
+**Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on
+the channel the viewer last tuned, on by default on every platform since Chad's decision of 2026-11-09.
+
+**Changed.** `source/guide/LastChannel.brs` ports `LaunchChannelMemory` and `nostalgex-last-channel.js`: the switch
+(on unless a stored value says otherwise) and the channel's id and name, both in the registry's `player` section.
+`GuideView.viewerTune` saves the channel on OK in the guide, Left and Right in full screen and a mini strip pick,
+with the switch on or off. The first guide of a launch opens on it after a launch deep link and a rebuild's resume,
+when a channel in the guide has the same id and the same name, and on channel one otherwise. PLAYBACK & PICTURE has
+the row after AUDIO LANGUAGE with the Apple TV's line. Sign-out clears the channel and leaves the switch.
+
+**The power-loss start follows it.** `NxSeedChannel` takes the channel a launch opens on, so the seed (#155) holds
+the remembered channel's airings, or channel one's when the switch is off, nothing is remembered or the channel is
+not in the guide. After a channel change or the switch, the library task moves the seed at its next 30 s re-check
+(`followSeed`), not on the key press, so a run of channel changes writes the seed (up to 10 KB of registry) once per
+re-check; closing Settings asks for a re-check too. Read from the code, not run: a remembered channel with no airing
+to save (a WATERSHED hold) leaves the seed it had.
+
+**A deep link is not remembered.** It tunes through `pressTune` like the app's own tunes. The Apple TV has none to
+follow.
+
+**Privacy text.** The Roku paragraph in `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` said the power-loss start
+keeps the details "of your first channel"; it now says "of the channel the app opens on". For Chad's review.
+
+**Tested off the TV.** A `last-channel` suite, 69 cases on a stand-in registry: the issue's list, the web smoke's
+match cases and every channel in `channels.json` finding itself, and the seed's channel. `tests/run.sh` ends in ALL
+TESTS PASSED.
+
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `3690863` plus two scratch lines (a launch switch that
+deletes the `cachefs:` files a power loss takes and keeps the registry, as #155's run had, and a timing print),
+signed in to the lab Emby (5,657 items, 17 channels, CH 3 first):
+- With nothing remembered the launch opened on CH 3 and saved CH 3's airings for a cold start.
+- OK on CH 6 in the guide, Home, launch: it opened on CH 6, tuned 1.7 s after the app started (picture 3.2 s later).
+- The seed moved to CH 6 at the next re-check, 5.7 s after that OK.
+- Launched with the files wiped: CH 6 was tuned from the seed (16 airings) 1.1 s after the app started (picture
+  3.6 s later), and the full guide's hand-over 27 s after the tune made no second tune.
+- The row is after AUDIO LANGUAGE and read ON before anyone pressed it. Switched OFF, the seed moved back to CH 3
+  10.6 s later, after Settings closed, and the next launch opened on CH 3.
+- Saving the channel on a tune took 37, 41, 31 and 33 ms on the render thread (four tunes).
+
+**Open.** The TV's power really pulled (the wipe stands in for it), a stick, a Plex library, and the 31 to 41 ms a
+tune now spends on the registry write. Not pressed on a TV: Left and Right in full screen and the mini strip (only OK
+in the guide was), sign-out, a deep link, and a remembered channel that is renamed or gone.
 ## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
 
 **Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
