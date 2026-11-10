@@ -82,6 +82,13 @@ old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSecti
 default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
 interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
 
+**Swift music title cleanup now matches the shared golden (N-034, follow-up).** The web fix landed on main with
+`scripts/music-title-golden.json` (37 clean cases, 8 parse cases) as the contract for all three apps. The Swift fix above was
+written before it and used a slightly different word list (it also took "lyric" and "clip" out of a bracket and did not take
+"uhd"). `MusicTitleParser.clean` now has the golden's nine steps exactly, and `MusicTitleGoldenTests` reads the same file: all
+37 clean and 8 parse cases pass, with the 18 `MusicTitleSuffixTests` cases. The Roku golden-file test is still the Roku
+agent's.
+
 **Playback Information says Remux or Transcode when Plex said so (I-059).** The PLAYBACK row showed "Server stream" for
 anything the server rewrote or re-encoded. The Plex `decision` call the app already makes before `start.m3u8` lists each
 stream as copy or transcode; `PlexAPIService.serverStream(fromDecision:)` reads those (the same `Stream` elements
