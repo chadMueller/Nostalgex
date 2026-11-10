@@ -108,6 +108,9 @@ jobs:
               - 'scripts/nostalgex-library-coverage.js'
               - 'scripts/nostalgex-library-coverage-smoke.mjs'
               - 'scripts/nostalgex-scan-failures-smoke.mjs'
+              # STOP WAITING during a slow library scan.
+              - 'scripts/nostalgex-load-stall.js'
+              - 'scripts/nostalgex-load-stall-smoke.mjs'
               - 'scripts/nostalgex-franchise-smoke.mjs'
               - 'scripts/nostalgex-franchise-lineup.js'
               - 'scripts/nostalgex-franchise-lineup-smoke.mjs'

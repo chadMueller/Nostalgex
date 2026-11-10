@@ -3,6 +3,36 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Web tuner and Docker: STOP WAITING during a slow library scan; branch web/fixes-1109)
+
+**STOP WAITING (parity with Apple TV, Roku, Android).** The loading screen had START OVER and nothing else, and the scan's page
+requests had no timeout: a Jellyfin or Emby `/Items` page, or a Plex section or episode page, that the server never answers
+held the screen forever (only the Plex section list has the 15 s timeout). Measured first, in the browser, against a
+Jellyfin-shaped server that stops answering a page: the loading screen was still up after 13 s with START OVER and the coffee
+button the only things to press. Now `scripts/nostalgex-load-stall.js` watches each foreground scan the way
+`LibraryLoadStallWatch.swift` does: the scan's counters (phase, section, items, the line under the headline, and a count of
+server answers) are sampled every 2 s, and only silence counts, never elapsed time. After 60 s of none the loading screen says
+"Still waiting on your server. Nothing has come back for a while." with a STOP WAITING button and "Keeps whatever has loaded
+so far. The rest is read again next time."; after 210 s the scan is given up on its own. Either way the requests are aborted,
+the whole sections already read stay (on Jellyfin and Emby also the pages already read of the one in flight, as for any page
+that fails), the guide is built from them, and the library is not saved as the library and does not count as the first load
+(the web's existing "lost a section" rule, which is how the saved library is marked not whole here; the Apple TV backdates a
+saved one instead). Nothing read at all is the error line STOPPED WAITING BEFORE ANYTHING LOADED with RECONNECT. A Plex press
+belongs to the server it was made on (Apple TV #146): every server's scan starts its own watch, and a finished watch ignores a
+press. One thing taken from the Roku port, not the Apple TV: a look more than 20 s after the last one (a laptop lid, a throttled
+background tab) is not counted as quiet, since the Apple TV's wall-clock comparison would have abandoned a scan that was only
+asleep. Not watched: a refresh behind a cached guide (no loading screen to press anything on).
+
+**Test.** `npm run test:load-stall` (32 checks: 60 s and 210 s, silence only, an hour of a page every 40 s is not a stall,
+sleep not counted, a press belongs to its watch) and `npm run test:stop-waiting` (60 checks, headless, the real page; the
+timings are shortened to 3 s and 9 s after the shipped 60 s and 210 s are checked in the file): Jellyfin stuck on the second
+page of the second library, pressed and left alone, at 960x540 and on a phone (the button is on screen and on top, no keys
+needed); a library that keeps answering for 12.6 s, longer than the give-up time, loads whole and never shows the block;
+nothing ever read; Plex with a stuck second section; and origin/main's page as the negative control (no block, still loading).
+Four older smokes that lift these functions out of the page got stubs for the new helpers.
+**Not verified.** A real slow server, a TV browser, Safari. The Plex multi-server press-carry is covered by the watch's own
+test, not by two fake Plex servers in a browser. Emby is the Jellyfin code path; it was run for the refused login, not for this.
+
 ## 2026-11-09 (Web tuner and Docker: saved login audit and a refused login, I-024; branch web/fixes-1109)
 
 **Saved login (I-024).** The web tuner already keeps the viewer signed in; the card was written before anyone measured it. Measured
