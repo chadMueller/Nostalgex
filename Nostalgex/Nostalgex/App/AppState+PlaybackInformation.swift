@@ -23,11 +23,12 @@ extension AppState {
     @discardableResult
     func beginPlaybackInformationAttempt(generation: Int, attempt: Int, isDirectPlay: Bool,
                                          reason: PlaybackInformation.FallbackReason = .none,
-                                         recoveryRequest: PlaybackInformation.RecoveryRequest? = nil) -> UUID? {
+                                         recoveryRequest: PlaybackInformation.RecoveryRequest? = nil,
+                                         serverStream: PlaybackInformation.ServerStream? = nil) -> UUID? {
         guard isCurrentPlaybackAttempt(generation: generation, attempt: attempt) else { return nil }
         return playbackInformation?.beginAttempt(generation: generation,
             delivery: isDirectPlay ? .directPlay : .serverStream,
-            reason: reason, recoveryRequest: recoveryRequest)
+            reason: reason, recoveryRequest: recoveryRequest, serverStream: serverStream)
     }
 
     func markPlaybackInformationReady(for playerItem: AVPlayerItem, generation: Int, attempt: Int, attemptID: UUID?) {

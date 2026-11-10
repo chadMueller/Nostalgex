@@ -988,13 +988,13 @@ struct PlexAPIService: MediaBackend {
             let second = await prepareTranscodeSession(startURL: remux)
             if second.code.hasPrefix("1") {
                 print("[Plex90] DECISION: Dolby Vision remux accepted for \"\(item.title)\"")
-                return (PlaybackResolution(url: remux, playSessionId: sessionID, isDirectPlay: false), offsetSeconds > 0)
+                return (PlaybackResolution(url: remux, playSessionId: sessionID, isDirectPlay: false, serverStream: second.serverStream), offsetSeconds > 0)
             }
             PlaybackDiagnostics.record(outcome: "server refused", title: item.title, detail: "decision \(decision.code): \(decision.text); remux retry \(second.code): \(second.text)")
         } else if decision.code.hasPrefix("2") {
             PlaybackDiagnostics.record(outcome: "server refused", title: item.title, detail: "decision \(decision.code): \(decision.text)")
         }
-        return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false), offsetSeconds > 0)
+        return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false, serverStream: decision.serverStream), offsetSeconds > 0)
     }
 
     struct TranscodeDecision: Sendable, Equatable {
@@ -1003,6 +1003,8 @@ struct PlexAPIService: MediaBackend {
         var preservesOriginalVideo: Bool = false
         var preservesOriginalAudio: Bool = false
         var convertsAudioToAC3Surround: Bool = false
+        /// Copy or convert per stream, as the decision listed them; nil when it did not say.
+        var serverStream: PlaybackInformation.ServerStream? = nil
         static let unknown = TranscodeDecision(code: "?", text: "")
     }
 
@@ -1163,7 +1165,7 @@ struct PlexAPIService: MediaBackend {
             return nil // The caller chooses normal recovery or explicit Original failure.
         }
         return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false,
-                                   requiresOriginalVideo: requiresOriginalVideo), offsetSeconds > 0)
+                                   requiresOriginalVideo: requiresOriginalVideo, serverStream: decision.serverStream), offsetSeconds > 0)
     }
 
     /// Auto/Maximum prefer a copy, but playback and capped recovery still take priority.
@@ -1237,6 +1239,31 @@ struct PlexAPIService: MediaBackend {
             && ["mp4", "fmp4"].contains(reader.containers[0])
     }
 
+    /// What the decision says about the streams of the one video and the one audio track it
+    /// lists: `<Stream streamType="1" decision="copy"/>`, `<Stream streamType="2" decision="transcode"/>`
+    /// (the same elements `decisionPreservesOriginalVideo` reads). Only streams that say copy or
+    /// transcode count, so a track the server did not choose, or any other word, is left out. Nil
+    /// unless that leaves exactly one video and one audio stream: anything else is not an answer.
+    static func serverStream(fromDecision data: Data) -> PlaybackInformation.ServerStream? {
+        final class Reader: NSObject, XMLParserDelegate {
+            var video: [String?] = []
+            var audio: [String?] = []
+            func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?,
+                        qualifiedName: String?, attributes: [String: String]) {
+                guard name == "Stream" else { return }
+                guard let decision = attributes["decision"], decision == "copy" || decision == "transcode" else { return }
+                if attributes["streamType"] == "1" { video.append(decision) }
+                if attributes["streamType"] == "2" { audio.append(decision) }
+            }
+        }
+        let reader = Reader()
+        let parser = XMLParser(data: data)
+        parser.delegate = reader
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), reader.video.count == 1, reader.audio.count == 1 else { return nil }
+        return PlaybackInformation.ServerStream(video: reader.video[0], audio: reader.audio[0])
+    }
+
     /// The `decision` call Plex's own players make before `start.m3u8`, with the same
     /// session and query. Without it the server answers `start.m3u8` with 400 (surfaced as
     /// "resource unavailable") whenever it is not idle, which on a channel-flipping app is
@@ -1255,8 +1282,10 @@ struct PlexAPIService: MediaBackend {
             let code = Self.attribute("transcodeDecisionCode", in: body) ?? Self.attribute("generalDecisionCode", in: body) ?? "?"
             let text = Self.attribute("transcodeDecisionText", in: body) ?? Self.attribute("generalDecisionText", in: body) ?? ""
             print("[Plex90] DECISION: HTTP \(status) code=\(code) \(text)")
+            let accepted = (200..<300).contains(status) && code.hasPrefix("1")
             return TranscodeDecision(code: code, text: text, preservesOriginalVideo: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data), preservesOriginalAudio: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAudioCopy: true),
-                convertsAudioToAC3Surround: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAC3Conversion: true))
+                convertsAudioToAC3Surround: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAC3Conversion: true),
+                serverStream: accepted ? Self.serverStream(fromDecision: data) : nil)
         } catch {
             print("[Plex90] DECISION: failed (\(error.localizedDescription)), starting anyway")
             return .unknown

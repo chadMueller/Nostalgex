@@ -82,6 +82,21 @@ old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSecti
 default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
 interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
 
+**Playback Information says Remux or Transcode when Plex said so (I-059).** The PLAYBACK row showed "Server stream" for
+anything the server rewrote or re-encoded. The Plex `decision` call the app already makes before `start.m3u8` lists each
+stream as copy or transcode; `PlexAPIService.serverStream(fromDecision:)` reads those (the same `Stream` elements
+`decisionPreservesOriginalVideo` reads) and the row now says Remux (video and audio copied), Transcode (audio), Transcode
+(video) or Transcode (video and audio). It is shown only when the answer is known: the decision was accepted (code 1xxx),
+exactly one video and one audio stream say copy or transcode (a track the server did not choose is ignored, any other word
+or count is not an answer), and the player is ready; otherwise the row stays "Server stream". A retry of the same stream
+keeps its answer, a different stream (capped, or the hand-built fallback that makes no decision call the app reads) does
+not inherit it. No new request and no new parser. Jellyfin and Emby are unchanged: their PlaybackInfo parse keeps the
+direct-stream and transcode flags and the URL but not the per-stream copy or convert verdict, so nothing there is known.
+Tests: 7 new in `PlaybackInformationTests` (88 passed with the neighbouring playback suites). Not verified: the replies in
+the tests are built from the elements the app's existing parser reads, not captured from a live server for this change, and
+nothing was played; whether Plex lists an unchosen audio track with a decision other than copy or transcode is assumed
+safe because any such track is simply not counted.
+
 **Review fixes for the kept sections (I-076, second commit).** The reviewer found two ways a kept section could be wrong.
 (1) A TV section missing a show could be kept as whole: the Plex per-show crawl and the Jellyfin and Emby episode fetch
 catch a failing show and return nothing, so the section came back short and was reused for up to an hour (six on Plex).

@@ -370,7 +370,8 @@ extension AppState {
             self.fallbackToTranscode(url: resolved.resolution.url, seekTo: resolved.startsAtOffset ? nil : position,
                                      generation: generation, allowCappedRetry: true, prepared: true,
                                      informationReason: informationReason,
-                                     informationIsDirectPlay: resolved.resolution.isDirectPlay)
+                                     informationIsDirectPlay: resolved.resolution.isDirectPlay,
+                                     informationServerStream: resolved.resolution.serverStream)
         }
     }
 
@@ -821,6 +822,7 @@ extension AppState {
             // Resolve the final playback URL.
             let resolvedURL: URL
             let isDirectPlay: Bool
+            var informationServerStream: PlaybackInformation.ServerStream?
             if isDemoMode, let demo = demoStreamURL {
                 resolvedURL = demo; isDirectPlay = false
             } else if let directURL {
@@ -855,6 +857,7 @@ extension AppState {
                 }
                 resolvedURL = resolution.url
                 isDirectPlay = resolution.isDirectPlay
+                informationServerStream = resolution.serverStream
                 self.activeTranscode = (itemServerID, resolution.playSessionId)
                 self.playbackRequiresOriginalVideo = resolution.requiresOriginalVideo
             }
@@ -877,7 +880,8 @@ extension AppState {
             self.installFreshPlayer(with: playerItem, generation: generation)
             let informationAttempt = self.beginPlaybackInformationAttempt(
                 generation: generation, attempt: attempt, isDirectPlay: isDirectPlay,
-                reason: isDirectPlay || isDemoMode ? .none : .serverStreamSelected)
+                reason: isDirectPlay || isDemoMode ? .none : .serverStreamSelected,
+                serverStream: informationServerStream)
 
             // Status observer
             playerItem.publisher(for: \.status)
@@ -981,8 +985,10 @@ extension AppState {
         guard loadGeneration == generation else { return }
         invalidatePlaybackAttempt()
         let attempt = playbackAttemptGeneration
+        // The same stream is opened again, so what the server said about it still holds.
         let informationAttempt = beginPlaybackInformationAttempt(
-            generation: generation, attempt: attempt, isDirectPlay: isDirectPlay, reason: .playerRetry)
+            generation: generation, attempt: attempt, isDirectPlay: isDirectPlay, reason: .playerRetry,
+            serverStream: playbackInformation?.serverStream)
         let title = currentItem?.title ?? "Unknown"
         print("[Plex90] gen=\(generation) | RETRY: \"\(title)\" - waiting 300ms")
         cancellables.removeAll()
@@ -1063,13 +1069,15 @@ extension AppState {
     private func fallbackToTranscode(url: URL, seekTo: Int?, generation: Int, allowCappedRetry: Bool = true, prepared: Bool = false,
                                      informationReason: PlaybackInformation.FallbackReason,
                                      informationRequest: PlaybackInformation.RecoveryRequest? = nil,
-                                     informationIsDirectPlay: Bool = false) {
+                                     informationIsDirectPlay: Bool = false,
+                                     informationServerStream: PlaybackInformation.ServerStream? = nil) {
         guard loadGeneration == generation else { return }
         invalidatePlaybackAttempt()
         let attempt = playbackAttemptGeneration
         let informationAttempt = beginPlaybackInformationAttempt(
             generation: generation, attempt: attempt, isDirectPlay: informationIsDirectPlay,
-            reason: informationReason, recoveryRequest: informationRequest)
+            reason: informationReason, recoveryRequest: informationRequest,
+            serverStream: informationServerStream)
         let title = currentItem?.title ?? "Unknown"
         print("[Plex90] gen=\(generation) | TRANSCODE FALLBACK: \"\(title)\"")
         // Analytics: direct play failed and we're moving to the server-side transcoder.

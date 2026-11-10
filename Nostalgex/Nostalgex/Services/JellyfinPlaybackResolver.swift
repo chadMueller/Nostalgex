@@ -8,6 +8,8 @@ struct PlaybackResolution: Sendable {
     let playSessionId: String?
     let isDirectPlay: Bool
     var requiresOriginalVideo: Bool = false
+    /// What the server said it does to this stream (Plex's decision), when it said.
+    var serverStream: PlaybackInformation.ServerStream? = nil
 }
 
 extension JellyfinPlaybackResolver {
