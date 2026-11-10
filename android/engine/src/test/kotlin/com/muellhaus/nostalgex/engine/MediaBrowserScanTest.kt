@@ -100,7 +100,7 @@ class MediaBrowserScanTest {
     /** Answers taken from the JS itself (parseMusicVideoFromPlex), its "( )" quirk included. */
     @Test
     fun musicVideoTitlesSplitAsTheWebSplitsThem() {
-        assertEquals("One More Time ( )" to "Daft Punk", MusicTitle.musicVideo("Daft Punk - One More Time (Official Video) [HD]", null, null))
+        assertEquals("One More Time" to "Daft Punk", MusicTitle.musicVideo("Daft Punk - One More Time (Official Video) [HD]", null, null))
         assertEquals("Bohemian Rhapsody" to "Queen", MusicTitle.musicVideo("Bohemian Rhapsody by Queen", null, null))
         assertEquals("Song" to "Artist", MusicTitle.musicVideo("Artist feat. Someone - Song ft. Other (1999)", null, null))
         assertEquals("Just A Title" to null, MusicTitle.musicVideo("Just A Title", null, null))

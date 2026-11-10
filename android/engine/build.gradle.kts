@@ -114,6 +114,7 @@ tasks.test {
         rootDir.parentFile.resolve("scripts/schedule-parity-golden.json"),
         rootDir.parentFile.resolve("scripts/filter-golden.json"),
         rootDir.parentFile.resolve("scripts/utf8-repair-golden.json"),
+        rootDir.parentFile.resolve("scripts/music-title-golden.json"),
         rootDir.parentFile.resolve("scripts/jellyfin-library-golden.json"),
         rootDir.parentFile.resolve("scripts/stream-quality-golden.json"),
         rootDir.parentFile.resolve("scripts/season-golden.json"),

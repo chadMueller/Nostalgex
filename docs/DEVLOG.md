@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Android: rebased onto main; open on last channel on by default, no tracking line, music video titles)
+
+**Changed.**
+- **Rebased** onto main at `db562ca2`. The only conflicts were dev log entries at the top of this file; both sides are kept.
+- **OPEN ON LAST CHANNEL is on by default** (#225, after the change of default on every surface). `LaunchChannelMemory.ENABLED_BY_DEFAULT` is true. `LaunchChannelMemory.isOn(stored)` reads the switch as the web's `isOn` does: the default only when nothing is stored. So a TV that switched it off stays off, and only a TV that never chose takes the new default.
+- **RETRO MODE no longer draws the VHS tracking line**, as on the web, Apple TV and Roku, because viewers found it distracting. Scanlines, vignette, flicker and 4:3 are unchanged. The row reads "CRT scanlines, vignette, flicker, 4:3 aspect ratio", the Apple TV's and Roku's wording.
+- **Music video titles (N-034).** `MusicTitle.cleanTitle` gets the web's two new passes:
+  - a group made only of noise words goes whole;
+  - parentheses a word came out of are tidied.
+
+  "Song (Official Music Video)" is now "Song", not "Song ( Music )". `MusicTitleGoldenTest` holds Android to all 37 `clean` and 8 `parse` cases in `scripts/music-title-golden.json`; on the old code all 3 of its tests fail. A hand-written case in `MediaBrowserScanTest` had recorded the old output ("One More Time ( )"); it now expects what the fixed web module gives.
+
+All 277 engine tests pass. Not yet on a TV. A saved library keeps the old titles until the background rescan after the next launch.
+
 ## 2026-11-09 (Android: libraries hidden on Jellyfin behind one switch, #224)
 
 **Changed.** Libraries hidden from the Jellyfin home screen now sit behind one switch, as on the web tuner. Android had them the Apple TV's way: each one listed and switched on separately. Chad's issue asked for the web's single switch until he says otherwise, and the switch keeps Android the same as the web and Docker.

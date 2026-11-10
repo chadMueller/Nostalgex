@@ -9,6 +9,15 @@ object MusicTitle {
     private val BRACKETS = Regex("\\[[^\\]]*\\]|\\{[^}]*\\}")
     private val TRAILING_YEAR = Regex("[${JsText.WS}]*\\((?:19|20)\\d\\d\\)[${JsText.WS}]*\\z")
     private val YEAR_IN_PARENS = Regex("\\([^)]*(?:19|20)\\d\\d[^)]*\\)")
+    /**
+     * N-034: a group made only of these words goes whole, so "Song (Official Music Video)" is
+     * "Song", not "Song ( Music )" (nostalgex-music-brainz.js NOISE_WORD and NOISE_GROUP).
+     */
+    private const val NOISE_WORD = "official|music|video|audio|visualizer|lyrics?|remaster(?:ed)?|hd|hq|mv|4k|uhd|xvid|dvdrip|vgb|prv"
+    private val NOISE_GROUP = Regex("\\([${JsText.WS}]*(?:$NOISE_WORD)(?:[${JsText.WS},&/+\\-]+(?:$NOISE_WORD))*[${JsText.WS}]*\\)", RegexOption.IGNORE_CASE)
+    private val EMPTY_PARENS = Regex("\\([${JsText.WS}]*\\)")
+    private val OPEN_PAD = Regex("\\([${JsText.WS}]+")
+    private val CLOSE_PAD = Regex("[${JsText.WS}]+\\)")
     private val NOISE = Regex("(?<![A-Za-z0-9_])(official|video|hd|hq|lyrics?|remaster(?:ed)?|mv|xvid|dvdrip|vgb|prv)(?![A-Za-z0-9_])!?", RegexOption.IGNORE_CASE)
     private val WS_RUN = Regex("[${JsText.WS}]+")
     private val EDGES = Regex("^[${JsText.WS}\\-!.]+|[${JsText.WS}\\-!.]+\\z")
@@ -22,7 +31,10 @@ object MusicTitle {
         t = t.replace(BRACKETS, "")
         t = t.replace(TRAILING_YEAR, "")
         t = t.replace(YEAR_IN_PARENS, "")
+        t = t.replace(NOISE_GROUP, "")
         t = t.replace(NOISE, "")
+        // Parentheses a word came out of are tidied (N-034).
+        t = t.replace(EMPTY_PARENS, "").replace(OPEN_PAD, "(").replace(CLOSE_PAD, ")")
         t = t.replace(WS_RUN, " ")
         return t.replace(EDGES, "")
     }
