@@ -52,6 +52,22 @@
     /* The rail is a list of rows, label left and value right. FULLSCREEN with its [F] is the
        widest: 13 characters of DM Mono at 0.6em, the tracking, the gap and the padding. */
     --nx-rail: calc(var(--nx-fs) * 9 + 56px);
+    /* The guide, scaled together (Chad, 2026-11-10: "a little bit bigger", about 9 to 10 rows at
+       1920x1080 where there were 12 to 14). The Apple TV guide is 80pt rows, a 60pt header, a 220pt
+       channel column and 20/18pt text on a 1080p grid, so text is a quarter of the row; VT323 is a
+       short face, so the web keeps its text at about half the row. One factor, 1.3, takes the old
+       38px row to 50, the 32px header to 42, the 160px channel column to 200 and the text with it
+       (18 to 23.4, 20 to 26). GUIDE TEXT SIZE multiplies on top, so its ratios hold. Phones and
+       tablets under 1025px keep their own sizes (the media block below sets the old values). */
+    --gs: 1.3;
+    --g-row: 50px;
+    --g-head: 42px;
+    --g-col: 200px;
+    --g-promo: 56px;
+    /* The info panel beside the rail: the Apple TV's InfoPanelView sizes (tag 36, title 38,
+       episode 22, description 20, badges and times 24, up next 18) times --is, stepped down on
+       shorter windows so the panel (which clips) still holds them. */
+    --is: 1;
     --bg: #080810;
     --cyan: #00C4FF;
     --magenta: #FF00FF;
@@ -226,52 +242,54 @@
   }
   .info-channel-tag {
     font-family: 'VT323', monospace;
-    font-size: max(22px, var(--nx-fs-tag));
+    font-size: max(calc(36px * var(--is)), var(--nx-fs-tag));
     letter-spacing: 3px;
-    margin-bottom: 16px;
+    margin-bottom: calc(14px * var(--is));
   }
   .info-title {
-    font-size: 29px;
+    font-size: max(calc(38px * var(--is)), var(--nx-fs));
     color: #fff;
     line-height: 1.1;
-    margin-bottom: 8px;
+    margin-bottom: calc(8px * var(--is));
     font-weight: 500;
-  }
-  .info-episode-title {
-    font-size: 20px;
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 12px;
-    font-weight: 500;
-  }
-  .info-description {
-    font-size: max(15px, var(--nx-fs));
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 20px;
-    line-height: 1.4;
-    max-height: calc(22px * 1.4 * 2);
-    overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .info-episode-title {
+    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    color: rgba(255,255,255,0.7);
+    margin-bottom: calc(12px * var(--is));
+    font-weight: 400;
+  }
+  .info-description {
+    font-size: max(calc(20px * var(--is)), var(--nx-fs));
+    color: rgba(255,255,255,0.7);
+    margin-bottom: calc(18px * var(--is));
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
   }
   .info-meta-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: max(15px, var(--nx-fs));
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 20px;
+    gap: calc(12px * var(--is));
+    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    color: rgba(255,255,255,0.7);
+    margin-bottom: calc(18px * var(--is));
     letter-spacing: 0.06em;
     flex-wrap: wrap;
   }
   .info-meta-badge {
-    font-family: 'DM Mono', monospace;
-    font-size: var(--nx-fs);
+    font-family: 'VT323', monospace;
+    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
     border: 1px solid rgba(255,255,255,0.25);
-    padding: 3px 6px;
+    padding: 2px 8px;
     border-radius: 3px;
     letter-spacing: 0.06em;
-    font-weight: 500;
   }
   .info-rating {
     color: var(--yellow);
@@ -296,23 +314,23 @@
   }
   .info-time {
     font-family: 'VT323', monospace;
-    font-size: max(22px, var(--nx-fs-tag));
-    color: rgba(255,255,255,0.55);
+    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
+    color: rgba(255,255,255,0.7);
     white-space: nowrap;
   }
   .info-upnext {
-    margin-top: 20px;
-    font-size: max(14px, var(--nx-fs));
-    color: rgba(255,255,255,0.55);
+    margin-top: calc(18px * var(--is));
+    font-size: max(calc(18px * var(--is)), var(--nx-fs));
+    color: rgba(255,255,255,0.7);
     letter-spacing: 0.06em;
   }
   .info-upnext strong {
-    font-family: 'DM Mono', monospace;
-    font-size: var(--nx-fs);
+    font-family: 'VT323', monospace;
+    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.55);
+    color: rgba(255,255,255,0.7);
     font-weight: normal;
-    margin-right: 8px;
+    margin-right: 10px;
   }
 
   /* Unmute button */
@@ -701,8 +719,8 @@
     display: none;
   }
   .player-logo img {
-    max-width: 100px;
-    width: 100%;
+    max-width: 170px;
+    width: 170px;
     height: auto;
     opacity: 0.6;
   }
@@ -1557,16 +1575,16 @@
   .grid-header {
     display: flex;
     align-items: center;
-    height: 32px;
+    height: var(--g-head);
     flex-shrink: 0;
     background: rgba(0,0,0,0.4);
     border-bottom: 1px solid rgba(255,215,0,0.2);
   }
   .grid-channel-col {
-    width: 160px;
+    width: var(--g-col);
     flex-shrink: 0;
     font-family: 'DM Mono', monospace;
-    font-size: calc(var(--nx-fs) * var(--gt-head));
+    font-size: calc(var(--nx-fs) * var(--gs) * var(--gt-head));
     color: var(--yellow);
     letter-spacing: 0.08em;
     padding: 0 12px;
@@ -1579,7 +1597,7 @@
   .grid-time-slot {
     flex: 1;
     font-family: 'VT323', monospace;
-    font-size: calc(20px * var(--gt-time));
+    font-size: calc(20px * var(--gs) * var(--gt-time));
     color: var(--yellow);
     letter-spacing: 1px;
     padding: 0 8px;
@@ -1598,7 +1616,7 @@
 
   .grid-row {
     display: flex;
-    height: 38px;
+    height: var(--g-row);
     align-items: stretch;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     cursor: pointer;
@@ -1643,7 +1661,7 @@
 
   /* Channel name column */
   .grid-row-channel {
-    width: 160px;
+    width: var(--g-col);
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -1653,13 +1671,13 @@
   }
   .grid-ch-num {
     font-family: 'VT323', monospace;
-    font-size: calc(20px * var(--gt-num));
+    font-size: calc(20px * var(--gs) * var(--gt-num));
     color: rgba(255,255,255,0.55);
-    min-width: calc(28px * var(--gt-num));
+    min-width: calc(28px * var(--gs) * var(--gt-num));
   }
   .grid-ch-name {
     font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gt-name));
+    font-size: calc(18px * var(--gs) * var(--gt-name));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -1679,7 +1697,7 @@
     align-items: center;
     padding: 0 8px;
     font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gt-title));
+    font-size: calc(18px * var(--gs) * var(--gt-title));
     color: rgba(255,255,255,0.85);
     white-space: nowrap;
     overflow: hidden;
@@ -1698,7 +1716,7 @@
 
   /* Promo rows in the channel guide */
   .grid-row--promo {
-    height: 44px;
+    height: var(--g-promo);
     border-bottom: 1px solid rgba(255,255,255,0.08) !important;
   }
   .grid-row--promo .grid-row-channel { display: none; }
@@ -1710,7 +1728,7 @@
     padding: 0 16px;
     gap: 10px;
     font-family: 'VT323', monospace;
-    font-size: max(19px, var(--nx-fs-tag));
+    font-size: max(calc(19px * var(--gs)), var(--nx-fs-tag));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -2398,6 +2416,7 @@
      780px: 1280x800 ran 43px over and 1440x760 7px, so the two tighter steps start
      higher than their names. */
   @media (pointer: fine) and (min-width: 1025px) and (max-height: 900px) {
+    :root { --is: 0.85; }
     .v-toolbar { padding: 10px 10px; gap: 5px; }
     .v-btn { padding: 8px; gap: 4px; }
     .v-coffee { margin-top: 4px; padding: 9px 8px; gap: 5px; }
@@ -2411,6 +2430,7 @@
     .v-social { margin-top: 4px; padding: 6px; }
   }
   @media (pointer: fine) and (min-width: 1025px) and (max-height: 779px) {
+    :root { --is: 0.72; }
     .v-toolbar { padding: 4px 10px; gap: 3px; }
     .v-btn { padding: 4px 8px; gap: 3px; }
     .v-coffee { margin-top: 3px; padding: 6px 8px; gap: 3px; }
@@ -2426,13 +2446,14 @@
      100vw/100vh, so the body is sized back up to fill the screen. Measured in
      Chrome 155 at 960x540 and 1280x720. Touch screens never match. */
   @media (pointer: fine) and (orientation: landscape) and (max-width: 1280px) and (max-height: 720px) {
-    :root { --nx-z: 0.875; }
+    :root { --nx-z: 0.875; --is: 0.72; }
     html { zoom: 0.875; }
     body { width: calc(100vw / 0.875); height: calc(100vh / 0.875); }
     .config-panel { width: min(1100px, calc(95vw / 0.875)); max-height: calc(85vh / 0.875); }
   }
   @media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) {
-    :root { --nx-z: 0.6667; }
+    /* 18px VT323 at this zoom was 12 screen px; 1.35 puts the guide text at 16 (the floor) and the rows at 35. */
+    :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-row: 52px; --g-head: 43px; --g-col: 208px; --g-promo: 58px; }
     html { zoom: 0.6667; }
     body { width: calc(100vw / 0.6667); height: calc(100vh / 0.6667); }
     .config-panel { width: min(1100px, calc(95vw / 0.6667)); max-height: calc(85vh / 0.6667); }
@@ -2490,6 +2511,9 @@
   /* ══════════════════════════════════════
      RESPONSIVE
   ══════════════════════════════════════ */
+  @media (max-width: 1024px) and (orientation: portrait), (max-width: 1024px) and (pointer: coarse), (orientation: landscape) and (max-height: 500px) {
+    :root { --gs: 1; --g-row: 38px; --g-head: 32px; --g-col: 160px; --g-promo: 44px; }
+  }
   @media (max-width: 1024px) {
     /* Unmute button — compact */
     .unmute-btn {
@@ -2570,7 +2594,7 @@
       font-weight: 500;
     }
     .info-meta-row { font-size: var(--nx-fs); gap: 8px; margin-bottom: 10px; }
-    .info-meta-badge { font-size: var(--nx-fs); font-weight: 500; }
+    .info-meta-badge { font-size: var(--nx-fs-tag); padding: 1px 6px; }
     .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
     .info-progress-wrap { gap: 10px; }
     .info-upnext { font-size: var(--nx-fs); margin-top: 10px; }
@@ -2845,7 +2869,7 @@
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
     .info-description { display: none; }
     .info-meta-row { font-size: var(--nx-fs); gap: 6px; margin-bottom: 8px; }
-    .info-meta-badge { font-size: var(--nx-fs); font-weight: 500; }
+    .info-meta-badge { font-size: var(--nx-fs-tag); padding: 1px 6px; }
     .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
     .info-upnext { display: none; }
 
