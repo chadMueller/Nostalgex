@@ -17,6 +17,17 @@ both buttons. Phones get the same column with no card and nothing under 12 px. N
 The guide header's PACKAGES button (`#grid-pkg-btn`) is removed: the Apple TV has none, and Left at the start of the guide
 still opens the package list.
 
+**Parity issues filed (label `web parity`).** One per gap against the Apple TV, found by reading this branch and `appletv/1.0.32-design`:
+#261 Now Playing panel as the Variant A (poster, CH tag, title, year and rating, UP NEXT, hint line); #248 AUDIO, AUDIO LANGUAGE,
+SUBTITLE LANGUAGE and AUTO SUBTITLES rows in the rail and drawer; #249 Plex subtitles and Plex language picks; #250 skip audio
+tracks titled commentary; #251 the guide in DM Mono Medium at the Apple TV's sizes (it is still VT323); #252 GUIDE TIMEOUT; #253 THEME
+(after #235 merges); #254 first-run onboarding; #255 a large text step for a 1920x1080 PC on a TV; #256 check Plex's 400 on
+`start.m3u8` and call `/decision` first if it happens; #257 WHY ARE SOME CHANNELS MISSING?; #258 playback recovery ladder;
+#259 background library refresh; #260 CHANNELS & BUNDLES as link rows. Settings as a left rail, SUPPORT with every link,
+libraries first with RESCAN LIBRARY and SIGN OUT last, package stripes and the package list, the library picker, the two-column
+pickers and the loader are done on this branch, so they are not issues. The Apple TV tried the one-server default and reverted it
+on `appletv/1.0.32-design`; the web keeps it until Chad decides.
+
 **Not verified.** The package list is now reachable only by key on the web: a mouse or touch user, and a TV browser, has no other
 way in. Not measured on a real TV browser.
 
