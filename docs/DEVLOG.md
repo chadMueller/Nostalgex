@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
+
+Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.
+
+**Now Playing no longer drifts behind the guide (Trello 6ae56acb).** Plex, Jellyfin and Emby floor a runtime to whole
+minutes and the schedule slot is that floored length, so a file runs 0 to 59 s past its slot. A natural end starts the
+next item at 0 (a seek would skip into the episode), so the player fell further behind the clock at every boundary and
+the headline kept naming the programme still playing while the guide had moved on. Measured in a model that walks a
+simulated clock over the real scheduler (`NaturalEndDriftTests`; files 5 to 55 s past their slot, five channels, six
+hours each): the headline disagreed with the guide in 1,647 of 7,200 samples (22.9%). The fix is the demo tick's idea
+for real libraries: `liveScheduleTick()` runs once a second, and when the loaded item's slot has ended and the file is
+still running (at most 90 s late, else the file's own end is left to act), it starts what the guide now shows, at 0.
+Same model with the tick: 0 of 7,200 mismatched, 24 tick advances. What a viewer loses is the end of the file past its
+slot, 59 s at most (credits, nearly always), which is what live TV does. Not touched: a file that ends before its slot
+still advances on its own and leads the guide by the gap (flooring cannot cause that, only wrong server metadata);
+multi-disc films and demo mode keep their own paths. Unit tests only, no real library.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

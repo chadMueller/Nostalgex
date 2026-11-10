@@ -801,6 +801,7 @@ extension AppState {
                                                      credentialFingerprint: scheduleCredentialFingerprint)
             }?.nowPlaying?.endTime
             : nil
+        liveSlotEnd = liveSlotEnd(for: item)
 
         // Small delay to let AVPlayer clean up the old item
         let playerSeek = playerSeekSeconds
@@ -1285,6 +1286,17 @@ extension AppState {
         }
         var monitor = PlaybackStarvation()
         let title = item?.title ?? currentItem?.title ?? "Unknown"
+        if !isDemoMode {
+            // Same generation-only rule as the demo tick above: a retry of the file still
+            // stands in for the same slot.
+            Timer.publish(every: 1.0, on: .main, in: .common)
+                .autoconnect()
+                .sink { [weak self] _ in
+                    guard let self, self.loadGeneration == generation else { return }
+                    self.liveScheduleTick()
+                }
+                .store(in: &self.cancellables)
+        }
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -1585,6 +1597,44 @@ extension AppState {
             print("[Plex90] ADVANCE: \"\(prevTitle)\" -> \"\(currentItem?.title ?? "nil")\" on CH \(channel.name) (random fallback)")
         }
         loadCurrentItem()
+    }
+
+    // MARK: - Keeping a real file on the guide's clock
+
+    /// Plex, Jellyfin and Emby floor a runtime to whole minutes and the schedule slot is
+    /// that floored length, so a file runs 0 to 59 s past its slot. Starting the next item
+    /// at 0 when the file ends (the only safe start, a seek would skip into the episode)
+    /// left the player that much further behind the clock at every boundary: the headline
+    /// named the programme still playing while the guide had moved on (22.9% of samples in
+    /// the NaturalEndDriftTests model, 2026-11-09), and the gap grew about 30 s a programme.
+    /// Live TV does not wait for the tail of a programme, so neither do we: when the slot
+    /// ends and the file is still running, move to what the guide now shows. What is lost
+    /// is the end of the file past its slot, 59 s at most (credits, nearly always).
+    static let liveSlotGraceSeconds: TimeInterval = 90
+
+    /// When the slot of `item` ends, if the schedule has `item` on air right now. Nil for
+    /// demo mode (its own tick), multi-disc films (the slot is for the whole stack, the
+    /// parts end on their own) and anything the schedule does not have on air.
+    func liveSlotEnd(for item: PlexMediaItem) -> Date? {
+        guard !isDemoMode, item.additionalPartKeys == nil, let channel = currentChannel else { return nil }
+        let now = scheduleClock()
+        guard let live = ChannelScheduleBuilder.buildSchedule(
+            for: channel, at: now, credentialFingerprint: scheduleCredentialFingerprint
+        )?.nowPlaying, live.item.id == item.id else { return nil }
+        return live.endTime
+    }
+
+    /// Once a second while a real file plays. Past the end of its slot, and not by more
+    /// than the grace (beyond that the drift has another cause and the file's own end is
+    /// the safer signal), start what the guide shows at 0.
+    func liveScheduleTick() {
+        guard !isDemoMode, let end = liveSlotEnd else { return }
+        let late = scheduleClock().timeIntervalSince(end)
+        guard late >= 0, late <= Self.liveSlotGraceSeconds else { return }
+        print("[Plex90] SLOT END: \"\(currentItem?.title ?? "nil")\" ran \(Int(late))s past its slot, moving to the guide's programme")
+        liveSlotEnd = nil
+        playbackTracker?.onPlaybackPreparing()
+        advanceToNextItem(fromNaturalEnd: true)
     }
 
     // MARK: - Demo clip
