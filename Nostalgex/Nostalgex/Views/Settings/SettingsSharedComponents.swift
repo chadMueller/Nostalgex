@@ -190,14 +190,17 @@ struct SupportTile: View {
                         .minimumScaleFactor(0.8)
                     if let hint {
                         Text(hint)
-                            .font(.custom("DMMono-Regular", size: 18))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .font(.custom("DMMono-Regular", size: 20))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("supportTileHint")
                     }
                 }
             }
-            .frame(maxWidth: .infinity)
+            // maxHeight too: the RATE tile carries a three-line instruction, and the tips beside it
+            // grow to the same height instead of floating at their own.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 16)
             .padding(.top, 30)
             .padding(.bottom, 26)

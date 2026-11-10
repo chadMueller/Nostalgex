@@ -23,7 +23,7 @@ struct SettingsSupportView: View {
                 // RATE alone keeps the full-width row it always had.
                 SettingsToggleRow(
                     title: "RATE NOSTALGEX",
-                    subtitle: appState.hasTappedRate ? "Thanks for rating. Rate again anytime" : "Opens the App Store on your Apple TV",
+                    subtitle: appState.hasTappedRate ? "Thanks for rating. \(RatingNudgePolicy.scrollHint)" : RatingNudgePolicy.scrollHint,
                     isOn: true,
                     isFocused: isFocused("rate"),
                     showToggle: false
@@ -62,9 +62,7 @@ struct SettingsSupportView: View {
     private func rateTapped() {
         Analytics.track(.rateTapped)
         appState.recordRatingTapped()
-        let variant = AppStoreLink.activeVariant
-        let url = variant.url
-        openURL(url) { accepted in
+        AppStoreLink.openRate(using: openURL) { variant, url, accepted in
             print("[Plex90] Settings: RATE opened variant=\(variant.rawValue) \(url.absoluteString) accepted=\(accepted)")
             Analytics.track(.rateOpened(accepted: accepted, variant: variant.rawValue))
         }

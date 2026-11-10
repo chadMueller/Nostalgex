@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// ABOUT: the version line, plus slots for the community and rating links.
+/// ABOUT: the version line, then LINKS (`AboutLinks.all`: Discord, the website, the web
+/// tuner, Roku, GitHub).
 ///
-/// GITHUB shows the public repo's address. tvOS has no web browser, so it is a line to
-/// read and open on a phone or computer, not a link.
-///
-/// PLACEHOLDER (N-028): the DISCORD and RATE rows have no destination yet. Their copy
-/// and links come from Chad; nothing here opens anything. They are hidden while
-/// `SettingsFeatures.showAboutCommunityLinks` is off.
+/// tvOS has no web browser, so each link is a line to read and open on a phone or
+/// computer, not a button that opens anything. Rating lives under SUPPORT NOSTALGEX.
 struct SettingsAboutView: View {
     let focus: FocusState<SettingsFocus?>.Binding
 
@@ -31,40 +28,24 @@ struct SettingsAboutView: View {
             SettingsSectionHeader(title: "LINKS")
                 .padding(.top, 24)
 
-            if SettingsFeatures.showAboutCommunityLinks {
-                placeholderRow(id: "about_discord", title: "DISCORD")
-            }
-            SettingsToggleRow(
-                title: "GITHUB",
-                subtitle: "Source code and issues. Open it on a phone or computer.",
-                detail: "github.com/chadMueller/Nostalgex",
-                detailIsProminent: true,
-                isOn: true,
-                isFocused: isFocused("about_github"),
-                showToggle: false
-            ) {}
-            .settingsRow("about_github", focus: focus)
-            .accessibilityLabel("GitHub, github.com/chadMueller/Nostalgex")
-            if SettingsFeatures.showAboutCommunityLinks {
-                placeholderRow(id: "about_rate", title: "RATE NOSTALGEX")
+            ForEach(AboutLinks.all) { link in
+                SettingsToggleRow(
+                    title: link.title,
+                    subtitle: link.subtitle,
+                    detail: link.address,
+                    detailIsProminent: true,
+                    isOn: true,
+                    isFocused: isFocused(link.rowID),
+                    showToggle: false
+                ) {}
+                .settingsRow(link.rowID, focus: focus)
+                .accessibilityLabel("\(link.title.capitalized), \(link.address)")
             }
         }
     }
 
     private func isFocused(_ id: String) -> Bool {
         focus.wrappedValue == .row(id)
-    }
-
-    private func placeholderRow(id: String, title: String) -> some View {
-        SettingsToggleRow(
-            title: title,
-            subtitle: "Placeholder. Link and copy to come from Chad.",
-            detail: "PLACEHOLDER",
-            isOn: false,
-            isFocused: isFocused(id),
-            showToggle: false
-        ) {}
-        .settingsRow(id, focus: focus)
     }
 
     /// Marketing version plus build, e.g. "1.0.10 (17)". Both matter: the build number

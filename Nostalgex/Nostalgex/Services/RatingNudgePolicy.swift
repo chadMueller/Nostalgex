@@ -18,13 +18,14 @@ enum RatingNudgePolicy {
     static var autoDismissSeconds: Double { autoDismissSeconds(hintShown: showsScrollHint) }
     static func autoDismissSeconds(hintShown: Bool) -> Double { hintShown ? 12 : 8 }
 
-    /// A second line on the banner and under the Settings RATE tile. On: tested on the
+    /// A line on the banner and under the Settings RATE tile. On: tested on the
     /// living room Apple TV 2026-11-04, none of the write-review links (`AppStoreLink
     /// .RateLinkVariant` b, c, d) lands on the stars; every one opens the product page
-    /// with focus on the download button and the stars below the fold. The line says so,
-    /// and the banner stays up 12 s instead of 8 to be read.
+    /// with focus on the download button and the stars below the fold. Apple gives no link
+    /// to the rating button, so the line says where to go, and the banner stays up 12 s
+    /// instead of 8 to be read. Both places show this one string.
     static let showsScrollHint = true
-    static let scrollHint = "Then scroll down to the stars"
+    static let scrollHint = "Opens the App Store page. Scroll down to the stars to rate."
 
     /// Debug launch argument that skips the counters and gates. The banner still only
     /// appears on the exit from fullscreen to the guide.
