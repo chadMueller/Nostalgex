@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: CHOOSE YOUR LIBRARIES, same branch)
+
+**Why.** Chad asked for the library pick the Apple TV has: choose which libraries become channels, so a library you do not
+want is never scanned.
+
+**Changed.** New `scripts/nostalgex-library-selection.js`: one stored set of libraries switched OFF, under
+`nostalgex_deselected_library_sections` (the Apple TV's key name), entries `<serverId>::<sectionKey>`. The server id is the
+Plex machineIdentifier (the name when there is none) or the Jellyfin/Emby server URL (lower case, no trailing slash); the
+section key is the Plex section key or the Jellyfin/Emby view Id, so a rename or rescan never changes it. Default is none
+off, so existing installs see no change. The scan loops (`scanOnePlexServerSections`, `fetchJellyfinLibraryScan`) skip OFF
+libraries and nothing else. First setup shows CHOOSE YOUR LIBRARIES between the server step and the scan (Apple TV layout,
+logo left, list right, CONTINUE focused, Up/Down walk, Enter/Space toggle, Esc/Left back to the server list on Plex with more
+than one server); only on a visit straight from a sign-in, never on a restored saved login. Settings > SERVERS & ACCOUNTS
+lists the libraries first; toggling clears the library cache and rebuilds like RESCAN LIBRARY (guide stays up), the last
+library that is on cannot be turned off (as on the Apple TV), a change made during a rescan runs a second rescan after it.
+
+**Tests.** `npm run test:library-selection` (23 checks, in `npm test`). `nostalgex-plex-paging-smoke.mjs` counts the paged
+section-list calls in the page, now four. `saved-login-browser-smoke.mjs` presses CONTINUE on the first sign-in.
+
+**Roku / Android.** No Roku or Android equivalent exists yet; the key and the id rule above are the contract to port.
+
 ## 2026-11-10 (web tuner round 2, same branch)
 
 **Why.** Chad looked at the batch 1 preview: everything read small, the guide most, the support strip was skipped by the

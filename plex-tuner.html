@@ -38,6 +38,7 @@
 <script src="scripts/nostalgex-last-channel.js"></script>
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
+<script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
   :root {
@@ -3252,6 +3253,8 @@
   .cfg-row[data-row-action] { cursor: pointer; }
   a.cfg-row { text-decoration: none; color: inherit; }
   .cfg-row-address { font-size: var(--fs-cap); color: rgba(255,255,255,0.7); letter-spacing: 0.04em; text-align: right; overflow-wrap: anywhere; max-width: 45%; }
+  .cfg-row-state { font-size: var(--fs-cap); font-weight: 500; letter-spacing: 0.06em; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+  .cfg-row-state.on { color: var(--cyan); }
   .cfg-row-title { font-size: var(--fs-body); color: rgba(255,255,255,0.85); font-weight: 500; }
   .cfg-row-desc { font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px; }
 
@@ -3509,7 +3512,8 @@
   .setup-copy > div { display: none; }
   .plex-connect:not(:has(.plex-waiting.active)):not(:has(.server-picker.active)):not(:has(#plex-empty[style*="display: flex"])) .setup-copy .c-connect,
   .plex-connect:has(.plex-waiting.active) .setup-copy .c-wait,
-  .plex-connect:has(.server-picker.active) .setup-copy .c-servers,
+  .plex-connect:has(.server-picker.active:not(.library-picker)) .setup-copy .c-servers,
+  .plex-connect:has(.library-picker.active) .setup-copy .c-libs,
   .plex-connect:has(#plex-empty[style*="display: flex"]) .setup-copy .c-empty { display: block; }
   /* the right side: left-aligned, full width */
   .plex-connect .plex-actions, .plex-connect .plex-empty, .plex-connect .plex-waiting, .plex-connect .server-picker {
@@ -3536,6 +3540,8 @@
   .setup-row-title { font-size: var(--fs-body); font-weight: 500; letter-spacing: 0.04em; overflow-wrap: anywhere; }
   .setup-row-sub { font-size: var(--fs-cap); color: rgba(255,255,255,0.7); margin-top: 6px; overflow-wrap: anywhere; }
   .setup-row-state { font-size: var(--fs-cap); font-weight: 500; letter-spacing: 0.06em; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+  .setup-row[aria-disabled="true"] { opacity: 0.5; }
+  .plex-connect .server-picker-connect:disabled { opacity: 0.35; cursor: default; }
   .setup-row.selected { border-color: rgba(0,196,255,0.6); }
   .setup-row.selected .setup-row-state { color: var(--cyan); }
   /* focus: the one bright thing, the cyan slab with dark text */
@@ -3898,6 +3904,7 @@
         <div class="c-connect"><h1 class="setup-title">CONNECT YOUR LIBRARY</h1><p class="setup-text">Sign in with Plex and Nostalgex turns your library into live channels.</p></div>
         <div class="c-wait"><h1 class="setup-title">CONNECT WITH PLEX</h1><p class="setup-text">Enter the code at plex.tv/link on your phone or computer, or scan the QR code.</p></div>
         <div class="c-servers"><h1 class="setup-title">CHOOSE YOUR SERVERS</h1><p class="setup-text">Your account can reach more than one Plex server. Pick which servers Nostalgex should build channels from. You can change this later in Settings.</p></div>
+        <div class="c-libs"><h1 class="setup-title">CHOOSE YOUR LIBRARIES</h1><p class="setup-text" id="library-copy">Pick which of your libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.</p></div>
         <div class="c-empty"><h1 class="setup-title">NO CHANNELS FOUND</h1><p class="setup-text">Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports.</p></div>
       </div>
     </div>
@@ -3932,6 +3939,9 @@
     <div class="server-picker" id="server-picker">
       <div class="server-picker-title">SELECT YOUR SERVER</div>
     </div>
+
+    <!-- CHOOSE YOUR LIBRARIES: first setup, after the server step and before the scan. -->
+    <div class="server-picker library-picker" id="library-picker"></div>
   </div>
 
   <!-- PREVUE-STYLE GRID GUIDE -->
@@ -4173,6 +4183,7 @@
     <div id="config-tab-server" style="display:none" tabindex="-1">
       <div id="cfg-library-section" style="display:none">
         <div class="config-section-label">LIBRARIES</div>
+        <div id="cfg-library-rows"></div>
         <div id="cfg-library-coverage-wrap" style="display:none; margin: 0 0 4px; padding: 0 4px;">
           <div id="cfg-library-coverage" style="font-size: var(--fs-desc); color: rgba(255,255,255,0.7); letter-spacing: 0.06em; line-height: 1.5;"></div>
         </div>
@@ -4939,6 +4950,7 @@
       console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
     } finally {
       includeHiddenReading = false;
+      if (typeof refreshLibraryRows === 'function') refreshLibraryRows();
     }
   }
 
@@ -5231,6 +5243,9 @@
     activePlaybackRequest = request;
     return request;
   }
+  // True only when this visit came straight from a sign-in (the landing page hands the session over, or a
+  // Plex code was just approved). A restored saved login never opens CHOOSE YOUR LIBRARIES.
+  let libraryPickAllowed = false;
   let appState = 'connect'; // 'connect' | 'player' | 'guide' | 'config'
   let discoveredGenres = {}; // { genreName: itemCount }
   let allItemsCache = []; // cached items for populating new channels
@@ -8755,15 +8770,193 @@
   }
 
 
+
+  // ══════════════════════════════════════
+  // LIBRARY SELECTION: CHOOSE YOUR LIBRARIES (first setup) and the LIBRARIES rows in Settings
+  // ══════════════════════════════════════
+  // One list of each server's libraries (read without scanning a title), one stored OFF set
+  // (scripts/nostalgex-library-selection.js, key <serverId>::<sectionKey>, nothing off by default) that the
+  // scan loops read. The picker and the Settings rows share both, so they never disagree.
+  let knownLibrarySections = [];
+
+  async function listLibrarySections() {
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    const out = [];
+    if (isMediaBrowserBackend(mediaBackend)) {
+      // The same request the scan makes, so the hidden-libraries switch decides what is listed.
+      const url = plexServerUrl + NostalgexJellyfinUrls.userViewsPath(mediaBackend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
+      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() } });
+      if (!res.ok) throw new Error(`HTTP ${res.status} from the library list`);
+      const data = await res.json();
+      for (const v of (data.Items || [])) {
+        const type = NostalgexJellyfinUrls.sectionType(v.CollectionType);
+        if (type === 'other') continue;   // Playlists, Music, Photos: never scanned, so never listed
+        out.push({ serverId: LSEL.mediaBrowserServerId(plexServerUrl), serverName: plexServerName || backendDisplayName(), key: v.Id, title: v.Name || 'Library', type });
+      }
+    } else {
+      const servers = selectedServers.length > 0
+        ? selectedServers
+        : [{ name: plexServerName || 'Plex', url: plexServerUrl, token: plexToken, connections: plexConnections }];
+      const NC = globalThis.NostalgexCollections;
+      for (const server of servers) {
+        try {
+          const sections = await NC.fetchPlexPaged(
+            (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
+          for (const sec of sections) {
+            if (sec.type === 'photo') continue;
+            out.push({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type });
+          }
+        } catch (err) {
+          console.warn(`[Nostalgex] Could not list the libraries of ${server.name}:`, err);
+        }
+      }
+    }
+    return out;
+  }
+  function librarySectionOn(sec) { return !globalThis.NostalgexLibrarySelection.isOff(sec.serverId, sec.key); }
+  function librarySectionsMultiServer(list) { return new Set(list.map(x => x.serverId)).size > 1; }
+
+  // ---- the setup screen ----
+  let libraryPickResolve = null;
+  function showLibrarySelection(sections, canGoBack) {
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    const picker = document.getElementById('library-picker');
+    const copy = document.getElementById('library-copy');
+    if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
+    document.getElementById('plex-connect').style.display = '';
+    document.getElementById('plex-actions').style.display = 'none';
+    document.getElementById('plex-waiting').classList.remove('active');
+    document.getElementById('server-picker').classList.remove('active');
+    appState = 'library-select';
+    const multi = librarySectionsMultiServer(sections);
+    const render = (focusKey) => {
+      picker.innerHTML = '';
+      const list = document.createElement('div');
+      list.className = 'server-picker-list';
+      sections.forEach((sec) => {
+        const on = librarySectionOn(sec);
+        const row = document.createElement('div');
+        row.className = `setup-row${on ? ' selected' : ''}`;
+        row.setAttribute('role', 'checkbox'); row.setAttribute('tabindex', '0'); row.setAttribute('aria-checked', on ? 'true' : 'false');
+        row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
+        row.innerHTML = `<div class="setup-row-main"><div class="setup-row-title">${escapeHtml(sec.title)}</div><div class="setup-row-sub">${escapeHtml(LSEL.subtitle(sec, multi))}</div></div><div class="setup-row-state">${on ? 'INCLUDED' : 'OFF'}</div>`;
+        row.addEventListener('click', () => { if (LSEL.setOff(sec.serverId, sec.key, on)) render(row.dataset.key); });
+        list.appendChild(row);
+      });
+      picker.appendChild(list);
+      const go = document.createElement('button');
+      go.type = 'button'; go.className = 'server-picker-connect plex-btn library-continue'; go.textContent = 'CONTINUE';
+      go.disabled = !sections.some(librarySectionOn);
+      go.addEventListener('click', () => finish('continue'));
+      picker.appendChild(go);
+      const target = focusKey ? [...picker.querySelectorAll('.setup-row')].find(r => r.dataset.key === focusKey) : go;
+      (target || go).focus({ preventScroll: true });
+    };
+    const finish = (how) => {
+      picker.classList.remove('active');
+      appState = 'connect';
+      const r = libraryPickResolve; libraryPickResolve = null;
+      if (r) r(how);
+    };
+    picker.classList.add('active');
+    render(null);
+    picker.dataset.canGoBack = canGoBack ? '1' : '';
+    return new Promise((resolve) => { libraryPickResolve = resolve; picker._finish = finish; });
+  }
+  function cancelLibrarySelection() {
+    const picker = document.getElementById('library-picker');
+    if (picker && picker.dataset.canGoBack && picker._finish) picker._finish('back');
+  }
+
+  // First setup only: an existing install (initial load done) never sees it. Skipped, silently, if the
+  // libraries cannot be listed or there are none: the scan then runs as it always did.
+  const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  async function maybeChooseLibraries() {
+    const LL = globalThis.NostalgexLibraryLoad;
+    if (!libraryPickAllowed || !LL || !LL.isFirstLibraryLoad() || localStorage.getItem(LIBRARY_PICK_SEEN_KEY) === '1') return 'skip';
+    // While the list loads, the same left-hand copy shows with one quiet line on the right.
+    const picker = document.getElementById('library-picker');
+    document.getElementById('plex-connect').style.display = '';
+    document.getElementById('plex-actions').style.display = 'none';
+    document.getElementById('plex-waiting').classList.remove('active');
+    document.getElementById('server-picker').classList.remove('active');
+    picker.innerHTML = '<div class="plex-waiting-text">READING YOUR LIBRARIES</div>';
+    picker.classList.add('active');
+    const copy = document.getElementById('library-copy');
+    if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
+    let sections;
+    try { sections = await listLibrarySections(); } catch (err) { console.warn('[Nostalgex] Library list failed, scanning everything:', err); picker.classList.remove('active'); return 'skip'; }
+    if (!sections.length) { picker.classList.remove('active'); return 'skip'; }
+    knownLibrarySections = sections;
+    const canGoBack = !isMediaBrowserBackend(mediaBackend) && discoveredServers.length > 1;
+    const how = await showLibrarySelection(sections, canGoBack);
+    if (how === 'back') { document.getElementById('library-picker').classList.remove('active'); showServerPicker(); return 'back'; }
+    lsSet(LIBRARY_PICK_SEEN_KEY, '1');
+    return 'continue';
+  }
+
+  // ---- Settings > SERVERS & ACCOUNTS > LIBRARIES ----
+  function renderLibraryRows(focusKey) {
+    const host = document.getElementById('cfg-library-rows');
+    if (!host) return;
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    const list = knownLibrarySections;
+    host.innerHTML = '';
+    const multi = librarySectionsMultiServer(list);
+    const onCount = list.filter(librarySectionOn).length;
+    list.forEach((sec) => {
+      const on = librarySectionOn(sec);
+      const last = on && onCount <= 1;
+      const row = document.createElement('div');
+      row.className = 'cfg-row';
+      row.setAttribute('role', 'checkbox'); row.tabIndex = 0; row.setAttribute('aria-checked', on ? 'true' : 'false');
+      row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
+      row.innerHTML = `<div><div class="cfg-row-title">${escapeHtml(sec.title)}</div><div class="cfg-row-desc">${escapeHtml(last ? LSEL.typeLabel(sec.type, sec.title) + ' · only enabled library' : LSEL.subtitle(sec, multi))}</div></div><div class="cfg-row-state${on ? ' on' : ''}">${on ? 'INCLUDED' : 'OFF'}</div>`;
+      row.addEventListener('click', () => toggleLibrarySection(sec));
+      host.appendChild(row);
+    });
+    if (focusKey) { const r = [...host.children].find(x => x.dataset.key === focusKey); if (r) r.focus({ preventScroll: true }); }
+  }
+  async function refreshLibraryRows() {
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    // Only the servers this visit is connected to (a saved list can be from another account's server).
+    const mine = new Set(isMediaBrowserBackend(mediaBackend)
+      ? [LSEL.mediaBrowserServerId(plexServerUrl)]
+      : (selectedServers.length ? selectedServers : [{ name: plexServerName, machineIdentifier: '' }]).map(sv => LSEL.plexServerId(sv)));
+    const seen = LSEL.listed().filter(x => mine.has(x.serverId));
+    if (seen.length) { knownLibrarySections = seen; renderLibraryRows(); return; }
+    // A visit that opened from the saved library has not scanned yet: ask once, on opening Settings.
+    renderLibraryRows();
+    try {
+      const fresh = await listLibrarySections();
+      if (fresh.length) {
+        knownLibrarySections = fresh; renderLibraryRows();
+        for (const id of new Set(fresh.map(x => x.serverId))) LSEL.noteListing(id, fresh.filter(x => x.serverId === id));
+      }
+    } catch (err) { console.warn('[Nostalgex] Could not list the libraries:', err); }
+  }
+  // Turning one off or on rebuilds the lineup like RESCAN LIBRARY: in the background, the guide stays up.
+  // The last library that is on cannot be turned off (nothing would be left to scan).
+  function toggleLibrarySection(sec) {
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    const wasOn = librarySectionOn(sec);
+    if (wasOn && knownLibrarySections.filter(librarySectionOn).length <= 1) return;
+    if (!LSEL.setOff(sec.serverId, sec.key, wasOn)) return;
+    clearLibraryCache();
+    renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
+    rescanLibrary();
+  }
+
   // ══════════════════════════════════════
   // RESCAN LIBRARY (SERVERS & ACCOUNTS), as on the Apple TV
   // ══════════════════════════════════════
   // The web tuner had no visible way to pull a fresh copy of the library: only the hidden-libraries
   // switch rescanned, and the daily refresh. This clears the saved copy and reads the server again in
   // the background (the guide stays up and what is playing keeps playing), rebuilding every channel.
-  let rescanRunning = false;
+  let rescanRunning = false, rescanQueued = false;
   async function rescanLibrary() {
-    if (rescanRunning || !plexConnected) return;
+    if (!plexConnected) return;
+    if (rescanRunning) { rescanQueued = true; return; }
     const btn = document.getElementById('cfg-rescan-btn');
     const desc = document.getElementById('cfg-rescan-desc');
     const was = desc ? desc.textContent : '';
@@ -8781,6 +8974,8 @@
       rescanRunning = false;
       if (btn) { btn.disabled = false; btn.textContent = 'RESCAN'; }
       renderActiveGuide();
+      if (typeof refreshLibraryRows === 'function') refreshLibraryRows();
+      if (rescanQueued) { rescanQueued = false; rescanLibrary(); }
     }
   }
 
@@ -8898,6 +9093,7 @@
     switchConfigTab('bundles');
     document.getElementById('config-overlay').classList.add('open');
     renderSupportLinks();
+    refreshLibraryRows();
     enhanceConfigRows();
     requestAnimationFrame(focusConfigRail);
     // Sync language dropdowns to current saved values
@@ -9394,6 +9590,7 @@
 
     plexConnected = true;
     updateConfigPlexStatus();
+    libraryPickAllowed = true;
     await fetchPlexLibrary();
   }
 
@@ -9452,6 +9649,7 @@
       // sessionStorage already has a token (came from web-tuner.html redirect or previous page).
       // Hide connect screen immediately so Jellyfin users don't see "CONNECT WITH PLEX" during validation.
       document.getElementById('plex-connect').style.display = 'none';
+      libraryPickAllowed = true;
     }
 
     // Re-read backend selection (web-tuner.html sets this before redirecting here).
@@ -9678,6 +9876,8 @@
     // The library cache persists across sessions now, so it has to go with the
     // credentials. Otherwise a signed-out browser keeps the whole library.
     clearLibraryCache();
+    // The list of this account's libraries goes too (which are switched off is a preference and stays).
+    try { if (globalThis.NostalgexLibrarySelection) globalThis.NostalgexLibrarySelection.forgetListings(); } catch (e) {}
     // Collection titles and their members are library data too.
     try { localStorage.removeItem(COLLECTION_SCAN_KEY); } catch (e) {}
     libraryExtrasGeneration++;
@@ -10511,7 +10711,15 @@
       throw e;
     }
     const viewsData = await viewsRes.json();
-    const views = viewsData.Items || [];
+    // A library the viewer switched off is never read. Nothing is off by default.
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    const NJU = globalThis.NostalgexJellyfinUrls;
+    if (LSEL && LSEL.noteListing && NJU) {
+      const sid = LSEL.mediaBrowserServerId(plexServerUrl);
+      LSEL.noteListing(sid, (viewsData.Items || []).map(v => ({ serverId: sid, serverName: plexServerName || 'Server', key: v.Id, title: v.Name || 'Library', type: NJU.sectionType(v.CollectionType) }))
+        .filter(x => x.type !== 'other'));
+    }
+    const views = (viewsData.Items || []).filter(v => !LSEL || !LSEL.isOff(LSEL.mediaBrowserServerId(plexServerUrl), v.Id));
     LL.state.scanTotalSections = views.length;
     LL.state.scanSectionIndex = 0;
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
@@ -10981,8 +11189,13 @@
     let lastSectionError = null;
     // Sends X-Plex-Container-Size like the section pages below (Trello N-038); the helper pages.
     const NC = globalThis.NostalgexCollections;
-    const sections = await NC.fetchPlexPaged(
+    const allSections = await NC.fetchPlexPaged(
       (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
+    // A library the viewer switched off (CHOOSE YOUR LIBRARIES, Settings) is never read. Nothing is off by default.
+    const LSEL = globalThis.NostalgexLibrarySelection;
+    if (LSEL && LSEL.noteListing) LSEL.noteListing(LSEL.plexServerId(server), allSections.filter(sec => sec.type !== 'photo')
+      .map(sec => ({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type })));
+    const sections = LSEL ? allSections.filter(sec => !LSEL.isOff(LSEL.plexServerId(server), sec.key)) : allSections;
     const serverPrefix = multiServer ? `${server.name} · ` : '';
 
     LL.state.scanTotalSections = sections.length;
@@ -11324,9 +11537,12 @@
 
   async function fetchPlexLibrary() {
     const LL = globalThis.NostalgexLibraryLoad;
+    // First setup: CHOOSE YOUR LIBRARIES, between the server step and the scan. Back goes to the server list.
+    if (await maybeChooseLibraries() === 'back') return;
     document.getElementById('plex-connect').style.display = 'none';
     document.getElementById('plex-waiting').classList.remove('active');
     document.getElementById('server-picker').classList.remove('active');
+    document.getElementById('library-picker').classList.remove('active');
 
     // Both branches below share this one catch. The cache-restore branch used to have
     // none of its own: an exception anywhere in finalizeLibraryWithMusicBrainz (filtering,
@@ -11674,6 +11890,19 @@
       } else {
         // Other keys handled below
       }
+    }
+
+    // CHOOSE YOUR LIBRARIES: the same keys as the server list.
+    if (appState === 'library-select') {
+      if (key === 'Escape' || key === 'ArrowLeft') { cancelLibrarySelection(); e.preventDefault(); return; }
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        const items = [...document.querySelectorAll('#library-picker .setup-row, #library-picker .library-continue')].filter(el => !el.disabled);
+        const at = items.indexOf(document.activeElement);
+        const to = at === -1 ? 0 : Math.min(Math.max(at + (key === 'ArrowDown' ? 1 : -1), 0), items.length - 1);
+        if (items[to]) items[to].focus({ preventScroll: false });
+        e.preventDefault();
+      }
+      return;
     }
 
     // Server picker mode: Up and Down walk the rows and CONTINUE, Enter or Space on a row toggles it (the

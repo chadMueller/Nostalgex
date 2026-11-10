@@ -219,7 +219,8 @@ const childrenRequests = (log, id) => log.filter((l) => l.path === `/library/col
 {
   const tuner = readFileSync(fileURLToPath(new URL("../plex-tuner.html", import.meta.url)), "utf8");
   const calls = [...tuner.matchAll(/\b(fetchPlexPaged|fetchPlexCollections)\(/g)];
-  check("tuner: the collection scan, the section list and the episode lists all page", calls.length === 3, `${calls.length} calls found`);
+  // four: the collection scan, the scan's section list, the episode lists, and the CHOOSE YOUR LIBRARIES section list
+  check("tuner: the collection scan, the section lists and the episode lists all page", calls.length === 4, `${calls.length} calls found`);
   for (const m of calls) {
     const nearby = tuner.slice(m.index, m.index + 400);
     check(`tuner: ${m[1]} at ${tuner.slice(0, m.index).split("\n").length} hands over a getter that sends the window`, nearby.includes("plexWindowPath("));

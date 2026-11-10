@@ -6,7 +6,7 @@
  * open (asking it for items anyway is recorded and fails the run).
  *
  * What it checks:
- *   - the switch is in Settings > GENERAL > PLAYBACK under OPEN ON LAST CHANNEL, with the Apple TV era
+ *   - the switch is in Settings > SERVERS & ACCOUNTS > LIBRARIES, under the per-library rows, with the Apple TV era
  *     wording of the line under it, a real button (a TV browser has no keys), visible and pressable by
  *     mouse at 960x540 and on a phone;
  *   - never chosen, the first scan's request is exactly /UserViews?userId=u (what it always was) and no
@@ -161,7 +161,7 @@ const library = (page) => page.evaluate(() => {
 });
 const openRow = (page) => page.evaluate(() => {
   showConfig();
-  switchConfigTab("general");
+  switchConfigTab("server");
   const row = document.getElementById("cfg-include-hidden-row");
   const b = document.getElementById("cfg-include-hidden-toggle");
   if (!row || !b) return { exists: false };
@@ -175,12 +175,12 @@ const openRow = (page) => page.evaluate(() => {
     rowShown: !row.hidden && rowCs.display !== "none",
     shown: cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0,
     inside: r.left >= 0 && r.right <= innerWidth + 0.5 && r.top >= 0 && r.bottom <= innerHeight + 0.5,
-    afterOpenLast: row.previousElementSibling && row.previousElementSibling.querySelector("#cfg-open-last-toggle") !== null,
+    inLibraries: row.closest("#cfg-library-section") !== null,
   };
 });
 const stored = (page) => page.evaluate(() => localStorage.getItem("nostalgex_include_hidden_libraries"));
 const pressSwitch = async (page) => {
-  await page.evaluate(() => { showConfig(); switchConfigTab("general"); });
+  await page.evaluate(() => { showConfig(); switchConfigTab("server"); });
   await page.click("#cfg-include-hidden-toggle", { timeout: 4000 }).catch(() => {});
 };
 // The read after a press runs in the background: wait for its first request, then for the scan to finish.
@@ -200,9 +200,9 @@ const reread = async (page, m) => {
   check("never chosen: the hidden library is not asked for items", !log.itemParents.includes("lib-hidden"));
 
   const s0 = await openRow(page);
-  check("Settings > GENERAL has the switch, a real button, named", s0.exists && s0.tag === "BUTTON" && s0.type === "button" && s0.label === TITLE, JSON.stringify(s0));
+  check("Settings > SERVERS & ACCOUNTS has the switch, a real button, named", s0.exists && s0.tag === "BUTTON" && s0.type === "button" && s0.label === TITLE, JSON.stringify(s0));
   check("the row says what it does in the one plain line", s0.title === TITLE && s0.line === LINE, JSON.stringify([s0.title, s0.line]));
-  check("it sits under OPEN ON LAST CHANNEL, in the same style (a cfg-row)", s0.afterOpenLast === true);
+  check("it sits in the LIBRARIES section, in the same style (a cfg-row)", s0.inLibraries === true);
   check("it reads OFF and not pressed", s0.text === "OFF" && s0.pressed === "false", JSON.stringify(s0));
   check("on Jellyfin the row is shown, and the button is visible and inside the 960x540 screen", s0.rowShown && s0.shown && s0.inside, JSON.stringify(s0));
   if (shots) { await page.waitForTimeout(700); await page.screenshot({ path: join(shots, "include-hidden-960x540.png") }); }
@@ -249,7 +249,7 @@ const reread = async (page, m) => {
   // OFF again, from the same channel; two presses in one tick read once
   const channelNow = await page.evaluate(() => currentChannel);
   m = mark();
-  await page.evaluate(() => { showConfig(); switchConfigTab("general"); window.__tunes = []; toggleIncludeHiddenLibraries(); toggleIncludeHiddenLibraries(); });
+  await page.evaluate(() => { showConfig(); switchConfigTab("server"); window.__tunes = []; toggleIncludeHiddenLibraries(); toggleIncludeHiddenLibraries(); });
   await reread(page, m);
   const afterOff = await library(page);
   const viewsOff = log.views.slice(m.views);
@@ -285,9 +285,9 @@ const reread = async (page, m) => {
   check("Emby, key saved as '1': the request is /Users/u/Views, no includeHidden, nothing on /UserViews", log.views.length >= 1 && log.views.every((v) => v === "/Users/u/Views"), JSON.stringify(log.views));
   const e = await openRow(emby.page);
   check("Emby: the row is hidden", e.exists && e.rowShown === false, JSON.stringify(e));
-  const plexRow = await emby.page.evaluate(() => { mediaBackend = "plex"; showConfig(); switchConfigTab("general"); const r = document.getElementById("cfg-include-hidden-row"); return r ? { hidden: r.hidden, display: getComputedStyle(r).display } : { hidden: false, display: "missing" }; });
+  const plexRow = await emby.page.evaluate(() => { mediaBackend = "plex"; showConfig(); switchConfigTab("server"); const r = document.getElementById("cfg-include-hidden-row"); return r ? { hidden: r.hidden, display: getComputedStyle(r).display } : { hidden: false, display: "missing" }; });
   check("Plex: the row is hidden", plexRow.hidden === true && plexRow.display === "none", JSON.stringify(plexRow));
-  const back = await emby.page.evaluate(() => { mediaBackend = "jellyfin"; showConfig(); switchConfigTab("general"); const r = document.getElementById("cfg-include-hidden-row"); return { hidden: r ? r.hidden : true }; });
+  const back = await emby.page.evaluate(() => { mediaBackend = "jellyfin"; showConfig(); switchConfigTab("server"); const r = document.getElementById("cfg-include-hidden-row"); return { hidden: r ? r.hidden : true }; });
   check("and shown again for Jellyfin", back.hidden === false);
   // Pressing the hidden button on a non-Jellyfin backend does nothing
   const before = log.views.length;
@@ -306,7 +306,7 @@ const reread = async (page, m) => {
   await t.page.click("#cfg-include-hidden-toggle", { timeout: 4000 }).catch(() => {});
   await t.page.waitForTimeout(2500);
   check("phone: a tap turns it on", (await stored(t.page)) === "1");
-  if (shots) { await t.page.evaluate(() => { showConfig(); switchConfigTab("general"); (document.getElementById("cfg-include-hidden-toggle") || document.body).scrollIntoView({ block: "center" }); }); await t.page.waitForTimeout(700); await t.page.screenshot({ path: join(shots, "include-hidden-390x844.png") }); }
+  if (shots) { await t.page.evaluate(() => { showConfig(); switchConfigTab("server"); (document.getElementById("cfg-include-hidden-toggle") || document.body).scrollIntoView({ block: "center" }); }); await t.page.waitForTimeout(700); await t.page.screenshot({ path: join(shots, "include-hidden-390x844.png") }); }
   check("phone: no page errors", t.errors.length === 0, t.errors.join(" | "));
   await t.ctx.close();
 }

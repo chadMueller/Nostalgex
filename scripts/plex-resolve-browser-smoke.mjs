@@ -144,6 +144,9 @@ async function signIn(servers, { waitMs = 40000 } = {}) {
   // Two or more servers: the picker, with everything selected. CONNECT is a button.
   let clickedAt = null;
   if (servers.length > 1) { await page.locator(".server-picker-connect").click({ timeout: 20000 }); clickedAt = t0(); }
+  // A first sign-in stops at CHOOSE YOUR LIBRARIES once a server answers: one press of CONTINUE (all on) starts the scan.
+  // Where nothing answers there is no list, so the wait is short and the case goes on to its failure.
+  await page.locator(".library-continue").click({ timeout: waitMs }).catch(() => {});
   let loaded = false;
   try {
     await page.waitForFunction(() => typeof allItemsCache !== "undefined" && allItemsCache.length > 0, null, { timeout: waitMs });
