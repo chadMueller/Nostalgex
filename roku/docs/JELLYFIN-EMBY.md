@@ -49,7 +49,10 @@ code path.
   by default, `source/mediabrowser/HiddenLibraries.brs`), Jellyfin's request
   ends `&includeHidden=true` and lists the libraries the user hides from the
   home screen; a library the user has no access to is in neither answer.
-  Emby's request is the same either way.
+  Emby's request is the same either way. Pressed on the 55R617
+  (2026-11-10) against the lab Jellyfin 12.2.0, a user hiding Shows: 834
+  items off, 5,589 on, 834 off again; a library the user can't open was read
+  in neither.
 - Items: `GET /Items?userId=&ParentId=&Recursive=true&IncludeItemTypes=` with
   the `Fields` list (`ProviderIds,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`),
   in pages of 200. A library of type `musicvideos` is asked for
