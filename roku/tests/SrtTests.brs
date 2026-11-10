@@ -51,6 +51,13 @@ function NxRunSrtTests() as Integer
     NxCheck(r, "box: the guide's preview, inside its box", NxToStr(small.x >= 1180 and small.x + small.w <= 1920 and small.y + small.h <= 555), "true")
     NxCheck(r, "box: smaller type in the preview", NxToStr(small.size < full.size), "true")
 
+    ' The moment drawn for: the reported position plus the time since the report.
+    NxCheck(r, "moment: just reported", NxForcedSubMs(297.0, 0).ToStr(), "297000")
+    NxCheck(r, "moment: 208 ms after the report", NxForcedSubMs(297.0, 208).ToStr(), "297208")
+    NxCheck(r, "moment: never more than 600 ms ahead", NxForcedSubMs(297.0, 5000).ToStr(), "297600")
+    NxCheck(r, "moment: a clock that ran back adds nothing", NxForcedSubMs(297.5, -3).ToStr(), "297500")
+    NxCheck(r, "moment: no position yet", NxForcedSubMs(invalid, 100).ToStr(), "0")
+
     print "srt cases (#237):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

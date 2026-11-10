@@ -94,7 +94,10 @@ sub init()
     m.forcedBoxFull = false
     m.forcedTask = invalid
     m.playerSubsShown = false
-    m.forcedTimer = newTimer(0.2, true, "drawForcedSub")
+    m.forcedTimer = newTimer(0.1, true, "drawForcedSub")
+    ' The player's last reported position and when it changed (NxForcedSubMs).
+    m.forcedPos = -1
+    m.forcedPosClock = CreateObject("roTimespan")
     restoreCaptionMode()
     m.tick = CreateObject("roSGNode", "Timer")
     m.tick.repeat = true
@@ -1707,12 +1710,20 @@ sub onForcedCues()
     drawForcedSub()
 end sub
 
-' Five times a second while an airing has forced lines: the line for the
-' player's position, redrawn only when it changes.
+' Ten times a second while an airing has forced lines: the line for the
+' player's position, redrawn only when it changes. The player reports its
+' position every half second, which drew a line up to that late (0.29 and
+' 0.34 s on a 43S45), so the time since the last report is added while it
+' plays (NxForcedSubMs).
 sub drawForcedSub()
     if m.forcedCues = invalid then return
     text = ""
-    if not m.playerSubsShown and m.video.state = "playing" then text = NxSrtTextAt(m.forcedCues, Int(m.video.position * 1000))
+    position = m.video.position
+    if position <> m.forcedPos then
+        m.forcedPos = position
+        m.forcedPosClock.Mark()
+    end if
+    if not m.playerSubsShown and m.video.state = "playing" then text = NxSrtTextAt(m.forcedCues, NxForcedSubMs(position, m.forcedPosClock.TotalMilliseconds()))
     spot = NxForcedSubBox(m.fullscreen)
     if text = m.forcedText and m.forcedBoxFull = m.fullscreen then return
     m.forcedText = text

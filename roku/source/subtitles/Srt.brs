@@ -90,3 +90,15 @@ function NxForcedSubBox(fullscreen as Boolean) as Object
     if fullscreen then return { x: 160, y: 760, w: 1600, h: 250, size: 44, edge: 3 }
     return { x: 1200, y: 385, w: 700, h: 150, size: 22, edge: 2 }
 end function
+
+' The moment of the film to draw for: the player's last reported position
+' (seconds) plus the time since it reported it, as it reports only every
+' half second. No more than 600 ms is added, so a player that has stopped
+' reporting (a stall the state hasn't caught up with) isn't run ahead.
+function NxForcedSubMs(position as Dynamic, sinceReportMs as Integer) as Integer
+    if not NxIsNumber(position) then return 0
+    add = sinceReportMs
+    if add < 0 then add = 0
+    if add > 600 then add = 600
+    return Int(position * 1000) + add
+end function
