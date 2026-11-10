@@ -38,6 +38,43 @@ never reached. The loading screen holds the screensaver off (`LoadingView.xml`);
 
 **Open.** A code entered late (after 5 minutes) on a TV, a stick, and whether the code screen should hold the
 screensaver off.
+## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
+
+**Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with
+`includeHidden=true`, so the Roku scan never read it. The web tuner (1.0.15) and the Apple TV already ask.
+
+**Changed.** `NxMbViewsPath` takes the switch and adds `&includeHidden=true` for Jellyfin only; off, the request is
+byte for byte what it was, and Emby's never changes. The switch is `source/mediabrowser/HiddenLibraries.brs`, off
+unless turned on, in the registry's `player` section. The row INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's
+line, is on SERVERS & ACCOUNTS between the servers and RESCAN LIBRARY, on a Jellyfin sign-in only. A press saves the
+switch and reads the library again in the background, as RESCAN LIBRARY does; while a load runs the row reads
+UPDATING… and a press does nothing, so no load is ever for the other position.
+
+**A library saved with the other position.** Read from the code, not run: if the app closes before the re-read ends,
+the next launch shows the saved guide, and its background refresh scans Jellyfin again (a Jellyfin library is scanned
+on every load) with the switch as it now is.
+
+**Tested off the TV.** The golden file's nine `views` cases are read with its `sections` and `types`. A
+`hidden-libraries` suite, 19 cases: the switch on a stand-in registry, and a scan against a stub that lists two hidden
+libraries only with `includeHidden=true` and never lists a third. On, the hidden films and episodes are scanned; off,
+none is and no hidden library is asked for items; the unlisted library is never asked. With the parameter taken out,
+3 of the 19 and 3 of the golden cases fail.
+
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `b72d36f`, against the lab Jellyfin 12.2.0 as a user
+who hides Shows (4,755 episodes) from the home screen and has no access to Lab Music Videos (4 items):
+- Signed in to the lab Emby first, SERVERS & ACCOUNTS had no such row: the server, RESCAN LIBRARY, SIGN OUT OF EMBY.
+- On Jellyfin the row is between the server and RESCAN LIBRARY and read OFF. The load read 834 items and built a
+  guide of 11 channels (the server counts 836 in the two libraries it listed; the scan kept 834).
+- OK on the row: it read UPDATING…, then ON. The re-read had 5,589 items 17.5 s after the press, 4,755 more, and
+  its guide of 17 channels was handed over 28.7 s after the press with no retune of the channel playing.
+- OK again: OFF, 834 items and the same pools fingerprint as before the switch.
+- Nothing of Lab Music Videos was read in either position: 4,755 is Shows alone.
+
+The row's words and states were read from the node tree (port 8080), not a screenshot.
+
+**Open.** A stick. Not looked at: the row as drawn (no screenshot), a hidden library's title on a channel on screen
+(the counts and the six more channels stand in), the request on the wire, a press while a load runs (ignored, by the
+code), and the app closed before the re-read ends.
 
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
