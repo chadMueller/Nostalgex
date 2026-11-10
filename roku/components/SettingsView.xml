@@ -66,6 +66,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/FranchiseChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/collections/CollectionChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
+  <script type="text/brightscript" uri="pkg:/source/mediabrowser/HiddenLibraries.brs" />
   <script type="text/brightscript" uri="pkg:/components/SettingsView.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0B1CFF" />

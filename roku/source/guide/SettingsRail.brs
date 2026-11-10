@@ -37,7 +37,7 @@ function NxSettingsTabOf(kind as String) as String
     ' listed here before that row exists, so neither pull request has to land
     ' first: a kind missing from these lists is in no tab and never shows.
     channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone"]
-    servers = ["server", "rescan", "signOut"]
+    servers = ["server", "includeHidden", "rescan", "signOut"]
     about = ["version", "github"]
     if kind = "support" then return "support"
     if NxHasValue(playback, kind) then return "playback"
