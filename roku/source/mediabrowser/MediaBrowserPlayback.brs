@@ -157,28 +157,55 @@ end function
 ' two letters, so "est" is not Spanish (issue #119). invalid when there is
 ' nothing to choose between, which leaves the server's own choice.
 ' `tracks` as NxMbAudioTracks keeps them.
+'
+' A commentary (a track's `commentary`, #236) is passed over at each step
+' while a track that isn't one fits it, and still used when it is the only
+' one that does: a film whose only English track is a commentary plays it.
 function NxMbPreferredAudioIndex(tracks as Object, languages as Object) as Dynamic
     if tracks.Count() < 2 then return invalid
     wanted = { en: true }
     for each l in languages
         if NxIsString(l) and l <> "" then wanted[LCase(l)] = true
     end for
+    best = NxMbBestInLanguages(tracks, wanted)
+    if best <> invalid then return best.index
+    ' No track in a wanted language: the default, then the first, among the
+    ' tracks that aren't a commentary when there is one.
+    rest = []
+    for each t in tracks
+        if t.commentary <> true then rest.Push(t)
+    end for
+    if rest.Count() = 0 then rest = tracks
+    for each t in rest
+        if t.isDefault = true then return t.index
+    end for
+    return rest[0].index
+end function
+
+' The track in one of `wanted` (comparable tags) with the most channels, the
+' first of equals: among those that aren't a commentary, else among the
+' commentaries. invalid when no track is in a wanted language.
+function NxMbBestInLanguages(tracks as Object, wanted as Object) as Dynamic
     best = invalid
+    bestCommentary = invalid
     for each t in tracks
         tag = NxSubComparableTag(t.language)
         if tag <> invalid and wanted.DoesExist(tag) then
-            if best = invalid then
+            if t.commentary = true then
+                if bestCommentary = invalid then
+                    bestCommentary = t
+                else if NxNumberOr0(t.channels) > NxNumberOr0(bestCommentary.channels) then
+                    bestCommentary = t
+                end if
+            else if best = invalid then
                 best = t
             else if NxNumberOr0(t.channels) > NxNumberOr0(best.channels) then
                 best = t
             end if
         end if
     end for
-    if best <> invalid then return best.index
-    for each t in tracks
-        if t.isDefault = true then return t.index
-    end for
-    return tracks[0].index
+    if best <> invalid then return best
+    return bestCommentary
 end function
 
 ' AUDIO LANGUAGE first (issue #62): a track in one of `languages`, most
@@ -193,17 +220,7 @@ function NxMbChosenAudioIndex(tracks as Object, languages as Object) as Dynamic
     for each l in languages
         if NxIsString(l) and l <> "" then wanted[LCase(l)] = true
     end for
-    best = invalid
-    for each t in tracks
-        tag = NxSubComparableTag(t.language)
-        if tag <> invalid and wanted.DoesExist(tag) then
-            if best = invalid then
-                best = t
-            else if NxNumberOr0(t.channels) > NxNumberOr0(best.channels) then
-                best = t
-            end if
-        end if
-    end for
+    best = NxMbBestInLanguages(tracks, wanted)
     if best <> invalid then return best.index
     return NxMbPreferredAudioIndex(tracks, languages)
 end function
@@ -243,10 +260,15 @@ function NxAudioTrackToSelect(listed as Object, want as Dynamic) as Dynamic
     if listed.Count() = want.count then return listed[want.position].Track
     tag = NxSubComparableTag(want.language)
     if tag = invalid then return invalid
+    ' A track named a commentary only when no other is in the language (#236).
+    commentary = invalid
     for each t in listed
-        if NxSubComparableTag(t.Language) = tag then return t.Track
+        if NxSubComparableTag(t.Language) = tag then
+            if not NxIsCommentaryTitle(t.Name) then return t.Track
+            if commentary = invalid then commentary = t.Track
+        end if
     end for
-    return invalid
+    return commentary
 end function
 
 ' The airing's first forced subtitle track in `lang` (NxMbForcedSubs), or

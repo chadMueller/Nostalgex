@@ -130,14 +130,21 @@ end function
 ' The player's track for `lang` among `listed` (availableAudioTracks), as
 ' upstream's applyAudioTrackSelection picks with preferredTrackIndex: the
 ' first in that language. invalid when none is, which leaves the player's
-' own choice where upstream takes the first track.
+' own choice where upstream takes the first track. A track named a
+' commentary is passed over for one in the language that isn't (#236), and
+' still taken when it is the only one in the language.
 function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
+    commentary = invalid
     for each t in listed
         tag = NxSubComparableTag(t.Language)
-        if tag <> invalid and NxSubMatches(tag, lang) then return t.Track
+        if tag <> invalid and NxSubMatches(tag, lang) then
+            if not NxIsCommentaryTitle(t.Name) then return t.Track
+            if commentary = invalid then commentary = t.Track
+        end if
     end for
-    return invalid
+    return commentary
 end function
+
 
 ' The name the Now Playing panel lists an audio track under. Roku lists
 ' some tracks with "#uniq:" in front of the name ("#uniq:Italiano ..."), seen

@@ -367,7 +367,14 @@ channels first, then the default, then the first (`NxMbPreferredAudioIndex`
 in `MediaBrowserPlayback.brs`). Since #62 the language is Settings > AUDIO
 LANGUAGE, the TV's until chosen, and a track in it comes before English
 (`NxMbChosenAudioIndex`): a German viewer gets the German stereo track over
-an English 5.1 one, where upstream's order, which wants both, takes the 5.1. The scan keeps those files' tracks
+an English 5.1 one, where upstream's order, which wants both, takes the 5.1.
+A track the server titles a commentary ("commentary" anywhere in its Title or
+DisplayTitle, any case) is passed over at each of those steps while a track
+that isn't one fits, and still used when it is the only one that does (#236,
+from #153: a commentary marked default, or with more channels than the film's
+track, was picked). The player-side picks do the same by the track's Name
+(`NxAudioTrackForLanguage`, which a Plex stream goes by, and
+`NxAudioTrackToSelect`'s short list). The scan keeps those files' tracks
 (`NxMbAudioTracks`; one-track files keep nothing extra). The server stream
 asks for the pick with `AudioStreamIndex`, and direct play is decided on the
 picked track's codec, so an English Opus track behind a dubbed AAC default

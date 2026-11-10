@@ -451,6 +451,53 @@ function NxRunAudioPickTests() as Integer
     NxCheck(r, "the language not listed: the player's choice", NxToStr(NxAudioTrackToSelect(short, { position: 0, language: "fre", count: 3 }) = invalid), "true")
     NxCheck(r, "no language on a short list: the player's choice", NxToStr(NxAudioTrackToSelect(short, { position: 0, language: invalid, count: 3 }) = invalid), "true")
     NxCheck(r, "no pick", NxToStr(NxAudioTrackToSelect(roku, invalid) = invalid), "true")
+    ' Issue #236: a track titled a commentary is passed over while another
+    ' fits, and still used when it is the only one that does.
+    NxCheck(r, "commentary title: plain", NxToStr(NxIsCommentaryTitle("Commentary")), "true")
+    NxCheck(r, "commentary title: any case, anywhere", NxToStr(NxIsCommentaryTitle("Director's COMMENTARY - English - AAC - Stereo")), "true")
+    NxCheck(r, "commentary title: a main track", NxToStr(NxIsCommentaryTitle("Surround - English - Dolby Digital - 5.1 - Default")), "false")
+    NxCheck(r, "commentary title: none", NxToStr(NxIsCommentaryTitle(invalid)), "false")
+    main = NxMbTrack(1, "eng", 2, "aac", false)
+    com = NxMbTrack(2, "eng", 6, "ac3", true)
+    com.commentary = true
+    NxCheck(r, "commentary: an english main track beats an english commentary default with more channels", NxToStr(NxMbChosenAudioIndex([main, com], ["en"])), "1")
+    NxCheck(r, "commentary: the same in upstream's order", NxToStr(NxMbPreferredAudioIndex([main, com], ["en"])), "1")
+    NxCheck(r, "commentary: the same with the commentary first in the file", NxToStr(NxMbChosenAudioIndex([com, main], ["en"])), "1")
+    NxCheck(r, "commentary: the pick carries the main track's codec", NxToStr(NxMbAudioPick({ audioTracks: [com, main] }, ["en"]).airing.audioCodec), "aac")
+    ' The only track in the language is a commentary: it is still used.
+    por = NxMbTrack(1, "por", 6, "eac3", true)
+    NxCheck(r, "commentary: the only english track is still used", NxToStr(NxMbChosenAudioIndex([por, com], ["en"])), "2")
+    NxCheck(r, "commentary: the only english track, upstream's order", NxToStr(NxMbPreferredAudioIndex([por, com], ["en"])), "2")
+    ' Two commentaries and no main track in the language: the one with more channels, as before.
+    com2 = NxMbTrack(3, "eng", 2, "aac", false)
+    com2.commentary = true
+    NxCheck(r, "commentary: among commentaries, most channels", NxToStr(NxMbChosenAudioIndex([por, com2, com], ["en"])), "2")
+    ' The viewer's language first, even as a commentary, before English.
+    deCom = NxMbTrack(4, "ger", 2, "aac", false)
+    deCom.commentary = true
+    NxCheck(r, "commentary: a german commentary is the german viewer's only german track", NxToStr(NxMbChosenAudioIndex([main, deCom], ["de"])), "4")
+    ' No track in a wanted language: the default, unless it is a commentary and another track isn't.
+    jpn = NxMbTrack(1, "jpn", 2, "aac", false)
+    jpnCom = NxMbTrack(2, "jpn", 2, "aac", true)
+    jpnCom.commentary = true
+    NxCheck(r, "commentary: a commentary default is passed over for the film's track", NxToStr(NxMbChosenAudioIndex([jpn, jpnCom], ["es"])), "1")
+    korCom = NxMbTrack(5, "kor", 2, "aac", false)
+    korCom.commentary = true
+    NxCheck(r, "commentary: commentaries alone, the default", NxToStr(NxMbPreferredAudioIndex([korCom, jpnCom], ["es"])), "2")
+    kor = NxMbTrack(3, "kor", 2, "aac", true)
+    NxCheck(r, "commentary: the default among the tracks that aren't one", NxToStr(NxMbChosenAudioIndex([jpnCom, jpn, kor], ["es"])), "3")
+    ' The scan marks them from the server's Title or DisplayTitle.
+    marked = NxMbAudioTracks({ MediaStreams: [
+        { Type: "Audio", Index: 1, Language: "eng", DisplayTitle: "English - AAC - Stereo - Default", IsDefault: true },
+        { Type: "Audio", Index: 2, Language: "eng", DisplayTitle: "Commentary 1 - English - HE-AAC - Stereo" },
+        { Type: "Audio", Index: 3, Language: "eng", Title: "Director's commentary", DisplayTitle: "English - AAC - Stereo" }
+    ] })
+    NxCheck(r, "commentary: the scan marks a DisplayTitle and a Title", NxToStr(marked[0].commentary = true) + " " + NxToStr(marked[1].commentary = true) + " " + NxToStr(marked[2].commentary = true), "false true true")
+    ' Direct play, a short list: the pick's language, a commentary only when alone in it.
+    named = [{ Track: "1", Language: "eng", Name: "Commentary with the director" }, { Track: "2", Language: "eng", Name: "English" }]
+    NxCheck(r, "commentary: a short list passes a commentary by", NxToStr(NxAudioTrackToSelect(named, { position: 2, language: "eng", count: 3 })), "2")
+    NxCheck(r, "commentary: a short list with a commentary alone takes it", NxToStr(NxAudioTrackToSelect([named[0], { Track: "3", Language: "por" }], { position: 2, language: "eng", count: 3 })), "1")
+    NxCheck(r, "commentary: a full list still goes by position", NxToStr(NxAudioTrackToSelect(named, { position: 1, language: "eng", count: 2 })), "2")
     print "audio pick cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

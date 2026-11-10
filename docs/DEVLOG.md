@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
+
+**Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
+channels than the film's own track in the same language, and the pick goes by language, channels and default (#153).
+
+**Changed.** A track whose title holds "commentary", in any case, is passed over while another track fits, and still
+used when it is the only one that does. On Jellyfin and Emby the scan marks it from the stream's `Title` or
+`DisplayTitle` (`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pass it over at each
+step: in the viewer's language, in English, as the default, as the first. That pick is the server stream's
+`AudioStreamIndex` and the direct play's track. On the player's own list (a Plex stream, and a direct play that
+listed fewer tracks than the file has) `NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name`.
+The exact-language rules are as they were, and a file with no commentary picks as before.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose. The Apple TV's cases
+(`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
+
+**Tested off the TV.** 19 new audio pick cases and 4 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Open.** Not run on a TV: a film with an English main track and an English commentary, on a server stream and on a
+direct play, and whether a Roku's `availableAudioTracks` names a commentary track by its title.
+
 ## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
 
 **Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
