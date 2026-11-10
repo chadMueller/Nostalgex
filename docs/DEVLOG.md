@@ -3,6 +3,50 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
+
+**Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
+channels than the film's own track in the same language, and the pick goes by language, channels and default (#153).
+
+**Changed.** A track whose title holds "commentary", in any case, is dropped from the pool while the file has any
+other audio track, before any language or default step, as the Apple TV's `AudioTrackCommentary.skippingCommentary`
+(Chad on PR #245, stricter than the issue's wording). A file whose every track is a commentary picks among them as
+before. On Jellyfin and Emby the scan marks the track from the stream's `Title` or `DisplayTitle`
+(`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pick from `NxMbSkipCommentary`'s pool.
+That pick is the server stream's `AudioStreamIndex` and the direct play's track. On the player's own list (a Plex
+stream, a direct play that listed fewer tracks than the file has, and AUDIO LANGUAGE in the Now Playing panel)
+`NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name` (`NxListedSkipCommentary`); with only a
+commentary in the language they leave the player's own choice. The exact-language rules are as they were, and a file
+with no commentary picks as before.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose. The Apple TV's cases
+(`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
+
+**Tested off the TV.** 29 new audio pick cases and 5 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**The first cut read "fits" by language** (`c699030`, the build the TV runs below used): a commentary alone in the
+viewer's language was still picked over a film track in another. Chad's rule replaced that, and six cases written
+for the first reading were turned round with it: an English commentary now loses to a Portuguese film track (three
+cases), a German commentary to an English film track, and on the player's list a commentary beside another track is
+never picked (two cases).
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
+`c699030` (the first cut, above), with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
+mono", index 2) beside three English stereo commentaries (3 to 5). Item-linked, the pick read from the console and
+from Jellyfin's ffmpeg log, where the mono is stream 0:1 and the first commentary 0:2. Volume at zero: nothing was
+listened to.
+
+| | main `9b5292a` | `c699030` |
+|---|---|---|
+| Direct play (STREAM QUALITY Auto) | `audio track 3 of 2=eng 3=eng 4=eng 5=eng, was 2`: switched to a commentary | `audio track 2 of 2=eng 3=eng 4=eng 5=eng, was 2`: stays on the film's track |
+| Server stream (STREAM QUALITY High) | ffmpeg `-map 0:0 -map 0:2`: a commentary | ffmpeg `-map 0:0 -map 0:1`: the film's track |
+
+On `c699030` Videodrome (English mono, German stereo, two English stereo commentaries) direct-played on track 2 of
+`2=eng 3=ger 4=eng 5=eng`. It was not run on main. In that library 143 films have a track titled commentary, and by
+the server's track lists main's pick is a commentary on these two.
+
+**Open.** Not run on a TV: a film whose only English track is a commentary, Emby, a Plex stream, and whether a
+Roku's `availableAudioTracks` names a commentary by its title (both direct plays went by position).
 ## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
 
 **Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with

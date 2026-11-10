@@ -350,7 +350,10 @@ end function
 
 ' A source's audio tracks as { index, language, channels, codec, isDefault },
 ' in the file's order, or invalid with fewer than two: one track is no
-' choice, and most files have one, so they keep nothing extra.
+' choice, and most files have one, so they keep nothing extra. A track the
+' server titles a commentary also carries commentary: true (#236,
+' NxIsCommentaryTitle): its Title, or the DisplayTitle the server builds from
+' it ("Commentary 1 - English - AAC - Stereo").
 function NxMbAudioTracks(src as Object) as Dynamic
     tracks = []
     for each s in NxList(src.MediaStreams)
@@ -360,6 +363,7 @@ function NxMbAudioTracks(src as Object) as Dynamic
                 if NxTruthy(s.Language) then t.language = LCase(NxToStr(s.Language))
                 if NxIsNumber(s.Channels) then t.channels = s.Channels
                 if NxTruthy(s.Codec) then t.codec = LCase(NxToStr(s.Codec))
+                if NxIsCommentaryTitle(s.Title) or NxIsCommentaryTitle(s.DisplayTitle) then t.commentary = true
                 tracks.Push(t)
             end if
         end if
