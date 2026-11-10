@@ -21,8 +21,23 @@ The exact-language rules are as they were, and a file with no commentary picks a
 
 **Tested off the TV.** 19 new audio pick cases and 4 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
 
-**Open.** Not run on a TV: a film with an English main track and an English commentary, on a server stream and on a
-direct play, and whether a Roku's `availableAudioTracks` names a commentary track by its title.
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
+`c699030`, with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
+mono", index 2) beside three English stereo commentaries (3 to 5). Item-linked, the pick read from the console and
+from Jellyfin's ffmpeg log, where the mono is stream 0:1 and the first commentary 0:2. Volume at zero: nothing was
+listened to.
+
+| | main `9b5292a` | `c699030` |
+|---|---|---|
+| Direct play (STREAM QUALITY Auto) | `audio track 3 of 2=eng 3=eng 4=eng 5=eng, was 2`: switched to a commentary | `audio track 2 of 2=eng 3=eng 4=eng 5=eng, was 2`: stays on the film's track |
+| Server stream (STREAM QUALITY High) | ffmpeg `-map 0:0 -map 0:2`: a commentary | ffmpeg `-map 0:0 -map 0:1`: the film's track |
+
+On `c699030` Videodrome (English mono, German stereo, two English stereo commentaries) direct-played on track 2 of
+`2=eng 3=ger 4=eng 5=eng`. It was not run on main. In that library 143 films have a track titled commentary, and by
+the server's track lists main's pick is a commentary on these two.
+
+**Open.** Not run on a TV: a film whose only English track is a commentary, Emby, a Plex stream, and whether a
+Roku's `availableAudioTracks` names a commentary by its title (both direct plays went by position).
 
 ## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
 

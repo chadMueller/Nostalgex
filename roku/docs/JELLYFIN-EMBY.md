@@ -374,7 +374,10 @@ that isn't one fits, and still used when it is the only one that does (#236,
 from #153: a commentary marked default, or with more channels than the film's
 track, was picked). The player-side picks do the same by the track's Name
 (`NxAudioTrackForLanguage`, which a Plex stream goes by, and
-`NxAudioTrackToSelect`'s short list). The scan keeps those files' tracks
+`NxAudioTrackToSelect`'s short list). On the 43S45 (2026-11-10, lab Jellyfin
+12.2.0) The Hills Have Eyes (1977), English mono beside three English stereo
+commentaries, played a commentary on main on both a direct play and a server
+stream, and the film's track with this. The scan keeps those files' tracks
 (`NxMbAudioTracks`; one-track files keep nothing extra). The server stream
 asks for the pick with `AudioStreamIndex`, and direct play is decided on the
 picked track's codec, so an English Opus track behind a dubbed AAC default
