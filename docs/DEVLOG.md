@@ -3,6 +3,10 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Android: build 5)
+
+**Shipped.** `versionCode` 5, `versionName` 1.0.0, for the internal track: every open Android parity issue in one build, as Chad asked. Not uploaded from here; Chad makes the release.
+
 ## 2026-11-10 (Android: the Plex server stream keeps 5.1 and 4K, asks its decision first, and skips Dolby Vision 5; #197, #192, #193 measured)
 
 **How it was measured.**
