@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Docker: settings kept on the server, I-080; looked at, not built; branch web/fixes-1109)
+
+**Not built, on purpose.** The ask (a Docker user on a Raspberry Pi: "I keep having to go into settings and turn stuff on and
+off ... I would like people to be able to log in and have it be ready") needs a decision first: what is shared between
+browsers, and whether it is one lineup for the whole container or one per signed-in user. Facts gathered so the decision is
+quick. The image is nginx serving static files (`docker/nginx.conf`) with a read-only root filesystem and only `/tmp` writable,
+so today it can store nothing; every setting lives in the browser's localStorage. The lineup settings are small: the channel
+config was 8,454 bytes on a default install, plus the enabled packages, collections and franchises. The login
+(`plex90_saved_auth`) is the only credential and stays per browser either way. nginx can take a `PUT` of one small file with its
+WebDAV module (`dav_methods PUT`) into a mounted volume, so no backend is needed; that is from nginx's packaging and has **not**
+been run (Docker was off the table for this pass). The hosted tuner would stay per-browser, and the page already
+tells the two apart (`<meta name="nostalgex-build" content="selfhost">`).
+
 ## 2026-11-09 (Web tuner and Docker: music video title cleanup leaves "Song ( Music )", N-034; branch web/fixes-1109)
 
 **Fixed on the web.** `cleanTitle` in `scripts/nostalgex-music-brainz.js` took the words `official video hd lyrics remastered`
