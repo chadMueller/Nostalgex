@@ -53,16 +53,16 @@ enum AudioTrackDescriptorBuilder {
     }
 }
 
-/// One row in the Now Playing panel's program column — the controls that act on the
-/// program playing right now. Headers are part of the list so the column's whole order
-/// is decided in one testable place instead of being spread through the view body.
+/// One row in the Now Playing panel's left column (AUDIO & CAPTIONS): the controls that act on the
+/// program playing right now. The group label is part of the list so the column's whole order is
+/// decided in one testable place instead of being spread through the view body.
 enum NowPlayingProgramRow: String, Hashable, CaseIterable {
-    case captionsHeader
+    case header
     case captions
     case subtitleLanguage
     case autoSubtitles
-    case audioHeader
-    case audioTracks
+    /// One row: the current track, opening the track list; with one track or none, a plain row.
+    case audio
     case audioLanguage
     case openInPlex
 }
@@ -70,27 +70,26 @@ enum NowPlayingProgramRow: String, Hashable, CaseIterable {
 /// Decides which optional rows the Now Playing panel offers for the current program.
 enum NowPlayingPanelLayout {
 
-    /// Program-column rows, in display order.
+    /// Left-column rows, in display order.
     ///
     /// The subtitle preferences only appear when the program exposes real subtitle tracks,
     /// and the audio-language preference only when there is more than one audio track,
     /// because otherwise they are settings whose effect the user cannot see or hear from
     /// a panel laid over the video. Both stay reachable from the settings page.
     ///
-    /// The captions rows are unconditional: the CC row is where panel focus first lands,
-    /// so it has to exist for every program.
+    /// The CC row is unconditional: it is where panel focus first lands, so it has to exist
+    /// for every program.
     static func programRows(
         hasSubtitleTracks: Bool,
         audioTrackCount: Int,
         canOpenInPlex: Bool = false
     ) -> [NowPlayingProgramRow] {
-        var rows: [NowPlayingProgramRow] = [.captionsHeader, .captions]
+        var rows: [NowPlayingProgramRow] = [.header, .captions]
         if hasSubtitleTracks {
             rows.append(.subtitleLanguage)
             rows.append(.autoSubtitles)
         }
-        rows.append(.audioHeader)
-        rows.append(.audioTracks)
+        rows.append(.audio)
         if audioTrackCount > 1 {
             rows.append(.audioLanguage)
         }
@@ -100,6 +99,50 @@ enum NowPlayingPanelLayout {
             rows.append(.openInPlex)
         }
         return rows
+    }
+
+    /// The audio row opens a track list only when there is a choice to make.
+    static func audioRowOpensList(trackCount: Int) -> Bool { trackCount > 1 }
+}
+
+/// The one line under the controls that says what the selected row does, so row heights never
+/// change. Wording reuses the Settings copy where it exists. Plain words, no dashes.
+enum NowPlayingPanelHints {
+    static let cc = "Subtitles on or off for every program."
+    static let subtitleLanguage = "Choose which subtitle track to prefer when multiple are available."
+    static let autoSubtitles = "Turns subtitles on when the audio is in another language."
+    static let audio = "Pick the audio track for this program."
+    static let audioLanguage = "Choose which audio track to prefer when multiple are available."
+    static let openInPlex = "Leaves Nostalgex and opens this title in the Plex app."
+    /// Settings' own words for RETRO MODE.
+    static let retro = "CRT scanlines, vignette, flicker, 4:3 aspect ratio."
+    static let streamQuality = "Takes effect on the next program."
+    static let retry = "Try different packaging for this program. Keeps original video; quality settings stay unchanged."
+    static let playbackInformation = "Source codecs and how this program reaches the screen: direct play, remux or transcode."
+    static let sleep = "Stops playback after the time you pick. A still-watching prompt comes first."
+    static let sleepList = "Back returns to the panel. Pick OFF to cancel a running timer."
+
+    /// Every fixed line, for the copy checks.
+    static let all = [cc, subtitleLanguage, autoSubtitles, audio, audioLanguage, openInPlex, retro, streamQuality,
+                      retry, playbackInformation, sleep, sleepList]
+
+    /// The hint for the row that has focus, nil when focus is on an option inside a list (that list
+    /// supplies its own line) or nowhere.
+    static func hint(for focus: NowPlayingFocus?) -> String? {
+        switch focus {
+        case .cc: return cc
+        case .subtitleLanguage: return subtitleLanguage
+        case .autoSubtitles: return autoSubtitles
+        case .audioRow: return audio
+        case .audioLanguage: return audioLanguage
+        case .openInPlex: return openInPlex
+        case .retro: return retro
+        case .streamQuality: return streamQuality
+        case .compatibilityRetry: return retry
+        case .playbackInformation: return playbackInformation
+        case .sleepRow: return sleep
+        case .audio, .sleep, .option, .none: return nil
+        }
     }
 }
 

@@ -53,6 +53,26 @@ enum NXFont {
     static let icon = Font.system(size: NXType.body, weight: .semibold)
 }
 
+// MARK: - Layout
+
+/// The numbers every screen's rows and safe area share (the row spec in `tokens.md`).
+enum NXLayout {
+    /// One height for every row, on Settings and in the Now Playing panel.
+    static let rowHeight: CGFloat = 76
+    static let rowGap: CGFloat = 12
+    static let rowRadius: CGFloat = 12
+    static let rowPaddingX: CGFloat = 28
+    /// tvOS title safe area at 1920 x 1080.
+    static let safeX: CGFloat = 90
+    static let safeY: CGFloat = 60
+    /// Selected state: 3 pt cyan outline, a 30 pt glow at 55%, a 3% lift.
+    static let selectedOutline: CGFloat = 3
+    static let restingOutline: CGFloat = 1.5
+    static let glowRadius: CGFloat = 30
+    static let glowOpacity: Double = 0.55
+    static let lift: CGFloat = 1.03
+}
+
 // MARK: - Color
 
 /// A color given as hex, with the math the contrast test needs.
@@ -150,31 +170,39 @@ extension Color {
 
 // MARK: - The row, resting and selected
 
-/// The one row surface (Settings now; the Now Playing panel after its redesign):
+/// The one row surface (Settings and the Now Playing panel):
 /// resting is the row fill with a quiet 1.5 pt outline; selected is the cyan-tinted fill, a
 /// 3 pt solid cyan outline, a cyan glow and a 3% lift. One row at a time is selected.
+/// `isStatic` is a row that only informs (a single audio track): no fill, a dashed outline,
+/// and the focus engine skips it.
 struct NXRowSurface: ViewModifier {
     let isSelected: Bool
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = NXLayout.rowRadius
+    var isStatic: Bool = false
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(isSelected ? Color.nxSelectedRow : Color.nxRow)
+                    .fill(isStatic ? Color.clear : (isSelected ? Color.nxSelectedRow : Color.nxRow))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(isSelected ? Color.nxCyan : Color.nxRestingOutline, lineWidth: isSelected ? 3 : 1.5)
+                    .strokeBorder(
+                        isSelected ? Color.nxCyan : Color.nxRestingOutline,
+                        style: StrokeStyle(lineWidth: isSelected ? NXLayout.selectedOutline : NXLayout.restingOutline,
+                                           dash: isStatic ? [8, 6] : [])
+                    )
             )
-            .shadow(color: isSelected ? Color.nxCyan.opacity(0.55) : .clear, radius: isSelected ? 30 : 0)
-            .scaleEffect(isSelected ? 1.03 : 1)
+            .shadow(color: isSelected ? Color.nxCyan.opacity(NXLayout.glowOpacity) : .clear,
+                    radius: isSelected ? NXLayout.glowRadius : 0)
+            .scaleEffect(isSelected ? NXLayout.lift : 1)
             .zIndex(isSelected ? 1 : 0)
     }
 }
 
 extension View {
-    func nxRowSurface(isSelected: Bool, cornerRadius: CGFloat = 12) -> some View {
-        modifier(NXRowSurface(isSelected: isSelected, cornerRadius: cornerRadius))
+    func nxRowSurface(isSelected: Bool, cornerRadius: CGFloat = NXLayout.rowRadius, isStatic: Bool = false) -> some View {
+        modifier(NXRowSurface(isSelected: isSelected, cornerRadius: cornerRadius, isStatic: isStatic))
     }
 }

@@ -73,6 +73,9 @@ extension AppState {
     /// and the Plex app is installed (canOpenURL requires the scheme to be declared in
     /// LSApplicationQueriesSchemes).
     var canOpenCurrentItemInPlex: Bool {
+        // Test only (`-uiTestShowOpenInPlex`): the demo has no Plex, so the panel's last row never shows
+        // in a simulator screenshot. The row's action is not touched.
+        if isDemoMode, currentItem != nil, TestLaunchFlags.isOn("-uiTestShowOpenInPlex") { return true }
         guard backendKind == .plex, !isDemoMode, currentItem != nil,
               let probe = URL(string: "plex://") else { return false }
         return UIApplication.shared.canOpenURL(probe)
@@ -226,6 +229,14 @@ extension AppState {
                 self.audibleGroup = group
                 self.audibleGroupItem = playerItem
                 self.audioTracks = AudioTrackDescriptorBuilder.build(from: group)
+                // Test only (`-uiTestTwoAudioTracks`): the demo stream has one track, so the AUDIO row's
+                // list never shows in a simulator screenshot.
+                if TestLaunchFlags.isOn("-uiTestTwoAudioTracks") {
+                    self.audioTracks = [AudioTrackDescriptor(id: 0, displayName: "English 5.1", languageTag: "en"),
+                                        AudioTrackDescriptor(id: 1, displayName: "Spanish", languageTag: "es")]
+                    self.selectedAudioTrackID = 0
+                    return
+                }
                 self.selectedAudioTrackID = idx
             } catch {
                 // Stream doesn't expose an audible group — leave AVPlayer's default selection

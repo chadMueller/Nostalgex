@@ -24,6 +24,29 @@ white as text. Not migrated, on purpose: the guide grid (its sizes follow row he
 panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
 pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
 
+**Now Playing panel, Variant A (Chad's pick, 2026-11-10).** The in-player panel is rebuilt on the shared tokens, `DesignTokens.swift`
+being the one place it takes sizes, colors, row height and the selected state from. Layout: the identity column on the left (poster
+when the backend has one, a small channel-colored bar beside "CH n" in white, the title at 44 pt, channel name, "1987 . PG-13", UP NEXT
+in yellow), then two 650 pt columns, AUDIO & CAPTIONS (CC, SUBTITLE LANGUAGE and AUTO SUBTITLES when the program has subtitle tracks,
+AUDIO, AUDIO LANGUAGE with two or more tracks, OPEN IN PLEX on Plex) and PICTURE (RETRO MODE, STREAM QUALITY, RETRY ORIGINAL VIDEO when it
+applies, PLAYBACK INFORMATION, then SLEEP TIMER set apart below). One row style: 76 pt high, label left and value right, ON in cyan and
+OFF in text-2 as words (no switches), a chevron where a row opens a list, a 3 pt cyan outline with glow and a 3% lift on #0B2A3A when
+selected. Four things behave differently, all from the design: (1) AUDIO is one row showing the current track that opens the track list
+(with one track or none it is a plain, unfocusable row), no longer a list of inline rows marked ACTIVE; (2) SLEEP TIMER is one row, OFF or a
+yellow countdown, that opens a short list (OFF, 15 MIN, 30 MIN, 1 HR) with a check on the one in effect and the countdown beside its
+title; choosing a time arms it and closes the list, choosing OFF cancels, and the timer, its grace prompt and its logic are unchanged;
+(3) every list shows its chosen entry with a cyan check instead of the word ACTIVE; (4) a one-line hint under the columns says what the
+selected row does, so row heights never change, and the "takes effect on the next program" note for STREAM QUALITY and the RETRY
+ORIGINAL VIDEO status now live there; the stream quality row shows ORIGINAL and keeps the full wording in its list. Focus order, Menu
+and Back (a list closes first, focus returns to its row), subtitle and audio logic and Analytics are unchanged. Both columns are focus
+sections of equal height, because with one shorter than the other Right from OPEN IN PLEX did nothing (measured in the simulator). STILL
+WATCHING moved to the tokens too. Tests: `DesignTokensTests` (10), `NowPlayingPanelLogicTests` (row order and the hint wording: plain
+words, no dashes, two lines), `NowPlayingPanelFocusTests` (4, including a new one that opens the sleep list, arms 15 MIN, sees the row stop
+saying OFF, and cancels with OFF). Two test-only launch flags show what a demo cannot: `-uiTestTwoAudioTracks` and
+`-uiTestShowOpenInPlex`. Simulator screenshots of each state are in `.shots/nowplaying-a/` beside the three mocks. Not done and not
+measured: a real Apple TV; the AUDIO value shows the track's own name (the mock's "English 5.1" needs the channel layout, which
+`AudioTrackDescriptor` does not carry); the guide grid and the other screens are not on the tokens yet.
+
 **RATE is a full-width row above the tips.** On SUPPORT NOSTALGEX the RATE tile was one of four, so its title wrapped to two lines
 and its instruction took six in a narrow column. RATE is now one full-width row (`SupportRateRow`, the shared row surface and
 selected state): the star on the left, "RATE NOSTALGEX" and "Leave a star rating" on one line, the instruction ("Opens the App

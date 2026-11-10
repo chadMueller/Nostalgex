@@ -187,7 +187,7 @@ final class NowPlayingPanelLogicTests: XCTestCase {
         // Nothing to pick between, so neither language preference is offered.
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: false, audioTrackCount: 1, canOpenInPlex: false),
-            [.captionsHeader, .captions, .audioHeader, .audioTracks]
+            [.header, .captions, .audio]
         )
     }
 
@@ -202,35 +202,63 @@ final class NowPlayingPanelLogicTests: XCTestCase {
     func testProgramRows_withSubtitles_addsSubtitlePreferences() {
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 1, canOpenInPlex: false),
-            [.captionsHeader, .captions, .subtitleLanguage, .autoSubtitles, .audioHeader, .audioTracks]
+            [.header, .captions, .subtitleLanguage, .autoSubtitles, .audio]
         )
     }
 
     func testProgramRows_multipleAudioTracks_addsAudioLanguage() {
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: false, audioTrackCount: 2, canOpenInPlex: false),
-            [.captionsHeader, .captions, .audioHeader, .audioTracks, .audioLanguage]
+            [.header, .captions, .audio, .audioLanguage]
         )
     }
 
     func testProgramRows_everythingAvailable_fullOrder() {
         XCTAssertEqual(
-            NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 3, canOpenInPlex: false),
-            [
-                .captionsHeader, .captions, .subtitleLanguage, .autoSubtitles,
-                .audioHeader, .audioTracks, .audioLanguage
-            ]
+            NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 3, canOpenInPlex: true),
+            [.header, .captions, .subtitleLanguage, .autoSubtitles, .audio, .audioLanguage, .openInPlex]
         )
     }
 
-    func testProgramRows_headersAlwaysPrecedeTheirRows() {
+    func testProgramRows_theGroupLabelLeadsAndIsOneRow() {
         let rows = NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 2, canOpenInPlex: false)
-        let captionsHeader = rows.firstIndex(of: .captionsHeader)
-        let audioHeader = rows.firstIndex(of: .audioHeader)
-        XCTAssertEqual(captionsHeader, 0)
-        XCTAssertLessThan(rows.firstIndex(of: .captions)!, audioHeader!)
-        XCTAssertLessThan(rows.firstIndex(of: .autoSubtitles)!, audioHeader!)
-        XCTAssertLessThan(audioHeader!, rows.firstIndex(of: .audioTracks)!)
+        XCTAssertEqual(rows.first, .header)
+        XCTAssertEqual(rows.filter { $0 == .header }.count, 1, "AUDIO & CAPTIONS is one group, not two")
+    }
+
+    // MARK: - The AUDIO row and the hint line
+
+    func testAudioRow_opensAListOnlyWhenThereIsAChoice() {
+        XCTAssertFalse(NowPlayingPanelLayout.audioRowOpensList(trackCount: 0))
+        XCTAssertFalse(NowPlayingPanelLayout.audioRowOpensList(trackCount: 1))
+        XCTAssertTrue(NowPlayingPanelLayout.audioRowOpensList(trackCount: 2))
+    }
+
+    func testHints_everyControlRowHasOneAndAnOptionInsideAListDoesNot() {
+        let rows: [NowPlayingFocus] = [.cc, .subtitleLanguage, .autoSubtitles, .audioRow, .audioLanguage, .openInPlex,
+                                       .retro, .streamQuality, .compatibilityRetry, .playbackInformation, .sleepRow]
+        for focus in rows {
+            XCTAssertNotNil(NowPlayingPanelHints.hint(for: focus), "\(focus)")
+        }
+        for focus: NowPlayingFocus? in [.audio(1), .sleep(30), .option("en"), nil] {
+            XCTAssertNil(NowPlayingPanelHints.hint(for: focus), "\(String(describing: focus))")
+        }
+    }
+
+    func testHints_arePlainWordsWithNoDashesEmojiOrFutureTalk() {
+        for hint in NowPlayingPanelHints.all {
+            XCTAssertFalse(hint.contains("\u{2014}") || hint.contains("\u{2013}"), hint)
+            XCTAssertTrue(hint.unicodeScalars.allSatisfy { $0.value < 0x2000 }, "no emoji or symbols: \(hint)")
+            XCTAssertTrue(hint.hasSuffix("."), hint)
+            XCTAssertLessThanOrEqual(hint.count, 100, "two lines at 25 pt: \(hint)")
+        }
+    }
+
+    func testHints_reuseSettingsWordsWhereTheyExist() {
+        XCTAssertEqual(NowPlayingPanelHints.retro, "CRT scanlines, vignette, flicker, 4:3 aspect ratio.")
+        XCTAssertEqual(NowPlayingPanelHints.subtitleLanguage, "Choose which subtitle track to prefer when multiple are available.")
+        XCTAssertEqual(NowPlayingPanelHints.audioLanguage, "Choose which audio track to prefer when multiple are available.")
+        XCTAssertEqual(NowPlayingPanelHints.streamQuality, "Takes effect on the next program.")
     }
 
     // MARK: - SubtitleLanguagePreset

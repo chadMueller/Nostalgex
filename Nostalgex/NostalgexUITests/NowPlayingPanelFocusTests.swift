@@ -104,7 +104,7 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         walk(app, .up, steps: 12)
 
         let deviceColumn = walk(app, .down, steps: 12).joined(separator: " | ")
-        for expected in ["RETRO MODE", "STREAM QUALITY", "OFF", "15 MIN", "30 MIN", "1 HR"] {
+        for expected in ["RETRO MODE", "STREAM QUALITY", "PLAYBACK INFORMATION", "SLEEP TIMER"] {
             XCTAssertTrue(
                 deviceColumn.localizedCaseInsensitiveContains(expected),
                 "down never reached \(expected). Visited: \(deviceColumn)"
@@ -159,30 +159,32 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         )
     }
 
-    func testPlaybackInformationIsBelowSleepTimerAndBackRestoresItsFocus() {
+    func testPlaybackInformationIsAboveSleepTimerAndBackRestoresItsFocus() {
         let app = launchIntoPanel()
         let retro = app.buttons.matching(labelContains("RETRO MODE")).firstMatch
         let quality = app.buttons.matching(labelContains("STREAM QUALITY")).firstMatch
-        let sleep = app.buttons.matching(labelContains("1 HR")).firstMatch
         let information = app.buttons.matching(labelContains("PLAYBACK INFORMATION")).firstMatch
-        XCTAssertTrue(information.waitForExistence(timeout: 10))
+        let sleep = app.buttons.matching(labelContains("SLEEP TIMER")).firstMatch
+        XCTAssertTrue(sleep.waitForExistence(timeout: 10))
         XCTAssertLessThan(retro.frame.minY, quality.frame.minY)
-        XCTAssertLessThan(quality.frame.minY, sleep.frame.minY)
-        XCTAssertLessThan(sleep.frame.maxY, information.frame.minY)
+        XCTAssertLessThan(quality.frame.minY, information.frame.minY)
+        XCTAssertLessThan(information.frame.maxY, sleep.frame.minY, "SLEEP TIMER is the last row, set apart below PLAYBACK INFORMATION")
 
         XCUIRemote.shared.press(.right)
         walk(app, .up, steps: 15)
         let labels = walk(app, .down, steps: 15)
         let visited = labels.joined(separator: " | ")
-        for expected in ["RETRO MODE", "STREAM QUALITY", "15 MIN", "30 MIN", "1 HR", "PLAYBACK INFORMATION"] {
+        for expected in ["RETRO MODE", "STREAM QUALITY", "PLAYBACK INFORMATION", "SLEEP TIMER"] {
             XCTAssertTrue(visited.localizedCaseInsensitiveContains(expected), "device controls skipped \(expected): \(visited)")
         }
-        XCTAssertTrue(focusedLabel(app)?.contains("PLAYBACK INFORMATION") == true)
+        XCTAssertTrue(focusedLabel(app)?.contains("SLEEP TIMER") == true)
         let controls = XCTAttachment(screenshot: app.screenshot())
-        controls.name = "Playback information below sleep timer"
+        controls.name = "Playback information above sleep timer"
         controls.lifetime = .keepAlways
         add(controls)
 
+        XCUIRemote.shared.press(.up)
+        XCTAssertTrue(focusedLabel(app)?.contains("PLAYBACK INFORMATION") == true)
         XCUIRemote.shared.press(.select)
         let back = app.buttons["Back to playback controls"]
         XCTAssertTrue(back.waitForExistence(timeout: 10))
@@ -200,5 +202,54 @@ final class NowPlayingPanelFocusTests: XCTestCase {
         XCTAssertTrue(retro.waitForExistence(timeout: 10), "Back dismissed the panel")
         let ownerFocus = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hasFocus == true"), object: information)
         XCTAssertEqual(XCTWaiter.wait(for: [ownerFocus], timeout: 3), .completed)
+    }
+
+    /// SLEEP TIMER is one row that opens the short list (OFF, 15 MIN, 30 MIN, 1 HR). Picking a time arms it and
+    /// closes the list; the row then reads a countdown, not OFF; picking OFF in the list cancels it.
+    func testSleepTimerRowOpensTheListAndArmsAndCancels() {
+        let app = launchIntoPanel()
+        let sleep = app.buttons.matching(labelContains("SLEEP TIMER")).firstMatch
+        XCTAssertTrue(sleep.waitForExistence(timeout: 10))
+        XCTAssertEqual(sleep.value as? String, "OFF")
+
+        func openSleepList() {
+            for step in 0..<14 {
+                if sleep.hasFocus { break }
+                XCUIRemote.shared.press(step == 0 ? .right : .down)
+            }
+            XCTAssertTrue(sleep.hasFocus, "never reached the SLEEP TIMER row")
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(app.buttons.matching(labelContains("15 MIN")).firstMatch.waitForExistence(timeout: 10), "the sleep list did not open")
+        }
+
+        openSleepList()
+        // The list opens on the choice in effect (OFF) and offers all four.
+        XCTAssertTrue(focusedLabel(app) == "OFF", "the list opened on \(focusedLabel(app) ?? "nothing")")
+        let offered = walk(app, .down, steps: 6).joined(separator: " | ")
+        for expected in ["OFF", "15 MIN", "30 MIN", "1 HR"] {
+            XCTAssertTrue(offered.contains(expected), "the sleep list skipped \(expected): \(offered)")
+        }
+        let list = XCTAttachment(screenshot: app.screenshot())
+        list.name = "Sleep timer list"
+        list.lifetime = .keepAlways
+        add(list)
+
+        // Pick 15 MIN: the list closes, focus is back on the row, which now counts down.
+        walk(app, .up, steps: 6)
+        XCUIRemote.shared.press(.down)
+        XCTAssertEqual(focusedLabel(app), "15 MIN")
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(sleep.waitForExistence(timeout: 10), "the list did not close")
+        XCTAssertNotEqual(sleep.value as? String, "OFF", "the row still says OFF with a timer running")
+
+        // Open it again: 15 MIN is the choice in effect; pick OFF to cancel.
+        openSleepList()
+        XCTAssertEqual(focusedLabel(app), "15 MIN", "the list opens on the running timer")
+        XCUIRemote.shared.press(.up)
+        XCTAssertEqual(focusedLabel(app), "OFF")
+        XCUIRemote.shared.press(.select)
+        XCTAssertTrue(sleep.waitForExistence(timeout: 10))
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'OFF'"), object: sleep)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 5), .completed, "OFF did not cancel the timer")
     }
 }

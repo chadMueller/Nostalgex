@@ -74,6 +74,7 @@ final class DesignTokensTests: XCTestCase {
         "Views/Settings/SettingsAboutView.swift",
         "Views/Settings/AboutLinks.swift",
         "Views/RatingNudgeBanner.swift",
+        "Views/NowPlayingPanel.swift",
     ]
 
     private func source(_ relative: String) throws -> String {
@@ -90,6 +91,33 @@ final class DesignTokensTests: XCTestCase {
             XCTAssertNil(text.range(of: #"foregroundStyle\([^)]*\.white\.opacity"#, options: .regularExpression), "\(file): faded white as text")
             XCTAssertNil(text.range(of: #"foregroundStyle\(\s*\.white\s*\)"#, options: .regularExpression), "\(file): bare white as text")
         }
+    }
+
+    // MARK: The Now Playing panel (Variant A)
+
+    func testTheRowSpecIsTheOneInTheProposal() {
+        XCTAssertEqual(NXLayout.rowHeight, 76)
+        XCTAssertEqual(NXLayout.rowGap, 12)
+        XCTAssertEqual(NXLayout.rowRadius, 12)
+        XCTAssertEqual(NXLayout.selectedOutline, 3)
+        XCTAssertEqual(NXLayout.restingOutline, 1.5)
+        XCTAssertEqual(NXLayout.glowRadius, 30)
+        XCTAssertEqual(NXLayout.glowOpacity, 0.55, accuracy: 0.001)
+        XCTAssertEqual(NXLayout.lift, 1.03, accuracy: 0.001)
+        XCTAssertEqual(NXLayout.safeX, 90)
+        XCTAssertEqual(NXLayout.safeY, 60)
+        // A row's label is body text, so what is pressed is at the 29 pt floor, and the row is tall enough to hold it.
+        XCTAssertGreaterThan(NXLayout.rowHeight, NXType.pressFloor * 2)
+    }
+
+    /// Channel color is a small bar beside the number, never the text color, in the panel.
+    func testThePanelNeverSetsTextInTheChannelColor() throws {
+        let text = try source("Views/NowPlayingPanel.swift")
+        XCTAssertNil(text.range(of: #"foregroundStyle\([^)]*channel\.color"#, options: .regularExpression),
+                     "channel color is a bar, not text")
+        XCTAssertNotNil(text.range(of: "nxRowSurface"), "the panel's row uses the shared row surface")
+        XCTAssertNil(text.range(of: "Toggle(") , "ON and OFF are words, not switches")
+        XCTAssertNil(text.range(of: "ToggleSwitch"), "ON and OFF are words, not switches")
     }
 
     func testTheMigratedFilesAreTheOnesTheListNames() throws {

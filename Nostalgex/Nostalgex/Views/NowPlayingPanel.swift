@@ -15,29 +15,29 @@ struct SleepGracePrompt: View {
 
             VStack(spacing: 16) {
                 Text("STILL WATCHING?")
-                    .font(.custom("DMMono-Medium", size: 34))
-                    .foregroundStyle(.white)
+                    .font(NXFont.heading)
+                    .foregroundStyle(Color.nxText)
 
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let remaining = max(0, (deadline ?? context.date).timeIntervalSince(context.date))
                     Text("SLEEPING IN \(SleepTimerLogic.countdownLabel(remaining: remaining))")
-                        .font(.custom("DMMono-Regular", size: 23))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .font(NXFont.bodyRegular)
+                        .foregroundStyle(Color.nxYellow)
                 }
 
                 Text("PRESS ANY BUTTON TO KEEP WATCHING")
-                    .font(.custom("DMMono-Regular", size: 19))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .padding(.top, 4)
             }
             .padding(48)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(red: 0.05, green: 0.05, blue: 0.07))
+                RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous)
+                    .fill(Color.nxPanel)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(.white.opacity(0.28), lineWidth: 1)
+                RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous)
+                    .strokeBorder(Color.nxRestingOutline, lineWidth: NXLayout.restingOutline)
             )
         }
         .focusable(true)
@@ -55,8 +55,14 @@ struct SleepGracePrompt: View {
 /// Focus targets inside the Now Playing panel.
 enum NowPlayingFocus: Hashable {
     case cc
+    /// The collapsed AUDIO row (it opens the track list).
+    case audioRow
+    /// A track inside the audio list, by `AudioTrackDescriptor.id`.
     case audio(Int)
-    case sleep(Int)  // -1 == OFF row
+    /// The collapsed SLEEP TIMER row (it opens the list).
+    case sleepRow
+    /// A choice inside the sleep list, in minutes; -1 == OFF.
+    case sleep(Int)
     case retro
     case streamQuality
     case playbackInformation
@@ -70,7 +76,7 @@ enum NowPlayingFocus: Hashable {
     case option(String)
 }
 
-/// The multi-value settings the panel can expand into a full-width list.
+/// The multi-value settings the panel can expand into a list.
 ///
 /// These open as a `.sheet` on the settings page, which is the wrong tool here: the panel
 /// already sits inside a `fullScreenCover` over live video, and presenting a sheet from
@@ -81,12 +87,15 @@ private enum PanelPicker: Hashable {
     case playbackInformation
     case subtitleLanguage
     case audioLanguage
+    case audioTracks
+    case sleepTimer
 }
 
-/// Top-anchored in-player control panel opened with the Siri Remote UP button — the
-/// counterpart to the bottom mini-guide. Left: now-playing context + Up Next.
-/// Right: two control columns — what this program is doing right now (captions, audio),
-/// and what the device is doing (picture, stream quality, sleep timer).
+/// Top-anchored in-player control panel opened with the Siri Remote UP button, the
+/// counterpart to the bottom mini-guide. Left: what is playing and what is next. Middle: what
+/// this program is doing (captions, audio). Right: what the device is doing (picture, stream
+/// quality, sleep timer). Built on the shared design tokens (`DesignTokens.swift`): six type
+/// sizes, one row, the cyan selected state, channel color never as text.
 struct NowPlayingPanel: View {
     @Environment(AppState.self) var appState
     let channel: Channel
@@ -106,9 +115,11 @@ struct NowPlayingPanel: View {
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
-    /// Wide enough for the longest title the panel carries, "AUTO SUBTITLES (FOREIGN
-    /// AUDIO)", without truncating its value.
-    private let controlColumnWidth: CGFloat = 420
+    /// Two equal control columns with the identity column to their left: 360 + 44 + 650 + 36 + 650
+    /// fills the width inside the 90 pt safe margins.
+    private let infoWidth: CGFloat = 360
+    private let columnWidth: CGFloat = 650
+    private let columnGap: CGFloat = 36
 
     private var schedule: ChannelSchedule? {
         ChannelScheduleBuilder.buildSchedule(
@@ -118,18 +129,21 @@ struct NowPlayingPanel: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 40) {
+        HStack(alignment: .top, spacing: 44) {
             infoZone
-            Spacer(minLength: 24)
             controlsZone
         }
-        .padding(.horizontal, 48)
-        .padding(.top, 40)
-        .padding(.bottom, 32)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, NXLayout.safeX)
+        .padding(.top, NXLayout.safeY)
+        .padding(.bottom, 56)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             LinearGradient(
-                colors: [.black.opacity(0.92), .clear],
+                stops: [
+                    .init(color: Color.nxPanel.opacity(0.96), location: 0),
+                    .init(color: Color.nxPanel.opacity(0.96), location: 0.85),
+                    .init(color: Color.nxPanel.opacity(0), location: 1),
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -161,7 +175,7 @@ struct NowPlayingPanel: View {
     // MARK: - Info zone (non-focusable)
 
     private var infoZone: some View {
-        HStack(alignment: .top, spacing: 24) {
+        VStack(alignment: .leading, spacing: 18) {
             // Poster only when the backend can serve one (Plex's thumbnail transcode
             // carries the token in the URL, so AsyncImage needs no header support).
             // The panel reads fine without it on Jellyfin/Emby.
@@ -169,56 +183,74 @@ struct NowPlayingPanel: View {
                 AsyncImage(url: poster) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    Color.white.opacity(0.14)
+                    Color.nxRow
                 }
                 .frame(width: 150, height: 225)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
+                )
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-            Rectangle()
-                .fill(channel.color)
-                .frame(width: 48, height: 4)
-
-            Text("CH \(channel.number)")
-                .font(.custom("DMMono-Medium", size: 23))
-                .foregroundStyle(channel.color)
+            // The channel's own color is a small bar beside the number, never the number.
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(channel.color)
+                    .frame(width: 12, height: 36)
+                Text("CH \(channel.number)")
+                    .font(NXFont.tag)
+                    .foregroundStyle(Color.nxText)
+            }
 
             // Title leads as the big headline, channel name follows smaller below it
             // (Discord feedback, 2026-10-29: viewers read this as "what's
             // playing", so the title should dominate and the channel is secondary).
-            Text(nowPlayingLine)
-                .font(.custom("DMMono-Medium", size: 30))
-                .foregroundStyle(.white)
+            Text(titleLine)
+                .font(NXFont.title)
+                .foregroundStyle(Color.nxText)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(channel.name.uppercased())
+                .font(NXFont.bodyRegular)
+                .foregroundStyle(Color.nxText2)
                 .lineLimit(2)
 
-            Text(channel.name)
-                .font(.custom("DMMono-Regular", size: 25))
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(1)
-
-            if let rating = item.contentRating, !rating.isEmpty {
-                Text(rating.uppercased())
-                    .font(.custom("DMMono-Regular", size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
+            if let meta = metaLine {
+                Text(meta)
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
             }
 
             if let next = schedule?.upNext?.item {
-                Text("UP NEXT: \(next.isMusicVideo ? next.musicDisplayLine : next.title)")
-                    .font(.custom("DMMono-Regular", size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("UP NEXT")
+                        .font(NXFont.captionMedium)
+                        .tracking(3)
+                        .foregroundStyle(Color.nxYellow)
+                    Text(next.isMusicVideo ? next.musicDisplayLine : next.title)
+                        .font(NXFont.bodyRegular)
+                        .foregroundStyle(Color.nxText)
+                        .lineLimit(2)
+                }
+                .padding(.top, 6)
             }
-            }
-            .frame(maxWidth: 640, alignment: .leading)
         }
+        .frame(width: infoWidth, alignment: .leading)
     }
 
-    private var nowPlayingLine: String {
-        if item.isMusicVideo { return item.musicDisplayLine }
-        if let year = item.year { return "\(item.title)  \(String(year))" }
-        return item.title
+    /// The title, or the artist and song for a music video.
+    private var titleLine: String {
+        item.isMusicVideo ? item.musicDisplayLine : item.title
+    }
+
+    /// "1985 · PG-13": the year (not for a music video) and the content rating, whichever exist.
+    private var metaLine: String? {
+        var parts: [String] = []
+        if !item.isMusicVideo, let year = item.year { parts.append(String(year)) }
+        if let rating = item.contentRating, !rating.isEmpty { parts.append(rating.uppercased()) }
+        return parts.isEmpty ? nil : parts.joined(separator: "  \u{00B7}  ")
     }
 
     // MARK: - Controls zone
@@ -227,30 +259,54 @@ struct NowPlayingPanel: View {
     // sections trap the tvOS focus engine and block up/down travel, so the two columns are
     // plain sibling VStacks of buttons under a single `.focusSection()` and the engine
     // resolves up/down and left/right between them geometrically.
-    //
-    // Two columns rather than one long list: the panel lies over live video and has to
-    // stay short and quick to leave. Nine rows in one column already ran tall, and this
-    // adds five more. Splitting by what the row acts on (this program vs. the device)
-    // leaves the panel shorter than it was before while showing everything at once, with
-    // no scrolling and no rows hidden below the fold.
 
     @ViewBuilder
     private var controlsZone: some View {
         if let picker = expandedPicker {
             pickerZone(picker)
         } else {
-            HStack(alignment: .top, spacing: 40) {
-                programColumn
-                deviceColumn
+            VStack(alignment: .leading, spacing: 20) {
+                // Each column is as tall as the taller one, and is a focus section: Right or Left from a row
+                // with nothing beside it (OPEN IN PLEX, at the foot of a longer left column) still moves into
+                // the other column, to the row nearest, instead of doing nothing.
+                HStack(alignment: .top, spacing: columnGap) {
+                    programColumn
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .focusSection()
+                    deviceColumn
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .focusSection()
+                }
+                // Only as tall as the taller column, never the whole screen: the hint sits right under it.
+                .fixedSize(horizontal: false, vertical: true)
+                hintLine(NowPlayingPanelHints.hint(for: focusedControl) ?? " ", status: compatibilityHintOverride)
             }
             .focusSection()
             .onAppear { focusedControl = .cc }
         }
     }
 
+    /// The RETRY ORIGINAL VIDEO result replaces its hint while that row has focus, as the note under
+    /// the row did before.
+    private var compatibilityHintOverride: String? {
+        focusedControl == .compatibilityRetry ? compatibilityStatus : nil
+    }
+
+    /// One fixed two-line slot, so row heights never change when the hint does. The playback
+    /// information note is four sentences, so that list gets the full width and room for them.
+    private func hintLine(_ text: String, status: String? = nil, lines: Int = 2, width: CGFloat? = nil) -> some View {
+        Text(status ?? text)
+            .font(NXFont.captionRegular)
+            .foregroundStyle(Color.nxText2)
+            .lineLimit(lines)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: width ?? columnWidth, alignment: .topLeading)
+            .frame(minHeight: 64, alignment: .topLeading)
+    }
+
     /// Controls that act on the program playing right now.
     private var programColumn: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
             ForEach(
                 NowPlayingPanelLayout.programRows(
                     hasSubtitleTracks: appState.hasSubtitleTracks,
@@ -261,18 +317,15 @@ struct NowPlayingPanel: View {
             ) { row in
                 programRow(row)
             }
-            if appState.canRetryOriginalVideo {
-                compatibilityRetryRow
-            }
         }
-        .frame(width: controlColumnWidth, alignment: .leading)
+        .frame(width: columnWidth, alignment: .leading)
     }
 
     @ViewBuilder
     private func programRow(_ row: NowPlayingProgramRow) -> some View {
         switch row {
-        case .captionsHeader:
-            controlHeader("CAPTIONS")
+        case .header:
+            groupLabel("AUDIO & CAPTIONS")
         case .captions:
             ccRow
         case .subtitleLanguage:
@@ -284,12 +337,11 @@ struct NowPlayingPanel: View {
             )
         case .autoSubtitles:
             autoSubtitlesRow
-        case .audioHeader:
-            controlHeader("AUDIO")
-        case .audioTracks:
-            audioRows
+        case .audio:
+            audioRow
         case .openInPlex:
             openInPlexRow
+                .padding(.top, 6)
         case .audioLanguage:
             pickerRow(
                 .audioLanguage,
@@ -302,19 +354,18 @@ struct NowPlayingPanel: View {
 
     /// Controls that act on the device rather than on this program.
     private var deviceColumn: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            controlHeader("PICTURE")
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+            groupLabel("PICTURE")
             retroRow
             streamQualityRow
-
-            controlHeader("SLEEP TIMER")
-            sleepRow(minutes: 0)  // OFF
-            ForEach(SleepTimerLogic.offeredMinutes(armed: appState.sleepTimerMinutes), id: \.self) { minutes in
-                sleepRow(minutes: minutes)
+            if appState.canRetryOriginalVideo {
+                compatibilityRetryRow
             }
             pickerRow(.playbackInformation, title: "PLAYBACK INFORMATION", value: "VIEW", focus: .playbackInformation)
+            sleepTimerRow
+                .padding(.top, 6)
         }
-        .frame(width: controlColumnWidth, alignment: .leading)
+        .frame(width: columnWidth, alignment: .leading)
     }
 
     // MARK: - Rows
@@ -327,41 +378,40 @@ struct NowPlayingPanel: View {
             guard appState.hasSubtitleTracks else { return }
             appState.subtitlesInFullscreenEnabled.toggle()
         } label: {
-            controlRow(
+            PanelRow(
                 label: "CC",
                 value: appState.hasSubtitleTracks
-                    ? (appState.subtitlesInFullscreenEnabled ? "ON" : "OFF")
-                    : "NONE",
-                isFocused: focusedControl == .cc,
-                isActive: appState.hasSubtitleTracks && appState.subtitlesInFullscreenEnabled,
-                disabled: !appState.hasSubtitleTracks
+                    ? (appState.subtitlesInFullscreenEnabled ? .on : .off)
+                    : .text("NONE"),
+                isFocused: focusedControl == .cc
             )
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .cc)
+        .accessibilityLabel("CC")
+        .accessibilityValue(appState.hasSubtitleTracks ? (appState.subtitlesInFullscreenEnabled ? "ON" : "OFF") : "NONE")
     }
 
     @State private var compatibilityStatus: String?
 
     private var compatibilityRetryRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                compatibilityStatus = "CHECKING SERVER"
-                Task { @MainActor in
-                    compatibilityStatus = await appState.retryOriginalVideoCompatibility()
-                }
-            } label: {
-                controlRow(label: "RETRY ORIGINAL VIDEO", value: "",
-                           isFocused: focusedControl == .compatibilityRetry,
-                           isActive: false, disabled: appState.compatibilityRetryInFlight)
+        Button {
+            compatibilityStatus = "CHECKING SERVER"
+            Task { @MainActor in
+                compatibilityStatus = await appState.retryOriginalVideoCompatibility()
             }
-            .buttonStyle(NoHighlightButtonStyle())
-            .focused($focusedControl, equals: .compatibilityRetry)
-            .disabled(appState.compatibilityRetryInFlight)
-            Text(compatibilityStatus ?? "Try different packaging for this program. Keeps original video; quality settings stay unchanged.")
-                .font(.system(size: 18))
-                .foregroundStyle(.secondary)
+        } label: {
+            PanelRow(
+                label: "RETRY ORIGINAL VIDEO",
+                value: appState.compatibilityRetryInFlight ? .text("CHECKING SERVER") : .none,
+                trailing: appState.compatibilityRetryInFlight ? .none : .retry,
+                isFocused: focusedControl == .compatibilityRetry
+            )
         }
+        .buttonStyle(NoHighlightButtonStyle())
+        .focused($focusedControl, equals: .compatibilityRetry)
+        .disabled(appState.compatibilityRetryInFlight)
+        .accessibilityLabel("RETRY ORIGINAL VIDEO")
     }
 
     @State private var openInPlexStatus: String?
@@ -372,157 +422,122 @@ struct NowPlayingPanel: View {
                 if !opened { openInPlexStatus = "NO PLEX APP" }
             }
         } label: {
-            controlRow(
+            PanelRow(
                 label: "OPEN IN PLEX",
-                value: openInPlexStatus ?? "",
-                isFocused: focusedControl == .openInPlex,
-                isActive: false,
-                disabled: false
+                value: openInPlexStatus.map { PanelRow.Value.warning($0) } ?? PanelRow.Value.none,
+                trailing: .external,
+                isFocused: focusedControl == .openInPlex
             )
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .openInPlex)
+        .accessibilityLabel("OPEN IN PLEX")
     }
 
     private var autoSubtitlesRow: some View {
         Button {
             appState.autoSubtitlesForForeignAudioEnabled.toggle()
         } label: {
-            controlRow(
+            PanelRow(
                 label: "AUTO SUBTITLES (FOREIGN AUDIO)",
-                value: appState.autoSubtitlesForForeignAudioEnabled ? "ON" : "OFF",
-                isFocused: focusedControl == .autoSubtitles,
-                isActive: appState.autoSubtitlesForForeignAudioEnabled,
-                disabled: false
+                value: appState.autoSubtitlesForForeignAudioEnabled ? .on : .off,
+                isFocused: focusedControl == .autoSubtitles
             )
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .autoSubtitles)
+        .accessibilityLabel("AUTO SUBTITLES (FOREIGN AUDIO)")
+        .accessibilityValue(appState.autoSubtitlesForForeignAudioEnabled ? "ON" : "OFF")
     }
 
     private var retroRow: some View {
         Button {
             appState.retroMode.toggle()
         } label: {
-            controlRow(
+            PanelRow(
                 label: "RETRO MODE",
-                value: appState.retroMode ? "ON" : "OFF",
-                isFocused: focusedControl == .retro,
-                isActive: appState.retroMode,
-                disabled: false
+                value: appState.retroMode ? .on : .off,
+                isFocused: focusedControl == .retro
             )
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .retro)
+        .accessibilityLabel("RETRO MODE")
+        .accessibilityValue(appState.retroMode ? "ON" : "OFF")
     }
 
     // Stream quality is shown for every program, not just transcoded ones: nothing
     // observable tells the panel whether the current stream is a transcode or a direct
     // play, and a row that vanished unpredictably would be worse than one that is
-    // occasionally inert. The note carries the part that does matter — the URL for this
-    // program is already built, so a new ceiling cannot apply until the next one.
+    // occasionally inert. The "takes effect on the next program" note is the hint line.
     private var streamQualityRow: some View {
         pickerRow(
             .streamQuality,
             title: "STREAM QUALITY",
-            value: localOriginalVideo && appState.backendKind == .plex ? "ORIGINAL (LOCAL PLEX)" : streamQuality.displayName.uppercased(),
-            focus: .streamQuality,
-            note: "Takes effect on the next program."
+            // The row shows the short word; the list keeps the full wording.
+            value: localOriginalVideo && appState.backendKind == .plex ? "ORIGINAL" : streamQuality.displayName.uppercased(),
+            focus: .streamQuality
         )
     }
 
-    /// A collapsed multi-value row: current value on the right, expands in place on select.
+    /// A collapsed multi-value row: current value on the right, a chevron, expands in place on select.
     private func pickerRow(
         _ picker: PanelPicker,
         title: String,
         value: String,
-        focus: NowPlayingFocus,
-        note: String? = nil
+        focus: NowPlayingFocus
     ) -> some View {
         Button {
             expandPicker(picker)
         } label: {
-            controlRow(
-                label: title,
-                value: value,
-                isFocused: focusedControl == focus,
-                isActive: false,
-                disabled: false,
-                note: note
-            )
+            PanelRow(label: title, value: .text(value), trailing: .chevron, isFocused: focusedControl == focus)
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: focus)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 
-    // Audio track list — per-item ephemeral selection. A single-/no-track item shows a
-    // non-focusable row so the focus engine skips straight past it.
+    // Audio: one row showing the current track, opening the track list when there is a choice.
+    // A single-/no-track item shows a plain row the focus engine skips straight past.
     @ViewBuilder
-    private var audioRows: some View {
-        if appState.audioTracks.count <= 1 {
-            controlRow(
-                label: appState.audioTracks.first?.displayName ?? "SINGLE TRACK",
-                value: nil,
-                isFocused: false,
-                isActive: false,
-                disabled: true
-            )
+    private var audioRow: some View {
+        if NowPlayingPanelLayout.audioRowOpensList(trackCount: appState.audioTracks.count) {
+            pickerRow(.audioTracks, title: "AUDIO", value: currentAudioName, focus: .audioRow)
         } else {
-            ForEach(appState.audioTracks) { track in
-                Button {
-                    appState.selectAudioTrack(id: track.id)
-                } label: {
-                    controlRow(
-                        label: track.displayName,
-                        value: track.id == appState.selectedAudioTrackID ? "ACTIVE" : nil,
-                        isFocused: focusedControl == .audio(track.id),
-                        isActive: track.id == appState.selectedAudioTrackID,
-                        disabled: false
-                    )
-                }
-                .buttonStyle(NoHighlightButtonStyle())
-                .focused($focusedControl, equals: .audio(track.id))
-            }
+            PanelRow(
+                label: appState.audioTracks.first?.displayName ?? "SINGLE TRACK",
+                value: .none,
+                isFocused: false,
+                isStatic: true
+            )
         }
     }
 
-    @ViewBuilder
-    private func sleepRow(minutes: Int) -> some View {
-        let isOff = minutes == 0
-        let armed = appState.sleepTimerEndDate != nil
-        let isSelected = isOff ? !armed : (armed && appState.sleepTimerMinutes == minutes)
-        let focusKey: NowPlayingFocus = .sleep(isOff ? -1 : minutes)
+    private var currentAudioName: String {
+        appState.audioTracks.first { $0.id == appState.selectedAudioTrackID }?.displayName
+            ?? appState.audioTracks.first?.displayName ?? ""
+    }
 
+    /// SLEEP TIMER reads OFF, or the countdown in yellow while one runs, so OFF can never look like ON.
+    private var sleepTimerRow: some View {
         Button {
-            if isOff {
-                appState.cancelSleepTimer()
-            } else {
-                appState.startSleepTimer(minutes: minutes)
-            }
+            expandPicker(.sleepTimer)
         } label: {
-            if !isOff && isSelected {
+            if appState.sleepTimerEndDate != nil {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let remaining = SleepTimerLogic.remaining(from: appState.sleepTimerEndDate, now: context.date) ?? 0
-                    controlRow(
-                        label: SleepTimerLogic.label(minutes: minutes),
-                        value: SleepTimerLogic.countdownLabel(remaining: remaining),
-                        isFocused: focusedControl == focusKey,
-                        isActive: true,
-                        disabled: false
-                    )
+                    PanelRow(label: "SLEEP TIMER", value: .live(SleepTimerLogic.countdownLabel(remaining: remaining)),
+                             trailing: .chevron, isFocused: focusedControl == .sleepRow)
                 }
             } else {
-                controlRow(
-                    label: isOff ? "OFF" : SleepTimerLogic.label(minutes: minutes),
-                    value: isSelected ? "ACTIVE" : nil,
-                    isFocused: focusedControl == focusKey,
-                    isActive: isSelected,
-                    disabled: false
-                )
+                PanelRow(label: "SLEEP TIMER", value: .text("OFF"), trailing: .chevron, isFocused: focusedControl == .sleepRow)
             }
         }
         .buttonStyle(NoHighlightButtonStyle())
-        .focused($focusedControl, equals: focusKey)
+        .focused($focusedControl, equals: .sleepRow)
+        .accessibilityLabel("SLEEP TIMER")
+        .accessibilityValue(appState.sleepTimerEndDate != nil ? "ON" : "OFF")
     }
 
     // MARK: - Expanded picker
@@ -538,6 +553,8 @@ struct NowPlayingPanel: View {
             case .subtitleLanguage: return .subtitleLanguage
             case .audioLanguage:    return .audioLanguage
             case .playbackInformation: return .playbackInformation
+            case .audioTracks:      return .audioRow
+            case .sleepTimer:       return .sleepRow
             }
         }()
         expandedPicker = nil
@@ -547,17 +564,11 @@ struct NowPlayingPanel: View {
     /// underneath the other rows. Sixteen languages inlined below a row would run the
     /// panel off the bottom of the screen; swapping keeps the panel roughly the height it
     /// already is, and the options are still ordinary buttons in the one focus section.
+    /// A list opened from the right column (stream quality, sleep timer) sits under it.
     @ViewBuilder
     private func pickerZone(_ picker: PanelPicker) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            controlHeader(pickerTitle(picker))
-
-            Text(pickerSubtitle(picker))
-                .font(.custom("DMMono-Regular", size: 17))
-                .foregroundStyle(.white.opacity(0.6))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 2)
-
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+            groupLabel(pickerTitle(picker), live: pickerLive(picker))
             switch picker {
             case .playbackInformation:
                 playbackInformationContents
@@ -571,32 +582,52 @@ struct NowPlayingPanel: View {
                 languageOptions(picker, selected: appState.preferredAudioLanguageCode) {
                     appState.preferredAudioLanguageCode = $0
                 }
+            case .audioTracks:
+                audioTrackOptions
+            case .sleepTimer:
+                sleepOptions
+            }
+            if picker == .playbackInformation {
+                hintLine(pickerHint(picker), lines: 4, width: columnWidth * 2 + columnGap)
+                    .padding(.top, 8)
+            } else {
+                hintLine(pickerHint(picker))
+                    .padding(.top, 8)
             }
         }
+        .padding(.leading, pickerOffset(picker))
         .focusSection()
-        .onAppear { focusedControl = .option(selectedOptionID(picker)) }
+        .onAppear { focusedControl = initialFocus(picker) }
+    }
+
+    /// Lists that open from the right column sit under it, as the sleep list does in the design.
+    private func pickerOffset(_ picker: PanelPicker) -> CGFloat {
+        switch picker {
+        case .streamQuality, .sleepTimer: return columnWidth + columnGap
+        default: return 0
+        }
     }
 
     /// Reuses the panel's in-place navigation. Playback continues; Back returns focus
     /// to the information row rather than dismissing the whole panel.
     private var playbackInformationContents: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 VStack(alignment: .leading, spacing: 8) {
                     if appState.playbackInformationRows.isEmpty {
                         Text("Playback information is unavailable.")
-                            .font(.custom("DMMono-Regular", size: 20))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(NXFont.bodyRegular)
+                            .foregroundStyle(Color.nxText2)
                     } else {
                         ForEach(appState.playbackInformationRows) { row in
-                            HStack(alignment: .top, spacing: 16) {
+                            HStack(alignment: .firstTextBaseline, spacing: 24) {
                                 Text(row.label)
-                                    .font(.custom("DMMono-Medium", size: 17))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .frame(width: 220, alignment: .leading)
+                                    .font(NXFont.captionMedium)
+                                    .foregroundStyle(Color.nxText2)
+                                    .frame(width: 330, alignment: .leading)
                                 Text(row.value)
-                                    .font(.custom("DMMono-Regular", size: 21))
-                                    .foregroundStyle(.white)
+                                    .font(NXFont.bodyRegular)
+                                    .foregroundStyle(Color.nxText)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .accessibilityElement(children: .combine)
@@ -606,31 +637,30 @@ struct NowPlayingPanel: View {
                 }
             }
             Button { collapsePicker(owner: .playbackInformation) } label: {
-                controlRow(label: "BACK", value: nil,
-                           isFocused: focusedControl == .option("information-back"),
-                           isActive: false, disabled: false)
+                PanelRow(label: "BACK", value: .none, isFocused: focusedControl == .option("information-back"))
             }
             .buttonStyle(NoHighlightButtonStyle())
             .focused($focusedControl, equals: .option("information-back"))
             .accessibilityLabel("Back to playback controls")
+            .frame(width: columnWidth)
             .padding(.top, 8)
         }
-        .frame(width: controlColumnWidth * 2 + 40, alignment: .leading)
+        .frame(width: columnWidth * 2 + columnGap, alignment: .leading)
     }
 
     private var streamQualityOptions: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
             if appState.backendKind == .plex {
                 Button {
                     localOriginalVideo.toggle()
                     collapsePicker(owner: .streamQuality)
                 } label: {
-                    controlRow(label: "ORIGINAL (LOCAL PLEX)", value: localOriginalVideo ? "ACTIVE" : nil,
-                               isFocused: focusedControl == .option("local-original"), isActive: localOriginalVideo,
-                               disabled: false, note: LocalPlexOriginalQuality.detail)
+                    PanelRow(label: "ORIGINAL (LOCAL PLEX)", value: .none, trailing: localOriginalVideo ? .check : .none,
+                             isFocused: focusedControl == .option("local-original"))
                 }
                 .buttonStyle(NoHighlightButtonStyle())
                 .focused($focusedControl, equals: .option("local-original"))
+                .accessibilityLabel("ORIGINAL (LOCAL PLEX)")
             }
             ForEach(StreamQuality.allCases) { quality in
                 Button {
@@ -639,20 +669,65 @@ struct NowPlayingPanel: View {
                     streamQuality = quality
                     collapsePicker(owner: .streamQuality)
                 } label: {
-                    controlRow(
+                    PanelRow(
                         label: quality.displayName.uppercased(),
-                        value: quality == streamQuality ? (localOriginalVideo ? "OTHER PLAYBACK" : "ACTIVE") : nil,
-                        isFocused: focusedControl == .option(quality.id),
-                        isActive: quality == streamQuality,
-                        disabled: false,
-                        note: quality.detail
+                        value: quality == streamQuality && localOriginalVideo ? .text("OTHER PLAYBACK") : .none,
+                        trailing: quality == streamQuality && !localOriginalVideo ? .check : .none,
+                        isFocused: focusedControl == .option(quality.id)
                     )
                 }
                 .buttonStyle(NoHighlightButtonStyle())
                 .focused($focusedControl, equals: .option(quality.id))
+                .accessibilityLabel(quality.displayName.uppercased())
             }
         }
-        .frame(width: 560, alignment: .leading)
+        .frame(width: columnWidth, alignment: .leading)
+    }
+
+    private var audioTrackOptions: some View {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+            ForEach(appState.audioTracks) { track in
+                Button {
+                    appState.selectAudioTrack(id: track.id)
+                    collapsePicker(owner: .audioTracks)
+                } label: {
+                    PanelRow(label: track.displayName, value: .none,
+                             trailing: track.id == appState.selectedAudioTrackID ? .check : .none,
+                             isFocused: focusedControl == .audio(track.id))
+                }
+                .buttonStyle(NoHighlightButtonStyle())
+                .focused($focusedControl, equals: .audio(track.id))
+                .accessibilityLabel(track.displayName)
+            }
+        }
+        .frame(width: columnWidth, alignment: .leading)
+    }
+
+    /// OFF and the offered times. A timer that is running shows its countdown beside the title.
+    private var sleepOptions: some View {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+            ForEach([0] + SleepTimerLogic.offeredMinutes(armed: appState.sleepTimerMinutes), id: \.self) { minutes in
+                let isOff = minutes == 0
+                let armed = appState.sleepTimerEndDate != nil
+                let isChosen = isOff ? !armed : (armed && appState.sleepTimerMinutes == minutes)
+                Button {
+                    if isOff {
+                        appState.cancelSleepTimer()
+                    } else {
+                        appState.startSleepTimer(minutes: minutes)
+                    }
+                    collapsePicker(owner: .sleepTimer)
+                } label: {
+                    PanelRow(label: isOff ? "OFF" : SleepTimerLogic.label(minutes: minutes), value: .none,
+                             trailing: isChosen ? .check : .none,
+                             isFocused: focusedControl == .sleep(isOff ? -1 : minutes))
+                }
+                .buttonStyle(NoHighlightButtonStyle())
+                .focused($focusedControl, equals: .sleep(isOff ? -1 : minutes))
+                .accessibilityLabel(isOff ? "OFF" : SleepTimerLogic.label(minutes: minutes))
+            }
+        }
+        .frame(width: columnWidth, alignment: .leading)
     }
 
     /// Two columns so all sixteen languages fit without scrolling. Focus travel between
@@ -664,7 +739,7 @@ struct NowPlayingPanel: View {
     ) -> some View {
         let all = SubtitleLanguagePreset.all
         let split = (all.count + 1) / 2
-        return HStack(alignment: .top, spacing: 20) {
+        return HStack(alignment: .top, spacing: columnGap) {
             languageColumn(Array(all[..<split]), picker: picker, selected: selected, onPick: onPick)
             languageColumn(Array(all[split...]), picker: picker, selected: selected, onPick: onPick)
         }
@@ -676,25 +751,22 @@ struct NowPlayingPanel: View {
         selected: String,
         onPick: @escaping (String) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
             ForEach(presets) { preset in
                 Button {
                     onPick(preset.code)
                     collapsePicker(owner: picker)
                 } label: {
-                    controlRow(
-                        label: preset.label,
-                        value: preset.code == selected ? "ACTIVE" : nil,
-                        isFocused: focusedControl == .option(preset.code),
-                        isActive: preset.code == selected,
-                        disabled: false
-                    )
+                    PanelRow(label: preset.label, value: .none,
+                             trailing: preset.code == selected ? .check : .none,
+                             isFocused: focusedControl == .option(preset.code))
                 }
                 .buttonStyle(NoHighlightButtonStyle())
                 .focused($focusedControl, equals: .option(preset.code))
+                .accessibilityLabel(preset.label)
             }
         }
-        .frame(width: 380, alignment: .leading)
+        .frame(width: columnWidth, alignment: .leading)
     }
 
     private func pickerTitle(_ picker: PanelPicker) -> String {
@@ -703,94 +775,163 @@ struct NowPlayingPanel: View {
         case .subtitleLanguage: return "SUBTITLE LANGUAGE"
         case .audioLanguage:    return "AUDIO LANGUAGE"
         case .playbackInformation: return "PLAYBACK INFORMATION"
+        case .audioTracks:      return "AUDIO"
+        case .sleepTimer:       return "SLEEP TIMER"
         }
+    }
+
+    /// The countdown in the sleep list's title row, while a timer runs.
+    private func pickerLive(_ picker: PanelPicker) -> AnyView? {
+        guard picker == .sleepTimer, appState.sleepTimerEndDate != nil else { return nil }
+        return AnyView(
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = SleepTimerLogic.remaining(from: appState.sleepTimerEndDate, now: context.date) ?? 0
+                Text("\(SleepTimerLogic.countdownLabel(remaining: remaining)) LEFT")
+                    .font(NXFont.tag)
+                    .foregroundStyle(Color.nxYellow)
+            }
+        )
     }
 
     /// Same wording the settings page uses for each setting, plus the one thing that is
     /// only true in here: a new quality ceiling cannot reach the stream already playing.
-    private func pickerSubtitle(_ picker: PanelPicker) -> String {
+    private func pickerHint(_ picker: PanelPicker) -> String {
         switch picker {
         case .playbackInformation:
             return appState.playbackInformation?.evidenceNote ?? "Playback information is unavailable for this program."
         case .streamQuality:
+            if focusedControl == .option("local-original") { return LocalPlexOriginalQuality.detail }
+            if case .option(let id)? = focusedControl, let quality = StreamQuality.allCases.first(where: { $0.id == id }) {
+                return quality.detail
+            }
             return "Lower this when your connection is slow or shared. Takes effect on the next program."
         case .subtitleLanguage:
-            return "Choose which subtitle track to prefer when multiple are available."
+            return NowPlayingPanelHints.subtitleLanguage
         case .audioLanguage:
-            return "Choose which audio track to prefer when multiple are available."
+            return NowPlayingPanelHints.audioLanguage
+        case .audioTracks:
+            return NowPlayingPanelHints.audio
+        case .sleepTimer:
+            return NowPlayingPanelHints.sleepList
         }
     }
 
-    /// Which option row focus should open on — the one currently in effect.
-    private func selectedOptionID(_ picker: PanelPicker) -> String {
+    /// Which row focus should open on: the one currently in effect.
+    private func initialFocus(_ picker: PanelPicker) -> NowPlayingFocus {
         switch picker {
-        case .streamQuality:    return localOriginalVideo && appState.backendKind == .plex ? "local-original" : streamQuality.id
-        case .subtitleLanguage: return appState.preferredSubtitleLanguageCode
-        case .audioLanguage:    return appState.preferredAudioLanguageCode
-        case .playbackInformation: return "information-back"
+        case .streamQuality:
+            return .option(localOriginalVideo && appState.backendKind == .plex ? "local-original" : streamQuality.id)
+        case .subtitleLanguage: return .option(appState.preferredSubtitleLanguageCode)
+        case .audioLanguage:    return .option(appState.preferredAudioLanguageCode)
+        case .playbackInformation: return .option("information-back")
+        case .audioTracks:      return .audio(appState.selectedAudioTrackID ?? appState.audioTracks.first?.id ?? 0)
+        case .sleepTimer:
+            let armed = appState.sleepTimerEndDate != nil
+            return .sleep(armed ? (appState.sleepTimerMinutes ?? -1) : -1)
         }
     }
 
     // MARK: - Row builders
 
-    private func controlHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.custom("DMMono-Medium", size: 16))
-            .foregroundStyle(.white.opacity(0.6))
-            .tracking(1.5)
+    /// A group label: 25 pt, letter-spaced, with a rule under it. `live` is the yellow status at its right.
+    private func groupLabel(_ text: String, live: AnyView? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(text)
+                    .font(NXFont.captionMedium)
+                    .tracking(3)
+                    .foregroundStyle(Color.nxText2)
+                Spacer(minLength: 12)
+                if let live { live }
+            }
+            Rectangle()
+                .fill(Color.nxRestingOutline)
+                .frame(height: 2)
+        }
+        .padding(.bottom, 4)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The panel's one row: label left, value right, optional icon at the far right; 76 pt high, the
+/// shared row surface (resting and selected). ON reads in cyan and OFF in text-2, as words, never
+/// as a switch; a running countdown reads in yellow; a warning in amber.
+private struct PanelRow: View {
+    enum Value: Equatable {
+        case none
+        case text(String)
+        case on
+        case off
+        case live(String)
+        case warning(String)
     }
 
-    /// `note` is a dim caption under the row, for the one thing a label and a value can't
-    /// say on their own (what a stream-quality choice does and doesn't reach).
-    private func controlRow(
-        label: String,
-        value: String?,
-        isFocused: Bool,
-        isActive: Bool,
-        disabled: Bool,
-        note: String? = nil
-    ) -> some View {
-        let fill: Color = isFocused ? Color(red: 0.05, green: 0.05, blue: 0.07) : Color.white.opacity(0.14)
-        let border: Color = isFocused
-            ? channel.color
-            : isActive ? channel.color.opacity(0.5) : Color.white.opacity(0.22)
-        let labelOpacity: Double = disabled ? 0.35 : 1.0
+    enum Trailing { case none, chevron, external, retry, check }
 
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                    .font(.custom("DMMono-Medium", size: 20))
-                    .foregroundStyle(.white.opacity(labelOpacity))
-                    .lineLimit(1)
-                    // The longest titles ("AUTO SUBTITLES (FOREIGN AUDIO)") only just fit;
-                    // shrink rather than truncate if a localized value runs longer.
-                    .minimumScaleFactor(0.8)
-                Spacer()
-                if let value {
-                    Text(value)
-                        .font(.custom("DMMono-Regular", size: 18))
-                        .foregroundStyle(isActive ? channel.color : .white.opacity(0.75))
-                        .lineLimit(1)
-                }
-            }
+    let label: String
+    var value: Value = .none
+    var trailing: Trailing = .none
+    let isFocused: Bool
+    /// A row that only informs (one audio track): no fill, a dashed outline, not focusable.
+    var isStatic: Bool = false
 
-            if let note {
-                Text(note)
-                    .font(.custom("DMMono-Regular", size: 16))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    var body: some View {
+        HStack(spacing: 20) {
+            Text(label)
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(Color.nxText)
+                .lineLimit(1)
+                // The longest title, "AUTO SUBTITLES (FOREIGN AUDIO)", only just fits; shrink
+                // rather than truncate if a longer one ever arrives.
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 12)
+            valueView
+            trailingView
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(fill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(border, lineWidth: isFocused ? 2 : 1)
-        )
-        .compositingGroup()
+        .padding(.horizontal, NXLayout.rowPaddingX)
+        .frame(height: NXLayout.rowHeight)
+        .nxRowSurface(isSelected: isFocused, isStatic: isStatic)
+        .contentShape(RoundedRectangle(cornerRadius: NXLayout.rowRadius))
+        .animation(.easeInOut(duration: 0.12), value: isFocused)
+    }
+
+    @ViewBuilder
+    private var valueView: some View {
+        switch value {
+        case .none:
+            EmptyView()
+        case .text(let text):
+            Text(text)
+                .font(NXFont.bodyRegular)
+                .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        case .on:
+            Text("ON").font(NXFont.bodyMedium).foregroundStyle(Color.nxCyan)
+        case .off:
+            Text("OFF")
+                .font(NXFont.bodyRegular)
+                .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
+        case .live(let text):
+            Text(text).font(NXFont.bodyRegular).foregroundStyle(Color.nxYellow)
+        case .warning(let text):
+            Text(text).font(NXFont.bodyRegular).foregroundStyle(Color.nxAmber)
+        }
+    }
+
+    @ViewBuilder
+    private var trailingView: some View {
+        switch trailing {
+        case .none:
+            EmptyView()
+        case .chevron:
+            Image(systemName: "chevron.right").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+        case .external:
+            Image(systemName: "arrow.up.right").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+        case .retry:
+            Image(systemName: "arrow.clockwise").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+        case .check:
+            Image(systemName: "checkmark").font(NXFont.icon).foregroundStyle(Color.nxCyan)
+        }
     }
 }
