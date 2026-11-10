@@ -108,6 +108,10 @@ jobs:
               - 'scripts/nostalgex-library-coverage.js'
               - 'scripts/nostalgex-library-coverage-smoke.mjs'
               - 'scripts/nostalgex-scan-failures-smoke.mjs'
+              # Music video title cleanup (N-034): the golden file is the Swift and Roku contract.
+              - 'scripts/nostalgex-music-brainz.js'
+              - 'scripts/nostalgex-music-title-smoke.mjs'
+              - 'scripts/music-title-golden.json'
               # STOP WAITING during a slow library scan.
               - 'scripts/nostalgex-load-stall.js'
               - 'scripts/nostalgex-load-stall-smoke.mjs'

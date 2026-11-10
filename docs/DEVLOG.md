@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Web tuner and Docker: music video title cleanup leaves "Song ( Music )", N-034; branch web/fixes-1109)
+
+**Fixed on the web.** `cleanTitle` in `scripts/nostalgex-music-brainz.js` took the words `official video hd lyrics remastered`
+out of a title and left the parentheses they sat in. Measured on the real function: "Song (Official Music Video)" gave
+"Song ( Music )", "(Official Video)" gave "Song ( )", "(Lyrics)" and "(HD)" gave "Song ()", "(Official Audio)" gave
+"Song ( Audio)", and "(Official Video) (HD)" gave "Song ( ) ()". That text is what MusicBrainz and Deezer were asked for and
+what the guide showed as the song. Now a parenthesised group made only of those words goes whole, and any parentheses a word
+came out of are tidied ("(Official Live at Wembley)" becomes "(Live at Wembley)"; "(Live)" stays). 69 checks in
+`npm run test:music-title` against the new `scripts/music-title-golden.json` (37 clean cases, 8 parse cases), and the cleanup
+as it was fails 22 of the 37.
+
+**Swift and Roku have the same bug and are not changed here.** `MusicTitleParser.clean` (Swift) and `NxCleanMusicTitle`
+(`roku/source/plex/PlexLibrary.brs`) are the same five passes. The golden file lists the exact cases and the nine steps in its
+`note`, for both ports to be tested against.
+
+**Found, not changed.** The bare-word pass removes a word anywhere in a title: "Artist - Video Killed The Radio Star (Official
+Video)" now gives "Artist - Killed The Radio Star", and "Song - Official Music Video" gives "Song - Music". Both are as before;
+the first loses a real word from the search. They need a rule for which words count (the tail of the title only), which changes
+more titles than this card reported, so it is not in the golden file.
+
 ## 2026-11-09 (Web tuner and Docker: STOP WAITING during a slow library scan; branch web/fixes-1109)
 
 **STOP WAITING (parity with Apple TV, Roku, Android).** The loading screen had START OVER and nothing else, and the scan's page
