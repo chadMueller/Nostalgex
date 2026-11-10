@@ -31,8 +31,20 @@ keeps the details "of your first channel"; it now says "of the channel the app o
 match cases and every channel in `channels.json` finding itself, and the seed's channel. `tests/run.sh` ends in ALL
 TESTS PASSED.
 
-**Open.** Not run on a TV yet: the relaunch, the power pull, the switch off, the Settings row on screen, and what a
-registry write on each channel change costs on the render thread.
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `3690863` plus two scratch lines (a launch switch that
+deletes the `cachefs:` files a power loss takes and keeps the registry, as #155's run had, and a timing print),
+signed in to the lab Emby (5,657 items, 17 channels, CH 3 first):
+- With nothing remembered the launch opened on CH 3 and saved CH 3's airings for a cold start.
+- OK on CH 6 in the guide, Home, launch: it opened on CH 6, tuned 1.7 s after the launch.
+- The seed moved to CH 6 at the next re-check, 5.7 s after that tune.
+- Launched with the files wiped: CH 6 was tuned 1.1 s after the launch from the seed (16 airings), and the full
+  guide's hand-over 27 s later made no second tune.
+- The row is after AUDIO LANGUAGE and read ON before anyone pressed it. Switched OFF, the seed moved back to CH 3
+  when Settings closed, and the next launch opened on CH 3.
+- Saving the channel on a tune took 37, 41, 31 and 33 ms on the render thread (four tunes).
+
+**Open.** The TV's power really pulled (the wipe stands in for it), a stick, a Plex library, and the 31 to 41 ms a
+tune now spends on the registry write.
 
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 

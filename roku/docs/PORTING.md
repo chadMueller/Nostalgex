@@ -677,6 +677,12 @@ channel in the guide has the same id and the same name; otherwise channel one,
 as before. Sign-out, and a fresh sign-in over another account's saved library, clear the channel
 with the caches (`NxClearAccountCaches`) and leave the switch. The Roku has no
 demo mode, so the Apple TV's demo cases have nothing to port.
+Pressed on the 55R617 (OS 15.3.4, 2026-11-09), a test-data build of `3690863`
+with a scratch wipe switch like #155's, on the lab Emby: a relaunch opened on the
+channel tuned before it (CH 6, not the first, CH 3); a launch with the
+`cachefs:` files wiped played CH 6 from the seed 1.1 s after the launch; with
+the switch off the seed went back to CH 3 and the launch opened there. The
+save on a tune took 31 to 41 ms on the render thread (four tunes).
 
 Pressed on the 43S45 (OS 16.0.4, 2026-11-03), a test-data build of this work
 on main `84bac18` signed in to the lab Emby (5,509 items, 30 channels), with a
