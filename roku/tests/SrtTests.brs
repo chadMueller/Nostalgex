@@ -44,6 +44,30 @@ function NxRunSrtTests() as Integer
     NxCheck(r, "sorted by start", mixed[0].text + "," + mixed[1].text, "first,second")
     NxCheck(r, "two cues at once", NxSrtTextAt(mixed, 10500), "first" + lf + "second")
 
+    ' A long track: 2,000 cues of 3 s, one every 3.5 s. Each is found, and the gaps are empty.
+    parts = []
+    for i = 0 to 1999
+        parts.Push((i + 1).ToStr() + lf + NxSrtTestStamp(i * 3500) + " --> " + NxSrtTestStamp(i * 3500 + 3000) + lf + "line " + i.ToStr() + lf)
+    end for
+    many = NxSrtParse(parts.Join(lf))
+    NxCheck(r, "long: every cue read", many.Count().ToStr(), "2000")
+    wrong = 0
+    for i = 0 to 1999
+        if NxSrtTextAt(many, i * 3500) <> "line " + i.ToStr() then wrong = wrong + 1
+        if NxSrtTextAt(many, i * 3500 + 2999) <> "line " + i.ToStr() then wrong = wrong + 1
+        if NxSrtTextAt(many, i * 3500 + 3000) <> "" then wrong = wrong + 1
+        if NxSrtTextAt(many, i * 3500 + 3499) <> "" then wrong = wrong + 1
+    end for
+    NxCheck(r, "long: each cue at its start and end, and each gap empty", wrong.ToStr(), "0")
+    NxCheck(r, "long: before the first", NxSrtTextAt(many, -1), "")
+    NxCheck(r, "long: after the last", NxSrtTextAt(many, 7000000), "")
+    ' A line that stays up while 16 shorter ones come and go under it is still found.
+    over = [{ startMs: 0, endMs: 100000, text: "long" }]
+    for i = 1 to 16
+        over.Push({ startMs: i * 1000, endMs: i * 1000 + 500, text: "s" + i.ToStr() })
+    end for
+    NxCheck(r, "overlap: a long line under 16 short ones", NxSrtTextAt(over, 16100), "long" + lf + "s16")
+
     ' Where the line is drawn: inside the picture, full screen and in the guide's preview.
     full = NxForcedSubBox(true)
     NxCheck(r, "box: full screen, inside the screen", NxToStr(full.x >= 0 and full.x + full.w <= 1920 and full.y + full.h <= 1080), "true")
@@ -60,4 +84,13 @@ function NxRunSrtTests() as Integer
 
     print "srt cases (#237):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
+end function
+
+' ms as an SRT stamp, for the long test track.
+function NxSrtTestStamp(ms as Integer) as String
+    h = ms \ 3600000
+    mi = (ms \ 60000) mod 60
+    se = (ms \ 1000) mod 60
+    fr = ms mod 1000
+    return Right("0" + h.ToStr(), 2) + ":" + Right("0" + mi.ToStr(), 2) + ":" + Right("0" + se.ToStr(), 2) + "," + Right("00" + fr.ToStr(), 3)
 end function

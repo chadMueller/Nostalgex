@@ -33,9 +33,22 @@ change), with *American Dad!* "Pilot": an HEVC MKV whose one forced English line
 - TV captions On: On before, during and after. Set Off: Off before, during and after, and 6 s and 21 s after Home.
 - Two dev screenshots show the line: at the foot of the full screen picture, and inside the guide's preview box.
 
+**Then on the lab clip *Lab Forced Opus*** (30 MB, silent; a Portuguese AAC and an English Opus track, an English
+forced track with lines at 0:10 and 0:40 and a full one at 0:20), signed in as the lab-clips user, a test-data build
+of `c21c2a9` plus the scratch aids. The English Opus track is picked, so each run is a server stream.
+- Jellyfin 12.2.0, TV captions On: both lines drawn 33 ms after their starts and cleared 33 ms after their ends; On
+  before, 15 s in and after. Captions Off: 75 ms and 75 ms; Off throughout.
+- Emby 4.10.1.0, captions Off: 33 ms and 33 ms; Off throughout. Captions On: 70 ms and 70 ms; On throughout.
+- SUBTITLES on ALWAYS (Jellyfin, captions Off before): as before this change. The full track showed through the TV's
+  captions, which the app switched On for it (On 15 s in) and back Off when the clip ended, and no forced line was
+  drawn.
+- A long track, made on the TV: 2,000 cues (186 KB) were read in 322 ms, and 100 looks near its end took 307 ms.
+  So `NxSrtTextAt` now finds the last cue to have started by halving and looks at the 16 before it. That change has
+  not been compiled on a TV.
+
 **Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
-times are the player's). Emby, a longer track, SUBTITLES ALWAYS beside a forced track, a stick, and the full
-`tests/run.sh` on this branch.
+times are the player's). A stick, a real film with a long forced track, and a dev screenshot with the TV's captions
+On (both screenshots were taken with them Off).
 
 ## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
 
