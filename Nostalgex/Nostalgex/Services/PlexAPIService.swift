@@ -208,6 +208,10 @@ struct PlexAPIService: MediaBackend {
     // `LoadProgressEvent` / `LoadProgress` now live in MediaBackend.swift (shared by all backends).
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: excludedSectionKeys, checkpoint: nil, progress: progress)
+    }
+
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
@@ -239,6 +243,19 @@ struct PlexAPIService: MediaBackend {
                 totalShows: nil
             ))
             let baseItemCount = allItems.count
+            // A section a killed first setup finished is taken from disk, not asked for again.
+            let signature = Self.sectionSignature(section)
+            if let kept = checkpoint?.resumable(sectionKey: section.key, signature: signature) {
+                print("[Plex90] RESUME: section '\(section.title)' kept from the earlier scan, \(kept.items.count) items")
+                scanSkips.add(kept.skippedNoRuntime)
+                allItems.append(contentsOf: kept.items)
+                progress?(LoadProgressEvent(
+                    sectionIndex: i, totalSections: sections.count, sectionTitle: section.title,
+                    sectionType: section.type, itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
+                ))
+                continue
+            }
+            let skipsBeforeSection = scanSkips.count
             let items: [PlexMediaItem]
             do {
                 items = try await fetchSection(section, pageSize: pageSize) { showsDone, totalShows, episodesSoFar in
@@ -264,6 +281,12 @@ struct PlexAPIService: MediaBackend {
                 throw error
             }
             allItems.append(contentsOf: items)
+            // Kept only when the section was read to the end: a cancel (Stop Waiting, the stall
+            // watch) makes the fetch hand back the pages it had, which is not the section.
+            if !Task.isCancelled {
+                checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: signature,
+                                   skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
+            }
 
             // A cancelled section now returns the rows it managed to read rather than
             // throwing, so surface the partial scan here instead of looping into the
@@ -274,6 +297,13 @@ struct PlexAPIService: MediaBackend {
         }
         try failures.finish(items: allItems)
         return allItems
+    }
+
+    /// Plex's own change counters for a section; nil when it sends neither. Kept sections are
+    /// reused for longer when these have not moved (`LibraryScanProgressStore`).
+    static func sectionSignature(_ section: PlexSection) -> String? {
+        guard section.updatedAt != nil || section.contentChangedAt != nil else { return nil }
+        return "u\(section.updatedAt ?? 0)/c\(section.contentChangedAt ?? 0)"
     }
 
     /// Page size for library section fetches. Plex serializes the entire requested

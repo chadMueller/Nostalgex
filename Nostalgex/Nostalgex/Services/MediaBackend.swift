@@ -46,7 +46,15 @@ protocol MediaBackend: Sendable {
     /// values, scoped to this one server (the caller does any cross-server key
     /// composition). An empty set (the default via the convenience overloads below)
     /// scans every section, which is every existing call site's behavior unchanged.
+    ///
+    /// `checkpoint` (I-076, #146) keeps each section's items on disk as the section finishes and
+    /// hands finished ones back after a relaunch, so a first setup that was killed does not start
+    /// over. Nil (every call but a foreground load) reads and writes nothing.
     func loadLibrary(excludedSectionKeys: Set<String>, progress: LoadProgress?) async throws -> [PlexMediaItem]
+
+    /// The same scan with a checkpoint. The three servers implement it; a backend that only
+    /// implements the one above (a test double) gets the default, which ignores the checkpoint.
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem]
 
     /// Library sections/views on this server.
     func loadSections() async throws -> [PlexSection]
@@ -237,6 +245,11 @@ extension MediaBackend {
         try await loadLibrary(excludedSectionKeys: [], progress: nil)
     }
 
+    /// Default for a backend with no checkpoint support: nothing is kept or resumed.
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: excludedSectionKeys, progress: progress)
+    }
+
     /// Default convenience for callers that only care about progress reporting
     /// (every existing call site before library selection), every section included.
     func loadLibrary(progress: LoadProgress?) async throws -> [PlexMediaItem] {
@@ -306,6 +319,7 @@ final class ScanSkipCounter: @unchecked Sendable {
 
     var count: Int { lock.lock(); defer { lock.unlock() }; return n }
     func add() { lock.lock(); n += 1; lock.unlock() }
+    func add(_ count: Int) { lock.lock(); n += max(0, count); lock.unlock() }
     func reset() { lock.lock(); n = 0; lock.unlock() }
     /// Takes back what was added after `mark`, for a section that is read a second way.
     func rewind(to mark: Int) { lock.lock(); n = min(n, mark); lock.unlock() }

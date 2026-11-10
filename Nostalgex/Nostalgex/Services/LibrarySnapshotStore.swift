@@ -239,6 +239,8 @@ enum LibrarySnapshotStore {
         epoch &+= 1
         if let dir = snapshotDirectoryURL { try? FileManager.default.removeItem(at: dir) }
         if let legacy = legacyFileURL { try? FileManager.default.removeItem(at: legacy) }
+        // Whatever a half-finished first scan kept belongs to the library being cleared.
+        LibraryScanProgressStore.clearAll()
     }
 
     /// Blocks until every queued save has finished or been dropped. Tests and the harness.
@@ -316,11 +318,15 @@ enum LibrarySnapshotStore {
 
     /// Queues the write on a background queue and returns at once. A newer request or a
     /// clear() made before it commits wins; the older write is abandoned and its files removed.
-    static func saveInBackground(_ payload: Payload) {
+    ///
+    /// `onCommit` runs on the writer queue only after the snapshot has been committed; a save
+    /// that is superseded, fails, or is killed never calls it.
+    static func saveInBackground(_ payload: Payload, onCommit: (@Sendable () -> Void)? = nil) {
         let e = nextEpoch()
         writeQueue.async {
             do {
                 try write(payload, epoch: e)
+                onCommit?()
             } catch SnapshotError.superseded {
                 // A newer save or a clear() owns the snapshot now.
             } catch {

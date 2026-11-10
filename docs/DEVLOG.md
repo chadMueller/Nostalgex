@@ -55,6 +55,33 @@ unchanged. Tests in `PINRequestRetryTests` decode the recorded reply and bound t
 unit test (it needs plex.tv), so the 15 minute wait and the 404 stop were not run end to end. The web tuner and the Roku
 app still stop at 150 polls (`web-tuner.html`, `plex-tuner.html`, `roku/source/plex/PlexApi.brs`).
 
+**A killed first setup keeps the sections it finished (I-076, #146, Trello 6aeb9f3f).** A large library (one section can
+be 105,000 movies) that stalls or crashes during first setup used to start over from section 1. Now each section's items
+are written to `library_scan_progress/` as soon as that section has been read in full (Plex, Jellyfin and Emby), and the
+next foreground load takes finished sections from there and asks the server only for the rest. The library snapshot is
+not involved: its format (3) is unchanged, nothing writes it from a partial scan, and a kept section is never read back as
+a library. A section is kept only if its fetch returned without an error and without a cancel (a cancelled fetch hands
+back the pages it had; that is not the section); a section lost for good, or never reached, has no entry. Each section is
+a directory of 10k-item files plus a `done.json` written last, atomically, so a write killed at any point leaves a
+directory with no marker that is ignored and swept. A kept section is reused only if it was written by this build and this
+scan-request version, is under an hour old (six hours when Plex's `updatedAt` and `contentChangedAt` for the section are
+the same as when it was saved; a changed counter drops it), and every file decodes to the saved count; the NO RUNTIME
+count is kept with it. Foreground loads only: a background refresh has a guide on screen and always reads everything. The
+whole directory is removed by Disconnect, START OVER and RESCAN (they call `LibrarySnapshotStore.clear()`), and after a
+complete scan once its snapshot has committed (a snapshot save that fails or is killed leaves the sections; a scan that
+lost a section leaves them too, for the next launch). A write still running when Disconnect lands cannot commit. Tests:
+`LibraryScanProgressTests` (11: store, kill mid-write, damage, age and counters, build and version, clearing, snapshot
+untouched) and `LibraryScanResumeTests` (4: Plex, Jellyfin and Emby against a loopback server, the scan stopped inside
+section 3, a second run asks for section 3 only and returns exactly the library a scan from nothing returns, same
+order and same NO RUNTIME count; a lost section not kept; through `AppState.loadLibrary`, resume, then clear; a
+background refresh reads every section). With resume switched off, three of those fail. Measured on the Mac simulator for
+one 105,000-item section: 81 MB on disk, 0.8 s to write (off the main thread), 0.9 s to read back; not measured on an
+Apple TV, whose slower CPU and disk will make both longer. Upgrading: a user with a snapshot sees nothing; the directory
+appears only during a first-time scan, and files from another build are ignored and deleted, so an update never merges
+old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSectionKeys:checkpoint:progress:)` with a
+default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
+interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

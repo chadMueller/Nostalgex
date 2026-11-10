@@ -135,6 +135,10 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
     }
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: excludedSectionKeys, checkpoint: nil, progress: progress)
+    }
+
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
         let allSections = try await loadSections()
         // A section the viewer turned off in library selection (I-054) is dropped here,
@@ -150,6 +154,18 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
             ))
             let baseItemCount = allItems.count
+            // A section a killed first setup finished is taken from disk, not asked for again.
+            if let kept = checkpoint?.resumable(sectionKey: section.key, signature: nil) {
+                print("[Emby] RESUME: section '\(section.title)' kept from the earlier scan, \(kept.items.count) items")
+                scanSkips.add(kept.skippedNoRuntime)
+                allItems.append(contentsOf: kept.items)
+                progress?(LoadProgressEvent(
+                    sectionIndex: i, totalSections: sections.count, sectionTitle: section.title,
+                    sectionType: section.type, itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
+                ))
+                continue
+            }
+            let skipsBeforeSection = scanSkips.count
             let items: [PlexMediaItem]
             do {
                 if section.type == "show" {
@@ -192,6 +208,12 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                 throw error
             }
             allItems.append(contentsOf: items)
+            // Kept only when the section was read to the end: a cancel makes the fetch hand
+            // back the pages it had, which is not the section.
+            if !Task.isCancelled {
+                checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: nil,
+                                   skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
+            }
 
             // A cancelled section now returns the rows it managed to read rather than
             // throwing, so surface the partial scan here instead of issuing another

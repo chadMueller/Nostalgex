@@ -242,6 +242,12 @@ extension AppState {
                 loadCancelRequested = false
                 isLoadStalling = false
                 do {
+                    // A foreground load keeps each section as it finishes and picks up the ones
+                    // an earlier, killed first setup finished. A background refresh has a
+                    // library on screen and wants a fresh read, so it uses neither.
+                    let checkpoint: LibraryScanProgressStore.Checkpoint? = isBackground ? nil
+                        : LibraryScanProgressStore.Checkpoint(identity: snapshotIdentitySeed, serverID: scanAPI.serverID,
+                                                              scanFieldsVersion: LibrarySnapshotStore.scanFieldsVersion)
                     let items = try await withLibraryLoadStallWatch(
                         sample: { [weak self] in self?.libraryScanProgressSample() ?? LibraryLoadProgressSample() },
                         onVerdict: { [weak self] verdict in
@@ -262,7 +268,7 @@ extension AppState {
                             return self.consumeLoadCancelRequest() || self.librarySessionGeneration != session
                         },
                         operation: {
-                            try await scanAPI.loadLibrary(excludedSectionKeys: excludedKeys) { [weak self] event in
+                            try await scanAPI.loadLibrary(excludedSectionKeys: excludedKeys, checkpoint: checkpoint) { [weak self] event in
                                 Task { @MainActor [weak self] in
                                     guard let self else { return }
                                     self.scanSectionIndex = event.sectionIndex
@@ -491,7 +497,7 @@ extension AppState {
             lastLoadAtUnix = scanWasAbandoned ? completedAt - 86_400 : completedAt
             librarySignature = signature
             lastLibraryCheckAtUnix = completedAt
-            saveLibrarySnapshotIfNeeded()
+            saveLibrarySnapshotIfNeeded(clearsScanProgress: !scanWasAbandoned)
             LibraryLoadProbe.mark("snapshotSaved")
 
             let durationMs = Int(Date().timeIntervalSince(loadStartedAt) * 1000)
@@ -835,7 +841,11 @@ extension AppState {
 
     /// Captures the library on the main actor (copy-on-write, no copying) and writes it on
     /// a background queue in chunks. Returns immediately.
-    func saveLibrarySnapshotIfNeeded() {
+    ///
+    /// `clearsScanProgress`: this save follows a scan that read every section, so the sections
+    /// a first setup kept on disk (`LibraryScanProgressStore`) are removed once, and only once,
+    /// the snapshot has committed.
+    func saveLibrarySnapshotIfNeeded(clearsScanProgress: Bool = false) {
         guard !isUITestStubLibrarySuccess else { return }
         let payload = LibrarySnapshotStore.makePayload(
             identity: snapshotIdentitySeed,
@@ -854,6 +864,10 @@ extension AppState {
             skippedNoRuntime: skippedNoRuntimeCount
         )
         LibraryLoadProbe.mark("snapshot.capture")
-        LibrarySnapshotStore.saveInBackground(payload)
+        if clearsScanProgress {
+            LibrarySnapshotStore.saveInBackground(payload, onCommit: { LibraryScanProgressStore.clearAll() })
+        } else {
+            LibrarySnapshotStore.saveInBackground(payload)
+        }
     }
 }
