@@ -142,6 +142,27 @@ function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
     return invalid
 end function
 
+' The track to move to when the pick above names none and the player is on a
+' commentary (#246): the first listed track that isn't one, as the Apple TV
+' takes the first when the selected track is a commentary. invalid when the
+' player's track (`current`, its Track) isn't a commentary, isn't in the
+' list, or every track is one, which leaves the player where it is.
+function NxAudioTrackOffCommentary(listed as Object, current as Dynamic) as Dynamic
+    onCommentary = false
+    for each t in listed
+        if type(t) = "roAssociativeArray" then
+            if NxToStr(t.Track) = NxToStr(current) and NxToStr(current) <> "" then onCommentary = NxIsCommentaryTitle(t.Name)
+        end if
+    end for
+    if not onCommentary then return invalid
+    for each t in listed
+        if type(t) = "roAssociativeArray" then
+            if not NxIsCommentaryTitle(t.Name) then return t.Track
+        end if
+    end for
+    return invalid
+end function
+
 ' The player's listed tracks less those named a commentary (NxIsCommentaryTitle
 ' on the track's Name), when at least one other is left; all of them when
 ' every track is a commentary, as NxMbSkipCommentary does for the scan's.

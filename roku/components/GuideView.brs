@@ -1595,9 +1595,15 @@ sub applyAudioPick()
     else
         track = NxAudioTrackToSelect(tracks, m.tuneAudio)
     end if
+    ' No pick, and the player started on a commentary beside another track:
+    ' the first that isn't one (#246), as a Plex file plays whose selected
+    ' track is a commentary and whose film track isn't in AUDIO LANGUAGE.
+    if track = invalid then track = NxAudioTrackOffCommentary(tracks, m.video.currentAudioTrack)
     listed = []
     for each a in tracks
-        listed.Push(NxToStr(a.Track) + "=" + NxToStr(a.Language))
+        mark = ""
+        if NxIsCommentaryTitle(a.Name) then mark = " (commentary)"
+        listed.Push(NxToStr(a.Track) + "=" + NxToStr(a.Language) + mark)
     end for
     print "player: audio track "; track; " of "; listed.Join(" "); ", was "; m.video.currentAudioTrack
     if track <> invalid and NxToStr(track) <> NxToStr(m.video.currentAudioTrack) then m.video.audioTrack = track
