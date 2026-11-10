@@ -18,7 +18,7 @@ enum ChannelsPage: String, Hashable {
 
     var title: String {
         switch self {
-        case .packages: return "CHANNEL PACKAGES"
+        case .packages: return "CHANNEL BUNDLES"
         case .franchises: return "FRANCHISES"
         case .collections: return "MY COLLECTIONS"
         case .missing: return "MISSING CHANNELS"
@@ -142,7 +142,7 @@ private struct ChannelsPackagesPage: View {
         let missingCount = ChannelsMissingPage.groups(appState: appState).reduce(0) { $0 + $1.channels.count }
 
         VStack(alignment: .leading, spacing: 16) {
-            SettingsSectionHeader(title: ChannelsPage.packages.title, subtitle: "Each package adds a set of channels")
+            SettingsSectionHeader(title: ChannelsPage.packages.title, subtitle: "Each bundle adds a set of channels")
 
             VStack(spacing: 4) {
                 ForEach(Self.rows(appState: appState)) { bundle in
@@ -183,7 +183,7 @@ private struct ChannelsPackagesPage: View {
         // an invitation, never a warning.
         let subtitle: String? = {
             if building { return "Finding \(total) channel\(total == 1 ? "" : "s") in your library" }
-            if bundle.enabled && available == 0 { return "Not enough content to build this package" }
+            if bundle.enabled && available == 0 { return "Not enough content to build this bundle" }
             if bundle.activeMonths != nil, !inSeason { return bundle.spotlightLabel(now: Date()) }
             return bundle.description
         }()
@@ -257,7 +257,7 @@ private struct ChannelsMissingPage: View {
             )
 
             if groups.isEmpty {
-                Text("Every channel in your packages is on air.")
+                Text("Every channel in your bundles is on air.")
                     .font(.custom("DMMono-Regular", size: 20))
                     .foregroundStyle(.white.opacity(0.7))
                     .focusable(true)

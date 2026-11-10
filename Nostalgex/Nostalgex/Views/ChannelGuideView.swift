@@ -133,7 +133,7 @@ struct ChannelGuideView: View {
                                     .buttonStyle(NoHighlightButtonStyle())
                                     .focused($focusedChannelID, equals: Self.seasonalRowID)
                                     .accessibilityIdentifier("seasonalInviteRow")
-                                    .accessibilityLabel("Turn on the \(offer.name) package")
+                                    .accessibilityLabel("Turn on the \(offer.name) bundle")
                                     .id(Self.seasonalRowID)
                                 }
                                 ForEach(Array(appState.channels.enumerated()), id: \.element.id) { index, channel in
@@ -621,7 +621,7 @@ struct ChannelGuideView: View {
             .disabled(!stripeMode)
             .accessibilityIdentifier("guideStripe")
             .accessibilityLabel(stripeAccessibilityLabel)
-            .accessibilityHint("Up and Down change package. Select opens the package list. Right returns to the channels.")
+            .accessibilityHint("Up and Down change bundle. Select opens the bundle list. Right returns to the channels.")
             .accessibilityHidden(!stripeMode)
             stripeSentinel(Self.stripeDownSentinelID)
         }
@@ -639,9 +639,9 @@ struct ChannelGuideView: View {
     private var stripeAccessibilityLabel: String {
         let groups = stripeGroups
         guard let index = stripeGroupIndex, groups.indices.contains(index), let name = groups[index].name else {
-            return "Package stripe"
+            return "Bundle stripe"
         }
-        return "Package \(name)"
+        return "Bundle \(name)"
     }
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
@@ -1008,7 +1008,7 @@ private struct BundleJumpSidebar: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                Text("PACKAGES")
+                Text("BUNDLES")
                     .font(.custom("DMMono-Medium", size: GuideTextMetrics.packageHeading))
                     .foregroundStyle(Color.nxText2)
                     .padding(.horizontal, 24)
@@ -1154,9 +1154,9 @@ struct SeasonalInviteRow: View {
                 .foregroundStyle(isFocused ? Color.black : Color.nxText)
                 .lineLimit(1)
 
-            // One call to action, not two. "ADD THE SCREAM PACKAGE" next to "PRESS SELECT"
+            // One call to action, not two. "ADD THE SCREAM BUNDLE" next to "PRESS SELECT"
             // said the same thing twice.
-            Text("PRESS TO ADD THE \(bundle.name) PACKAGE")
+            Text("PRESS TO ADD THE \(bundle.name) BUNDLE")
                 .font(NXFont.captionMedium)
                 .foregroundStyle(Color.black)
                 .padding(.horizontal, 14)

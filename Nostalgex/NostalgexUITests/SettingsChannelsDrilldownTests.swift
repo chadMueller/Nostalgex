@@ -90,7 +90,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
         press(.right, 1.2)
 
         // The list: three link rows and the WATERSHED switch, nothing else.
-        let list = ["CHANNEL PACKAGES", "FRANCHISES", "MY COLLECTIONS", "WATERSHED"]
+        let list = ["CHANNEL BUNDLES", "FRANCHISES", "MY COLLECTIONS", "WATERSHED"]
         XCTAssertTrue(focusedLabel().hasPrefix(list[0]), focusedLabel())
         shot("after-1-channels-list")
         for title in list.dropFirst() {
@@ -101,7 +101,7 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
         XCTAssertTrue(focusedLabel().hasPrefix("WATERSHED"), "list should end at WATERSHED: \(focusedLabel())")
         for _ in 0..<3 { press(.up, 0.6) }
 
-        visit("CHANNEL PACKAGES", shotName: "after-2-packages", expectFirst: "DEMO") {
+        visit("CHANNEL BUNDLES", shotName: "after-2-packages", expectFirst: "DEMO") {
             // The amber count on a package short of content, read out in full.
             XCTAssertTrue(focusedLabel().contains("1 channel does not have enough titles yet"),
                           "DEMO should carry the short-of-content count: \(focusedLabel())")
@@ -158,6 +158,6 @@ final class SettingsChannelsDrilldownTests: XCTestCase {
         press(.up, 1.0)
         press(.down, 1.0)
         press(.right, 1.2)
-        XCTAssertTrue(focusedLabel().hasPrefix("CHANNEL PACKAGES"), "tab change should reset to the list: \(focusedLabel())")
+        XCTAssertTrue(focusedLabel().hasPrefix("CHANNEL BUNDLES"), "tab change should reset to the list: \(focusedLabel())")
     }
 }

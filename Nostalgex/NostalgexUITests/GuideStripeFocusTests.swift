@@ -63,7 +63,7 @@ final class GuideStripeFocusTests: XCTestCase {
 
     private var stripeIsFocused: Bool { probeRaw().last == "-903" }
 
-    /// The stripe's own label: "Package <name>".
+    /// The stripe's own label: "Bundle <name>".
     private var stripeLabel: String { app.buttons["guideStripe"].exists ? app.buttons["guideStripe"].label : "<no stripe>" }
 
     /// Top of the list on the screen, and of channel `n`'s row.
@@ -89,7 +89,7 @@ final class GuideStripeFocusTests: XCTestCase {
         press(.left)
         log("left")
         XCTAssertTrue(stripeIsFocused, "Left did not reach the stripe: \(focusText())")
-        XCTAssertEqual(stripeLabel, "Package RETRO ACTION")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION")
         shot("2-stripe-on-first-package")
 
         // Down: the next package; its first channel is at the top of the list, and focus stays on the stripe.
@@ -97,7 +97,7 @@ final class GuideStripeFocusTests: XCTestCase {
             press(.down, 1.3)
             log("down to \(name)")
             XCTAssertTrue(stripeIsFocused, "focus left the stripe going down to \(name): \(focusText())")
-            XCTAssertEqual(stripeLabel, "Package \(name)")
+            XCTAssertEqual(stripeLabel, "Bundle \(name)")
             let top = rowTop(firstChannel)
             XCTAssertNotNil(top, "channel \(firstChannel) is not on screen after the jump to \(name)")
             if let top { XCTAssertEqual(top, listTop, accuracy: 6, "\(name): its first channel (\(firstChannel)) is not at the top of the list") }
@@ -107,13 +107,13 @@ final class GuideStripeFocusTests: XCTestCase {
         // Past the last package nothing moves.
         press(.down, 1.0)
         XCTAssertTrue(stripeIsFocused)
-        XCTAssertEqual(stripeLabel, "Package THE REST OF THE DEMO", "no wrap past the last package")
+        XCTAssertEqual(stripeLabel, "Bundle THE REST OF THE DEMO", "no wrap past the last package")
 
         // Up goes back, package by package.
         press(.up, 1.3)
-        XCTAssertEqual(stripeLabel, "Package TINY")
+        XCTAssertEqual(stripeLabel, "Bundle TINY")
         press(.up, 1.3)
-        XCTAssertEqual(stripeLabel, "Package LATE NIGHT")
+        XCTAssertEqual(stripeLabel, "Bundle LATE NIGHT")
         XCTAssertTrue(stripeIsFocused)
         if let top = rowTop(7) { XCTAssertEqual(top, listTop, accuracy: 6, "LATE NIGHT back at the top") }
 
@@ -132,10 +132,10 @@ final class GuideStripeFocusTests: XCTestCase {
         // Up from the top of the stripe's first package goes nowhere either.
         press(.left, 1.6)
         XCTAssertTrue(stripeIsFocused, "the second Left did not reach the stripe: \(focusText())")
-        XCTAssertEqual(stripeLabel, "Package LATE NIGHT")
+        XCTAssertEqual(stripeLabel, "Bundle LATE NIGHT")
         press(.up, 1.3)
         press(.up, 1.3)
-        XCTAssertEqual(stripeLabel, "Package RETRO ACTION", "no wrap before the first package")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION", "no wrap before the first package")
         if let top = rowTop(1) { XCTAssertEqual(top, listTop, accuracy: 6, "the first package is at the very top") }
         // Right returns to the first channel of the package the stripe was moved to.
         press(.right, 1.2)
@@ -148,7 +148,7 @@ final class GuideStripeFocusTests: XCTestCase {
         XCTAssertTrue(stripeIsFocused, focusText())
         press(.select, 1.5)
         log("select")
-        XCTAssertTrue(app.staticTexts["PACKAGES"].waitForExistence(timeout: 5), "the package list did not open")
+        XCTAssertTrue(app.staticTexts["BUNDLES"].waitForExistence(timeout: 5), "the package list did not open")
         shot("5-package-list-from-select")
     }
 
@@ -158,7 +158,7 @@ final class GuideStripeFocusTests: XCTestCase {
         XCTAssertTrue(stripeIsFocused, focusText())
         press(.left, 1.5)
         log("left again")
-        XCTAssertTrue(app.staticTexts["PACKAGES"].waitForExistence(timeout: 5), "the package list did not open")
+        XCTAssertTrue(app.staticTexts["BUNDLES"].waitForExistence(timeout: 5), "the package list did not open")
         shot("6-package-list-from-left")
     }
 }
