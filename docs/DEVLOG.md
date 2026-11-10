@@ -20,7 +20,24 @@ a code entered after 10 minutes signs in, one never entered expires at 900 s, a 
 that poll with nothing asked after it, no `expiresIn` waits 300 s, a day-long one stops at 1,800 s, and slow polls
 still end by the clock.
 
-**Open.** Not run on a TV with a real plex.tv code.
+**Pressed** on the 43S45 (OS 16.0.4), a test-data build of `dd17385`, signed out, CONNECT TO PLEX, the code left
+unentered:
+- The console said `waiting up to 900 s for the code (plex.tv keeps it 900 s)`.
+- 6 min 4 s in, past where 150 polls gave up, the code was still on screen.
+- 899 s in, plex.tv answered the PIN check 404 and the wait ended on that poll: `the code expired after 899 s
+  (439 polls)`. So on a real code the 404 ended it, a second before the clock would have.
+- The screen did not change then. It showed "The code expired. Press CONNECT TO PLEX for a new one." on the first
+  page 4 min 29 s later, the moment a key was pressed.
+
+**Why the screen waited for a key: the TV's screensaver, by inference.** This TV's screensaver starts 10 minutes
+after the last key (measured afterwards: last key 12:22:47, Roku City up between 12:32:45 and 12:32:54), so it was
+up from about 10 minutes into the wait. The sign-in task went on polling under it (439 polls in 899 s), and its
+answer reached the screen only when the key woke the TV. The screensaver was not looked at during the wait itself.
+So with a 15 minute wait the screensaver covers the code for its last 5 minutes on this TV, which a 5 minute wait
+never reached. The loading screen holds the screensaver off (`LoadingView.xml`); the code screen does not.
+
+**Open.** A code entered late (after 5 minutes) on a TV, a stick, and whether the code screen should hold the
+screensaver off.
 
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
