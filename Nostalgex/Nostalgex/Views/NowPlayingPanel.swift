@@ -15,13 +15,13 @@ struct SleepGracePrompt: View {
 
             VStack(spacing: 16) {
                 Text("STILL WATCHING?")
-                    .font(NXFont.heading)
+                    .font(SettingsFont.heading)
                     .foregroundStyle(Color.nxText)
 
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let remaining = max(0, (deadline ?? context.date).timeIntervalSince(context.date))
                     Text("SLEEPING IN \(SleepTimerLogic.countdownLabel(remaining: remaining))")
-                        .font(NXFont.bodyRegular)
+                        .font(SettingsFont.bodyRegular)
                         .foregroundStyle(Color.nxYellow)
                 }
 
@@ -115,22 +115,16 @@ struct NowPlayingPanel: View {
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
-    /// The identity column gets the room: 540 + 44 + 560 + 36 + 560 fills the width inside the 90 pt safe
-    /// margins. 560 is what the longest row still needs at 29 pt (PLAYBACK INFORMATION, its value and its
-    /// chevron: 495 pt of the 504 pt inside the row's padding).
-    private let infoWidth: CGFloat = 540
-    private let columnWidth: CGFloat = 560
-    private let columnGap: CGFloat = 36
-
-    private var schedule: ChannelSchedule? {
-        ChannelScheduleBuilder.buildSchedule(
-            for: channel,
-            credentialFingerprint: appState.scheduleCredentialFingerprint
-        )
-    }
+    /// The identity column gets the room: 708 + 40 + 480 + 32 + 480 fills the width inside the 90 pt safe
+    /// margins. 480 is what the longest row needs at the compact 25 pt (PLAYBACK INFORMATION, its value and its
+    /// chevron: about 430 pt of the 440 pt inside the row's padding), 80 pt less per column than at 29 pt, which
+    /// the metadata column takes.
+    private let infoWidth: CGFloat = 708
+    private let columnWidth: CGFloat = 480
+    private let columnGap: CGFloat = 32
 
     var body: some View {
-        HStack(alignment: .top, spacing: 44) {
+        HStack(alignment: .top, spacing: 40) {
             infoZone
             controlsZone
         }
@@ -182,11 +176,11 @@ struct NowPlayingPanel: View {
     // MARK: - Info zone (non-focusable)
 
     private var infoZone: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 20) {
             // The poster (Plex only: its thumbnail transcode carries the token in the URL, so AsyncImage needs no
             // header support) with what is playing beside it, left-aligned to the poster's right edge. Without a
             // poster the details sit where the poster would be, no empty hole.
-            HStack(alignment: .top, spacing: 24) {
+            HStack(alignment: .top, spacing: 22) {
                 if let poster = appState.posterURL(for: item) {
                     AsyncImage(url: poster) { image in
                         image.resizable().scaledToFill()
@@ -201,14 +195,14 @@ struct NowPlayingPanel: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     // The channel's own color is a small bar beside the number, never the number.
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(channel.color)
-                            .frame(width: 12, height: 36)
+                            .frame(width: 10, height: 31)
                         Text("CH \(channel.number)")
-                            .font(NXFont.tag)
+                            .font(SettingsFont.tag)
                             .foregroundStyle(Color.nxText)
                     }
 
@@ -216,13 +210,13 @@ struct NowPlayingPanel: View {
                     // (Discord feedback, 2026-10-29: viewers read this as "what's
                     // playing", so the title should dominate and the channel is secondary).
                     Text(titleLine)
-                        .font(NXFont.title)
+                        .font(SettingsFont.title)
                         .foregroundStyle(Color.nxText)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(channel.name.uppercased())
-                        .font(NXFont.bodyRegular)
+                        .font(SettingsFont.bodyRegular)
                         .foregroundStyle(Color.nxText2)
                         .lineLimit(2)
 
@@ -231,24 +225,67 @@ struct NowPlayingPanel: View {
                             .font(NXFont.captionRegular)
                             .foregroundStyle(Color.nxText2)
                     }
+
+                    // The room the compact scale frees: the description runs to six lines before it ends in an
+                    // ellipsis, and the genres sit under it.
+                    if !item.summary.isEmpty {
+                        Text(item.summary)
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
+                            .lineLimit(6)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    }
+                    if let genres = genreLine {
+                        Text(genres)
+                            .font(NXFont.captionMedium)
+                            .tracking(1)
+                            .foregroundStyle(Color.nxText2)
+                            .lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if let next = schedule?.upNext?.item {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("UP NEXT")
-                        .font(NXFont.captionMedium)
-                        .tracking(3)
-                        .foregroundStyle(Color.nxYellow)
-                    Text(next.isMusicVideo ? next.musicDisplayLine : next.title)
-                        .font(NXFont.bodyRegular)
-                        .foregroundStyle(Color.nxText)
-                        .lineLimit(2)
+            // The minutes in the chip move with the clock, so this block re-reads the schedule every 15 s; the
+            // rest of the panel does not tick.
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                if let next = ChannelScheduleBuilder.buildSchedule(
+                    for: channel, at: context.date, credentialFingerprint: appState.scheduleCredentialFingerprint
+                )?.upNext {
+                    upNextCard(next, now: context.date)
                 }
             }
         }
         .frame(width: infoWidth, alignment: .leading)
+    }
+
+    /// The next programme as its own element: a cyan chip with the time until it starts, then its title, on the
+    /// panel's row surface. Cyan is the time; yellow stays for live things only.
+    private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
+                .font(NXFont.captionMedium)
+                .tracking(2)
+                .foregroundStyle(Color.nxCyan)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.nxSelectedRow))
+                .overlay(Capsule().strokeBorder(Color.nxCyan, lineWidth: 1.5))
+            Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                .font(SettingsFont.bodyMedium)
+                .foregroundStyle(Color.nxText)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, SettingsLayout.rowPaddingX)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous).fill(Color.nxRow))
+        .overlay(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous)
+            .strokeBorder(Color.nxRestingOutline, lineWidth: NXLayout.restingOutline))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("nowPlayingUpNext")
     }
 
     /// The title, or the artist and song for a music video.
@@ -256,12 +293,21 @@ struct NowPlayingPanel: View {
         item.isMusicVideo ? item.musicDisplayLine : item.title
     }
 
-    /// "1985 · PG-13": the year (not for a music video) and the content rating, whichever exist.
+    /// "1985 · PG-13 · 1 HR 52 MIN": the year (not for a music video), the content rating and the runtime,
+    /// whichever exist.
     private var metaLine: String? {
         var parts: [String] = []
         if !item.isMusicVideo, let year = item.year { parts.append(String(year)) }
         if let rating = item.contentRating, !rating.isEmpty { parts.append(rating.uppercased()) }
+        if let runtime = UpNextLabel.runtime(minutes: item.duration) { parts.append(runtime) }
         return parts.isEmpty ? nil : parts.joined(separator: "  \u{00B7}  ")
+    }
+
+    /// Up to three genres, "ACTION · COMEDY · CRIME". Nothing for a music video.
+    private var genreLine: String? {
+        guard !item.isMusicVideo else { return nil }
+        let names = item.genres.filter { !$0.isEmpty }.prefix(3)
+        return names.isEmpty ? nil : names.map { $0.uppercased() }.joined(separator: "  \u{00B7}  ")
     }
 
     // MARK: - Controls zone
@@ -313,12 +359,12 @@ struct NowPlayingPanel: View {
             .lineLimit(lines)
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: width ?? columnWidth, alignment: .topLeading)
-            .frame(minHeight: 64, alignment: .topLeading)
+            .frame(minHeight: 56, alignment: .topLeading)
     }
 
     /// Controls that act on the program playing right now.
     private var programColumn: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             ForEach(
                 NowPlayingPanelLayout.programRows(
                     hasSubtitleTracks: appState.hasSubtitleTracks,
@@ -353,7 +399,7 @@ struct NowPlayingPanel: View {
             audioRow
         case .openInPlex:
             openInPlexRow
-                .padding(.top, 6)
+                .padding(.top, 5)
         case .audioLanguage:
             pickerRow(
                 .audioLanguage,
@@ -366,7 +412,7 @@ struct NowPlayingPanel: View {
 
     /// Controls that act on the device rather than on this program.
     private var deviceColumn: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             groupLabel("PICTURE")
             retroRow
             streamQualityRow
@@ -375,7 +421,7 @@ struct NowPlayingPanel: View {
             }
             pickerRow(.playbackInformation, title: "PLAYBACK INFORMATION", value: "VIEW", focus: .playbackInformation)
             sleepTimerRow
-                .padding(.top, 6)
+                .padding(.top, 5)
         }
         .frame(width: columnWidth, alignment: .leading)
     }
@@ -580,7 +626,7 @@ struct NowPlayingPanel: View {
     /// A list opened from the right column (stream quality, sleep timer) sits under it.
     @ViewBuilder
     private func pickerZone(_ picker: PanelPicker) -> some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             groupLabel(pickerTitle(picker), live: pickerLive(picker))
             switch picker {
             case .playbackInformation:
@@ -622,12 +668,12 @@ struct NowPlayingPanel: View {
     /// Reuses the panel's in-place navigation. Playback continues; Back returns focus
     /// to the information row rather than dismissing the whole panel.
     private var playbackInformationContents: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 VStack(alignment: .leading, spacing: 8) {
                     if appState.playbackInformationRows.isEmpty {
                         Text("Playback information is unavailable.")
-                            .font(NXFont.bodyRegular)
+                            .font(SettingsFont.bodyRegular)
                             .foregroundStyle(Color.nxText2)
                     } else {
                         ForEach(appState.playbackInformationRows) { row in
@@ -637,7 +683,7 @@ struct NowPlayingPanel: View {
                                     .foregroundStyle(Color.nxText2)
                                     .frame(width: 330, alignment: .leading)
                                 Text(row.value)
-                                    .font(NXFont.bodyRegular)
+                                    .font(SettingsFont.bodyRegular)
                                     .foregroundStyle(Color.nxText)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -660,7 +706,7 @@ struct NowPlayingPanel: View {
     }
 
     private var streamQualityOptions: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             if appState.backendKind == .plex {
                 Button {
                     localOriginalVideo.toggle()
@@ -696,7 +742,7 @@ struct NowPlayingPanel: View {
     }
 
     private var audioTrackOptions: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             ForEach(appState.audioTracks) { track in
                 Button {
                     appState.selectAudioTrack(id: track.id)
@@ -716,7 +762,7 @@ struct NowPlayingPanel: View {
 
     /// OFF and the offered times. A timer that is running shows its countdown beside the title.
     private var sleepOptions: some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             ForEach([0] + SleepTimerLogic.offeredMinutes(armed: appState.sleepTimerMinutes), id: \.self) { minutes in
                 let isOff = minutes == 0
                 let armed = appState.sleepTimerEndDate != nil
@@ -762,7 +808,7 @@ struct NowPlayingPanel: View {
         selected: String,
         onPick: @escaping (String) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: NXLayout.rowGap) {
+        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
             ForEach(presets) { preset in
                 Button {
                     onPick(preset.code)
@@ -798,7 +844,7 @@ struct NowPlayingPanel: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = SleepTimerLogic.remaining(from: appState.sleepTimerEndDate, now: context.date) ?? 0
                 Text("\(SleepTimerLogic.countdownLabel(remaining: remaining)) LEFT")
-                    .font(NXFont.tag)
+                    .font(SettingsFont.tag)
                     .foregroundStyle(Color.nxYellow)
             }
         )
@@ -889,7 +935,7 @@ private struct PanelRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(label)
-                .font(NXFont.bodyMedium)
+                .font(SettingsFont.bodyMedium)
                 .foregroundStyle(Color.nxText)
                 .lineLimit(1)
                 // The longest title, "AUTO SUBTITLES (FOREIGN AUDIO)", only just fits; shrink
@@ -899,8 +945,8 @@ private struct PanelRow: View {
             valueView
             trailingView
         }
-        .padding(.horizontal, NXLayout.rowPaddingX)
-        .frame(height: NXLayout.rowHeight)
+        .padding(.horizontal, SettingsLayout.rowPaddingX)
+        .frame(height: SettingsLayout.rowHeight)
         .nxRowSurface(isSelected: isFocused, isStatic: isStatic)
         .contentShape(RoundedRectangle(cornerRadius: NXLayout.rowRadius))
         .animation(.easeInOut(duration: 0.12), value: isFocused)
@@ -913,20 +959,20 @@ private struct PanelRow: View {
             EmptyView()
         case .text(let text):
             Text(text)
-                .font(NXFont.bodyRegular)
+                .font(SettingsFont.bodyRegular)
                 .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
                 .lineLimit(1)
                 .truncationMode(.tail)
         case .on:
-            Text("ON").font(NXFont.bodyMedium).foregroundStyle(Color.nxCyan)
+            Text("ON").font(SettingsFont.bodyMedium).foregroundStyle(Color.nxCyan)
         case .off:
             Text("OFF")
-                .font(NXFont.bodyRegular)
+                .font(SettingsFont.bodyRegular)
                 .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
         case .live(let text):
-            Text(text).font(NXFont.bodyRegular).foregroundStyle(Color.nxYellow)
+            Text(text).font(SettingsFont.bodyRegular).foregroundStyle(Color.nxYellow)
         case .warning(let text):
-            Text(text).font(NXFont.bodyRegular).foregroundStyle(Color.nxAmber)
+            Text(text).font(SettingsFont.bodyRegular).foregroundStyle(Color.nxAmber)
         }
     }
 
@@ -936,13 +982,13 @@ private struct PanelRow: View {
         case .none:
             EmptyView()
         case .chevron:
-            Image(systemName: "chevron.right").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "chevron.right").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .external:
-            Image(systemName: "arrow.up.right").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "arrow.up.right").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .retry:
-            Image(systemName: "arrow.clockwise").font(NXFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "arrow.clockwise").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .check:
-            Image(systemName: "checkmark").font(NXFont.icon).foregroundStyle(Color.nxCyan)
+            Image(systemName: "checkmark").font(SettingsFont.icon).foregroundStyle(Color.nxCyan)
         case .busy:
             ProgressView().tint(Color.nxCyan)
         }
