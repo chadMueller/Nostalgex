@@ -18,8 +18,9 @@ the row after AUDIO LANGUAGE with the Apple TV's line. Sign-out clears the chann
 **The power-loss start follows it.** `NxSeedChannel` takes the channel a launch opens on, so the seed (#155) holds
 the remembered channel's airings, or channel one's when the switch is off, nothing is remembered or the channel is
 not in the guide. After a channel change or the switch, the library task moves the seed at its next 30 s re-check
-(`followSeed`), not on the key press: one registry write of up to 10 KB at most each 30 s. A remembered channel with
-no airing to save (a WATERSHED hold) leaves the seed it had.
+(`followSeed`), not on the key press, so a run of channel changes writes the seed (up to 10 KB of registry) once per
+re-check; closing Settings asks for a re-check too. Read from the code, not run: a remembered channel with no airing
+to save (a WATERSHED hold) leaves the seed it had.
 
 **A deep link is not remembered.** It tunes through `pressTune` like the app's own tunes. The Apple TV has none to
 follow.
@@ -35,16 +36,17 @@ TESTS PASSED.
 deletes the `cachefs:` files a power loss takes and keeps the registry, as #155's run had, and a timing print),
 signed in to the lab Emby (5,657 items, 17 channels, CH 3 first):
 - With nothing remembered the launch opened on CH 3 and saved CH 3's airings for a cold start.
-- OK on CH 6 in the guide, Home, launch: it opened on CH 6, tuned 1.7 s after the launch.
-- The seed moved to CH 6 at the next re-check, 5.7 s after that tune.
-- Launched with the files wiped: CH 6 was tuned 1.1 s after the launch from the seed (16 airings), and the full
-  guide's hand-over 27 s later made no second tune.
+- OK on CH 6 in the guide, Home, launch: it opened on CH 6, tuned 1.7 s after the app started (picture 3.2 s later).
+- The seed moved to CH 6 at the next re-check, 5.7 s after that OK.
+- Launched with the files wiped: CH 6 was tuned from the seed (16 airings) 1.1 s after the app started (picture
+  3.6 s later), and the full guide's hand-over 27 s after the tune made no second tune.
 - The row is after AUDIO LANGUAGE and read ON before anyone pressed it. Switched OFF, the seed moved back to CH 3
-  when Settings closed, and the next launch opened on CH 3.
+  10.6 s later, after Settings closed, and the next launch opened on CH 3.
 - Saving the channel on a tune took 37, 41, 31 and 33 ms on the render thread (four tunes).
 
 **Open.** The TV's power really pulled (the wipe stands in for it), a stick, a Plex library, and the 31 to 41 ms a
-tune now spends on the registry write.
+tune now spends on the registry write. Not pressed on a TV: Left and Right in full screen and the mini strip (only OK
+in the guide was), sign-out, a deep link, and a remembered channel that is renamed or gone.
 ## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
 
 **Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver

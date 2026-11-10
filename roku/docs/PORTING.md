@@ -680,7 +680,7 @@ demo mode, so the Apple TV's demo cases have nothing to port.
 Pressed on the 55R617 (OS 15.3.4, 2026-11-09), a test-data build of `3690863`
 with a scratch wipe switch like #155's, on the lab Emby: a relaunch opened on the
 channel tuned before it (CH 6, not the first, CH 3); a launch with the
-`cachefs:` files wiped played CH 6 from the seed 1.1 s after the launch; with
+`cachefs:` files wiped tuned CH 6 from the seed 1.1 s after the app started; with
 the switch off the seed went back to CH 3 and the launch opened there. The
 save on a tune took 31 to 41 ms on the render thread (four tunes).
 
