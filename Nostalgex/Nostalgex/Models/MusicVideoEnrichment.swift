@@ -55,7 +55,15 @@ enum MusicTitleParser {
         t = t.replacingOccurrences(of: #"\[[^\]]*\]|\{[^}]*\}"#, with: "", options: .regularExpression)
         t = t.replacingOccurrences(of: #"\s*\((?:19|20)\d\d\)\s*$"#, with: "", options: .regularExpression)
         t = t.replacingOccurrences(of: #"\([^)]*(?:19|20)\d\d[^)]*\)"#, with: "", options: .regularExpression)
+        // A bracket made only of YouTube-style noise words goes whole: "(Official Music Video)",
+        // "(Official Video)", "(Lyrics)", "(HD)". Removing just the words used to leave
+        // "( Music )" and "( )" (N-034). A bracket that says anything else stays.
+        t = t.replacingOccurrences(of: #"(?i)\(\s*(?:(?:official|music|video|audio|lyrics?|lyric|hd|hq|4k|mv|visuali[sz]er|clip|remaster(?:ed)?)\b[\s,&/+-]*)+\)"#, with: "", options: .regularExpression)
         t = t.replacingOccurrences(of: #"(?i)\b(official|video|hd|hq|lyrics?|remaster(?:ed)?|mv|xvid|dvdrip|vgb|prv)\b!?"#, with: "", options: .regularExpression)
+        // Brackets the word strip emptied or left padded.
+        t = t.replacingOccurrences(of: #"\(\s*\)"#, with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\(\s+"#, with: "(", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\s+\)"#, with: ")", options: .regularExpression)
         t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         return t.trimmingCharacters(in: CharacterSet(charactersIn: " -!."))
     }

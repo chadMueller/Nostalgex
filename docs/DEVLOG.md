@@ -82,6 +82,19 @@ old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSecti
 default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
 interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
 
+**Music video titles no longer end in "( Music )" or "( )" (N-034, Trello 6aeaadc1).** Reproduced in Swift first
+(`MusicTitleSuffixTests` failed on the 1.0.32-links source): `MusicTitleParser.clean` strips the words "official" and
+"video" but left the bracket, so "Song (Official Music Video)" became "Song ( Music )" and "Song (Official Video)" became
+"Song ( )". That text is what MusicBrainz and Deezer are searched with and what Jellyfin and Emby show as the title. A
+bracket made only of noise words (official, music, video, audio, lyric(s), HD, HQ, 4K, MV, visualizer, clip, remaster(ed))
+now goes whole, and brackets the word strip empties or pads are tidied, so "Song (Live Video)" reads "Song (Live)".
+A bracket that says anything else ("(Live at Wembley)", "(Remix)", "(Radio Edit)") is untouched. 18 cases in
+`MusicMetadataTests.swift`. Library items already saved keep their old title until the next scan of that library. Not
+done here: `scripts/nostalgex-music-brainz.js` `cleanTitle` and the Roku port have the same bug and the same fix
+(one regex ahead of the word strip), so the web tuner, the Docker image and the Roku app still produce "Song ( Music )".
+Separate and older: the word strip also removes "video" and "official" outside brackets, so a title such as "Video Killed
+the Radio Star" loses its first word before search; not changed.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
