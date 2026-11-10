@@ -4941,6 +4941,10 @@
   let guideFocusIndex = 0;
   // The cursor is on a promo row (support, info, the seasonal invite) instead of a channel: its data-promo.
   let guidePromoKey = null;
+  // The guide's time cursor (the Apple TV's slotOffset, I-089): Right and Left move the window later and earlier,
+  // one 30-minute slot a press, up to 44 slots, with the cursor staying on its row.
+  let guideSlotOffset = 0;
+  const GUIDE_MAX_SLOTS = 44;
   let configFocusIndex = 0;
   let connectFocusIndex = 0;
   let overlayTimeout = null;
@@ -5580,7 +5584,7 @@
     // Calculate 2-hour time window starting at current half-hour
     const now = new Date();
     const nowMs = now.getTime();
-    const windowStartMs = Math.floor(nowMs / 1800000) * 1800000; // round down to 30 min
+    const windowStartMs = Math.floor(nowMs / 1800000) * 1800000 + guideSlotOffset * 1800000; // round down to 30 min, then the time cursor
     const windowEndMs = windowStartMs + 7200000; // 2 hours
     const windowDuration = 7200; // seconds
 
@@ -6694,16 +6698,27 @@
   }
 
   function updateInfoPanel() {
-    const ch = CHANNELS.find(c => c.id === currentChannel);
+    // The panel shows the focused channel while the cursor is on one (the playing channel otherwise), and
+    // when the guide's window has been moved later than now, the programme at its left edge.
+    const focusedCh = guideVisible && !guidePromoKey ? getEnabledChannels()[guideFocusIndex] : null;
+    const playingCh = CHANNELS.find(c => c.id === currentChannel);
+    const ch = focusedCh && focusedCh.schedule && focusedCh.schedule[0] ? focusedCh : playingCh;
     if (!ch || !ch.schedule[0]) return;
 
-    const now = ch.schedule[0];
-    const next = ch.schedule[1];
+    let preview = null;
+    if (guideSlotOffset > 0 && ch._manifestBlocks) {
+      const t = (Math.floor(Date.now() / 1800000) * 1800000 + guideSlotOffset * 1800000) / 1000;
+      const blocks = ch._manifestBlocks;
+      const i = blocks.findIndex(b => b.startSec <= t && t < b.endSec);
+      if (i >= 0 && blocks[i].startSec > Date.now() / 1000) preview = { entry: blocks[i], next: blocks[i + 1] };
+    }
+    const now = preview ? { progress: 0 } : ch.schedule[0];
+    const next = preview ? (preview.next ? preview.next.item : null) : ch.schedule[1];
     // InfoPanelView: the details are what the player is playing (`playingItem`), which can run
     // a little behind the clock after a programme overruns its slot; the progress is the
     // schedule's.
-    const playing = activePlaybackRequest && activePlaybackRequest.channelId === ch.id ? activePlaybackRequest.item : null;
-    const shown = playing || now;
+    const playing = !preview && activePlaybackRequest && activePlaybackRequest.channelId === ch.id ? activePlaybackRequest.item : null;
+    const shown = preview ? preview.entry.item : (playing || now);
 
     document.getElementById('info-channel-tag').textContent = `CH ${String(chNum(ch)).padStart(2, '0')} \u2014 ${ch.name}`;
     document.getElementById('info-channel-tag').style.color = (typeof channelTextColor === 'function' ? channelTextColor(ch.color) : ch.color);
@@ -6716,7 +6731,9 @@
     document.getElementById('info-description').textContent = shown.summary || '';
     document.getElementById('info-progress').style.width = (now.progress || 0) + '%';
     document.getElementById('info-progress').style.background = ch.color;
-    document.getElementById('info-time').textContent = `${now.position || '0:00'} / ${now.total || ''}`;
+    document.getElementById('info-time').textContent = preview
+      ? 'STARTS ' + new Date(preview.entry.startSec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : `${now.position || '0:00'} / ${now.total || ''}`;
 
     // Build meta badges
     const metaEl = document.getElementById('info-meta-row');
@@ -6795,6 +6812,7 @@
     if (guideVisible) return;
     guideVisible = true;
     guidePromoKey = null;
+    guideSlotOffset = 0;
 
     // Pre-select current channel in guide
     const enabled = getEnabledChannels();
@@ -6851,6 +6869,14 @@
     updateGuideFocus(wrapped);
   }
 
+  function moveGuideTime(step) {
+    const to = Math.min(Math.max(guideSlotOffset + step, 0), GUIDE_MAX_SLOTS);
+    if (to === guideSlotOffset) return;
+    guideSlotOffset = to;
+    renderGrid();
+    updateGuideFocus();
+  }
+
   function updateGuideFocus(wrapped = false) {
     // `guideFocusIndex` indexes getEnabledChannels(), but the promo rows share the
     // .grid-row class, so walking the full NodeList by position drifted one row per
@@ -6879,6 +6905,9 @@
       // the guide again, seasonal invite included, the way Apple TV centers its rows.
       focusedRow.scrollIntoView({ behavior: 'smooth', block: wrapped ? 'center' : 'nearest' });
     }
+    // The info panel follows the cursor (the Apple TV previews the focused channel, and the programme at the
+    // window's left edge once the cursor is later than now).
+    updateInfoPanel();
   }
 
   // ══════════════════════════════════════
@@ -7724,6 +7753,7 @@
   // nothing; after the sleep timer stopped it, it starts that channel again. Nothing in
   // the background goes through here, so a library refresh never restarts playback.
   function tuneFromGuide(channelId) {
+    guideSlotOffset = 0;
     if (sleepStoppedPlayback && channelId === currentChannel) currentChannel = null;
     switchChannel(channelId, true);
   }
@@ -11440,6 +11470,13 @@
           e.preventDefault();
           return;
         }
+      }
+      // Left and Right move the guide's time cursor, as on the Apple TV. Full screen has no guide: there they
+      // still change channel (the player branch below).
+      if ((key === 'ArrowLeft' || key === 'ArrowRight') && !isVideoFullscreen()) {
+        moveGuideTime(key === 'ArrowRight' ? 1 : -1);
+        e.preventDefault();
+        return;
       }
       if (key === 'Enter' || key === ' ') {
         if (guidePromoKey) {
