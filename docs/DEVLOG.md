@@ -45,6 +45,16 @@ for every container is unmeasured, so the player-list rule is a safety net and t
 Not covered: the hand-built HLS fallback stream on Jellyfin and Emby (no PlaybackInfo, so no track list to read) still
 takes the server's default track.
 
+**Plex sign-in code is waited for as long as plex.tv keeps it (N-007, Trello 6ad92eca).** The app polled 150 times at 2 s
+and gave up at five minutes; plex.tv keeps a code for 15 minutes, so someone slow at plex.tv/link could approve a code
+the TV had already dropped. Measured against plex.tv on 2026-11-09: a new code comes back with `expiresIn: 900` and
+`expiresAt` 15 minutes after `createdAt`; asking for a code that is gone or expired answers 404 with error 1020, "Code
+not found or expired". The app now reads `expiresIn` off the reply and waits that long by the clock (a fixed 300 s if the
+reply has none, never more than 1,800 s), and stops at once if plex.tv answers 404. The wording on the picker is
+unchanged. Tests in `PINRequestRetryTests` decode the recorded reply and bound the lifetime; the poll loop itself has no
+unit test (it needs plex.tv), so the 15 minute wait and the 404 stop were not run end to end. The web tuner and the Roku
+app still stop at 150 polls (`web-tuner.html`, `plex-tuner.html`, `roku/source/plex/PlexApi.brs`).
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

@@ -1281,7 +1281,21 @@ struct PlexAPIService: MediaBackend {
 
     // MARK: - PIN Auth
 
-    static func requestPIN() async throws -> (id: Int, code: String) {
+    /// What plex.tv sends back for a new code. `expiresIn` is seconds the code stays valid
+    /// (measured 2026-11-09: 900, with `expiresAt` 15 minutes after `createdAt`); nil when
+    /// the reply leaves it out.
+    struct PINGrant: Equatable, Sendable {
+        let id: Int
+        let code: String
+        let expiresIn: Int?
+    }
+
+    static func decodePINGrant(_ data: Data) throws -> PINGrant {
+        let decoded = try JSONDecoder().decode(PINResponse.self, from: data)
+        return PINGrant(id: decoded.id, code: decoded.code, expiresIn: decoded.expiresIn)
+    }
+
+    static func requestPIN() async throws -> PINGrant {
         guard var components = URLComponents(string: "https://plex.tv/api/v2/pins") else {
             throw APIError.invalidResponse
         }
@@ -1295,9 +1309,13 @@ struct PlexAPIService: MediaBackend {
         let (data, response) = try await Self.session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         guard http.statusCode == 201 else { throw APIError.httpFailure(statusCode: http.statusCode) }
-        let decoded = try JSONDecoder().decode(PINResponse.self, from: data)
-        return (decoded.id, decoded.code)
+        return try decodePINGrant(data)
     }
+
+    /// The account token once the code has been approved, nil while it waits. Throws
+    /// `PINError.expired` when plex.tv no longer has the code (404, "Code not found or
+    /// expired", measured 2026-11-09): waiting longer cannot help.
+    enum PINError: Error { case expired }
 
     static func checkPIN(id: Int) async throws -> String? {
         guard let url = URL(string: "https://plex.tv/api/v2/pins/\(id)") else {
@@ -1305,7 +1323,8 @@ struct PlexAPIService: MediaBackend {
         }
         var req = URLRequest(url: url)
         pinHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        let (data, _) = try await Self.session.data(for: req)
+        let (data, response) = try await Self.session.data(for: req)
+        if (response as? HTTPURLResponse)?.statusCode == 404 { throw PINError.expired }
         let decoded = try JSONDecoder().decode(PINStatusResponse.self, from: data)
         return decoded.authToken
     }
@@ -1680,6 +1699,25 @@ private extension Data {
 private struct PINResponse: Decodable {
     let id: Int
     let code: String
+    let expiresIn: Int?
+
+    private enum CodingKeys: String, CodingKey { case id, code, expiresIn }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        code = try c.decode(String.self, forKey: .code)
+        // An Int in the reply today; tolerate a Double or a numeric string so a change in
+        // plex.tv's spelling cannot fail the sign-in itself.
+        var value: Int?
+        if let n = try? c.decodeIfPresent(Int.self, forKey: .expiresIn) {
+            value = n
+        } else if let d = try? c.decodeIfPresent(Double.self, forKey: .expiresIn), d.isFinite {
+            value = Int(d)
+        } else if let text = try? c.decodeIfPresent(String.self, forKey: .expiresIn) {
+            value = Int(text)
+        }
+        expiresIn = value
+    }
 }
 
 private struct PINStatusResponse: Decodable {
