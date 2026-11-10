@@ -58,10 +58,11 @@ function NxRunSubtitleTests() as Integer
     NxCheck(r, "audio track: none leaves the player's", NxToStr(NxAudioTrackForLanguage(listed, "ja") = invalid), "true")
     NxCheck(r, "audio track: portuguese (brazil) takes por", NxToStr(NxAudioTrackForLanguage([{ Track: "x", Language: "eng" }, { Track: "y", Language: "por" }], NxPreferredLanguageFrom("pt-BR", "en_US"))), "y")
     NxCheck(r, "audio track: untagged never matches", NxToStr(NxAudioTrackForLanguage([{ Track: "x", Language: "" }, { Track: "y" }], "en") = invalid), "true")
-    ' Issue #236: a track named a commentary is passed over for another in the language.
+    ' Issue #236, as PR #245 settled it: a track named a commentary is never picked while another track is listed.
     NxCheck(r, "audio track: a commentary first is passed over", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "eng", Name: "Director's Commentary" }, { Track: "m", Language: "eng", Name: "English 5.1" }], "en")), "m")
     NxCheck(r, "audio track: a commentary marked #uniq: too", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "eng", Name: "#uniq:Commentary" }, { Track: "m", Language: "eng" }], "en")), "m")
-    NxCheck(r, "audio track: the only one in the language, a commentary, is taken", NxToStr(NxAudioTrackForLanguage([{ Track: "p", Language: "por", Name: "Portuguese" }, { Track: "c", Language: "eng", Name: "Commentary" }], "en")), "c")
+    NxCheck(r, "audio track: a commentary alone in the language leaves the player's choice", NxToStr(NxAudioTrackForLanguage([{ Track: "p", Language: "por", Name: "Portuguese" }, { Track: "c", Language: "eng", Name: "Commentary" }], "en") = invalid), "true")
+    NxCheck(r, "audio track: commentaries alone go by language", NxToStr(NxAudioTrackForLanguage([{ Track: "p", Language: "por", Name: "Commentary (pt)" }, { Track: "c", Language: "eng", Name: "Commentary" }], "en")), "c")
     NxCheck(r, "audio track: a commentary in another language doesn't matter", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "ger", Name: "Kommentar / Commentary" }, { Track: "m", Language: "eng" }], "en")), "m")
 
     ' One code per language (#119): ISO 639-2's two forms to 639-1, so a

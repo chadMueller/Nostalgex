@@ -8,27 +8,30 @@ Commits carry the detail of *what*; this carries the *why*.
 **Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
 channels than the film's own track in the same language, and the pick goes by language, channels and default (#153).
 
-**Changed.** A track whose title holds "commentary", in any case, is passed over while another track fits, and still
-used when it is the only one that does. On Jellyfin and Emby the scan marks it from the stream's `Title` or
-`DisplayTitle` (`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pass it over at each
-step: in the viewer's language, in English, as the default, as the first. That pick is the server stream's
-`AudioStreamIndex` and the direct play's track. On the player's own list (a Plex stream, and a direct play that
-listed fewer tracks than the file has) `NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name`.
-The exact-language rules are as they were, and a file with no commentary picks as before.
+**Changed.** A track whose title holds "commentary", in any case, is dropped from the pool while the file has any
+other audio track, before any language or default step, as the Apple TV's `AudioTrackCommentary.skippingCommentary`
+(Chad on PR #245, stricter than the issue's wording). A file whose every track is a commentary picks among them as
+before. On Jellyfin and Emby the scan marks the track from the stream's `Title` or `DisplayTitle`
+(`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pick from `NxMbSkipCommentary`'s pool.
+That pick is the server stream's `AudioStreamIndex` and the direct play's track. On the player's own list (a Plex
+stream, a direct play that listed fewer tracks than the file has, and AUDIO LANGUAGE in the Now Playing panel)
+`NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name` (`NxListedSkipCommentary`); with only a
+commentary in the language they leave the player's own choice. The exact-language rules are as they were, and a file
+with no commentary picks as before.
 
 **Not changed.** Plex's server stream, which carries the track Plex chose. The Apple TV's cases
 (`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
 
-**Tested off the TV.** 19 new audio pick cases and 4 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
-With main's `MediaBrowserPlayback.brs` 7 of the 19 fail, and with main's `SubtitleSettings.brs` 2 of the 4; the rest
-hold what main already did (a commentary alone in its language is used) or the new helper.
+**Tested off the TV.** 29 new audio pick cases and 5 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
 
-**One reading of "fits" to confirm.** The viewer's language comes first, as before: a German viewer whose only German
-track is a commentary gets it over an English film track, as an English viewer gets an English commentary over a
-Portuguese film track.
+**The first cut read "fits" by language** (`c699030`, the build the TV runs below used): a commentary alone in the
+viewer's language was still picked over a film track in another. Chad's rule replaced that, and six cases written
+for the first reading were turned round with it: an English commentary now loses to a Portuguese film track (three
+cases), a German commentary to an English film track, and on the player's list a commentary beside another track is
+never picked (two cases).
 
 **Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
-`c699030`, with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
+`c699030` (the first cut, above), with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
 mono", index 2) beside three English stereo commentaries (3 to 5). Item-linked, the pick read from the console and
 from Jellyfin's ffmpeg log, where the mono is stream 0:1 and the first commentary 0:2. Volume at zero: nothing was
 listened to.
