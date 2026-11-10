@@ -748,6 +748,11 @@ private struct EPGRow: View {
     // 2-hour visible window
     private let visibleDuration: TimeInterval = 7200
 
+    /// The fills behind a focused row's text, from the channel's own color.
+    private var focusedFills: GuideRowContrast.Fills {
+        GuideRowContrast.fills(forHex: channel.color.snapshotHexString)
+    }
+
     /// GUIDE TEXT SIZE. NORMAL is the sizes this row always drew.
     private var text: GuideTextMetrics { appState.guideTextSize.metrics }
     /// Background for alternating rows
@@ -756,7 +761,9 @@ private struct EPGRow: View {
             // The focused row must read from the couch at a glance. A 15% tint of the
             // channel colour disappeared on a bright TV; a third-strength fill plus the
             // outline and glow below does not.
-            return channel.color.opacity(0.32)
+            // Darkened only as far as white text needs (GuideRowContrast), so a bright channel's
+            // titles read at 4.5:1 or better.
+            return focusedFills.row.color
         }
         return isEvenRow
             ? Color.white.opacity(0.03)
@@ -906,7 +913,7 @@ private struct EPGRow: View {
                         .clipped()
                         .background(
                             entry.isNowPlaying
-                                ? channel.color.opacity(isFocused ? 0.55 : 0.25)
+                                ? (isFocused ? focusedFills.nowPlaying.color : channel.color.opacity(0.25))
                                 : isPast
                                     ? Color.white.opacity(0.02)
                                     : Color.clear

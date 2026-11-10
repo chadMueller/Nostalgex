@@ -29,6 +29,17 @@ pages' own literals (Channels, Servers, Pro, Playback screens still carry some 1
 Reached as before: Up out of the top channel row; the id `tunerSettingsButton` and the focus section are unchanged, and the
 wrap tests that go up to it (`ChannelGuideWrapFocusTests`) pass. Simulator screenshots in the scratchpad `links-shots` folder.
 
+**The guide's selected row reads on bright channels.** White titles sat on the playing block of the focused row, which is a
+half-strength channel color laid over the row's own third-strength wash. Computed over the 97 distinct channel colors in
+`channels.json`, 33 of them put white text under 4.5:1 there, the worst 2.46:1 (cyan, yellow, white and the light pinks). The
+block (and the row, for the titles beside it) is now an opaque fill of the same look, darkened toward black only as far as white
+text needs to reach 4.5:1 (`GuideRowContrast`): a dark channel is unchanged, a bright one gets a darker shade of itself, same
+hue. Black or white text per color was the alternative; a darker shade keeps the guide's white text and its channel identity.
+`GuideRowContrastTests` (4) holds white text at 4.5:1 or better on both fills for every channel color, the extremes (white,
+yellow, cyan, black) and a bad hex, that a color that already reads is not changed, and that a bright one is darkened no
+further than needed. The focus outline and glow stay in the channel's color, and the guide's sizes and GUIDE TEXT SIZE are
+untouched. The "now line through titles" item was skipped, as asked.
+
 ## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
 
 Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.
