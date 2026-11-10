@@ -1031,8 +1031,7 @@ struct PlexAPIService: MediaBackend {
         guard let currentKey = part.key, let cachedKey = item.partKey,
               Self.samePlexPart(currentKey, cachedKey) else { return item }
         let video = part.Stream?.first { $0.streamType == 1 }
-        let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-            ?? part.Stream?.first { $0.streamType == 2 }
+        let audio = PlexRawItem.PlexMedia.playbackAudioStream(in: part.Stream)
         guard video?.codec == item.videoCodec, audio?.codec == item.audioCodec else { return item }
         var enriched = currentKey == cachedKey ? item : item.withPartKey(currentKey)
         if currentKey != cachedKey, let cachedParts = enriched.playbackParts {
@@ -1869,6 +1868,10 @@ struct PlexRawItem: Decodable {
             var channels: Int? = nil
             var id: Int? = nil
             var selected: Int? = nil
+            /// The track's name ("Director's Commentary"). Plex sends `title` for a track
+            /// the file names and `displayTitle` always; both are read so either shows.
+            var title: String? = nil
+            var displayTitle: String? = nil
             let colorTrc: String?
             let colorPrimaries: String?
             let colorSpace: String?
@@ -1877,6 +1880,7 @@ struct PlexRawItem: Decodable {
             }
             private enum CodingKeys: String, CodingKey {
                 case streamType, codec, bitDepth, DOVIProfile, DOVIBLCompatID, channels, id, selected
+                case title, displayTitle
                 case colorTrc, colorPrimaries, colorSpace
             }
             init(from decoder: Decoder) throws {
@@ -1891,6 +1895,8 @@ struct PlexRawItem: Decodable {
                 colorSpace = try c.decodeIfPresent(String.self, forKey: .colorSpace)
                 channels = try c.decodeIfPresent(Int.self, forKey: .channels)
                 id = try c.decodeIfPresent(Int.self, forKey: .id)
+                title = try? c.decodeIfPresent(String.self, forKey: .title)
+                displayTitle = try? c.decodeIfPresent(String.self, forKey: .displayTitle)
                 selected = (try? c.decode(Bool.self, forKey: .selected)).map { $0 ? 1 : 0 }
                     ?? (try? c.decode(Int.self, forKey: .selected))
             }
@@ -1899,8 +1905,7 @@ struct PlexRawItem: Decodable {
             (Part ?? []).compactMap { part in
                 guard let key = part.key else { return nil }
                 let video = part.Stream?.first { $0.streamType == 1 }
-                let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-                    ?? part.Stream?.first { $0.streamType == 2 }
+                let audio = Self.playbackAudioStream(in: part.Stream)
                 return PlexPartPlaybackInfo(key: key, container: part.container ?? container,
                     videoCodec: video?.codec ?? videoCodec, audioCodec: audio?.codec ?? audioCodec,
                     bitDepth: video?.bitDepth, doviProfile: video?.DOVIProfile,
@@ -1909,8 +1914,15 @@ struct PlexRawItem: Decodable {
             }
         }
         var audioStream: PlexStream? {
-            Part?.first?.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-                ?? Part?.first?.Stream?.first { $0.streamType == 2 }
+            Self.playbackAudioStream(in: Part?.first?.Stream)
+        }
+        /// The audio track the app keeps facts and a remux URL for: the one Plex marks
+        /// selected, else the first, but never a track titled "commentary" while another
+        /// audio track exists (I-075). A file whose only audio is a commentary keeps it.
+        static func playbackAudioStream(in streams: [PlexStream]?) -> PlexStream? {
+            let audio = (streams ?? []).filter { $0.streamType == 2 }
+            let pool = AudioTrackCommentary.skippingCommentary(audio) { [$0.title, $0.displayTitle] }
+            return pool.first { $0.selected == 1 } ?? pool.first
         }
         var videoStream: PlexStream? {
             Part?.first?.Stream?.first { $0.streamType == 1 }

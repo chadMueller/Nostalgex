@@ -31,6 +31,20 @@ else reads the size on these two backends (the soak harness label aside). Not me
 Emby start, and the 4 s fail-fast on a server refusal (the other half of the card) is untouched: it needs a uri in
 AVPlayer's error log, which the simulator's -16847 events do not carry.
 
+**Audio tracks titled "commentary" are passed over (I-075, #153, Trello 6aeb8906).** A director's commentary that the file
+marks default, or that shares the viewer's language, could be the track a channel started on. Three pickers now skip a
+track whose title contains "commentary" (any case: "Director's Commentary", "Audio Commentary with ...") whenever another
+audio track exists, and keep it when it is all there is. Jellyfin and Emby (`JellyfinPlaybackResolver.preferredAudioIndex`,
+which now reads `Title` and `DisplayTitle`): the commentary is dropped before the AUDIO LANGUAGE, device language and
+channel-count rules run, which are otherwise unchanged; a file with one real track and a commentary is now pinned to
+the real one. Plex (the selected audio stream the app keeps for its remux and preserve-original URLs): a selected
+commentary gives way to the first other audio track. The player's own track list (`applyAudioTrackSelection`, direct play
+and multi-audio HLS): options are matched on their display name. 11 new unit tests in `AudioTrackSelectionTests`.
+Not proven: no file with a real commentary track was played; whether AVFoundation's display name carries the track name
+for every container is unmeasured, so the player-list rule is a safety net and the server-side picks are the main path.
+Not covered: the hand-built HLS fallback stream on Jellyfin and Emby (no PlaybackInfo, so no track list to read) still
+takes the server's default track.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

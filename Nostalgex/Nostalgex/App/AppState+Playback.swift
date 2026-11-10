@@ -216,7 +216,9 @@ extension AppState {
                 guard self.player?.currentItem === playerItem else { return }
 
                 let tags = group.options.map { Self.languageTag(for: $0) }
-                let idx = SubtitleSelectionLogic.preferredTrackIndex(tags: tags, preferredLowercased: preferredLang)
+                // displayName is the HLS NAME or the track's title, so "Commentary" shows up in it.
+                let titles: [[String?]] = group.options.map { [$0.displayName] }
+                let idx = SubtitleSelectionLogic.preferredTrackIndex(tags: tags, titles: titles, preferredLowercased: preferredLang)
                 playerItem.select(group.options[idx], in: group)
 
                 // Publish descriptors for the Now Playing panel. Behind the same
