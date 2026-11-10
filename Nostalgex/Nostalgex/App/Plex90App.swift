@@ -555,17 +555,17 @@ struct ServerPickerView: View {
             .padding(.horizontal, 100)
             .padding(.vertical, 60)
         }
-        .defaultFocus($focusedID, appState.availableServers.first?.machineIdentifier ?? "continue")
+        .defaultFocus($focusedID, "continue")
         .onAppear {
-            // Exactly one server starts on: the first one the user owns, else the first listed. The rest are
-            // off, so the user chooses before moving on instead of passing through with everything ticked.
-            let first = appState.availableServers.first(where: \.owned) ?? appState.availableServers.first
-            selectedIDs = first.map { [$0.machineIdentifier] } ?? []
-            // The remote starts on the first row, not CONTINUE: the list is the first thing the viewer works.
-            let firstRow = appState.availableServers.first?.machineIdentifier
+            // Default selection: owned servers, or all if none are owned.
+            let owned = appState.availableServers.filter(\.owned)
+            let defaults = owned.isEmpty ? appState.availableServers : owned
+            selectedIDs = Set(defaults.map(\.machineIdentifier))
+            // The usual choice is already ticked, so the remote starts on CONTINUE: one
+            // press to go on, instead of walking down past every server first.
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(120))
-                focusedID = firstRow ?? "continue"
+                focusedID = "continue"
             }
         }
     }
