@@ -53,6 +53,12 @@ struct GuideTextMetrics: Equatable {
     /// The guide's own row, shorter than the shared 76 (Chad 2026-11-10: the grid read too big), so more rows fit.
     static let rowHeight: CGFloat = 64
 
+    /// The package list (the guide's left rail) on the same footing as the grid: 22 pt row text, the 25 pt floor for
+    /// its heading, the guide's 64 pt row. The text size does not follow NORMAL or LARGE.
+    static let packageRowText: CGFloat = 22
+    static let packageHeading: CGFloat = NXType.caption
+    static let packageRowHeight: CGFloat = rowHeight
+
     /// Row text (titles, numbers, names) at 22 pt, an exception to the 25 pt floor for the guide's dense grid only
     /// (Chad 2026-11-10). Times, the heading and the placeholder keep the 25 pt floor. The box holds three digits at
     /// 22 pt (39.6 pt measured with DM Mono).

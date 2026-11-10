@@ -979,61 +979,63 @@ private struct BundleJumpSidebar: View {
     /// -1 is the pinned Settings row. Package rows use their list index.
     @FocusState private var focusedIndex: Int?
     private let settingsFocus = -1
-    /// Matches the guide's own row height and focus treatment so the sidebar reads as
-    /// part of the same grid rather than a separate widget.
+    /// Same footing as the guide grid (Chad 2026-11-10): row text, heading and row height come from
+    /// `GuideTextMetrics`, colours and the selected state from the design tokens (`nxRowSurface`: 3 pt cyan
+    /// outline, glow, 3% lift). The left bar keeps each package's own colour.
     private static let width: CGFloat = 380
-    private static let rowHeight: CGFloat = 72
+    private static let rowHeight = GuideTextMetrics.packageRowHeight
+    private static let rowText = GuideTextMetrics.packageRowText
+    private static let rowRadius = NXLayout.rowRadius
+
+    private var rowFont: Font { .custom("DMMono-Medium", size: Self.rowText) }
+
+    /// One row's label: the colour bar, an optional icon, the name. The bar is clipped to the row's corners
+    /// before the shared surface draws its fill, outline and glow around it.
+    private func rowLabel<Content: View>(isFocused: Bool, accent: Color, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 14) {
+            Rectangle()
+                .fill(isFocused ? accent : accent.opacity(0.4))
+                .frame(width: isFocused ? 8 : 4)
+            content()
+            Spacer()
+        }
+        .padding(.trailing, 16)
+        .frame(height: Self.rowHeight)
+        .clipShape(RoundedRectangle(cornerRadius: Self.rowRadius, style: .continuous))
+        .nxRowSurface(isSelected: isFocused)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 Text("PACKAGES")
-                    .font(.custom("DMMono-Medium", size: 22))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(.custom("DMMono-Medium", size: GuideTextMetrics.packageHeading))
+                    .foregroundStyle(Color.nxText2)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 18)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 2) {
+                        VStack(spacing: 6) {
                             // Inside the list, not above it: tvOS won't move focus out
                             // of a ScrollView, so Settings has to be a row. It sits
                             // first; the sidebar still opens on the first package,
                             // and Up from there lands here.
                             let settingsFocused = focusedIndex == settingsFocus
-                            let settingsAccent = Color(hex: "#FFE500")
                             Button(action: onOpenSettings) {
-                                HStack(spacing: 14) {
-                                    Rectangle()
-                                        .fill(settingsFocused ? settingsAccent : settingsAccent.opacity(0.4))
-                                        .frame(width: settingsFocused ? 8 : 4)
-
+                                rowLabel(isFocused: settingsFocused, accent: Color.nxCyan) {
                                     Image(systemName: "gearshape.fill")
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(settingsFocused ? .white : .white.opacity(0.75))
+                                        .font(.system(size: Self.rowText, weight: .semibold))
+                                        .foregroundStyle(settingsFocused ? Color.nxText : Color.nxText2)
                                         .frame(width: 26)
 
                                     Text("SETTINGS")
-                                        .font(.custom("DMMono-Medium", size: 24))
-                                        .foregroundStyle(settingsFocused ? .white : .white.opacity(0.75))
+                                        .font(rowFont)
+                                        .foregroundStyle(settingsFocused ? Color.nxText : Color.nxText2)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.8)
-
-                                    Spacer()
                                 }
-                                .padding(.trailing, 16)
-                                .frame(height: Self.rowHeight)
-                                .background(settingsFocused ? settingsAccent.opacity(0.32) : .clear)
-                                .overlay {
-                                    if settingsFocused {
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .strokeBorder(settingsAccent, lineWidth: 3)
-                                            .padding(2)
-                                            .shadow(color: settingsAccent.opacity(0.7), radius: 14)
-                                    }
-                                }
-                                .zIndex(settingsFocused ? 1 : 0)
                             }
                             .buttonStyle(NoHighlightButtonStyle())
                             .focused($focusedIndex, equals: settingsFocus)
@@ -1043,8 +1045,8 @@ private struct BundleJumpSidebar: View {
                             Rectangle()
                                 .fill(Color.white.opacity(0.1))
                                 .frame(height: 1)
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 6)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 3)
 
                             ForEach(Array(targets.enumerated()), id: \.element.bundleID) { index, target in
                                 let isFocused = focusedIndex == index
@@ -1052,37 +1054,22 @@ private struct BundleJumpSidebar: View {
                                 Button {
                                     onSelect(target.firstChannelID)
                                 } label: {
-                                    HStack(spacing: 14) {
-                                        Rectangle()
-                                            .fill(isFocused ? target.channelColor : target.channelColor.opacity(0.4))
-                                            .frame(width: isFocused ? 8 : 4)
-
+                                    rowLabel(isFocused: isFocused, accent: target.channelColor) {
                                         Text(target.bundleName)
-                                            .font(.custom("DMMono-Medium", size: 24))
-                                            .foregroundStyle(isFocused ? .white : .white.opacity(0.75))
+                                            .font(rowFont)
+                                            .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.8)
-
-                                        Spacer()
                                     }
-                                    .padding(.trailing, 16)
-                                    .frame(height: Self.rowHeight)
-                                    .background(isFocused ? target.channelColor.opacity(0.32) : .clear)
-                                    .overlay {
-                                        if isFocused {
-                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .strokeBorder(target.channelColor, lineWidth: 3)
-                                                .padding(2)
-                                                .shadow(color: target.channelColor.opacity(0.7), radius: 14)
-                                        }
-                                    }
-                                    .zIndex(isFocused ? 1 : 0)
                                 }
                                 .buttonStyle(NoHighlightButtonStyle())
                                 .focused($focusedIndex, equals: index)
                                 .id(index)
                             }
                         }
+                        // Room for the focused row's lift and outline inside the scroll view's clip.
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                     }
                     .onChange(of: focusedIndex) { _, newIndex in
                         if let idx = newIndex, idx >= 0 {
@@ -1094,7 +1081,7 @@ private struct BundleJumpSidebar: View {
                 }
             }
             .frame(width: Self.width)
-            .background(Color(red: 0.03, green: 0.03, blue: 0.08).opacity(0.95))
+            .background(Color.nxPanel)
 
             // Divider
             Rectangle()
