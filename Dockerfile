@@ -47,6 +47,12 @@ COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=0755 docker/40-config.sh /docker-entrypoint.d/40-config.sh
 COPY --from=build /src/dist-selfhost /usr/share/nginx/html
 
+# Where the shared lineup is kept (docker/40-config.sh): one small file. Mount a volume on
+# /data to keep it across a recreated container; a named volume starts out owned by 101 like
+# this folder, a bind mount has to be made writable for uid 101 on the host. Not a VOLUME
+# line: nobody gets an anonymous volume they did not ask for.
+USER root
+RUN mkdir -p /data && chown 101:101 /data
 # Runs as the image's unprivileged nginx user (uid 101). Works with a read-only
 # root filesystem as long as /tmp is writable (see the compose example).
 USER 101

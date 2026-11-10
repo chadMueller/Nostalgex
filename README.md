@@ -142,6 +142,8 @@ services:
     restart: unless-stopped
 ```
 
+**Settings for every browser (optional).** Mount a volume on `/data` and the container keeps one lineup for everyone who opens it: the packages that are on, the channel settings, collections and franchises. A new browser or device starts from it. Your sign-in, guide layout and language stay in each browser. The last change wins, and the first browser to change something after you add the volume becomes the shared lineup. In Compose add `volumes: ["nostalgex-data:/data"]` to the service and a `nostalgex-data:` entry under top-level `volumes:`; with `docker run`, add `-v nostalgex-data:/data`. A folder on the host needs `chown 101:101` first. Anyone who can reach the port can change the lineup file, so keep the port on your home network or behind a proxy that asks for a login, or turn the feature off with `NOSTALGEX_SHARED_SETTINGS=off`. With no writable `/data`, each browser keeps its own settings, as before.
+
 **Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.13 · DOCKER`.
 
 **Platforms:** amd64 and arm64 (Synology and Unraid on Intel or AMD, NUCs, Raspberry Pi 4 and 5 on a 64 bit OS). No armv7. Runs as a non root user (uid 101) and works with a read only root filesystem as long as `/tmp` is writable.

@@ -112,6 +112,10 @@ jobs:
               - 'scripts/nostalgex-music-brainz.js'
               - 'scripts/nostalgex-music-title-smoke.mjs'
               - 'scripts/music-title-golden.json'
+              # The Docker tuner's shared lineup (I-080).
+              - 'scripts/nostalgex-server-settings.js'
+              - 'scripts/nostalgex-server-settings-smoke.mjs'
+              - 'scripts/nostalgex-storage.js'
               # STOP WAITING during a slow library scan.
               - 'scripts/nostalgex-load-stall.js'
               - 'scripts/nostalgex-load-stall-smoke.mjs'
@@ -149,6 +153,7 @@ jobs:
               - 'docker/**'
               - 'vite.config.*'
               - 'scripts/selfhost-build.mjs'
+              - 'scripts/nostalgex-server-settings.js'
               - 'tuner/**'
               - 'web-tuner.html'
               - 'plex-tuner.html'
@@ -306,6 +311,36 @@ jobs:
           curl -fsS http://127.0.0.1:8080/config.json | grep -q "\"tunerVersion\":\"$want\""
           curl -fsS http://127.0.0.1:8081/config.json | grep -q '"tunerVersion":"9.9.9-ci"'
           test "$(docker exec on id -u)" = "101"
+
+          # The shared lineup (I-080): this is where the real nginx is asked to do the PUT.
+          # With a volume on /data: nothing yet (404, marked), a PUT, the same file back, and
+          # still there after a restart. The read-only root and /tmp tmpfs are the compose example's.
+          f=nostalgex-settings.json
+          docker volume create nx-ci-data >/dev/null
+          docker run -d --name shared -p 8082:8080 --read-only --tmpfs /tmp -v nx-ci-data:/data nostalgex:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8082/healthz >/dev/null 2>&1 && break; sleep 1; done
+          docker logs shared 2>&1 | grep -q 'shared lineup on'
+          curl -sS -D - -o /dev/null http://127.0.0.1:8082/$f | grep -qi '^x-nostalgex-settings: on'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/$f)" = 404
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data '{"v":1,"keys":{"nostalgex_enabled_bundles":"[\"nostalgex\"]"}}' http://127.0.0.1:8082/$f)"
+          case "$code" in 201|204) ;; *) echo "PUT answered $code"; exit 1 ;; esac
+          curl -fsS http://127.0.0.1:8082/$f | grep -q 'nostalgex_enabled_bundles'
+          docker restart shared >/dev/null
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8082/healthz >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8082/$f | grep -q 'nostalgex_enabled_bundles'
+          # Only that file, and only GET, HEAD and PUT.
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE http://127.0.0.1:8082/$f)" = 403
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data x http://127.0.0.1:8082/config.json)" != 201
+          # Without a volume on a read-only root (the first container) the PUT is refused and the page is fine.
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data '{"v":1,"keys":{}}' http://127.0.0.1:8080/$f)"
+          case "$code" in 2*) echo "PUT with no writable /data answered $code"; exit 1 ;; esac
+          curl -fsS http://127.0.0.1:8080/plex-tuner.html >/dev/null
+          # Off: no settings location at all, no mark, and a PUT is not accepted.
+          docker run -d --name noshare -p 8083:8080 --read-only --tmpfs /tmp -v nx-ci-data:/data -e NOSTALGEX_SHARED_SETTINGS=off nostalgex:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8083/healthz >/dev/null 2>&1 && break; sleep 1; done
+          if curl -sS -D - -o /dev/null http://127.0.0.1:8083/$f | grep -qi '^x-nostalgex-settings'; then echo "mark present with the feature off"; exit 1; fi
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data x http://127.0.0.1:8083/$f)"
+          case "$code" in 2*) echo "PUT with the feature off answered $code"; exit 1 ;; esac
           echo "docker smoke ok"
 
       - name: Logs on failure
