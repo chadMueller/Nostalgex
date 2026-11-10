@@ -333,6 +333,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     serverID: serverID.isEmpty ? nil : serverID,
                     videoBitDepth: source?.videoBitDepth,
                     doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
+                    videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
                     showKey: show.Id
                 )
             }
@@ -399,7 +400,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             librarySource: isMusicVideo ? .musicVideo : .movie,
             serverID: serverID.isEmpty ? nil : serverID,
             videoBitDepth: source?.videoBitDepth,
-            doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType)
+            doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))

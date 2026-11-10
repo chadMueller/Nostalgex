@@ -412,6 +412,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     librarySource: .tv,
                     serverID: serverID.isEmpty ? nil : serverID,
                     videoBitDepth: source?.videoBitDepth,
+                    videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
                     showKey: show.Id
                 )
             }
@@ -477,7 +478,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             imdbID: item.imdbID,
             librarySource: isMusicVideo ? .musicVideo : .movie,
             serverID: serverID.isEmpty ? nil : serverID,
-            videoBitDepth: source?.videoBitDepth
+            videoBitDepth: source?.videoBitDepth,
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -1025,6 +1027,7 @@ struct JellyfinItem: Decodable {
         var audioCodec: String? { MediaStreams?.first(where: { $0.streamType == "Audio" })?.Codec }
         var videoProfile: String? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Profile }
         var videoHeight: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Height }
+        var videoWidth: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Width }
         var videoBitDepth: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.BitDepth }
         var videoExtendedSubType: String? { MediaStreams?.first(where: { $0.streamType == "Video" })?.ExtendedVideoSubType }
     }

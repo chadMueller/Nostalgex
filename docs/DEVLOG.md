@@ -20,6 +20,17 @@ slot, 59 s at most (credits, nearly always), which is what live TV does. Not tou
 still advances on its own and leads the guide by the gap (flooring cannot cause that, only wrong server metadata);
 multi-disc films and demo mode keep their own paths. Unit tests only, no real library.
 
+**Jellyfin and Emby 4K films get the 40 s watchdog (N-035, Trello 6aeab4de).** The watchdog gives a 4K source the server has
+to transcode 40 s before it falls back and everything else 20 s, but it reads the frame size off the item and only the
+Plex loader filled it in, so a slow 4K start on Jellyfin or Emby was given up on at 20 s. The Jellyfin and Emby movie
+and episode scans now read Width and Height off the same media source as the codec and bit depth. Reproduced first:
+`BackendWatchdogDeadlineTests` fails on both backends against the 1.0.32-links source (size nil, deadline 20 s for a
+3840x2160 and a 3840x1606 file) and passes with the change (40 s for both, 20 s for 1080p and 720x480, 15 s direct play).
+Items already in a saved library have no size and keep the 20 s deadline until the next scan of that library; nothing
+else reads the size on these two backends (the soak harness label aside). Not measured against a real 4K Jellyfin or
+Emby start, and the 4 s fail-fast on a server refusal (the other half of the card) is untouched: it needs a uri in
+AVPlayer's error log, which the simulator's -16847 events do not carry.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
