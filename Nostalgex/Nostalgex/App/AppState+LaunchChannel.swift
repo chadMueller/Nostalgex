@@ -7,12 +7,13 @@ extension AppState {
     /// UI tests, so the feature can be proven on an Apple TV that is signed out. Never set in a
     /// shipping run.
     var launchMemoryApplies: Bool {
-        !isDemoMode || ProcessInfo.processInfo.arguments.contains("-uiTestLaunchMemoryInDemo")
+        !isDemoMode || TestLaunchFlags.isOn("-uiTestLaunchMemoryInDemo")
     }
 
     /// The channel a launch tunes first: the last one the viewer tuned when OPEN ON LAST CHANNEL is
-    /// on and that channel is still in the lineup under the same name, otherwise the first
-    /// channel, as before. Demo mode always opens on the first channel.
+    /// on (it is, unless the viewer turned it off) and that channel is still in the lineup under
+    /// the same name, otherwise the first channel, as before. Demo mode always opens on the first
+    /// channel (or its own start channel, see `enterDemoMode`).
     var channelToOpenFirst: Channel? {
         if launchMemoryApplies, let remembered = LaunchChannelMemory.channelToOpen(in: channels) {
             return remembered

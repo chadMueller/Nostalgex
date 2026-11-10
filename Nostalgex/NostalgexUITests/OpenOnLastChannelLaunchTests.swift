@@ -2,9 +2,10 @@ import XCTest
 
 /// OPEN ON LAST CHANNEL (I-017) end to end, in demo mode with the app's storage isolated
 /// (`NOSTALGEX_HARNESS_ROOT`) and `-uiTestLaunchMemoryInDemo`, so it runs on an Apple TV that is
-/// signed out and touches nothing it holds: turn the switch on in Settings, tune a channel,
+/// signed out and touches nothing it holds: leave the switch as it is (On), tune a channel,
 /// relaunch, and the app starts on that channel; turn it off, relaunch, and it starts on channel 1
-/// as it always did.
+/// as it always did. The switch is on by default, so the first half presses nothing: it reads the
+/// row, finds it On, and tunes.
 final class OpenOnLastChannelLaunchTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -41,8 +42,10 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         return live.exists ? live.label : "<none>"
     }
 
-    /// Guide to SETTINGS, PLAYBACK & PICTURE, the OPEN ON LAST CHANNEL row, a press, and back out.
-    private func setOpenOnLastChannel(to wanted: Bool) {
+    /// Guide to SETTINGS, PLAYBACK & PICTURE, the OPEN ON LAST CHANNEL row, a press only if it is not
+    /// already at `wanted`, and back out. Returns what the row read before any press.
+    @discardableResult
+    private func setOpenOnLastChannel(to wanted: Bool) -> String? {
         let settings = app.buttons["tunerSettingsButton"]
         for _ in 0..<10 where !settings.hasFocus { press(.up, 0.4) }
         for _ in 0..<8 where !settings.hasFocus { press(.right, 0.4) }
@@ -53,39 +56,40 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         press(.right, 1.0)
         for _ in 0..<14 where focused().label != "OPEN ON LAST CHANNEL" { press(.down) }
         XCTAssertEqual(focused().label, "OPEN ON LAST CHANNEL")
-        if (focused().value as? String == "On") != wanted { press(.select, 1.0) }
+        let found = focused().value as? String
+        if (found == "On") != wanted { press(.select, 1.0) }
         XCTAssertEqual(focused().value as? String, wanted ? "On" : "Off")
         press(.menu, 1.0)   // rail
         press(.menu, 2.0)   // out of Settings
+        return found
     }
 
     func testTheLaunchOpensOnTheLastChannelOnlyWhileTheSwitchIsOn() {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        // A fresh root every run: the setting and the saved channel persist in it, and a run that stops
-        // half way must not hand its state to the next.
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-open-on-last-channel-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestLaunchMemoryInDemo", "-uiTestManyChannels"]
+        // A fresh root every run: the setting and the saved channel persist in it across the relaunches below, and
+        // a run that stops half way must not hand its state to the next.
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestLaunchMemoryInDemo", "-uiTestManyChannels"])
 
-        // 1. Off by default: a fresh launch opens on channel 1.
+        // 1. Nothing remembered yet (a viewer's first launch after an update): channel 1.
         launchIntoDemo()
         XCTAssertTrue(liveChannelLabel().hasPrefix("Channel 1,"), "fresh launch: \(liveChannelLabel())")
 
-        // 2. Switch it on and tune channel 5 from the guide.
-        setOpenOnLastChannel(to: true)
+        // 2. The switch is On as shipped: read it without pressing it, then tune channel 5 from the guide.
+        let shipped = setOpenOnLastChannel(to: true)
+        XCTAssertEqual(shipped, "On", "on by default: the helper only presses a row that is not already On")
         for _ in 0..<8 where !(focused().exists && focused().label.hasPrefix("Channel 5,")) { press(.down, 0.6) }
         XCTAssertTrue(focused().label.hasPrefix("Channel 5,"), "could not reach channel 5: \(focused().label)")
         press(.select, 3)
         XCTAssertTrue(liveChannelLabel().hasPrefix("Channel 5,"), "tuned: \(liveChannelLabel())")
         Thread.sleep(forTimeInterval: 2)
 
-        // 3. Relaunch: it opens on channel 5.
+        // 3. Relaunch: it opens on channel 5, with the switch never pressed.
         app.terminate()
         launchIntoDemo()
         shot("relaunch-switch-on")
-        XCTAssertTrue(liveChannelLabel().hasPrefix("Channel 5,"), "switch on, relaunched: \(liveChannelLabel())")
+        XCTAssertTrue(liveChannelLabel().hasPrefix("Channel 5,"), "switch on by default, relaunched: \(liveChannelLabel())")
 
         // 4. Switch it off and relaunch: channel 1, exactly as before.
         setOpenOnLastChannel(to: false)
@@ -101,9 +105,7 @@ final class OpenOnLastChannelLaunchTests: XCTestCase {
         continueAfterFailure = false
         XCUIRemote.shared.press(.menu)   // wakes an Apple TV in standby; harmless on a simulator
         Thread.sleep(forTimeInterval: 4)
-        app = XCUIApplication()
-        app.launchEnvironment["NOSTALGEX_HARNESS_ROOT"] = "i017-demo-row-\(Int(Date().timeIntervalSince1970))"
-        app.launchArguments = ["-uiTestResetCredentials", "-uiTestManyChannels"]   // no -uiTestLaunchMemoryInDemo
+        app = isolatedApp(arguments: ["-uiTestResetCredentials", "-uiTestManyChannels"])   // no -uiTestLaunchMemoryInDemo
         launchIntoDemo()
 
         let settings = app.buttons["tunerSettingsButton"]

@@ -3,6 +3,354 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
+
+**Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
+edge), is drawn in its colour pushed a fifth of the way to white, with a 5 pt cyan outline and a glow, and its name is
+chosen for that brighter colour (4.5 to 1 or better on all ten, tested). The fade-in is skipped under Reduce Motion. Where
+focus goes did not change.
+
+**Info panel follows the window (I-089).** Right and Left in the guide step the window through time, 30 minutes a press,
+with focus staying on the row. The top-left panel used to show only what is on now, so nothing in it changed. Moved later
+than now, it now shows the focused channel's programme at the window's left edge: title, episode, description, year,
+rating, its time range where the progress bar was, and the programme after it as UP NEXT. Changing row while the window
+is moved updates it too; back at the start it shows what is on now. The schedule already carries all of that, so there
+is no extra lookup and it works offline. How far a press moves, Select and first focus are unchanged. Not done: stepping
+by title instead of by 30 minutes, which would change how far a press moves.
+
+**Silent UI tests.** Demo mode streams Apple's BipBop sample, which beeps; every simulator UI test played it through the
+Mac's speakers. `isolatedApp` now passes `-uiTestMuteAudio`, and the app mutes every player it creates, and keeps the
+Settings screen from unmuting it, only under the harness root (like the other test flags); a release build ignores it.
+The static check fails if the helper stops passing it. Nothing else in the app makes sound: the channel-change static's
+noise is never enabled.
+
+**Test.** Unit 1,268 passed, 0 failed, 29 skipped. UI 18 of 18 (`GuideInfoPanelTimeTests`, `GuideStripeFocusTests`,
+`GuideFocusAfterFullScreenTests`, `ChannelGuideWrapFocusTests`). Simulator only.
+
+## 2026-11-09 (Apple TV: CHANNEL PACKAGES scroll fixed after a run on a real Apple TV, discussion #217)
+
+**Found on a real Apple TV.** The list above was measured on a simulator, where the focused row always came to rest at the same
+height. Run on an Apple TV 4K (3rd generation, tvOS 27.2) with the real remote it did not. Going down, the focused row's centre sat
+lower and lower on the screen (0.41, 0.56, 0.62, 0.70, 0.79 of the screen height); going up, every row rested with its top at one
+place, so down and up disagreed; and on the jump to OVERTIME the row's top was at 197 pt, above the pinned header's lower edge at
+206 pt, so its title line was hidden under the header. The walk test only compared the row against the window, so it could not see
+that. What held up: every row grows and shrinks, the tallest (NOSTALGEX, 22 names) is 268 pt, and fast taps (0.23 s a press),
+13-press bursts, a 20-press jitter and 2.5 and 5 second holds all ended on the right package with no row left half open.
+The names of an off package read at 4.41:1 against the focused row, just under 4.5:1.
+
+**Changed.** The Settings pane centred the focused row at the moment of the press, while the row before it was shrinking and the
+new one growing. A package row (the only rows that change size) is now placed after the rows have stopped changing size: the
+pane waits the row's own animation time plus a frame, centres the row once, and once more with no animation to finish a slide the
+system cut short. A new press cancels the wait, so a held press scrolls once, where it stops. Every other row centres at once, as
+before. The centre of the pane is one point whatever a row's height, and the tallest row is well inside it, so a package row sits
+wholly below the header, in the same place going down as going up. The cause on the device was not isolated (the system's own
+scroll to the focused row, or a centre worked out before the rows had finished moving); both are covered by placing the row last,
+and neither is proved. The off-state names go from 45 to 47 percent white (4.66:1).
+
+**Test.** `SettingsPackageChannelsTests` now checks the focused row's top against the pinned header's lower edge (the top of the
+rows' scroll view, plus its 32 pt fade and a margin), not only against the window, and holds rows in the middle of the list to
+one resting height (within 0.01 of the screen) and each row to the same height going up as going down (0.01). On the simulator
+the walk reads as before: 0.58 for every middle row, and it passes with the new header check (75 s). `PackageChannelListingTests` (22) adds the 4.5:1 contrast check for every name
+colour on the focused row.
+
+**Measured.** On the tvOS simulator, one run each: `PackageChannelListingTests` 22 of 22; `SettingsPackageChannelsTests` 2 of 2
+(the walk, and Select on a package; the second test was re-run alone after the test runner was killed by another run on the
+same simulator).
+
+**Not verified.** The simulator never showed the problem, so a passing simulator run does not prove this fix. It has to be run on an
+Apple TV: the walk down and up, a jump to OVERTIME, fast taps and a hold.
+
+## 2026-11-09 (Apple TV: a focused package lists its channels on CHANNEL PACKAGES, discussion #217)
+
+**Why.** A proposal from tydude001 on discussion #217 (Trello I-084). On CHANNEL PACKAGES a viewer cannot see what a package
+adds without switching it on and waiting for the build, and the amber count on a row says how many of its channels are short
+of content without saying which.
+
+**Changed.** On CHANNEL PACKAGES (Settings, CHANNELS & BUNDLES) the focused row grows to list its channels under the
+description. Names only, no channel numbers, in the package's own order (`channelIDs` in channels.json; every shipped package
+lists them by ascending channel number, which is how the website's lineup sorts them, and a test pins that). They are one run
+of small type, separated by commas, that wraps like any other text. A package that is off lists them dim. A package that is on
+lists them brighter, with the channels short of content in amber and one line under the list, "Amber: not enough titles yet".
+Only the focused row opens, so the page is no longer than before while a viewer scrolls past. Nothing new is stored: no key,
+no page, and the names come from channels.json through the call the row already made (`bundleChannelAvailability`). WHY ARE
+SOME CHANNELS MISSING? is unchanged and is still where the reasons are explained.
+
+The list is a single `Text`. A custom layout that kept a separator off the end of a wrapped line was tried and dropped: a
+plain `Text` wraps by itself and cannot lose a name, and a comma at the end of a line reads as ordinary typography.
+
+VoiceOver reads the row's count as "4 channels do not have enough titles yet" ("1 channel does not have enough titles yet";
+it said "need more content", and titles is the word the on-screen line and the WHY page use). It reads the names as the row's
+hint, then which of them are short, because amber is colour only. The hint is applied only to a row that has names
+(`accessibilityHintIfPresent`), so every other `SettingsToggleRow` comes back from it unchanged.
+
+One rule decides which channels are amber (`PackageChannelListing`), and the row's amber count is read from the same list,
+so the count names exactly what it counts. A package that is off, still building, or with nothing on air marks no channel:
+the row already says so, and none of those showed a count before. (Not changed here: the total on WHY ARE SOME CHANNELS
+MISSING? differs from the sum of the counts on the rows in three ways. It counts the FRANCHISES package, which has no row on
+this page. It counts only channels that have rules. And it lists every channel of a package that is on with nothing on air,
+where the row shows no amber. In the test library it reads 17 where the rows add up to 12.)
+
+**Scrolling, the open risk.** The Settings pane scrolls to centre the row that took focus, in the same moment the row before
+it shrinks and the new one grows. Measured on the simulator with the real focus engine, down through all 14 packages and back
+up (a library of the shipped packages, some on with channels the sample library cannot fill): unfocused rows are 95 pt tall,
+focused ones 129 to 268 pt (NOSTALGEX, 22 names and 4 amber, the tallest at 268; KIDZ ZONE, 15 names, off, 184; HIGH ROTATION,
+last, on with 5 amber, 186). Every row in the middle of the list comes to rest at the same place on the screen whatever its own
+height, 0.58 of the screen height, and the same place going up as going down. The first row and the last stop where the list
+ends (0.41 and 0.70), and NOSTALGEX, second from the top and the tallest, rests at 0.56. No focused row was cut off at the top
+or the bottom. Switching a package with Select keeps its list open and the row where it was, while it builds and after, and
+back off. That is the simulator: how the focus engine and the scroll view behave on an Apple TV is not measured.
+
+**Test.** `PackageChannelListingTests` (21): the names in package order, every shipped package read from channels.json with no
+name dropped, every shipped package listing its channels by ascending channel number (the order the website sorts them in), a
+long package, the amber set equals the channels without content and the badge counts them (exhaustive over every pattern of up
+to six channels, on or off, building or not, against the rule it replaced), an empty package, a package with no missing
+channels, off, building and nothing on air marking none, the drawn text (the names and nothing else, joined by commas, every
+shipped package's names once and in order, a name never broken across lines, only the short ones amber, an off package dimmer),
+and what VoiceOver hears (the count in titles, the names, which are short, and no hint for a package with no names).
+`SettingsPackageChannelsTests` (UI, 2): the walk above, with the same row measured focused and unfocused, and the amber line
+present on exactly the rows that carry the amber count; and Select on a package. Demo mode with a new test-only
+`-uiTestPackageList`, which lists the shipped packages after DEMO, some on with channels short of content.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,207 passed, 0 failed,
+29 skipped (the live-server harnesses), `PackageChannelListingTests` among them 21 of 21. UI: `SettingsPackageChannelsTests`
+2 of 2 and `SettingsChannelsDrilldownTests` 1 of 1 (it reads the row's new VoiceOver text). The screenshots show the names in
+commas wrapping after a comma, with the amber ones amber.
+
+**Half-done.** On `appletv/package-channels-preview`, off the 1.0.31 bundle branch (f2fda75d) and not merged into it, so that
+build can ship without it. Not pushed, no build cut, not run on a TV. The Roku app and the web tuner are not changed. The list
+text is 18 pt, a step under the row's description; whether that reads from the couch is a TV question.
+
+## 2026-11-09 (Apple TV: UI tests can no longer wipe a real Apple TV)
+
+**What happened.** A UI test was run on a real Apple TV. It launched the app with `-uiTestResetCredentials` and no harness root,
+so on the device the flag acted on the TV's real stores: it deleted the library snapshot, rewrote the settings and removed the
+saved sign-in. The harness root was set for the test runner (`TEST_RUNNER_NOSTALGEX_HARNESS_ROOT`), but that variable only
+reaches the runner, not the app a test launches. A UI test is isolated only if it sets `NOSTALGEX_HARNESS_ROOT` on the app's own
+launch environment, and five test files launched with a reset and did not.
+
+**Changed.**
+- One launch helper for every UI test: `isolatedApp(arguments:)` in `NostalgexUITests/IsolatedApp.swift`. It sets
+  `NOSTALGEX_HARNESS_ROOT` on the app, with a root of its own per test and run, so a new test cannot forget. Every UI test file that
+  makes an app (twelve) now does it through the helper, the ones that already set a root by hand included. `realStoresApp(because:)` is for a
+  test that has to see the real stores: it runs on the simulator only and skips on a device. None needs it today.
+- In the app, the launch flags that delete or rewrite stored data act only while the harness root is set: `-uiTestResetCredentials`,
+  `-reproAppReviewFlow` (which also overwrote the sign-in with a test token), `-uiTestInstantAuth`, `-uiTestRescanRowFixture`,
+  `-uiTestLaunchMemoryInDemo`, `-uiTestForceLibrarySelection` and `-uiTestFranchiseFixture`. Any other launch ignores them, logs one
+  line (`TEST FLAG: <flag> ignored ...`) and starts as a normal launch. A release build has no harness isolation, so it never
+  acts on them. They are listed once, in `TestLaunchFlags`, and read through `TestLaunchFlags.isOn`.
+- `scripts/ui-test-isolation-check.mjs` reads the Swift files and fails when a UI test file calls `XCUIApplication(` itself, names
+  one of those flags without going through the helper, passes one to `realStoresApp`, or when the helper's copy of the flag list
+  drifts from the app's. It runs in `npm test` and as its own CI job on every pull request (it needs no Mac).
+- The RESCAN row test no longer launches a second "clear" app after each test: its fixture now writes into the test's own root, so
+  there is nothing to clean up, and that extra launch was itself a launch on the real stores.
+
+**Test.** `TestLaunchFlagsTests` (unit): every listed flag is ignored without isolation, acts with it, and a flag that only changes
+what is drawn is never held. The static check was run against a test that calls `XCUIApplication(` directly, one that passes a
+reset flag to `realStoresApp`, one with an empty reason, and a flag list that differs from the app's: each fails it.
+
+**Measured.** On the tvOS simulator, one run each. UI: the ten classes that launch the app (`AppReviewReproHarnessTests`,
+`ChannelGuideWrapFocusTests`, `FirstLaunchSmokeTests`, `FranchisesPageGateUITests`, `GuideFocusAfterFullScreenTests`,
+`NowPlayingPanelFocusTests`, `OpenOnLastChannelLaunchTests`, `SettingsChannelsDrilldownTests`, `SettingsOpenOnLastChannelTests`,
+`SettingsRescanRowTests`): 27 tests, 26 passed, 1 skipped (the old instant-auth flow, skipped before this change), 0 failed.
+Unit: `NostalgexTests` 1,236 tests, 1,207 passed, 0 failed, 29 skipped (the live-server harnesses). `LANDiscoveryUITests` and the
+sign-in tour need real servers and were not run; they are converted and pass the static check.
+
+**Not done here.** Nothing was run on an Apple TV for this change. The approach (the root set on the app, the real stores
+compared before and after) was checked on a real Apple TV 4K (3rd generation) earlier the same day. A UI test added on another
+branch that makes its own `XCUIApplication` will fail the check until it uses the helper. On `appletv/ui-test-safety`, off
+`appletv/1.0.31-rc1` (ba30acba), not pushed, no build cut.
+
+## 2026-11-09 (Apple TV: package stripes in the guide, and a way to move along them)
+
+**What.** A coloured stripe down the left edge of the guide, one per package, with the package name written up it. The
+name is sticky: it sits in the part of its package that is on screen, so it stays readable while the viewer scrolls
+through the package's channels. The idea is tango259's, from the contributor proposal; this is our own code.
+
+**Where it fits.** The stripe fills the empty slot at the left of every row, so nothing moves: programs, channel names
+and focus are where they were. (The slot is an accident of the layout: the header is 68 pt wider than the screen, so the
+rows are centred in a frame that wide, which leaves 31.5 pt at the left of each row, 29.5 on the live and the focused row.
+The stripe is 28 pt.) Each row draws its own piece of the stripe, so the colour scrolls with the rows.
+
+**Colour.** One of ten colours that are already channel colours in the app, picked from the package name by a fixed hash,
+so a name is the same colour on every launch and every Apple TV. The name is white or black, whichever reads better: at
+least 4.5 to 1 on every colour. No two neighbouring shipped packages share a colour.
+
+**Moving.** Left from the rows, with the time window at its start, focuses the stripe (a ring around the package's part of
+it). Up and Down jump to the previous and next package, scrolling so its first channel is at the top (without animation
+when Reduce Motion is on). Right goes back to the rows, on the first channel of the package the stripe is on, or on the
+row the viewer left if the stripe has not moved. Select opens the package list (the left rail), and so does Left again.
+Left on the rows used to open that list straight away; it is now two presses, the first to the stripe. The stripe is a
+focus target only after that first Left, so it can never be where first focus, or the return from full screen, lands.
+
+**Decided.** A channel in no package gets a plain grey stripe with no name, which Up and Down step over. FRANCHISES is one
+package, as in the package list. A package whose channels are all filtered out has no rows and so no stripe. A one-row
+package is 81 pt tall, so its name is cut to fit; below 44 pt of it on screen there is no name, only the colour. GUIDE
+TEXT SIZE does not change the stripe: its name is 18 pt in both sizes, because the slot cannot grow. When tvOS brings
+the first channel back into view on Right, it centres it like any focused row.
+
+**Test.** `GuideStripesTests` (32): which package a channel is in, the runs, Up and Down past the ends and over unnamed
+runs, the colour of every shipped package pinned, contrast on all ten colours, neighbours, and the label maths.
+`GuideStripeFocusTests` (UI, 3, demo mode with four demo packages, own harness root): Left to the stripe, Down through
+four packages and back up with each first channel at the top, no wrap at either end, Right back to the rows, Select and
+Left again opening the list. The accessibility tree does not report the stripe as focused, so the test reads where focus
+is from the guide's debug record. Simulator only so far; not seen on a TV.
+
+## 2026-11-09 (Apple TV: Retro mode loses the white tracking line)
+
+**Why.** Feedback that the white line which ran down the screen in Retro mode is very distracting. It drew the eye away from
+the picture: at each check, every 6 to 15 seconds, there was a 45 percent chance of a bright line that crossed the screen
+for half a second to a second and a half.
+
+**Removed.** The tracking line, completely: the view that drew it (`TrackingGlitchLine`), its state and timer, the
+scheduling that rolled for it, and the two constants `RetroLook.glitchChance` and `RetroLook.glitchBrightness`. Retro mode's
+overlay is scanlines, vignette and flicker, as before: the same constants and the same drawing code, nothing re-tuned. The
+RETRO MODE row's line in PLAYBACK & PICTURE read "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio" and now reads
+"CRT scanlines, vignette, flicker, 4:3 aspect ratio".
+
+**Test.** No test pinned the constants or the line, and none here would catch the line coming back: it started hidden and
+appeared 6 to 15 seconds after the overlay did, so a render of the first frame cannot show it. `CRTOverlayRenderTests` (3,
+new) guards what stays. It renders the overlay over white and reads the pixels: a dark scanline every third row at about
+the scanline opacity, and a vignette that darkens the corners and the edges and leaves the middle alone; and, over black, a
+first frame that adds no light inside the edge. `NowPlayingPanelFocusTests` (3, the UI class that touches the RETRO MODE
+rows) pass. Simulator screenshots of the guide and of full screen with Retro mode on (it is on by default), a second
+apart, show the scanlines, the vignette and the edge still drawn. The whole unit suite was not run on that branch: the
+change is the overlay and one line of text.
+
+**Not changed here.** The Roku app still draws a tracking line and its Retro mode text still lists it (its Settings row and
+its guide), as do two blog posts that describe Retro mode. The web tuner's removal is on its own branch, not on main. On
+`appletv/retro-no-tracking-line`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut.
+
+## 2026-11-09 (Apple TV: the guide no longer shows its highlight move when it comes back from full screen, I-041)
+
+**What the viewer saw.** Change channel in full screen, leave it, and the guide came back with the highlight on the row the
+viewer had left from, then moved it to the channel that is playing. The first I-041 fix put focus on the right row, but the
+move was in plain sight, and it was reported as clearly slower on an Apple TV 4K (1st generation, tvOS 26.6) than on a
+simulator. The same thing happened when the guide first appeared: the first row, or the seasonal invite, was highlighted for
+a moment before the playing channel.
+
+**Why.** The highlight was drawn from the guide's focus state alone. tvOS hands focus back to the guide when the full
+screen cover has finished closing, which on a simulator is about 0.55 s after the close was asked for, and it hands it to
+the row it remembers, the old one. The guide moved focus to the live row a moment later (6 ms on a simulator, more on a
+TV). For that moment the old row was the highlighted one. The guide itself was on screen the whole time the cover was
+closing.
+
+**Changed.**
+- The guide draws the live channel's row highlighted from the first frame it is back, whatever row tvOS has focused for the
+  moment (`GuideReturnFocus.highlighted`, held by `LiveHighlightHold`, from the close of full screen or the guide
+  appearing). Real focus is still moved to the live row exactly as before.
+- The hold lets go the moment focus is anywhere other than the handout of a wrong row: focus on the live row, or the
+  viewer moving it, so a viewer's own move is never overridden. It lets go 0.3 s after a wrong row is handed out if the
+  move has not landed, so the highlight cannot stay on a row that is not the focused one, and it never lasts longer than
+  2 s.
+- No animated scroll runs for this case any more. The guide is placed on the live row with no animation when the channel
+  changes (it is covered then), when it comes back, and when it first appears. Before, the first appearance scrolled to
+  the row 0.1 s later with a 0.2 s animation, and the return scrolled 0.3 s later. The viewer's own moves still scroll
+  with the 0.2 s animation.
+- A press on a row is ignored while the highlight is held on the live row and the row pressed is another one
+  (`GuideReturnFocus.rowActs`), so a Select in the moment between tvOS handing focus to the old row and the move to the
+  live row cannot tune a channel other than the one the viewer sees highlighted. Play/Pause is untouched: it full-screens
+  the playing channel from any row.
+- A debug-only log and probe (`GuideJumpProbe`): `[GuideJump]` lines with the time in milliseconds from the moment the
+  guide came back, for the row tvOS focused, the row the guide drew highlighted and the list's scroll offset. A release
+  build has an empty stand-in and logs and keeps nothing. With `-uiTestGuideJumpProbe` a UI test can read the same
+  sequence.
+
+**Measured** on the simulator (Apple TV 4K, 3rd generation), from the moment the guide came back:
+
+| | row drawn highlighted before | row drawn highlighted now | tvOS focus |
+|---|---|---|---|
+| back from full screen, channel changed 4 to 6 | none, then channel 4 at 540 ms, then 6 at 553 ms | channel 6 at 2.6 ms | channel 4 at 552 ms, channel 6 at 558 ms |
+| first appearance, playing channel 4 | none, then channel 1, then 4 | channel 4 at 7.6 ms | channel 1 at 59 ms, channel 4 at 90 ms |
+| first appearance, invite above channel 1 | none, then the invite, then 1 | channel 1 at 7.9 ms | the invite at 79 ms, channel 1 at 106 ms |
+
+The first frames after Menu show CH 06 highlighted and in view while the cover is still going away.
+
+**The old row far from the live one.** tvOS scrolls a list to show the row it focuses, and the guide's own placement
+does not stop that. So the far case was measured: channel 1 playing, one press down in full screen wraps to channel 20, and
+the reverse, 19 rows apart. tvOS handed focus to the far row at about 552 ms and the guide moved it to the live row 6 to
+11 ms later, and the list's scroll offset did not change at all after the guide came back (1158 pt before and after going
+down to channel 20, 0 pt before and after going up to channel 1). The guide's placement on the live row runs in the same
+pass as the handout, which probably undoes a focus scroll within the frame; the probe cannot confirm that mechanism, only
+that the offset did not change. That is a simulator measurement; the offset changes on a TV are in the `[GuideJump]` lines
+as `scroll offset a -> b`.
+
+**Not measured.** The two limits (0.3 s for the move to the live row once a wrong row is handed out, 2 s overall) are
+constants with a unit test that pins their values; whether they suit a TV is not measured. The build was tried on the
+living room Apple TV 4K by hand and looked right; its `[GuideJump]` timings are not read here.
+
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) now reads the probe and fails if the guide drew
+any row but the live channel, in all three cases (back from full screen, the playing channel not the first, an invite above
+channel 1), and has two far cases that fail if the list scrolls after the guide comes back (channel 1 to 20 and 20 to 1).
+The probe exists only from this change on, so the commit before it cannot run these tests as they are; with the probe added
+to the previous behaviour, the three first cases failed with "the guide drew [9004, 9006] highlighted, not only the live
+channel 9006" and its two siblings, and they pass now. `GuideReturnFocusTests` gained 12 cases for the highlight rule, what
+ends the hold, its generation counter, its limits and which presses act. On this head, on the simulator:
+`GuideFocusAfterFullScreenTests` 5 of 5, `GuideReturnFocusTests` 20 of 20, `ChannelGuideWrapFocusTests` 9 of 9 (the guide's
+focus handler, which this change edits), `NowPlayingPanelFocusTests` 3 of 3, `OpenOnLastChannelLaunchTests` 2 of 2,
+`SettingsOpenOnLastChannelTests` 1 of 1, and the whole of `NostalgexTests`: 1,201 passed, 0 failed, 29 skipped (the
+live-server harnesses). Two of those UI classes, `ChannelGuideWrapFocusTests` and `NowPlayingPanelFocusTests`, run without a
+harness root and are for the simulator only; `OpenOnLastChannelLaunchTests`, `SettingsOpenOnLastChannelTests` and
+`GuideFocusAfterFullScreenTests` set their own.
+
+**Half-done.** On `appletv/guide-focus-no-jump`, off the 1.0.31 bundle branch (f2fda75d), not pushed, no build cut. Tried by
+hand on the living room Apple TV 4K, where it looked right; its `[GuideJump]` timings are not read here, and the numbers above
+are a simulator's. Left alone: the package panel and the rows changing behind an open guide.
+
+## 2026-11-09 (Apple TV: OPEN ON LAST CHANNEL is on by default)
+
+**Why.** The setting was written to be off until someone turned it on. The decision is the other way: a viewer who has not
+touched it gets it, and turns it off in PLAYBACK & PICTURE if they would rather start on channel 1. It will feel different
+at first for someone who updates, and that was accepted.
+
+**Changed.** `LaunchChannelMemory.enabledByDefault` is `true`, the only line in the app that changed behaviour; the rest is
+comments, tests and this log. A press on the switch is stored and always wins over the default, so a viewer who turns it
+off stays off. The row's title and line ("Open on last channel", "Start on the channel you were last watching") read the
+same with the setting on, so they are unchanged. Demo mode still hides the row, saves nothing and starts on its own start
+channel (`DemoData.startChannel(in:)` first, then the first channel): the memory does not apply there.
+
+**What a viewer who updates sees.** The channel is saved on every tune the viewer makes (the guide, next and previous, the
+mini strip), whether the switch is on or off, and not on a tune the app makes itself. Nothing was saved by any build before
+this one, so the first launch after the update opens channel 1, as it always did. From the first channel the viewer tunes,
+the next launch opens that channel. A viewer who never tunes keeps opening on channel 1. A saved channel that is gone, or whose
+name changed, opens channel 1.
+
+**Test.** `LaunchChannelMemoryTests`: the default is pinned `true`; nothing saved is channel 1; a tune is what the next launch
+opens, with the switch never pressed and nothing written to it; a viewer who turned it off opens channel 1; entering demo mode
+with a real memory saved still starts on the demo's own first channel. `SettingsOpenOnLastChannelTests` reads the row On in
+a fresh storage root, switches it off and back. `OpenOnLastChannelLaunchTests` no longer presses the switch: it reads it as
+On, tunes channel 5, relaunches on 5, then turns it off and relaunches on channel 1.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,186 passed, 0 failed,
+29 skipped (the live-server harnesses). UI: `OpenOnLastChannelLaunchTests` 2 of 2, `GuideFocusAfterFullScreenTests` 3 of 3
+and `SettingsOpenOnLastChannelTests` 1 of 1.
+
+**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. Not run on a TV with the default on. With
+it on, opening on a channel other than 1 is the common case, so the guide's first focus on the playing channel (the I-041
+commits in this bundle) now applies to every viewer, not only to those who turned the setting on. The web tuner's switch is
+still off by default in this branch (its Settings row, `docs/WEB-TUNER-FEATURES.md` and the 2026-11-08 web entry below say so),
+and the Roku has no such setting. The hidden Jellyfin libraries switch is unchanged and stays off by default.
+
+## 2026-11-09 (Apple TV: the guide-focus fix (I-041) merged with the 1.0.31 candidate)
+
+**Changed.** `appletv/i041-guide-focus` (2e4a3a0c) is merged onto main (70686b63) on `appletv/1.0.31-bundle`, so the next
+Apple TV build carries it with OPEN ON LAST CHANNEL and the hidden Jellyfin libraries switch. Two files conflicted. The
+dev log kept both entries. In `enterDemoMode` the start channel is now `DemoData.startChannel(in: channels) ?? channelToOpenFirst`:
+the test-only `-uiTestStartOnChannel` wins, then the remembered channel (when OPEN ON LAST CHANNEL applies), then the first
+channel. Either side alone would drop one behaviour: the I-041 line ignores the remembered channel (which
+`OpenOnLastChannelLaunchTests` expects), the candidate line ignores `-uiTestStartOnChannel` (which `GuideFocusAfterFullScreenTests`
+uses). That was read from the code and the earlier dry merge; neither side alone was run. Nothing else changed.
+
+**Measured.** On this head, on the tvOS simulator (Apple TV 4K, 3rd generation): `NostalgexTests` 1,183 passed, 0 failed,
+29 skipped (the live-server harnesses, which need a server). UI: `GuideFocusAfterFullScreenTests` 3 of 3 and
+`OpenOnLastChannelLaunchTests` 2 of 2, the two classes the conflict touches. The rest of the UI tests were not re-run.
+
+**Half-done.** On `appletv/1.0.31-bundle`, not on main, not pushed, no build cut. The basement Apple TV 4K (tvOS 27.2) runs covered the first two guide commits (the return-from-full-screen fix and the
+first-appearance anchor). The last two (the handout window generation counter and the row-exists check) were measured on
+the simulator only, and this head has not itself been run on a TV. The first-appearance cases were only ever reproduced
+on the simulator.
+
+**Next.** A review of the branch, then a push to main.
+
 ## 2026-11-09 (Roku: RETRO MODE no longer draws the tracking line)
 
 **Why.** Chad's decision, from viewer feedback: the white tracking (drift) line that rolled through the picture in
@@ -235,20 +583,20 @@ Docker container changes when it pulls 1.0.16. Not measured on a real TV browser
 **Why.** Asked for as "open to a random channel" and then as "better yet, the previous watched channel" (Trello I-017):
 an optional start-up setting.
 
-**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, off by default (`LaunchChannelMemory.enabledByDefault`, one
-line to flip). A channel the viewer tunes (the guide, next and previous, the mini strip) is saved with its id and its
-name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
+**Changed.** PLAYBACK & PICTURE has OPEN ON LAST CHANNEL, on by default (`LaunchChannelMemory.enabledByDefault`, one
+line; it was off when this entry was first written and was switched on 2026-11-09, see that entry). A channel the viewer
+tunes (the guide, next and previous, the mini strip) is saved with its id and its name, on this Apple TV only: the key is not in `PreferenceSync.syncedKeys`, so iCloud never carries it. At launch, once
 the saved snapshot or the load has built the guide, the app opens that channel if the setting is on and a channel with
 the same id and the same name is in the lineup; otherwise it opens the first channel, as before. A collection or
 franchise channel renumbered by a rebuild is not tuned by mistake: a changed name or a missing id opens the first
 channel. Demo mode (what App Review sees) hides the row, ignores the setting and saves nothing; signing out clears the saved
 channel (the setting stays).
 
-**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, off by default, demo mode, sign-out, not
-synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, off, and switches).
+**Test.** `LaunchChannelMemoryTests` (saved, restored, gone, renumbered, on by default, demo mode, sign-out, not
+synced) and `SettingsOpenOnLastChannelTests` (UI: the row is there, on, and switches).
 
 **Proved end to end** in demo mode with the app's storage isolated (`OpenOnLastChannelLaunchTests`, with
-`-uiTestLaunchMemoryInDemo`): switch on in Settings, tune channel 5, relaunch, and 5 is the channel playing; switch off,
+`-uiTestLaunchMemoryInDemo`): switch on in Settings (as shipped it is On already, and the test now only reads it), tune channel 5, relaunch, and 5 is the channel playing; switch off,
 relaunch, and it is channel 1, as today. On a simulator. With the guide-focus branch (`appletv/i041-guide-focus`) merged
 in, the same flow, with and without a forced seasonal invite above channel 1, also put the guide's focus ring on channel 5
 on a simulator and on a real Apple TV 4K (tvOS 27.2).
@@ -392,6 +740,43 @@ the Apple TV can ask without a switch because of the picker), Roku (a setting, t
 test; a stick run) and Android take their own change; queue items are in the internal notes. If the default is ever flipped
 to on, change `INCLUDE_HIDDEN_DEFAULT` and decide on a `LIBRARY_SCAN_REVISION` bump so saved Jellyfin libraries are read
 again. STOP WAITING during a slow scan (web parity) and Docker-held settings (I-080) are not small and are not in this release.
+
+## 2026-11-08 (Apple TV: the guide follows a channel change made in full screen, I-041)
+
+**Why.** Change channel in full screen (next channel with Right), press Menu, and the guide came back with its
+selection on the row the viewer had left from while the live bolt sat on the channel now playing (Trello I-041, first
+reported in June). Reproduced on main on a simulator in demo mode: focus on channel 4, Select, Select, Right, Right,
+Menu. The info panel read CH 04 with channel 6 playing. The app log showed focus go from the old row to none on
+entering full screen and from none back to the OLD row on leaving, with the live channel never assigned.
+
+**Approach.**
+- What is set: the focus ring goes to the live channel, as `anchorFocusToLiveChannel` already did when full screen closes.
+- When: once more, the moment tvOS hands focus back to the guide, i.e. `focusedChannelID` changing from none to a row
+  while the handout window is open. Closing full screen opens it; the handout, or 2 seconds, closes it. Each opening
+  has its own generation number and its timer only closes the opening it belongs to, so the timer of an earlier close
+  of full screen cannot shut a later window early (`GuideReturnFocus.HandoutWindow`).
+- Why it survives: a request made while nothing in the guide has focus does not stick, and tvOS then restores the row it
+  remembers. Acting on the handout puts our request after the engine's, not before it, and a viewer's own move is never
+  "from none", so it is left alone.
+- Where: `ChannelGuideView` (the window, three small hunks) and the pure rule and window in `GuideReturnFocus`.
+- Second commit, same flag and rule, set when the guide first appears: with the playing channel not the first, or a
+  seasonal invite above channel 1, tvOS gave first focus to the first row or the invite instead. Measured on a simulator in
+  demo mode (`-uiTestStartOnChannel 4`, `-uiTestSeasonalInvite`): focus on channel 1, or on the invite, for the 5 seconds
+  watched. On the basement Apple TV 4K (tvOS 27.2) both cases already land on the playing channel without this commit, so it
+  protects the simulator and any tvOS that behaves that way; not measured on another tvOS version.
+- The early return skips one `onFocusChanged` call, the one for the row tvOS handed focus to. Measured on a simulator with
+  timestamps: the call for the live channel follows 8 ms later after full screen, and 31 to 34 ms later when the guide first
+  appears, with or without the invite. The info panel goes from empty to the live channel and never shows the wrong row.
+  One case it did break, found by that measurement: when the playing channel has no row in the guide (its package was
+  switched off while it played), the anchor pointed at a row that is not there, the ring stayed on channel 1 and the info
+  panel stayed empty. The handout is now only acted on when the playing channel has a row (`GuideReturnFocus.liveRowID`).
+- Not touched: the packages panel and the rows changing behind an open guide.
+
+**Test.** `GuideFocusAfterFullScreenTests` (UI, demo mode, storage isolated) has three cases (a channel changed in full screen then back, the playing channel not the first, a seasonal invite above channel 1); the first fails on main with "the
+guide came back on CH 04, not the live channel 6", and passes with the change. `GuideReturnFocusTests` (8) covers the rule and the window, including a timer from an earlier opening firing while a later one is open.
+The return-from-full-screen case fails without the first commit and passes with it on a simulator and on a real Apple TV
+4K (3rd generation, tvOS 27.2). The two first-appearance cases fail without the second commit on the simulator and pass on
+the TV either way. TV runs use isolated app storage, so nothing the TV holds was touched.
 
 
 ## 2026-11-08 (Roku: CHANNELS & BUNDLES's link rows and pages, #188's second PR)

@@ -191,6 +191,16 @@ jobs:
       - name: Leak guard
         run: node scripts/public-repo-leak-guard.mjs
 
+  # Every pull request, like the leak guard: no Mac and no npm install, it only reads the Swift files. A UI test that
+  # launches the app without a harness root can wipe a real Apple TV's library and sign-in (2026-11-09); this fails the
+  # pull request that adds one.
+  tvos-ui-test-isolation:
+    name: tvOS UI tests keep off a real Apple TV's stores
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: node scripts/ui-test-isolation-check.mjs
+
   channel-engine:
     name: Channel engine (rule parity, schedule order, docs)
     needs: changes

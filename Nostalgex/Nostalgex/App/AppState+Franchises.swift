@@ -528,14 +528,16 @@ extension AppState {
         let franchisesBundle = config.bundles
             .first(where: { $0.id == Self.franchisesBundleID })?
             .toChannelBundle(enabled: true)
-        bundles = [demoBundle] + (franchisesBundle.map { [$0] } ?? [])
-        enabledBundleIDs = Set(bundles.map(\.id))
+        // `-uiTestPackageList` only: the shipped packages, some on with channels short of content.
+        let packageList = DemoData.packageListFixtureRequested ? DemoData.packageListFixture(config: config) : nil
+        bundles = [demoBundle] + (packageList?.bundles ?? []) + (franchisesBundle.map { [$0] } ?? [])
+        enabledBundleIDs = Set(bundles.filter(\.enabled).map(\.id))
 
         let stockIDs = Set(franchisesBundle?.channelIDs ?? [])
         let built = await rebuildStaticChannelPools(
             configChannels: config.channels, items: allItems, onlyChannelIDs: stockIDs
         )
-        allChannels = (allChannels.filter { !stockIDs.contains($0.id) } + built)
+        allChannels = (allChannels.filter { !stockIDs.contains($0.id) } + built + (packageList?.stockedChannels ?? []))
             .sorted { $0.number < $1.number }
 
         discoveredCollections = fixture.collections

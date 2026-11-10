@@ -14,8 +14,7 @@ final class NowPlayingPanelFocusTests: XCTestCase {
     }
 
     private func launchIntoPanel() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-uiTestResetCredentials"]
+        let app = isolatedApp(arguments: ["-uiTestResetCredentials"])
         app.launch()
 
         // The connect screen stamps one accessibility identifier on every element, so

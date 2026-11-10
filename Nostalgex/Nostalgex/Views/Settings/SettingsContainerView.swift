@@ -19,6 +19,8 @@ struct SettingsContainerView: View {
     /// The CHANNELS & BUNDLES sub-page on show; nil is its list. Back to the list
     /// whenever another tab is selected.
     @State private var channelsPage: ChannelsPage?
+    /// The pending placement of a package row (`centreFocusedRow`). Cancelled by the next focus change.
+    @State private var placeRowTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -66,7 +68,7 @@ struct SettingsContainerView: View {
             appState.player?.isMuted = true
         }
         .onDisappear {
-            appState.player?.isMuted = false
+            appState.player?.isMuted = TestLaunchFlags.audioMuted
         }
         .task {
             // Refresh the reachable-server list so deselected servers can be re-added.
@@ -144,11 +146,8 @@ struct SettingsContainerView: View {
                     .padding(.bottom, 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .onChange(of: focus) { _, newFocus in
-                    guard case .row(let id)? = newFocus else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
+                .onChange(of: focus) { previous, newFocus in
+                    centreFocusedRow(previous: previous, now: newFocus, proxy: proxy)
                 }
                 .onChange(of: selected) { _, _ in
                     proxy.scrollTo("rows_top", anchor: .top)
@@ -182,6 +181,53 @@ struct SettingsContainerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
+
+    /// Scrolls the row that took focus to the centre of the pane.
+    ///
+    /// A package row grows to list its channels while it has focus and the one that lost focus shrinks back, so
+    /// the rows are changing size for `SettingsToggleRow.focusAnimationDuration` after every press. Centring the
+    /// row at the moment of the press did not give the same place on an Apple TV as on a simulator: going down,
+    /// rows came to rest lower and lower on the screen, and one landed with its title under the pinned header.
+    /// The cause was not isolated (the system's own scroll to the focused row, or a centre worked out before the
+    /// rows had finished moving). So when a package row gains or loses focus the pane waits until the rows have
+    /// stopped changing size and centres the row once, after the system has done its own scrolling. The centre of
+    /// the pane is the same point whatever a row's height and the tallest row is well inside it, so a package row
+    /// sits wholly below the header, in the same place going down as going up. Pressing again before the wait is
+    /// over cancels it, so a held press scrolls once, where it stops. Every other row centres at once, as before.
+    private func centreFocusedRow(previous: SettingsFocus?, now: SettingsFocus?, proxy: ScrollViewProxy) {
+        placeRowTask?.cancel()
+        placeRowTask = nil
+        guard case .row(let id)? = now else { return }
+        var changesSize = SettingsChannelsView.isPackageRow(id)
+        if case .row(let before)? = previous, SettingsChannelsView.isPackageRow(before) { changesSize = true }
+        guard changesSize else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+            return
+        }
+        placeRowTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(SettingsToggleRow.focusAnimationDuration + Self.placeRowSettle))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: Self.placeRowDuration)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+            // Once the slide is over, the same target again, with no animation: nothing moves if the slide
+            // arrived, and a slide the system cut short is finished instead of left half way.
+            try? await Task.sleep(for: .seconds(Self.placeRowDuration + Self.placeRowSettle))
+            guard !Task.isCancelled else { return }
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        }
+    }
+
+    /// A little over a frame, so the rows are done changing size and the layout has run before the pane looks.
+    private static let placeRowSettle: Double = 0.05
+    /// The slide to the centre. Short: the row is already on screen.
+    private static let placeRowDuration: Double = 0.15
 
     /// Identity of the rows block, so a tab or sub-page swap cross-fades as a whole.
     private var rowsIdentity: String {

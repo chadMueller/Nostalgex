@@ -26,13 +26,28 @@ final class LaunchChannelMemoryTests: XCTestCase {
 
     // MARK: The helper
 
-    func testItIsOffUntilSomeoneTurnsItOn() {
+    func testItIsOnUntilSomeoneTurnsItOff() {
         let defaults = freshDefaults()
-        XCTAssertFalse(LaunchChannelMemory.enabledByDefault, "the default is Chad's call; this pins what ships")
+        XCTAssertTrue(LaunchChannelMemory.enabledByDefault, "this pins what ships: on unless the viewer turns it off")
         XCTAssertEqual(LaunchChannelMemory.isEnabled(defaults: defaults), LaunchChannelMemory.enabledByDefault)
+        XCTAssertNil(defaults.object(forKey: LaunchChannelMemory.enabledKey), "no switch has been pressed in this suite")
         LaunchChannelMemory.remember(lineup[2], defaults: defaults)
+        XCTAssertEqual(LaunchChannelMemory.channelToOpen(in: lineup, defaults: defaults)?.id, 401,
+                       "with nobody having touched the switch, a launch opens the channel last tuned")
+        defaults.set(false, forKey: LaunchChannelMemory.enabledKey)
         XCTAssertNil(LaunchChannelMemory.channelToOpen(in: lineup, defaults: defaults),
-                     "with the switch off a launch opens where it always did, whatever was saved")
+                     "a viewer who turned it off opens where the app always did, whatever was saved")
+    }
+
+    /// A viewer updating from a build without this setting has no saved channel and has never pressed
+    /// the switch: the first launch is the first channel, as it was.
+    func testAnUpdatedViewerWithNothingSavedStillOpensTheFirstChannel() {
+        let defaults = freshDefaults()
+        defaults.set("some other setting", forKey: "nostalgex_unrelated_setting")
+        XCTAssertTrue(LaunchChannelMemory.isEnabled(defaults: defaults))
+        XCTAssertNil(LaunchChannelMemory.saved(defaults: defaults))
+        XCTAssertNil(LaunchChannelMemory.channelToOpen(in: lineup, defaults: defaults),
+                     "nil means the caller opens the first channel")
     }
 
     func testOnOpensTheChannelTheViewerLastTuned() {
@@ -101,10 +116,26 @@ final class LaunchChannelMemoryTests: XCTestCase {
     func testALaunchOpensOnTheFirstChannelWhileTheSwitchIsOff() {
         let scope = HarnessScope.begin("launch-channel-off")
         defer { scope.end() }
+        AppDefaults.standard.set(false, forKey: LaunchChannelMemory.enabledKey)
         let state = AppState()
         state.channels = lineup
         state.rememberLaunchChannel(lineup[2])
         XCTAssertEqual(state.channelToOpenFirst?.id, 1, "today's behaviour, untouched")
+    }
+
+    /// The shipped default, through AppState and the real defaults path: nothing pressed, nothing
+    /// saved is the first channel; the first tune the viewer makes is what the next launch opens.
+    func testWithTheSwitchNeverPressedALaunchOpensTheFirstChannelUntilOneIsTuned() {
+        let scope = HarnessScope.begin("launch-channel-default")
+        defer { scope.end() }
+        XCTAssertNil(AppDefaults.standard.object(forKey: LaunchChannelMemory.enabledKey))
+        let state = AppState()
+        state.channels = lineup
+        XCTAssertEqual(state.channelToOpenFirst?.id, 1, "first launch after an update: nothing saved yet")
+        state.rememberLaunchChannel(lineup[2])
+        XCTAssertEqual(state.channelToOpenFirst?.id, 401, "the default is on: the next launch opens what was last tuned")
+        XCTAssertNil(AppDefaults.standard.object(forKey: LaunchChannelMemory.enabledKey),
+                     "tuning does not write the switch; only a press does")
     }
 
     func testALaunchOpensOnTheSavedChannelWhenTheSwitchIsOn() {
@@ -134,6 +165,24 @@ final class LaunchChannelMemoryTests: XCTestCase {
         XCTAssertEqual(state.channelToOpenFirst?.id, 1)
         state.rememberLaunchChannel(lineup[1])
         XCTAssertEqual(LaunchChannelMemory.saved()?.id, 401, "a demo tune does not overwrite the real memory")
+    }
+
+    /// With the shipped default on, demo mode (what App Review sees) still starts on its own channel,
+    /// even when the real memory holds a channel with the same id and name as one of the demo's.
+    func testEnteringDemoModeStartsOnTheFirstChannelWhateverTheMemoryHolds() throws {
+        let scope = HarnessScope.begin("launch-channel-enter-demo")
+        defer { scope.end() }
+        XCTAssertNil(AppDefaults.standard.object(forKey: LaunchChannelMemory.enabledKey), "the shipped default is in force")
+        let demo = DemoData.channels()
+        XCTAssertGreaterThan(demo.count, 3)
+        LaunchChannelMemory.remember(demo[3])
+        XCTAssertEqual(LaunchChannelMemory.channelToOpen(in: demo)?.id, demo[3].id, "the memory would pick it outside demo mode")
+
+        let state = AppState()
+        state.enterDemoMode()
+        XCTAssertTrue(state.isDemoMode)
+        XCTAssertEqual(state.currentChannel?.id, state.channels.first?.id, "demo mode opens on its own first channel")
+        XCTAssertEqual(LaunchChannelMemory.saved()?.id, demo[3].id, "and leaves the real memory as it was")
     }
 
     func testSigningOutClearsTheSavedChannel() {

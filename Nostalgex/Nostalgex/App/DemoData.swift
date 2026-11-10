@@ -198,20 +198,99 @@ enum DemoData {
         )
     }
 
+    // MARK: - Start channel (test only)
+
+    /// `-uiTestStartOnChannel N`: demo mode starts on the N-th channel instead of the first, so a
+    /// UI test can see where the guide puts focus when the playing channel is not the first one.
+    /// Never set in a shipping run.
+    static func startChannel(in channels: [Channel]) -> Channel? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "-uiTestStartOnChannel"), flag + 1 < args.count,
+              let n = Int(args[flag + 1]), channels.indices.contains(n - 1) else { return nil }
+        return channels[n - 1]
+    }
+
     // MARK: - Franchise fixture (test only)
+
+    /// `-uiTestGuideStripes`: demo mode's channels in four demo packages, so the guide's package stripes
+    /// have packages to name and move between: the first six channels, the next six, one channel on its own
+    /// (a package too short for its whole name), and the rest. Never set in a shipping run.
+    static var guideStripesFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestGuideStripes")
+    }
+
+    static func guideStripeBundles(for channels: [Channel]) -> [ChannelBundle] {
+        let ids = channels.map(\.id)
+        let cuts = [0, 6, 12, 13]
+        let names = ["RETRO ACTION", "LATE NIGHT", "TINY", "THE REST OF THE DEMO"]
+        return names.indices.compactMap { i in
+            let from = min(cuts[i], ids.count)
+            let to = i + 1 < cuts.count ? min(cuts[i + 1], ids.count) : ids.count
+            guard from < to else { return nil }
+            return ChannelBundle(
+                id: "demo-stripe-\(i)", name: names[i], description: nil,
+                channelIDs: Array(ids[from..<to]), activeMonths: nil, enabled: true
+            )
+        }
+    }
 
     /// `-uiTestFranchiseFixture`: demo mode plus a small enriched library, so the FOUND IN
     /// YOUR LIBRARY block and a found-franchise channel can be seen on a simulator with no
     /// server and before the shared enrichment table carries the franchise columns.
     /// Never set in a shipping run.
     static var franchiseFixtureRequested: Bool {
-        ProcessInfo.processInfo.arguments.contains("-uiTestFranchiseFixture")
+        TestLaunchFlags.isOn("-uiTestFranchiseFixture")
     }
 
     /// `-uiTestShortPackage`, with the franchise fixture: the DEMO package also lists a
     /// channel the sample library can't fill, so a UI test sees the amber count on its row.
     static var shortPackageFixtureRequested: Bool {
         ProcessInfo.processInfo.arguments.contains("-uiTestShortPackage")
+    }
+
+    /// `-uiTestPackageList`, with the franchise fixture: CHANNEL PACKAGES lists the shipped
+    /// packages from channels.json after DEMO (names, order and sizes as shipped), some on with
+    /// channels the sample library cannot fill and some off, so a UI test can walk a long list
+    /// and a focused row that grows. Never set in a shipping run.
+    static var packageListFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestPackageList")
+    }
+
+    struct PackageListFixture {
+        /// The shipped packages but FRANCHISES (the fixture adds that one itself), each on or off.
+        let bundles: [ChannelBundle]
+        /// A stand-in channel, with the sample items, for every channel of an on package that is
+        /// not meant to be short of content.
+        let stockedChannels: [Channel]
+    }
+
+    /// Positions (0-based, in package order) of the channels each on package lacks:
+    /// NOSTALGEX is long (22 channels) and 4 short, the last package (HIGH ROTATION) is on with
+    /// 5 short, so the first, the long and the last rows all carry amber names. Any package not
+    /// listed here is off.
+    private static let packageListShortPositions: [String: [Int]] = [
+        "nostalgex": [3, 9, 14, 20],
+        "truecrime": [5],
+        "essentials": [2, 11],
+        "high-rotation": [1, 4, 6, 8, 12],
+    ]
+
+    static func packageListFixture(config: ChannelConfigResult) -> PackageListFixture {
+        let sample = baseChannels().first?.itemPool ?? []
+        var bundles: [ChannelBundle] = []
+        var stocked: [Channel] = []
+        var stockedIDs = Set<Int>()
+        for definition in config.bundles where definition.id != AppState.franchisesBundleID && !definition.id.hasPrefix("collections-") {
+            let short = packageListShortPositions[definition.id]
+            bundles.append(definition.toChannelBundle(enabled: short != nil))
+            guard let short else { continue }
+            for (position, id) in definition.channelIDs.enumerated()
+            where !short.contains(position) && stockedIDs.insert(id).inserted {
+                guard let shipped = config.channels.first(where: { $0.id == id }) else { continue }
+                stocked.append(channel(id: id, number: 1000 + id, name: shipped.name, colorHex: "#8899AA", items: sample))
+            }
+        }
+        return PackageListFixture(bundles: bundles, stockedChannels: stocked)
     }
 
     struct FranchiseFixture {
@@ -377,7 +456,8 @@ extension DemoData {
     /// shipping run.
     static var rescanRowFixture: String? {
         let args = ProcessInfo.processInfo.arguments
-        guard let flag = args.firstIndex(of: "-uiTestRescanRowFixture"), flag + 1 < args.count else { return nil }
+        guard TestLaunchFlags.isOn("-uiTestRescanRowFixture"),
+              let flag = args.firstIndex(of: "-uiTestRescanRowFixture"), flag + 1 < args.count else { return nil }
         return args[flag + 1]
     }
 

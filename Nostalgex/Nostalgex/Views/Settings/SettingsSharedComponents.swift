@@ -239,6 +239,9 @@ struct SettingsToggleRow: View {
     /// text on screen; `alertBadgeLabel` is what VoiceOver reads for it.
     var alertBadge: Int? = nil
     var alertBadgeLabel: String? = nil
+    /// A package's channel names (#217). The row grows to list them under its description
+    /// while it has focus, and shrinks back when focus leaves. Nil for every other row.
+    var channelNames: PackageChannelListing? = nil
     let isOn: Bool
     let isFocused: Bool
     var isLoading: Bool = false
@@ -249,6 +252,10 @@ struct SettingsToggleRow: View {
     var proLocked: Bool = false
     var onLockedTap: (() -> Void)? = nil
     let onToggle: () -> Void
+
+    /// How long a row takes to grow or shrink when focus arrives or leaves. The Settings pane waits this long
+    /// (and a little more) before it places a package row, so it never measures a row that is still growing.
+    static let focusAnimationDuration: Double = 0.15
 
     var body: some View {
         Button {
@@ -277,6 +284,11 @@ struct SettingsToggleRow: View {
                             .font(.custom("DMMono-Regular", size: 20))
                             .foregroundStyle(Color(hex: "#FFB020"))
                             .lineLimit(2)
+                    }
+
+                    if isFocused, let channelNames, !channelNames.entries.isEmpty {
+                        PackageChannelNames(listing: channelNames, isOn: isOn)
+                            .padding(.top, 6)
                     }
                 }
 
@@ -330,8 +342,25 @@ struct SettingsToggleRow: View {
         .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
         .accessibilityLabel(alertBadgeLabel.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(proLocked ? "Pro only" : (isOn ? "On" : "Off"))
+        .accessibilityHintIfPresent(channelNames?.spokenChannels)
         .animation(.easeInOut(duration: 0.2), value: isOn)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .animation(.easeInOut(duration: Self.focusAnimationDuration), value: isFocused)
+    }
+}
+
+// MARK: - Optional accessibility hint
+
+extension View {
+    /// Applies `accessibilityHint` only when there is a hint. With nil the view comes back as it was,
+    /// so a row that has none (every `SettingsToggleRow` but a package row) is not touched, and a hint a
+    /// caller sets on it afterwards is the only one.
+    @ViewBuilder
+    func accessibilityHintIfPresent(_ hint: String?) -> some View {
+        if let hint, !hint.isEmpty {
+            accessibilityHint(hint)
+        } else {
+            self
+        }
     }
 }
 

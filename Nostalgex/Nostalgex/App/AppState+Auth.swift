@@ -14,8 +14,7 @@ extension AppState {
     /// Loads credentials from Keychain only when we don't already have them in memory.
     /// This avoids clobbering a just-acquired token/serverURL during the PIN auth flow.
     func hydrateCredentialsIfNeeded() {
-        if ProcessInfo.processInfo.arguments.contains("-uiTestResetCredentials")
-            || ProcessInfo.processInfo.arguments.contains("-reproAppReviewFlow") {
+        if TestLaunchFlags.isOn("-uiTestResetCredentials") || TestLaunchFlags.isOn("-reproAppReviewFlow") {
             return
         }
         // Restore the last-load timestamp from UserDefaults so the "loaded < 24h
@@ -540,8 +539,16 @@ extension AppState {
         allChannels = demoChannels
         channels = demoChannels
         allItems = demoChannels.flatMap { $0.itemPool }
+        // `-uiTestGuideStripes` only: the demo channels in demo packages, for the guide's package stripes.
+        if DemoData.guideStripesFixtureRequested {
+            bundles = DemoData.guideStripeBundles(for: demoChannels)
+            enabledBundleIDs = Set(bundles.map(\.id))
+            applyBundleFilter()
+        }
 
-        if currentChannel == nil, let first = channelToOpenFirst {
+        // The test-only start channel (-uiTestStartOnChannel) wins, then `channelToOpenFirst`
+        // (the remembered channel when OPEN ON LAST CHANNEL applies, else the first channel).
+        if currentChannel == nil, let first = DemoData.startChannel(in: channels) ?? channelToOpenFirst {
             selectChannel(first)
         }
 

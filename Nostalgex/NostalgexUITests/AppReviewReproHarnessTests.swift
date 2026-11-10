@@ -2,8 +2,7 @@ import XCTest
 
 final class AppReviewReproHarnessTests: XCTestCase {
     func testReproAppReviewFlow_LandsOnTuner() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-reproAppReviewFlow", "1"]
+        let app = isolatedApp(arguments: ["-reproAppReviewFlow", "1"])
         app.launch()
 
         XCTAssertTrue(app.buttons["SETTINGS"].waitForExistence(timeout: 15))

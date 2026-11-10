@@ -20,7 +20,7 @@ struct SettingsPlaybackView: View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsToggleRow(
                 title: "RETRO MODE",
-                subtitle: "CRT scanlines, vignette, VHS glitch, 4:3 aspect ratio",
+                subtitle: "CRT scanlines, vignette, flicker, 4:3 aspect ratio",
                 isOn: appState.retroMode,
                 isFocused: isFocused("retro")
             ) {
