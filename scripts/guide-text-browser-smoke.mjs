@@ -126,6 +126,9 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
+// A desktop viewport draws a program title at 18 px x the guide factor (1.3) x the row text share (0.76: the Apple TV took its row
+// text from 29 to 22 pt on 2026-11-10).
+const DESKTOP_NORMAL = 18 * 1.3 * 0.76;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */
@@ -174,7 +177,9 @@ async function openSettingsGeneral(page) {
   if (await rail.first().isVisible().catch(() => false)) await rail.first().click();
   else { await page.locator("#m-menu-btn").click(); await page.locator(".m-drawer-item:has-text('SETTINGS')").click(); }
   await settle(page, 300);
-  await page.locator("#tab-general").click();
+  // Wide screens have the Settings rail (#rail-general); a phone has the tab strip (#tab-general).
+  const railItem = page.locator("#rail-general");
+  if (await railItem.isVisible().catch(() => false)) await railItem.click(); else await page.locator("#tab-general").click();
   await settle(page, 300);
 }
 // Settings and the guide scroll rows into view smoothly; measure once the guide has stopped moving.
@@ -259,7 +264,7 @@ for (const name of Object.keys(viewports)) try {
 for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
   const { page, errors } = await launch("desktop", { stored });
   const s = await read(page);
-  check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && s.program === 18, `${s.large} ${s.program}`);
+  check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && near(s.program, DESKTOP_NORMAL), `${s.large} ${s.program}`);
   check(`stored ${JSON.stringify(stored)}: no page errors`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {
@@ -268,7 +273,7 @@ for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
 try {
   const { page, errors } = await launch("desktop", { stored: "large" });
   const s = await read(page);
-  check("stored 'large' on a new page: LARGE on first draw", s.large && near(s.program, 18 * ratio.title), `${s.large} ${s.program}`);
+  check("stored 'large' on a new page: LARGE on first draw", s.large && near(s.program, DESKTOP_NORMAL * ratio.title), `${s.large} ${s.program}`);
   check("stored 'large': no page errors", errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {

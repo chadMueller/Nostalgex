@@ -3,6 +3,73 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: text one step smaller, same branch)
+
+**Why.** Chad, on the preview: the guide text is too big, and the font increases overall were more than he wanted. The Apple TV took
+the same step the same day: guide row text 29 to 22 pt, rows 76 to 64 pt, Settings one step down (row text 29 to 25, headings 34
+to 29, rail rows 76 to 64, rail width 470 to 420, toggle 52x30 to 44x26). The web follows by ratio, keeping its face and tokens.
+
+**Changed.** Guide row text (titles, numbers, names) is 0.76 of what it was (`--gr`), rows are 40 px (50 before; 52 on the
+TV-browser step), the header 38 (42), times and the CHANNEL heading stay. About 9 rows show at 1280x800, 7.6 at 960x540 (8.9 and 8.5
+on main). The info panel steps down one notch (`--is` 1 to 0.85, and 0.85 to 0.72 under 900 px tall). Settings and every dialog take
+`--ts` 0.85 (phones 0.72), the rail is 300 wide (340), its rows 14 px type and about 44 px tall, the pane title 22 (26), the bundle
+switch 48x26 (56x30). Setup screens: title 40 to 34, button 24 to 20, row padding 22/30 to 18/26. Loader: first-setup line 22 to 19,
+rail label 16 to 14, rail circle 28 to 24, headline 32 to 27, detail 22 to 19, caption 19 to 16, stall line 20 to 17, stall note 17 to
+14, STOP WAITING 24 to 20, START OVER 16 to 14. The 12 px floor on text that carries state (ON and OFF, labels, errors) is unchanged;
+only guide row text goes under it, on the TV-browser step (12.3 px on screen). The phone guide keeps its own table (as on main).
+
+Before and after, in CSS px as the page measures them (960x540 values are authored px; multiply by 0.667 for what is on screen):
+
+| What | Main | Before this pass | After | At |
+|---|---|---|---|---|
+| guide time (25 pt, unchanged) | 20 | 26 | 26 | 1280x800 |
+| guide time (25 pt, unchanged) | 20 | 27 | 27 | 960x540 (authored px, zoom 0.667) |
+| guide CHANNEL heading (unchanged) | 8 | 15.6 | 15.6 | 1280x800 |
+| guide CHANNEL heading (unchanged) | 8 | 24.3 | 24.3 | 960x540 (authored px, zoom 0.667) |
+| guide CHANNEL heading (unchanged) | 7 | 12 | 12 | 390x844 |
+| guide channel number | 20 | 26 | 19.8 | 1280x800 |
+| guide channel number | 20 | 27 | 20.5 | 960x540 (authored px, zoom 0.667) |
+| guide channel name | 18 | 23.4 | 17.8 | 1280x800 |
+| guide channel name | 18 | 24.3 | 18.5 | 960x540 (authored px, zoom 0.667) |
+| guide program title | 18 | 23.4 | 17.8 | 1280x800 |
+| guide program title | 18 | 24.3 | 18.5 | 960x540 (authored px, zoom 0.667) |
+| guide row height | 38 | 50 | 40 | 1280x800 |
+| guide row height | 38 | 52 | 40 | 960x540 (authored px, zoom 0.667) |
+| info channel tag | 12 | 30.6 | 25.9 | 1280x800 |
+| info channel tag | 12 | 25.9 | 25.9 | 960x540 (authored px, zoom 0.667) |
+| info channel tag | 8 | 18 | 18 | 390x844 |
+| info title | 42 | 32.3 | 27.4 | 1280x800 |
+| info title | 42 | 27.4 | 27.4 | 960x540 (authored px, zoom 0.667) |
+| info title | 20 | 14 | 14 | 390x844 |
+| info badges and time | 8 | 20.4 | 17.3 | 1280x800 |
+| info badges and time | 8 | 24 | 24 | 960x540 (authored px, zoom 0.667) |
+| info badges and time | 7 | 16 | 16 | 390x844 |
+| info UP NEXT | 20 | 15.3 | 13 | 1280x800 |
+| info UP NEXT | 20 | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item | - | 16 | 14 | 1280x800 |
+| Settings rail item | - | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item height | - | 53 | 44 | 1280x800 |
+| Settings rail item height | - | 56 | 50 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item height | - | - | - | 390x844 |
+| Settings rail width | - | 340 | 300 | 1280x800 |
+| Settings rail width | - | 340 | 300 | 960x540 (authored px, zoom 0.667) |
+| Settings pane title | - | 26 | 22 | 1280x800 |
+| Settings pane title | - | 26 | 22 | 960x540 (authored px, zoom 0.667) |
+| Settings pane line | - | 20 | 17 | 1280x800 |
+| Settings pane line | - | 20 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings section label | 10 | 17 | 14.5 | 1280x800 |
+| Settings section label | 10 | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings section label | 10 | 14.5 | 12.2 | 390x844 |
+| Settings row title | 22 | 22 | 18.7 | 1280x800 |
+| Settings row title | 22 | 22 | 18.7 | 960x540 (authored px, zoom 0.667) |
+| Settings row title | 22 | 18.7 | 15.8 | 390x844 |
+| Settings row description | 12 | 20 | 17 | 1280x800 |
+| Settings row description | 12 | 20 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings row description | 12 | 17 | 14.4 | 390x844 |
+
+**Tests.** `guide-text-browser-smoke.mjs` held a desktop title size of 18 px that has been stale since the 1.3x guide, and clicked
+the old Settings tab strip; it now expects 18 x 1.3 x 0.76 and uses the rail. It passes (104 checks).
+
 ## 2026-11-10 (web tuner: the loading screen as the Apple TV's, PACKAGES button removed, same branch)
 
 **Why.** The loading screen was the last first-run screen still in the old look: a coffee ask under the rail, a bordered card on

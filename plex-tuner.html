@@ -61,18 +61,21 @@
        (18 to 23.4, 20 to 26). GUIDE TEXT SIZE multiplies on top, so its ratios hold. Phones and
        tablets under 1025px keep their own sizes (the media block below sets the old values). */
     --gs: 1.3;
-    --g-row: 50px;
-    --g-head: 42px;
+    /* The Apple TV took the guide's row text from 29 to 22 pt (x0.76) and its rows from 76 to 64 pt (x0.84) on
+       2026-11-10. Times and the CHANNEL heading stay where they were. --gr is the row text's share of --gs. */
+    --gr: 0.76;
+    --g-row: 40px;
+    --g-head: 38px;
     --g-col: 200px;
     --g-promo: 56px;
     /* The info panel beside the rail: the Apple TV's InfoPanelView sizes (tag 36, title 38,
        episode 22, description 20, badges and times 24, up next 18) times --is, stepped down on
        shorter windows so the panel (which clips) still holds them. */
-    --is: 1;
+    --is: 0.85;
     /* Text of dialogs, Settings and notes (not the window-height-stepped info panel): body for a row's
        label and value, desc for the line that explains it, cap for hints, section labels and small
        captions. The info panel's description is 20px, so desc is too. */
-    --ts: 1;
+    --ts: 0.85;
     --fs-body: max(calc(22px * var(--ts)), var(--nx-fs));
     --fs-desc: max(calc(20px * var(--ts)), var(--nx-fs));
     --fs-cap: max(calc(17px * var(--ts)), var(--nx-fs));
@@ -381,7 +384,7 @@
   }
   .loading-library-first-hint {
     font-family: 'DM Mono', monospace;
-    font-size: max(22px, var(--nx-fs));
+    font-size: max(19px, var(--nx-fs));
     line-height: 1.25;
     color: rgba(255,255,255,0.55);
     text-align: center;
@@ -408,14 +411,14 @@
     min-width: 0;
   }
   .load-rail-dot {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: max(14px, var(--nx-fs));
+    font-size: max(12px, var(--nx-fs));
     font-weight: 700;
     color: var(--cyan);
     flex-shrink: 0;
@@ -423,15 +426,15 @@
   .load-rail-step.active .load-rail-dot,
   .load-rail-step.complete .load-rail-dot { border-color: var(--cyan); }
   .load-rail-dot-active {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: var(--cyan);
     display: block;
   }
   .load-rail-label {
     font-family: 'DM Mono', monospace;
-    font-size: max(16px, var(--nx-fs));
+    font-size: max(14px, var(--nx-fs));
     color: rgba(255,255,255,0.3);
     text-align: center;
     white-space: nowrap;
@@ -442,17 +445,17 @@
   .load-rail-step.active .load-rail-label { color: var(--cyan); }
   .load-rail-step.complete .load-rail-label { color: rgba(255,255,255,0.55); }
   .load-rail-connector {
-    width: 36px;
+    width: 32px;
     height: 2px;
     background: rgba(255,255,255,0.15);
-    margin-top: 13px;
+    margin-top: 11px;
     flex-shrink: 0;
   }
   .load-rail-connector.done { background: rgba(0,196,255,0.5); }
   .loading-library-text {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    font-size: max(32px, var(--nx-fs));
+    font-size: max(27px, var(--nx-fs));
     line-height: 1.2;
     color: var(--cyan);
     text-align: center;
@@ -470,7 +473,7 @@
   }
   .loading-library-sub {
     font-family: 'DM Mono', monospace;
-    font-size: max(22px, var(--nx-fs));
+    font-size: max(19px, var(--nx-fs));
     line-height: 1.3;
     color: rgba(255,255,255,0.45);
     text-align: center;
@@ -500,7 +503,7 @@
   }
   .loading-library-progress-caption {
     font-family: 'DM Mono', monospace;
-    font-size: max(19px, var(--nx-fs));
+    font-size: max(16px, var(--nx-fs));
     color: rgba(255,255,255,0.45);
   }
   /* STOP WAITING: appears once the scan has gone quiet for a minute (scripts/nostalgex-load-stall.js),
@@ -518,11 +521,11 @@
   .loading-library-stall-line,
   .loading-library-stall-note {
     font-family: 'DM Mono', monospace;
-    font-size: max(20px, var(--nx-fs));
+    font-size: max(17px, var(--nx-fs));
     line-height: 1.4;
     color: rgba(255,255,255,0.5);
   }
-  .loading-library-stall-note { font-size: max(17px, var(--nx-fs)); color: rgba(255,255,255,0.4); }
+  .loading-library-stall-note { font-size: max(14px, var(--nx-fs)); color: rgba(255,255,255,0.4); }
   /* The setup screens' primary button, sized as the Apple TV's STOP WAITING (24 pt). Focus is the
      page's 3 px ring (the :where rule at the top), not removed. */
   .loading-library-stop-waiting {
@@ -530,9 +533,9 @@
     border: 2.5px solid var(--cyan);
     border-radius: 14px;
     color: #00101a;
-    padding: 18px 40px;
+    padding: 15px 34px;
     font-family: 'DM Mono', monospace;
-    font-size: max(24px, var(--nx-fs));
+    font-size: max(20px, var(--nx-fs));
     cursor: pointer;
   }
   .loading-library-stop-waiting:hover { background: #fff; border-color: #fff; }
@@ -544,9 +547,9 @@
     border: 2px solid rgba(255,255,255,0.3);
     border-radius: 14px;
     color: rgba(255,255,255,0.6);
-    padding: 12px 28px;
+    padding: 10px 24px;
     font-family: 'DM Mono', monospace;
-    font-size: max(16px, var(--nx-fs));
+    font-size: max(14px, var(--nx-fs));
     cursor: pointer;
   }
   .loading-library-start-over:hover,
@@ -1641,13 +1644,13 @@
   }
   .grid-ch-num {
     font-family: 'VT323', monospace;
-    font-size: calc(20px * var(--gs) * var(--gt-num));
+    font-size: calc(20px * var(--gs) * var(--gr) * var(--gt-num));
     color: rgba(255,255,255,0.55);
-    min-width: calc(28px * var(--gs) * var(--gt-num));
+    min-width: calc(28px * var(--gs) * var(--gr) * var(--gt-num));
   }
   .grid-ch-name {
     font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gs) * var(--gt-name));
+    font-size: calc(18px * var(--gs) * var(--gr) * var(--gt-name));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -1667,7 +1670,7 @@
     align-items: center;
     padding: 0 8px;
     font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gs) * var(--gt-title));
+    font-size: calc(18px * var(--gs) * var(--gr) * var(--gt-title));
     color: rgba(255,255,255,0.85);
     white-space: nowrap;
     overflow: hidden;
@@ -1698,7 +1701,7 @@
     padding: 0 16px;
     gap: 10px;
     font-family: 'VT323', monospace;
-    font-size: max(calc(19px * var(--gs)), var(--nx-fs-tag));
+    font-size: max(calc(19px * var(--gs) * var(--gr)), var(--nx-fs-tag));
     letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
@@ -1933,7 +1936,7 @@
   @media (min-width: 701px) {
     .config-panel {
       display: grid;
-      grid-template-columns: var(--cfg-rail-w, 340px) minmax(0, 1fr);
+      grid-template-columns: var(--cfg-rail-w, 300px) minmax(0, 1fr);
       width: min(1320px, 96vw);
       height: min(88vh, 900px);
       max-height: none;
@@ -1948,13 +1951,13 @@
       border-right: 1px solid rgba(255,255,255,0.1);
     }
     .config-rail .config-header { text-align: left; margin: 0 0 4px 20px; }
-    .config-rail .config-header img { height: 36px; }
+    .config-rail .config-header img { height: 32px; }
     .config-rail-title {
       font-family: 'VT323', monospace;
-      font-size: max(36px, var(--nx-fs-tag));
+      font-size: max(31px, var(--nx-fs-tag));
       color: var(--yellow);
       letter-spacing: 0.08em;
-      margin: 10px 0 14px 20px;
+      margin: 8px 0 12px 20px;
     }
     .config-rail-divider { height: 1px; background: rgba(255,255,255,0.14); margin: 8px 12px; }
     .config-rail-item {
@@ -1963,13 +1966,13 @@
       text-align: left;
       font-family: 'DM Mono', monospace;
       font-weight: 500;
-      font-size: max(16px, var(--nx-fs));
+      font-size: max(14px, var(--nx-fs));
       letter-spacing: 0.06em;
       color: rgba(255,255,255,0.85);
       background: transparent;
       border: 0;
       border-radius: 6px;
-      padding: 16px 16px 16px 24px;
+      padding: 13px 16px 13px 24px;
       cursor: pointer;
       position: relative;
     }
@@ -1980,7 +1983,7 @@
     .config-main { overflow-y: auto; padding: 0 8px 0 36px; min-width: 0; }
     .config-main .config-sub, .config-main .config-tabs { display: none; }
     .config-pane-head { display: block; margin: 8px 0 24px; }
-    .config-pane-title { font-size: max(26px, var(--nx-fs)); font-weight: 500; color: #fff; letter-spacing: 0.04em; }
+    .config-pane-title { font-size: max(22px, var(--nx-fs)); font-weight: 500; color: #fff; letter-spacing: 0.04em; }
     .config-pane-sub { font-size: var(--fs-desc); color: rgba(255,255,255,0.7); margin-top: 6px; }
   }
   #config-tab-bundles:focus-visible, #config-tab-help:focus-visible, #config-tab-support:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
@@ -2082,11 +2085,11 @@
 
   /* Toggle switch */
   .toggle-switch {
-    width: 56px;
-    height: 30px;
+    width: 48px;
+    height: 26px;
     background: rgba(255,255,255,0.1);
     border: 2px solid rgba(255,255,255,0.2);
-    border-radius: 15px;
+    border-radius: 13px;
     position: relative;
     flex-shrink: 0;
     transition: all 0.2s;
@@ -2100,14 +2103,14 @@
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     background: rgba(255,255,255,0.5);
     border-radius: 50%;
     transition: all 0.2s;
   }
   .toggle-switch.on::after {
-    left: 29px;
+    left: 25px;
     background: var(--green);
     box-shadow: 0 0 8px var(--green);
   }
@@ -2486,7 +2489,7 @@
   }
   @media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) {
     /* 18px VT323 at this zoom was 12 screen px; 1.35 puts the guide text at 16 (the floor) and the rows at 35. */
-    :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-row: 52px; --g-head: 43px; --g-col: 208px; --g-promo: 58px; }
+    :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-row: 40px; --g-head: 38px; --g-col: 208px; --g-promo: 58px; }
     html { zoom: 0.6667; }
     body { width: calc(100vw / 0.6667); height: calc(100vh / 0.6667); }
     .config-panel { width: min(1320px, calc(96vw / 0.6667)); max-height: calc(85vh / 0.6667); height: min(calc(88vh / 0.6667), 900px); }
@@ -2544,10 +2547,10 @@
      RESPONSIVE
   ══════════════════════════════════════ */
   @media (max-width: 1024px) and (orientation: portrait), (max-width: 1024px) and (pointer: coarse), (orientation: landscape) and (max-height: 500px) {
-    :root { --gs: 1; --g-row: 38px; --g-head: 32px; --g-col: 160px; --g-promo: 44px; }
+    :root { --gs: 1; --gr: 1; --g-row: 38px; --g-head: 32px; --g-col: 160px; --g-promo: 44px; }
   }
-  @media (max-width: 560px) { :root { --ts: 0.85; } }
-  @media (pointer: fine) and (max-height: 900px) { :root { --is: 0.85; } }
+  @media (max-width: 560px) { :root { --ts: 0.72; } }
+  @media (pointer: fine) and (max-height: 900px) { :root { --is: 0.72; } }
   @media (pointer: fine) and (max-height: 779px) { :root { --is: 0.72; } }
   @media (max-width: 1024px) {
     /* Unmute button — compact */
@@ -3432,7 +3435,7 @@
   .plex-connect > :not(.plex-brand) { grid-column: 2; grid-row: 1; }
   .plex-brand { display: flex; flex-direction: column; gap: 28px; align-items: flex-start; }
   .plex-brand .plex-logo { max-width: 440px; }
-  .setup-title { font-family: 'DM Mono', monospace; font-weight: 500; font-size: max(40px, var(--nx-fs)); letter-spacing: 0.02em; color: rgba(255,255,255,0.95); margin: 0 0 14px; line-height: 1.15; }
+  .setup-title { font-family: 'DM Mono', monospace; font-weight: 500; font-size: max(34px, var(--nx-fs)); letter-spacing: 0.02em; color: rgba(255,255,255,0.95); margin: 0 0 14px; line-height: 1.15; }
   .setup-text { font-size: var(--fs-desc); color: rgba(255,255,255,0.7); line-height: 1.5; max-width: 560px; margin: 0; }
   .setup-copy > div { display: none; }
   .plex-connect:not(:has(.plex-waiting.active)):not(:has(.server-picker.active)):not(:has(#plex-empty[style*="display: flex"])) .setup-copy .c-connect,
@@ -3446,7 +3449,7 @@
   }
   .plex-connect .plex-empty-title, .plex-connect .plex-empty-text, .plex-connect .server-picker-title { display: none; }
   .plex-connect .plex-btn, .plex-connect .server-picker-connect {
-    border-radius: 14px; width: 100%; text-align: center; font-size: max(24px, var(--nx-fs)); padding: 22px 36px;
+    border-radius: 14px; width: 100%; text-align: center; font-size: max(20px, var(--nx-fs)); padding: 18px 30px;
     border-width: 2.5px;
   }
   .plex-connect .plex-waiting { align-items: flex-start; }
@@ -3463,7 +3466,7 @@
   .server-picker-connect { flex-shrink: 0; }
   .setup-row {
     display: flex; align-items: center; gap: 16px; justify-content: space-between;
-    padding: 22px 30px; border-radius: 14px; cursor: pointer;
+    padding: 18px 26px; border-radius: 14px; cursor: pointer;
     background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.28); color: #fff;
     font-family: 'DM Mono', monospace;
   }
