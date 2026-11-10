@@ -1713,7 +1713,7 @@ sub drawForcedSub()
     if m.forcedCues = invalid then return
     text = ""
     if not m.playerSubsShown and m.video.state = "playing" then text = NxSrtTextAt(m.forcedCues, Int(m.video.position * 1000))
-    box = NxForcedSubBox(m.fullscreen)
+    spot = NxForcedSubBox(m.fullscreen)
     if text = m.forcedText and m.forcedBoxFull = m.fullscreen then return
     m.forcedText = text
     m.forcedBoxFull = m.fullscreen
@@ -1723,13 +1723,13 @@ sub drawForcedSub()
     edge = m.top.FindNode("forcedSubEdge")
     lbl = m.top.FindNode("forcedSubText")
     for each l in [edge, lbl]
-        l.font = fontOf("DMMono-Medium", box.size)
-        l.width = box.w
-        l.height = box.h
+        l.font = fontOf("DMMono-Medium", spot.size)
+        l.width = spot.w
+        l.height = spot.h
         l.text = text
     end for
-    lbl.translation = [box.x, box.y]
-    edge.translation = [box.x + box.edge, box.y + box.edge]
+    lbl.translation = [spot.x, spot.y]
+    edge.translation = [spot.x + spot.edge, spot.y + spot.edge]
 end sub
 
 ' Roku draws subtitles only while its caption mode is on, and that mode is the
