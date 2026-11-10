@@ -3,6 +3,40 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: a Jellyfin or Emby forced subtitle track is drawn by the app, #237, first half)
+
+**Why.** Roku shows its captions only while the TV's caption mode is on, so the app switched that setting on to show
+a forced track and put it back afterwards. Back restores it since #170; Home leaves it on until the next launch
+(#117). Drawing the lines in the app means the setting is never touched (#117's option A).
+
+**Changed, Jellyfin and Emby.** The forced track in SUBTITLE LANGUAGE is no longer handed to the player as a
+sidecar. `ForcedSubTask` fetches the server's SRT at tune, `source/subtitles/Srt.brs` reads it into cues, and
+`GuideView.drawForcedSub` puts the current line in a Label under the CRT overlay, in full screen and in the guide's
+preview, ten times a second. The player reports its position every half second, so the time since the last report is
+added (`NxForcedSubMs`). The line gives way while the player's own subtitles show. SUBTITLES (OFF, FOREIGN AUDIO,
+ALWAYS) and its full tracks are as they were, through the TV's captions.
+
+**Not yet: Plex, and a picture track.** The Roku keeps no list of a Plex file's subtitle tracks; it would take the
+per-tune request asked about on #246. A forced track that is a picture (PGS, VobSub) has no text to draw.
+
+**A TV refused `box` as a variable name** ("Builtin function call expected", five lines of `GuideView.brs`) after the
+interpreter, static analysis and the guards had passed it. Renamed, and `check-guards.sh` now refuses it as it does
+`run`.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of `ad74ada` to `227f4af`
+plus three scratch aids (a linked item starts 285 s in, an input that sets the TV's caption mode, a log line per drawn
+change), with *American Dad!* "Pilot": an HEVC MKV whose one forced English line runs 4:57.208 to 5:02.166.
+- The track came in 6 to 16 ms once the server had it (281 ms the first time) and was read in 0 to 2 ms.
+- First build, the reported position alone: drawn 291 ms late, cleared 338 ms late.
+- With the time since the report added (`227f4af`), by the app's own clock: direct play, drawn 30 to 96 ms after
+  the line's start and cleared 1 to 76 ms after its end (six runs); server stream, 87 and 88 ms, 35 and 35 ms.
+- TV captions On: On before, during and after. Set Off: Off before, during and after, and 6 s and 21 s after Home.
+- Two dev screenshots show the line: at the foot of the full screen picture, and inside the guide's preview box.
+
+**Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
+times are the player's). Emby, a longer track, SUBTITLES ALWAYS beside a forced track, a stick, and the full
+`tests/run.sh` on this branch.
+
 ## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
 
 **Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with

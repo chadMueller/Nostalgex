@@ -427,8 +427,22 @@ content carries the first in SUBTITLE LANGUAGE as the server's SRT
 answer without a token), and `applySubtitles` selects it when no full
 track is showing, over the guide too, as a burned-in line would be. With
 SUBTITLES on, a full track in the language comes first, as
-`pickLegibleOption`. Measured on a TCL 55R617 against the test Emby,
-2026-10-26:
+`pickLegibleOption`.
+
+**Since #237 the app draws the forced track itself** and the player is given
+no forced sidecar, so the TV's caption setting is never changed for one.
+`ForcedSubTask` fetches the same SRT at tune, `source/subtitles/Srt.brs` reads
+it into cues, and `GuideView.drawForcedSub` puts the current line in a Label
+over the picture, in full screen and in the guide's preview, ten times a
+second off the player's position (which it reports every half second, so the
+time since the report is added: `NxForcedSubMs`). The line gives way while the
+player's own subtitles show. On the 43S45 against the lab Jellyfin 12.2.0
+(2026-11-10), *American Dad!* "Pilot"'s one forced line (4:57.208 to
+5:02.166) was drawn 30 to 96 ms after its start and cleared 1 to 76 ms after
+its end by the app's own clock, on a direct play and on a server stream, with
+the TV's captions On and Off, and Off stayed Off through the airing and after
+Home. The sidecar measurements below are from before that, on a TCL 55R617
+against the test Emby, 2026-10-26:
 
 - The Roku doesn't list a forced track inside the file: of *American Dad!*
   "Pilot"'s 23 SRT tracks it listed 22, all but the forced one, and of
