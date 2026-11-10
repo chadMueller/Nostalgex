@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner round 2, same branch)
+
+**Why.** Chad looked at the batch 1 preview: everything read small, the guide most, the support strip was skipped by the
+keyboard, and Settings should be the Apple TV's rail and content. Branch `web/visual-batch-1-1110`, pushed (branch only).
+
+**Changed.** The guide is 1.3x as a whole (row 38 to 50, header 32 to 42, channel column 160 to 200, text 18 to 23.4 and 20
+to 26; `--gs` and `--g-*` in `plex-tuner.html`), against the Apple TV's 80pt rows with 20pt text; at the 960x540 step 1.35,
+which also puts the guide text at the 16 floor. GUIDE TEXT SIZE multiplies on top and its ratios hold. Under 1025px
+wide and on touch screens the old sizes stay. The corner logo is 170px, the info panel uses the Apple TV's InfoPanelView
+sizes (tag 36, title 38, episode 22, description 20, badges and times 24, up next 18) stepped down on short windows.
+Keyboard: Up and Down walk every guide row including SUPPORT, INFO and the seasonal invite (Enter presses it, Left and
+Right walk the invite's buttons); Enter and Space press the focused control instead of tuning in; the guide is a Tab
+stop; Settings, the dialogs and the drawer keep focus inside and hand it back; the hidden full-screen controls are out of
+the Tab order. Settings is a rail of the Apple TV's categories (SUPPORT NOSTALGEX, PLAYBACK & PICTURE, CHANNELS & BUNDLES,
+SERVERS & ACCOUNTS, ABOUT) with the content beside it; Up and Down in the rail swap the content, Right or Tab goes in,
+Left or Esc comes back, Esc in the rail closes. Under 701px wide the tab strip stays.
+
+**Not run.** No test suites for this round (Chad's call); the existing smokes that click Settings tabs were not re-run.
+
 ## 2026-11-10 (web tuner and Docker: first visual batch, branch only)
 
 **Why.** The Apple TV and the web tuner had drifted apart on type, contrast and states. Chad asked for the audit's first
