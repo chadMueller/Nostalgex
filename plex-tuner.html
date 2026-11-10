@@ -3241,6 +3241,15 @@
   .cfg-row[hidden] { display: none; }
   .cfg-row--wrap { flex-wrap: wrap; }
   .cfg-row--wrap > div:first-child { flex: 1 1 260px; min-width: 0; }
+  /* the row is the target: the whole row takes the cyan outline */
+  .cfg-row[data-row-action]:focus, .cfg-row[data-row-action]:focus-visible, a.cfg-row:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 0;
+    background: rgba(0,196,255,0.12);
+  }
+  .cfg-row[data-row-action] { cursor: pointer; }
+  a.cfg-row { text-decoration: none; color: inherit; }
+  .cfg-row-address { font-size: var(--fs-cap); color: rgba(255,255,255,0.7); letter-spacing: 0.04em; text-align: right; overflow-wrap: anywhere; max-width: 45%; }
   .cfg-row-title { font-size: var(--fs-body); color: rgba(255,255,255,0.85); font-weight: 500; }
   .cfg-row-desc { font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px; }
 
@@ -3854,30 +3863,8 @@
     </div>
 
     <div id="config-tab-support" style="display:none" tabindex="-1">
-      <div class="config-section-label">TIP JAR</div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Buy me a coffee</div>
-          <div class="cfg-row-desc">Nostalgex is built by one person. A tip helps.</div>
-        </div>
-        <a class="plex-btn" href="https://buymeacoffee.com/chadmueller" target="_blank" rel="noopener noreferrer" style="font-size: var(--fs-cap); padding: 12px 22px; text-decoration: none;">OPEN</a>
-      </div>
-      <div class="config-section-label" style="margin-top: 28px;">FOLLOW</div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Instagram</div>
-          <div class="cfg-row-desc">News and screenshots.</div>
-        </div>
-        <a class="plex-btn" href="https://www.instagram.com/nostalgex_" target="_blank" rel="noopener noreferrer" style="font-size: var(--fs-cap); padding: 12px 22px; text-decoration: none;">OPEN</a>
-      </div>
-      <div class="config-section-label" style="margin-top: 28px;">THE APP</div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Nostalgex for Apple TV</div>
-          <div class="cfg-row-desc">The same guide on the big screen.</div>
-        </div>
-        <a class="plex-btn" href="https://apps.apple.com/app/nostalgex/id6762563534" target="_blank" rel="noopener noreferrer" style="font-size: var(--fs-cap); padding: 12px 22px; text-decoration: none;">OPEN</a>
-      </div>
+      <!-- Filled from NX_LINKS by renderSupportLinks(). -->
+      <div id="cfg-links"></div>
     </div><!-- end config-tab-support -->
 
     <div id="config-tab-bundles" style="display:none" tabindex="-1" role="listbox" aria-label="Channel bundles. Up and Down move, Enter or Space toggles.">
@@ -3911,7 +3898,7 @@
 
     <div id="config-tab-general" style="display:none" tabindex="-1">
       <div class="config-section-label">DISPLAY</div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+      <div class="cfg-row">
         <div>
           <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Retro mode</div>
           <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">CRT scanlines, vignette, flicker, 4:3 aspect ratio. Shortcut: B</div>
@@ -3940,22 +3927,14 @@
         </div>
         <button class="plex-btn plex-btn--toggle on" id="cfg-open-last-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleOpenLastChannel()" aria-label="Open on last channel" aria-pressed="true">ON</button>
       </div>
-      <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
-      <div class="cfg-row" id="cfg-include-hidden-row" hidden>
-        <div>
-          <div class="cfg-row-title">Include libraries hidden on Jellyfin</div>
-          <div class="cfg-row-desc">Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle" id="cfg-include-hidden-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleIncludeHiddenLibraries()" aria-label="Include libraries hidden on Jellyfin" aria-pressed="false">OFF</button>
-      </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+      <div class="cfg-row">
         <div>
           <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Show Now Playing</div>
           <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Show the current program on your server. Marking a title watched is a separate choice.</div>
         </div>
         <button class="plex-btn plex-btn--toggle" id="cfg-nowplaying-toggle" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleNowPlaying()" aria-label="Show Now Playing" aria-pressed="false">OFF</button>
       </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+      <div class="cfg-row">
         <div>
           <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Mark Watched</div>
           <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Count a watch when you join near the start and watch at least 75%. Works with Show Now Playing off.</div>
@@ -3997,7 +3976,7 @@
 
       <div class="config-section-label" style="margin-top: 28px;">LANGUAGE</div>
       <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+        <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Audio language</div>
             <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Preferred audio track when multiple languages are available (Jellyfin and Emby)</div>
@@ -4024,7 +4003,7 @@
             <option value="tr">Turkish</option>
           </select>
         </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+        <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Subtitle language</div>
             <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">Language for subtitles when enabled (C key in fullscreen, Jellyfin and Emby)</div>
@@ -4051,7 +4030,7 @@
             <option value="tr">Turkish</option>
           </select>
         </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
+        <div class="cfg-row">
           <div>
             <div style="font-size: var(--fs-body); color: rgba(255,255,255,0.85);">Auto subtitles for foreign audio</div>
             <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); margin-top: 4px;">If nothing plays in your audio language, show subtitles automatically (Jellyfin and Emby, fullscreen)</div>
@@ -4062,20 +4041,35 @@
     </div>
 
     <div id="config-tab-server" style="display:none" tabindex="-1">
-      <div class="config-section-label" id="cfg-account-label">PLEX ACCOUNT</div>
-      <div id="config-plex-status" style="margin-bottom: 24px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
-        <div style="font-size: var(--fs-desc); color: rgba(255,255,255,0.55); letter-spacing: 0.06em;" id="cfg-server-name">Not connected</div>
-        <div style="margin-top: 12px; display: flex; gap: 16px;">
-          <button class="plex-btn" id="cfg-plex-btn" style="font-size: var(--fs-cap); padding: 12px 20px;" onclick="if(plexConnected){signOut()}else{startPlexAuth()}">CONNECT WITH PLEX</button>
+      <div id="cfg-library-section" style="display:none">
+        <div class="config-section-label">LIBRARIES</div>
+        <div id="cfg-library-coverage-wrap" style="display:none; margin: 0 0 4px; padding: 0 4px;">
+          <div id="cfg-library-coverage" style="font-size: var(--fs-desc); color: rgba(255,255,255,0.7); letter-spacing: 0.06em; line-height: 1.5;"></div>
+        </div>
+      <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
+      <div class="cfg-row" id="cfg-include-hidden-row" hidden>
+        <div>
+          <div class="cfg-row-title">Include libraries hidden on Jellyfin</div>
+          <div class="cfg-row-desc">Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.</div>
+        </div>
+        <button class="plex-btn plex-btn--toggle" id="cfg-include-hidden-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleIncludeHiddenLibraries()" aria-label="Include libraries hidden on Jellyfin" aria-pressed="false">OFF</button>
+      </div>
+        <div class="cfg-row" id="cfg-rescan-row">
+          <div>
+            <div class="cfg-row-title">RESCAN LIBRARY</div>
+            <div class="cfg-row-desc" id="cfg-rescan-desc">Pull a fresh copy of your library after adding content</div>
+          </div>
+          <button class="plex-btn" id="cfg-rescan-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="rescanLibrary()">RESCAN</button>
         </div>
       </div>
-      <div id="cfg-library-coverage-wrap" style="display:none; margin: -8px 0 24px; padding: 0 20px;">
-        <div class="config-section-label" style="margin-bottom:6px;">LIBRARY</div>
-        <div id="cfg-library-coverage" style="font-size: var(--fs-body); color: rgba(255,255,255,0.55); letter-spacing: 0.06em; line-height: 1.5;"></div>
-      </div>
-      <div id="cfg-server-list" style="display:none">
+      <div id="cfg-server-list" style="display:none; margin-top: 28px;">
         <div class="config-section-label" style="margin-bottom:12px;">SERVERS</div>
         <div id="cfg-server-list-items"></div>
+      </div>
+      <div class="config-section-label" id="cfg-account-label" style="margin-top: 28px;">PLEX ACCOUNT</div>
+      <div class="cfg-row" id="config-plex-status">
+        <div class="cfg-row-title" id="cfg-server-name">Not connected</div>
+        <button class="plex-btn" id="cfg-plex-btn" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="if(plexConnected){signOut()}else{startPlexAuth()}">CONNECT WITH PLEX</button>
       </div>
     </div>
 
@@ -8525,7 +8519,7 @@
     { tab: 'support', title: 'SUPPORT NOSTALGEX', sub: 'A tip or a follow, whichever suits' },
     { tab: 'general', title: 'PLAYBACK & PICTURE', sub: 'Picture, quality, subtitles and audio' },
     { tab: 'bundles', title: 'CHANNELS & BUNDLES', sub: 'Packages, franchises, collections and the schedule' },
-    { tab: 'server',  title: 'SERVERS & ACCOUNTS', sub: 'Servers, libraries, rescans and sign out' },
+    { tab: 'server',  title: 'SERVERS & ACCOUNTS', sub: 'Libraries, servers, rescan and sign out' },
     { tab: 'help',    title: 'KEYBOARD', sub: 'Every key, and the version' },
   ];
 
@@ -8590,6 +8584,103 @@
     renderSuggestedList();
   }
 
+
+  // ══════════════════════════════════════
+  // RESCAN LIBRARY (SERVERS & ACCOUNTS), as on the Apple TV
+  // ══════════════════════════════════════
+  // The web tuner had no visible way to pull a fresh copy of the library: only the hidden-libraries
+  // switch rescanned, and the daily refresh. This clears the saved copy and reads the server again in
+  // the background (the guide stays up and what is playing keeps playing), rebuilding every channel.
+  let rescanRunning = false;
+  async function rescanLibrary() {
+    if (rescanRunning || !plexConnected) return;
+    const btn = document.getElementById('cfg-rescan-btn');
+    const desc = document.getElementById('cfg-rescan-desc');
+    const was = desc ? desc.textContent : '';
+    rescanRunning = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'SCANNING...'; }
+    if (desc) desc.textContent = 'Reading your library. The guide updates when it is done.';
+    try {
+      clearLibraryCache();
+      await fetchLibraryFromServer({ background: true, buildAllChannels: true });
+      if (desc) desc.textContent = 'Done. ' + was;
+    } catch (err) {
+      console.warn('[Nostalgex] Library rescan failed:', err);
+      if (desc) desc.textContent = 'The rescan did not finish. ' + was;
+    } finally {
+      rescanRunning = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'RESCAN'; }
+      renderActiveGuide();
+    }
+  }
+
+  // ══════════════════════════════════════
+  // SUPPORT NOSTALGEX: every link, one row each
+  // ══════════════════════════════════════
+  // The Apple TV's ABOUT > LINKS (AboutLinks.swift) plus the tip jar, one list. A platform joins the
+  // same way: add an entry here with show: true when its listing is live. Android is not shown yet.
+  const NX_LINKS = [
+    { id: 'coffee',    section: 'TIP JAR', title: 'BUY ME A COFFEE', sub: 'Built by one person. A tip helps.', url: 'https://buymeacoffee.com/chadmueller', show: true },
+    { id: 'discord',   section: 'COMMUNITY', title: 'DISCORD', sub: 'Chat with other viewers and get help.', url: 'https://discord.gg/FgnZcr5bDT', show: true },
+    { id: 'instagram', title: 'INSTAGRAM', sub: 'News and screenshots.', url: 'https://www.instagram.com/nostalgex_', show: true },
+    { id: 'github',    title: 'GITHUB', sub: 'Source code and issues.', url: 'https://github.com/chadMueller/Nostalgex', show: true },
+    { id: 'appletv',   section: 'GET NOSTALGEX', title: 'APPLE TV', sub: 'Nostalgex for Apple TV, from the App Store.', url: 'https://apps.apple.com/app/nostalgex/id6762563534', show: true },
+    { id: 'roku',      title: 'ROKU', sub: 'Add it from the Roku Channel Store. Channel code: NOSTALGEX.', url: 'https://my.roku.com/account/add/NOSTALGEX', show: true },
+    { id: 'android',   title: 'ANDROID TV', sub: '', url: '', show: false },
+  ];
+  function renderSupportLinks() {
+    const host = document.getElementById('cfg-links');
+    if (!host || host.dataset.done) return;
+    host.dataset.done = '1';
+    let html = '', first = true;
+    for (const l of NX_LINKS) {
+      if (!l.show || !l.url) continue;
+      if (l.section) html += `<div class="config-section-label"${first ? '' : ' style="margin-top: 28px;"'}>${escapeHtml(l.section)}</div>`;
+      first = false;
+      html += `<a class="cfg-row cfg-row--link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer"><div><div class="cfg-row-title">${escapeHtml(l.title)}</div><div class="cfg-row-desc">${escapeHtml(l.sub)}</div></div><div class="cfg-row-address">${escapeHtml(l.url.replace(/^https?:\/\//, ''))}</div></a>`;
+    }
+    host.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════
+  // SETTINGS ROWS: the whole row is the target
+  // ══════════════════════════════════════
+  // A row that holds exactly one control (a toggle, VIEW, SIGN OUT, a language select, a link) is itself
+  // the focus stop and gets the cyan outline; Enter or Space presses its control, and so does a click
+  // anywhere on the row. A row with several buttons (NORMAL and LARGE, the quality and sleep choices)
+  // is left alone: the buttons are the targets.
+  const CFG_CONTROL_SEL = 'button, a[href], select, input:not([type="hidden"])';
+  function enhanceConfigRows() {
+    document.querySelectorAll('#config-main .cfg-row').forEach(row => {
+      if (row.dataset.rowAction) return;
+      if (row.matches('a')) { row.dataset.rowAction = 'link'; return; }
+      const controls = [...row.querySelectorAll(CFG_CONTROL_SEL)];
+      if (controls.length !== 1) return;
+      const c = controls[0];
+      row.dataset.rowAction = 'control';
+      row.tabIndex = 0;
+      row.setAttribute('role', c.tagName === 'SELECT' ? 'group' : 'button');
+      const title = row.querySelector('.cfg-row-title');
+      if (title) row.setAttribute('aria-label', title.textContent.trim());
+      c.tabIndex = -1;
+      row.addEventListener('click', (e) => {
+        if (e.target.closest(CFG_CONTROL_SEL)) return;
+        activateConfigRow(row);
+      });
+      if (c.tagName === 'SELECT') {
+        c.addEventListener('change', () => row.focus({ preventScroll: true }));
+        c.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); row.focus({ preventScroll: true }); } });
+      }
+    });
+  }
+  function activateConfigRow(row) {
+    if (row.dataset.rowAction === 'self' || row.dataset.rowAction === 'link') { row.click(); return; }
+    const c = row.querySelector(CFG_CONTROL_SEL);
+    if (!c || c.disabled) return;
+    if (c.tagName === 'SELECT') { c.focus({ preventScroll: true }); if (c.showPicker) { try { c.showPicker(); } catch (_) {} } }
+    else c.click();
+  }
+
   // ── Web tuner version (bottom of Settings) ──────────────────
   // So support can ask which tuner someone is running, the way VERSION 1.0.26 (50)
   // sits at the bottom of the Apple TV app's Settings.
@@ -8636,6 +8727,8 @@
     renderConfig();
     switchConfigTab('bundles');
     document.getElementById('config-overlay').classList.add('open');
+    renderSupportLinks();
+    enhanceConfigRows();
     requestAnimationFrame(focusConfigRail);
     // Sync language dropdowns to current saved values
     const audioSel = document.getElementById('cfg-audio-lang');
@@ -8686,7 +8779,9 @@
     return Array.from(pane.querySelectorAll(CONFIG_FOCUSABLE_SEL))
       // offsetParent is null for anything inside a display:none subtree, which
       // is how collapsed sections (e.g. the server list) stay out of the walk.
-      .filter(el => el.offsetParent !== null && !el.disabled);
+      .filter(el => el.offsetParent !== null && !el.disabled)
+      // A row that is itself the target hides the control inside it; a link row is the link.
+      .filter(el => { const r = el.closest('[data-row-action]'); return !r || r === el; });
   }
 
   function moveConfigFocus(delta) {
@@ -8698,7 +8793,8 @@
       if (main) main.scrollBy({ top: delta * 120, behavior: 'smooth' });
       return;
     }
-    const current = items.indexOf(document.activeElement);
+    const here = document.activeElement && document.activeElement.closest ? (document.activeElement.closest('[data-row-action]') || document.activeElement) : document.activeElement;
+    const current = items.indexOf(here);
     let next = current === -1 ? (delta > 0 ? 0 : items.length - 1) : current + delta;
     next = Math.max(0, Math.min(next, items.length - 1));
     const el = items[next];
@@ -9445,6 +9541,8 @@
     const listWrap = document.getElementById('cfg-server-list');
     const listEl = document.getElementById('cfg-server-list-items');
     const accountLabel = document.getElementById('cfg-account-label');
+    const libSection = document.getElementById('cfg-library-section');
+    if (libSection) libSection.style.display = plexConnected ? '' : 'none';
     if (accountLabel) {
       accountLabel.textContent = plexConnected && isMediaBrowserBackend(mediaBackend)
         ? `${backendDisplayName().toUpperCase()} SERVER` : 'PLEX ACCOUNT';
@@ -9479,13 +9577,18 @@
         row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);margin-bottom:8px;cursor:pointer;transition:background 0.15s;';
         row.innerHTML = `
           <div style="flex:1;min-width:0;">
-            <div style="font-family: 'DM Mono', monospace;font-size: max(15px, var(--nx-fs));color:#fff;">${escapeHtml(server.name)}${server.owned ? '' : ' <span style="font-size: var(--nx-fs);color:rgba(255,255,255,0.55);">(shared)</span>'}</div>
-            <div style="font-family: 'DM Mono', monospace;font-size: var(--nx-fs);color:rgba(255,255,255,0.55);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${bestConn ? escapeHtml(bestConn.uri) : ''}</div>
+            <div style="font-family: 'DM Mono', monospace;font-size: var(--fs-body);color:#fff;">${escapeHtml(server.name)}${server.owned ? '' : ' <span style="font-size: var(--nx-fs);color:rgba(255,255,255,0.55);">(shared)</span>'}</div>
+            <div style="font-family: 'DM Mono', monospace;font-size: var(--fs-cap);color:rgba(255,255,255,0.7);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${bestConn ? escapeHtml(bestConn.uri) : ''}</div>
           </div>
           <div style="width:36px;height:20px;border-radius:10px;background:${isOn ? 'var(--cyan)' : 'rgba(255,255,255,0.1)'};position:relative;flex-shrink:0;transition:background 0.2s;">
             <div style="position:absolute;top:3px;left:${isOn ? '19px' : '3px'};width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s;"></div>
           </div>
         `;
+        row.tabIndex = 0;
+        row.setAttribute('role', 'checkbox');
+        row.setAttribute('aria-checked', isOn ? 'true' : 'false');
+        row.dataset.rowAction = 'self';
+        row.classList.add('cfg-row');
         row.addEventListener('click', () => toggleServerInSettings(server.machineIdentifier, server.name));
         listEl.appendChild(row);
       });
@@ -11198,6 +11301,7 @@
     // guide's own Enter (tune in) must not take it; a div with a role gets the click here.
     if ((key === 'Enter' || key === ' ') && focused && focused !== document.body) {
       if (focused.matches('button, a[href], summary')) return;
+      if (focused.dataset && focused.dataset.rowAction && focused.dataset.rowAction !== 'link') { activateConfigRow(focused); e.preventDefault(); return; }
       const pressable = focused.closest('[role="button"], [role="tab"], [role="option"], [role="checkbox"], [role="menuitem"]');
       if (pressable && !(appState === 'server-picker' && key === 'Enter')) { pressable.click(); e.preventDefault(); return; }
     }
@@ -11482,7 +11586,7 @@
     return null;
   }
   function nxFocusables(root) {
-    return [...root.querySelectorAll(NX_FOCUSABLE)].filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+    return [...root.querySelectorAll(NX_FOCUSABLE)].filter(el => el.tabIndex >= 0 && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
   }
   document.addEventListener('focusin', (e) => {
     if (!nxModalOpen && !nxTopModal()) nxOpener = e.target;
