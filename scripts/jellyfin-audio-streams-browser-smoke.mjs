@@ -263,7 +263,18 @@ for (const backend of ["jellyfin", "emby"]) try {
   await playItem(page, "Multi Film 0");
   body = lastBody("mm0");
   check(`${tag}: AUDIO LANGUAGE English asks for the English track (AudioStreamIndex 2), not the file's French default`, body && body.AudioStreamIndex === 2, JSON.stringify(body && body.AudioStreamIndex));
+  // The rail's AUDIO row (#248) lists the file's tracks; choosing German plays it for this program.
+  await page.evaluate(() => renderTrackRows());
+  const railRows = await page.evaluate(() => [...document.querySelectorAll("#v-toolbar .track-row")].filter((e) => !e.hidden).map((e) => e.dataset.track));
+  check(`${tag}: the rail shows AUDIO and AUDIO LANGUAGE for a film with three audio tracks, and the subtitle rows`, JSON.stringify(railRows) === JSON.stringify(["cc", "sublang", "autosubs", "audio", "audiolang"]), JSON.stringify(railRows));
+  await page.locator("#tb-audio").click();
+  check(`${tag}: AUDIO lists the three tracks`, (await page.locator("#track-rows .sleep-row").count()) === 3);
+  await page.locator("#track-rows .sleep-row").nth(2).click();
+  await page.waitForTimeout(800);
+  body = lastBody("mm0");
+  check(`${tag}: choosing the German track in AUDIO asks for it (AudioStreamIndex 3)`, body && body.AudioStreamIndex === 3, JSON.stringify(body && body.AudioStreamIndex));
   // Then German.
+  await page.evaluate(() => { currentPlayingItem._audioChoice = null; });
   await page.evaluate(() => setAudioLanguage("de"));
   await playItem(page, "Multi Film 0");
   body = lastBody("mm0");
