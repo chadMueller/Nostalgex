@@ -1953,6 +1953,65 @@
     max-height: 85vh;
     overflow-y: auto;
   }
+  .config-rail, .config-pane-head { display: none; }
+  .config-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding-top: 0; }
+
+  /* Settings as the Apple TV draws it (SettingsContainerView): a rail of categories on the left, the
+     category on the right. Wide screens only; a phone keeps the tab strip. */
+  @media (min-width: 701px) {
+    .config-panel {
+      display: grid;
+      grid-template-columns: var(--cfg-rail-w, 340px) minmax(0, 1fr);
+      width: min(1320px, 96vw);
+      height: min(88vh, 900px);
+      max-height: none;
+      overflow: hidden;
+    }
+    .config-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 20px 20px 0;
+      overflow-y: auto;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .config-rail .config-header { text-align: left; margin: 0 0 4px 20px; }
+    .config-rail .config-header img { height: 36px; }
+    .config-rail-title {
+      font-family: 'VT323', monospace;
+      font-size: max(36px, var(--nx-fs-tag));
+      color: var(--yellow);
+      letter-spacing: 0.08em;
+      margin: 10px 0 14px 20px;
+    }
+    .config-rail-divider { height: 1px; background: rgba(255,255,255,0.14); margin: 8px 12px; }
+    .config-rail-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font-family: 'DM Mono', monospace;
+      font-weight: 500;
+      font-size: max(16px, var(--nx-fs));
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.85);
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      padding: 16px 16px 16px 24px;
+      cursor: pointer;
+      position: relative;
+    }
+    /* chosen: the bar and the white text; hover and focus: the cyan slab, as on the chips */
+    .config-rail-item[aria-selected="true"] { background: rgba(0,196,255,0.14); color: #fff; box-shadow: inset 6px 0 0 var(--cyan); }
+    .config-rail-item:hover, .config-rail-item:focus-visible { background: var(--cyan); color: #000; box-shadow: inset 6px 0 0 #000; outline: none; }
+    .config-rail-item.focused { background: var(--cyan); color: #000; }
+    .config-main { overflow-y: auto; padding: 0 8px 0 36px; min-width: 0; }
+    .config-main .config-sub, .config-main .config-tabs { display: none; }
+    .config-pane-head { display: block; margin: 8px 0 24px; }
+    .config-pane-title { font-size: max(26px, var(--nx-fs)); font-weight: 500; color: #fff; letter-spacing: 0.04em; }
+    .config-pane-sub { font-size: max(15px, var(--nx-fs)); color: rgba(255,255,255,0.7); margin-top: 6px; }
+  }
+  #config-tab-bundles:focus-visible, #config-tab-help:focus-visible, #config-tab-support:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
 
   /* Two-column channels layout */
   .config-columns {
@@ -2354,9 +2413,10 @@
     z-index: 30;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s;
+    transition: opacity 0.3s, visibility 0s linear 0.3s;
+    visibility: hidden;   /* its buttons are not Tab stops while it is not showing */
   }
-  .fs-overlay.visible { opacity: 1; }
+  .fs-overlay.visible { opacity: 1; visibility: visible; transition: opacity 0.3s, visibility 0s; }
   .fs-overlay-channel {
     font-family: 'VT323', monospace;
     font-size: max(18px, var(--nx-fs-tag));
@@ -2450,14 +2510,14 @@
     :root { --nx-z: 0.875; --is: 0.72; }
     html { zoom: 0.875; }
     body { width: calc(100vw / 0.875); height: calc(100vh / 0.875); }
-    .config-panel { width: min(1100px, calc(95vw / 0.875)); max-height: calc(85vh / 0.875); }
+    .config-panel { width: min(1320px, calc(96vw / 0.875)); max-height: calc(85vh / 0.875); height: min(calc(88vh / 0.875), 900px); }
   }
   @media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) {
     /* 18px VT323 at this zoom was 12 screen px; 1.35 puts the guide text at 16 (the floor) and the rows at 35. */
     :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-row: 52px; --g-head: 43px; --g-col: 208px; --g-promo: 58px; }
     html { zoom: 0.6667; }
     body { width: calc(100vw / 0.6667); height: calc(100vh / 0.6667); }
-    .config-panel { width: min(1100px, calc(95vw / 0.6667)); max-height: calc(85vh / 0.6667); }
+    .config-panel { width: min(1320px, calc(96vw / 0.6667)); max-height: calc(85vh / 0.6667); height: min(calc(88vh / 0.6667), 900px); }
     /* The text floor is 12 screen px, which at this zoom is 18 authored. One column of rows no
        longer fits the half-height row (nine rows at 18px is over 400 authored px), and a remote's
        cursor needs 32 screen px to hit, which is 48 authored. So the rail is two columns of
@@ -3751,19 +3811,65 @@
 <div class="config-overlay" id="config-overlay">
   <button class="config-close" type="button" onclick="hideConfig()" aria-label="Close settings">CLOSE</button>
   <div class="config-panel">
-    <div class="config-header">
-      <img src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
-    </div>
+    <!-- The Apple TV's Settings: a rail of categories on the left, the category's content on the right.
+         Up and Down in the rail change category and the content follows; Right or Tab goes into the
+         content, Left or Esc comes back. Under 701px wide the rail is replaced by the tab strip. -->
+    <nav class="config-rail" id="config-rail" role="tablist" aria-orientation="vertical" aria-label="Settings categories">
+      <div class="config-header">
+        <img src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
+      </div>
+      <div class="config-rail-title">SETTINGS</div>
+      <button class="config-rail-item" type="button" id="rail-support" role="tab" data-tab="support" aria-selected="false" tabindex="-1" onclick="onConfigCategoryClick('support', event)">SUPPORT NOSTALGEX</button>
+      <div class="config-rail-divider" role="presentation"></div>
+      <button class="config-rail-item" type="button" id="rail-general" role="tab" data-tab="general" aria-selected="false" tabindex="-1" onclick="onConfigCategoryClick('general', event)">PLAYBACK &amp; PICTURE</button>
+      <button class="config-rail-item" type="button" id="rail-bundles" role="tab" data-tab="bundles" aria-selected="true" tabindex="0" onclick="onConfigCategoryClick('bundles', event)">CHANNELS &amp; BUNDLES</button>
+      <button class="config-rail-item" type="button" id="rail-server" role="tab" data-tab="server" aria-selected="false" tabindex="-1" onclick="onConfigCategoryClick('server', event)">SERVERS &amp; ACCOUNTS</button>
+      <button class="config-rail-item" type="button" id="rail-help" role="tab" data-tab="help" aria-selected="false" tabindex="-1" onclick="onConfigCategoryClick('help', event)">ABOUT</button>
+    </nav>
+    <div class="config-main" id="config-main">
     <div class="config-sub">Settings</div>
 
-    <div class="config-tabs">
-      <div class="config-tab" id="tab-general" onclick="switchConfigTab('general')">GENERAL</div>
-      <div class="config-tab active" id="tab-bundles" onclick="switchConfigTab('bundles')">BUNDLES</div>
-      <div class="config-tab" id="tab-server" onclick="switchConfigTab('server')">SERVER</div>
-      <div class="config-tab" id="tab-help" onclick="switchConfigTab('help')">HELP</div>
+    <div class="config-tabs" role="tablist" aria-label="Settings categories">
+      <button class="config-tab" type="button" role="tab" id="tab-support" aria-selected="false" onclick="onConfigCategoryClick('support', event)">SUPPORT</button>
+      <button class="config-tab" type="button" role="tab" id="tab-general" aria-selected="false" onclick="onConfigCategoryClick('general', event)">PLAYBACK</button>
+      <button class="config-tab active" type="button" role="tab" id="tab-bundles" aria-selected="true" onclick="onConfigCategoryClick('bundles', event)">CHANNELS</button>
+      <button class="config-tab" type="button" role="tab" id="tab-server" aria-selected="false" onclick="onConfigCategoryClick('server', event)">SERVERS</button>
+      <button class="config-tab" type="button" role="tab" id="tab-help" aria-selected="false" onclick="onConfigCategoryClick('help', event)">ABOUT</button>
     </div>
 
-    <div id="config-tab-bundles" style="display:none">
+    <div class="config-pane-head">
+      <div class="config-pane-title" id="config-pane-title">CHANNELS &amp; BUNDLES</div>
+      <div class="config-pane-sub" id="config-pane-sub">Packages, franchises, collections and the schedule</div>
+    </div>
+
+    <div id="config-tab-support" style="display:none" tabindex="-1">
+      <div class="config-section-label">TIP JAR</div>
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Buy me a coffee</div>
+          <div class="cfg-row-desc">Nostalgex is built by one person. A tip helps.</div>
+        </div>
+        <a class="plex-btn" href="https://buymeacoffee.com/chadmueller" target="_blank" rel="noopener noreferrer" style="font-size: var(--nx-fs); padding: 12px 22px; text-decoration: none;">OPEN</a>
+      </div>
+      <div class="config-section-label" style="margin-top: 28px;">FOLLOW</div>
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Instagram</div>
+          <div class="cfg-row-desc">News and screenshots.</div>
+        </div>
+        <a class="plex-btn" href="https://www.instagram.com/nostalgex_" target="_blank" rel="noopener noreferrer" style="font-size: var(--nx-fs); padding: 12px 22px; text-decoration: none;">OPEN</a>
+      </div>
+      <div class="config-section-label" style="margin-top: 28px;">THE APP</div>
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Nostalgex for Apple TV</div>
+          <div class="cfg-row-desc">The same guide on the big screen.</div>
+        </div>
+        <a class="plex-btn" href="https://apps.apple.com/app/nostalgex/id6762563534" target="_blank" rel="noopener noreferrer" style="font-size: var(--nx-fs); padding: 12px 22px; text-decoration: none;">OPEN</a>
+      </div>
+    </div><!-- end config-tab-support -->
+
+    <div id="config-tab-bundles" style="display:none" tabindex="-1" role="listbox" aria-label="Channel bundles. Up and Down move, Enter or Space toggles.">
       <div class="config-section-label">CHANNEL BUNDLES</div>
       <div style="color: rgba(255,255,255,0.55); font-size: var(--nx-fs); letter-spacing: 0.06em; margin-bottom: 16px;">
         Toggle channel packages on or off. Matching the tvOS app.
@@ -3792,7 +3898,7 @@
       </div>
     </div>
 
-    <div id="config-tab-general" style="display:none">
+    <div id="config-tab-general" style="display:none" tabindex="-1">
       <div class="config-section-label">DISPLAY</div>
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
         <div>
@@ -3944,7 +4050,7 @@
       </div>
     </div>
 
-    <div id="config-tab-server" style="display:none">
+    <div id="config-tab-server" style="display:none" tabindex="-1">
       <div class="config-section-label" id="cfg-account-label">PLEX ACCOUNT</div>
       <div id="config-plex-status" style="margin-bottom: 24px; padding: 16px 20px; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); border-radius: 6px;">
         <div style="font-size: 18px; color: rgba(255,255,255,0.55); letter-spacing: 0.06em;" id="cfg-server-name">Not connected</div>
@@ -4009,7 +4115,7 @@
     </div><!-- end config-columns -->
     </div><!-- end config-tab-channels -->
 
-    <div id="config-tab-help" style="display:none">
+    <div id="config-tab-help" style="display:none" tabindex="-1">
       <div class="help-content">
         <div class="help-section-label">PLAYBACK</div>
         <div class="help-row"><div class="help-key">LEFT / RIGHT</div><div class="help-desc">Change channel</div></div>
@@ -4024,30 +4130,24 @@
         <div class="help-row"><div class="help-key">ENTER</div><div class="help-desc">Tune in</div></div>
 
         <div class="help-section-label">SETTINGS</div>
-        <div class="help-row"><div class="help-key">H</div><div class="help-desc">Open settings</div></div>
-        <div class="help-row"><div class="help-key">LEFT / RIGHT</div><div class="help-desc">Switch tabs</div></div>
-        <div class="help-row"><div class="help-key">UP / DOWN</div><div class="help-desc">Navigate</div></div>
-        <div class="help-row"><div class="help-key">ENTER / SPACE</div><div class="help-desc">Toggle bundle on/off</div></div>
-
-        <div class="help-section-label">SUPPORT</div>
-        <div class="help-row">
-          <div class="help-key">COFFEE</div>
-          <div class="help-desc">
-            <a href="https://buymeacoffee.com/chadmueller" target="_blank" rel="noopener noreferrer" style="color: rgba(255,229,0,0.85); text-decoration: none; border-bottom: 1px solid rgba(255,229,0,0.28); padding-bottom: 2px;">Buy Me a Coffee</a>
-          </div>
-        </div>
+        <div class="help-row"><div class="help-key">H</div><div class="help-desc">Open or close settings</div></div>
+        <div class="help-row"><div class="help-key">UP / DOWN</div><div class="help-desc">In the list on the left: change category. In the content: move between rows</div></div>
+        <div class="help-row"><div class="help-key">RIGHT / TAB</div><div class="help-desc">Go into the content</div></div>
+        <div class="help-row"><div class="help-key">LEFT / ESC</div><div class="help-desc">Back to the list; Esc there closes settings</div></div>
+        <div class="help-row"><div class="help-key">ENTER / SPACE</div><div class="help-desc">Press the highlighted row or toggle a bundle</div></div>
       </div>
     </div><!-- end config-tab-help -->
 
     <div class="config-footer">
-      <div class="config-footer-hint"><span>[ESC]</span> BACK</div>
-      <div class="config-footer-hint"><span>[&lt;/&gt;]</span> TABS</div>
-      <div class="config-footer-hint"><span>[ENTER]</span> TOGGLE / ADD</div>
-      <div class="config-footer-hint"><span>[DEL]</span> REMOVE</div>
+      <div class="config-footer-hint"><span>[UP/DOWN]</span> MOVE</div>
+      <div class="config-footer-hint"><span>[RIGHT]</span> OPEN</div>
+      <div class="config-footer-hint"><span>[LEFT/ESC]</span> BACK</div>
+      <div class="config-footer-hint"><span>[ENTER]</span> TOGGLE</div>
       <div class="config-footer-hint"><span>[☕]</span> <a href="https://buymeacoffee.com/chadmueller" target="_blank" rel="noopener noreferrer" style="color: rgba(0,255,255,0.7); text-decoration: none; border-bottom: 1px solid rgba(0,255,255,0.16); padding-bottom: 2px;">BUY ME A COFFEE</a></div>
     </div>
     <!-- WEB TUNER 1.0.3, or WEB TUNER 1.0.3 · DOCKER. Filled in by loadTunerVersion(). -->
     <div class="config-version" id="cfg-tuner-version" hidden></div>
+    </div><!-- end config-main -->
   </div>
 </div>
 
@@ -8408,23 +8508,67 @@
     });
   }
 
-  function switchConfigTab(tab) {
+  // The Settings categories, in the order of the Apple TV's rail (SettingsCategory.swift). The pane ids
+  // keep the web's old names; the titles and one-line subtitles are the Apple TV's.
+  const CONFIG_CATEGORIES = [
+    { tab: 'support', title: 'SUPPORT NOSTALGEX', sub: 'A tip or a follow, whichever suits' },
+    { tab: 'general', title: 'PLAYBACK & PICTURE', sub: 'Picture, quality, subtitles and audio' },
+    { tab: 'bundles', title: 'CHANNELS & BUNDLES', sub: 'Packages, franchises, collections and the schedule' },
+    { tab: 'server',  title: 'SERVERS & ACCOUNTS', sub: 'Servers, libraries, rescans and sign out' },
+    { tab: 'help',    title: 'ABOUT', sub: 'Version, keys and links' },
+  ];
+
+  // Choose a category. The content swaps at once and focus stays where it is, so Up and Down in the
+  // rail browse the categories without leaving it. `enter` also moves into the content.
+  function switchConfigTab(tab, opts) {
     configTab = tab;
-    document.getElementById('tab-bundles').classList.toggle('active', tab === 'bundles');
-    document.getElementById('tab-help').classList.toggle('active', tab === 'help');
-    document.getElementById('tab-general').classList.toggle('active', tab === 'general');
-    document.getElementById('tab-server').classList.toggle('active', tab === 'server');
-    document.getElementById('config-tab-channels').style.display = 'none';
-    document.getElementById('config-tab-bundles').style.display = tab === 'bundles' ? '' : 'none';
-    document.getElementById('config-tab-help').style.display = tab === 'help' ? '' : 'none';
-    document.getElementById('config-tab-general').style.display = tab === 'general' ? '' : 'none';
-    document.getElementById('config-tab-server').style.display = tab === 'server' ? '' : 'none';
-    if (tab === 'bundles') { bundleFocusIndex = 0; renderBundleList(); }
-    // Give the new pane a focus anchor so the first Up/Down has somewhere to
-    // start from. Bundles runs its own index, so leave that one alone.
-    if (tab !== 'bundles') {
-      setTimeout(focusFirstConfigItem, 0);
+    for (const c of CONFIG_CATEGORIES) {
+      const on = c.tab === tab;
+      const t = document.getElementById('tab-' + c.tab), r = document.getElementById('rail-' + c.tab), pane = document.getElementById('config-tab-' + c.tab);
+      if (t) { t.classList.toggle('active', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; }
+      if (r) { r.setAttribute('aria-selected', on ? 'true' : 'false'); r.tabIndex = on ? 0 : -1; }
+      if (pane) pane.style.display = on ? '' : 'none';
     }
+    document.getElementById('config-tab-channels').style.display = 'none';
+    const cat = CONFIG_CATEGORIES.find(c => c.tab === tab);
+    if (cat) {
+      document.getElementById('config-pane-title').textContent = cat.title;
+      document.getElementById('config-pane-sub').textContent = cat.sub;
+    }
+    const main = document.getElementById('config-main');
+    if (main) main.scrollTop = 0;
+    if (tab === 'bundles') { bundleFocusIndex = 0; renderBundleList(); }
+    if (opts && opts.enter) enterConfigContent();
+  }
+
+  // Where the focus is in Settings: the rail (or the narrow tab strip), or the content.
+  function configZone() {
+    const a = document.activeElement;
+    return a && a.closest && a.closest('.config-rail, .config-tabs') ? 'rail' : 'content';
+  }
+  function configRailItem(tab) {
+    const rail = document.getElementById('config-rail');
+    const wide = rail && rail.getClientRects().length;
+    return document.getElementById((wide ? 'rail-' : 'tab-') + tab);
+  }
+  function focusConfigRail() {
+    const el = configRailItem(configTab);
+    if (el) el.focus({ preventScroll: true });
+  }
+  // Into the content: the first control in the category, or the pane itself when it is a list
+  // (BUNDLES) or only text (ABOUT), so the arrow keys still have somewhere to act.
+  function enterConfigContent() {
+    const pane = document.getElementById('config-tab-' + configTab);
+    if (!pane) return;
+    if (configTab !== 'bundles') {
+      const items = getConfigFocusables();
+      if (items.length) { items[0].focus({ preventScroll: true }); return; }
+    }
+    pane.focus({ preventScroll: true });
+  }
+  // A click on a rail item or tab: choose it. A keyboard press (detail 0) also goes in.
+  function onConfigCategoryClick(tab, ev) {
+    switchConfigTab(tab, { enter: !!ev && ev.detail === 0 && ev.target.closest('.config-rail') });
   }
 
   function switchSuggestedTab(tab) {
@@ -8481,6 +8625,7 @@
     renderConfig();
     switchConfigTab('bundles');
     document.getElementById('config-overlay').classList.add('open');
+    requestAnimationFrame(focusConfigRail);
     // Sync language dropdowns to current saved values
     const audioSel = document.getElementById('cfg-audio-lang');
     if (audioSel) audioSel.value = audioLanguage;
@@ -8538,8 +8683,8 @@
     if (!items.length) {
       // Nothing to focus (the Help tab is static text) — scroll the pane so the
       // key still does something the user can see.
-      const pane = document.getElementById('config-tab-' + configTab);
-      if (pane) pane.scrollBy({ top: delta * 120, behavior: 'smooth' });
+      const main = document.getElementById('config-main') || document.getElementById('config-tab-' + configTab);
+      if (main) main.scrollBy({ top: delta * 120, behavior: 'smooth' });
       return;
     }
     const current = items.indexOf(document.activeElement);
@@ -11080,15 +11225,35 @@
 
     // Config mode
     if (appState === 'config') {
-      if (key === 'Escape' || key === 'h' || key === 'H') {
-        hideConfig();
+      const zone = configZone();
+      const inRail = zone === 'rail';
+      const order = CONFIG_CATEGORIES.map(c => c.tab);
+      const idx = order.indexOf(configTab);
+      if (key === 'h' || key === 'H') { hideConfig(); e.preventDefault(); return; }
+      if (key === 'Escape') {
+        // Esc steps back: out of the content to the rail, and out of the rail to the guide.
+        if (inRail) hideConfig(); else focusConfigRail();
         e.preventDefault();
         return;
       }
-      if (key === 'ArrowLeft' || key === 'ArrowRight') {
-        const tabs = ['general', 'bundles', 'server', 'help'];
-        const idx = tabs.indexOf(configTab);
-        switchConfigTab(key === 'ArrowRight' ? tabs[(idx + 1) % tabs.length] : tabs[(idx + tabs.length - 1) % tabs.length]);
+      if (inRail) {
+        // The rail (and the narrow tab strip): the categories.
+        const wide = !!document.getElementById('config-rail').getClientRects().length;
+        const prev = wide ? 'ArrowUp' : 'ArrowLeft', next = wide ? 'ArrowDown' : 'ArrowRight';
+        if (key === prev || key === next) {
+          const to = order[Math.min(Math.max(idx + (key === next ? 1 : -1), 0), order.length - 1)];
+          if (to !== configTab) switchConfigTab(to);
+          focusConfigRail();
+          e.preventDefault();
+          return;
+        }
+        if (key === 'ArrowRight' && wide || key === 'ArrowDown' && !wide) { enterConfigContent(); e.preventDefault(); return; }
+        if (key === 'Home' || key === 'End') { switchConfigTab(order[key === 'Home' ? 0 : order.length - 1]); focusConfigRail(); e.preventDefault(); return; }
+        return;
+      }
+      // The content.
+      if (key === 'ArrowLeft' && document.getElementById('config-rail').getClientRects().length) {
+        focusConfigRail();
         e.preventDefault();
         return;
       }
@@ -11111,11 +11276,9 @@
           e.preventDefault();
           return;
         }
-        e.preventDefault();
         return;
       }
-      // General, Server and Help: walk whatever is actually on screen in the
-      // active tab.
+      // PLAYBACK & PICTURE, SERVERS & ACCOUNTS and the rest: walk what is on screen in the category.
       if (key === 'ArrowDown') {
         moveConfigFocus(1);
         e.preventDefault();
@@ -11124,16 +11287,6 @@
       if (key === 'ArrowUp') {
         moveConfigFocus(-1);
         e.preventDefault();
-        return;
-      }
-      if (key === 'Enter') {
-        // Let the focused control handle it. Inputs keep their own behaviour,
-        // everything else is a click.
-        const el = document.activeElement;
-        if (el && el.tagName !== 'INPUT' && typeof el.click === 'function') {
-          el.click();
-          e.preventDefault();
-        }
         return;
       }
       return;
