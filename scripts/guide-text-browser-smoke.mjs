@@ -126,9 +126,9 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
-// A desktop viewport draws a program title at 18 px x the guide factor (1.3) x the row text share (0.76: the Apple TV took its row
-// text from 29 to 22 pt on 2026-11-10).
-const DESKTOP_NORMAL = 18 * 1.3 * 0.76;
+// A desktop viewport draws a program title in DM Mono Medium at 0.34 of the row (the Apple TV's 22 pt on a 64 pt row), and a row
+// is clamp(40px, 4.8vh, 60px): 43.2 px in the 900 px tall window this uses.
+const DESKTOP_NORMAL = Math.min(60, Math.max(40, 900 * 0.048)) * 0.34;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */
@@ -265,6 +265,14 @@ for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
   const { page, errors } = await launch("desktop", { stored });
   const s = await read(page);
   check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && near(s.program, DESKTOP_NORMAL), `${s.large} ${s.program}`);
+  check(`stored ${JSON.stringify(stored)}: guide, info panel and rail are all DM Mono`, await page.evaluate(() => {
+    const bad = [];
+    for (const root of ["#guide-grid", "#info-panel", "#v-toolbar"]) for (const el of document.querySelectorAll(`${root} *`)) {
+      if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+      if (!getComputedStyle(el).fontFamily.includes("DM Mono")) bad.push(`${root} ${el.className}: ${getComputedStyle(el).fontFamily}`);
+    }
+    return bad.length === 0 ? true : bad.slice(0, 3).join(" | ");
+  }) === true);
   check(`stored ${JSON.stringify(stored)}: no page errors`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {

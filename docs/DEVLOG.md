@@ -3,6 +3,16 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 3 so far, the guide in DM Mono, #251)
+
+**Why.** The guide was the one place still drawn in VT323; the Apple TV draws it in DM Mono Medium.
+
+**Changed.** Every text node in the guide, the info panel and the rail is DM Mono now (`guide-text-browser-smoke.mjs` checks it).
+Guide row text is 0.34 of the row (the Apple TV's 22 pt on a 64 pt row) and times 0.39 of the header (25 on 58), with the 11 and 12 px
+on-screen floors; LARGE multiplies by the same 1.3 ratios. Rows are `clamp(40px, 4.8vh, 60px)` so about 9 show at 1280x800 and 9.6 at
+1920x1080 (the Apple TV shows 9 to 10). Phone keeps its own table at 12 px. The info panel's channel tag and time, the Settings rail title,
+the channel number in Settings, the overlay and the sleep countdown moved to DM Mono too; the VT323 stylesheet link is gone.
+
 ## 2026-11-10 (web tuner: parity group 2, Now Playing details, program rows, and "bundles" in the words)
 
 **Why.** #261 and #248, then Chad's call that the apps' mixed "package" and "bundle" become "bundle" everywhere a person reads it.

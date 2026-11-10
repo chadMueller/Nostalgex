@@ -13,7 +13,6 @@
 <meta name="nostalgex-tmdb-relay" content="%VITE_TMDB_RELAY_URL%">
 <link rel="icon" type="image/png" href="./tuner/logo/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="tuner/fonts.css">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" integrity="sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
@@ -66,8 +65,10 @@
     /* The Apple TV took the guide's row text from 29 to 22 pt (x0.76) and its rows from 76 to 64 pt (x0.84) on
        2026-11-10. Times and the CHANNEL heading stay where they were. --gr is the row text's share of --gs. */
     --gr: 0.76;
-    --g-row: 40px;
-    --g-head: 38px;
+    /* 40 px rows up to about 830 px of window height, then growing with it (4.8vh): about 9 rows at 1280x800 and 1920x1080,
+       as on the Apple TV. */
+    --g-row: clamp(40px, 4.8vh, 60px);
+    --g-head: clamp(38px, 3.9vh, 56px);
     --g-col: 200px;
     --g-promo: 56px;
     /* The info panel beside the rail: the Apple TV's InfoPanelView sizes (tag 36, title 38,
@@ -272,9 +273,10 @@
     display: flex;
     align-items: center;
     gap: calc(14px * var(--is));
-    font-family: 'VT323', monospace;
-    font-size: max(calc(36px * var(--is)), var(--nx-fs-tag));
-    letter-spacing: 3px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: max(calc(30px * var(--is)), var(--nx-fs));
+    letter-spacing: 0.08em;
     color: #fff;
     margin-bottom: calc(14px * var(--is));
   }
@@ -336,8 +338,8 @@
     transition: width 1s linear;
   }
   .info-time {
-    font-family: 'VT323', monospace;
-    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
+    font-family: 'DM Mono', monospace;
+    font-size: max(calc(20px * var(--is)), var(--nx-fs));
     color: rgba(255,255,255,0.7);
     white-space: nowrap;
   }
@@ -1059,8 +1061,8 @@
     top: 40px;
     left: 40px;
     z-index: 20;
-    font-family: 'VT323', monospace;
-    font-size: 28px;
+    font-family: 'DM Mono', monospace;
+    font-size: 22px;
     color: rgba(255,255,255,0.55);
     opacity: 0;
     transition: opacity 0.4s;
@@ -1442,9 +1444,10 @@
     transform: translateY(0);
   }
   .np-channel-tag {
-    font-family: 'VT323', monospace;
-    font-size: max(20px, var(--nx-fs-tag));
-    letter-spacing: 3px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: max(16px, var(--nx-fs));
+    letter-spacing: 0.08em;
     margin-bottom: 12px;
   }
   .np-title {
@@ -1479,8 +1482,8 @@
     transition: width 1s linear;
   }
   .np-time {
-    font-family: 'VT323', monospace;
-    font-size: 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
     color: rgba(255,255,255,0.55);
     white-space: nowrap;
   }
@@ -1589,10 +1592,12 @@
   }
   .grid-time-slot {
     flex: 1;
-    font-family: 'VT323', monospace;
-    font-size: calc(20px * var(--gs) * var(--gt-time));
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    /* The Apple TV's guide: times 25 pt on a 58 pt header (0.39 of it), in DM Mono Medium. */
+    font-size: calc(max(calc(var(--g-head) * 0.39), calc(12px / var(--nx-z))) * var(--gt-time));
     color: var(--yellow);
-    letter-spacing: 1px;
+    letter-spacing: 0.02em;
     padding: 0 8px;
     display: flex;
     align-items: center;
@@ -1664,15 +1669,18 @@
     overflow: hidden;
   }
   .grid-ch-num {
-    font-family: 'VT323', monospace;
-    font-size: calc(20px * var(--gs) * var(--gr) * var(--gt-num));
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    /* Row text is 22 pt on a 64 pt row (0.34 of it); the floor is the Apple TV's 11 on-screen pixels. */
+    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-num));
     color: rgba(255,255,255,0.55);
-    min-width: calc(28px * var(--gs) * var(--gr) * var(--gt-num));
+    min-width: 2.2em;
   }
   .grid-ch-name {
-    font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gs) * var(--gr) * var(--gt-name));
-    letter-spacing: 1px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-name));
+    letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1690,8 +1698,9 @@
     display: flex;
     align-items: center;
     padding: 0 8px;
-    font-family: 'VT323', monospace;
-    font-size: calc(18px * var(--gs) * var(--gr) * var(--gt-title));
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-title));
     color: rgba(255,255,255,0.85);
     white-space: nowrap;
     overflow: hidden;
@@ -1721,9 +1730,10 @@
     justify-content: center;
     padding: 0 16px;
     gap: 10px;
-    font-family: 'VT323', monospace;
-    font-size: max(calc(19px * var(--gs) * var(--gr)), var(--nx-fs-tag));
-    letter-spacing: 1px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z)));
+    letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
   }
@@ -1974,8 +1984,9 @@
     .config-rail .config-header { text-align: left; margin: 0 0 4px 20px; }
     .config-rail .config-header img { height: 32px; }
     .config-rail-title {
-      font-family: 'VT323', monospace;
-      font-size: max(31px, var(--nx-fs-tag));
+      font-family: 'DM Mono', monospace;
+      font-weight: 500;
+      font-size: max(26px, var(--nx-fs));
       color: var(--yellow);
       letter-spacing: 0.08em;
       margin: 8px 0 12px 20px;
@@ -2085,8 +2096,8 @@
     flex-shrink: 0;
   }
   .config-ch-number {
-    font-family: 'VT323', monospace;
-    font-size: max(18px, var(--nx-fs-tag));
+    font-family: 'DM Mono', monospace;
+    font-size: max(14px, var(--nx-fs));
     width: 40px;
     text-align: center;
     flex-shrink: 0;
@@ -2414,9 +2425,10 @@
   }
   .fs-overlay.visible { opacity: 1; visibility: visible; transition: opacity 0.3s, visibility 0s; }
   .fs-overlay-channel {
-    font-family: 'VT323', monospace;
-    font-size: max(18px, var(--nx-fs-tag));
-    letter-spacing: 3px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: max(14px, var(--nx-fs));
+    letter-spacing: 0.08em;
     margin-bottom: 6px;
   }
   .fs-overlay-title {
@@ -2443,10 +2455,10 @@
     transition: width 1s linear;
   }
   .fs-overlay-time {
-    font-family: 'VT323', monospace;
-    font-size: max(18px, var(--nx-fs-tag));
+    font-family: 'DM Mono', monospace;
+    font-size: max(14px, var(--nx-fs));
     color: rgba(255,255,255,0.55);
-    letter-spacing: 2px;
+    letter-spacing: 0.04em;
   }
 
   .key-hint {
@@ -2629,9 +2641,10 @@
     /* The pixel font has no built-in leading, so a tag that wraps to two lines
        prints them on top of each other. */
     .info-channel-tag {
-      font-family: 'VT323', monospace;
-      font-size: max(18px, var(--nx-fs-tag));
-      letter-spacing: 2px; margin-bottom: 8px; line-height: 1.6;
+      font-family: 'DM Mono', monospace;
+      font-weight: 500;
+      font-size: max(14px, var(--nx-fs));
+      letter-spacing: 0.08em; margin-bottom: 8px; line-height: 1.6;
     }
     .info-title {
       font-size: max(17px, var(--nx-fs));
@@ -2652,7 +2665,7 @@
       overflow: hidden;
       font-weight: 500;
     }
-    .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
+    .info-time { font-family: 'DM Mono', monospace; font-size: var(--nx-fs); }
     .info-progress-wrap { gap: 10px; }
     .info-upnext { font-size: var(--nx-fs); margin-top: 10px; }
 
@@ -2661,10 +2674,10 @@
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
     .grid-row { height: 34px; }
-    .grid-ch-num { font-size: calc(16px * var(--gt-num)); min-width: calc(18px * var(--gt-num)); }
-    .grid-ch-name { font-size: calc(15px * var(--gt-name)); letter-spacing: 0; }
+    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: 2.2em; }
+    .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
-    .grid-time-slot { font-size: calc(16px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
+    .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -2712,7 +2725,7 @@
        tighter: one more channel on screen at 393x852. */
     .grid-row { height: 32px; }
     /* Four time columns in 256px once the channel column is paid for. */
-    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 5px; }
+    .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 5px; }
   }
 
   /* ──────────────────────────────────────
@@ -2905,9 +2918,10 @@
       justify-content: center;
     }
     .info-channel-tag {
-      font-family: 'VT323', monospace;
-      font-size: max(18px, var(--nx-fs-tag));
-      letter-spacing: 1.5px; margin-bottom: 6px; line-height: 1.6;
+      font-family: 'DM Mono', monospace;
+      font-weight: 500;
+      font-size: max(14px, var(--nx-fs));
+      letter-spacing: 0.06em; margin-bottom: 6px; line-height: 1.6;
     }
     .info-title {
       font-size: max(13px, var(--nx-fs));
@@ -2924,15 +2938,15 @@
     .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
     .info-ch-bar { width: 6px; height: 16px; }
     .info-channel-tag { gap: 8px; }
-    .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
+    .info-time { font-family: 'DM Mono', monospace; font-size: var(--nx-fs); }
     .info-upnext { display: none; }
 
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
     .grid-row { height: 30px; }
-    .grid-ch-num { font-size: calc(15px * var(--gt-num)); min-width: calc(16px * var(--gt-num)); }
-    .grid-ch-name { font-size: calc(14px * var(--gt-name)); letter-spacing: 0; }
-    .grid-time-slot { font-size: calc(15px * var(--gt-time)); padding: 0 6px; white-space: nowrap; }
+    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: 2.2em; }
+    .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
+    .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
   }
 
@@ -3325,7 +3339,7 @@
     text-align: center;
   }
   .sleep-grace-title { font-family: 'DM Mono', monospace; font-size: 20px; letter-spacing: 0.08em; line-height: 1.4; font-weight: 500; }
-  .sleep-grace-count { font-family: 'VT323', monospace; font-size: max(22px, var(--nx-fs-tag)); letter-spacing: 2px; color: rgba(255,255,255,0.85); }
+  .sleep-grace-count { font-family: 'DM Mono', monospace; font-size: max(18px, var(--nx-fs)); letter-spacing: 0.04em; color: rgba(255,255,255,0.85); }
   .sleep-grace-hint { font-size: var(--fs-desc); color: rgba(255,255,255,0.7); letter-spacing: 0.06em; font-weight: 500; }
 
   .nx-dialog--info { z-index: 701; width: min(680px, calc(100vw - 32px)); padding: 20px; gap: 12px; }
