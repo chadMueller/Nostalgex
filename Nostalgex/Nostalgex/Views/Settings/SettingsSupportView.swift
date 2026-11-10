@@ -68,7 +68,7 @@ struct SettingsSupportView: View {
         }
     }
 
-    /// RATE plus the three tips as one row of four equal tiles.
+    /// RATE as a full-width row, then the three tips as a row of three equal tiles.
     @ViewBuilder
     private var supportGrid: some View {
         Text("Tips help keep Nostalgex maintained.")
@@ -76,19 +76,19 @@ struct SettingsSupportView: View {
             .foregroundStyle(Color.nxText2)
             .fixedSize(horizontal: false, vertical: true)
 
-        HStack(spacing: 24) {
-            SupportTile(
-                art: PixelIcons.star,
-                title: "RATE NOSTALGEX",
-                caption: appState.hasTappedRate ? "Thanks for rating" : "Leave a star rating",
-                hint: RatingNudgePolicy.showsScrollHint ? RatingNudgePolicy.scrollHint : nil,
-                isFocused: isFocused("rate")
-            ) {
-                rateTapped()
-            }
-            .settingsRow("rate", focus: focus)
-            .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
+        SupportRateRow(
+            art: PixelIcons.star,
+            title: "RATE NOSTALGEX",
+            caption: appState.hasTappedRate ? "Thanks for rating" : "Leave a star rating",
+            hint: RatingNudgePolicy.showsScrollHint ? RatingNudgePolicy.scrollHint : nil,
+            isFocused: isFocused("rate")
+        ) {
+            rateTapped()
+        }
+        .settingsRow("rate", focus: focus)
+        .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
 
+        HStack(spacing: 24) {
             ForEach(tipJar.products, id: \.id) { product in
                 if let tip = TipProduct(rawValue: product.id) {
                     SupportTile(

@@ -195,6 +195,66 @@ struct SupportTile: View {
     }
 }
 
+// MARK: - Rate row
+
+/// RATE NOSTALGEX as one full-width row above the tip tiles: the star on the left, the name and a
+/// short line side by side, and the instruction under them. Same row surface and selected state as
+/// every other Settings row. The focus id and the action belong to the caller (`SettingsSupportView`),
+/// so the one RATE path (`AppStoreLink.openRate`) is the same one the rating banner uses.
+struct SupportRateRow: View {
+    let art: PixelArt
+    let title: String
+    let caption: String
+    /// The line under the title: where the stars are. Nil when the viewer has seen it enough.
+    var hint: String? = nil
+    let isFocused: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 28) {
+                PixelIconView(art: art, size: 72)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 24) {
+                        Text(title)
+                            .font(NXFont.bodyMedium)
+                            .foregroundStyle(Color.nxText)
+                            .lineLimit(1)
+                        Text(caption)
+                            .font(NXFont.bodyRegular)
+                            .foregroundStyle(Color.nxText2)
+                            .lineLimit(1)
+                    }
+                    if let hint {
+                        Text(hint)
+                            .font(NXFont.captionRegular)
+                            .foregroundStyle(Color.nxText2)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("supportTileHint")
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(NXFont.icon)
+                    .foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .nxRowSurface(isSelected: isFocused)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(SettingsButtonStyle(isFocused: isFocused))
+        .accessibilityLabel(title)
+        .accessibilityValue(caption)
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
+    }
+}
+
 // MARK: - Toggle Row
 
 struct SettingsToggleRow: View {

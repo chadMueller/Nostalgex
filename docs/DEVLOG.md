@@ -24,6 +24,15 @@ white as text. Not migrated, on purpose: the guide grid (its sizes follow row he
 panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
 pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
 
+**RATE is a full-width row above the tips.** On SUPPORT NOSTALGEX the RATE tile was one of four, so its title wrapped to two lines
+and its instruction took six in a narrow column. RATE is now one full-width row (`SupportRateRow`, the shared row surface and
+selected state): the star on the left, "RATE NOSTALGEX" and "Leave a star rating" on one line, the instruction ("Opens the App
+Store page. Scroll down to the stars to rate.") under them on one line, an open-out arrow on the right. POPCORN, TV DINNER and
+PIZZA NIGHT are a row of three below it. The focus id `rate`, the single RATE path (`AppStoreLink.openRate`) and `RateLinkTests` are
+unchanged; the instruction keeps its `supportTileHint` id. New `SettingsSupportGridTests` walks it with the remote: the pane opens
+on RATE, the tips are below it in one row left to right, Down from RATE reaches a tip, Left and Right move along the tips, and Up from
+each of the three tips reaches RATE. Simulator screenshot: `links-shots/step4-settings-rate-wide.png`.
+
 **SETTINGS on the guide's header is a real button.** It was plain gray text that turned yellow when focused. It is now a pill
 (the row's resting fill and outline, white 29 pt text) with the shared selected state, a 3 pt cyan outline, glow and 3% lift.
 Reached as before: Up out of the top channel row; the id `tunerSettingsButton` and the focus section are unchanged, and the
