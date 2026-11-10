@@ -489,3 +489,21 @@ a { color: inherit; }
   .page-connect .connect-brand, .page-connect .signin, .page-connect .connect-extra { grid-column: 1; grid-row: auto; }
   .page-connect .connect-title { font-size: max(28px, var(--nx-fs)); }
 }
+
+/* A simple start screen: one screen, no scrolling. A quiet header and footer. */
+.page-connect { min-height: 100vh; }
+.page-connect .connect-main { padding: 16px 0; }
+.page-connect .connect-title { font-size: clamp(22px, 2.6vw, 40px); white-space: nowrap; margin-bottom: 12px; }
+.page-connect .connect-lede { font-size: max(18px, var(--nx-fs)); margin: 0; max-width: 40ch; }
+.page-connect .connect-logo { margin-bottom: 24px; }
+.page-connect .footer { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.page-connect .footer-inner { display: flex; align-items: center; justify-content: flex-start; gap: 24px; flex-wrap: wrap; }
+.page-connect .footer-brand, .page-connect .footer-note { display: none; }
+.page-connect .footer-links { gap: 20px; }
+.page-connect .footer-links a { font-size: max(12px, var(--nx-fs)); font-weight: 500; text-transform: none; color: #b9c3de; }
+@media (max-width: 860px) {
+  .page-connect .connect-logo { width: min(260px, 70%); margin-bottom: 16px; }
+  .page-connect .connect-main { padding: 12px 0; }
+  .page-connect .signin-btn { min-height: 52px; }
+  .page-connect .signin-btn--primary { min-height: 56px; }
+}

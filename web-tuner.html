@@ -217,15 +217,12 @@
   <main class="connect-main">
     <div class="connect-wrap">
 
-      <!-- The Apple TV's setup layout: logo, title and a line of copy on the left, the choices on the right. -->
+      <!-- A simple start screen, the Apple TV's setup layout: logo, one headline and one line on the left,
+           the three choices on the right. What the tuner is and how it connects lives on the site. -->
       <div class="connect-brand">
       <img class="connect-logo" src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
-      <h1 class="connect-title">Watch your library as live TV in a browser.</h1>
-      <!-- selfhost:strip:start -->
-      <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide, right in your browser. It's free and needs no account. Plex works as is. Jellyfin and Emby need an https address.</p>
-      <!-- selfhost:strip:end -->
-      <!-- selfhost:only: <p class="connect-lede">The Nostalgex web tuner plays your own Plex, Jellyfin or Emby library as live channels with a retro guide. This copy runs on your own server, so a plain http:// Jellyfin or Emby address on your network works.</p> -->
-      <p class="connect-lede connect-lede--follow">Sign in once and Nostalgex turns your library into channels, then drops you straight into the guide.</p>
+      <h1 class="connect-title">Your library as live TV.</h1>
+      <p class="connect-lede">Plays your own Plex, Jellyfin or Emby library as live channels.</p>
       </div>
 
       <!-- The sign-in, screen by screen, as on Apple TV (nostalgex-internal SIGNIN-FLOW.md).
@@ -338,30 +335,6 @@
 
       </div>
 
-      <div class="connect-extra">
-      <p class="connect-privacy">Your credentials go straight from this browser to your server. Nothing lands on ours.</p>
-
-      <!-- selfhost:strip:start -->
-      <section class="connect-how" aria-labelledby="connect-how-title">
-        <h2 class="connect-how-title" id="connect-how-title">How the web tuner connects</h2>
-        <p>Plex works as is: sign in with a code and the tuner finds your server. Jellyfin and Emby have to be reachable over https, because browsers block a secure page from talking to a plain http server. A plain http server on your network works in the Apple TV app instead.</p>
-        <p>New here? See how it works with <a href="/plex">Plex</a>, <a href="/jellyfin">Jellyfin</a> or <a href="/emby">Emby</a>.</p>
-      </section>
-      <!-- selfhost:strip:end -->
-      <!-- selfhost:only: <section class="connect-how" aria-labelledby="connect-how-title"><h2 class="connect-how-title" id="connect-how-title">How this tuner connects</h2><p>This page comes from your own server, so it talks to Jellyfin or Emby on your network directly. Plex sign-in goes through plex.tv, the same as any Plex app. Serve this page and your media server the same way: both on http, or both on https.</p></section> -->
-
-      <!-- selfhost:strip:start -->
-      <div class="footer-signup connect-signup">
-        <p class="footer-signup-label">Want an email when new channels ship?</p>
-        <form class="subscribe-form js-subscribe-form" data-signup-source="webtuner" novalidate>
-          <label class="visually-hidden" for="tunerEmail">Email address</label>
-          <input class="subscribe-input" id="tunerEmail" type="email" name="email" placeholder="you@somewhere.tv" autocomplete="email" maxlength="254" required>
-          <button class="btn btn-ink btn-sm subscribe-btn" type="submit">Sign up</button>
-        </form>
-        <p class="subscribe-msg" role="status" aria-live="polite"></p>
-      </div>
-      <!-- selfhost:strip:end -->
-      </div>
     </div>
   </main>
 
