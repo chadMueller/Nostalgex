@@ -35,8 +35,11 @@ who hides Shows (4,755 episodes) from the home screen and has no access to Lab M
 - OK again: OFF, 834 items and the same pools fingerprint as before the switch.
 - Nothing of Lab Music Videos was read in either position: 4,755 is Shows alone.
 
-**Open.** A stick. Not looked at: a hidden library's title on a channel on screen (the counts and the six more
-channels stand in), the request on the wire, and the app closed before the re-read ends.
+The row's words and states were read from the node tree (port 8080), not a screenshot.
+
+**Open.** A stick. Not looked at: the row as drawn (no screenshot), a hidden library's title on a channel on screen
+(the counts and the six more channels stand in), the request on the wire, a press while a load runs (ignored, by the
+code), and the app closed before the re-read ends.
 
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
