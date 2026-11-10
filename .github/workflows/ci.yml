@@ -370,6 +370,8 @@ jobs:
         # discovery timing tests skip on these shared runners (N-037); they run locally.
         env:
           TEST_RUNNER_NOSTALGEX_SKIP_TIMING: "1"
+          # Written to a known place so the next step can keep it (N-037).
+          RESULT_BUNDLE: ${{ runner.temp }}/NostalgexTests.xcresult
         run: |
           set -eo pipefail
           xcodebuild test \
@@ -377,6 +379,19 @@ jobs:
             -scheme Nostalgex \
             -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' \
             -only-testing:NostalgexTests \
+            -resultBundlePath "$RESULT_BUNDLE" \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+
+      # The runner is thrown away with the result bundle, which is where a test's attachments
+      # live (the Plex discovery timelines). Kept only when the job fails, so a green run
+      # uploads nothing.
+      - name: Keep the result bundle when the tests fail
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: NostalgexTests-xcresult
+          path: ${{ runner.temp }}/NostalgexTests.xcresult
+          if-no-files-found: warn
+          retention-days: 14

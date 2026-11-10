@@ -95,6 +95,14 @@ done here: `scripts/nostalgex-music-brainz.js` `cleanTitle` and the Roku port ha
 Separate and older: the word strip also removes "video" and "official" outside brackets, so a title such as "Video Killed
 the Radio Star" loses its first word before search; not changed.
 
+**CI keeps the test result bundle when the tvOS job fails (N-037 step 1, Trello 6aeb81ad).** The tvOS job now writes
+its result bundle to a known path (`-resultBundlePath`) and uploads it as the artifact `NostalgexTests-xcresult` when the
+job fails (`if: failure()`, `actions/upload-artifact@v7`, 14 days), so the Plex discovery timelines the two timing tests
+attach are readable from a red run. A green run uploads nothing. The flag was run locally with the same command shape and
+produced a bundle; the upload itself has not run, because that needs a CI run on GitHub. Steps 2 and 3 of the card wait
+for that: (2) remove the skip in `PlexDiscoveryDeadLocalHarnessTests` for one CI run, let it fail, download the artifact,
+read the attached timeline and fix the real cause; (3) then delete `TEST_RUNNER_NOSTALGEX_SKIP_TIMING` from `ci.yml`.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left
