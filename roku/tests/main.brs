@@ -64,6 +64,7 @@ sub Main(args = invalid as Dynamic)
         print "  franchise lineup took "; timer.TotalMilliseconds(); " ms"
     end if
     if NxTestWants("subtitle") then failures = failures + NxRunSubtitleTests()
+    if NxTestWants("srt") then failures = failures + NxRunSrtTests()
     if NxTestWants("guide-nav") then failures = failures + NxRunGuideNavTests()
     if NxTestWants("cold-boot-seed") then failures = failures + NxRunColdBootSeedTests()
     if NxTestWants("tune-queue") then failures = failures + NxRunTuneQueueTests()
