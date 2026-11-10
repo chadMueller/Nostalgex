@@ -118,11 +118,11 @@ struct RatingNudgeBanner: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isFocused ? .white.opacity(0.07) : .white.opacity(0.02))
+                        .fill(isFocused ? .white.opacity(0.10) : .white.opacity(0.02))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(isFocused ? Color("BrandCyan").opacity(0.5) : .clear, lineWidth: 1.5)
+                        .stroke(isFocused ? Color("BrandCyan") : .clear, lineWidth: 3)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 10))
         }

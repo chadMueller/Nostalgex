@@ -55,7 +55,7 @@ function startOver(src, { signOutThrows = false } = {}) {
     console: { warn() {}, log() {} }, localStorage: local, sessionStorage: session,
     document: { getElementById: el },
     location: { replace: (u) => calls.push(`replace ${u}`) },
-    sleepTimer: { cancel() {} }, closePlaybackInfo() {}, stopVideo() {}, resetConnectScreen() {},
+    sleepTimer: { cancel() {} }, closePlaybackInfo() {}, stopVideo() {}, resetConnectScreen() {}, endScanWatch() {},
     updateConfigPlexStatus() {}, hideGuide() {},
     clearLibraryCache() { calls.push("clearLibraryCache"); local.removeItem("plex90_library_cache"); },
     COLLECTION_SCAN_KEY: "plex90_collections", CHANNELS: [{ itemPool: [1], schedule: [1] }],

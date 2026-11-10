@@ -81,6 +81,8 @@ export async function mediaBrowserVectors(upstream) {
     lift(html, "function pickBestVersion("),
     lift(html, "function formatDuration("),
     lift(html, "async function fetchJellyfinLibraryFromServer("),
+    // The scan itself, which the function above wraps (STOP WAITING, web tuner 1.0.17).
+    lift(html, "async function fetchJellyfinLibraryScan("),
     "return fetchJellyfinLibraryFromServer({ background: true });",
   ].join("\n");
   const run = new Function(
@@ -88,6 +90,9 @@ export async function mediaBrowserVectors(upstream) {
     "discoveredGenres", "jellyfinAuthHeader", "backendDisplayName", "adoptMediaBrowserKind",
     "finalizeLibraryWithMusicBrainz", "NostalgexJellyfinUrls", "CHANNELS", "switchChannel", "console",
     "NostalgexDailyManifest",
+    // The web tuner's STOP WAITING watch. A background scan, which this is, has none:
+    // no signal, never abandoned, nothing to start or end.
+    "scanSignal", "scanIsAbandoned", "noteScanAnswer", "startScanWatch", "endScanWatch", "abandonedScanError",
     body,
   );
   const quiet = { log() {}, warn() {} };
@@ -96,6 +101,7 @@ export async function mediaBrowserVectors(upstream) {
     env.fetch, { ...globalThis, ...env }, "http://server.invalid", fx.userId, "jellyfin", [], new Set(),
     {}, () => "", () => "Jellyfin", () => {}, env.finalizeLibraryWithMusicBrainz, urls, [], () => {}, quiet,
     globalThis.NostalgexDailyManifest,
+    () => undefined, () => false, () => {}, () => {}, () => {}, () => new Error("abandoned"),
   );
   // `meta` is display text, which the port's guide builds; `subtitles` the web
   // tuner's own subtitle menu, which the port fills from the stream.

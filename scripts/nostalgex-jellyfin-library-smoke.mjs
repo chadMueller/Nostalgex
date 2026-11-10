@@ -96,6 +96,7 @@ async function scan(serve, urls = globalThis.NostalgexJellyfinUrls) {
     lift(html, "function pickBestVersion("),
     lift(html, "function formatDuration("),
     lift(html, "async function fetchJellyfinLibraryFromServer("),
+    lift(html, "async function fetchJellyfinLibraryScan("),
     "return fetchJellyfinLibraryFromServer({ background: true });",
   ].join("\n");
   const run = new Function(
@@ -103,6 +104,8 @@ async function scan(serve, urls = globalThis.NostalgexJellyfinUrls) {
     "discoveredGenres", "jellyfinAuthHeader", "backendDisplayName", "adoptMediaBrowserKind",
     "finalizeLibraryWithMusicBrainz", "NostalgexJellyfinUrls", "CHANNELS", "switchChannel", "console",
     "NostalgexDailyManifest",
+    // STOP WAITING: a background scan has no watch.
+    "scanSignal", "scanIsAbandoned", "noteScanAnswer", "startScanWatch", "endScanWatch", "abandonedScanError",
     body,
   );
   const quiet = { log() {}, warn() {} };
@@ -110,6 +113,7 @@ async function scan(serve, urls = globalThis.NostalgexJellyfinUrls) {
     env.fetch, { ...globalThis, ...env }, "http://server.invalid", "u", "jellyfin", [], new Set(),
     {}, () => "", () => "Jellyfin", () => {}, env.finalizeLibraryWithMusicBrainz, urls, [], () => {}, quiet,
     globalThis.NostalgexDailyManifest,
+    () => undefined, () => false, () => {}, () => {}, () => {}, () => new Error("abandoned"),
   );
   return { items: result || [], requests };
 }

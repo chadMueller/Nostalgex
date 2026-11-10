@@ -134,6 +134,176 @@ produced a bundle; the upload itself has not run, because that needs a CI run on
 for that: (2) remove the skip in `PlexDiscoveryDeadLocalHarnessTests` for one CI run, let it fail, download the artifact,
 read the attached timeline and fix the real cause; (3) then delete `TEST_RUNNER_NOSTALGEX_SKIP_TIMING` from `ci.yml`.
 
+## 2026-11-09 (Apple TV: GUIDE TIMEOUT sends a guide left alone to fullscreen)
+
+**Why.** The guide holds the Apple TV awake while its preview plays (`ScreenAwakePolicy`), so tvOS's screensaver
+never starts there. A guide left up for hours keeps the logo, header and grid lines still on screen, which can burn
+into an OLED. Fullscreen video keeps moving.
+
+**Changed.** New PLAYBACK & PICTURE row GUIDE TIMEOUT: OFF, 5 MIN (default) or 15 MIN, per Apple TV and never
+synced. After that long with no remote press on the guide, the playing channel goes fullscreen, the same as
+Play/Pause. It only runs while the guide is in front and a channel is playing; Settings, the loading screen and an
+empty guide are left alone. `RemoteActivityMonitor` notes every press and touch-surface swipe with a window gesture
+recognizer that never recognizes, so it never takes a press from the focus engine. `TunerView` checks every 5 seconds
+and restarts the clock when the guide comes back from fullscreen or Settings.
+
+**Tested.** `GuideTimeoutTests` (default, cycling, the timing rule) and `GuideTimeoutUITests` in demo mode with
+`-uiTestGuideTimeoutSeconds 20`: a guide left alone for 30 seconds goes fullscreen, and a guide pressed every 8 seconds
+for 40 seconds stays up. Both passed twice. `NostalgexTests` and the OPEN ON LAST CHANNEL UI tests pass with the new
+row. Not tried on a real Apple TV.
+
+**Not changed.** Roku and the web tuner keep the guide up indefinitely; they need the same setting for parity.
+
+## 2026-11-09 (Apple TV: settings values readable, focused settings row easy to find)
+
+**Why.** A design pass over demo mode on an Apple TV 4K simulator (tvOS 27.2, build 1.0.30) found two settings
+problems you notice from the couch. The current value on a settings row (NORMAL, AUTO, FOREIGN AUDIO, MATCH APPLE TV
+LANGUAGE) was VT323 20pt at 20% white, measured 1.98:1 against the row. The focused row was marked by a 1.5px cyan
+stroke at 50% and a fill only 1.12:1 lighter than an unfocused row, so it was hard to tell where the remote was.
+
+**Changed.** `SettingsToggleRow`'s detail text is DMMono-Medium 22 at 60% white, cyan when focused, the treatment
+`SettingsLinkRow` already gives OFF and 0 ON. A detail marked prominent (a price) is unchanged. Every settings row,
+the subtitle language and stream quality pickers, and the rating banner now focus with a solid BrandCyan 3px stroke
+and a 10% white fill. `NostalgexTests` pass.
+
+**Not changed.** Guide, player and Now Playing panel styling. Other findings from the pass are in an issue for Chad
+to decide on.
+
+## 2026-11-10 (privacy: the web tuner and Docker tuner's saved sign-in)
+
+**Why.** The policy said where the apps keep a sign-in and said nothing about the web tuner, which keeps one too (the
+web agent's I-024 measurement, entry of 2026-11-09 below).
+
+**Changed.** On Chad's yes, after one reviewer pass that checked every statement against `plex-tuner.html` and
+`web-tuner.html`. One paragraph in "This website", straight after the web tuner paragraph, in `privacy.html` and
+`Nostalgex/PRIVACY_POLICY.md`, the same words in both: the web tuner and the Docker tuner keep your sign-in in your
+browser (Plex: account token, server name, address and token; Jellyfin or Emby: server name and address, the user name
+typed, user ID and access token); it stays until SIGN OUT in Settings or the server stops accepting it; none of it is
+sent to us; the password is never stored. It also says the saved day schedules carry the server address in their names
+and that SIGN OUT does not remove them (clearing the site's data in the browser does). The Summary bullet about where the
+server address and login token stay now names the browser for the web tuner and the Docker tuner. The Effective date
+moves from November 5 to November 10, 2026. No tuner file changed and there is no `tuner-v` tag, so the Docker image is
+untouched.
+
+**Left alone, on purpose.** The Apple TV "What the app stores on your device" block, which is about the TV app and stays
+true.
+
+## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
+
+**Why.** `NxCleanMusicTitle` got steps 5 and 7 of the web cleanup the same day as the web tuner (N-034, the entry
+below), checked by one title in the MediaBrowser fixture. The golden file `scripts/music-title-golden.json` is the
+contract for all three apps and nothing on the Roku read it.
+
+**Changed, tests only.** A `music-title` suite (`roku/tests/MusicTitleGoldenTests.brs`) runs the file's 37 clean
+cases against `NxCleanMusicTitle` and its 8 parse cases against `NxParseMusicTitle`. `roku/tests/gen-music-title.mjs`
+also asks the web module (`cleanTitle`, `parseTitle`) for every input in the file, 39 of them, and the suite holds the
+port to each answer, so a change to the module that the file doesn't cover still shows. The generator stops if the
+module and the file's clean cases disagree, and `tests/run.sh` runs the web's own smoke first.
+
+**Result.** Off the TV, on main at `259a3d0`: 46 and 79 checks pass, so the port needed no change. With
+`PlexLibrary.brs` as it was before `259a3d0`, 27 and 48 of them fail.
+
+**Not changed.** Anything in the channel package: `NxCleanMusicTitle` and `NxParseMusicTitle` are as they were.
+
+**Open.** Not run on a TV (`deploy.sh --test` lists the suite). The Roku job's path filter in `ci.yml` has
+`nostalgex-music-brainz.js` but not `music-title-golden.json`, so a change to the golden file alone doesn't start it.
+
+## 2026-11-09 (Docker: settings kept on the server, I-080; looked at, not built; branch web/fixes-1109)
+
+**Not built, on purpose.** The ask (a Docker user on a Raspberry Pi: "I keep having to go into settings and turn stuff on and
+off ... I would like people to be able to log in and have it be ready") needs a decision first: what is shared between
+browsers, and whether it is one lineup for the whole container or one per signed-in user. Facts gathered so the decision is
+quick. The image is nginx serving static files (`docker/nginx.conf`) with a read-only root filesystem and only `/tmp` writable,
+so today it can store nothing; every setting lives in the browser's localStorage. The lineup settings are small: the channel
+config was 8,454 bytes on a default install, plus the enabled packages, collections and franchises. The login
+(`plex90_saved_auth`) is the only credential and stays per browser either way. nginx can take a `PUT` of one small file with its
+WebDAV module (`dav_methods PUT`) into a mounted volume, so no backend is needed; that is from nginx's packaging and has **not**
+been run (Docker was off the table for this pass). The hosted tuner would stay per-browser, and the page already
+tells the two apart (`<meta name="nostalgex-build" content="selfhost">`).
+
+## 2026-11-09 (Web tuner and Docker: music video title cleanup leaves "Song ( Music )", N-034; branch web/fixes-1109)
+
+**Fixed on the web.** `cleanTitle` in `scripts/nostalgex-music-brainz.js` took the words `official video hd lyrics remastered`
+out of a title and left the parentheses they sat in. Measured on the real function: "Song (Official Music Video)" gave
+"Song ( Music )", "(Official Video)" gave "Song ( )", "(Lyrics)" and "(HD)" gave "Song ()", "(Official Audio)" gave
+"Song ( Audio)", and "(Official Video) (HD)" gave "Song ( ) ()". That text is what MusicBrainz and Deezer were asked for and
+what the guide showed as the song. Now a parenthesised group made only of those words goes whole, and any parentheses a word
+came out of are tidied ("(Official Live at Wembley)" becomes "(Live at Wembley)"; "(Live)" stays). 69 checks in
+`npm run test:music-title` against the new `scripts/music-title-golden.json` (37 clean cases, 8 parse cases), and the cleanup
+as it was fails 22 of the 37.
+
+**Swift still has the same bug. Roku was ported the same day (main was red until then).** `MusicTitleParser.clean` (Swift) is
+the same five passes as the web had; the golden file lists the exact cases and the nine steps in its `note`, for the Apple TV
+port to be tested against. Main went red on the Roku port job after the push of the three web fixes, for two reasons, both
+found by running only the vector generator and then the MediaBrowser suite in the interpreter: (1) the generator
+`roku/tests/gen-mediabrowser.mjs` lifts `fetchJellyfinLibraryFromServer` out of the page, which since STOP WAITING is a wrapper
+around `fetchJellyfinLibraryScan` and calls `endScanWatch()` ("ReferenceError: endScanWatch is not defined"); it now lifts both
+and stubs the six watch helpers, like the four web smokes. (2) With that fixed, the vectors differ from those of the commit
+before the three fixes in exactly one value, the Jellyfin music video "Artist Name - Song Name (Official Video)": title
+"Song Name ( )" became "Song Name", and the Roku port, still on the old cleanup, answered "Song Name ( )" (5,987 passed, 1
+failed). `NxCleanMusicTitle` now has steps 5 and 7 (5,988 passed, 0 failed). The Roku golden-file test for the cleanup
+itself (all 45 cases, not the one in the fixture) is not written.
+
+**Found, not changed.** The bare-word pass removes a word anywhere in a title: "Artist - Video Killed The Radio Star (Official
+Video)" now gives "Artist - Killed The Radio Star", and "Song - Official Music Video" gives "Song - Music". Both are as before;
+the first loses a real word from the search. They need a rule for which words count (the tail of the title only), which changes
+more titles than this card reported, so it is not in the golden file.
+
+## 2026-11-09 (Web tuner and Docker: STOP WAITING during a slow library scan; branch web/fixes-1109)
+
+**STOP WAITING (parity with Apple TV, Roku, Android).** The loading screen had START OVER and nothing else, and the scan's page
+requests had no timeout: a Jellyfin or Emby `/Items` page, or a Plex section or episode page, that the server never answers
+held the screen forever (only the Plex section list has the 15 s timeout). Measured first, in the browser, against a
+Jellyfin-shaped server that stops answering a page: the loading screen was still up after 13 s with START OVER and the coffee
+button the only things to press. Now `scripts/nostalgex-load-stall.js` watches each foreground scan the way
+`LibraryLoadStallWatch.swift` does: the scan's counters (phase, section, items, the line under the headline, and a count of
+server answers) are sampled every 2 s, and only silence counts, never elapsed time. After 60 s of none the loading screen says
+"Still waiting on your server. Nothing has come back for a while." with a STOP WAITING button and "Keeps whatever has loaded
+so far. The rest is read again next time."; after 210 s the scan is given up on its own. Either way the requests are aborted,
+the whole sections already read stay (on Jellyfin and Emby also the pages already read of the one in flight, as for any page
+that fails), the guide is built from them, and the library is not saved as the library and does not count as the first load
+(the web's existing "lost a section" rule, which is how the saved library is marked not whole here; the Apple TV backdates a
+saved one instead). Nothing read at all is the error line STOPPED WAITING BEFORE ANYTHING LOADED with RECONNECT. A Plex press
+belongs to the server it was made on (Apple TV #146): every server's scan starts its own watch, and a finished watch ignores a
+press. One thing taken from the Roku port, not the Apple TV: a look more than 20 s after the last one (a laptop lid, a throttled
+background tab) is not counted as quiet, since the Apple TV's wall-clock comparison would have abandoned a scan that was only
+asleep. Not watched: a refresh behind a cached guide (no loading screen to press anything on).
+
+**Test.** `npm run test:load-stall` (32 checks: 60 s and 210 s, silence only, an hour of a page every 40 s is not a stall,
+sleep not counted, a press belongs to its watch) and `npm run test:stop-waiting` (60 checks, headless, the real page; the
+timings are shortened to 3 s and 9 s after the shipped 60 s and 210 s are checked in the file): Jellyfin stuck on the second
+page of the second library, pressed and left alone, at 960x540 and on a phone (the button is on screen and on top, no keys
+needed); a library that keeps answering for 12.6 s, longer than the give-up time, loads whole and never shows the block;
+nothing ever read; Plex with a stuck second section; and origin/main's page as the negative control (no block, still loading).
+Four older smokes that lift these functions out of the page got stubs for the new helpers.
+**Not verified.** A real slow server, a TV browser, Safari. The Plex multi-server press-carry is covered by the watch's own
+test, not by two fake Plex servers in a browser. Emby is the Jellyfin code path; it was run for the refused login, not for this.
+
+## 2026-11-09 (Web tuner and Docker: saved login audit and a refused login, I-024; branch web/fixes-1109)
+
+**Saved login (I-024).** The web tuner already keeps the viewer signed in; the card was written before anyone measured it. Measured
+on the real pages, headless, against a Jellyfin-shaped server (`scripts/saved-login-browser-smoke.mjs`, `npm run test:saved-login`):
+signing in writes `plex90_saved_auth` in localStorage (backend, token, server address and name, user id, plus the typed address
+and user name for the next sign-in form; for Plex also the account token) and a working copy of the token in sessionStorage. No
+password is stored anywhere. A browser restart (localStorage and IndexedDB kept, sessionStorage gone) forwards web-tuner.html
+to the guide, signed in, no connect screen. The login stays until the viewer signs out or the server refuses it; there is no
+timer. SIGN OUT leaves no copy of the token or the user id in localStorage, sessionStorage, IndexedDB or cookies, and empties
+the library cache. It does not clear the channel settings, the install id, or the saved day schedules (`plex90_manifest_*`,
+whose keys carry the server address and whose rows carry item ids); those stay in the browser. Not measured: Safari, which
+may clear script-written storage after seven days without a visit, and a TV browser that wipes site data on exit.
+
+**Fixed: a refused login was remembered.** Measured with a server that answers 401 to everything after sign-in: the first
+request, the library list, was read as a library list. Jellyfin's `{}` made an empty library (NO CHANNELS FOUND, nothing says
+why), and the saved login stayed. Where the screen did say SESSION ENDED, two things made it a dead end: the RECONNECT link
+was created and then removed by `resetConnectScreen()` a line later, leaving the message beside CONNECT WITH PLEX (the Plex
+button, for a Jellyfin or Emby viewer); and even with the link, web-tuner.html forwards a saved login straight back to the
+tuner. Now a 401 or 403 on the library list ends the scan like the item pages already did, the refused login is forgotten (the
+same removal Plex already did when plex.tv refused the token, now one function), the connect screen is reset before the
+RECONNECT link is made, and only the Plex button is hidden, not the container that also holds the error line and the link.
+Smoke: 43 checks, Jellyfin and Emby at 960x540 and a phone, Plex through plex.tv, and a negative control with the 401 handling
+taken out. Not done: a revoked login while a cached library is showing still plays the cached guide and fails at playback
+with the existing "sign in again" card.
+
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 
 **Stripe hover.** The focused package stripe is now unmistakable: it lifts out of its slot (38 pt, over the row's left

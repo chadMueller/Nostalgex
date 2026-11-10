@@ -1,0 +1,195 @@
+{
+ "note": "Music video title cleanup (N-034). `clean` is MusicTitleParser.clean (Swift), cleanTitle in nostalgex-music-brainz.js (web, Docker) and NxCleanMusicTitle (Roku): the same text in, the same text out. `parse` is parse(raw): artist (null when none) and song. Rules: 1 underscores to spaces; 2 delete [..] and {..}; 3 delete a trailing (YYYY); 4 delete any (..YYYY..) group; 5 delete a (..) group made only of the words official music video audio visualizer lyric lyrics remaster remastered hd hq mv 4k uhd xvid dvdrip vgb prv (case-insensitive, separated by spaces , & / + -); 6 delete those words (without music, audio, visualizer, 4k, uhd) anywhere as whole words with a trailing ! if there is one; 7 delete empty () and trim spaces just inside (); 8 collapse white space; 9 trim spaces - ! . from both ends. Cases that depend on a later change are not here: 'Song - Official Music Video' still gives 'Song - Music', and a title with the word Video in it ('Video Killed The Radio Star') loses that word, both as before.",
+ "clean": [
+  {
+   "in": "Song (Official Music Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official Audio)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official HD Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official Video 4K)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official Lyric Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Official Visualizer)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Music Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Lyric Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Lyrics)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Video)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (HD)",
+   "out": "Song"
+  },
+  {
+   "in": "Song (Remastered)",
+   "out": "Song"
+  },
+  {
+   "in": "Song ( Official Video )",
+   "out": "Song"
+  },
+  {
+   "in": "Song (OFFICIAL MUSIC VIDEO)",
+   "out": "Song"
+  },
+  {
+   "in": "Artist - Song (Official Music Video)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song (Official Video) ft. Other",
+   "out": "Artist - Song ft. Other"
+  },
+  {
+   "in": "Artist - Song (Official Video) (HD)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song (Official Music Video) [HD]",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song (Official Video) (1988)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist_-_Song_(Official_Video)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song (Official Live at Wembley)",
+   "out": "Artist - Song (Live at Wembley)"
+  },
+  {
+   "in": "Artist - Song (Live)",
+   "out": "Artist - Song (Live)"
+  },
+  {
+   "in": "Artist - Song (Explicit)",
+   "out": "Artist - Song (Explicit)"
+  },
+  {
+   "in": "Artist - Song (Extended Mix)",
+   "out": "Artist - Song (Extended Mix)"
+  },
+  {
+   "in": "Ruff_Ryders_-_Get_Wild_[MMV]",
+   "out": "Ruff Ryders - Get Wild"
+  },
+  {
+   "in": "Avril Lavigne - Don't Tell Me video!",
+   "out": "Avril Lavigne - Don't Tell Me"
+  },
+  {
+   "in": "Beatles - From Me To You(11-4-1963 Royal Variety)",
+   "out": "Beatles - From Me To You"
+  },
+  {
+   "in": "the_used-take_it_away-vgb-prv",
+   "out": "the used-take it away"
+  },
+  {
+   "in": "Michael Jackson - Smooth Criminal (1988)",
+   "out": "Michael Jackson - Smooth Criminal"
+  },
+  {
+   "in": "Artist - Song (Remastered 2009)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song (Live at Wembley 1986)",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song [Official Video]",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Artist - Song {smg}",
+   "out": "Artist - Song"
+  },
+  {
+   "in": "Madonna - Music",
+   "out": "Madonna - Music"
+  },
+  {
+   "in": "Plain Title",
+   "out": "Plain Title"
+  },
+  {
+   "in": "",
+   "out": ""
+  }
+ ],
+ "parse": [
+  {
+   "in": "Artist - Song (Official Music Video)",
+   "artist": "Artist",
+   "song": "Song"
+  },
+  {
+   "in": "Artist - Song (Official Video) ft. Other",
+   "artist": "Artist",
+   "song": "Song"
+  },
+  {
+   "in": "Song (Official Music Video)",
+   "artist": null,
+   "song": "Song"
+  },
+  {
+   "in": "Song by Artist (Official Video)",
+   "artist": "Artist",
+   "song": "Song"
+  },
+  {
+   "in": "Artist-Song (Official Audio)",
+   "artist": "Artist",
+   "song": "Song"
+  },
+  {
+   "in": "Ruff_Ryders_-_Get_Wild_[MMV]",
+   "artist": "Ruff Ryders",
+   "song": "Get Wild"
+  },
+  {
+   "in": "Michael Jackson - Smooth Criminal (1988)",
+   "artist": "Michael Jackson",
+   "song": "Smooth Criminal"
+  },
+  {
+   "in": "Artist - Song (Live)",
+   "artist": "Artist",
+   "song": "Song (Live)"
+  }
+ ]
+}

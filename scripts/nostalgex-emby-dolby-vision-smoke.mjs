@@ -162,7 +162,7 @@ function fakeServer(video) {
 
 const PAGE_FUNCTIONS = [
   "backendDisplayName", "pickBestVersion", "formatDuration", "channelFilter", "filterItems",
-  "fetchJellyfinLibraryFromServer", "isMediaBrowserBackend", "collectionServerKeyForItem",
+  "fetchJellyfinLibraryFromServer", "fetchJellyfinLibraryScan", "isMediaBrowserBackend", "collectionServerKeyForItem",
   "refreshDynamicChannels", "franchiseItemKey", "franchisePackageOn", "franchiseBundleChannelIDs", "rulePoolOf", "isRuntimeChannel",
 ];
 
@@ -189,6 +189,8 @@ function page(backend, server) {
     },
     channelMembershipManifest: manifest,
     exclusiveRules,
+    // STOP WAITING: a background scan has no watch.
+    scanSignal: () => undefined, scanIsAbandoned: () => false, noteScanAnswer() {}, startScanWatch() {}, endScanWatch() {}, abandonedScanError: () => new Error("abandoned"),
     // refreshDynamicChannels
     allItemsCache: [], allChannelsUnfiltered: [], rawCollections: null, collectionCandidates: [],
     collectionsOverCap: 0, enabledCollectionKeys: new Set(), currentChannel: null,
