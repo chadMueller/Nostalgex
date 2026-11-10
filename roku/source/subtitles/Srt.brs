@@ -82,3 +82,11 @@ function NxSrtTextAt(cues as Dynamic, ms as Integer) as String
     end for
     return out.Join(Chr(10))
 end function
+
+' Where a drawn forced line goes: the lower part of the full screen picture,
+' or of the guide's preview box (1180,0 740x555), bottom-aligned in the box,
+' with the size of its type and how far its dark edge sits behind it.
+function NxForcedSubBox(fullscreen as Boolean) as Object
+    if fullscreen then return { x: 160, y: 760, w: 1600, h: 250, size: 44, edge: 3 }
+    return { x: 1200, y: 385, w: 700, h: 150, size: 22, edge: 2 }
+end function

@@ -338,6 +338,13 @@ function NxRunFullSubTests() as Integer
     NxCheck(r, "sidecars: always, no forced track, full alone", NxFullSubTrackList(NxMbSubtitleSidecars(noForced, base, "en", true, false)), "eng:http://emby:8096/Videos/51239/ms51239/Subtitles/4/0/Stream.srt")
     NxCheck(r, "sidecars: always, none in the language, none", NxFullSubTrackList(NxMbSubtitleSidecars(b, base, "de", true, false)), "")
     NxCheck(r, "sidecars: not always, no forced, none", NxFullSubTrackList(NxMbSubtitleSidecars(noForced, base, "en", false, false)), "")
+    ' #237: the app draws the forced track itself, so the player gets no forced sidecar.
+    NxCheck(r, "drawn: not always, the player gets nothing", NxFullSubTrackList(NxMbSubtitleSidecars(b, base, "en", false, false, true)), "")
+    NxCheck(r, "drawn: always, direct play, the player gets nothing", NxFullSubTrackList(NxMbSubtitleSidecars(b, base, "en", true, true, true)), "")
+    NxCheck(r, "drawn: always, server stream, the full track alone", NxFullSubTrackList(NxMbSubtitleSidecars(b, base, "en", true, false, true)), NxFullSubTrackList(NxMbSubtitleSidecars(noForced, base, "en", true, false)))
+    NxCheck(r, "drawn: the forced track's address", NxMbForcedSubUrl(b, base, "en"), "http://emby:8096/Videos/51239/ms51239/Subtitles/3/0/Stream.srt")
+    NxCheck(r, "drawn: no forced track, no address", NxMbForcedSubUrl(noForced, base, "en"), "")
+    NxCheck(r, "drawn: none in the language, no address", NxMbForcedSubUrl(b, base, "de"), "")
 
     on = { startSec: 1000, endSec: 2800, ratingKey: "a", partKey: "pa", serverIndex: 0, container: "mkv", videoCodec: "h264", audioCodec: "opus", fullSubs: [{ index: 4, language: "eng" }] }
     both = { startSec: 1000, endSec: 2800, ratingKey: "b", partKey: "pb", serverIndex: 0, container: "mkv", videoCodec: "h264", audioCodec: "opus", forcedSubs: [{ index: 2, language: "eng" }], fullSubs: [{ index: 4, language: "eng" }] }

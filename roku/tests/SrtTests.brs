@@ -44,6 +44,13 @@ function NxRunSrtTests() as Integer
     NxCheck(r, "sorted by start", mixed[0].text + "," + mixed[1].text, "first,second")
     NxCheck(r, "two cues at once", NxSrtTextAt(mixed, 10500), "first" + lf + "second")
 
+    ' Where the line is drawn: inside the picture, full screen and in the guide's preview.
+    full = NxForcedSubBox(true)
+    NxCheck(r, "box: full screen, inside the screen", NxToStr(full.x >= 0 and full.x + full.w <= 1920 and full.y + full.h <= 1080), "true")
+    small = NxForcedSubBox(false)
+    NxCheck(r, "box: the guide's preview, inside its box", NxToStr(small.x >= 1180 and small.x + small.w <= 1920 and small.y + small.h <= 555), "true")
+    NxCheck(r, "box: smaller type in the preview", NxToStr(small.size < full.size), "true")
+
     print "srt cases (#237):"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

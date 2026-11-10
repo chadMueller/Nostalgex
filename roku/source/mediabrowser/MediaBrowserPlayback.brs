@@ -26,10 +26,11 @@
 ' reports playback back to the server: that is SHOW NOW PLAYING and MARK
 ' WATCHED, off unless the viewer turns them on (source/guide/PlaybackReport.brs).
 
-' Returns { content, stopUrl, route, rung, audioTrack, forcedSub } (stopUrl
-' "" for direct play; audioTrack the pick for the player to select on a
-' direct play, as NxAudioTrackToSelect takes it, else invalid; forcedSub
-' true when the content carries a forced track as a sidecar), or invalid.
+' Returns { content, stopUrl, route, rung, audioTrack, forcedSub, forcedUrl }
+' (stopUrl "" for direct play; audioTrack the pick for the player to select on
+' a direct play, as NxAudioTrackToSelect takes it, else invalid; forcedSub
+' true when the airing has a forced track in SUBTITLE LANGUAGE, and forcedUrl
+' its SRT for the app to fetch and draw, #237), or invalid.
 ' A server stream may carry a full track as a sidecar too (NxMbFullSub).
 ' rung as for NxPlexStreamContent.
 function NxMbStreamContent(b as Object, offsetSec as LongInteger, s as Object, rung = "auto" as String) as Dynamic
@@ -80,9 +81,9 @@ function NxMbStreamContent(b as Object, offsetSec as LongInteger, s as Object, r
         end if
         content.url = base + "/Videos/" + NxUrlEncode(itemId) + "/stream." + ext + "?Static=true&MediaSourceId=" + NxUrlEncode(msid)
         content.streamFormat = format
-        sidecars = NxMbSubtitleSidecars(b, base, subLang, subsAlways, true)
+        sidecars = NxMbSubtitleSidecars(b, base, subLang, subsAlways, true, true)
         if sidecars.Count() > 0 then content.SubtitleTracks = sidecars
-        return { content: content, stopUrl: "", route: route, rung: "direct", audioTrack: audioTrack, forcedSub: forced <> invalid }
+        return { content: content, stopUrl: "", route: route, rung: "direct", audioTrack: audioTrack, forcedSub: forced <> invalid, forcedUrl: NxMbForcedSubUrl(b, base, subLang) }
     end if
 
     ' Emby needs a PlaySessionId on a hand-built address or every segment
@@ -117,10 +118,10 @@ function NxMbStreamContent(b as Object, offsetSec as LongInteger, s as Object, r
     q = q + "&SegmentLength=2"
     content.url = base + "/Videos/" + NxUrlEncode(itemId) + "/master.m3u8?" + q
     content.streamFormat = "hls"
-    sidecars = NxMbSubtitleSidecars(b, base, subLang, subsAlways, false)
+    sidecars = NxMbSubtitleSidecars(b, base, subLang, subsAlways, false, true)
     if sidecars.Count() > 0 then content.SubtitleTracks = sidecars
     stopUrl = base + "/Videos/ActiveEncodings?deviceId=" + NxUrlEncode(NxPlexClientId()) + "&playSessionId=" + session
-    return { content: content, stopUrl: stopUrl, route: route, rung: rung, audioTrack: invalid, forcedSub: forced <> invalid }
+    return { content: content, stopUrl: stopUrl, route: route, rung: rung, audioTrack: invalid, forcedSub: forced <> invalid, forcedUrl: NxMbForcedSubUrl(b, base, subLang) }
 end function
 
 ' Whether this TV plays the airing as stored, `b` with its audio pick
@@ -281,16 +282,28 @@ end function
 ' SubtitleMethod=Hls), and applySubtitles picks it. A direct play lists the
 ' file's own. Only on ALWAYS, so a server makes the file only for a viewer
 ' who reads it (issue #120). The server needs no token for either.
-function NxMbSubtitleSidecars(b as Object, base as String, lang as String, always as Boolean, direct as Boolean) as Object
+function NxMbSubtitleSidecars(b as Object, base as String, lang as String, always as Boolean, direct as Boolean, drawForced = false as Boolean) as Object
     itemId = NxToStr(b.ratingKey)
     msid = NxToStr(NxOr(b.partKey, itemId))
     out = []
     forced = NxMbForcedSub(b, lang)
+    ' drawForced: the app draws the forced track itself (#237, NxMbForcedSubUrl),
+    ' so the player is given no forced sidecar and the TV's captions aren't needed.
+    if drawForced then forced = invalid
     if forced <> invalid then out.Push({ Language: NxToStr(forced.language), TrackName: base + NxMbSubtitlePath(itemId, msid, forced.index), Description: "Forced" })
     full = invalid
     if always and not direct then full = NxMbFullSub(b, lang)
     if full <> invalid then out.Push({ Language: NxToStr(full.language), TrackName: base + NxMbSubtitlePath(itemId, msid, full.index) })
     return out
+end function
+
+' The forced track in `lang` as an address the app fetches and draws itself
+' (#237, ForcedSubTask), or "" when the airing has none.
+function NxMbForcedSubUrl(b as Object, base as String, lang as String) as String
+    forced = NxMbForcedSub(b, lang)
+    if forced = invalid then return ""
+    itemId = NxToStr(b.ratingKey)
+    return base + NxMbSubtitlePath(itemId, NxToStr(NxOr(b.partKey, itemId)), forced.index)
 end function
 
 ' A subtitle track as SRT, from the server's root. Jellyfin and Emby both

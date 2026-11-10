@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fetches a forced subtitle track as the server's SRT and reads it into
+     cues (source/subtitles/Srt.brs), for GuideView to draw (#237). Jellyfin
+     and Emby answer the address with no token. Nothing is kept on the TV
+     past the airing. -->
+<component name="ForcedSubTask" extends="Task">
+  <interface>
+    <field id="url" type="string" />
+    <!-- [{ startMs, endMs, text }], set once: empty when the file didn't
+         come or held no text. -->
+    <field id="cues" type="array" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/subtitles/Srt.brs" />
+  <script type="text/brightscript" uri="pkg:/components/ForcedSubTask.brs" />
+</component>
