@@ -226,6 +226,9 @@ sub NxClearAccountCaches(root = "" as String)
     DeleteFile(NxCacheOwnerPath(root))
     NxClearPlaybackVerdicts()
     NxClearSeed()
+    ' The channel OPEN ON LAST CHANNEL opens on was that lineup's (#230); the
+    ' switch stays. Nothing to do in the off-TV interpreter, which has no registry.
+    NxForgetLastChannel(NxLastChannelRegistry())
 end sub
 
 ' The cold-boot seed (source/guide/ColdBootSeed.brs) is the account's

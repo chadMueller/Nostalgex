@@ -213,11 +213,19 @@ sub onGuide()
                 if NxToStr(m.channels[i].id) = m.top.resumeId then resumed = i
             end for
         end if
+        ' OPEN ON LAST CHANNEL (#230): the channel the viewer last tuned, when
+        ' no link or rebuild names another. -1 with the switch off, nothing
+        ' saved, or the channel gone or renamed: channel one, as before.
+        remembered = -1
+        if linked < 0 and resumed < 0 and itemId = "" then remembered = NxChannelToOpen(NxLastChannelRegistry(), m.channels)
         if linked >= 0 then
             m.focus = linked
             keepFocusVisible()
         else if resumed >= 0 then
             m.focus = resumed
+            keepFocusVisible()
+        else if remembered >= 0 then
+            m.focus = remembered
             keepFocusVisible()
         end if
         renderGrid()
@@ -228,6 +236,9 @@ sub onGuide()
             setFullscreen(true)
         else if resumed >= 0 then
             pressTune(resumed)
+        else if remembered >= 0 then
+            print "guide: opening on the last channel, "; m.channels[remembered].id
+            pressTune(remembered)
         else
             pressTune(0)
         end if
@@ -862,6 +873,15 @@ sub pressTune(idx as Integer)
     NxFailureReset(m.failRun)
     m.stopped = false
     tune(idx)
+end sub
+
+' A tune the viewer made with the remote (the guide, Left and Right in full
+' screen, the mini strip): the channel OPEN ON LAST CHANNEL opens on (#230,
+' AppState.rememberLaunchChannel). Saved whether the switch is on or off.
+' The tunes the app makes itself go through pressTune and are not saved.
+sub viewerTune(idx as Integer)
+    if idx >= 0 and idx < m.channels.Count() then NxRememberChannel(NxLastChannelRegistry(), m.channels[idx])
+    pressTune(idx)
 end sub
 
 sub startTune(idx as Integer)
@@ -1723,7 +1743,7 @@ sub onStripPicked()
     closeStrip()
     m.focus = idx
     keepFocusVisible()
-    if idx <> m.tuned then pressTune(idx)
+    if idx <> m.tuned then viewerTune(idx)
     showOsd()
 end sub
 
@@ -2425,7 +2445,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             idx = (m.tuned + d + m.channels.Count()) mod m.channels.Count()
             m.focus = idx
             keepFocusVisible()
-            pressTune(idx)
+            viewerTune(idx)
             showOsd()
             return true
         end if
@@ -2514,7 +2534,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "OK" then
         ' A channel the sleep timer stopped starts again, and one that
         ' stopped trying tries again.
-        if m.focus = m.tuned and m.playing <> invalid and not m.stopped then setFullscreen(true) else pressTune(m.focus)
+        if m.focus = m.tuned and m.playing <> invalid and not m.stopped then setFullscreen(true) else viewerTune(m.focus)
         return true
     end if
     if key = "play" then

@@ -4,6 +4,8 @@ sub init()
     m.top.functionName = "loadLibrary"
     ' The seed text last written (saveSeed).
     m.savedSeed = ""
+    ' The id of the channel the last saveSeed was for (followSeed).
+    m.seedChannelId = ""
 end sub
 
 ' The saved guide: the last build's output, shown at launch while it is for
@@ -979,6 +981,8 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
             ' Each hour, so the seed keeps its budget for hours still to come
             ' on a TV left on, not ones that have aired.
             saveSeed(guide.channels)
+        else if type(msg) = "roSGNodeEvent" and msg.GetField() = "reschedule" then
+            followSeed(guide.channels)
         end if
     end while
 end sub
@@ -1063,14 +1067,26 @@ end sub
 ' opens on, written when it changed: a registry write is a flash write, and
 ' an unchanged hour gives the same text.
 sub saveSeed(channels as Object)
-    text = NxSeedFrom(NxSeedChannel(channels), CreateObject("roDateTime").AsSeconds(), NxBuildKey(), NxSeedBudget())
+    ch = NxSeedChannel(channels, NxChannelToOpen(NxLastChannelRegistry(), channels))
+    if ch <> invalid then m.seedChannelId = NxToStr(ch.id)
+    text = NxSeedFrom(ch, CreateObject("roDateTime").AsSeconds(), NxBuildKey(), NxSeedBudget())
     ' Each launch starts a task, so the first save compares with the registry.
     if m.savedSeed = "" then m.savedSeed = NxSeedRead()
     if text = "" or text = m.savedSeed then return
     if NxSeedWrite(text) then
         m.savedSeed = text
-        print "library: saved the first channel's next airings for a cold start ("; NxUtf8Bytes(text); " bytes)"
+        print "library: saved channel "; m.seedChannelId; "'s next airings for a cold start ("; NxUtf8Bytes(text); " bytes)"
     end if
+end sub
+
+' On a re-check inside the same hour: the seed again only when the channel a
+' launch opens on is another one (the viewer tuned a channel, or switched
+' OPEN ON LAST CHANNEL, #230), so a cold start plays the channel a launch
+' opens. MainScene asks every 30 s, so the seed follows within that.
+sub followSeed(channels as Object)
+    ch = NxSeedChannel(channels, NxChannelToOpen(NxLastChannelRegistry(), channels))
+    if ch = invalid or NxToStr(ch.id) = m.seedChannelId then return
+    saveSeed(channels)
 end sub
 
 ' Takes the bundleRequest events waiting on the port, and returns how many.
@@ -1131,6 +1147,8 @@ sub keepSavedGuide()
                 print "library: saved guide rescheduled from the saved pools (new day or time restriction)"
             end if
             saveSeed(guide.channels)
+        else if type(msg) = "roSGNodeEvent" and msg.GetField() = "reschedule" then
+            followSeed(guide.channels)
         end if
     end while
 end sub

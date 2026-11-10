@@ -65,6 +65,7 @@
   <script type="text/brightscript" uri="pkg:/source/subtitles/SubtitleSettings.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/PlaybackVerdict.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
   <script type="text/brightscript" uri="pkg:/components/GuideView.brs" />
   <children>
     <Rectangle id="screen" width="1920" height="1080" color="0x000000FF" />

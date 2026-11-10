@@ -92,5 +92,6 @@
   <script type="text/brightscript" uri="pkg:/source/collections/CollectionClassifier.brs" />
   <script type="text/brightscript" uri="pkg:/source/enrich/Enrichment.brs" />
   <script type="text/brightscript" uri="pkg:/source/enrich/EnrichmentNet.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
   <script type="text/brightscript" uri="pkg:/components/LibraryTask.brs" />
 </component>

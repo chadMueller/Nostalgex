@@ -239,6 +239,8 @@ sub buildRows()
     ' SUBTITLE LANGUAGE only while subtitles can show, as upstream's.
     if m.subs.always or m.subs.foreign then pushLanguage("subsLanguage")
     pushLanguage("audioLanguage")
+    ' OPEN ON LAST CHANNEL (#230), after AUDIO LANGUAGE as on the Apple TV.
+    add({ kind: "lastChannel" })
     ' Upstream's two reporting switches, both off by default (issue #72,
     ' source/guide/PlaybackReport.brs), under WATCH HISTORY as on the Apple TV.
     add({ kind: "header", title: "WATCH HISTORY", subtitle: "What " + NxKindName(NxSignedInKind()) + " is told about what you watch" }, "playback")
@@ -925,6 +927,15 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "lastChannel" then
+        label = "OPEN ON LAST CHANNEL"
+        detail = "Start on the channel you were last watching"
+        state = "OFF"
+        stateColor = "0xFFFFFF59"
+        if NxLastChannelOn(NxLastChannelRegistry()) then
+            state = "ON"
+            stateColor = m.accent + "FF"
+        end if
     else if row.kind = "watershed" then
         label = "WATERSHED"
         detail = "18 and R-rated titles wait until 9 PM"
@@ -1270,6 +1281,12 @@ sub pressRow()
         render()
     else if row.kind = "retro" then
         NxSaveRetroMode(not NxRetroMode())
+        render()
+    else if row.kind = "lastChannel" then
+        ' The library task reads it on its next re-check too, for the
+        ' cold-start seed's channel (LibraryTask.followSeed).
+        NxSaveLastChannelOn(NxLastChannelRegistry(), not NxLastChannelOn(NxLastChannelRegistry()))
+        print "settings: open on last channel "; NxLastChannelOn(NxLastChannelRegistry())
         render()
     else if row.kind = "watershed" then
         ' The library task reads it on its next re-check, which closing
