@@ -502,9 +502,10 @@ struct ServerPickerView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            HStack(alignment: .center, spacing: 80) {
-                // Left: branding + explanation
-                VStack(alignment: .leading, spacing: 28) {
+            // One column (Chad, 2026-11-10): logo, title, copy, list, continue, stacked and
+            // centred on the screen, same as the web tuner's picker.
+            VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 20) {
                     Image("NostalgexLogo")
                         .resizable()
                         .scaledToFit()
@@ -521,11 +522,10 @@ struct ServerPickerView: View {
                         .lineSpacing(4)
                         // Without this the copy clips to two lines and ellipsises.
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 560, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Right: server list + continue
+                // List + continue
                 VStack(alignment: .leading, spacing: 24) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 12) {
@@ -539,7 +539,7 @@ struct ServerPickerView: View {
                         // focused row's corners read as square instead of rounded.
                         .padding(.horizontal, 8)
                     }
-                    .frame(maxHeight: 560)
+                    .frame(maxHeight: 440)
 
                     Button("CONTINUE") {
                         let chosen = appState.availableServers.filter { selectedIDs.contains($0.machineIdentifier) }
@@ -552,7 +552,7 @@ struct ServerPickerView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 100)
+            .frame(maxWidth: 900)
             .padding(.vertical, 60)
         }
         .defaultFocus($focusedID, "continue")
@@ -625,7 +625,7 @@ private struct PickerRowButtonStyle: ButtonStyle {
 
 /// Shown once per sign-in, right after server selection (or right after connect for
 /// Jellyfin/Emby, which never show `ServerPickerView`) and before the first scan. Same
-/// two-column layout as `ServerPickerView` on purpose, same screen family, one step
+/// one-column layout as `ServerPickerView` on purpose, same screen family, one step
 /// later in the same flow. Default is every section ON: this is opting a library OUT,
 /// not opting one in, so leaving without touching anything still builds a full guide.
 struct LibrarySelectionView: View {
@@ -636,9 +636,10 @@ struct LibrarySelectionView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            HStack(alignment: .center, spacing: 80) {
-                // Left: branding + explanation
-                VStack(alignment: .leading, spacing: 28) {
+            // One column (Chad, 2026-11-10): logo, title, copy, list, continue, stacked and
+            // centred on the screen, same as the web tuner's picker.
+            VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 20) {
                     Image("NostalgexLogo")
                         .resizable()
                         .scaledToFit()
@@ -655,11 +656,10 @@ struct LibrarySelectionView: View {
                         .lineSpacing(4)
                         // Without this the copy clips to two lines and ellipsises.
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 560, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Right: section list + continue
+                // List + continue
                 VStack(alignment: .leading, spacing: 24) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 12) {
@@ -673,7 +673,7 @@ struct LibrarySelectionView: View {
                         // focused row's corners read as square instead of rounded.
                         .padding(.horizontal, 8)
                     }
-                    .frame(maxHeight: 560)
+                    .frame(maxHeight: 440)
 
                     Button("CONTINUE") {
                         appState.confirmLibrarySelection(includedIDs: includedIDs)
@@ -685,7 +685,7 @@ struct LibrarySelectionView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 100)
+            .frame(maxWidth: 900)
             .padding(.vertical, 60)
         }
         .defaultFocus($focusedID, "continue")
