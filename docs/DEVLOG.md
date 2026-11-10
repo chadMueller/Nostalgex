@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: the loading screen as the Apple TV's, PACKAGES button removed, same branch)
+
+**Why.** The loading screen was the last first-run screen still in the old look: a coffee ask under the rail, a bordered card on
+phones, the CRT edge tint over a black page, a detail line louder than the headline.
+
+**Changed.** `.loading-library` is now the Apple TV's `LoadingView` column on the same scale as the setup screens: logo (500),
+the first-setup line (22), the step rail (28 circles, 16 labels, upcoming steps dimmer than finished ones), the cyan headline (32)
+with the Apple TV's dots, one quiet detail line (22 at 45%), the progress bar (420 wide, 19 caption), the stall block with STOP
+WAITING (24, the setup screens' primary button), and START OVER always present and quiet (16). The buy-me-a-coffee block is gone
+from the loader. The retro overlay, the chromatic edge and the CRT corners no longer draw over it. Focus is the page's 3 px ring on
+both buttons. Phones get the same column with no card and nothing under 12 px. No loader logic, phase or number changed.
+The guide header's PACKAGES button (`#grid-pkg-btn`) is removed: the Apple TV has none, and Left at the start of the guide
+still opens the package list.
+
+**Not verified.** The package list is now reachable only by key on the web: a mouse or touch user, and a TV browser, has no other
+way in. Not measured on a real TV browser.
+
 ## 2026-11-10 (web tuner: setup pickers in two columns, one server on by default, same branch)
 
 **Why.** The setup pickers were a single stacked column on desktop and the TV browser, although the layout (logo, title and
