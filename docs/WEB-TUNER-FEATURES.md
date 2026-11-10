@@ -155,7 +155,7 @@ Saved auth shape:
 In the Docker tuner the container holds one lineup, so a new browser or device starts ready. The hosted
 nostalgex.app does not: it keeps settings in each browser.
 
-- **Shared:** the packages that are on (`nostalgex_enabled_bundles`), the channel settings
+- **Shared:** the bundles that are on (`nostalgex_enabled_bundles`), the channel settings
   (`plex90_channel_config`, `plex90_config_version`), the collections (`nostalgex_enabled_collections`) and the
   franchises (`nostalgex_enabled_franchises`, `nostalgex_disabled_franchises`). Nothing else.
 - **Per browser, as before:** the sign-in, guide layout, retro mode, language, guide text size, sound, last
@@ -204,7 +204,7 @@ Users can enable/disable individual channel bundles (and individual channels wit
 
 ## Franchises and collections
 
-The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as the Apple TV (1.0.29) and the Roku (1.0.8). Settings → Bundles has a FRANCHISES section and a MY COLLECTIONS section under the packages.
+The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as the Apple TV (1.0.29) and the Roku (1.0.8). Settings → Bundles has a FRANCHISES section and a MY COLLECTIONS section under the bundles.
 
 | What | Where it airs |
 |------|---------------|
@@ -213,7 +213,7 @@ The same franchise channels and the same FRANCHISES / OTHER COLLECTIONS split as
 | Every other server collection (actors, directors, your own sets) | CH 400-499, the first 100 switched on |
 | HIGH ROTATION | CH 500 and up |
 
-- **One switch for the lot, one for each.** The FRANCHISES package switch heads the section: off, no classic, found franchise or franchise collection airs. Under it ADD ALL and REMOVE ALL (real buttons, since a TV browser has no keys) and one alphabetical list. A classic starts on, a found franchise starts off except STAR TREK and FAST & FURIOUS (`defaultOn` in `franchises.json`). Choices are kept by stable id (`dict:STAR WARS`, `tmdb:99999`) in `nostalgex_enabled_franchises` and `nostalgex_disabled_franchises`, never by channel number. A choice is kept for a franchise whether or not the library has it.
+- **One switch for the lot, one for each.** The FRANCHISES bundle switch heads the section: off, no classic, found franchise or franchise collection airs. Under it ADD ALL and REMOVE ALL (real buttons, since a TV browser has no keys) and one alphabetical list. A classic starts on, a found franchise starts off except STAR TREK and FAST & FURIOUS (`defaultOn` in `franchises.json`). Choices are kept by stable id (`dict:STAR WARS`, `tmdb:99999`) in `nostalgex_enabled_franchises` and `nostalgex_disabled_franchises`, never by channel number. A choice is kept for a franchise whether or not the library has it.
 - **Found franchises** come from TMDB's own collections (a film's `franchiseID`, which needs enrichment) and the dictionary, `franchises.json`. Three films make a channel. What a classic covers joins that classic's pool, so The Mandalorian airs on CH 300; it does not join a pool another channel owns (a manifest lock or an exclusive rule).
 - **Server collections** are classified FRANCHISES (movie series: a shared TMDB collection, a known name, a keyword like "saga", a repeated word or title prefix) or OTHER COLLECTIONS. A collection that is the same franchise as a classic or a found one is folded into it and listed nowhere else. A collection holding shows folds only into a franchise that airs those shows.
 - **When more are on than fit** in CH 310-399, the ones with the most films stay, then the kept ones are numbered by name. Settings says how many are on but not shown.
@@ -227,7 +227,7 @@ Settings > GENERAL > PLAYBACK, a real button (no key needed). On unless switched
 
 - Kept in the browser's own storage (`nostalgex_open_last_channel`, `nostalgex_last_channel`), so each browser or device that opens the container keeps its own. Nothing is sent anywhere.
 - A choice is kept, a default is not stored. Pressing the button writes `0` or `1` and that stays; a browser that never pressed it holds no value and reads the default. So a browser that switched it off on 1.0.15 (stored `0`) stays off after the default changed, one that switched it on stays on, and only a browser that never chose now opens on the last channel. Opening on the remembered channel never writes the switch.
-- The channel is remembered with its id and its name whenever the viewer tunes one on a real server (a pick in the guide, channel up or down, a number key), switch on or off. Tunes the page makes itself (the first channel after a load, the fallback when a package is switched off) are not remembered, so a saved channel that is not in the lineup yet is not replaced by the first one. Signing out clears it (the switch stays). It is opened only when an enabled channel has the same id and the same name. Renamed, renumbered, dropped, package off, nothing kept, a damaged value: the first enabled channel opens, as with the switch off.
+- The channel is remembered with its id and its name whenever the viewer tunes one on a real server (a pick in the guide, channel up or down, a number key), switch on or off. Tunes the page makes itself (the first channel after a load, the fallback when a bundle is switched off) are not remembered, so a saved channel that is not in the lineup yet is not replaced by the first one. Signing out clears it (the switch stays). It is opened only when an enabled channel has the same id and the same name. Renamed, renumbered, dropped, bundle off, nothing kept, a damaged value: the first enabled channel opens, as with the switch off.
 - Tests: `npm run test:last-channel`, `npm run test:open-last-channel:browser`.
 
 ---

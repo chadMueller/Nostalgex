@@ -69,7 +69,7 @@ Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker cont
 
 [Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.29)
 
-- **Channel numbers change in this update.** Every package has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
+- **Channel numbers change in this update.** Every bundle has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
 - **A new Settings layout.** Pick a category on the left and its settings open on the right. Settings also tells you why a channel isn't on the air.
 - **Pick which libraries load** when your server has more than one. A library you leave off is never scanned.
 - **Three new 80s channels** in NOSTALGEX: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV.
@@ -142,7 +142,7 @@ services:
     restart: unless-stopped
 ```
 
-**Settings for every browser (optional).** Mount a volume on `/data` and the container keeps one lineup for everyone who opens it: the packages that are on, the channel settings, collections and franchises. A new browser or device starts from it. Your sign-in, guide layout and language stay in each browser. The last change wins, and the first browser to change something after you add the volume becomes the shared lineup. In Compose add `volumes: ["nostalgex-data:/data"]` to the service and a `nostalgex-data:` entry under top-level `volumes:`; with `docker run`, add `-v nostalgex-data:/data`. A folder on the host needs `chown 101:101` first. Anyone who can reach the port can change the lineup file, so keep the port on your home network or behind a proxy that asks for a login, or turn the feature off with `NOSTALGEX_SHARED_SETTINGS=off`. With no writable `/data`, each browser keeps its own settings, as before.
+**Settings for every browser (optional).** Mount a volume on `/data` and the container keeps one lineup for everyone who opens it: the bundles that are on, the channel settings, collections and franchises. A new browser or device starts from it. Your sign-in, guide layout and language stay in each browser. The last change wins, and the first browser to change something after you add the volume becomes the shared lineup. In Compose add `volumes: ["nostalgex-data:/data"]` to the service and a `nostalgex-data:` entry under top-level `volumes:`; with `docker run`, add `-v nostalgex-data:/data`. A folder on the host needs `chown 101:101` first. Anyone who can reach the port can change the lineup file, so keep the port on your home network or behind a proxy that asks for a login, or turn the feature off with `NOSTALGEX_SHARED_SETTINGS=off`. With no writable `/data`, each browser keeps its own settings, as before.
 
 **Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.13 · DOCKER`.
 
