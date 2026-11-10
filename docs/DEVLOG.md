@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
+
+**Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with
+`includeHidden=true`, so the Roku scan never read it. The web tuner (1.0.15) and the Apple TV already ask.
+
+**Changed.** `NxMbViewsPath` takes the switch and adds `&includeHidden=true` for Jellyfin only; off, the request is
+byte for byte what it was, and Emby's never changes. The switch is `source/mediabrowser/HiddenLibraries.brs`, off
+unless turned on, in the registry's `player` section. The row INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's
+line, is on SERVERS & ACCOUNTS between the servers and RESCAN LIBRARY, on a Jellyfin sign-in only. A press saves the
+switch and reads the library again in the background, as RESCAN LIBRARY does; while a load runs the row reads
+UPDATING… and a press does nothing, so no load is ever for the other position.
+
+**A library saved with the other position.** Read from the code, not run: if the app closes before the re-read ends,
+the next launch shows the saved guide, and its background refresh scans Jellyfin again (a Jellyfin library is scanned
+on every load) with the switch as it now is.
+
+**Tested off the TV.** The golden file's nine `views` cases are read with its `sections` and `types`. A
+`hidden-libraries` suite, 19 cases: the switch on a stand-in registry, and a scan against a stub that lists two hidden
+libraries only with `includeHidden=true` and never lists a third. On, the hidden films and episodes are scanned; off,
+none is and no hidden library is asked for items; the unlisted library is never asked. With the parameter taken out,
+3 of the 19 and 3 of the golden cases fail.
+
+**Open.** Not run on a TV or against a real Jellyfin yet.
+
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
 **Why.** The Roku opened on the first channel in the guide at every launch. The Apple TV and the web tuner open on

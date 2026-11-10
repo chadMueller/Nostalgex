@@ -565,7 +565,18 @@ function NxMbFixtureFetcher(fx as Object) as Object
                 end for
             end if
             if base = "/UserViews" or CreateObject("roRegex", "^/Users/[^/]+/Views$", "").IsMatch(base) then
-                return { Items: m.fx.views, TotalRecordCount: m.fx.views.Count() }
+                ' A view in `hidden` is one the user hides from the home screen:
+                ' Jellyfin's /UserViews lists it only with includeHidden=true
+                ' (#231). Emby's list has it either way.
+                hidden = NxList(m.fx.hidden)
+                if hidden.Count() = 0 or base <> "/UserViews" or q.includeHidden = "true" then
+                    return { Items: m.fx.views, TotalRecordCount: m.fx.views.Count() }
+                end if
+                shown = []
+                for each v in m.fx.views
+                    if not NxHasValue(hidden, v.Id) then shown.Push(v)
+                end for
+                return { Items: shown, TotalRecordCount: shown.Count() }
             end if
             if base <> "/Items" then return invalid
             if NxHasValue(NxList(m.fx.fail), q.ParentId) then return invalid
@@ -830,6 +841,13 @@ function NxRunPlaylistLeakTests(goldenPath as String, fixturePath as String, cha
         NxCheck(r, label, section, NxToStr(c.sectionType))
         NxCheck(r, label + " asks for", NxToStr(NxMbItemTypes(section)), NxToStr(c.itemTypes))
     end for
+    ' Its `views`: the request that lists a user's libraries, by backend, user
+    ' id and the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (#231).
+    for each c in golden.views
+        label = "views path, " + c.backend + ", user '" + c.userId + "', includeHidden " + NxToStr(c.includeHidden)
+        NxCheck(r, label, NxMbViewsPath(c.backend, c.userId, c.includeHidden = true), c.path)
+    end for
+    NxCheck(r, "the golden file has its views cases", NxToStr(NxList(golden.views).Count() >= 9), "true")
     ' Its `types`: a row the server sent, what was asked, and whether it is kept.
     for each c in golden.types
         NxCheck(r, "row of Type '" + NxToStr(c.item.Type) + "' asked " + c.asked, NxToStr(NxMbHasAskedType(c.item, c.asked)), NxToStr(c.kept))

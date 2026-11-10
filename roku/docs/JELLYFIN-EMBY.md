@@ -45,6 +45,11 @@ code path.
 
 - The libraries come from `/UserViews?userId=` on Jellyfin and
   `/Users/{id}/Views` on Emby. Emby answers 404 to the first.
+  With INCLUDE LIBRARIES HIDDEN ON JELLYFIN on (#231, SERVERS & ACCOUNTS, off
+  by default, `source/mediabrowser/HiddenLibraries.brs`), Jellyfin's request
+  ends `&includeHidden=true` and lists the libraries the user hides from the
+  home screen; a library the user has no access to is in neither answer.
+  Emby's request is the same either way.
 - Items: `GET /Items?userId=&ParentId=&Recursive=true&IncludeItemTypes=` with
   the `Fields` list (`ProviderIds,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData`),
   in pages of 200. A library of type `musicvideos` is asked for
