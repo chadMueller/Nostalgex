@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (privacy: the web tuner and Docker tuner's saved sign-in)
+
+**Why.** The policy said where the apps keep a sign-in and said nothing about the web tuner, which keeps one too (the
+web agent's I-024 measurement, entry of 2026-11-09 below).
+
+**Changed.** On Chad's yes, after one reviewer pass that checked every statement against `plex-tuner.html` and
+`web-tuner.html`. One paragraph in "This website", straight after the web tuner paragraph, in `privacy.html` and
+`Nostalgex/PRIVACY_POLICY.md`, the same words in both: the web tuner and the Docker tuner keep your sign-in in your
+browser (Plex: account token, server name, address and token; Jellyfin or Emby: server name and address, the user name
+typed, user ID and access token); it stays until SIGN OUT in Settings or the server stops accepting it; none of it is
+sent to us; the password is never stored. It also says the saved day schedules carry the server address in their names
+and that SIGN OUT does not remove them (clearing the site's data in the browser does). The Summary bullet about where the
+server address and login token stay now names the browser for the web tuner and the Docker tuner. The Effective date
+moves from November 5 to November 10, 2026. No tuner file changed and there is no `tuner-v` tag, so the Docker image is
+untouched.
+
+**Left alone, on purpose.** The Apple TV "What the app stores on your device" block, which is about the TV app and stays
+true.
+
 ## 2026-11-09 (Roku: the music video title cleanup is held to the golden file, #239)
 
 **Why.** `NxCleanMusicTitle` got steps 5 and 7 of the web cleanup the same day as the web tuner (N-034, the entry
