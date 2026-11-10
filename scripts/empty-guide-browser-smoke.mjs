@@ -29,7 +29,7 @@ const shots = process.env.SHOTS || "";
 if (shots) mkdirSync(shots, { recursive: true });
 
 const HEADING = "NO CHANNELS FOUND";
-const LINE = "Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports.";
+const LINE = "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports.";
 
 const odd = {
   Id: "odd1", Name: "Odd One", Type: "Movie", ProductionYear: 2023, Genres: ["Western"], OfficialRating: null,

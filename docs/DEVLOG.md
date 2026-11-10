@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 2, Now Playing details, program rows, and "bundles" in the words)
+
+**Why.** #261 and #248, then Chad's call that the apps' mixed "package" and "bundle" become "bundle" everywhere a person reads it.
+
+**#261, Now Playing details.** The info panel's left column is now what the Apple TV's Now Playing panel shows and nothing more (Chad's
+correction the same day: no description, genres, year, rating or runtime): the Plex poster beside the info (hidden when there is none),
+CH with a bar in the channel's colour, the title (and the episode or artist line), the channel name, then the UP NEXT card, a cyan chip
+`UP NEXT IN 12 MIN` (`LESS THAN 1 MIN`, `1 HR 5 MIN`, rounded down; `scripts/nostalgex-up-next.js`, 12 checks in `npm test`) and the next title. A
+hint line under the details says what the control the viewer is on does. The progress bar and time stay (the guide's panel uses them).
+The web's panel is always on screen, so there is no open and close to mirror. Jellyfin and Emby show no poster (the Apple TV's is Plex only).
+
+**#248, program rows.** CAPTIONS, SUBTITLE LANGUAGE, AUTO SUBTITLES, AUDIO and AUDIO LANGUAGE on the rail and in the phone drawer, each shown
+only when the playing file has something to choose; AUDIO, AUDIO LANGUAGE and SUBTITLE LANGUAGE open one list. A track chosen in AUDIO holds for
+that program. `plex-tracks-browser-smoke.mjs` covers the rows and the choice (17 checks).
+
+**Words.** PACKAGES, Packages and package became BUNDLES, Bundles and bundle in every string a person reads (the empty-guide line, the
+list heading and its aria label, Settings pane lines, the hint, the keyboard help line, the seasonal offer pill). Identifiers, ids, CSS
+classes (`pkg-*`), storage keys, function names and log lines are unchanged. `empty-guide-browser-smoke.mjs` expects the new line.
+
 ## 2026-11-10 (web tuner: parity group 1, the audio pick, Plex tracks and the /decision check, same branch)
 
 **Why.** Chad asked for all the web parity issues (#248 to #261) to be worked and closed before the next web and Docker release.
@@ -97,7 +116,7 @@ Before and after, in CSS px as the page measures them (960x540 values are author
 **Tests.** `guide-text-browser-smoke.mjs` held a desktop title size of 18 px that has been stale since the 1.3x guide, and clicked
 the old Settings tab strip; it now expects 18 x 1.3 x 0.76 and uses the rail. It passes (104 checks).
 
-## 2026-11-10 (web tuner: the loading screen as the Apple TV's, PACKAGES button removed, same branch)
+## 2026-11-10 (web tuner: the loading screen as the Apple TV's, BUNDLES button removed, same branch)
 
 **Why.** The loading screen was the last first-run screen still in the old look: a coffee ask under the rail, a bordered card on
 phones, the CRT edge tint over a black page, a detail line louder than the headline.
@@ -108,8 +127,8 @@ with the Apple TV's dots, one quiet detail line (22 at 45%), the progress bar (4
 WAITING (24, the setup screens' primary button), and START OVER always present and quiet (16). The buy-me-a-coffee block is gone
 from the loader. The retro overlay, the chromatic edge and the CRT corners no longer draw over it. Focus is the page's 3 px ring on
 both buttons. Phones get the same column with no card and nothing under 12 px. No loader logic, phase or number changed.
-The guide header's PACKAGES button (`#grid-pkg-btn`) is removed: the Apple TV has none, and Left at the start of the guide
-still opens the package list.
+The guide header's BUNDLES button (`#grid-pkg-btn`) is removed: the Apple TV has none, and Left at the start of the guide
+still opens the bundle list.
 
 **Parity issues filed (label `web parity`).** One per gap against the Apple TV, found by reading this branch and `appletv/1.0.32-design`:
 #261 Now Playing panel as the Variant A (poster, CH tag, title, year and rating, UP NEXT, hint line); #248 AUDIO, AUDIO LANGUAGE,
@@ -118,11 +137,11 @@ tracks titled commentary; #251 the guide in DM Mono Medium at the Apple TV's siz
 (after #235 merges); #254 first-run onboarding; #255 a large text step for a 1920x1080 PC on a TV; #256 check Plex's 400 on
 `start.m3u8` and call `/decision` first if it happens; #257 WHY ARE SOME CHANNELS MISSING?; #258 playback recovery ladder;
 #259 background library refresh; #260 CHANNELS & BUNDLES as link rows. Settings as a left rail, SUPPORT with every link,
-libraries first with RESCAN LIBRARY and SIGN OUT last, package stripes and the package list, the library picker, the two-column
+libraries first with RESCAN LIBRARY and SIGN OUT last, bundle stripes and the bundle list, the library picker, the two-column
 pickers and the loader are done on this branch, so they are not issues. The Apple TV tried the one-server default and reverted it
 on `appletv/1.0.32-design`; the web keeps it until Chad decides.
 
-**Not verified.** The package list is now reachable only by key on the web: a mouse or touch user, and a TV browser, has no other
+**Not verified.** The bundle list is now reachable only by key on the web: a mouse or touch user, and a TV browser, has no other
 way in. Not measured on a real TV browser.
 
 ## 2026-11-10 (web tuner: setup pickers in two columns, one server on by default, same branch)

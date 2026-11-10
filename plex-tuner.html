@@ -39,6 +39,7 @@
 <script src="scripts/nostalgex-playback-info.js"></script>
 <script src="scripts/nostalgex-language.js"></script>
 <script src="scripts/nostalgex-audio-pick.js"></script>
+<script src="scripts/nostalgex-up-next.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -244,21 +245,54 @@
   .player-screen.layout-side.has-channel .info-panel {
     display: flex;
     flex-direction: column;
-    justify-content: center;
     width: 35%;
     flex-shrink: 0;
     /* The corner logo (fixed, 170px wide, about 24px tall, 20px from the top) is not drawn over
        the text: the panel starts below it. */
     padding: 72px 40px 32px;
+    justify-content: safe center;
     background: linear-gradient(135deg, #0a0a1a 0%, #0d0d20 100%);
     border-right: 1px solid rgba(255,255,255,0.08);
     overflow: hidden;
   }
+  .info-main { display: flex; align-items: flex-start; gap: calc(24px * var(--is)); min-width: 0; margin-bottom: calc(14px * var(--is)); }
+  .info-text { flex: 1 1 auto; min-width: 0; }
+  .info-poster {
+    flex: 0 0 auto;
+    width: calc(130px * var(--is));
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: calc(10px * var(--is));
+    border: 2px solid rgba(255,255,255,0.18);
+    background: #101024;
+  }
+  .info-poster[hidden] { display: none; }
+  /* The channel's own colour is a small bar beside the number, never the number (the Apple TV: 12 by 36 pt). */
   .info-channel-tag {
+    display: flex;
+    align-items: center;
+    gap: calc(14px * var(--is));
     font-family: 'VT323', monospace;
     font-size: max(calc(36px * var(--is)), var(--nx-fs-tag));
     letter-spacing: 3px;
+    color: #fff;
     margin-bottom: calc(14px * var(--is));
+  }
+  .info-ch-bar { flex: 0 0 auto; width: calc(12px * var(--is)); height: calc(36px * var(--is)); min-width: 6px; min-height: 16px; border-radius: 2px; }
+  .info-channel-name {
+    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 0.06em;
+    margin-bottom: calc(12px * var(--is));
+    overflow-wrap: anywhere;
+  }
+  .info-channel-name:empty { display: none; }
+  .info-hint {
+    margin-top: calc(14px * var(--is));
+    min-height: calc(2.8em);
+    font-size: max(calc(18px * var(--is)), var(--nx-fs));
+    line-height: 1.4;
+    color: rgba(255,255,255,0.7);
   }
   .info-title {
     font-size: max(calc(38px * var(--is)), var(--nx-fs));
@@ -277,36 +311,11 @@
     margin-bottom: calc(12px * var(--is));
     font-weight: 400;
   }
-  .info-description {
-    font-size: max(calc(20px * var(--is)), var(--nx-fs));
-    color: rgba(255,255,255,0.7);
-    margin-bottom: calc(18px * var(--is));
-    line-height: 1.4;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-  }
-  .info-meta-row {
-    display: flex;
-    align-items: center;
-    gap: calc(12px * var(--is));
-    font-size: max(calc(22px * var(--is)), var(--nx-fs));
-    color: rgba(255,255,255,0.7);
-    margin-bottom: calc(18px * var(--is));
-    letter-spacing: 0.06em;
-    flex-wrap: wrap;
-  }
-  .info-meta-badge {
-    font-family: 'VT323', monospace;
-    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
-    border: 1px solid rgba(255,255,255,0.25);
-    padding: 2px 8px;
-    border-radius: 3px;
-    letter-spacing: 0.06em;
-  }
-  .info-rating {
-    color: var(--yellow);
+  /* A short window: the panel still holds the poster and the details, with less description. */
+  @media (pointer: fine) and (max-height: 900px) {
+    .info-poster { width: calc(104px * var(--is)); }
+    .info-hint { min-height: 1.4em; }
+    .info-main { margin-bottom: calc(8px * var(--is)); }
   }
   .info-progress-wrap {
     display: flex;
@@ -334,17 +343,27 @@
   }
   .info-upnext {
     margin-top: calc(18px * var(--is));
-    font-size: max(calc(18px * var(--is)), var(--nx-fs));
-    color: rgba(255,255,255,0.7);
-    letter-spacing: 0.06em;
+    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    color: #fff;
+    letter-spacing: 0.04em;
   }
-  .info-upnext strong {
-    font-family: 'VT323', monospace;
-    font-size: max(calc(24px * var(--is)), var(--nx-fs-tag));
-    letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.7);
-    font-weight: normal;
-    margin-right: 10px;
+  .info-upnext-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .info-upnext-chip {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: max(calc(16px * var(--is)), var(--nx-fs));
+    letter-spacing: 0.12em;
+    color: #00101a;
+    background: var(--cyan);
+    border-radius: 999px;
+    padding: calc(4px * var(--is)) calc(12px * var(--is));
+    margin-bottom: calc(8px * var(--is));
   }
 
   /* Unmute button */
@@ -770,6 +789,7 @@
      ran into QUALITY. A row has the whole rail to itself, so the pairs are just rows now. The
      rail is --nx-rail wide, which grows with the text floor. */
   .v-btn-pair { display: contents; }
+  .track-row[hidden] { display: none !important; }
 
   /* ══════════════════════════════════════
      TOUCH TOP BAR (phones and tablets)
@@ -2632,8 +2652,6 @@
       overflow: hidden;
       font-weight: 500;
     }
-    .info-meta-row { font-size: var(--nx-fs); gap: 8px; margin-bottom: 10px; }
-    .info-meta-badge { font-size: var(--nx-fs-tag); padding: 1px 6px; }
     .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
     .info-progress-wrap { gap: 10px; }
     .info-upnext { font-size: var(--nx-fs); margin-top: 10px; }
@@ -2677,7 +2695,10 @@
     }
     /* No room for prose next to a 16:9 video on a phone. The title, the meta
        row and the progress are what a glance needs. */
-    .info-description { display: none; }
+    .info-poster, .info-hint { display: none; }
+    .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
+    .info-ch-bar { width: 6px; height: 16px; }
+    .info-channel-tag { gap: 8px; }
     .guide-grid { flex: 1 1 auto; min-height: 0; }
   }
 
@@ -2705,13 +2726,6 @@
       width: 34%;
       padding: 16px 20px;
       justify-content: center;
-    }
-    .info-description {
-      font-size: var(--nx-fs);
-      line-height: 1.4;
-      max-height: calc(15px * 1.4 * 3);
-      -webkit-line-clamp: 3;
-      margin-bottom: 12px;
     }
     /* The bottom bar used to take 56px off the foot of the screen. Raised from
        44% so the guide gets that back rather than the video row, which is
@@ -2906,9 +2920,10 @@
       font-weight: 500;
     }
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
-    .info-description { display: none; }
-    .info-meta-row { font-size: var(--nx-fs); gap: 6px; margin-bottom: 8px; }
-    .info-meta-badge { font-size: var(--nx-fs-tag); padding: 1px 6px; }
+    .info-poster, .info-hint { display: none; }
+    .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
+    .info-ch-bar { width: 6px; height: 16px; }
+    .info-channel-tag { gap: 8px; }
     .info-time { font-family: 'VT323', monospace; font-size: var(--nx-fs-tag); }
     .info-upnext { display: none; }
 
@@ -3590,6 +3605,21 @@
       <span class="m-drawer-label">STREAM QUALITY</span>
       <span class="m-drawer-value" id="dw-quality-val">AUTO</span>
     </button>
+    <button class="m-drawer-item track-row" type="button" data-track="cc" hidden onclick="closeDrawer(); toggleSubtitles(); renderTrackRows();">
+      <span class="m-drawer-label">CAPTIONS</span><span class="m-drawer-value" id="dw-cc-val">OFF</span>
+    </button>
+    <button class="m-drawer-item track-row" type="button" data-track="sublang" hidden onclick="closeDrawer(); openTrackDialog('sublang');" aria-haspopup="dialog">
+      <span class="m-drawer-label">SUBTITLE LANGUAGE</span><span class="m-drawer-value" id="dw-sublang-val">AUTO</span>
+    </button>
+    <button class="m-drawer-item track-row" type="button" data-track="autosubs" hidden onclick="toggleAutoSubsForeignAudio(); renderTrackRows();">
+      <span class="m-drawer-label">AUTO SUBTITLES</span><span class="m-drawer-value" id="dw-autosubs-val">ON</span>
+    </button>
+    <button class="m-drawer-item track-row" type="button" data-track="audio" hidden onclick="closeDrawer(); openTrackDialog('audio');" aria-haspopup="dialog">
+      <span class="m-drawer-label">AUDIO</span><span class="m-drawer-value" id="dw-audio-val">AUTO</span>
+    </button>
+    <button class="m-drawer-item track-row" type="button" data-track="audiolang" hidden onclick="closeDrawer(); openTrackDialog('audiolang');" aria-haspopup="dialog">
+      <span class="m-drawer-label">AUDIO LANGUAGE</span><span class="m-drawer-value" id="dw-audiolang-val">AUTO</span>
+    </button>
     <button class="m-drawer-item" type="button" onclick="closeDrawer(); openPlaybackInfo();" aria-haspopup="dialog">
       <span class="m-drawer-label">PLAYBACK INFO</span>
     </button>
@@ -3620,11 +3650,17 @@
 
     <!-- INFO PANEL (visible in side layout) -->
     <div class="info-panel" id="info-panel">
-      <div class="info-channel-tag" id="info-channel-tag"></div>
-      <div class="info-title" id="info-title"></div>
-      <div class="info-episode-title" id="info-episode-title"></div>
-      <div class="info-description" id="info-description"></div>
-      <div class="info-meta-row" id="info-meta-row"></div>
+      <!-- The Apple TV's Now Playing details (NowPlayingPanel.infoZone): the poster (Plex) on the left; beside it CH and the
+           channel's colour bar, the title and the channel name. Then UP NEXT IN n MIN and the next title. Nothing else. -->
+      <div class="info-main">
+        <img class="info-poster" id="info-poster" alt="" hidden>
+        <div class="info-text">
+          <div class="info-channel-tag" id="info-channel-tag"></div>
+          <div class="info-title" id="info-title"></div>
+          <div class="info-episode-title" id="info-episode-title"></div>
+          <div class="info-channel-name" id="info-channel-name"></div>
+        </div>
+      </div>
       <div class="info-progress-wrap">
         <div class="info-progress-bar">
           <div class="info-progress-fill" id="info-progress" style="width: 0%"></div>
@@ -3632,6 +3668,8 @@
         <div class="info-time" id="info-time"></div>
       </div>
       <div class="info-upnext" id="info-upnext"></div>
+      <!-- One fixed two-line slot, so nothing jumps: says what the focused control on the rail does. -->
+      <div class="info-hint" id="info-hint" aria-live="polite"></div>
     </div>
 
     <!-- VERTICAL TOOLBAR (beside info panel in side layout) -->
@@ -3678,6 +3716,23 @@
           <span class="v-btn-label">QUALITY</span>
           <span class="v-btn-short">QUALITY</span>
           <span class="v-btn-value" id="tb-quality-val">AUTO</span>
+        </button>
+        <!-- The Apple TV's program rows. Each shows only when the playing file has something to choose (subtitle tracks, or more
+             than one audio track); renderTrackRows() sets them. -->
+        <button class="v-btn track-row" type="button" id="tb-cc" data-track="cc" hidden onclick="toggleSubtitles(); renderTrackRows()">
+          <span class="v-btn-label">CAPTIONS [C]</span><span class="v-btn-short">CAPTIONS</span><span class="v-btn-value" id="tb-cc-val">OFF</span>
+        </button>
+        <button class="v-btn track-row" type="button" id="tb-sublang" data-track="sublang" hidden onclick="openTrackDialog('sublang')" aria-haspopup="dialog">
+          <span class="v-btn-label">SUBTITLE LANGUAGE</span><span class="v-btn-short">SUB LANGUAGE</span><span class="v-btn-value" id="tb-sublang-val">AUTO</span>
+        </button>
+        <button class="v-btn track-row" type="button" id="tb-autosubs" data-track="autosubs" hidden onclick="toggleAutoSubsForeignAudio(); renderTrackRows()">
+          <span class="v-btn-label">AUTO SUBTITLES</span><span class="v-btn-short">AUTO SUBS</span><span class="v-btn-value" id="tb-autosubs-val">ON</span>
+        </button>
+        <button class="v-btn track-row" type="button" id="tb-audio" data-track="audio" hidden onclick="openTrackDialog('audio')" aria-haspopup="dialog">
+          <span class="v-btn-label">AUDIO</span><span class="v-btn-short">AUDIO</span><span class="v-btn-value" id="tb-audio-val">AUTO</span>
+        </button>
+        <button class="v-btn track-row" type="button" id="tb-audiolang" data-track="audiolang" hidden onclick="openTrackDialog('audiolang')" aria-haspopup="dialog">
+          <span class="v-btn-label">AUDIO LANGUAGE</span><span class="v-btn-short">AUDIO LANG</span><span class="v-btn-value" id="tb-audiolang-val">AUTO</span>
         </button>
         <button class="v-btn" type="button" onclick="showConfig()">
           <span class="v-btn-label">SETTINGS</span>
@@ -3829,7 +3884,7 @@
         <div class="c-wait"><h1 class="setup-title">CONNECT WITH PLEX</h1><p class="setup-text">Enter the code at plex.tv/link on your phone or computer, or scan the QR code.</p></div>
         <div class="c-servers"><h1 class="setup-title">CHOOSE YOUR SERVERS</h1><p class="setup-text">Your account can reach more than one Plex server. Pick which servers Nostalgex should build channels from. You can change this later in Settings.</p></div>
         <div class="c-libs"><h1 class="setup-title">CHOOSE YOUR LIBRARIES</h1><p class="setup-text" id="library-copy">Pick which of your libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.</p></div>
-        <div class="c-empty"><h1 class="setup-title">NO CHANNELS FOUND</h1><p class="setup-text">Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports.</p></div>
+        <div class="c-empty"><h1 class="setup-title">NO CHANNELS FOUND</h1><p class="setup-text">Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports.</p></div>
       </div>
     </div>
 
@@ -3843,7 +3898,7 @@
          Same words as the Apple TV and Roku. A real button, so a TV browser (no keys) can click it. -->
     <div class="plex-empty" id="plex-empty" style="display:none;">
       <div class="plex-empty-title">NO CHANNELS FOUND</div>
-      <div class="plex-empty-text">Your library didn't have enough content to fill any channels.<br>Open Settings to see which packages your library supports.</div>
+      <div class="plex-empty-text">Your library didn't have enough content to fill any channels.<br>Open Settings to see which bundles your library supports.</div>
       <button class="plex-btn focused" id="plex-empty-settings-btn" type="button">OPEN SETTINGS</button>
     </div>
 
@@ -3877,7 +3932,7 @@
     <!-- The package stripe's names, written up the stripe (GuideStripeViews.swift); placed from the scroll. -->
     <div class="grid-stripe-overlay" id="grid-stripe-overlay" aria-hidden="true"></div>
     <!-- The package list (the Apple TV's BundleJumpSidebar): Left at the start of the guide. -->
-    <div class="pkg-list" id="pkg-list" role="dialog" aria-modal="true" aria-label="Packages"></div>
+    <div class="pkg-list" id="pkg-list" role="dialog" aria-modal="true" aria-label="Bundles"></div>
     <div class="grid-body" id="grid-body" tabindex="0" aria-label="Channel guide. Up and Down browse, Enter tunes in."></div>
     <div class="grid-footer">
       <div class="grid-page-btns">
@@ -3922,7 +3977,7 @@
 
     <div class="config-pane-head">
       <div class="config-pane-title" id="config-pane-title">CHANNELS &amp; BUNDLES</div>
-      <div class="config-pane-sub" id="config-pane-sub">Packages, franchises, collections and the schedule</div>
+      <div class="config-pane-sub" id="config-pane-sub">Bundles, franchises, collections and the schedule</div>
     </div>
 
     <div id="config-tab-support" style="display:none" tabindex="-1">
@@ -3933,7 +3988,7 @@
     <div id="config-tab-bundles" style="display:none" tabindex="-1" role="listbox" aria-label="Channel bundles. Up and Down move, Enter or Space toggles.">
       <div class="config-section-label">CHANNEL BUNDLES</div>
       <div style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 16px;">
-        Toggle channel packages on or off. Matching the tvOS app.
+        Toggle channel bundles on or off. Matching the tvOS app.
       </div>
       <div id="enrichment-status" style="display:none; color: var(--cyan); font-size: var(--fs-cap); letter-spacing: 0.06em; margin: -6px 0 16px;"></div>
       <div id="bundle-list">
@@ -4197,7 +4252,7 @@
         <div class="help-row"><div class="help-key">G</div><div class="help-desc">Fullscreen + guide overlay</div></div>
         <div class="help-row"><div class="help-key">UP / DOWN</div><div class="help-desc">Browse channels, and the support and info rows between them</div></div>
         <div class="help-row"><div class="help-key">LEFT / RIGHT</div><div class="help-desc">Move the guide earlier or later, 30 minutes a press</div></div>
-        <div class="help-row"><div class="help-key">LEFT AT THE START</div><div class="help-desc">The package stripe: Up and Down jump between packages, Left again opens the package list, Right goes back</div></div>
+        <div class="help-row"><div class="help-key">LEFT AT THE START</div><div class="help-desc">The bundle stripe: Up and Down jump between bundles, Left again opens the bundle list, Right goes back</div></div>
         <div class="help-row"><div class="help-key">ENTER</div><div class="help-desc">Tune in. On the channel that is playing: full screen</div></div>
         <div class="help-row"><div class="help-key">TAB</div><div class="help-desc">Move between the controls; Enter or Space presses one</div></div>
 
@@ -4251,6 +4306,16 @@
   </div>
   <div class="sleep-rows" id="quality-rows"></div>
   <p class="pi-note">TAKES EFFECT ON THE NEXT PROGRAM, ON EVERY CHANNEL.</p>
+</div>
+
+<!-- AUDIO, AUDIO LANGUAGE and SUBTITLE LANGUAGE: one list, opened from the rail or the drawer. -->
+<div class="nx-scrim" id="track-scrim" hidden></div>
+<div class="nx-dialog" id="track-dialog" role="dialog" aria-modal="true" aria-labelledby="track-dialog-title" hidden>
+  <div class="nx-dialog-head">
+    <span class="nx-dialog-title" id="track-dialog-title">AUDIO</span>
+    <button class="nx-close" type="button" onclick="closeTrackDialog()" aria-label="Close">X</button>
+  </div>
+  <div class="sleep-rows" id="track-rows"></div>
 </div>
 
 <!-- "Still watching?" when the sleep timer reaches zero. Any click, tap or key keeps
@@ -4960,13 +5025,10 @@
     width('np-progress', '0%');
     text('np-time', '');
     text('np-upnext', '');
-    text('info-channel-tag', `CH ${num} \u2014 ${ch.name}`);
-    colour('info-channel-tag', (typeof channelTextColor === 'function' ? channelTextColor(ch.color) : ch.color));
+    setInfoChannelTag(ch);
+    setInfoPoster(null);
     text('info-title', WATERSHED_GUIDE_LABEL);
     text('info-episode-title', '');
-    text('info-description', '');
-    const meta = document.getElementById('info-meta-row');
-    if (meta) meta.textContent = '';
     width('info-progress', '0%');
     text('info-time', '');
     text('info-upnext', '');
@@ -5585,7 +5647,7 @@
     const nowIdx = live.nowPlaying ? live.entries.indexOf(live.nowPlaying) : -1;
     const rows = nowIdx >= 0 ? live.entries.slice(nowIdx, nowIdx + 4) : live.entries.slice(0, 4);
     channel.schedule = rows.map((entry, j) => {
-      const item = { ...entry.item };
+      const item = { ...entry.item, startSec: entry.startSec, endSec: entry.endSec };
       if (j === 0 && nowIdx >= 0) {
         const offsetInCurrent = nowSec - entry.startSec;
         const currentDurationSec = entry.endSec - entry.startSec;
@@ -5693,7 +5755,7 @@
       const pill = document.createElement('button');
       pill.className = 'grid-seasonal-pill';
       pill.type = 'button';
-      pill.textContent = `PRESS TO ADD THE ${offer.name} PACKAGE`;
+      pill.textContent = `PRESS TO ADD THE ${offer.name} BUNDLE`;
       pill.addEventListener('click', (e) => { e.stopPropagation(); answerSeasonalPrompt(offer.id, 'yes'); });
       const notNow = document.createElement('button');
       notNow.className = 'grid-seasonal-quiet';
@@ -6144,7 +6206,7 @@
             MediaSourceId: msid,
             SubtitleStreamIndex: burn ? burn.index : NostalgexJellyfinUrls.NO_SUBTITLE_STREAM,
           };
-          const pickedAudio = pickAudioStream(item.audioStreams || []);
+          const pickedAudio = pickAudioStream(item.audioStreams || [], item);
           if (pickedAudio) body.AudioStreamIndex = pickedAudio.index;
           // Emby only: after a failed direct play, turn off direct play AND direct stream,
           // or Emby offers the same file again and no TranscodingUrl. Jellyfin's body is
@@ -6477,7 +6539,7 @@
       if (canDirectPlay) {
         // stream.mp4 for the mp4/m4v/mov family: Jellyfin labels a static stream by file
         // name, so an MP4 saved as .mkv would otherwise come back video/x-matroska.
-        const pickedAudio = pickAudioStream(item.audioStreams || []);
+        const pickedAudio = pickAudioStream(item.audioStreams || [], item);
         streamUrl = NostalgexJellyfinUrls.staticStreamUrl({
           serverUrl: plexServerUrl,
           itemId: item.ratingKey,
@@ -6513,7 +6575,7 @@
       // A track other than the one Plex starts on can only be had from a server stream: a browser cannot pick a track of a
       // file it plays directly. Subtitles that live inside the file are burned into the server stream, the way a forced
       // track is on Jellyfin; a subtitle file beside the film is drawn by the page.
-      const audioPick = pickAudioStream(item.audioStreams || []);
+      const audioPick = pickAudioStream(item.audioStreams || [], item);
       const audioNeedsServer = !!(audioPick && !audioPick.isDefault);
       const wantsSubtitles = subtitlesEnabled || shouldAutoEnableSubs(item.audioStreams || []);
       const subtitlePick = wantsSubtitles ? pickPlexSubtitle(item.subtitles) : null;
@@ -6813,62 +6875,82 @@
     const playing = !preview && activePlaybackRequest && activePlaybackRequest.channelId === ch.id ? activePlaybackRequest.item : null;
     const shown = preview ? preview.entry.item : (playing || now);
 
-    document.getElementById('info-channel-tag').textContent = `CH ${String(chNum(ch)).padStart(2, '0')} \u2014 ${ch.name}`;
-    document.getElementById('info-channel-tag').style.color = (typeof channelTextColor === 'function' ? channelTextColor(ch.color) : ch.color);
+    setInfoChannelTag(ch);
+    setInfoPoster(shown);
     const MB = globalThis.NostalgexMusicBrainz;
     const isMusic = MB && MB.isMusicVideoItem(shown);
     document.getElementById('info-title').textContent = shown.title;
     document.getElementById('info-episode-title').textContent = isMusic
       ? (shown.artist || '')
       : (shown.episodeTitle || '');
-    document.getElementById('info-description').textContent = shown.summary || '';
     document.getElementById('info-progress').style.width = (now.progress || 0) + '%';
     document.getElementById('info-progress').style.background = ch.color;
     document.getElementById('info-time').textContent = preview
       ? 'STARTS ' + new Date(preview.entry.startSec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
       : `${now.position || '0:00'} / ${now.total || ''}`;
 
-    // Build meta badges
-    const metaEl = document.getElementById('info-meta-row');
-    metaEl.innerHTML = '';
-    if (shown.year) {
-      const yearBadge = document.createElement('span');
-      yearBadge.className = 'info-meta-badge';
-      yearBadge.textContent = shown.year;
-      metaEl.appendChild(yearBadge);
-    }
-    if (shown.contentRating) {
-      const ratingBadge = document.createElement('span');
-      ratingBadge.className = 'info-meta-badge';
-      ratingBadge.textContent = shown.contentRating;
-      metaEl.appendChild(ratingBadge);
-    }
-    if (shown.rating) {
-      const starEl = document.createElement('span');
-      starEl.className = 'info-rating';
-      starEl.textContent = `\u2605 ${Number(shown.rating).toFixed(1)}`;
-      metaEl.appendChild(starEl);
-    }
-    if (shown.duration) {
-      const durEl = document.createElement('span');
-      durEl.textContent = formatDuration(shown.duration);
-      metaEl.appendChild(durEl);
-    }
-    if (isMusic && MB) {
-      const genreLine = MB.musicGenreDisplay(shown);
-      if (genreLine) {
-        const genreBadge = document.createElement('span');
-        genreBadge.className = 'info-meta-badge';
-        genreBadge.textContent = genreLine;
-        metaEl.appendChild(genreBadge);
-      }
-    }
-
     // Up next
+    // The card: a cyan chip with the time until it starts ("UP NEXT IN 12 MIN"), then the next title. While the guide is
+    // moved later the clock says nothing about the programme shown, so the chip is plain.
+    const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
     document.getElementById('info-upnext').innerHTML = next
-      ? `<strong>UP NEXT</strong> ${escapeHtml(itemGuideTitle(next))}`
+      ? `<span class="info-upnext-chip">${escapeHtml(upNextSeconds === null ? 'UP NEXT' : NostalgexUpNext.label(upNextSeconds))}</span><span class="info-upnext-title">${escapeHtml(itemGuideTitle(next))}</span>`
       : '';
   }
+
+  // The channel's colour is a small bar beside the number, never the number itself; the channel's name sits under the title.
+  function setInfoChannelTag(ch) {
+    const tag = document.getElementById('info-channel-tag');
+    if (tag) tag.innerHTML = `<span class="info-ch-bar" style="background:${escapeHtml(String(ch.color || '#fff'))}"></span><span>CH ${String(chNum(ch)).padStart(2, '0')}</span>`;
+    const nameEl = document.getElementById('info-channel-name');
+    if (nameEl) nameEl.textContent = String(ch.name || '').toUpperCase();
+  }
+
+  // The poster, Plex only, as on the Apple TV (its thumbnail URL carries the token). Hidden when there is none or it fails.
+  function infoPosterUrl(item) {
+    if (!item || mediaBackend !== 'plex' || !item.thumb) return '';
+    const server = item.serverUrl || plexServerUrl;
+    const token = item.serverToken || plexToken;
+    if (!server || !token) return '';
+    return `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(item.thumb)}&X-Plex-Token=${encodeURIComponent(token)}`;
+  }
+  function setInfoPoster(item) {
+    const img = document.getElementById('info-poster');
+    if (!img) return;
+    const url = infoPosterUrl(item);
+    if (!url) { img.hidden = true; img.removeAttribute('src'); delete img.dataset.src; return; }
+    img.onerror = () => { img.hidden = true; };
+    if (img.dataset.src !== url) { img.dataset.src = url; img.src = url; }
+    img.hidden = false;
+  }
+
+  // The hint line under the details: what the control the viewer is on does, in the Apple TV's words where it has them.
+  (function wireRailHints() {
+    const rail = document.getElementById('v-toolbar');
+    const hint = document.getElementById('info-hint');
+    if (!rail || !hint) return;
+    const HINTS = {
+      'SOUND': 'Turn the sound on or off for this channel',
+      'FULLSCREEN': 'Show this channel without the guide',
+      'RETRO': 'CRT scanlines, vignette, flicker, 4:3 aspect ratio',
+      'SLEEP': 'Stop playing after a set time',
+      'INFO': 'How this program is playing, and why',
+      'QUALITY': 'Lower this when your connection is slow or shared',
+      'SETTINGS': 'Bundles, servers, language and the rest',
+      'APPLE TV': 'Nostalgex for Apple TV, from the App Store',
+    };
+    const show = (e) => {
+      const btn = e.target.closest && e.target.closest('.v-btn');
+      const label = btn && btn.querySelector('.v-btn-label');
+      const key = label ? label.textContent.split('[')[0].trim().toUpperCase() : '';
+      hint.textContent = HINTS[key] || '';
+    };
+    const clear = () => { hint.textContent = ''; };
+    rail.addEventListener('focusin', show);
+    rail.addEventListener('mouseover', show);
+    rail.addEventListener('focusout', clear);
+    rail.addEventListener('mouseleave', clear);
+  })();
 
   function getEnabledChannels() {
     return CHANNELS.filter(ch => ch.enabled);
@@ -7653,6 +7735,106 @@
   })();
 
   /* ══════════════════════════════════════
+     PROGRAM ROWS: CAPTIONS, SUBTITLE LANGUAGE, AUTO SUBTITLES, AUDIO, AUDIO LANGUAGE
+     The Apple TV's Now Playing panel rows (NowPlayingPanelLayout.programRows), on the rail and in the drawer. A row shows
+     only when the playing file has something to choose: subtitle tracks, or more than one audio track. Rows are buttons.
+  ══════════════════════════════════════ */
+  let trackDialogKind = null;
+  let trackDialogReturnFocus = null;
+  const langOptionsOf = (selectId) => [...((document.getElementById(selectId) || {}).options || [])].map(o => ({ value: o.value, label: o.textContent.trim() }));
+  const langLabelOf = (selectId, value) => { const o = langOptionsOf(selectId).find(x => x.value === value); return o ? o.label : String(value || 'AUTO'); };
+  const shortLabel = (t) => String(t || '').replace(/\s*\(.*$/, '').toUpperCase().slice(0, 14);
+  function currentAudioStream() {
+    const item = currentPlayingItem;
+    return item && Array.isArray(item.audioStreams) && item.audioStreams.length > 1 ? pickAudioStream(item.audioStreams, item) : null;
+  }
+  function renderTrackRows() {
+    const item = currentPlayingItem;
+    const audio = item && Array.isArray(item.audioStreams) ? item.audioStreams : [];
+    const subs = item && Array.isArray(item.subtitles) ? item.subtitles : [];
+    const show = { cc: subs.length > 0, sublang: subs.length > 0, autosubs: subs.length > 0, audio: audio.length > 1, audiolang: audio.length > 1 };
+    for (const el of document.querySelectorAll('.track-row')) el.hidden = !show[el.dataset.track];
+    const cur = currentAudioStream();
+    const values = {
+      cc: subtitlesEnabled ? 'ON' : 'OFF',
+      sublang: shortLabel(langLabelOf('cfg-subtitle-lang', subtitleLanguage)),
+      autosubs: autoSubsForeignAudio ? 'ON' : 'OFF',
+      audio: cur ? shortLabel(cur.lang || cur.title) || 'AUTO' : 'AUTO',
+      audiolang: shortLabel(langLabelOf('cfg-audio-lang', audioLanguage)),
+    };
+    for (const [k, v] of Object.entries(values)) {
+      for (const id of [`tb-${k}-val`, `dw-${k}-val`]) { const el = document.getElementById(id); if (el) el.textContent = v; }
+    }
+  }
+  function trackDialogOptions(kind) {
+    const item = currentPlayingItem;
+    if (kind === 'audio') {
+      const cur = currentAudioStream();
+      return { title: 'AUDIO', current: cur ? String(cur.index) : '', options: ((item && item.audioStreams) || []).map(a => ({
+        value: String(a.index), label: String(a.title || a.lang || 'Audio').toUpperCase(),
+        detail: [String(a.codec || '').toUpperCase(), a.channels ? `${a.channels} CH` : ''].filter(Boolean).join(' ') })) };
+    }
+    if (kind === 'audiolang') return { title: 'AUDIO LANGUAGE', current: audioLanguage, options: langOptionsOf('cfg-audio-lang') };
+    return { title: 'SUBTITLE LANGUAGE', current: subtitleLanguage, options: langOptionsOf('cfg-subtitle-lang') };
+  }
+  function trackDialogFocusables() {
+    const d = document.getElementById('track-dialog');
+    return d ? [...d.querySelectorAll('button')] : [];
+  }
+  function isTrackDialogOpen() { const d = document.getElementById('track-dialog'); return !!d && !d.hidden; }
+  function openTrackDialog(kind) {
+    trackDialogKind = kind;
+    trackDialogReturnFocus = document.activeElement;
+    const spec = trackDialogOptions(kind);
+    document.getElementById('track-dialog-title').textContent = spec.title;
+    const rows = document.getElementById('track-rows');
+    rows.innerHTML = '';
+    for (const o of spec.options) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      const active = String(o.value) === String(spec.current);
+      b.className = 'sleep-row' + (active ? ' active' : '');
+      b.setAttribute('aria-pressed', String(active));
+      const label = document.createElement('span'); label.className = 'sleep-row-label'; label.textContent = o.label;
+      const value = document.createElement('span'); value.className = 'sleep-row-value'; value.textContent = active ? 'ACTIVE' : (o.detail || '');
+      b.append(label, value);
+      b.addEventListener('click', () => { chooseTrack(kind, o.value); closeTrackDialog(); });
+      rows.appendChild(b);
+    }
+    document.getElementById('track-scrim').hidden = false;
+    document.getElementById('track-dialog').hidden = false;
+    const first = rows.querySelector('.sleep-row.active') || trackDialogFocusables()[0];
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closeTrackDialog() {
+    if (!isTrackDialogOpen()) return;
+    document.getElementById('track-scrim').hidden = true;
+    document.getElementById('track-dialog').hidden = true;
+    const back = trackDialogReturnFocus && document.contains(trackDialogReturnFocus) ? trackDialogReturnFocus : null;
+    trackDialogReturnFocus = null;
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+  }
+  function chooseTrack(kind, value) {
+    if (kind === 'audio') {
+      const item = currentPlayingItem;
+      const ch = CHANNELS.find(c => c.id === currentChannel);
+      if (!item || !ch) return;
+      item._audioChoice = Number(value);
+      playCurrentItem(item, ch);
+    } else if (kind === 'audiolang') {
+      setAudioLanguage(value);
+    } else {
+      setSubtitleLanguage(value);
+    }
+    setTimeout(renderTrackRows, 600);
+  }
+  (() => {
+    document.getElementById('track-scrim').addEventListener('click', closeTrackDialog);
+    // The rows follow what is playing and the settings, wherever those change.
+    setInterval(renderTrackRows, 1000);
+  })();
+
+  /* ══════════════════════════════════════
      SLEEP TIMER
      Parity with tvOS (SleepTimerLogic and the sleep timer in AppState+Playback.swift):
      15, 30 or 60 minutes, a countdown wherever the choice is shown, then "Still
@@ -8098,7 +8280,12 @@
   // The audio track to pin on a Jellyfin or Emby stream, or null to leave the server's choice alone. The Apple TV's rule
   // (scripts/nostalgex-audio-pick.js): a commentary is never it while another track exists, then AUDIO LANGUAGE, then a
   // track in the browser's language or English with the most channels, then the file's default.
-  function pickAudioStream(audioStreams) {
+  function pickAudioStream(audioStreams, item) {
+    // A track picked in the AUDIO row holds for this program only.
+    if (item && item._audioChoice != null && Array.isArray(audioStreams)) {
+      const chosen = audioStreams.find(s => s.index === item._audioChoice);
+      if (chosen) return chosen;
+    }
     return NostalgexAudioPick.preferredAudioStream(audioStreams, {
       audioLanguage,
       preferredLanguages: (navigator.languages && navigator.languages.length) ? [...navigator.languages] : [navigator.language || 'en'],
@@ -8724,7 +8911,7 @@
   const CONFIG_CATEGORIES = [
     { tab: 'support', title: 'SUPPORT NOSTALGEX', sub: 'A tip or a follow, whichever suits' },
     { tab: 'general', title: 'PLAYBACK & PICTURE', sub: 'Picture, quality, subtitles and audio' },
-    { tab: 'bundles', title: 'CHANNELS & BUNDLES', sub: 'Packages, franchises, collections and the schedule' },
+    { tab: 'bundles', title: 'CHANNELS & BUNDLES', sub: 'Bundles, franchises, collections and the schedule' },
     { tab: 'server',  title: 'SERVERS & ACCOUNTS', sub: 'Libraries, servers, rescan and sign out' },
     { tab: 'help',    title: 'KEYBOARD', sub: 'Every key, and the version' },
   ];
@@ -11742,6 +11929,18 @@
       else if (key === 'Tab' || key.startsWith('Arrow')) { document.getElementById('pi-back').focus(); e.preventDefault(); }
       return;
     }
+    if (isTrackDialogOpen()) {
+      if (key === 'Escape' || key === 'Backspace') { closeTrackDialog(); e.preventDefault(); return; }
+      if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Tab') {
+        const items = trackDialogFocusables();
+        const back = key === 'ArrowUp' || (key === 'Tab' && e.shiftKey);
+        const at = items.indexOf(document.activeElement);
+        const next = at === -1 ? 0 : (at + (back ? -1 : 1) + items.length) % items.length;
+        if (items[next]) items[next].focus({ preventScroll: true });
+        e.preventDefault();
+      }
+      return;
+    }
     if (isQualityDialogOpen()) {
       if (key === 'Escape' || key === 'Backspace') { closeQualityDialog(); e.preventDefault(); return; }
       if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Tab') {
@@ -12182,7 +12381,7 @@
     const list = document.getElementById('pkg-list');
     if (!list || isPackageListOpen()) return;
     guideStripeMode = false; guideStripeGroup = null; updateGuideFocus();
-    list.innerHTML = '<div class="pkg-head">PACKAGES</div><button class="pkg-row pkg-row--settings" type="button" data-settings="1">SETTINGS</button><div class="pkg-rule"></div>';
+    list.innerHTML = '<div class="pkg-head">BUNDLES</div><button class="pkg-row pkg-row--settings" type="button" data-settings="1">SETTINGS</button><div class="pkg-rule"></div>';
     for (const t of packageListTargets()) {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'pkg-row'; b.textContent = t.name; b.dataset.channel = String(t.ch.id);
