@@ -130,13 +130,30 @@ end function
 ' The player's track for `lang` among `listed` (availableAudioTracks), as
 ' upstream's applyAudioTrackSelection picks with preferredTrackIndex: the
 ' first in that language. invalid when none is, which leaves the player's
-' own choice where upstream takes the first track.
+' own choice where upstream takes the first track. A track named a
+' commentary is never picked while another track is listed (#236,
+' NxListedSkipCommentary): with only a commentary in the language, the
+' player's own choice stays.
 function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
-    for each t in listed
+    for each t in NxListedSkipCommentary(listed)
         tag = NxSubComparableTag(t.Language)
         if tag <> invalid and NxSubMatches(tag, lang) then return t.Track
     end for
     return invalid
+end function
+
+' The player's listed tracks less those named a commentary (NxIsCommentaryTitle
+' on the track's Name), when at least one other is left; all of them when
+' every track is a commentary, as NxMbSkipCommentary does for the scan's.
+function NxListedSkipCommentary(listed as Object) as Object
+    pool = []
+    for each t in listed
+        if type(t) = "roAssociativeArray" then
+            if not NxIsCommentaryTitle(t.Name) then pool.Push(t)
+        end if
+    end for
+    if pool.Count() = 0 then return listed
+    return pool
 end function
 
 ' The name the Now Playing panel lists an audio track under. Roku lists
