@@ -156,7 +156,9 @@ class Prefs(context: Context) {
 
     /** OPEN ON LAST CHANNEL's switch and the channel last tuned (LaunchChannelMemory), on this TV only. */
     var openOnLastChannel: Boolean
-        get() = prefs.getBoolean(LaunchChannelMemory.ENABLED_KEY, LaunchChannelMemory.ENABLED_BY_DEFAULT)
+        get() = LaunchChannelMemory.isOn(
+            if (prefs.contains(LaunchChannelMemory.ENABLED_KEY)) prefs.getBoolean(LaunchChannelMemory.ENABLED_KEY, false) else null,
+        )
         set(value) = prefs.edit().putBoolean(LaunchChannelMemory.ENABLED_KEY, value).apply()
 
     var lastWatchedChannel: LaunchChannelMemory.Saved?

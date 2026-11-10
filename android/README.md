@@ -88,7 +88,7 @@ listing; it installs over `adb`.
   Photos, Home Videos, Live TV and the like) is neither listed nor scanned, and a
   row whose type the scan did not ask for is dropped, so a playlist is never a
   film (#206).
-- OPEN ON LAST CHANNEL (off by default) under PLAYBACK: a launch opens the
+- OPEN ON LAST CHANNEL (on by default, #225) under PLAYBACK: a launch opens the
   channel you last tuned, if it is still in the guide under the same name.
 - `nostalgex://channel/<id>` opens the app on that channel full screen, from a
   cold start or while it runs, naming it by id and then by number as the Roku

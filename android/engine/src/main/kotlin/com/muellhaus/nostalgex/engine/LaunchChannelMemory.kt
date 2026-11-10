@@ -16,8 +16,17 @@ object LaunchChannelMemory {
     /** The Settings switch, under the Apple TV's key. */
     const val ENABLED_KEY = "nostalgex_open_on_last_channel"
 
-    /** The one line to change to make opening on the last channel the default. */
-    const val ENABLED_BY_DEFAULT = false
+    /**
+     * On by default on every surface since 2026-11-09 (#225, I-017): a TV that never chose opens
+     * on the channel it was last watching. The switch stays in Settings.
+     */
+    const val ENABLED_BY_DEFAULT = true
+
+    /**
+     * The switch as stored (`null` when the viewer never chose), as the web's isOn(stored): the
+     * default only when nothing is stored, so a TV that switched it off stays off.
+     */
+    fun isOn(stored: Boolean?): Boolean = stored ?: ENABLED_BY_DEFAULT
 
     /** The channel the viewer last tuned, as JSON [Saved], under the Apple TV's key. */
     const val SAVED_KEY = "nostalgex_last_watched_channel"

@@ -4,6 +4,7 @@ import com.muellhaus.nostalgex.engine.LaunchChannelMemory.Saved
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The Apple TV's LaunchChannelMemoryTests: saved, restored, gone, renumbered, the default and demo mode. */
@@ -15,8 +16,12 @@ class LaunchChannelMemoryTest {
     private fun open(enabled: Boolean, saved: Saved?, demo: Boolean = false, channels: List<Ch> = lineup) =
         LaunchChannelMemory.channelToOpenFirst(channels, Ch::id, Ch::name, enabled, saved, demo)
 
-    @Test fun offByDefault() {
-        assertFalse(LaunchChannelMemory.ENABLED_BY_DEFAULT)
+    /** On by default since #225's change; a stored choice is kept either way. */
+    @Test fun onByDefaultAndAStoredChoiceStands() {
+        assertTrue(LaunchChannelMemory.ENABLED_BY_DEFAULT)
+        assertTrue("never chose", LaunchChannelMemory.isOn(null))
+        assertFalse("switched off stays off", LaunchChannelMemory.isOn(false))
+        assertTrue("switched on stays on", LaunchChannelMemory.isOn(true))
         assertEquals("nostalgex_open_on_last_channel", LaunchChannelMemory.ENABLED_KEY)
         assertEquals("nostalgex_last_watched_channel", LaunchChannelMemory.SAVED_KEY)
     }
