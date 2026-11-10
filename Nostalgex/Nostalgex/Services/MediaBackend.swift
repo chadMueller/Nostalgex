@@ -325,11 +325,17 @@ final class ScanSkipCounter: @unchecked Sendable {
     func rewind(to mark: Int) { lock.lock(); n = min(n, mark); lock.unlock() }
 }
 
+///
+/// `userInitiated` starts `false` because the backend that throws this only knows it was cancelled, not why.
+/// `withLibraryLoadStallWatch` fills it in afterward from its own watchdog verdict (#146): a viewer's STOP
+/// WAITING on a section that had read some pages is not recorded, or treated, like an automatic stall.
 struct LibraryScanInterrupted: Error {
     let partialItems: [PlexMediaItem]
     /// Sections that failed for good while the others were read (a connection that dropped
     /// until the retries ran out, a server error). Empty for a cancel.
     var failedSections: [String] = []
+    /// True when the viewer pressed STOP WAITING (stamped by `withLibraryLoadStallWatch`).
+    var userInitiated: Bool = false
 }
 
 /// What a scan does about a section whose requests fail for good: carry on without that
