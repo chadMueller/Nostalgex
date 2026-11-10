@@ -146,12 +146,27 @@ extension AppState {
 
     /// Replaces the selected-server list, keeps the primary display fields in sync, and persists.
     func setSelectedServers(_ servers: [ServerRef]) {
+        let previous = selectedServers
         selectedServers = Self.dedupingServers(servers)
+        // Moving to a server none of the old ones is: the last playback failure Settings
+        // shows was about a library the viewer has left. Adding or removing one server of
+        // several keeps it.
+        if !previous.isEmpty, !Self.sharesAServer(previous, selectedServers) {
+            PlaybackDiagnostics.clear()
+        }
         syncPrimaryServerFields()
         persistSelectedServers()
         // A different server set is a different library; nothing a running scan brings
         // back belongs in it.
         invalidateInFlightLibraryLoads()
+    }
+
+    /// Whether two server lists have a server in common: the same identifier, or the same
+    /// host and port (a pre-multi-server install keyed its one server by URL).
+    static func sharesAServer(_ a: [ServerRef], _ b: [ServerRef]) -> Bool {
+        let ids = Set(b.map(\.machineIdentifier))
+        let hosts = Set(b.map { serverHostKey($0.baseURL) })
+        return a.contains { ids.contains($0.machineIdentifier) || hosts.contains(serverHostKey($0.baseURL)) }
     }
 
     /// One entry per physical server. A pre-multi-server install migrated its single server
@@ -461,6 +476,9 @@ extension AppState {
     }
 
     func clearCredentials() {
+        // The last playback failure belongs to the sign-in that is ending. Settings kept
+        // showing it under the next one (PlaybackDiagnostics.clear was never called).
+        PlaybackDiagnostics.clear()
         // A deliberate sign-out (or a proven-dead token) must not read as "the device lost
         // your sign-in" on the next launch.
         AppDefaults.standard.removeObject(forKey: Self.hasHeldSignInMarkerKey)

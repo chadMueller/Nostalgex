@@ -63,3 +63,75 @@ final class PlaybackDiagnosticsTests: XCTestCase {
         XCTAssertNil(PlaybackDiagnostics.latestForSettings(defaults: defaults))
     }
 }
+
+/// Settings shows the last playback failure. It used to survive a sign-out and a switch to
+/// another server, so someone on a new library read a failure from the old one.
+@MainActor
+final class PlaybackFailureClearingTests: XCTestCase {
+    private final class MemoryStore: CredentialStoring, @unchecked Sendable {
+        var values: [String: String] = [:]
+        @discardableResult func save(key: String, value: String) -> Bool { values[key] = value; return true }
+        func load(key: String) -> String? { values[key] }
+        func delete(key: String) { values[key] = nil }
+    }
+
+    override func setUp() { PlaybackDiagnostics.clear() }
+    override func tearDown() { PlaybackDiagnostics.clear() }
+
+    private func server(_ id: String, _ url: String) -> AppState.ServerRef {
+        AppState.ServerRef(machineIdentifier: id, name: id, baseURL: url, owned: true, token: "t")
+    }
+
+    private func recordFailure() {
+        PlaybackDiagnostics.record(outcome: "retry capped at 1080p after 20s", title: "72 Hours", detail: "HTTP 500")
+        XCTAssertNotNil(PlaybackDiagnostics.latestForSettings())
+    }
+
+    func testSignOutClearsTheLastFailure() {
+        let state = AppState(credentialStore: MemoryStore())
+        state.setSelectedServers([server("a", "http://192.168.1.10:32400")])
+        state.token = "t"
+        recordFailure()
+
+        state.disconnect()
+
+        XCTAssertNil(PlaybackDiagnostics.latestForSettings())
+        XCTAssertTrue(PlaybackDiagnostics.recent().isEmpty)
+    }
+
+    func testSwitchingToAnotherServerClearsIt() {
+        let state = AppState(credentialStore: MemoryStore())
+        state.setSelectedServers([server("a", "http://192.168.1.10:32400")])
+        recordFailure()
+
+        state.setSelectedServers([server("b", "http://192.168.1.20:32400")])
+
+        XCTAssertNil(PlaybackDiagnostics.latestForSettings())
+    }
+
+    func testTheFirstSignInAndServersKeptInAMultiServerListKeepIt() {
+        let state = AppState(credentialStore: MemoryStore())
+        recordFailure()
+        // Nothing was signed in before: nothing to leave behind (disconnect already cleared).
+        state.setSelectedServers([server("a", "http://192.168.1.10:32400")])
+        XCTAssertNotNil(PlaybackDiagnostics.latestForSettings())
+
+        // Adding a second server, then removing the first, keeps one in common each time.
+        state.setSelectedServers([server("a", "http://192.168.1.10:32400"), server("b", "http://192.168.1.20:32400")])
+        XCTAssertNotNil(PlaybackDiagnostics.latestForSettings())
+        state.setSelectedServers([server("b", "http://192.168.1.20:32400")])
+        XCTAssertNotNil(PlaybackDiagnostics.latestForSettings())
+    }
+
+    func testTheSameServerKeyedByURLThenByIdentifierKeepsIt() {
+        // A pre-multi-server install stored its server keyed by URL; discovery later knows
+        // its machine identifier. Same host and port: same server.
+        let state = AppState(credentialStore: MemoryStore())
+        state.setSelectedServers([server("http://192.168.1.10:32400", "http://192.168.1.10:32400")])
+        recordFailure()
+
+        state.setSelectedServers([server("abc123", "http://192.168.1.10:32400")])
+
+        XCTAssertNotNil(PlaybackDiagnostics.latestForSettings())
+    }
+}
