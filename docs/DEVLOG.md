@@ -28,8 +28,9 @@ slots, a copy of a slot that began before midnight). With the copy not carrying 
 both ways). With the shift at the full cap instead of 240 s, the 241 s case fails.
 
 **Not done.** The overlap itself stays: the packing is the same in the JS engine and the Swift scheduler, and changing it is
-an engine change on all three with the schedule goldens. A stick check at midnight. The `onGuide` branch is covered by
-the function's tests, not by running the component.
+an engine change on all three with the schedule goldens. A stick check at midnight. `NxKeepPlayingPastMidnight` and
+`NxSameAiring` (the comparison by `slotStartSec`) are tested; the `GuideView.onGuide` path that calls them is not, as no
+test runs the component. The Up Next line reads the copy's end, which is cosmetic.
 
 ## 2026-11-12 (publish Nostalgex on Roku)
 
