@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 5, the playback recovery ladder, #258)
+
+**Why.** From reading the code (not measured): the web stopped a channel after 3 failures in a row where the Apple TV allows 5, never tried a 1080p
+stream, and skipped a frozen stream after 8 s without asking for a smaller one.
+
+**Changed.** `scripts/nostalgex-playback-recovery.js`, a port of `PlaybackStarvation.swift`, `ChannelFailureRun.swift` and the ladder rule in `AppState+Playback.swift`
+(18 checks replaying the Apple TV's starvation tests, in `npm test`). The page now goes direct play, then the server stream (as before), then ONE retry capped at 1080p from where the
+program is (Plex: `maxVideoBitrate=12000`, `videoResolution=1920x1080`, `autoAdjustQuality=0`; Jellyfin and Emby: the HIGH ceiling), then the failure card. It skips that retry
+when STREAM QUALITY already caps at 1080p or lower. A stream that was playing and starves (three stalls of 3 s inside two minutes, or one freeze of 20 s) gets the same retry, then is
+skipped; the old 8 s freeze also tries the retry first. Five failures in a row stop the channel (was three). `playback-recovery-browser-smoke.mjs` (13 checks, a Plex stub that fails
+on demand and Playwright's clock). **Roku and Android** have their own ladders (PARITY rows 100 and 101); compare against `nostalgex-playback-recovery-smoke.mjs`.
+
+**Not verified.** Against a real server on a stream that really starves; the 20 s and 3-stall paths are driven by a faked playhead.
+
 ## 2026-11-10 (web tuner: parity group 4, GUIDE TIMEOUT, background library refresh, PAGE SIZE, #252 #259 #255)
 
 **#252.** GUIDE TIMEOUT: OFF, 5 MIN, 15 MIN in PLAYBACK & PICTURE, 5 MIN by default, key `nostalgex_guide_timeout` (the Apple TV's). Left alone that long, with a

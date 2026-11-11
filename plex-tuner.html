@@ -42,6 +42,7 @@
 <script src="scripts/nostalgex-channel-requirements.js"></script>
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
+<script src="scripts/nostalgex-playback-recovery.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -6237,10 +6238,17 @@
   // URL causes 400s on segments AND lets Jellyfin copy h265 video through (black screen +
   // audio). The DeviceProfile's DirectPlayProfiles deliberately omit h265 so the server
   // always transcodes it. Falls back to a hand-built URL if PlaybackInfo is unavailable.
+  // The quality a program is asked for: the viewer's STREAM QUALITY, except on the one retry capped at 1080p that follows a server
+  // stream that failed or starved (the Apple TV's ladder, scripts/nostalgex-playback-recovery.js): then HIGH when the viewer set no ceiling.
+  function effectiveQualityFor(item) {
+    const current = NostalgexStreamQuality.current();
+    return item && item._cappedRetry && !NostalgexStreamQuality.isCapped(current) ? 'high' : current;
+  }
+
   async function getJellyfinTranscodeUrl(item, request) {
     const msid = item.partKey || item.ratingKey;
     // Read once per programme: a change in Settings applies from the next one.
-    const streamQualityAtTune = NostalgexStreamQuality.current();
+    const streamQualityAtTune = effectiveQualityFor(item);
     const startTicks = item.offsetSeconds ? Math.floor(item.offsetSeconds) * 10000000 : 0;
     // No StartTimeTicks on the fallback URL. Jellyfin copies the master's query string onto
     // main.m3u8 and then onto every segment, and its segment handler refuses the parameter:
@@ -6616,6 +6624,7 @@
     let infoDelivery = 'unknown';
     const beginInfoAttempt = () => {
       infoDelivery = canDirectPlay ? 'directPlay' : 'serverStream';
+      request.delivery = canDirectPlay ? 'direct' : 'server';
       const reason = canDirectPlay ? 'none' : (item._retryHls ? 'directPlayFailed' : 'serverStreamSelected');
       watchPlaybackInfoReady(video, request, infoGeneration,
         playbackInfo && playbackInfo.beginAttempt(infoGeneration, infoDelivery, reason));
@@ -6631,7 +6640,7 @@
       // Only direct-play when we KNOW the codecs are browser-safe. Unknown video codec →
       // transcode (safer than a decode failure).
       canDirectPlay = !item._forceTranscode && containerOK && videoOK && audioOK
-        && NostalgexStreamQuality.directPlayAllowed(NostalgexStreamQuality.current(), item.bitrate);
+        && NostalgexStreamQuality.directPlayAllowed(effectiveQualityFor(item), item.bitrate);
       beginInfoAttempt();
       if (canDirectPlay) {
         // stream.mp4 for the mp4/m4v/mov family: Jellyfin labels a static stream by file
@@ -6681,7 +6690,7 @@
 
       canDirectPlay = !item._forceTranscode && item.partKey && ['mp4', 'webm', 'mov'].includes(item.container)
         && !audioNeedsServer && !subtitleBurned
-        && NostalgexStreamQuality.directPlayAllowed(NostalgexStreamQuality.current(), item.bitrate);
+        && NostalgexStreamQuality.directPlayAllowed(effectiveQualityFor(item), item.bitrate);
       beginInfoAttempt();
 
       if (canDirectPlay) {
@@ -6705,7 +6714,7 @@
           + `&X-Plex-Device=Browser&X-Plex-Device-Name=Plex90`
           + (audioPick ? `&audioStreamID=${audioPick.index}` : '')
           + (subtitleBurned ? `&subtitles=burn&subtitleStreamID=${subtitlePick.index}` : '')
-          + NostalgexStreamQuality.plexTranscodeQuery(NostalgexStreamQuality.current());
+          + NostalgexStreamQuality.plexTranscodeQuery(effectiveQualityFor(item));
 
       }
     }
@@ -6835,14 +6844,28 @@
       stallTimer = setTimeout(() => {
         if (!ownsPlaybackRequest(request)) return;
         if (!video.paused && !video.ended && video.currentTime === lastTime) {
-          console.warn('[PLEX 90] Stall detected, skipping:', item.title);
           clearStall();
+          if (tryCappedRetry(channel, item, video)) return;   // a smaller stream from where it froze, once
+          console.warn('[PLEX 90] Stall detected, skipping:', item.title);
           onItemEnded(channel, item);
         }
       }, 8000);
       lastTime = video.currentTime;
     };
     video.ontimeupdate = armStall;
+    // A stream that was playing and is starved by its source: three stalls in two minutes (a stall is the playhead standing still for 3 s)
+    // or one freeze of 20 s. The answer is a smaller stream from where it is, once; after that the program is skipped.
+    const starvation = NostalgexPlaybackRecovery.createStarvationMonitor();
+    const starvationTimer = setInterval(() => {
+      if (!ownsPlaybackRequest(request)) { clearInterval(starvationTimer); return; }
+      const remaining = Number.isFinite(video.duration) ? video.duration - video.currentTime : null;
+      const verdict = starvation.observe(video.currentTime, performance.now() / 1000, video.paused || video.ended, remaining);
+      if (!verdict) return;
+      clearInterval(starvationTimer);
+      console.warn('[PLEX 90] Stream starved:', item.title, verdict);
+      if (!tryCappedRetry(channel, item, video)) { clearStall(); onItemEnded(channel, item); }
+    }, 1000);
+    request.cleanups.push(() => clearInterval(starvationTimer));
     // Drive the playback tracker off real player events. Using on* assignment (not
     // addEventListener) so each new program replaces the handler instead of leaking one.
     video.onplaying = () => {
@@ -6880,18 +6903,33 @@
   }
 
   // A program that cannot play should not hold the channel. Show why for a moment, then
-  // move on, the way the Apple TV app does. After three in a row the channel stops instead
+  // move on, the way the Apple TV app does. After five in a row the channel stops instead
   // of racing through the schedule, because that means the server, not the file.
-  const MAX_CONSECUTIVE_FAILURES = 3;
+  const MAX_CONSECUTIVE_FAILURES = NostalgexPlaybackRecovery.FAILURE_RUN_LIMIT;
+
+  // One retry capped at 1080p, from where the program is, after a server stream failed or starved (not after a direct play, which has its
+  // own step to the server stream, and not when the viewer's quality already caps at 1080p or lower). True when it was started.
+  function tryCappedRetry(channel, item, video) {
+    const request = activePlaybackRequest;
+    if (!ownsPlaybackRequest(request) || request.item !== item) return false;
+    const delivery = request.delivery || 'server';
+    if (NostalgexPlaybackRecovery.nextRung(delivery, NostalgexStreamQuality.isCapped(NostalgexStreamQuality.current()), !!item._cappedRetry) !== 'capped1080') return false;
+    const where = Math.floor((item.offsetSeconds || 0) + (video && video.currentTime > 0 ? video.currentTime : 0));
+    console.warn('[PLEX 90] Server stream failed, retrying once capped at 1080p from', where, 's:', item.title);
+    playCurrentItem({ ...item, _forceTranscode: true, _retryHls: true, _cappedRetry: true, offsetSeconds: where }, channel);
+    return true;
+  }
+
   function failCurrentItem(channel, item, failure) {
     const request = activePlaybackRequest;
     if (!ownsPlaybackRequest(request) || request.item !== item) return;
+    if (tryCappedRetry(channel, item, document.getElementById('plex-video'))) return;
     consecutivePlaybackFailures += 1;
     console.warn('[PLEX 90] Playback failed', item && item.title,
       `(${consecutivePlaybackFailures}/${MAX_CONSECUTIVE_FAILURES})`);
     const willSkip = consecutivePlaybackFailures < MAX_CONSECUTIVE_FAILURES;
     showPlaybackFailure(failure, willSkip);
-    if (!willSkip) return;   // three in a row points at the server; park rather than spin
+    if (!willSkip) return;   // five in a row points at the server or the device; park rather than spin
     // Five seconds, same as the Apple TV: long enough to read why.
     const skipTimer = setTimeout(() => {
       if (!ownsPlaybackRequest(request)) return;
