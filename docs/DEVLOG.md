@@ -3,6 +3,28 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: #228's review follow-ups, #227)
+
+**Why.** Chad's merge note on #228 (tydude001): time `pushMissing`, which runs on every Settings visit and parses
+`channels.json` on the render thread; press the empty state on a TV; fix the `showPage` comment; and list the
+libraries with no count as a difference from the Apple TV.
+
+**Changed.** `pushMissing` logs `settings: missing channels: n in t ms`, with the read and parse of `channels.json`
+when that visit's first build does it. The comment above `showPage` says it steps up one level onto the link row that
+opened the page. `PORTING.md` gives the libraries with no count (over 30,000 titles, a saved guide with no library)
+their own bullet: no "You have m" there, where the Apple TV counts at any size. The Settings tour has a `fills` state:
+as `on`, then after `after` seconds every channel of the packages on is on air, handed to Settings as
+`refreshSettings` does after a guide build, so MISSING CHANNELS left open shows its empty state.
+
+**Timed** on the 43S45 (OS 16.0.4). A test-data build of `2d79a15` on the lab Emby as `nxlab`, one Settings visit:
+62 missing, 49 ms, of which reading and parsing `channels.json` 15 ms. The Settings tour (24 missing): 33 to 34 ms, the
+parse 13 to 14 ms, four visits; a second build in the same visit, with no parse, 1 to 3 ms. Not on a stick.
+
+**Pressed** on the same TV with the tour, `?state=fills`: MISSING CHANNELS opened from its link row (24 CH), focus on
+the first card; when every channel went on air the page said "Every channel in your packages is on air." with focus on
+that line (its 7% band read off a screenshot); OK changed nothing on screen; Back went to CHANNEL PACKAGES on its first
+package, the link row gone from the end of the list.
+
 ## 2026-11-11 (Android: CI's release lint)
 
 **Changed.**
