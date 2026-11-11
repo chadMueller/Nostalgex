@@ -163,6 +163,25 @@ function NxAudioTrackOffCommentary(listed as Object, current as Dynamic) as Dyna
     return invalid
 end function
 
+' A Jellyfin or Emby direct play's pick (`picked`, from NxAudioTrackToSelect)
+' checked against the player's own names (#246): a server that kept no title
+' for a track can pick a commentary the player names one. Emby 4.10 reads no
+' title from an MP4's audio tracks, where a Roku 43S45 lists the handler name
+' (2026-11-10). Such a pick goes to the first track in the pick's language
+' (`lang`, the server's tag, "eng" as "en") that isn't a commentary
+' (NxAudioTrackForLanguage), else the first that isn't one. Any other pick,
+' invalid included, is returned as it is.
+function NxAudioTrackPastCommentary(listed as Object, picked as Dynamic, lang as Dynamic) as Dynamic
+    off = NxAudioTrackOffCommentary(listed, picked)
+    if off = invalid then return picked
+    tag = NxSubComparableTag(lang)
+    if tag <> invalid then
+        byLang = NxAudioTrackForLanguage(listed, tag)
+        if byLang <> invalid then return byLang
+    end if
+    return off
+end function
+
 ' The player's listed tracks less those named a commentary (NxIsCommentaryTitle
 ' on the track's Name), when at least one other is left; all of them when
 ' every track is a commentary, as NxMbSkipCommentary does for the scan's.

@@ -1579,8 +1579,10 @@ sub onAudioTracks()
 end sub
 
 ' A Jellyfin or Emby direct play selects the audio track the stream picked
-' (NxMbAudioPick), once the player lists the file's tracks; their server
-' stream already carries only that one. Any other stream takes the first
+' (NxMbAudioPick), once the player lists the file's tracks, unless the
+' player names that track a commentary beside another (#246,
+' NxAudioTrackPastCommentary); their server stream already carries only
+' that one. Any other stream takes the first
 ' track in AUDIO LANGUAGE, as upstream's applyAudioTrackSelection. Once per
 ' start, so a track the viewer chooses in Now Playing stays chosen. Only
 ' after the first picture: a switch while the start still buffered ended it
@@ -1593,7 +1595,7 @@ sub applyAudioPick()
     if m.tuneAudio.byLanguage = true then
         track = NxAudioTrackForLanguage(tracks, m.tuneAudio.language)
     else
-        track = NxAudioTrackToSelect(tracks, m.tuneAudio)
+        track = NxAudioTrackPastCommentary(tracks, NxAudioTrackToSelect(tracks, m.tuneAudio), m.tuneAudio.language)
     end if
     ' No pick, and the player started on a commentary beside another track:
     ' the first that isn't one (#246), as a Plex file plays whose selected
