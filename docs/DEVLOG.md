@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: the Plex code waits 15 minutes, DISCONNECT forgets playback failures, Remux or Transcode; #284, #289, #291)
+
+**Changed.**
+- **#284, the Plex sign-in code.** Android now waits as long as plex.tv keeps the code: the PIN's `expiresIn`, at most 1,800 s, and 300 s when plex.tv doesn't say (`PlexPinWait`, as the Apple TV's `plexPINLifetime` and the Roku's `NxPlexPinWaitSeconds`). It used to stop after 150 polls, which is 5 minutes.
+  - It polls every 2 s by the clock, an approval on the last poll still counts, and an expired code is replaced by a new one, as before.
+  - Measured against plex.tv on 2026-11-11: a new code said `expiresIn=900`, and an unentered code answered 200 at minutes 4, 6, 12 and 14, then 404 at minute 16.
+  - A code approved at minute 12 on a TV was not tried.
+- **#289, the last playback failure.** DISCONNECT clears the saved playback failures and the "Last playback failure" line in Settings, as the Apple TV 1.0.32 does.
+  - A Plex sign-in, the server picker or a Jellyfin or Emby sign-in clears them too, unless the new servers share one with the old ones (`ServerSharing.sharesAServer`): the same machine or server id, or the same host and port. So adding or removing one of several keeps them.
+  - On a Google TV emulator signed in to a lab Jellyfin, the line showed before DISCONNECT, and the saved verdicts were `[]` after.
+  - The rule has 9 tests. The sign-out half has none, because the app module has no unit tests; the emulator run stands in for it.
+- **#291, PLAYBACK INFORMATION.** For a Plex server stream the PLAYBACK row says Remux when Plex's decision copies the video, and Transcode when it re-encodes it. `PlexDecision` reads the video stream's `decision` from the answer the server stream already asks for (#192).
+  - With no decision, and on Jellyfin and Emby, it says "Server stream" as before. Jellyfin's PlaybackInfo answer doesn't plainly say whether the video is copied, so it is left alone, as the issue allows.
+  - Held to two answers for Android's real request, saved from an unclaimed lab Plex 1.43.5 that was deleted straight after: High-profile H.264 copied, and Constrained Baseline H.264 re-encoded.
+  - The row itself was not seen on a screen, because a Plex server stream needs a claimed server.
+
+All 308 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: rebased onto main)
 
 **Changed.** `feature/android` rebased onto main at `c822b507`. The only conflicts were dev log entries at the top of this file; both sides are kept. Nothing on main touched `android/`, and all 292 engine tests pass. The 2026-11-10 entry said the Apple TV doesn't ask Plex's decision before a server stream; it does, and that line is corrected.

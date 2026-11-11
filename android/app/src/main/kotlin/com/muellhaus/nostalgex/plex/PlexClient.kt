@@ -34,7 +34,8 @@ import java.util.concurrent.TimeUnit
 @Serializable
 data class PlexServer(val name: String, val machineIdentifier: String, val url: String, val token: String, val owned: Boolean = true)
 
-data class PlexPin(val id: Long, val code: String)
+/** A plex.tv/link code; `expiresIn` is how long plex.tv keeps it, in seconds, when it says (#284). */
+data class PlexPin(val id: Long, val code: String, val expiresIn: Long? = null)
 
 /**
  * plex.tv sign-in and the server API, as plex-tuner.html does them (startPlexAuth,
@@ -97,7 +98,7 @@ class PlexClient(private val clientId: String, versionName: String) {
         http.newCall(req).execute().use { res ->
             if (!res.isSuccessful) throw IOException("PIN request failed: ${res.code}")
             val o = json.parseToJsonElement(res.body.string()).jsonObject
-            PlexPin(o["id"]!!.jsonPrimitive.longOrNull!!, o["code"]!!.jsonPrimitive.content.uppercase())
+            PlexPin(o["id"]!!.jsonPrimitive.longOrNull!!, o["code"]!!.jsonPrimitive.content.uppercase(), (o["expiresIn"] as? JsonPrimitive)?.longOrNull)
         }
     }
 

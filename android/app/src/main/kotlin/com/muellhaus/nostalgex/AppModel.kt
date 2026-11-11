@@ -15,6 +15,8 @@ import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.PlexDecision
+import com.muellhaus.nostalgex.engine.PlexPinWait
+import com.muellhaus.nostalgex.engine.ServerSharing
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
 import com.muellhaus.nostalgex.engine.PlaybackDiagnostics
@@ -591,9 +593,12 @@ class AppModel(private val context: Context) : Playback.Listener {
             try {
                 val pin = plex.createPin()
                 screen = Screen.SignIn(pin)
-                // Every 2 s for 5 minutes, as the web tuner.
-                repeat(150) {
-                    delay(2000)
+                // Every 2 s for as long as plex.tv keeps the code (#284, PlexPinWait), by the clock.
+                val waitMs = PlexPinWait.seconds(pin.expiresIn) * 1000
+                val shownAt = SystemClock.elapsedRealtime()
+                Log.i(TAG, "PLEX CODE waits ${waitMs / 1000} s (plex.tv says ${pin.expiresIn ?: "nothing"})")
+                while (true) {
+                    delay(PlexPinWait.POLL_MS)
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
                         mbServer = null
@@ -622,13 +627,17 @@ class AppModel(private val context: Context) : Playback.Listener {
                             pendingPlexToken = token
                             screen = Screen.ChooseServers(servers)
                         } else {
+                            forgetFailuresUnlessShared(servers.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
                             prefs.plexToken = token
                             prefs.servers = servers
                             chooseLibrariesOrScan()
                         }
                         return@launch
                     }
+                    // An approval on the last poll still counts; after it, a new code.
+                    if (SystemClock.elapsedRealtime() - shownAt >= waitMs) break
                 }
+                Log.i(TAG, "PLEX CODE expired after ${(SystemClock.elapsedRealtime() - shownAt) / 1000} s; asking for a new one")
                 signIn()
             } catch (e: Exception) {
                 Log.w(TAG, "Sign-in failed", e)
@@ -697,6 +706,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         playback.stop()
         leaveDemoMode()
         prefs.signOut()
+        // The failures were about the server just left (#289, the Apple TV's PlaybackDiagnostics.clear()).
+        forgetPlaybackFailures()
         mbServer = null
         libraryStore.clear()
         lineup = null
@@ -845,6 +856,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private fun finishSignIn(server: MediaBrowserServer) {
+        forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.serverId, server.url)))
         prefs.signOut()
         libraryStore.clear()
         mbServer = server
@@ -897,6 +909,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (picked.isEmpty()) return
         Log.i(TAG, "SERVERS ${picked.size} of ${servers.size} chosen")
         pendingPlexToken = null
+        forgetFailuresUnlessShared(picked.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
         prefs.plexToken = token
         prefs.servers = picked
         chooseLibrariesOrScan()
@@ -1952,6 +1965,28 @@ class AppModel(private val context: Context) : Playback.Listener {
         private set
 
     override fun onVerdict(outcome: String, title: String, detail: String) = recordVerdict(outcome, title, detail)
+
+    /** The saved verdicts and the line in Settings, gone (#289). */
+    private fun forgetPlaybackFailures() {
+        prefs.playbackVerdicts = emptyList()
+        lastPlaybackFailure = null
+    }
+
+    /** The servers in use now: the Jellyfin or Emby one, else the chosen Plex ones. */
+    private fun serverRefs(): List<ServerSharing.Ref> =
+        mbServer?.let { listOf(ServerSharing.Ref(it.serverId, it.url)) } ?: prefs.servers.map { ServerSharing.Ref(it.machineIdentifier, it.url) }
+
+    /**
+     * About to use `next`: the saved failures stay only if it shares a server with the old set
+     * (ServerSharing.sharesAServer), so adding or removing one of several keeps them.
+     */
+    private fun forgetFailuresUnlessShared(next: List<ServerSharing.Ref>) {
+        val old = serverRefs()
+        if (lastPlaybackFailure == null && prefs.playbackVerdicts.isEmpty()) return
+        if (ServerSharing.sharesAServer(old, next)) return
+        Log.i(TAG, "PLAYBACK FAILURES forgotten: none of the ${next.size} new server(s) was in use before")
+        forgetPlaybackFailures()
+    }
 
     /** A watchdog or end-of-item decision, kept so Settings can say "device" or "server" (PlaybackDiagnostics.record). */
     private fun recordVerdict(outcome: String, title: String, detail: String) {
