@@ -67,7 +67,7 @@ in `channels.json` needs it. Its live cell is the channel's colour at 55% over t
 a whole number of 65 px rows, and stopping where the last row touches the bottom left 11 px of the row above under
 the header, as seen on the 55R617.
 
-**Tests changed.** `GuideNavTests`' "normal is the old grid" case pinned the old sizes; it holds #263's now (Tyler's
+**Tests changed.** `GuideNavTests`' "normal is the old grid" case pinned the old sizes; it holds #263's now (tydude001's
 call), with a LARGE case beside it, and the fit checks use the 64 and 58 px row and header.
 
 **Tested off the TV.** `GuideLookTests`, 28 cases: `NxTokOver`, `NxTokOverAt` and `NxTokDarkenFor`, the shape,
