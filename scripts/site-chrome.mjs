@@ -18,7 +18,7 @@ import path from "node:path";
 import { renderBar } from "./announcements.mjs";
 
 export const SITE_ORIGIN = "https://www.nostalgex.app";
-export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image-1200.png`;
+export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-site-1200.png`;
 export const DEFAULT_OG_ALT =
   "The Nostalgex channel guide: a grid of live channels built from your own library";
 export const APPLE_TV_URL = "https://apps.apple.com/app/nostalgex/id6762563534";

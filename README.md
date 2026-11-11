@@ -8,7 +8,7 @@
 [![Web tuner](https://img.shields.io/badge/Web%20tuner-open%20in%20browser-orange)](https://www.nostalgex.app/web-tuner)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fchadmueller%2Fnostalgex-2496ED?logo=docker&logoColor=white)](https://github.com/chadMueller/Nostalgex/pkgs/container/nostalgex)
 
-![The Nostalgex channel guide on Apple TV, with CH 12 Action Adventure playing The Empire Strikes Back and a grid of channels and showtimes below](docs/images/nostalgex-guide.png)
+![The Nostalgex channel guide on Apple TV: a grid of channels with what is on now and what is next, and a bundle stripe down the left edge](docs/images/nostalgex-guide.png)
 
 Nostalgex turns your library into 130+ channels in 14 bundles, plus a channel for every film series you own, with a real channel guide. Every channel plays on a set daily schedule, so tuning in feels like live TV. No account to make, and it never supplies any media of its own.
 
