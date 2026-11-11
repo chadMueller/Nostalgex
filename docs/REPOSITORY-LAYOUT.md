@@ -37,6 +37,7 @@ A stale build shows an older version number or a different channel name. Regener
 | `vercel.json` | Headers / routing; **web only** |
 | `Nostalgex/` | Xcode project + Swift sources + assets |
 | `roku/` | Roku app (BrightScript), a contributed port under its own MIT license (`roku/LICENSE`). Reads the root's `channels.json`, `channels-memberships.json` and `franchises.json` through symlinks in `roku/data/`. Not part of the site build: a push that only touches `roku/` skips the Vercel deploy (`scripts/vercel-ignore-build.sh`). Tests: the `roku` job in `ci.yml`. See `roku/README.md` |
+| `android/` | Android TV app (Kotlin, Compose for TV, Media3), an early spike that installs over `adb`. Reads the root's `channels.json` and `channels-memberships.json` through symlinks in `android/app/src/main/assets/`. `android/engine` is the schedule and filter in plain Kotlin, tested on the JVM against `scripts/schedule-parity-golden.json` and `scripts/filter-golden.json`. Not part of the site build: a push that only touches `android/` skips the Vercel deploy. Tests: the `android` job in `ci.yml`. See `android/README.md` |
 
 The nested folder `Nostalgex/Nostalgex/` (app target inside the project) is normal for Xcode; **web files still live at the repo root.**
 

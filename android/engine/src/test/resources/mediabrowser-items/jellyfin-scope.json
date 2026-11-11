@@ -1,0 +1,123 @@
+{
+ "Items": [
+  {
+   "Name": "Scope Test",
+   "Id": "ee478fc5a4d3549206176b6d2198e019",
+   "DateCreated": "2026-11-11T10:20:14.1752746Z",
+   "Container": "mkv",
+   "MediaSources": [
+    {
+     "Protocol": "File",
+     "Id": "ee478fc5a4d3549206176b6d2198e019",
+     "Type": "Default",
+     "Container": "mkv",
+     "Size": 297070884,
+     "Name": "Scope Test (1989)",
+     "IsRemote": false,
+     "ETag": "8d9a94c64e3e23e1b323ba2295dd2ea3",
+     "RunTimeTicks": 700210000,
+     "ReadAtNativeFramerate": false,
+     "IgnoreDts": false,
+     "IgnoreIndex": false,
+     "GenPtsInput": false,
+     "SupportsTranscoding": true,
+     "SupportsDirectStream": true,
+     "SupportsDirectPlay": true,
+     "IsInfiniteStream": false,
+     "UseMostCompatibleTranscodingProfile": false,
+     "RequiresOpening": false,
+     "RequiresClosing": false,
+     "RequiresLooping": false,
+     "SupportsProbing": true,
+     "VideoType": "VideoFile",
+     "MediaStreams": [
+      {
+       "Codec": "h264",
+       "TimeBase": "1/1000",
+       "VideoRange": "SDR",
+       "VideoRangeType": "SDR",
+       "AudioSpatialFormat": "None",
+       "DisplayTitle": "4K H264 SDR",
+       "NalLengthSize": "4",
+       "IsInterlaced": false,
+       "IsAVC": true,
+       "BitRate": 33748775,
+       "BitDepth": 8,
+       "RefFrames": 1,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Height": 1600,
+       "Width": 3840,
+       "AverageFrameRate": 24,
+       "RealFrameRate": 24,
+       "ReferenceFrameRate": 24,
+       "Profile": "Constrained Baseline",
+       "Type": "Video",
+       "AspectRatio": "2.40:1",
+       "Index": 0,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false,
+       "PixelFormat": "yuv420p",
+       "Level": 51,
+       "IsAnamorphic": false
+      },
+      {
+       "Codec": "aac",
+       "TimeBase": "1/1000",
+       "VideoRange": "Unknown",
+       "VideoRangeType": "Unknown",
+       "AudioSpatialFormat": "None",
+       "LocalizedDefault": "Default",
+       "LocalizedExternal": "External",
+       "LocalizedOriginal": "Original",
+       "DisplayTitle": "AAC - Mono",
+       "IsInterlaced": false,
+       "ChannelLayout": "mono",
+       "BitRate": 192000,
+       "Channels": 1,
+       "SampleRate": 48000,
+       "IsDefault": false,
+       "IsForced": false,
+       "IsHearingImpaired": false,
+       "IsOriginal": false,
+       "Profile": "LC",
+       "Type": "Audio",
+       "Index": 1,
+       "IsExternal": false,
+       "IsTextSubtitleStream": false,
+       "SupportsExternalStream": false
+      }
+     ],
+     "MediaAttachments": [],
+     "Formats": [],
+     "Bitrate": 33940775,
+     "RequiredHttpHeaders": {},
+     "TranscodingSubProtocol": "http",
+     "DefaultAudioStreamIndex": 1,
+     "HasSegments": false
+    }
+   ],
+   "Genres": [
+    "Comedy"
+   ],
+   "RunTimeTicks": 700210000,
+   "ProductionYear": 1989,
+   "ProviderIds": {},
+   "IsFolder": false,
+   "Type": "Movie",
+   "Studios": [],
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "08d31605d366d63a7a924f944b4417f1"
+    }
+   ],
+   "VideoType": "VideoFile",
+   "MediaType": "Video"
+  }
+ ],
+ "TotalRecordCount": 1
+}
