@@ -60,7 +60,7 @@ fi
 # `box` names Roku's builtin Box() the same way: a GuideView with a variable
 # named box failed to compile on a 43S45 (2026-11-10, #237) after passing
 # the interpreter and static analysis.
-builtin=$(grep -rnEi '^\s*(for\s+)?box\s*=[^=]|[(,]\s*box\s+as\b' source components tests --include=*.brs || true)
+builtin=$(grep -rnEi '^\s*(for\s+)?box\s*=[^=]|^\s*for\s+each\s+box\s+in\b|[(,]\s*box\s+as\b' source components tests --include=*.brs || true)
 if [ -n "$builtin" ]; then
     echo "FAIL a variable named box (Roku's Box()):" >&2
     echo "$builtin" >&2

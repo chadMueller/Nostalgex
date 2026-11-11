@@ -253,7 +253,7 @@ end function
 ' direct-play decision (source/util/DirectPlay.brs), the source's bitrate
 ' in kbps for the server stream's (NxMbVideoQuery), its audio tracks when it has
 ' more than one, for the pick at tune (NxMbPreferredAudioIndex), and its
-' forced text subtitle tracks, shown as a sidecar at tune (NxMbForcedSub).
+' forced text subtitle tracks, drawn by the app at tune (NxMbForcedSubUrl).
 function NxMbMediaInfo(item as Object) as Object
     src = NxMbBestSource(item.MediaSources)
     out = { msid: invalid, container: invalid, videoCodec: invalid, audioCodec: invalid, videoProfile: invalid, audioChannels: invalid, doviProfile: invalid, bitrate: 0, videoWidth: invalid, videoHeight: invalid, audioTracks: invalid, forcedSubs: invalid, fullSubs: invalid }

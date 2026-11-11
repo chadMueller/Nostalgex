@@ -433,16 +433,16 @@ server stream asked for `-map 0:2`, the Spanish track, and direct play
 selected track 3 (`spa`). Main without the change, same settings, took the
 Estonian `0:1` and track 2.
 
-**Forced subtitles come as a sidecar (issue #63).** A film's forced track
-in SUBTITLE LANGUAGE (the lines it always shows, such as dialogue in
-another language) is shown whatever SUBTITLES says, as on the Apple TV. The
-scan keeps a file's forced text tracks (`NxMbForcedSubs`); at tune the
-content carries the first in SUBTITLE LANGUAGE as the server's SRT
+**Forced subtitles (issue #63).** A film's forced track in SUBTITLE
+LANGUAGE (the lines it always shows, such as dialogue in another language)
+is shown whatever SUBTITLES says, as on the Apple TV. The scan keeps a
+file's forced text tracks (`NxMbForcedSubs`); at tune the first in SUBTITLE
+LANGUAGE is the server's SRT
 (`/Videos/{id}/{source}/Subtitles/{index}/0/Stream.srt`, which both servers
-answer without a token), and `applySubtitles` selects it when no full
-track is showing, over the guide too, as a burned-in line would be. With
-SUBTITLES on, a full track in the language comes first, as
-`pickLegibleOption`.
+answer without a token), shown when no full track is, over the guide too,
+as a burned-in line would be. With SUBTITLES on, a full track in the
+language comes first, as `pickLegibleOption`. Until #237 the content carried
+it as a sidecar and `applySubtitles` selected it.
 
 **Since #237 the app draws the forced track itself** and the player is given
 no forced sidecar, so the TV's caption setting is never changed for one.

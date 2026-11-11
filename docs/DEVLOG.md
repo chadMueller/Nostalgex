@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: #272's review follow-ups, #237)
+
+**Why.** Chad's merge note on #272 (tydude001) asked for four small things.
+
+**Changed.** `NxSrtParse`: a file with no blank line between two cues kept the next cue's counter as the last line of
+the one before ("A" then "2"); an all-digit line just before a timing line is now taken as the counter and dropped,
+and one before a blank line stays the cue's. `check-guards.sh` also refuses `for each box in`. The `applySubtitles`
+header, `NxMbMediaInfo`'s and `NxMbSubtitleSidecars`' comments and `JELLYFIN-EMBY.md` no longer say Jellyfin and Emby
+hand the player the forced track as a sidecar. The #237 entry names its author.
+
+**Tests changed.** `SrtTests`' "no blank line between cues" checked only the second cue, so it passed with the first
+reading `A` and `2`; it now compares both cues whole (Tyler's call). A new case keeps a line of digits before a blank line.
+
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
 **Why.** Each Roku screen carries its own sizes and greys (white at 70% for hints, at 80% for rail titles, sizes
@@ -392,7 +405,7 @@ and Silkscreen are still in package.json.
 
 **Why.** Roku shows its captions only while the TV's caption mode is on, so the app switched that setting on to show
 a forced track and put it back afterwards. Back restores it since #170; Home leaves it on until the next launch
-(#117). Drawing the lines in the app means the setting is never touched (#117's option A).
+(#117). Drawing the lines in the app means the setting is never touched (#117's option A). By tydude001, PR #272.
 
 **Changed, Jellyfin and Emby.** The forced track in SUBTITLE LANGUAGE is no longer handed to the player as a
 sidecar. `ForcedSubTask` fetches the server's SRT at tune, `source/subtitles/Srt.brs` reads it into cues, and
