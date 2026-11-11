@@ -15,12 +15,17 @@ at local midnight, in all six zones tried and on the two New York DST days.
 
 **Changed.** `NxKeepPlayingPastMidnight` (`source/guide/Advance.brs`): `onGuide` leaves the airing alone while its slot
 runs and it began before today's local midnight. When it ends, `NxAdvancePick` takes the airing now on from its
-beginning, and that one began more than the overrun cap (300 s) ago, so its slot would end the file that far in; it now
-airs from now for its own length (a copy, the schedule keeps its own), as a pick already over did. The Apple TV and the
-web tuner do not retune on a schedule rebuild, so nothing changes there.
+beginning, and that one began more than 240 s ago (a minute under the overrun cap, over the 59 s a tail runs over on
+its own), so its slot would end the file that far in; it now airs from now for its own length. That is a copy, the
+schedule keeps its own, and the copy carries the slot's start in `slotStartSec`: a guide rebuilt while it airs (the
+6-hour library refresh, a package change, a rescan) finds the schedule's block and `NxSameAiring` takes it for the same
+airing, where comparing start times alone retuned the channel and rejoined the title at the clock, ahead of the viewer.
+The Apple TV and the web tuner do not retune on a schedule rebuild, so nothing changes there.
 
-**Tested off the TV.** `tests/AdvanceTests.brs`, 15 new cases (40 in all). In a copy with the function returning false
-and the shift removed, five fail: kept 15 s after, kept an hour after, New York's own midnight, and the two shifted slots.
+**Tested off the TV.** `tests/AdvanceTests.brs`, 29 new cases (54 in all). In a copy with the function returning false
+and the shift removed, six fail (kept 15 s after, kept an hour after, New York's own midnight, the two shifted
+slots, a copy of a slot that began before midnight). With the copy not carrying `slotStartSec`, four fail (the slot's start, the rebuild finding the same airing,
+both ways). With the shift at the full cap instead of 240 s, the 241 s case fails.
 
 **Not done.** The overlap itself stays: the packing is the same in the JS engine and the Swift scheduler, and changing it is
 an engine change on all three with the schedule goldens. A stick check at midnight. The `onGuide` branch is covered by

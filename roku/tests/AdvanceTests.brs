@@ -98,9 +98,29 @@ function NxRunAdvanceTests() as Integer
     NxCheck(r, "midnight: after the tail, f from its start", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, true), "f@0")
     NxCheck(r, "midnight: f airs from now for its 95 min", NxAdvanceBlockLine(tonight, 0, "t", mid& + 3900&, true), (mid& + 3900&).ToStr() + "-" + (mid& + 3900& + 5700&).ToStr())
     NxCheck(r, "midnight: the schedule's own f is not changed", first.startSec.ToStr() + "-" + first.endSec.ToStr(), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
-    ' Not yet shifted at the cap: 300 s in, f keeps its slot.
-    NxCheck(r, "midnight: 300 s in, f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 300&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
-    NxCheck(r, "midnight: 301 s in, f airs from now", NxAdvanceBlockLine(tonight, 0, "t", mid& + 301&, true), (mid& + 301&).ToStr() + "-" + (mid& + 301& + 5700&).ToStr())
+    ' The shift starts a minute under the overrun cap (240 s): a tail runs up to
+    ' 59 s over on its own and keeps the next slot.
+    NxCheck(r, "midnight: 59 s in (a tail's own overrun), f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 59&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
+    NxCheck(r, "midnight: 240 s in, f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 240&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
+    NxCheck(r, "midnight: 241 s in, f airs from now", NxAdvanceBlockLine(tonight, 0, "t", mid& + 241&, true), (mid& + 241&).ToStr() + "-" + (mid& + 241& + 5700&).ToStr())
+    ' The copy keeps the slot's start, so a guide rebuilt while it airs finds
+    ' the schedule's f and takes it for the same airing, not a new one to retune to.
+    p = NxAdvancePick(tonight, 0, "t", mid& + 3900&, true)
+    copy = p.block
+    NxCheck(r, "midnight: the copy keeps the slot's start", NxSlotStart(copy).ToStr(), mid&.ToStr())
+    NxCheck(r, "midnight: the schedule's f has no slotStartSec", (first.slotStartSec = invalid).ToStr(), "true")
+    NxCheck(r, "midnight: a rebuild at 01:23 while f airs, the guide's f is the copy", NxSameAiring(NxBlockOnAir(tonight[0].blocks, mid& + 5000&), copy).ToStr(), "true")
+    NxCheck(r, "midnight: a rebuild finding f, the copy is the same airing", NxSameAiring(first, copy).ToStr(), "true")
+    NxCheck(r, "midnight: and the other way", NxSameAiring(copy, first).ToStr(), "true")
+    NxCheck(r, "midnight: the next airing g is another", NxSameAiring(second, copy).ToStr(), "false")
+    NxCheck(r, "midnight: the tail is another", NxSameAiring(tail, copy).ToStr(), "false")
+    NxCheck(r, "midnight: the same airing without a copy", NxSameAiring(first, first).ToStr(), "true")
+    NxCheck(r, "midnight: a start the copy does not share, another airing of the title", NxSameAiring({ ratingKey: "f", startSec: mid& + 86400& }, copy).ToStr(), "false")
+    NxCheck(r, "midnight: nothing on now", NxSameAiring(invalid, copy).ToStr(), "false")
+    NxCheck(r, "midnight: nothing playing", NxSameAiring(first, invalid).ToStr(), "false")
+    ' The copy is not kept as a tail: it began after midnight in its own slot.
+    NxCheck(r, "midnight: the copy of f is not a tail past midnight", NxKeepPlayingPastMidnight(copy, mid& + 7200&).ToStr(), "false")
+    NxCheck(r, "midnight: a copy of a slot that began before midnight is", NxKeepPlayingPastMidnight({ ratingKey: "t", startSec: mid& + 3900&, slotStartSec: mid& - 5400&, endSec: mid& + 9000& }, mid& + 4000&).ToStr(), "true")
     ' The hand-over after a failure joins where the clock is, as before.
     NxCheck(r, "midnight: after a failure, f where the clock is", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, false), "f@3900")
     g.nxTzOffsetSec = invalid

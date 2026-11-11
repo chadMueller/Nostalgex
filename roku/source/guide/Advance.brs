@@ -37,7 +37,23 @@ end function
 function NxKeepPlayingPastMidnight(playing as Dynamic, t as LongInteger) as Boolean
     if playing = invalid then return false
     if t >= playing.endSec then return false
-    return playing.startSec < NxLocalDay(t).dayStartSec
+    return NxSlotStart(playing) < NxLocalDay(t).dayStartSec
+end function
+
+' When the schedule's own airing began. A hand-over that airs a pick from now
+' (NxAdvancePick) is a copy with its own start and end, and keeps the slot's
+' start in slotStartSec.
+function NxSlotStart(block as Object) as LongInteger
+    if block.slotStartSec <> invalid then return block.slotStartSec
+    return block.startSec
+end function
+
+' Whether the airing the schedule has on now is the one playing, a copy of
+' it airing from a later start included. A guide rebuild that finds a
+' different one retunes the channel (GuideView.onGuide).
+function NxSameAiring(now as Dynamic, playing as Dynamic) as Boolean
+    if now = invalid or playing = invalid then return false
+    return now.ratingKey = playing.ratingKey and NxSlotStart(now) = NxSlotStart(playing)
 end function
 
 ' ── What airs: the guide's window, one title on two channels, the next pick ──
@@ -221,15 +237,19 @@ function NxAdvancePick(channels as Object, idx as Integer, prevKey as Dynamic, t
     ' one would hand over again on the next tick, to the same pick, forever.
     ' So it airs as from now, for its slot's length. A copy: the schedule
     ' keeps its own.
-    ' The same for a pick that began more than the overrun cap ago and starts
-    ' from its beginning: after a tail past midnight, the new day's first
-    ' airing has been on for the tail's length (65 min in #297), and its slot
-    ' would end the file that far in. A tail runs to 59 s over on its own.
+    ' The same for a pick that began more than a minute under the overrun cap
+    ' ago and starts from its beginning: after a tail past midnight, the new
+    ' day's first airing has been on for the tail's length (65 min in #297),
+    ' and its slot would end the file that far in. A tail runs up to 59 s over
+    ' on its own, so a minute under the cap leaves that and a tick to spare.
+    ' The copy keeps the slot's start in slotStartSec: a guide rebuilt while it
+    ' airs finds the schedule's block, which is the same airing (NxSameAiring).
     late = pick.endSec <= t
-    if not late and seek& = 0 then late = t - pick.startSec > NxOverrunCapSec()
+    if not late and seek& = 0 then late = t - pick.startSec > NxOverrunCapSec() - 60
     if late then
         shifted = {}
         shifted.Append(pick)
+        shifted.slotStartSec = NxSlotStart(pick)
         shifted.endSec = t + (pick.endSec - pick.startSec)
         shifted.startSec = t
         pick = shifted

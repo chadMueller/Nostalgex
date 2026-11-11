@@ -288,8 +288,7 @@ sub onGuide()
     renderGrid()
     renderInfo()
     now = blockAt(m.channels[m.tuned], nowSec())
-    same = now <> invalid and m.playing <> invalid
-    if same then same = now.ratingKey = m.playing.ratingKey and now.startSec = m.playing.startSec
+    same = NxSameAiring(now, m.playing)
     ' An airing still running past its slot finishes first.
     if not same and m.playing <> invalid then
         t = nowSec()
