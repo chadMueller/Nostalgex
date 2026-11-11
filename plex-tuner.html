@@ -20,6 +20,7 @@
 <script src="scripts/nostalgex-channel-filter.cjs"></script>
 <script src="scripts/nostalgex-music-brainz.js"></script>
 <script src="scripts/nostalgex-daily-manifest.js"></script>
+<script src="scripts/nostalgex-program-row-layout.js"></script>
 <script src="scripts/nostalgex-storage.js"></script>
 <script src="scripts/nostalgex-server-settings.js"></script>
 <script src="scripts/nostalgex-library-load.js"></script>
@@ -1726,6 +1727,15 @@
   }
   .grid-program:first-child {
     border-left: none;
+  }
+  .grid-program--sliver {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* Dead air in a row (ProgramRowLayout's gap): holds its place, draws nothing. */
+  .grid-gap {
+    flex-shrink: 0;
+    align-self: stretch;
   }
   .grid-program.now-playing {
     color: #fff;
@@ -5941,28 +5951,38 @@
         const items = getTimeFilteredPool(ch);
         const nowSec = nowMs / 1000;
         const windowStartSec = windowStartMs / 1000;
-        const windowEndSec = windowEndMs / 1000;
 
         const blocks = ch._manifestBlocks || NostalgexDailyManifest.getManifestBlocks(
           ch, items, nowMs, manifestServerKey()
         );
 
-        for (const block of blocks) {
-          if (block.endSec <= windowStartSec) continue;
-          if (block.startSec >= windowEndSec) break;
-
-          const visStart = Math.max(block.startSec, windowStartSec);
-          const visEnd = Math.min(block.endSec, windowEndSec);
-          const visDuration = visEnd - visStart;
-          const widthPct = (visDuration / windowDuration) * 100;
+        // ProgramRowLayout.segments: a cursor walk, so the row is never wider than the window. An airing
+        // that runs past local midnight overlaps the next day's first one; that one is trimmed at its start.
+        const segs = NostalgexProgramRowLayout.segments(blocks, windowStartSec, windowDuration);
+        const PROGRAM_SLIVER = 0.08;   // of the window: 9.6 min, where 16px of padding is more than the block's share on a phone
+        for (const seg of segs) {
+          const widthPct = seg.fraction * 100;
+          if (seg.kind === 'gap') {
+            // Dead air keeps its place, so the programmes after it are not pulled left.
+            const gap = document.createElement('div');
+            gap.className = 'grid-gap';
+            gap.style.width = widthPct + '%';
+            progsCol.appendChild(gap);
+            continue;
+          }
+          const block = blocks[seg.index];
           // Not marked when this channel gave the title way to a lower one (rebuildAllSchedules).
           const gaveWay = Boolean(ch._guide) && ch._guide.entries.some(e => e.isConflict
             && e.startSec === block.startSec && e.item.ratingKey === block.item.ratingKey);
-          const isNowPlaying = nowSec >= block.startSec && nowSec < block.endSec && !gaveWay;
+          // A block trimmed at its start gave those minutes to the airing before it, so it is not the live one.
+          const trimmed = seg.startSec > Math.max(block.startSec, windowStartSec);
+          const isNowPlaying = nowSec >= block.startSec && nowSec < block.endSec && !gaveWay && !trimmed;
           const item = block.item;
 
           const prog = document.createElement('div');
-          prog.className = `grid-program${isNowPlaying ? ' now-playing' : ''}`;
+          // A sliver (a few minutes of an airing at a window edge, or of a trimmed one) cannot be narrower than its
+          // padding, and a block wider than its share pushes every later one off its time.
+          prog.className = `grid-program${isNowPlaying ? ' now-playing' : ''}${seg.fraction < PROGRAM_SLIVER ? ' grid-program--sliver' : ''}`;
           prog.style.width = widthPct + '%';
           if (isNowPlaying) {
             prog.style.background = `${ch.colorHex}22`;
