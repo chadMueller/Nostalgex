@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 3, CHANNELS & BUNDLES as link rows and MISSING CHANNELS, #260 and #257)
+
+**Why.** The Apple TV and the Roku show CHANNELS & BUNDLES as a short list of link rows, each opening its page, with WATERSHED on the list
+and a WHY ARE SOME CHANNELS MISSING? page under the bundles. The web had one long scrolling page and no way to learn why a channel is not on air.
+
+**Changed.** The category is a list of CHANNEL BUNDLES, FRANCHISES and MY COLLECTIONS (each with its value on the right) and the WATERSHED
+switch, which moved here from PLAYBACK & PICTURE (the card's OPEN SETTINGS opens this list). Each page has a back button; Esc or Left goes
+back to the row it came from; the arrow-key index works per page (`channelsPage`, `showChannelsPage`). Switching a bundle, franchise or collection is
+unchanged. The bundle rows carry an amber MISSING count and the page ends with `WHY ARE SOME CHANNELS MISSING?` and its count, which opens MISSING CHANNELS: a
+card per channel (its colour bar, `Needs 15 matching titles. You have 3.`, and its rules in plain words). The plain words are
+`scripts/nostalgex-channel-requirements.js`, a port of `ChannelRules.plainLanguageRequirements`, with every channel's lines in
+`scripts/channel-requirements-golden.json` (142 channels, 154 checks, in `npm test`). **Roku and Android** compare against that file.
+`watershed-browser-smoke.mjs` and `franchise-channels-browser-smoke.mjs` navigate the pages now (the franchise one also had a stale selector and
+a focus race, fixed).
+
+**Not verified.** The plain-words lines are checked against the Swift by reading it, not by running the Swift; the golden file is this port's own output.
+
 ## 2026-11-10 (web tuner: parity group 3 so far, the guide in DM Mono, #251)
 
 **Why.** The guide was the one place still drawn in VT323; the Apple TV draws it in DM Mono Medium.

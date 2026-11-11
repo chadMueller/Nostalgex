@@ -39,6 +39,7 @@
 <script src="scripts/nostalgex-language.js"></script>
 <script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-up-next.js"></script>
+<script src="scripts/nostalgex-channel-requirements.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -2115,6 +2116,37 @@
     margin-right: 16px;
   }
 
+
+  /* CHANNELS & BUNDLES: link rows and pages (the Apple TV's SettingsChannelsView). One cyan slab for focus. */
+  .chan-note { color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 16px; line-height: 1.5; }
+  .chan-back {
+    display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 8px 14px;
+    font-family: 'DM Mono', monospace; font-weight: 500; font-size: var(--fs-cap); letter-spacing: 0.06em;
+    color: var(--cyan); background: transparent; border: 2px solid rgba(0,196,255,0.5); border-radius: 8px; cursor: pointer;
+  }
+  .chan-back[hidden] { display: none; }
+  .chan-back:hover, .chan-back:focus-visible { background: var(--cyan); color: #00101a; outline: none; }
+  .chan-link {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; text-align: left;
+    margin: 0 0 8px; padding: 16px 20px; cursor: pointer;
+    font-family: 'DM Mono', monospace; font-weight: 500; font-size: var(--fs-body); letter-spacing: 0.06em; color: #fff;
+    background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.28); border-radius: 12px;
+  }
+  .chan-link-value { color: rgba(255,255,255,0.7); font-size: var(--fs-cap); flex-shrink: 0; }
+  .chan-link--gap { margin-top: 20px; }
+  .chan-link--gap .chan-link-value { color: #ffb000; }
+  .chan-link:hover, .chan-link:focus-visible, .chan-link.kfocus,
+  .cfg-row.kfocus { outline: none; background: var(--cyan); border-color: var(--cyan); color: #00101a; box-shadow: 0 0 24px rgba(0,196,255,0.45); }
+  .chan-link:hover .chan-link-value, .chan-link:focus-visible .chan-link-value, .chan-link.kfocus .chan-link-value { color: #00101a; }
+  .cfg-row.kfocus .cfg-row-title, .cfg-row.kfocus .cfg-row-desc { color: #00101a; }
+  .chan-amber { color: #ffb000; font-size: var(--fs-cap); letter-spacing: 0.06em; }
+  .chan-card { margin: 0 0 10px; padding: 14px 18px; border: 1.5px solid rgba(255,255,255,0.22); border-radius: 12px; background: rgba(255,255,255,0.03); }
+  .chan-card.kfocus, .chan-card:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1.5px var(--cyan), 0 0 18px rgba(0,196,255,0.35); }
+  .chan-card-head { display: flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-weight: 500; font-size: var(--fs-body); letter-spacing: 0.06em; color: #fff; margin-bottom: 6px; }
+  .chan-card-bar { width: 6px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+  .chan-card-need { color: #ffb000; font-size: var(--fs-cap); margin-bottom: 6px; line-height: 1.4; }
+  .chan-card-line { color: rgba(255,255,255,0.7); font-size: var(--fs-cap); line-height: 1.5; }
+
   /* Toggle switch */
   .toggle-switch {
     width: 48px;
@@ -3999,32 +4031,48 @@
       <div id="cfg-links"></div>
     </div><!-- end config-tab-support -->
 
-    <div id="config-tab-bundles" style="display:none" tabindex="-1" role="listbox" aria-label="Channel bundles. Up and Down move, Enter or Space toggles.">
-      <div class="config-section-label">CHANNEL BUNDLES</div>
-      <div style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 16px;">
-        Toggle channel bundles on or off. Matching the tvOS app.
+    <div id="config-tab-bundles" style="display:none" tabindex="-1" role="listbox" aria-label="Channels and bundles. Up and Down move, Enter or Space opens or switches.">
+      <!-- The Apple TV's CHANNELS & BUNDLES: a short list of link rows, each opening its page (SettingsChannelsView). One page shows
+           at a time; Esc or Left goes back a page. channelsPage says which. -->
+      <button class="chan-back" id="chan-back" type="button" hidden onclick="channelsGoBack()"><span aria-hidden="true">&lsaquo;</span> <span id="chan-back-label">CHANNELS &amp; BUNDLES</span></button>
+
+      <div id="channels-page-list" data-page="list"><div id="channels-list-rows"></div>
+      <div class="cfg-row" id="chan-watershed-row">
+        <div>
+          <div class="cfg-row-title">Watershed</div>
+          <div class="cfg-row-desc">18 and R-rated titles wait until 9 PM</div>
+        </div>
+        <button class="plex-btn plex-btn--toggle" id="cfg-watershed-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleWatershed()" aria-label="Watershed" aria-pressed="false">OFF</button>
       </div>
-      <div id="enrichment-status" style="display:none; color: var(--cyan); font-size: var(--fs-cap); letter-spacing: 0.06em; margin: -6px 0 16px;"></div>
-      <div id="bundle-list">
-        <!-- Rendered by JS -->
+</div>
+
+      <div id="channels-page-bundles" data-page="bundles" hidden>
+        <div class="chan-note">Toggle channel bundles on or off. Matching the tvOS app.</div>
+        <div id="enrichment-status" style="display:none; color: var(--cyan); font-size: var(--fs-cap); letter-spacing: 0.06em; margin: -6px 0 16px;"></div>
+        <div id="bundle-list">
+          <!-- Rendered by JS -->
+        </div>
+        <div id="chan-missing-link"></div>
       </div>
 
-      <div class="config-section-label" style="margin-top: 28px;">FRANCHISES</div>
-      <div style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 16px;">
-        The classics on CH 300-306, then the series found in your library and your server's movie-series collections from CH 310. One switch for the lot, one for each.
-      </div>
-      <div id="franchises-status" style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 12px;"></div>
-      <div id="franchise-list">
-        <!-- Rendered by JS -->
+      <div id="channels-page-franchises" data-page="franchises" hidden>
+        <div class="chan-note">The classics on CH 300-306, then the series found in your library and your server's movie-series collections from CH 310. One switch for the lot, one for each.</div>
+        <div id="franchises-status" class="chan-note" style="margin-bottom: 12px;"></div>
+        <div id="franchise-list">
+          <!-- Rendered by JS -->
+        </div>
       </div>
 
-      <div class="config-section-label" style="margin-top: 28px;">MY COLLECTIONS</div>
-      <div style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 16px;">
-        Collections on your server with 3 or more movies or episodes that are not movie series. Switch one on and it airs from CH 400. Movie series are under FRANCHISES.
+      <div id="channels-page-collections" data-page="collections" hidden>
+        <div class="chan-note">Collections on your server with 3 or more movies or episodes that are not movie series. Switch one on and it airs from CH 400. Movie series are under FRANCHISES.</div>
+        <div id="collections-status" class="chan-note" style="margin-bottom: 12px;"></div>
+        <div id="collection-list">
+          <!-- Rendered by JS -->
+        </div>
       </div>
-      <div id="collections-status" style="color: rgba(255,255,255,0.55); font-size: var(--fs-cap); letter-spacing: 0.06em; margin-bottom: 12px;"></div>
-      <div id="collection-list">
-        <!-- Rendered by JS -->
+
+      <div id="channels-page-missing" data-page="missing" hidden>
+        <div id="chan-missing-cards"></div>
       </div>
     </div>
 
@@ -4095,15 +4143,6 @@
           <div class="cfg-row-desc">How this program is playing: direct or through your server, player size, source codecs, and why a fallback happened.</div>
         </div>
         <button class="plex-btn" id="cfg-playback-info-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="openPlaybackInfo()" aria-haspopup="dialog">VIEW</button>
-      </div>
-
-      <div class="config-section-label" style="margin-top: 28px;">SCHEDULE</div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Watershed</div>
-          <div class="cfg-row-desc">18 and R-rated titles wait until 9 PM</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle" id="cfg-watershed-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleWatershed()" aria-label="Watershed" aria-pressed="false">OFF</button>
       </div>
 
       <div class="config-section-label" style="margin-top: 28px;">LANGUAGE</div>
@@ -5076,7 +5115,7 @@
 
   function openWatershedSettings() {
     showConfig();
-    switchConfigTab('general');
+    switchConfigTab('bundles');   // WATERSHED is on CHANNELS & BUNDLES, as on the Apple TV
   }
 
   let currentChannel = null;
@@ -8559,35 +8598,186 @@
     return row;
   }
 
+  // ── CHANNELS & BUNDLES as the Apple TV draws it (SettingsChannelsView): a short list of link rows, each opening its page.
+  // ChannelsPage is `list`, `bundles` (CHANNEL BUNDLES), `franchises`, `collections`, and `missing` (MISSING CHANNELS, one level
+  // under CHANNEL BUNDLES). Esc or Left on a page goes back a page, to the row it came from.
+  let channelsPage = 'list';
+  const channelsReturnIndex = { list: 0, bundles: 0 };
+  const CHANNELS_PAGES = {
+    list:        { title: 'CHANNELS & BUNDLES', sub: 'Bundles, franchises, collections and the schedule', parent: null },
+    bundles:     { title: 'CHANNEL BUNDLES', sub: 'Each bundle adds a set of channels', parent: 'list' },
+    franchises:  { title: 'FRANCHISES', sub: 'The classics, the series in your library and your server\'s movie-series collections', parent: 'list' },
+    collections: { title: 'MY COLLECTIONS', sub: 'Turn your server\'s collections into channels', parent: 'list' },
+    missing:     { title: 'MISSING CHANNELS', sub: 'A channel goes on air once your library has enough titles that fit it', parent: 'bundles' },
+  };
+
+  function showChannelsPage(page, opts) {
+    if (!CHANNELS_PAGES[page]) page = 'list';
+    channelsPage = page;
+    bundleFocusIndex = opts && opts.focus != null ? opts.focus : 0;
+    for (const el of document.querySelectorAll('#config-tab-bundles [data-page]')) el.hidden = el.dataset.page !== page;
+    const meta = CHANNELS_PAGES[page];
+    const back = document.getElementById('chan-back');
+    if (back) {
+      back.hidden = !meta.parent;
+      const label = document.getElementById('chan-back-label');
+      if (label && meta.parent) label.textContent = CHANNELS_PAGES[meta.parent].title;
+    }
+    if (typeof configTab !== 'undefined' && configTab === 'bundles') {
+      const title = document.getElementById('config-pane-title');
+      const sub = document.getElementById('config-pane-sub');
+      if (title) title.textContent = meta.title;
+      if (sub) sub.textContent = meta.sub;
+    }
+    const main = document.getElementById('config-main');
+    if (main) main.scrollTop = 0;
+    renderBundleList();
+  }
+  function openChannelsPage(page) {
+    channelsReturnIndex[channelsPage] = bundleFocusIndex;
+    showChannelsPage(page);
+  }
+  /** Back a page. False when already at the list (the caller then leaves the category as before). */
+  function channelsGoBack() {
+    const parent = CHANNELS_PAGES[channelsPage].parent;
+    if (!parent) return false;
+    showChannelsPage(parent, { focus: channelsReturnIndex[parent] || 0 });
+    return true;
+  }
+
+  /** Bundles the list counts and the page lists: every bundle but FRANCHISES (its switch heads its own page) and the per-category
+   *  collection ones. */
+  function channelsBundleRows() {
+    return bundles.filter(b => b.id !== 'collections' && b.id !== FRANCHISES_BUNDLE_ID && !String(b.id).startsWith('collections-'));
+  }
+  function channelsListRowsModel() {
+    const on = channelsBundleRows().filter(b => enabledBundleIDs.has(b.id)).length;
+    const fOn = franchisePackageOn() ? franchiseSectionRows().filter(r => (r.kind === 'row' && r.row.enabled) || (r.kind === 'collection' && r.c.enabled)).length : 0;
+    const cOn = visibleCollections().filter(c => c.enabled).length;
+    return [
+      { page: 'bundles', title: 'CHANNEL BUNDLES', value: `${on} ON` },
+      { page: 'franchises', title: 'FRANCHISES', value: franchisePackageOn() ? `${fOn} ON` : 'OFF' },
+      { page: 'collections', title: 'MY COLLECTIONS', value: `${cOn} ON` },
+    ];
+  }
+  function renderChannelsList() {
+    const host = document.getElementById('channels-list-rows');
+    if (!host) return;
+    host.innerHTML = '';
+    const rows = channelsListRowsModel();
+    rows.forEach((r, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chan-link' + (configTab === 'bundles' && i === bundleFocusIndex ? ' kfocus' : '');
+      b.dataset.page = '';
+      b.innerHTML = `<span class="chan-link-title">${escapeHtml(r.title)}</span><span class="chan-link-value">${escapeHtml(r.value)}</span>`;
+      b.addEventListener('click', () => { bundleFocusIndex = i; openChannelsPage(r.page); });
+      host.appendChild(b);
+    });
+    const ws = document.getElementById('chan-watershed-row');
+    if (ws) ws.classList.toggle('kfocus', configTab === 'bundles' && bundleFocusIndex === rows.length);
+  }
+
+  /** Channels short of content, by bundle: the ones that have rules to explain, in bundles that are on. */
+  function missingChannelGroups() {
+    const groups = [];
+    for (const b of bundles) {
+      if (String(b.id).startsWith('collections-') || b.id === 'collections') continue;
+      if (!enabledBundleIDs.has(b.id)) continue;
+      const channels = (b.channelIDs || [])
+        .map(id => allChannelsUnfiltered.find(c => c.id === id))
+        .filter(ch => ch && ch.rules && !(ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)));
+      if (channels.length) groups.push({ bundle: b, channels });
+    }
+    return groups;
+  }
+  const missingCountOf = (groups) => groups.reduce((n, g) => n + g.channels.length, 0);
+
+  function renderChannelsMissingLink(model) {
+    const host = document.getElementById('chan-missing-link');
+    if (!host) return;
+    host.innerHTML = '';
+    const count = missingCountOf(missingChannelGroups());
+    if (!count) return;
+    const idx = model.packages.length;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chan-link chan-link--gap' + (configTab === 'bundles' && bundleFocusIndex === idx ? ' kfocus' : '');
+    b.innerHTML = `<span class="chan-link-title">WHY ARE SOME CHANNELS MISSING?</span><span class="chan-link-value">${count} CH</span>`;
+    b.addEventListener('click', () => { bundleFocusIndex = idx; openChannelsPage('missing'); });
+    host.appendChild(b);
+  }
+
+  function renderMissingCards() {
+    const host = document.getElementById('chan-missing-cards');
+    if (!host) return;
+    host.innerHTML = '';
+    const R = globalThis.NostalgexChannelRequirements;
+    const groups = missingChannelGroups();
+    if (!groups.length) {
+      const none = document.createElement('div');
+      none.className = 'chan-note';
+      none.textContent = 'Every channel in your bundles is on air.';
+      host.appendChild(none);
+      return;
+    }
+    let idx = 0;
+    for (const g of groups) {
+      const head = document.createElement('div');
+      head.className = 'config-section-label';
+      head.textContent = g.bundle.name;
+      host.appendChild(head);
+      for (const ch of g.channels) {
+        const card = document.createElement('div');
+        card.className = 'chan-card' + (configTab === 'bundles' && idx === bundleFocusIndex ? ' kfocus' : '');
+        card.tabIndex = 0;
+        card.dataset.idx = String(idx);
+        const have = ch.itemPool ? ch.itemPool.length : 0;
+        card.innerHTML = `<div class="chan-card-head"><span class="chan-card-bar" style="background:${escapeHtml(ch.colorHex || '#fff')}"></span><span>${escapeHtml(String(ch.name).toUpperCase())}</span></div>`
+          + `<div class="chan-card-need">${escapeHtml(R.needsLine(ch.minItems || 50, have))}</div>`
+          + R.plainRequirements(ch.rules).map(l => `<div class="chan-card-line">\u2022 ${escapeHtml(l)}</div>`).join('');
+        const at = idx;
+        card.addEventListener('click', () => { bundleFocusIndex = at; renderMissingCards(); });
+        host.appendChild(card);
+        idx += 1;
+      }
+    }
+    const focused = host.querySelector('.chan-card.kfocus');
+    if (focused && focused.scrollIntoView) focused.scrollIntoView({ block: 'nearest' });
+  }
+
   function renderBundleList() {
     const container = document.getElementById('bundle-list');
     if (!container) return;
+    const model = bundleTabModel();
+    // Clamp focus index. The franchise and collection rows continue the same index on their own pages.
+    if (bundleFocusIndex >= model.total) bundleFocusIndex = Math.max(0, model.total - 1);
+    if (channelsPage === 'list') { renderChannelsList(); return; }
+    if (channelsPage === 'missing') { renderMissingCards(); return; }
+    if (channelsPage === 'franchises') { renderFranchiseList(model); return; }
+    if (channelsPage === 'collections') { renderCollectionList(); return; }
     container.innerHTML = '';
-
     if (bundles.length === 0) {
       container.innerHTML = '<div style="color: rgba(255,255,255,0.55); font-size: var(--nx-fs); padding: 20px 0;">No bundles available</div>';
       return;
     }
-
-    const model = bundleTabModel();
-    // Clamp focus index. The franchise and collection rows below continue the same index.
-    if (bundleFocusIndex >= model.total) bundleFocusIndex = Math.max(0, model.total - 1);
-
     model.packages.forEach((bundle, idx) => {
       container.appendChild(bundleRowElement(bundle, idx));
     });
-    renderFranchiseList(model);
-    renderCollectionList();
+    renderChannelsMissingLink(model);
   }
 
-  // The BUNDLES tab is one list for the arrow keys: the packages, the FRANCHISES section,
-  // then MY COLLECTIONS. FRANCHISES is not among the packages: its switch heads its own
-  // section, as it heads the FRANCHISES page on the Apple TV.
+  // The rows of the page on screen, for the arrow keys. Each page's index starts at 0, so the franchise and collection rows keep
+  // their own offsets (packages and franchises are empty on the pages that are not theirs).
   function bundleTabModel() {
-    const packages = bundles.filter(b => b.id !== 'collections' && b.id !== FRANCHISES_BUNDLE_ID);
-    const franchises = franchiseSectionRows();
-    const collections = visibleCollections();
-    return { packages, franchises, collections, total: packages.length + franchises.length + collections.length };
+    const packages = channelsPage === 'bundles' ? channelsBundleRows() : [];
+    const franchises = channelsPage === 'franchises' ? franchiseSectionRows() : [];
+    const collections = channelsPage === 'collections' ? visibleCollections() : [];
+    let total = packages.length + franchises.length + collections.length;
+    if (channelsPage === 'list') total = channelsListRowsModel().length + 1;                          // the three links and WATERSHED
+    else if (channelsPage === 'bundles' && missingCountOf(missingChannelGroups()) > 0) total += 1;   // WHY ARE SOME CHANNELS MISSING?
+    else if (channelsPage === 'missing') total = missingCountOf(missingChannelGroups());
+    return { packages, franchises, collections, total };
   }
 
   /** The rows of the FRANCHISES section: the package switch, then, while it is on, ADD ALL
@@ -8612,7 +8802,15 @@
 
   /** What pressing a row in the BUNDLES tab does: Enter on the keyboard. */
   function activateBundleTabRow(index) {
+    if (channelsPage === 'list') {
+      const rows = channelsListRowsModel();
+      if (index < rows.length) openChannelsPage(rows[index].page);
+      else toggleWatershed();
+      return;
+    }
+    if (channelsPage === 'missing') return;   // read-only
     const m = bundleTabModel();
+    if (channelsPage === 'bundles' && index === m.packages.length) { if (missingCountOf(missingChannelGroups()) > 0) openChannelsPage('missing'); return; }
     if (index < m.packages.length) {
       toggleBundle(m.packages[index].id);
       return;
@@ -8643,6 +8841,10 @@
     const populatedCount = allChannelsUnfiltered.filter(ch =>
       bundle.channelIDs.includes(ch.id) && ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)
     ).length;
+
+    // Channels in a bundle that is on and still short of content: an amber count, explained by WHY ARE SOME CHANNELS MISSING?.
+    const missingGroup = isEnabled ? missingChannelGroups().find(g => g.bundle.id === bundle.id) : null;
+    const missingInBundle = missingGroup ? missingGroup.channels.length : 0;
 
     const row = document.createElement('div');
     row.className = 'bundle-row';
@@ -8677,6 +8879,7 @@
           ${populatedCount}/${channelCount}
         </div>
         <div style="font-size: var(--fs-cap); color: rgba(255,255,255,0.55); letter-spacing: 0.06em;">CHANNELS</div>
+        ${missingInBundle ? `<div class="chan-amber" title="Channels short of content: see WHY ARE SOME CHANNELS MISSING?">${missingInBundle} MISSING</div>` : ''}
       </div>
     `;
     // Scroll focused row into view
@@ -8949,7 +9152,7 @@
     }
     const main = document.getElementById('config-main');
     if (main) main.scrollTop = 0;
-    if (tab === 'bundles') { bundleFocusIndex = 0; renderBundleList(); }
+    if (tab === 'bundles') { showChannelsPage('list'); }
     if (opts && opts.enter) enterConfigContent();
   }
 
@@ -11987,6 +12190,12 @@
       const order = CONFIG_CATEGORIES.map(c => c.tab);
       const idx = order.indexOf(configTab);
       if (key === 'h' || key === 'H') { hideConfig(); e.preventDefault(); return; }
+      // CHANNELS & BUNDLES pages: Esc or Left is back a page, to the row it came from.
+      if (configTab === 'bundles' && !inRail && channelsPage !== 'list' && (key === 'Escape' || key === 'ArrowLeft' || key === 'Backspace')) {
+        channelsGoBack();
+        e.preventDefault();
+        return;
+      }
       if (key === 'Escape') {
         // Esc steps back: out of the content to the rail, and out of the rail to the guide.
         if (inRail) hideConfig(); else focusConfigRail();

@@ -6,7 +6,7 @@
  * loads the real plex-tuner.html, headless, against a Jellyfin-shaped server, with the clock
  * pinned to 2 PM, and drives what a viewer does:
  *
- *   - the switch is in Settings > GENERAL, says the Apple TV's words, is OFF on a new install
+ *   - the switch is in Settings > CHANNELS & BUNDLES, says the Apple TV's words, is OFF on a new install
  *     and writes `nostalgex_watershed` ('1' on), which the engine reads;
  *   - on, a channel that is nothing but R-rated titles shows BROADCASTS RESUME AT 9 PM in the
  *     guide and the card when tuned; a mixed channel keeps airing without its R titles;
@@ -179,12 +179,12 @@ const read = (page) => page.evaluate(() => {
     hour: new Date().getHours(),
     current: typeof currentChannel === "undefined" ? null : currentChannel,
     src: video.getAttribute("src"),
-    infoTag: (document.getElementById("info-channel-tag") || {}).textContent || "",
+    infoTag: ((document.getElementById("info-channel-tag") || {}).textContent || "") + " " + ((document.getElementById("info-channel-name") || {}).textContent || ""),
     infoTitle: (document.getElementById("info-title") || {}).textContent || "",
     npTitle: (document.getElementById("np-title") || {}).textContent || "",
     picture: rect(document.getElementById("video-container")),
     configOpen: document.getElementById("config-overlay").classList.contains("open"),
-    generalShown: getComputedStyle(document.getElementById("config-tab-general")).display !== "none",
+    generalShown: getComputedStyle(document.getElementById("config-tab-bundles")).display !== "none",
     fullscreen: !!document.fullscreenElement,
     vw: innerWidth, vh: innerHeight,
   };
@@ -199,7 +199,8 @@ async function openSettingsGeneral(page, name) {
   if (await rail.first().isVisible().catch(() => false)) await rail.first().click();
   else { await page.locator("#m-menu-btn").click(); await page.locator(".m-drawer-item:has-text('SETTINGS')").click(); }
   await settle(page, 300);
-  await page.locator("#tab-general").click();
+  // WATERSHED sits on CHANNELS & BUNDLES, as on the Apple TV. A rail on wide screens, the tab strip on a phone.
+  if (await page.locator("#rail-bundles").isVisible().catch(() => false)) await page.locator("#rail-bundles").click(); else await page.locator("#tab-bundles").click();
   await settle(page, 300);
 }
 const closeSettings = async (page) => { await page.locator(".config-close").click(); await settle(page, 400); };
@@ -231,7 +232,7 @@ try {
 
   await openSettingsGeneral(page, "desktop");
   s = await read(page);
-  check("Settings > GENERAL has the Watershed row", s.toggle !== null);
+  check("Settings > CHANNELS & BUNDLES has the Watershed row", s.toggle !== null);
   if (s.toggle === null) {
     // A page without the switch (the negative control) cannot go any further.
     await browser.close();
@@ -288,7 +289,7 @@ try {
   await page.locator("#watershed-card-settings").click();
   await settle(page, 400);
   s = await read(page);
-  check("OPEN SETTINGS: Settings opens on the GENERAL pane with the switch", s.configOpen && s.generalShown && s.toggle && s.toggle.text === "ON");
+  check("OPEN SETTINGS: Settings opens on CHANNELS & BUNDLES with the switch", s.configOpen && s.generalShown && s.toggle && s.toggle.text === "ON");
 
   // Switch off from there: the card clears and the channel tunes.
   await page.locator("#cfg-watershed-toggle").click();
@@ -393,7 +394,7 @@ for (const name of Object.keys(viewports)) try {
   await page.locator("#watershed-card-settings").click();
   await settle(page, 400);
   s = await read(page);
-  check(`${name}: OPEN SETTINGS opens the GENERAL pane`, s.configOpen && s.generalShown);
+  check(`${name}: OPEN SETTINGS opens CHANNELS & BUNDLES`, s.configOpen && s.generalShown);
   const toggle = page.locator("#cfg-watershed-toggle");
   await toggle.scrollIntoViewIfNeeded();
   const tb = await toggle.boundingBox();
