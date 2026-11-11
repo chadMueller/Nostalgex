@@ -143,8 +143,9 @@ function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
 end function
 
 ' The track to move to when the pick above names none and the player is on a
-' commentary (#246): the first listed track that isn't one, as the Apple TV
-' takes the first when the selected track is a commentary. invalid when the
+' commentary (#246): the first listed track that isn't one, as #246 asks of
+' the Plex track (the selected one, else the first, never a commentary while
+' another is left). invalid when the
 ' player's track (`current`, its Track) isn't a commentary, isn't in the
 ' list, or every track is one, which leaves the player where it is.
 function NxAudioTrackOffCommentary(listed as Object, current as Dynamic) as Dynamic
@@ -165,9 +166,9 @@ end function
 
 ' A Jellyfin or Emby direct play's pick (`picked`, from NxAudioTrackToSelect)
 ' checked against the player's own names (#246): a server that kept no title
-' for a track can pick a commentary the player names one. Emby 4.10 reads no
-' title from an MP4's audio tracks, where a Roku 43S45 lists the handler name
-' (2026-11-10). Such a pick goes to the first track in the pick's language
+' for a track can pick a commentary the player names one. Emby 4.10.1.0 had no
+' title for a lab MP4's audio tracks, where a Roku 43S45 named them by the
+' file's titles (2026-11-10). Such a pick goes to the first track in the pick's language
 ' (`lang`, the server's tag, "eng" as "en") that isn't a commentary
 ' (NxAudioTrackForLanguage), else the first that isn't one. Any other pick,
 ' invalid included, is returned as it is.

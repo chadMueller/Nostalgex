@@ -387,7 +387,7 @@ same by the track's Name (`NxAudioTrackForLanguage`, which a Plex stream goes
 by, and `NxAudioTrackToSelect`'s short list). A direct play's pick the player
 names a commentary beside another track goes to a film track
 (`NxAudioTrackPastCommentary`, #246): Emby 4.10.1.0 kept no title for a lab MP4's
-audio tracks, so its pick can be a commentary the Roku names one. On the 43S45 (2026-11-10, lab Jellyfin
+audio tracks, so the pick from its list can be a commentary the Roku names one. On the 43S45 (2026-11-10, lab Jellyfin
 12.2.0) The Hills Have Eyes (1977), English mono beside three English stereo
 commentaries, played a commentary on main on both a direct play and a server
 stream, and the film's track with this. The scan keeps those files' tracks

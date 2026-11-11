@@ -1598,8 +1598,8 @@ sub applyAudioPick()
         track = NxAudioTrackPastCommentary(tracks, NxAudioTrackToSelect(tracks, m.tuneAudio), m.tuneAudio.language)
     end if
     ' No pick, and the player started on a commentary beside another track:
-    ' the first that isn't one (#246), as a Plex file plays whose selected
-    ' track is a commentary and whose film track isn't in AUDIO LANGUAGE.
+    ' the first that isn't one (#246): a Plex direct play whose film track isn't
+    ' in AUDIO LANGUAGE, where the player started on a commentary.
     if track = invalid then track = NxAudioTrackOffCommentary(tracks, m.video.currentAudioTrack)
     listed = []
     for each a in tracks
