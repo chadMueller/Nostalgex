@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Apple TV 1.0.32 rc2: the launch-time freeze, filter pass moved off the main actor)
+
+**Why.** A tester's Apple TV 4K (1st generation) stalled the remote and the picture for about 40 s, twice, at launch. Measured in the simulator, and the
+same on 1.0.31, so not a regression: after every snapshot restore, when the enrichment cache (`enrichment_cache_v1.json`) is missing or older than
+7 days, `refillEnrichmentAfterRestoreIfNeeded` ran `refilterChannelsWithEnrichment` and `rebuildFoundFranchises` on the main actor.
+
+**Changed.** The two slow passes now run in a background task on an immutable snapshot and are applied on the main actor in one step each:
+`refilterChannelsWithEnrichment` is split into prepare (main), `buildEnrichedStaticPools` (pure, off-main) and apply (main), and the franchise builder
+runs off-main the same way (`refilterChannelsWithEnrichmentOffMain`, `rebuildFoundFranchisesOffMain`). A result is applied only if the library
+session, the item count, the enrichment count, the enabled bundles, the config channels and the library signature did not move meanwhile; otherwise it
+is thrown away and the pass runs again (three tries). The synchronous functions stay and use the same three pieces. No filter rule, threshold,
+`channels.json` or schedule change.
+
+**Measured** (launch harness `LaunchBlockHarness`, simulator, Debug, a 10,693 item library, every bundle on, 104 channels):
+
+| | Before | After |
+|---|---|---|
+| Main-actor work after enrichment lands | 13,786 ms (12,429 ms refilter, 1,355 ms franchises) | 1.7 ms |
+| Main-thread hangs over 250 ms | 1, longest 13,962 ms | 0 |
+| Background work, wall clock | n/a | 12.5 s and 1.4 s |
+
+Results are identical: the same fingerprint of every channel's pool in order, the guide order and the found franchises (`poolHash`, `guideHash`,
+`franchiseHash`) from the synchronous and the off-main path. New `EnrichedRefilterOffMainTests` (2): the off-main result equals the synchronous one for
+every bundle, the first three and the default; and a result made stale by a bundle switch is recomputed (it fails with the staleness guard removed).
+218 existing tests in the channel filter, golden, franchise, enrichment, snapshot, PackageChannelListing, schedule and guide order classes pass
+unchanged. The full NostalgexTests run on the branch: 1,371 passed, 0 failed, 32 skipped.
+
+**Not measured.** An Apple TV: the numbers are a Mac simulator in Debug (an optimized build was 9.1 s for the refilter), and the 40 s on the TV is an
+estimate that the 1st-generation CPU makes it about three times slower. The background pass now competes with the main thread for the TV's cores; the
+priority is user-initiated. Roku and Android have not been looked at for the same cost.
+
 ## 2026-11-10 (Apple TV 1.0.32 design branch: the brand logo replaces the lightning bolt, #226)
 
 **Changed.** The Apple TV drew the retired lightning-bolt logo (Trello I-086, GitHub #226 from tydude001). It now draws the NOSTALGEX wordmark with a

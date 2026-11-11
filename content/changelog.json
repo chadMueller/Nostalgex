@@ -23,7 +23,8 @@
         "If setup is interrupted, the libraries that already finished are kept.",
         "STOP WAITING stops the whole scan, not only the server you pressed it on.",
         "Disconnect and moving to another server clear the last playback failure shown in Settings.",
-        "The selected guide row stays readable on bright channel colours."
+        "The selected guide row stays readable on bright channel colours.",
+        "Opening the app after a week or more away no longer freezes the remote and the picture for up to 40 seconds while it refreshes the extra title info the channels use."
       ]
     },
     {
