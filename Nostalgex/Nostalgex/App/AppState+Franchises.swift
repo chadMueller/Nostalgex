@@ -195,19 +195,51 @@ extension AppState {
             guard let tmdbID = item.tmdbID else { return nil }
             return cache[tmdbID]
         }
-        // Music videos live in a movie-typed library; they are never franchise films. Items no
-        // channel may take (Emby Dolby Vision profile 5) are not franchise members either.
-        let channelItems = ChannelEligibility.onChannels(allItems, backend: backendKind)
-        let movies = channelItems.filter { $0.type == .movie && ($0.librarySource ?? .movie) == .movie }
-        let tv = channelItems.filter { $0.type == .episode }
-
+        let (movies, tv) = franchiseCandidates()
         let groupings = FranchiseChannelBuilder.build(
             movies: movies,
             tvItems: tv,
             enrichmentFor: lookup,
             availableStockChannelIDs: availableStockFranchiseChannelIDs
         )
+        applyFoundFranchiseGroupings(groupings, lookup: lookup)
+    }
 
+    /// Music videos live in a movie-typed library; they are never franchise films. Items no
+    /// channel may take (Emby Dolby Vision profile 5) are not franchise members either.
+    private func franchiseCandidates() -> (movies: [PlexMediaItem], tv: [PlexMediaItem]) {
+        let channelItems = ChannelEligibility.onChannels(allItems, backend: backendKind)
+        return (channelItems.filter { $0.type == .movie && ($0.librarySource ?? .movie) == .movie },
+                channelItems.filter { $0.type == .episode })
+    }
+
+    /// `rebuildFoundFranchises` with the builder off the main actor (1.4 s on a Mac with a 10.7k item library).
+    /// Same inputs, same builder; the result is applied on the main actor only if the library, the enrichment
+    /// and the lineup did not move meanwhile, else the pass runs again (three tries).
+    func rebuildFoundFranchisesOffMain() async {
+        for _ in 0..<3 {
+            let session = librarySessionGeneration
+            let stamp = currentRefilterStamp()
+            let (movies, tv) = franchiseCandidates()
+            let cache = enrichmentService.cache
+            let available = availableStockFranchiseChannelIDs
+            let groupings = await Task.detached(priority: .userInitiated) { () -> [FranchiseChannelBuilder.FranchiseGrouping] in
+                FranchiseChannelBuilder.build(
+                    movies: movies,
+                    tvItems: tv,
+                    enrichmentFor: { item in item.tmdbID.flatMap { cache[$0] } },
+                    availableStockChannelIDs: available
+                )
+            }.value
+            guard !Task.isCancelled, session == librarySessionGeneration, !isLoading else { return }
+            guard stamp == currentRefilterStamp() else { continue }
+            applyFoundFranchiseGroupings(groupings) { item in item.tmdbID.flatMap { cache[$0] } }
+            return
+        }
+    }
+
+    private func applyFoundFranchiseGroupings(_ groupings: [FranchiseChannelBuilder.FranchiseGrouping],
+                                              lookup: @escaping (PlexMediaItem) -> MediaEnrichment?) {
         foundFranchises = groupings.map { g in
             let covered: Int? = {
                 if case let .stock(channelID) = g.placement { return channelID }

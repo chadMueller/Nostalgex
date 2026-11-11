@@ -827,8 +827,11 @@ extension AppState {
             await self.enrichmentService.enrichItems(items, omdbGates: gates)
             guard !Task.isCancelled, session == self.librarySessionGeneration, !self.isLoading else { return }
             guard !self.enrichmentService.cache.isEmpty else { return }
-            self.refilterChannelsWithEnrichment()
-            self.rebuildFoundFranchises()
+            // The two slow passes run off the main actor and are applied in one step each (a launch used to hold
+            // the main actor for 9 to 14 s here); a result made stale meanwhile is discarded and recomputed.
+            guard await self.refilterChannelsWithEnrichmentOffMain() else { return }
+            await self.rebuildFoundFranchisesOffMain()
+            guard !Task.isCancelled, session == self.librarySessionGeneration, !self.isLoading else { return }
             self.materializeDynamicChannels()
             self.applyBundleFilter()
             self.saveLibrarySnapshotIfNeeded()
