@@ -145,10 +145,20 @@ end function
 ' The track to move to when the pick above names none and the player is on a
 ' commentary (#246): the first listed track that isn't one, as #246 asks of
 ' the Plex track (the selected one, else the first, never a commentary while
-' another is left). invalid when the
-' player's track (`current`, its Track) isn't a commentary, isn't in the
-' list, or every track is one, which leaves the player where it is.
+' another is left). A player that reports no current track (`current`
+' invalid or "", as the 43S45 did on a lab MP4) is taken to be on the first
+' listed one. invalid when the player's track (`current`, its Track) isn't a
+' commentary, isn't in the list, or every track is one, which leaves the
+' player where it is.
 function NxAudioTrackOffCommentary(listed as Object, current as Dynamic) as Dynamic
+    if NxToStr(current) = "" then
+        for each t in listed
+            if type(t) = "roAssociativeArray" then
+                current = t.Track
+                exit for
+            end if
+        end for
+    end if
     onCommentary = false
     for each t in listed
         if type(t) = "roAssociativeArray" then
@@ -173,6 +183,7 @@ end function
 ' (NxAudioTrackForLanguage), else the first that isn't one. Any other pick,
 ' invalid included, is returned as it is.
 function NxAudioTrackPastCommentary(listed as Object, picked as Dynamic, lang as Dynamic) as Dynamic
+    if NxToStr(picked) = "" then return picked
     off = NxAudioTrackOffCommentary(listed, picked)
     if off = invalid then return picked
     tag = NxSubComparableTag(lang)

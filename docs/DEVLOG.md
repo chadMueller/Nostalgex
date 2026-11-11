@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: no current audio track is the first listed, #283's review follow-ups, #246)
+
+**Why.** Chad's merge note on #283 (tydude001): a player that reports no current audio track (the 43S45's `was ` on a
+lab MP4) left `NxAudioTrackOffCommentary` with nothing to compare, so the no-pick rule never moved off a commentary
+there.
+
+**Changed.** `NxAudioTrackOffCommentary` takes a missing or empty current track as the first listed one.
+`NxAudioTrackPastCommentary` returns no pick as no pick before asking it, so a Jellyfin or Emby start with no pick
+still leaves the choice to the no-pick rule. The #246 entry names its author.
+
+**Tests.** Two new cases: Chad's (a commentary first, then English, no current track: `2`), and an empty current track
+on the lab MP4's layout. The existing "no current track, the player stays" case still holds: its first track is
+Portuguese, not a commentary.
+
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
 **Why.** Each Roku screen carries its own sizes and greys (white at 70% for hints, at 80% for rail titles, sizes
@@ -26,7 +40,7 @@ the chosen neutral (4.22:1).
 
 ## 2026-11-10 (Roku: a commentary on the player's own list is passed over on a direct play, #246)
 
-**Why.** After #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
+**Why.** Measured by tydude001 (PR #283): after #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
 didn't name it one: Emby 4.10.1.0 kept no title for the lab MP4's audio tracks (its `Title` is empty, where Jellyfin
 12.2.0 reads the same file's), so the app's pick from that list can be a commentary. And on a Plex direct play with no film track
 in AUDIO LANGUAGE the pick names no track, which left the player on the track it started with, which can be a commentary.
