@@ -44,8 +44,9 @@ midnight the harness also saw the guide row name the next day's first airing at 
 still named the movie that is playing. That is which airing the engine calls "now" in the overlap, not how the row
 is laid out; it is not touched here and its cause is not established.
 
-**Half-done.** Branch `web/guide-midnight-overlap`, committed, not pushed. Needs a review before it goes to main
-(a push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).
+**Shipped.** Pushed to main on 2026-11-11 after a review of the branch and a full `npm test` pass. The push deploys the
+hosted tuner. The Docker image shares the page and picks the fix up at the next `tuner-v` tag; no tag was cut for this,
+so the image on the registry does not have it yet.
 
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
