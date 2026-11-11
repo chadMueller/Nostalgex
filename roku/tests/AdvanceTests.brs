@@ -66,6 +66,45 @@ function NxRunAdvanceTests() as Integer
     if gave["0"] <> invalid then NxCheck(r, "channel 5 shows c as on now", gave["0"].gaveWay.ratingKey + " " + gave["0"].shown.ratingKey, "b c")
     if gave["2"] <> invalid then NxCheck(r, "channel 9 has nothing after b", gave["2"].shown.ratingKey, "b")
 
+    ' An ordinary overrun keeps the next airing's own slot: only a start more
+    ' than the overrun cap ago is shifted.
+    NxCheck(r, "ran 25 s over, b keeps its slot", NxAdvanceBlockLine(chans, 0, "a", 1685&, true), "1660-2320")
+
+    ' A tail past midnight (#297). Local midnight is mid. Channel 5's last
+    ' airing t began at 22:30 the night before and runs 65 min past it; the new
+    ' day's first airing f began at midnight, 95 min, and g follows it.
+    g = GetGlobalAA()
+    g.nxTzOffsetSec = 0
+    mid& = 1794441600& ' 2026-11-12 00:00 UTC
+    tail = { ratingKey: "t", startSec: mid& - 5400&, endSec: mid& + 3900& }
+    first = { ratingKey: "f", startSec: mid&, endSec: mid& + 5700& }
+    second = { ratingKey: "g", startSec: mid& + 5700&, endSec: mid& + 10800& }
+    NxCheck(r, "midnight: kept 15 s after", NxKeepPlayingPastMidnight(tail, mid& + 15&).ToStr(), "true")
+    NxCheck(r, "midnight: kept an hour after", NxKeepPlayingPastMidnight(tail, mid& + 3600&).ToStr(), "true")
+    NxCheck(r, "midnight: not 5 s before it (the day it began in)", NxKeepPlayingPastMidnight(tail, mid& - 5&).ToStr(), "false")
+    NxCheck(r, "midnight: not once its slot is over", NxKeepPlayingPastMidnight(tail, mid& + 3900&).ToStr(), "false")
+    NxCheck(r, "midnight: not an airing of the new day", NxKeepPlayingPastMidnight(first, mid& + 15&).ToStr(), "false")
+    NxCheck(r, "midnight: nothing playing", NxKeepPlayingPastMidnight(invalid, mid& + 15&).ToStr(), "false")
+    ' The guide's day is the local one: the same airing at UTC midnight is
+    ' kept in UTC and not in New York, where it is 7 PM.
+    g.nxTzOffsetSec = -18000
+    started = { ratingKey: "t", startSec: mid& - 3600&, endSec: mid& + 3600& }
+    NxCheck(r, "midnight: UTC midnight is 7 PM in New York, not kept", NxKeepPlayingPastMidnight(started, mid& + 15&).ToStr(), "false")
+    NxCheck(r, "midnight: New York's own midnight, kept", NxKeepPlayingPastMidnight({ ratingKey: "t", startSec: mid& + 5& * 3600& - 600&, endSec: mid& + 5& * 3600& + 3600& }, mid& + 5& * 3600& + 15&).ToStr(), "true")
+    g.nxTzOffsetSec = 0
+    ' The tail ends on its own at 01:05. The new day's first airing has been on
+    ' 65 min, so it airs from now for its own length, not from 00:00.
+    tonight = [{ id: 5, blocks: [first, second] }]
+    NxCheck(r, "midnight: after the tail, f from its start", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, true), "f@0")
+    NxCheck(r, "midnight: f airs from now for its 95 min", NxAdvanceBlockLine(tonight, 0, "t", mid& + 3900&, true), (mid& + 3900&).ToStr() + "-" + (mid& + 3900& + 5700&).ToStr())
+    NxCheck(r, "midnight: the schedule's own f is not changed", first.startSec.ToStr() + "-" + first.endSec.ToStr(), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
+    ' Not yet shifted at the cap: 300 s in, f keeps its slot.
+    NxCheck(r, "midnight: 300 s in, f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 300&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
+    NxCheck(r, "midnight: 301 s in, f airs from now", NxAdvanceBlockLine(tonight, 0, "t", mid& + 301&, true), (mid& + 301&).ToStr() + "-" + (mid& + 301& + 5700&).ToStr())
+    ' The hand-over after a failure joins where the clock is, as before.
+    NxCheck(r, "midnight: after a failure, f where the clock is", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, false), "f@3900")
+    g.nxTzOffsetSec = invalid
+
     print "advance cases (upstream hand-over): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
@@ -97,4 +136,11 @@ function NxAdvancePickLine(channels as Object, idx as Integer, prevKey as Dynami
     p = NxAdvancePick(channels, idx, prevKey, t, natural)
     if p = invalid then return "none"
     return p.block.ratingKey + "@" + p.seek.ToStr()
+end function
+
+' "start-end" of the block NxAdvancePick returns, or "none".
+function NxAdvanceBlockLine(channels as Object, idx as Integer, prevKey as Dynamic, t as LongInteger, natural as Boolean) as String
+    p = NxAdvancePick(channels, idx, prevKey, t, natural)
+    if p = invalid then return "none"
+    return p.block.startSec.ToStr() + "-" + p.block.endSec.ToStr()
 end function

@@ -25,6 +25,21 @@ function NxAiringEnded(playing as Dynamic, t as LongInteger, videoState as Strin
     return true
 end function
 
+' Whether a guide rebuilt at t leaves the airing playing alone because it
+' began before today's local midnight and its slot is still running. A day's
+' last programme can run past midnight (the packing loop is t < dayEnd, so it
+' ends where the file does), and from midnight the guide reads the new day
+' only: the airing is no longer in it, the new day's first one is on now, and
+' the rebuild would retune the channel off a film mid-way (#297). The Apple
+' TV and the web tuner leave the player alone on a rebuild; it ends on its own
+' (NxAiringEnded) and NxAdvancePick moves on. Stateless, so it holds through
+' every later rebuild until the slot is over.
+function NxKeepPlayingPastMidnight(playing as Dynamic, t as LongInteger) as Boolean
+    if playing = invalid then return false
+    if t >= playing.endSec then return false
+    return playing.startSec < NxLocalDay(t).dayStartSec
+end function
+
 ' ── What airs: the guide's window, one title on two channels, the next pick ──
 ' After ChannelScheduleBuilder (Models/ChannelSchedule.swift) and
 ' AppState.advanceToNextItem, as the web tuner mirrors them in
@@ -206,7 +221,13 @@ function NxAdvancePick(channels as Object, idx as Integer, prevKey as Dynamic, t
     ' one would hand over again on the next tick, to the same pick, forever.
     ' So it airs as from now, for its slot's length. A copy: the schedule
     ' keeps its own.
-    if pick.endSec <= t then
+    ' The same for a pick that began more than the overrun cap ago and starts
+    ' from its beginning: after a tail past midnight, the new day's first
+    ' airing has been on for the tail's length (65 min in #297), and its slot
+    ' would end the file that far in. A tail runs to 59 s over on its own.
+    late = pick.endSec <= t
+    if not late and seek& = 0 then late = t - pick.startSec > NxOverrunCapSec()
+    if late then
         shifted = {}
         shifted.Append(pick)
         shifted.endSec = t + (pick.endSec - pick.startSec)

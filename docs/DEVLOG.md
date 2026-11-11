@@ -3,6 +3,29 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: an airing that runs past midnight is no longer cut off at 12:00 AM, #297)
+
+**Why.** A Discord report said a movie stops at midnight every night. Run through the Roku's own schedule code in the
+off-device interpreter: the packing loop is `t < dayEnd`, so the day's last airing ends where the file does, and on a
+60-movie channel it crossed midnight on 30 of 30 days (average 66.6 min, longest 137 min), on a 400-episode channel
+29 of 30 (average 16.7 min). The next day's first airing starts at 12:00 AM, so the two overlap (the overlap #296
+saw on two channels). From midnight the guide reads the new day only, so the airing playing is not in it and the
+rebuild `onGuide` runs on the 30 s timer retuned the channel to the new day's first airing. The guide changes only
+at local midnight, in all six zones tried and on the two New York DST days.
+
+**Changed.** `NxKeepPlayingPastMidnight` (`source/guide/Advance.brs`): `onGuide` leaves the airing alone while its slot
+runs and it began before today's local midnight. When it ends, `NxAdvancePick` takes the airing now on from its
+beginning, and that one began more than the overrun cap (300 s) ago, so its slot would end the file that far in; it now
+airs from now for its own length (a copy, the schedule keeps its own), as a pick already over did. The Apple TV and the
+web tuner do not retune on a schedule rebuild, so nothing changes there.
+
+**Tested off the TV.** `tests/AdvanceTests.brs`, 15 new cases (40 in all). In a copy with the function returning false
+and the shift removed, five fail: kept 15 s after, kept an hour after, New York's own midnight, and the two shifted slots.
+
+**Not done.** The overlap itself stays: the packing is the same in the JS engine and the Swift scheduler, and changing it is
+an engine change on all three with the schedule goldens. A stick check at midnight. The `onGuide` branch is covered by
+the function's tests, not by running the component.
+
 ## 2026-11-12 (publish Nostalgex on Roku)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgex-on-roku`.
