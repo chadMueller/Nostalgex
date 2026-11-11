@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * PAGE SIZE in the real plex-tuner.html (headless) (#255): a PC on a TV at 1920x1080 draws the page 1:1, so LARGE lays it out like a
- * 1440 px window and scales it up by a third (html.nx-large). AUTO does that at 1800x1000 and up with a mouse, never on touch;
- * LARGE does it from 1440 px wide; OFF never. The guide keeps its 64 pt rows, and nothing leaves the screen.
+ * 1440 px window and scales it up by a third (html.nx-large). OFF is the default; AUTO does that at 1800x1000 and up with a mouse,
+ * never on touch; LARGE does it from 1440 px wide. The guide keeps its 64 pt rows, and nothing leaves the screen.
  *
  * Needs Playwright (not a dependency): PLAYWRIGHT=/path/to/playwright/index.mjs, or a resolvable `playwright`.
  * Run: `npm run test:page-size:browser`.
@@ -101,6 +101,9 @@ async function openAt(width, height, { touch = false, stored = null } = {}) {
 const large = (page) => page.evaluate(() => document.documentElement.classList.contains("nx-large"));
 try {
   let { ctx, page, errors } = await openAt(1920, 1080);
+  check("a new browser has it OFF, even at 1920x1080 with a mouse", !(await large(page)));
+  await ctx.close();
+  ({ ctx, page, errors } = await openAt(1920, 1080, { stored: "auto" }));
   check("1920x1080 with a mouse: AUTO is on", await large(page));
   const m = await page.evaluate(() => { const row = document.querySelector(".grid-row[data-channel-id]"); const body = document.getElementById("grid-body"); const z = parseFloat(getComputedStyle(document.documentElement).zoom); return { z, rows: body.getBoundingClientRect().height / row.getBoundingClientRect().height, docW: document.documentElement.scrollWidth, vw: innerWidth }; });
   check("the page is scaled by a third", Math.abs(m.z - 1.3333) < 0.01, String(m.z));
@@ -117,7 +120,7 @@ try {
   check("no page errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 
-  ({ ctx, page } = await openAt(1280, 800));
+  ({ ctx, page } = await openAt(1280, 800, { stored: "auto" }));
   check("1280x800: AUTO leaves it off", !(await large(page)));
   await ctx.close();
   ({ ctx, page } = await openAt(1280, 800, { stored: "large" }));
@@ -126,7 +129,7 @@ try {
   ({ ctx, page } = await openAt(1600, 900, { stored: "large" }));
   check("1600x900: LARGE turns it on", await large(page));
   await ctx.close();
-  ({ ctx, page } = await openAt(1920, 1080, { touch: true }));
+  ({ ctx, page } = await openAt(1920, 1080, { touch: true, stored: "auto" }));
   check("a touch screen never gets it", !(await large(page)));
   await ctx.close();
   ({ ctx, page } = await openAt(1920, 1080, { stored: "off" }));

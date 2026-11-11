@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner and Docker 1.0.17)
+
+**Shipped.** `tunerVersion` 1.0.17, tag `tuner-v1.0.17`, on main after the web branch merged (hosted nostalgex.app deploys with main; the image `ghcr.io/chadmueller/nostalgex:1.0.17`,
+`1.0` and `latest` come from the tag). The Apple TV v1.0.29 stays the Latest release on GitHub. Nothing else was tagged.
+
+**Changed.** Everything in the entries below: the Apple TV's setup, loader, Settings rail, bundle stripes and list, Now Playing details and program rows, the guide's approved sizes, Plex subtitles and
+audio language, the commentary rule, MISSING CHANNELS, CHANNELS & BUNDLES as link rows, GUIDE TIMEOUT, background library refresh, PAGE SIZE (off unless chosen), the playback recovery ladder, and "bundle" in the
+words. The site's wording commit (README, privacy, how channels work, three blog posts, the web tuner features doc) went with it. The Apple TV and Roku apps were not touched.
+
+**Verified.** `npm test`, `npm run build`, `npm run build:selfhost` and the tuner version check pass; 31 browser smokes pass except `empty-lineup` and two negative controls in `stop-waiting`, which fail the same way on
+main before this work (they are not caused by it). The empty-guide smoke was failing before and now reads the visible copy line. Not verified on a real TV browser, and the burned-in Plex subtitle text and a really starving
+stream were checked by request, not by picture. A reviewer pass ran on the final head before the push.
+
+**Half-done.** #254 (first-run onboarding: the first-guide hint and the first-run wording need a design call) and #253 (THEME, waiting for PR #235) stay open. The Roku and Android ports listed in `projects/nostalgex-internal/docs/PARITY.md` are not started.
+
 ## 2026-11-10 (web tuner: the Apple TV's approved sizes, guide and Now Playing, #251 and #261)
 
 **Why.** Chad approved the Apple TV's final numbers on the basement TV. The web follows them in points, 1 pt = 0.5 CSS px on a desktop and a TV browser (`--pt`, which is
@@ -57,8 +72,8 @@ already has the Apple TV's loop (#67); the Android port compares against the sam
 
 **#255.** PAGE SIZE (AUTO, LARGE, OFF) in PLAYBACK & PICTURE, `nostalgex_page_size`: `html.nx-large` lays the page out like a 1440 px window and scales it by a
 third (zoom 1.3333), the same picture the 960x540 TV step makes at 2x, with the guide still showing about 9 rows. AUTO does it at 1800x1000 and up with a mouse
-and never on touch; LARGE from 1440 px wide; OFF never. AUTO is the default, which makes every 1920x1080 mouse window larger; that is the decision
-to confirm. `page-size-browser-smoke.mjs` (13 checks).
+and never on touch; LARGE from 1440 px wide; OFF never. OFF is the default (Chad, 2026-11-10: nobody's window gets larger unasked); LARGE and AUTO are opt-in.
+`page-size-browser-smoke.mjs` (14 checks).
 
 ## 2026-11-10 (web tuner: parity group 3, CHANNELS & BUNDLES as link rows and MISSING CHANNELS, #260 and #257)
 

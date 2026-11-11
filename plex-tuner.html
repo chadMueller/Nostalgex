@@ -4126,12 +4126,12 @@
       <div class="cfg-row cfg-row--wrap">
         <div>
           <div class="cfg-row-title">Page size</div>
-          <div class="cfg-row-desc">LARGE draws everything a third bigger, for a screen across the room. AUTO does it at 1920x1080 and up with a mouse.</div>
+          <div class="cfg-row-desc">LARGE draws everything a third bigger, for a screen across the room. AUTO does it at 1920x1080 and up with a mouse. Off unless you choose.</div>
         </div>
         <div class="sleep-chips" id="cfg-page-size-chips" role="group" aria-label="Page size">
-          <button class="sleep-chip" type="button" data-size="auto" onclick="setPageSize('auto')" aria-pressed="true">AUTO</button>
+          <button class="sleep-chip" type="button" data-size="auto" onclick="setPageSize('auto')" aria-pressed="false">AUTO</button>
           <button class="sleep-chip" type="button" data-size="large" onclick="setPageSize('large')" aria-pressed="false">LARGE</button>
-          <button class="sleep-chip" type="button" data-size="off" onclick="setPageSize('off')" aria-pressed="false">OFF</button>
+          <button class="sleep-chip" type="button" data-size="off" onclick="setPageSize('off')" aria-pressed="true">OFF</button>
         </div>
       </div>
 
@@ -8284,7 +8284,8 @@
 
   // ── PAGE SIZE ──
   const PAGE_SIZE_KEY = 'nostalgex_page_size';
-  let pageSize = ['auto', 'large', 'off'].includes(localStorage.getItem(PAGE_SIZE_KEY)) ? localStorage.getItem(PAGE_SIZE_KEY) : 'auto';
+  // OFF unless the viewer chooses: nobody's window gets larger unasked (Chad, 2026-11-10).
+  let pageSize = ['auto', 'large', 'off'].includes(localStorage.getItem(PAGE_SIZE_KEY)) ? localStorage.getItem(PAGE_SIZE_KEY) : 'off';
   function pageSizeApplies() {
     if (pageSize === 'off') return false;
     // The TV-browser steps already scale small viewports; this is for big ones. A phone or tablet (touch) never gets it.
@@ -8301,7 +8302,7 @@
     }
   }
   function setPageSize(value) {
-    pageSize = ['auto', 'large', 'off'].includes(value) ? value : 'auto';
+    pageSize = ['auto', 'large', 'off'].includes(value) ? value : 'off';
     lsSet(PAGE_SIZE_KEY, pageSize);
     applyPageSize();
   }
