@@ -77,7 +77,9 @@ struct PlayerView: View {
                         schedule: ChannelScheduleBuilder.buildSchedule(
                             for: channel,
                             credentialFingerprint: appState.scheduleCredentialFingerprint
-                        )
+                        ),
+                        // The same poster, from the same place, as the Now Playing panel's.
+                        posterURL: appState.posterURL(for: item)
                     )
                     .transition(.opacity)
                 }
@@ -419,61 +421,90 @@ private struct ChannelOSD: View {
     let channel: Channel
     let item: PlexMediaItem
     let schedule: ChannelSchedule?
+    /// nil when there is no poster (not Plex, demo mode): the text is drawn alone, exactly as before.
+    var posterURL: URL? = nil
+
+    /// The poster is the Now Playing panel's size, 120 x 180 (`NowPlayingLayout`); it is about as tall as the
+    /// text block beside it.
+    private var posterSize: CGSize { CGSize(width: NowPlayingLayout.posterWidth, height: NowPlayingLayout.posterHeight) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
 
             HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Rectangle()
-                        .fill(channel.color)
-                        .frame(width: 48, height: 4)
-
-                    Text("CH \(channel.number)")
-                        .font(.custom("DMMono-Medium", size: 20))
-                        .foregroundStyle(channel.color)
-
-                    // Title leads as the big headline, channel name follows smaller below it
-                    // (Discord feedback, 2026-10-29: viewers read this as "what's
-                    // playing", so the title should dominate and the channel is secondary).
-                    Group {
-                        if item.type == .episode, let epTitle = item.episodeTitle {
-                            Text("\(item.title)  \(item.seTag ?? "")  \"\(epTitle)\"")
-                                .foregroundStyle(.white.opacity(0.95))
-                        } else if item.isMusicVideo {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.title)
-                                    .foregroundStyle(.white.opacity(0.95))
-                                if let artist = item.artist, !artist.isEmpty {
-                                    Text(artist)
-                                        .foregroundStyle(.white.opacity(0.7))
-                                }
-                                HStack(spacing: 12) {
-                                    if let year = item.year {
-                                        Text(String(year))
-                                    }
-                                    if let genres = item.musicGenreDisplay {
-                                        Text(genres)
-                                    }
-                                }
-                                .foregroundStyle(.white.opacity(0.55))
+                HStack(alignment: .center, spacing: 20) {
+                    if let posterURL {
+                        // Text is on screen at once; the poster fills in when it loads and leaves no hole if it never does.
+                        AsyncImage(url: posterURL) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                                    .frame(width: posterSize.width, height: posterSize.height)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
+                                    )
+                            case .empty:
+                                Color.nxRow
+                                    .frame(width: posterSize.width, height: posterSize.height)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            default:
+                                EmptyView()
                             }
-                        } else {
-                            Text("\(item.title)\(item.year.map { "  \(String($0))" } ?? "")")
-                                .foregroundStyle(.white.opacity(0.95))
                         }
                     }
-                    .font(.custom("DMMono-Medium", size: 32))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Rectangle()
+                            .fill(channel.color)
+                            .frame(width: 48, height: 4)
 
-                    Text(channel.name)
-                        .font(.custom("DMMono-Regular", size: 24))
-                        .foregroundStyle(.white.opacity(0.9))
+                        Text("CH \(channel.number)")
+                            .font(.custom("DMMono-Medium", size: 20))
+                            .foregroundStyle(channel.color)
 
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(playbackTimeLabel(at: context.date))
-                            .font(.custom("DMMono-Regular", size: 18))
-                            .foregroundStyle(.gray)
+                        // Title leads as the big headline, channel name follows smaller below it
+                        // (Discord feedback, 2026-10-29: viewers read this as "what's
+                        // playing", so the title should dominate and the channel is secondary).
+                        Group {
+                            if item.type == .episode, let epTitle = item.episodeTitle {
+                                Text("\(item.title)  \(item.seTag ?? "")  \"\(epTitle)\"")
+                                    .foregroundStyle(.white.opacity(0.95))
+                            } else if item.isMusicVideo {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title)
+                                        .foregroundStyle(.white.opacity(0.95))
+                                    if let artist = item.artist, !artist.isEmpty {
+                                        Text(artist)
+                                            .foregroundStyle(.white.opacity(0.7))
+                                    }
+                                    HStack(spacing: 12) {
+                                        if let year = item.year {
+                                            Text(String(year))
+                                        }
+                                        if let genres = item.musicGenreDisplay {
+                                            Text(genres)
+                                        }
+                                    }
+                                    .foregroundStyle(.white.opacity(0.55))
+                                }
+                            } else {
+                                Text("\(item.title)\(item.year.map { "  \(String($0))" } ?? "")")
+                                    .foregroundStyle(.white.opacity(0.95))
+                            }
+                        }
+                        .font(.custom("DMMono-Medium", size: 29))
+
+                        Text(channel.name)
+                            .font(.custom("DMMono-Regular", size: 22))
+                            .foregroundStyle(.white.opacity(0.9))
+
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(playbackTimeLabel(at: context.date))
+                                .font(.custom("DMMono-Regular", size: 18))
+                                .foregroundStyle(.gray)
+                        }
                     }
                 }
                 .padding(32)
