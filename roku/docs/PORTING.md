@@ -242,7 +242,11 @@ franchise collections are in the FRANCHISES section, not under MY COLLECTIONS:
   natural order. ADD ALL and REMOVE ALL cover all three kinds. One "Up to 90"
   note counts the found franchises and the franchise collections past the block.
 - The collections stay listed while the switch is off, as there, where the
-  switch gates their channels: a row can read ON and not air until it is on.
+  switch gates their channels (`FranchisesPageGate`, #273): under "None of
+  these are on the air while FRANCHISES is off.", faded to 0.45, reading OFF,
+  with no channel number, and out of focus's way, so none can be switched.
+  Each keeps its own saved switch, so FRANCHISES on again brings back what was
+  set. The channel number is the Roku's own: the Apple TV's row shows none.
 - MY COLLECTIONS holds OTHER COLLECTIONS only (still one accordion), with a line
   for how many collections sit under FRANCHISES.
 - A package that is on shows how many of its channels are on air ("14/15

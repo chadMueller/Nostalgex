@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: franchise collections while FRANCHISES is off, #273)
+
+**Why.** With FRANCHISES off, a franchise collection on the FRANCHISES page still read ON and could be focused and
+switched, though its channel doesn't air: the switch gates every franchise channel, collections included. The Apple
+TV fixed it with `FranchisesPageGate` (#273, filed by Chad for tydude001).
+
+**Changed.** While FRANCHISES is off, the page lists the franchise collections under "None of these are on the air
+while FRANCHISES is off.", faded to 0.45, reading OFF, with no channel number, and marked `gated`: focus skips them
+(`focusable`, `NxSettingsFirstFocusable`, and `refreshRows` won't put focus back on one) and OK does nothing on one.
+Each keeps its saved switch. The rules are `NxFranchisesOffNote`, `NxFranchiseCollectionReadsOn` and
+`NxFranchiseCollectionSelectable` in `SettingsChannels.brs`. The channel number is the Roku's own (the Apple TV's
+row shows none); a gated row hides it, since a collection built while FRANCHISES is off gets one and doesn't air.
+The FRANCHISES value on the Channels list already read OFF while the switch is off (`NxChannelsLinkValue`).
+
+**Tests.** Nine cases in `SettingsChannelsTests`: reads ON in all four combinations, selectable, the line, no dash,
+and that `NxSettingsFirstFocusable` skips gated rows (with main's `SettingsRail.brs` that case gets 2, a gated row).
+The existing "page: switch off, the collections stay listed" still holds.
+
+**Seen** on the 43S45 (OS 16.0.4), a test-data build of `1ecada5` signed in to the lab Emby as `nxlab`, through the
+guide to Settings › CHANNELS & BUNDLES › FRANCHISES. Two lab collections made for it, *Lab Saga Collection* (3 clips)
+and *Lab Trilogy Collection* (4), both filed as franchises. With FRANCHISES on: Saga switched on and read ON.
+FRANCHISES off: the line, both rows faded and OFF, and three Down presses left the screen byte for byte as it was,
+focus on the switch. On again: Saga ON, Trilogy OFF. Off, out of Settings and back: the Channels list read FRANCHISES
+OFF, the guide rebuilt with the same two channels (Saga's channel built but not aired), the page showed both rows
+gated, and on again Saga read ON. That round showed Saga's CH 310 on its gated row, so a gated row now hides it
+(`db76012`, seen gated without it).
+
 ## 2026-11-11 (Web tuner: the guide row no longer runs past its window when an airing crosses local midnight)
 
 **Why.** The 24-hour guide window holds two days' blocks, and the next day's first airing starts at 00:00 whatever
