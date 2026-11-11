@@ -21,7 +21,8 @@
 #                              with no library and no video. Always in the test
 #                              data space (NX_TEST_DATA=1), so the TV's own
 #                              saved data stays as it was. Relaunch with
-#                              ?state=on|off|empty|folded|overcap.
+#                              ?state=on|off|empty|folded|overcap, or
+#                              ?state=fills&after=<s>: on, then every channel on air.
 #
 # NX_TEST_DATA=1 scripts/deploy.sh: the build keeps its own registry sections
 # and cachefs: folder (scripts/stamp-manifest.sh --test-data), so it can sign
