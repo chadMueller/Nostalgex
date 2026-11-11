@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
+
+**Why.** Each Roku screen carries its own sizes and greys (white at 70% for hints, at 80% for rail titles, sizes
+from 16 to 34 px with no scale). The Apple TV 1.0.32 has one type scale, one colour list and one row, and #263 to
+#266 move the Roku's screens onto the same, so the numbers are written down once first.
+
+**Changed.** `roku/source/ui/Tokens.brs`: `NxTokens()` holds #262's type scale, the one step down for Settings and
+the Now Playing panel, the guide row's 22 px, the colours (all opaque), the two rows and the font names the screens
+already load. `NxTokContrast` is the WCAG contrast ratio, and `NxTokTextOn` picks black or white for text on a solid
+fill. No screen reads them yet: each moves in its own issue.
+
+**Tested off the TV.** `tests/DesignTokensTests.brs`, 39 cases: the contrast function against known ratios (21:1, 4.54:1
+for #767676 on white), the 23 pairs #262 holds at 4.5:1 or more (`textDim` on the panel and the resting row), no colour with an opacity, nothing below 25 px but
+the guide's rows, and black or white on a fill. With `text2` set to a darker grey in a throwaway copy, the suite
+fails the four `text2` pairs (3.04:1 down to 1.84:1). `tests/run.sh` ends in ALL TESTS PASSED.
+
+**The pairs, by this function.** The lowest of the 23 are `textDim` on the resting row, 4.74:1, and on the panel, 5.32:1.
+#262 gives 5.36:1 on the bare guide and 4.83:1 on the lightest row background, so the Apple TV's guide surfaces
+are not quite the panel and row colours. Read literally, #262's list also puts `textDim` on the selected row, which is 4.16:1; it is left out here, as `textDim` is only for rows that aren't focused. #263, written before `textDim` was added to #262, has the guide's text in white and #B9C3DE only; which surfaces `textDim` sits on there is for that issue. Of the other text colours on the four surfaces, below 4.5:1: `textDim` on the chosen neutral (3.22:1) and `redText` on
+the chosen neutral (4.22:1).
+
 ## 2026-11-10 (web tuner and Docker 1.0.17)
 
 **Shipped.** `tunerVersion` 1.0.17, tag `tuner-v1.0.17`, on main after the web branch merged (hosted nostalgex.app deploys with main; the image `ghcr.io/chadmueller/nostalgex:1.0.17`,
