@@ -515,24 +515,12 @@
     return COPY.nothingAnswered;
   }
 
-  /**
-   * True for an address typed with http:// that a secure (https) page cannot reach, so the page can say so before it
-   * tries: the browser would block the request anyway. An address on this machine (localhost, 127.x, ::1) is let
-   * through by browsers, so it is still tried; an address typed without a scheme is tried as https first and is not
-   * judged here. Web only: the Apple TV has no secure-page rule.
-   */
-  function blockedFromSecurePage(address) {
-    const a = String(address || '').trim();
-    if (!/^http:\/\//i.test(a)) return false;
-    return !/^http:\/\/(?:[^@/]*@)?(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:\/|$)/i.test(a);
-  }
-
   const api = {
     DEFAULT_HTTP_PORT, FIND_WINDOW_MS, CHECK_REQUEST_MS, CHECK_TOTAL_MS, QUICK_CONNECT_POLL_MS, QUICK_CONNECT_MAX_POLLS,
     splitAddress, basePath, addressCandidates,
     parseDiscoveryReply, dedupeServers, discoveryOutcome, findCandidates, findServers,
     parsePublicInfo, parseQuickConnectEnabled, parsePublicUsers, preferredMethod, offersQuickConnect,
-    checkServer, checkErrorMessage, blockedFromSecurePage,
+    checkServer, checkErrorMessage,
     quickConnectInitiateOutcome, quickConnectPollOutcome, quickConnect, signInWithPassword, authHeader,
     COPY,
   };

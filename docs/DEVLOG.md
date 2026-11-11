@@ -133,35 +133,42 @@ were decided in favour of matching the other apps.
 - `web-tuner.html`: the headline and the one sentence are the Apple TV's and the Roku's, word for word: CONNECT YOUR
   SERVER, and "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get
   started." They replaced two web-only lines.
-- `web-tuner.html`, `tuner/signin.css`: one quiet line under the three choices on the hosted page: "On this page
-  Jellyfin and Emby need an https address. To use any address, run the tuner yourself." The last words link to the
-  self-host page. It sits inside a `selfhost:strip` block with the script line that removes it on an http page, so the
-  Docker image carries no trace of it (it can reach any address, so the line would be untrue there).
-- `web-tuner.html`, `scripts/nostalgex-signin.js`: a plain-http address typed on the https page is now refused before
-  any attempt. Before, the page called `fetch` on it, the browser blocked the request, and only then did the page
-  explain; the CONNECTING screen showed in between. `blockedFromSecurePage` judges only an address typed with
-  `http://` that is not on this machine: `localhost`, `127.x` and `::1` are let through by browsers and are still
-  tried, and an address with no scheme is tried as https first. The wording is the existing one (a home-network address
-  and a public one each have their own line, both name the self-host page).
+- `web-tuner.html`: one quiet line under the three choices on the hosted page: "On this page Jellyfin and Emby need
+  an https address. To use any address, run the tuner yourself." The last words link to the self-host page. The line,
+  its inline styling and the script line that removes it on an http page are all inside `selfhost:strip` blocks, so the
+  Docker image carries no trace of it in markup, script or CSS (it can reach any address, so the line would be untrue
+  there). The styling is inline on purpose: a rule in the shared stylesheet would have shipped in Docker.
 - No hint on the first guide. The Apple TV and the Roku have none; the guide has clickable UP and DOWN buttons and
   Settings has a KEYBOARD page.
 
+**Not changed, on purpose.** A plain-http address typed on the hosted page is still tried: the browser blocks the
+request and the page then says why and how to get round it, in the words it already had. An earlier note on #254 said
+it is refused before the attempt; it is not. A first version of this change did refuse it up front, and was dropped:
+it would have removed the chance of reaching a home-network http server through Chrome's per-site "Insecure content:
+Allow" setting, which only works if the attempt is made.
+
 **Tested.**
-- `npm run test:first-run` (in `npm test`): the web headline and sentence equal the ones read from the Apple TV's
-  `SettingsView.swift` and the Roku's `SignInFlow.brs`; the line is in the hosted build and gone from the self-host
-  build; the address table (17 cases, look-alikes such as `localhost.evil.com` stay blocked); no em dashes.
-  `npm run test:first-run:builds` checks `dist/` and `dist-selfhost/` and runs in CI after both builds.
-- `npm run test:first-run:browser` (needs Playwright), 111 checks: at 1280x800, 960x540 at DPR 2 and 390x844, hosted
+- `npm run test:first-run` (in `npm test`, 22 checks): the web headline and sentence equal the ones read from the
+  Apple TV's `SettingsView.swift` and the Roku's `SignInFlow.brs`; the line is in the hosted build and gone from the
+  self-host build; no stylesheet has a rule for it; no em dashes; negative controls (a changed word, the old words, the
+  line outside its strip block).
+- `npm run test:first-run:builds` (33 checks, a new CI step after both builds): `dist/` carries the line; none of the
+  44 pages, scripts and stylesheets in `dist-selfhost/` has any trace of it. With a rule for the line planted in the
+  built Docker stylesheet the check fails, so it does look at the CSS.
+- `npm run test:first-run:browser` (103 checks, needs Playwright): at 1280x800, 960x540 at DPR 2 and 390x844, hosted
   (served from an https address) and over http: the words, the three choices, nothing scrolls at the two wide sizes,
   nothing runs off the side on the phone, the line there on the hosted page inside the screen and absent over http;
-  two plain-http addresses refused with no request sent and no CONNECTING screen, by keyboard and by mouse; start to
-  a guide on Jellyfin and on Emby by keyboard alone and by mouse alone; a saved login skipping the start screen.
-  Run against `dist-selfhost/` the same file passes with no https line at any size. Against origin/main it fails 38
-  checks (the old words, no line, a request sent and the CONNECTING screen shown), so the checks do bite.
+  two plain-http addresses given the existing refusal, by keyboard and by mouse; start to a guide on Jellyfin and on
+  Emby by keyboard alone and by mouse alone; a saved login skipping the start screen. Run against `dist-selfhost/` the
+  same file passes (94 checks) with no https line at any size. Run against a checkout of origin/main it fails 30 of
+  103 checks, all of them the old words and the missing line, so the checks do look at the change.
 - `npm test` and both builds pass.
 
-**Not changed.** Plex's own sign-in (plex.tv is outside the harness; the run checks that CONNECT TO PLEX answers),
-the Apple TV and the Roku, the engine. The https line is web-only by design.
+**Not verified.** Plex's own sign-in (plex.tv is outside the harness; the run checks that CONNECT TO PLEX answers),
+Firefox, WebKit and real TV browsers (Chromium only; 960x540 at DPR 2 stands in for a TV browser), and a real home
+network server reached through Chrome's "Insecure content: Allow".
+
+**Not changed.** The Apple TV, the Roku, the engine. The https line is web-only by design.
 
 **Half-done.** Branch `web/first-run-start-screen`, committed, not pushed. It needs a review before it goes to main (a
 push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).

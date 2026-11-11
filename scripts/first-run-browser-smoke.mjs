@@ -9,9 +9,10 @@
  *    scrolls sideways on the phone.
  * 2. The hosted page's one line about the https limit: there at every size on the hosted page, with its link to the
  *    self-host page, inside the screen where nothing scrolls; not there on a page served over http.
- * 3. Before the attempt: a plain-http address typed on the hosted page (one on a home network, one on the internet) is
- *    refused with the reason and the way round, no request is made to it and the CONNECTING screen never shows. With
- *    the keyboard alone and with the mouse alone.
+ * 3. A plain-http address typed on the hosted page (one on a home network, one on the internet): the browser blocks the
+ *    request, and the page then says why, and the way round, in the existing words. It is NOT refused before the
+ *    attempt, on purpose: the attempt is what lets Chrome's per-site "Insecure content: Allow" reach a LAN server.
+ *    With the keyboard alone and with the mouse alone.
  * 4. Start to guide on a page served over http, Jellyfin and Emby: with the keyboard alone (Tab, Enter and typing) and
  *    with the mouse alone (clicks; text is filled in as an on-screen keyboard would).
  * 5. A saved login skips the start screen.
@@ -170,18 +171,15 @@ for (const size of SIZES) {
   }
 }
 
-// ── 3: before the attempt, hosted ──
-// Two plain-http addresses: one on a home network, one on the internet. The page says why and how to get round it
-// without trying: no request leaves for either, and the CONNECTING screen never shows.
+// ── 3: a plain-http address on the hosted page: blocked by the browser, explained by the page ──
+// Two addresses: one on a home network, one on the internet. The page's refusal is the existing one for each.
 const PLAIN = [
   { address: "http://192.168.1.10:8096", host: "192.168.1.10", reason: /address on your own network, which browsers block from this secure page/ },
   { address: "http://jellyfin.example.com:8096", host: "jellyfin.example.com", reason: /Browsers block a plain http:\/\/ server from this secure page/ },
 ];
-async function refusedBeforeAttempt(how, plain) {
+async function refusedAfterBlock(how, plain) {
   const ctx = await context({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
-  const sent = [];
-  page.on("request", (r) => { if (r.url().includes(plain.host)) sent.push(r.url()); });
   await page.goto(`${HOSTED_ORIGIN}/web-tuner.html`);
   await page.waitForSelector("#connect-btn", { state: "visible" });
   const label = `${how}, ${plain.host}`;
@@ -196,12 +194,6 @@ async function refusedBeforeAttempt(how, plain) {
     await page.click("#connect-jellyfin-btn");
   }
   await page.waitForSelector("#address-input", { state: "visible", timeout: 5000 });
-  // Record every screen that shows from here on.
-  await page.evaluate(() => {
-    window.__screens = [];
-    const seen = () => [...document.querySelectorAll("[data-screen]")].filter((el) => !el.hidden).map((el) => el.dataset.screen).join(",");
-    new MutationObserver(() => window.__screens.push(seen())).observe(document.getElementById("signin"), { attributes: true, subtree: true, attributeFilter: ["hidden"] });
-  });
   if (how === "keyboard") {
     await page.keyboard.type(plain.address);
     await page.keyboard.press("Enter");
@@ -213,13 +205,9 @@ async function refusedBeforeAttempt(how, plain) {
   const warn = await page.evaluate(() => { const w = document.getElementById("address-warn"); return w && !w.hidden ? w.textContent : ""; });
   check(`${label}: a plain-http address is refused, with the reason`, plain.reason.test(warn), JSON.stringify(warn));
   check(`${label}: and the way round, naming the tuner you run yourself`, /run the tuner on your own server/.test(warn) && /nostalgex\.app\/self-host/.test(warn), JSON.stringify(warn));
-  await page.waitForTimeout(600);
-  check(`${label}: no request was made to that address`, sent.length === 0, sent.join(", "));
-  const screens = await page.evaluate(() => window.__screens);
-  check(`${label}: the CONNECTING screen never showed, the address screen stayed`, screens.every((x) => !x.split(",").includes("checking")) && (await page.evaluate(() => document.querySelector("[data-screen='address']").hidden === false)), JSON.stringify(screens));
   await ctx.close();
 }
-for (const plain of PLAIN) for (const how of ["mouse", "keyboard"]) await refusedBeforeAttempt(how, plain);
+for (const plain of PLAIN) for (const how of ["mouse", "keyboard"]) await refusedAfterBlock(how, plain);
 
 // ── 4: start to guide, over http, Jellyfin and Emby ──
 async function toGuide(kind, how) {

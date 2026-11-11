@@ -238,10 +238,11 @@
           <button class="signin-btn signin-btn--secondary" id="connect-jellyfin-btn" type="button">JELLYFIN</button>
           <button class="signin-btn signin-btn--secondary" id="connect-emby-btn" type="button">EMBY</button>
           <!-- selfhost:strip:start -->
-          <!-- The hosted page is https, so a plain-http server cannot be reached from it. Said here, before the
-               attempt, with the way round it. The Docker tuner is served over http and can reach any address, so
-               it never carries this line (stripped from the self-host build; removed by the script on any http page). -->
-          <p class="signin-hint signin-https-note" id="picker-https-note">On this page Jellyfin and Emby need an https address. To use any address, <a href="/self-host">run the tuner yourself</a>.</p>
+          <!-- The hosted page is https, so a plain-http server cannot be reached from it. Said here, up front, with
+               the way round it. The Docker tuner is served over http and can reach any address, so
+               it never carries this line (stripped from the self-host build; removed by the script on any http page). Its
+               styling is inline for the same reason: a rule in the shared stylesheet would ship in Docker. -->
+          <p class="signin-hint" id="picker-https-note" style="margin: 10px 0 0; line-height: 1.5;">On this page Jellyfin and Emby need an https address. To use any address, <a href="/self-host" style="color: var(--sg-cyan); text-underline-offset: 4px;">run the tuner yourself</a>.</p>
           <!-- selfhost:strip:end -->
         </section>
 
@@ -727,11 +728,6 @@
     stopMedia();
     const run = flow.run;
     flow.origin = origin;
-    // A plain-http address typed on the https page: say so now, with the reason and the way round, before any
-    // attempt. The browser would block the request anyway.
-    if (pageInfo().protocol === 'https:' && S.blockedFromSecurePage(address)) {
-      return backToOrigin(S.checkErrorMessage({ code: 'network', url: String(address).trim() }, flow.kind, pageInfo()));
-    }
     $('checking-status').textContent = C.connecting(label);
     showScreen('checking', 'checking-cancel');
     let server;

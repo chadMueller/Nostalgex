@@ -8,16 +8,18 @@
  *     (SettingsView.swift) and the Roku (mediabrowser/SignInFlow.brs, NxSignInCopy) put on their first screen;
  *   - the https line sits inside a selfhost strip block: the hosted build keeps it, the self-host build (the Docker
  *     image) deletes it without a trace, and the script removes it on any http page;
- *   - none of it has an em dash.
+ *   - none of it has an em dash;
+ *   - nothing in the shared stylesheets is for the line (its styling is inline, inside the strip block), so the
+ *     Docker image's CSS has no trace of it either.
  * Build checks (`--builds`, after `npm run build` and `npm run build:selfhost`): dist/ carries the line, dist-selfhost/
- * does not, and both carry the headline and sentence.
+ * does not in any file (pages, scripts, CSS), and both carry the headline and sentence.
  *
  * Negative controls: a one-character change to the web's words, and a copy of the page with the line outside its strip
  * block, are both caught by the same checks.
  *
  * The page itself, at three sizes, is scripts/first-run-browser-smoke.mjs. Run: `npm run test:first-run`.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { applySelfhostMarkers, stripMarkerLines } from "./selfhost-build.mjs";
 
 const BUILDS = process.argv.includes("--builds");
@@ -53,13 +55,13 @@ check("negative control: one character changed on the web is caught", !sameWords
 check("negative control: the old web words are caught", !sameWords(web.replace(appleTitle, "Your library as live TV.")));
 
 // ── The https line ──
-const NOTE = /<p class="signin-hint signin-https-note" id="picker-https-note">([\s\S]*?)<\/p>/;
+const NOTE = /<p class="signin-hint" id="picker-https-note"[^>]*>([\s\S]*?)<\/p>/;
 const noteOf = (html) => NOTE.exec(html);
 const textOf = (inner) => inner.replace(/<[^>]*>/g, "");
 const note = noteOf(web);
 check("web-tuner.html has the https line", !!note);
 check("the line says what the limit is and how to get round it", !!note && /Jellyfin and Emby need an https address/.test(textOf(note[1])) && /run the tuner yourself/.test(textOf(note[1])), note ? textOf(note[1]) : "");
-check("the line links to the self-host page", !!note && /<a href="\/self-host">run the tuner yourself<\/a>/.test(note[1]));
+check("the line links to the self-host page", !!note && /<a href="\/self-host"[^>]*>run the tuner yourself<\/a>/.test(note[1]));
 check("the line is there once", (web.match(/id="picker-https-note"/g) || []).length === 1);
 
 const hosted = stripMarkerLines(web);
@@ -72,27 +74,15 @@ check("the script removes the line on an http page, where any address can be rea
 
 // negative control: the line outside its strip block would reach Docker.
 {
-  const leaky = web.replace(/[ \t]*<!-- selfhost:strip:start -->\r?\n([ \t]*<!-- The hosted page is https)/, "$1").replace(/(<p class="signin-hint signin-https-note"[^\n]*\n)[ \t]*<!-- selfhost:strip:end -->\r?\n/, "$1");
+  const leaky = web.replace(/[ \t]*<!-- selfhost:strip:start -->\r?\n([ \t]*<!-- The hosted page is https)/, "$1").replace(/(<p class="signin-hint" id="picker-https-note"[^\n]*\n)[ \t]*<!-- selfhost:strip:end -->\r?\n/, "$1");
   check("negative control: the line outside its strip block would reach the Docker page", leaky !== web && !!noteOf(applySelfhostMarkers(leaky, "leaky")));
 }
 
-// ── A plain-http address on the https page is refused before any attempt ──
-await import("./nostalgex-signin.js");
-const SI = globalThis.NostalgexSignIn;
-const blocked = {
-  "http://192.168.1.10:8096": true, "http://jellyfin.example.com:8096": true, "HTTP://x.y": true, "http://10.0.0.5": true,
-  "http://localhost:8096": false, "http://localhost": false, "http://localhost/jf": false, "http://127.0.0.1:8096/": false,
-  "http://127.0.0.1": false, "http://[::1]:8096": false, "http://user@localhost:8096": false,
-  "http://localhost.evil.com:80": true, "http://127.0.0.1.evil.com": true,
-  "https://x.y": false, "192.168.1.10:8096": false, "jellyfin.example.com": false, "": false,
-};
-const wrong = Object.entries(blocked).filter(([a, want]) => SI.blockedFromSecurePage(a) !== want).map(([a]) => a);
-check(`blockedFromSecurePage: ${Object.keys(blocked).length} addresses judged as expected (explicit http:// off this machine is blocked; this machine, https and no scheme are not)`, wrong.length === 0, wrong.join(", "));
-check("blockedFromSecurePage: nothing and null are not blocked", SI.blockedFromSecurePage(null) === false && SI.blockedFromSecurePage(undefined) === false);
-check("the refusal for a private address and for a public one differ and both name the self-host page",
-  SI.checkErrorMessage({ code: "network", url: "http://192.168.1.10:8096" }, "jellyfin", { protocol: "https:", online: true }) !== SI.checkErrorMessage({ code: "network", url: "http://jellyfin.example.com:8096" }, "jellyfin", { protocol: "https:", online: true })
-  && [SI.COPY.localFromSecure, SI.COPY.mixedContent].every((m) => m.includes("nostalgex.app/self-host")));
-check("the page asks before it tries: startCheck refuses a blocked address ahead of the fetch", /if \(pageInfo\(\)\.protocol === 'https:' && S\.blockedFromSecurePage\(address\)\) \{\s*return backToOrigin\([^;]*\);\s*\}\s*\$\('checking-status'\)/.test(web));
+// ── No stylesheet rule for the line: it would ship in Docker ──
+for (const css of ["tuner/signin.css", "tuner/connect.css", "tuner/fonts.css"]) {
+  check(`${css} has no rule for the https line`, !/https-note/.test(read(css)));
+}
+check("the line styles itself inline (margin, and the link's colour), inside the strip block", !!note && /style="[^"]*margin/.test(note[0]) && /<a href="\/self-host" style="[^"]*color/.test(note[1]));
 
 // ── Words ──
 const startScreen = (/<div class="connect-brand">[\s\S]*?<\/div>/.exec(web) || [""])[0] + (note ? note[0] : "");
@@ -106,6 +96,19 @@ if (BUILDS) {
   if (hostedBuilt) {
     check("dist/: the hosted page carries the line", !!noteOf(hostedBuilt));
     check("dist/: the headline and sentence are the Apple TV's", sameWords(hostedBuilt));
+  }
+  // Every text file the Docker image would serve: nothing of the line, in markup, script or CSS.
+  const treeRoot = new URL("../dist-selfhost/", import.meta.url);
+  if (existsSync(treeRoot)) {
+    const files = readdirSync(treeRoot, { recursive: true }).filter((f) => /\.(html|css|js|json|mjs|cjs)$/.test(f) && statSync(new URL(f, treeRoot)).isFile());
+    const MARKERS = ["picker-https-note", "signin-https-note", "run the tuner yourself", "On this page Jellyfin and Emby need an https address"];
+    const hits = [];
+    for (const f of files) {
+      const text = readFileSync(new URL(f, treeRoot), "utf8");
+      for (const m of MARKERS) if (text.includes(m)) hits.push(`${f}: ${m}`);
+    }
+    check(`dist-selfhost/: none of ${files.length} pages, scripts and stylesheets has any trace of the https line`, files.length > 10 && hits.length === 0, hits.slice(0, 4).join(" | "));
+    check("dist-selfhost/: that includes at least one stylesheet", files.some((f) => f.endsWith(".css")));
   }
   for (const name of ["web-tuner.html", "index.html"]) {
     const built = page("dist-selfhost", name);
