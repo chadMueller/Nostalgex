@@ -12,13 +12,13 @@ Commits carry the detail of *what*; this carries the *why*.
 - `MediaItem.serverToken` is no longer saved. It was written once per item into `library.json` and the kept scan sections (#288). It is `@Transient` now, `ServerTokens.fill` puts it back from the signed-in server with the item's address when `library.json` is read, and a kept section's items take their own server's token. `LibraryStore.FORMAT` is 8, so a copy saved by an older build, token included, is read again and overwritten on the first launch after the update. Playback code is unchanged: it still reads `item.serverToken`.
   - Measured on a Google TV emulator (API 34) against the Docker Jellyfin lab: after a full read, `library.json` had 5 items with their addresses, 0 `serverToken` keys and 0 copies of the token. Relaunched from it, the fill gave all 5 items the token (a throwaway log line, not committed), and the first channel direct-played in 1268 ms.
   - `ServerTokensTest`: the token is never written, an old copy's token isn't read back, and each item gets its own server's token, or none when no signed-in server has its address. 355 engine tests pass, and so do `:app:lintRelease` and `:app:assembleDebug`.
+  - Measured on a SHIELD (Android 11), the real install updated in place to a release build of this branch, signed in to a real Plex server that answers 401 to a request without a token. The first launch didn't use the saved format 7 copy: it read the server in full and saved format 8. Relaunched from that copy, the first channel direct-played (4K HEVC, E-AC-3) in 1910 ms, and tuning 40 channels by link started 20 programmes, all direct play, with no failure; the other 20 channel ids have no channel in that lineup.
 
 **Half-done.**
-- Not measured against Plex, which is where the token is actually used (direct play, the transcode, the audio pick, stopping the transcode, watch reporting); Jellyfin and Emby playback uses the signed-in server's own token. The lab Plex server was taken down. Plex items get their address from the same `server.url` the fill matches, so a Plex library opened from `library.json` should behave as the Jellyfin one did. The kept-section path (a first setup killed part way) wasn't exercised on a device.
-- No device build yet: the TV pass Chad asked for before the next Play upload is still to do.
+- No programme in those 20 went through the Plex server stream, so `/decision`, the audio pick and stopping a transcode were not exercised with a filled-in token. They read the same `item.serverToken` direct play does. The kept-section path (a first setup killed part way) wasn't exercised on a device.
 
 **Next.**
-- A TV pass on a SHIELD with a build from main plus this branch, signed in to Plex: open from the saved library and play a channel.
+- Chad's TV pass before the next Play upload: the SHIELD now runs this branch, so a server-stream title on Plex is the one check left.
 
 ## 2026-11-11 (Roku: WATERSHED's placeholder at 4.5:1 on a focused guide row, #301)
 
