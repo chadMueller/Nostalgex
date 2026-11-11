@@ -31,10 +31,17 @@
 '     (invalid) as a Plex server does. Upstream reads either as no libraries.
 
 ' The libraries list: /UserViews on Jellyfin; Emby (4.8 to 4.10) answers that
-' with 404 and has /Users/{id}/Views (scripts/nostalgex-jellyfin-urls.js).
-function NxMbViewsPath(kind as String, userId as String) as String
+' with 404 and has /Users/{id}/Views (scripts/nostalgex-jellyfin-urls.js,
+' userViewsPath). With includeHidden, Jellyfin is also asked for the
+' libraries the user hides from the home screen (#231,
+' source/mediabrowser/HiddenLibraries.brs); without it the request is the
+' one it always was. Emby's is the same either way: it lists them regardless.
+' The cases are the `views` of scripts/jellyfin-library-golden.json.
+function NxMbViewsPath(kind as String, userId as String, includeHidden = false as Boolean) as String
     if kind = "emby" then return "/Users/" + NxUrlEncode(userId) + "/Views"
-    return "/UserViews?userId=" + NxUrlEncode(userId)
+    path = "/UserViews?userId=" + NxUrlEncode(userId)
+    if includeHidden then path = path + "&includeHidden=true"
+    return path
 end function
 
 ' One page of items under a parent, with the fields the channel rules read.
@@ -343,7 +350,10 @@ end function
 
 ' A source's audio tracks as { index, language, channels, codec, isDefault },
 ' in the file's order, or invalid with fewer than two: one track is no
-' choice, and most files have one, so they keep nothing extra.
+' choice, and most files have one, so they keep nothing extra. A track the
+' server titles a commentary also carries commentary: true (#236,
+' NxIsCommentaryTitle): its Title, or the DisplayTitle the server builds from
+' it ("Commentary 1 - English - AAC - Stereo").
 function NxMbAudioTracks(src as Object) as Dynamic
     tracks = []
     for each s in NxList(src.MediaStreams)
@@ -353,6 +363,7 @@ function NxMbAudioTracks(src as Object) as Dynamic
                 if NxTruthy(s.Language) then t.language = LCase(NxToStr(s.Language))
                 if NxIsNumber(s.Channels) then t.channels = s.Channels
                 if NxTruthy(s.Codec) then t.codec = LCase(NxToStr(s.Codec))
+                if NxIsCommentaryTitle(s.Title) or NxIsCommentaryTitle(s.DisplayTitle) then t.commentary = true
                 tracks.Push(t)
             end if
         end if
@@ -538,8 +549,9 @@ end function
 ' `barCaption` as NxPlexScanServer's does. Returns invalid when the token
 ' was rejected or the libraries list failed. A scan told to stop waiting
 ' (NxLoadStopped) returns what it has read, as NxPlexScanServer's does.
-function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic) as Dynamic
-    viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId))
+' `includeHidden` is the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (#231).
+function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean) as Dynamic
+    viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId, includeHidden))
     if viewsAnswer = invalid then return invalid
     views = NxList(viewsAnswer.Items)
     musicGenre = CreateObject("roRegex", "music", "i")
@@ -627,5 +639,5 @@ function NxScanServerFor(server as Object, serverIndex as Integer, progress as D
     kind = NxServerKind(server)
     if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info)
     info.signature = invalid
-    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress)
+    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxIncludeHidden(NxHiddenLibrariesRegistry()))
 end function

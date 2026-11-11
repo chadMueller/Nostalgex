@@ -153,8 +153,7 @@ sub startSignIn()
     m.hint.text = ""
     m.signIn = CreateObject("roSGNode", "PlexSignInTask")
     m.signIn.ObserveField("status", "onSignInState")
-    ' Every 5 minutes the task fetches a fresh code while status stays "code",
-    ' so the code is watched on its own.
+    ' The code is watched on its own, apart from the status.
     m.signIn.ObserveField("code", "onSignInCode")
     m.signIn.control = "run"
 end sub

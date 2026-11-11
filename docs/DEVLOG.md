@@ -318,6 +318,124 @@ Large default for that class, which halves the visible rows, so it waits for Cha
 and Silkscreen are still in package.json.
 
 **Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
+
+**Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
+channels than the film's own track in the same language, and the pick goes by language, channels and default (#153).
+
+**Changed.** A track whose title holds "commentary", in any case, is dropped from the pool while the file has any
+other audio track, before any language or default step, as the Apple TV's `AudioTrackCommentary.skippingCommentary`
+(Chad on PR #245, stricter than the issue's wording). A file whose every track is a commentary picks among them as
+before. On Jellyfin and Emby the scan marks the track from the stream's `Title` or `DisplayTitle`
+(`NxMbAudioTracks`), and `NxMbChosenAudioIndex` and `NxMbPreferredAudioIndex` pick from `NxMbSkipCommentary`'s pool.
+That pick is the server stream's `AudioStreamIndex` and the direct play's track. On the player's own list (a Plex
+stream, a direct play that listed fewer tracks than the file has, and AUDIO LANGUAGE in the Now Playing panel)
+`NxAudioTrackForLanguage` and `NxAudioTrackToSelect` go by the track's `Name` (`NxListedSkipCommentary`); with only a
+commentary in the language they leave the player's own choice. The exact-language rules are as they were, and a file
+with no commentary picks as before.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose. The Apple TV's cases
+(`AudioTrackSelectionTests.swift`) aren't on main yet, so the Roku cases are its own.
+
+**Tested off the TV.** 29 new audio pick cases and 5 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**The first cut read "fits" by language** (`c699030`, the build the TV runs below used): a commentary alone in the
+viewer's language was still picked over a film track in another. Chad's rule replaced that, and six cases written
+for the first reading were turned round with it: an English commentary now loses to a Portuguese film track (three
+cases), a German commentary to an English film track, and on the player's list a commentary beside another track is
+never picked (two cases).
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of main `9b5292a` and of
+`c699030` (the first cut, above), with The Hills Have Eyes (1977): an HEVC MKV whose default track is English mono ("Original theatrical
+mono", index 2) beside three English stereo commentaries (3 to 5). Item-linked, the pick read from the console and
+from Jellyfin's ffmpeg log, where the mono is stream 0:1 and the first commentary 0:2. Volume at zero: nothing was
+listened to.
+
+| | main `9b5292a` | `c699030` |
+|---|---|---|
+| Direct play (STREAM QUALITY Auto) | `audio track 3 of 2=eng 3=eng 4=eng 5=eng, was 2`: switched to a commentary | `audio track 2 of 2=eng 3=eng 4=eng 5=eng, was 2`: stays on the film's track |
+| Server stream (STREAM QUALITY High) | ffmpeg `-map 0:0 -map 0:2`: a commentary | ffmpeg `-map 0:0 -map 0:1`: the film's track |
+
+On `c699030` Videodrome (English mono, German stereo, two English stereo commentaries) direct-played on track 2 of
+`2=eng 3=ger 4=eng 5=eng`. It was not run on main. In that library 143 films have a track titled commentary, and by
+the server's track lists main's pick is a commentary on these two.
+
+**Open.** Not run on a TV: a film whose only English track is a commentary, Emby, a Plex stream, and whether a
+Roku's `availableAudioTracks` names a commentary by its title (both direct plays went by position).
+
+## 2026-11-10 (Roku: the Plex link code is waited for as long as plex.tv keeps it, #240)
+
+**Why.** The code on screen gave up after 150 polls, 5 minutes, while plex.tv keeps a code for 15 (`expiresIn: 900`,
+measured for the Apple TV, N-007). A viewer who took longer to reach plex.tv/link entered a code the TV had already
+dropped.
+
+**Changed.** `NxPlexCreatePin` keeps the PIN's `expiresIn`, and the wait goes by the clock (`NxPlexPinWait` in
+`source/mediabrowser/SignInFlow.brs`): a poll every 2 s until `expiresIn` seconds have passed, 300 when plex.tv
+doesn't say and never more than 1,800, as the Apple TV. A 404 from the PIN check still ends it on that poll, and both
+ends show the same "The code expired. Press CONNECT TO PLEX for a new one." A poll that couldn't reach plex.tv is not
+an answer and waits on, as before. Jellyfin's Quick Connect keeps its 150 polls.
+
+**Tested off the TV.** 17 new cases in the sign-in flow suite, the wait run against a faked plex.tv and a faked clock:
+a code entered after 10 minutes signs in, one never entered expires at 900 s, a PIN dropped at 40 s stops the wait on
+that poll with nothing asked after it, no `expiresIn` waits 300 s, a day-long one stops at 1,800 s, and slow polls
+still end by the clock.
+
+**Pressed** on the 43S45 (OS 16.0.4), a test-data build of `dd17385`, signed out, CONNECT TO PLEX, the code left
+unentered:
+- The console said `waiting up to 900 s for the code (plex.tv keeps it 900 s)`.
+- 6 min 4 s in, past where 150 polls gave up, the code was still on screen.
+- 899 s in, plex.tv answered the PIN check 404 and the wait ended on that poll: `the code expired after 899 s
+  (439 polls)`. So on a real code the 404 ended it, a second before the clock would have.
+- The screen did not change then. It showed "The code expired. Press CONNECT TO PLEX for a new one." on the first
+  page 4 min 29 s later, the moment a key was pressed.
+
+**Why the screen waited for a key: the TV's screensaver, by inference.** This TV's screensaver starts 10 minutes
+after the last key (measured afterwards: last key 12:22:47, Roku City up between 12:32:45 and 12:32:54), so it was
+up from about 10 minutes into the wait. The sign-in task went on polling under it (439 polls in 899 s), and its
+answer reached the screen only when the key woke the TV. The screensaver was not looked at during the wait itself.
+So with a 15 minute wait the screensaver covers the code for its last 5 minutes on this TV, which a 5 minute wait
+never reached. The loading screen holds the screensaver off (`LoadingView.xml`); the code screen does not.
+
+**Open.** A code entered late (after 5 minutes) on a TV, a stick, and whether the code screen should hold the
+screensaver off.
+
+## 2026-11-10 (Roku: INCLUDE LIBRARIES HIDDEN ON JELLYFIN, off by default, #231)
+
+**Why.** A Jellyfin user can hide a library from the home screen, and `/UserViews` leaves it out unless asked with
+`includeHidden=true`, so the Roku scan never read it. The web tuner (1.0.15) and the Apple TV already ask.
+
+**Changed.** `NxMbViewsPath` takes the switch and adds `&includeHidden=true` for Jellyfin only; off, the request is
+byte for byte what it was, and Emby's never changes. The switch is `source/mediabrowser/HiddenLibraries.brs`, off
+unless turned on, in the registry's `player` section. The row INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's
+line, is on SERVERS & ACCOUNTS between the servers and RESCAN LIBRARY, on a Jellyfin sign-in only. A press saves the
+switch and reads the library again in the background, as RESCAN LIBRARY does; while a load runs the row reads
+UPDATING… and a press does nothing, so no load is ever for the other position.
+
+**A library saved with the other position.** Read from the code, not run: if the app closes before the re-read ends,
+the next launch shows the saved guide, and its background refresh scans Jellyfin again (a Jellyfin library is scanned
+on every load) with the switch as it now is.
+
+**Tested off the TV.** The golden file's nine `views` cases are read with its `sections` and `types`. A
+`hidden-libraries` suite, 19 cases: the switch on a stand-in registry, and a scan against a stub that lists two hidden
+libraries only with `includeHidden=true` and never lists a third. On, the hidden films and episodes are scanned; off,
+none is and no hidden library is asked for items; the unlisted library is never asked. With the parameter taken out,
+3 of the 19 and 3 of the golden cases fail.
+
+**Pressed** on the 55R617 (OS 15.3.4), a test-data build of `b72d36f`, against the lab Jellyfin 12.2.0 as a user
+who hides Shows (4,755 episodes) from the home screen and has no access to Lab Music Videos (4 items):
+- Signed in to the lab Emby first, SERVERS & ACCOUNTS had no such row: the server, RESCAN LIBRARY, SIGN OUT OF EMBY.
+- On Jellyfin the row is between the server and RESCAN LIBRARY and read OFF. The load read 834 items and built a
+  guide of 11 channels (the server counts 836 in the two libraries it listed; the scan kept 834).
+- OK on the row: it read UPDATING…, then ON. The re-read had 5,589 items 17.5 s after the press, 4,755 more, and
+  its guide of 17 channels was handed over 28.7 s after the press with no retune of the channel playing.
+- OK again: OFF, 834 items and the same pools fingerprint as before the switch.
+- Nothing of Lab Music Videos was read in either position: 4,755 is Shows alone.
+
+The row's words and states were read from the node tree (port 8080), not a screenshot.
+
+**Open.** A stick. Not looked at: the row as drawn (no screenshot), a hidden library's title on a channel on screen
+(the counts and the six more channels stand in), the request on the wire, a press while a load runs (ignored, by the
+code), and the app closed before the re-read ends.
 
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
