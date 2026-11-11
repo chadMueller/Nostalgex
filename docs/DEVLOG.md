@@ -34,14 +34,14 @@ gated, and on again Saga read ON. That round showed Saga's CH 310 on its gated r
 
 **Why.** When the enrichment cache comes back, `refilterChannelsWithEnrichment()` ran the shared channel filter over
 every title for every rules channel in one synchronous pass, so the page answered nothing until it ended. The Apple
-TV had the same freeze and moved it off the main thread in 1.0.32; a browser has no thread to move it to that shares
-the page's data (a Web Worker would copy all 10,700 titles each way), so this runs the same filter in slices and
-gives the page back between them.
+TV had the same freeze; on the 1.0.32 branch (not yet on main) it is moved off the main thread. A browser has no
+thread that shares the page's data (a Web Worker would copy all 10,700 titles each way), so this runs the same filter
+in slices and gives the page back between them.
 
 **Measured before, on origin/main.** A 10,700-title stub Plex, a stub enrichment service holding a row for every
 title, headless Chromium, no CPU throttling, the tuner started cold and then restarted with the cache filled:
-- All 14 bundles on: one task of 4.9 s cold and 5.0 s on the restarted launch, 40 channels changed.
-- Default bundle only: one task of 1.8 s cold and 0.58 s on the restarted launch.
+- All 14 bundles on: one task of 4.8 to 4.9 s cold and 4.8 to 5.0 s on the restarted launch, 40 channels changed.
+- Default bundle only: one task of 1.8 s cold and 0.56 to 0.58 s on the restarted launch.
 - CPU slowed 4 times, as a rough Google TV: one task of 21 to 22 s with all bundles on.
 
 **Changed.**
@@ -52,35 +52,63 @@ title, headless Chromium, no CPU throttling, the tuner started cold and then res
 - `plex-tuner.html`: `refilterChannelsWithEnrichment()` is async and runs in two steps. Step one filters every
   channel in slices and writes nothing, so the guide keeps the pools it has. Step two writes the pools that moved
   together, then rebuilds their schedules in the same order as before (each schedule is packed against the whole
-  lineup, so every pool is in before the first is built), giving the page back between schedules. A newer refilter,
-  a replaced library or a sign-out stops step one. Once step two has begun it finishes, because a channel with a
-  new pool and an old schedule would otherwise stay that way: the newer refilter would find the pool already right.
+  lineup, so every pool is in before the first is built), giving the page back between schedules.
+- What stops it. A newer refilter, a new library (`libraryExtrasGeneration`) or a sign-out stops step one, and stops
+  step two the next time it gives the page back, so a library the account has left is not worked on and its
+  franchises are not put back. A newer refilter alone does not stop step two once it has begun: a channel with a new
+  pool and an old schedule would stay that way, because the newer one would find its pool already right.
+- The library's array being replaced by a copy of itself while it runs is not a stop. MusicBrainz display metadata
+  replaces `allItemsCache` after tune-in (`itemsWithDisplayMetadata`), which is the same library, so the refilter runs
+  again on the new array, three tries at most (as the Apple TV's off-main refilter does) and says so in the console if
+  it gives up. Without this, a restarted launch with a full cache and the music bundle on lost the pools made from
+  enrichment for the session whenever MusicBrainz finished while the refilter was working. A first version of this
+  change had that bug; review found it.
 - The yield is a message to itself, not `scheduler.yield()`. With `scheduler.yield()` the pass answered input and
   drew frames but ran no timer at all until it was done (0 timer beats in 22 s on the slowed CPU), and the player's
   retries and the guide's clock are timers. With a message, timers run through it.
 
-**Measured after, same harness.** Same page, same stubs:
+**Measured after, same harness, against a fresh run of origin/main (c2d585dc).**
 - Which title is on which channel did not change. All 142 channels hold the same titles, in the same order, with the
-  same on and off, as origin/main, for default bundles and for all 14, cold and restarted; the guide's lineup and
-  the count of enriched titles are the same. Two runs of origin/main agree with each other byte for byte, so the
+  same on and off, as origin/main, for default bundles and for all 14, cold and restarted; the guide's lineup and the
+  count of enriched titles are the same. Two runs of origin/main agree with each other byte for byte, so the
   comparison is not noise. In the page, the new filter and the old one-pass filter return the same rows (members,
   order and how each got in) on all 142 channels.
-- No long task over 50 ms inside the refilter at normal speed, all bundles or default. The longest wait for a 4 ms
-  timer while it ran was 44 to 52 ms (measured while the machine was busy), against 4.9 s.
-- With the CPU slowed 4 times: no wait over 133 ms between timers and no long task over 121 ms, against one 21 to
-  22 s task. The tasks that remain inside the refilter are the franchise pass after the schedules, about 110 ms there.
-- It takes longer in total, because the page now does its own work between slices: 6.5 s against 5.0 s with all
-  bundles on at normal speed, 34 to 35 s against 21 to 22 s at 4 times slower, and 0.62 s against 0.58 s for the
+- No long task over 50 ms inside the refilter at normal speed, all bundles or default. The page waited at most 44 to
+  63 ms for a 4 ms timer while it ran in my runs and 153 ms in the reviewer's, so read it as about 150 ms at most;
+  it moves with load. Before, the page waited 4.8 s.
+- With the CPU slowed 4 times, in an earlier run: no wait over 133 ms between timers and no long task over 121 ms,
+  against one 21 to 22 s task. The tasks that remain inside the refilter are the franchise pass after the schedules,
+  about 110 ms there.
+- It takes longer in total, because the page now does its own work between slices: 6.4 to 6.6 s against 4.8 s with all
+  bundles on at normal speed, 34 to 35 s against 21 to 22 s at 4 times slower, and 0.64 s against 0.56 s for the
   default restarted launch. In Node the sliced pass costs the same as one pass (4.7 s against 4.8 to 5.1 s for all
   142 channels), so the difference is the page being alive, not the slicing.
 
-**Tested.** `npm run test:sliced-filter` (in `npm test`): sliced against whole-library `filterPool` on all 142 rules
-channels, Plex and Emby, block sizes 1 to 100,000, a give-back after every block, plus the clock, the slice
-budget, cancellation and two negative controls (blocks joined in the wrong order or short by one are not equal).
-`npm run test:refilter:browser` is the real-browser run behind the numbers above (needs Playwright; `OUT=` writes the
-fingerprint of one tree and `COMPARE=` checks another against it). `npm test`, both builds and
-`test:tuner-version:builds` pass; the library-coverage, franchise-channels, library-refresh and cache-restore-crash
-browser smokes pass.
+**Tested (all run).**
+- `npm run test:sliced-filter` (in `npm test`, 22 checks): sliced against whole-library `filterPool` on all 142 rules
+  channels, Plex and Emby, block sizes 1 to 100,000, a give-back after every block, plus the clock, the slice
+  budget, cancellation and two negative controls (blocks joined in the wrong order or short by one are not equal).
+- `npm run test:refilter:browser` (28 checks, needs Playwright; `OUT=` writes the fingerprint of one tree and
+  `COMPARE=` checks another against it), passed with default bundles and with all 14 against a fresh origin/main.
+  It also interrupts the refilter: two overlapping calls; the array replaced by a copy of itself (it runs again and
+  writes the same members from the new array's rows); replaced on every try (it gives up after three and writes
+  nothing); a new library during step one; and a real `signOut()` fired after step two's first give-back (it builds no
+  more schedules, runs no franchise pass and puts no franchises back). Run against the previous commit of this
+  branch, the retry cases and the step-two sign-out case fail (that commit built 4 more schedules and put all 40
+  franchises back after the sign-out), so they do test what they say.
+- `npm test`, both builds and `test:tuner-version:builds` pass. The library-coverage, franchise-channels and
+  cache-restore-crash browser smokes pass. The library-refresh browser smoke failed once with a closed-page error
+  under heavy machine load and passed 3 of 3 on rerun; it runs with no enrichment configured, so the refilter does
+  not run in it.
+
+**Not verified.**
+- MusicBrainz itself: the music bundle case replaces the array the way `itemsWithDisplayMetadata` does, in a stub; it
+  was not run against the real MusicBrainz service or with a real music-video library.
+- Firefox, WebKit and real TV browsers: only Chromium, with the CPU slowed to stand in for a TV. The yield by message
+  and the timer behaviour were not checked elsewhere.
+- Schedules were not fingerprinted: pools (members, order, on and off) and the guide's lineup were compared, not the
+  schedules built from them.
+- The step-two sign-out and library-change handling had no test until this change.
 
 **Not changed.** Which titles land on which channel, the rule thresholds, the engine and its goldens, the Apple TV,
 Roku. Two things the harness showed that are not new: with all 14 bundles, 8 pools keep an older `poolVia` label
@@ -88,10 +116,10 @@ when enrichment leaves their members alone (the refilter keeps a pool whose memb
 order always match a fresh filter), and the first library build after a scan is its own 0.8 s task at normal speed,
 which this does not touch.
 
-**Half-done.** Branch `web/launch-refilter-yield`, committed, not pushed. It needs a review before it goes to main
-(a push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag). Not measured on a
-real TV browser, only on a slowed CPU. The first library build's 0.8 s task and the franchise pass's 110 ms at 4
-times slower would be the next two to slice.
+**Half-done.** Branch `web/launch-refilter-yield`, committed, not pushed. It needs a review of the retry and
+sign-out changes before it goes to main (a push to main deploys the hosted tuner; the Docker image takes it at the
+next `tuner-v` tag). The first library build's 0.8 s task and the franchise pass's 110 ms at 4 times slower would be
+the next two to slice.
 
 ## 2026-11-11 (Roku: #228's review follow-ups, #227)
 

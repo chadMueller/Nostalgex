@@ -309,30 +309,95 @@ if (process.env.COMPARE) {
   }
 }
 
-// A refilter that is overtaken, or outlived by its library, stops without writing (the branch's refilter is async;
-// origin/main's is one synchronous pass, so these only run where there is a sliced filter to interrupt).
+// What interrupts a refilter, and what it does about it (the branch's refilter is async; origin/main's is one synchronous
+// pass, so these only run where there is a sliced filter to interrupt). Each case starts from a few channels whose pools
+// have been cut back, so the refilter has real work in both steps: it finds them changed and writes them back.
 const conc = await page.evaluate(async () => {
   if (typeof filterItemsSliced !== "function") return null;
+  const fnv = (a) => { const t = a.slice().sort().join(","); let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; };
+  const keysOf = (ch) => rulePoolOf(ch).map((it) => String(it.ratingKey));
   const snap = () => JSON.stringify(allChannelsUnfiltered.map((ch) => [ch.id, (ch.itemPool || []).length, !!ch.enabled]));
+  const victims = allChannelsUnfiltered.filter((ch) => !isRuntimeChannel(ch) && ch.rules && rulePoolOf(ch).length >= 100).slice(0, 5);
+  const want = victims.map((ch) => [ch.id, fnv(keysOf(ch))]);
+  const cutBack = () => victims.forEach((ch) => setRulePool(ch, rulePoolOf(ch).slice(0, Math.ceil(rulePoolOf(ch).length * 0.8))));
+  const restored = () => victims.every((ch, i) => fnv(keysOf(ch)) === want[i][1]);
+  const out = { victims: victims.length, franchisesBefore: foundFranchises.length };
+
+  // 1. Two overlapping refilters: the older one stops without writing, the newer one answers. Nothing to change.
   const was = snap();
   const first = refilterChannelsWithEnrichment();
   const second = refilterChannelsWithEnrichment();
   const [r1, r2] = await Promise.all([first, second]);
-  const afterTwo = snap();
+  Object.assign(out, { r1, r2, unchangedByTwo: was === snap() });
+
+  // 2. The library's array is replaced by a copy of itself while the refilter works, as MusicBrainz display metadata
+  //    does after tune-in (itemsWithDisplayMetadata). The same library, so the refilter runs again on the new array and
+  //    writes the pools back from its rows: the same members, and rows that carry what the new array carries.
+  cutBack();
+  let attempts = 0;
+  const EN = globalThis.NostalgexEnrichment, attach = EN.attach;
+  EN.attach = (...a) => { attempts++; return attach.apply(EN, a); };
   const third = refilterChannelsWithEnrichment();
-  allItemsCache = allItemsCache.slice();                 // a newer library replaces the one it is reading
+  allItemsCache = allItemsCache.map((it) => ({ ...it, nxDisplay: 1 }));
   const r3 = await third;
-  const afterReplace = snap();
-  const fourth = refilterChannelsWithEnrichment();
-  signOut();                                             // the account goes while it is working
-  const r4 = await fourth;
-  return { r1, r2, r3, r4, unchangedByTwo: was === afterTwo, unchangedByReplace: afterTwo === afterReplace };
+  Object.assign(out, { r3, attempts3: attempts, restored3: restored(), rowsFromNewArray: victims.every((ch) => rulePoolOf(ch).length > 0 && rulePoolOf(ch).every((it) => it.nxDisplay === 1)) });
+
+  // 3. Replaced again on every try: it gives up after three and writes nothing.
+  cutBack();
+  const cut = snap();
+  attempts = 0;
+  EN.attach = (...a) => { attempts++; const r = attach.apply(EN, a); queueMicrotask(() => { allItemsCache = allItemsCache.map((it) => ({ ...it })); }); return r; };
+  const r4 = await refilterChannelsWithEnrichment();
+  Object.assign(out, { r4, attempts4: attempts, unwrittenAfterGiveUp: cut === snap() });
+  EN.attach = attach;
+
+  // 4. A new library (the extras generation moves) while step one works: it stops for good and writes nothing.
+  const fifth = refilterChannelsWithEnrichment();
+  libraryExtrasGeneration++;
+  allItemsCache = allItemsCache.slice();
+  const r5 = await fifth;
+  Object.assign(out, { r5, unwrittenAfterNewLibrary: cut === snap() });
+
+  // 5. Settle the pools again, then sign out while step two is giving the page back between schedules. Its first
+  //    schedule takes long enough to use up the slice, and the sign-out lands in the microtask after the give-back
+  //    begins, before the refilter resumes. It must not build the next schedule or put the franchises back.
+  cutBack();
+  await refilterChannelsWithEnrichment();
+  out.restored5 = restored();
+  cutBack();
+  const build = buildChannelSchedule, dyn = refreshDynamicChannels, apply = applyBundleFilter;
+  // signOut() rebuilds schedules itself, and the page's own once-a-second tick rebuilds them while step one runs, so
+  // the trap is armed by step two itself (it calls applyBundleFilter just before its schedule loop) and the builds
+  // made inside signOut() are left out of the count.
+  let armed = false, trapped = false, signedOut = false, inSignOut = false, buildsAfter = 0, dynAfter = 0;
+  applyBundleFilter = function (...a) { if (!trapped) armed = true; return apply.apply(this, a); };
+  buildChannelSchedule = function (...a) {
+    if (signedOut && !inSignOut) buildsAfter++;
+    if (armed && !trapped) {
+      trapped = true;
+      const t = performance.now(); while (performance.now() - t < 20) { /* use the slice up */ }
+      queueMicrotask(() => { signedOut = true; inSignOut = true; try { signOut(); } finally { inSignOut = false; } });
+    }
+    return build.apply(this, a);
+  };
+  refreshDynamicChannels = function (...a) { if (signedOut) dynAfter++; return dyn.apply(this, a); };
+  const r6 = await refilterChannelsWithEnrichment();
+  buildChannelSchedule = build; refreshDynamicChannels = dyn; applyBundleFilter = apply;
+  Object.assign(out, { r6, trapped, buildsAfter, dynAfter, signedOut, franchisesAfter: foundFranchises.length });
+  return out;
 });
 if (conc) {
-  check("a refilter overtaken by a newer one stops without writing", conc.r1 === null && typeof conc.r2 === "number", JSON.stringify(conc));
+  console.log(`MEASURE interrupts: ${JSON.stringify(conc)}`);
+  check("the interrupt cases start from channels with real work (5 pools cut back) and franchises found", conc.victims === 5 && conc.franchisesBefore > 0, JSON.stringify({ victims: conc.victims, franchises: conc.franchisesBefore }));
+  check("a refilter overtaken by a newer one stops without writing", conc.r1 === null && typeof conc.r2 === "number", JSON.stringify({ r1: conc.r1, r2: conc.r2 }));
   check("two overlapping refilters over unchanged data leave every pool as it was", conc.unchangedByTwo);
-  check("a refilter whose library was replaced stops and writes nothing", conc.r3 === null && conc.unchangedByReplace, JSON.stringify(conc));
-  check("a refilter running when the account signs out stops", conc.r4 === null, JSON.stringify(conc));
+  check("the library's array replaced by a copy (MusicBrainz display metadata): it runs again and answers", typeof conc.r3 === "number" && conc.attempts3 === 2, JSON.stringify({ r3: conc.r3, attempts: conc.attempts3 }));
+  check("and the pools come back with the same members, from the rows of the new array", conc.restored3 && conc.rowsFromNewArray, JSON.stringify({ restored: conc.restored3, rows: conc.rowsFromNewArray }));
+  check("replaced on every try: it gives up after three tries and writes nothing", conc.r4 === null && conc.attempts4 === 3 && conc.unwrittenAfterGiveUp, JSON.stringify({ r4: conc.r4, attempts: conc.attempts4, unwritten: conc.unwrittenAfterGiveUp }));
+  check("and says so in the console", logs.some((l) => /Refilter gave up/.test(l)), logs.join(" | ").slice(0, 200));
+  check("a new library while step one works stops it for good and writes nothing", conc.r5 === null && conc.unwrittenAfterNewLibrary, JSON.stringify({ r5: conc.r5 }));
+  check("a refilter settles pools that were cut back (the sign-out case's starting point)", conc.restored5);
+  check("a sign-out after step two's first give-back stops it: null, no schedule built after, no franchise pass after, no franchises put back", conc.trapped && conc.signedOut && conc.r6 === null && conc.buildsAfter === 0 && conc.dynAfter === 0 && conc.franchisesAfter === 0, JSON.stringify({ r6: conc.r6, trapped: conc.trapped, buildsAfter: conc.buildsAfter, dynAfter: conc.dynAfter, franchises: conc.franchisesAfter }));
   check("no page errors after those", errors.length === 0, errors.join(" | "));
 }
 
