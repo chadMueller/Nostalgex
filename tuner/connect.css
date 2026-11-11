@@ -492,6 +492,9 @@ a { color: inherit; }
 
 /* A simple start screen: one screen, no scrolling. A quiet header and footer. */
 .page-connect { min-height: 100vh; }
+/* The TV-browser steps above zoom this page, and zoom scales vh: the height is sized back up here, after the line above that would undo it. */
+@media (pointer: fine) and (orientation: landscape) and (max-width: 1280px) and (max-height: 720px) { .page-connect { min-height: calc(100vh / 0.875); } }
+@media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) { .page-connect { min-height: calc(100vh / 0.6667); } }
 .page-connect .connect-main { padding: 16px 0; }
 .page-connect .connect-title { font-size: clamp(22px, 2.6vw, 40px); white-space: nowrap; margin-bottom: 12px; }
 .page-connect .connect-lede { font-size: max(18px, var(--nx-fs)); margin: 0; max-width: 40ch; }
