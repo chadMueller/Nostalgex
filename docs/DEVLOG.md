@@ -121,6 +121,51 @@ sign-out changes before it goes to main (a push to main deploys the hosted tuner
 next `tuner-v` tag). The first library build's 0.8 s task and the franchise pass's 110 ms at 4 times slower would be
 the next two to slice.
 
+## 2026-11-11 (Web tuner: the start screen says what the Apple TV and the Roku say, and the hosted page says its https limit up front, #254)
+
+**Why.** #254 asked that someone opening the web tuner with no saved login understands in one screen what it does and
+what they need, with no dead ends. Most of that was already in place since 1.0.17: the start screen fits one screen at
+1280x800, 960x540 and on a phone, the steps after connecting use the Apple TV's words, a saved login skips the start
+screen, and no channels ends on NO CHANNELS FOUND with an OPEN SETTINGS button. Three things were left, and all three
+were decided in favour of matching the other apps.
+
+**Changed.**
+- `web-tuner.html`: the headline and the one sentence are the Apple TV's and the Roku's, word for word: CONNECT YOUR
+  SERVER, and "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get
+  started." They replaced two web-only lines.
+- `web-tuner.html`, `tuner/signin.css`: one quiet line under the three choices on the hosted page: "On this page
+  Jellyfin and Emby need an https address. To use any address, run the tuner yourself." The last words link to the
+  self-host page. It sits inside a `selfhost:strip` block with the script line that removes it on an http page, so the
+  Docker image carries no trace of it (it can reach any address, so the line would be untrue there).
+- `web-tuner.html`, `scripts/nostalgex-signin.js`: a plain-http address typed on the https page is now refused before
+  any attempt. Before, the page called `fetch` on it, the browser blocked the request, and only then did the page
+  explain; the CONNECTING screen showed in between. `blockedFromSecurePage` judges only an address typed with
+  `http://` that is not on this machine: `localhost`, `127.x` and `::1` are let through by browsers and are still
+  tried, and an address with no scheme is tried as https first. The wording is the existing one (a home-network address
+  and a public one each have their own line, both name the self-host page).
+- No hint on the first guide. The Apple TV and the Roku have none; the guide has clickable UP and DOWN buttons and
+  Settings has a KEYBOARD page.
+
+**Tested.**
+- `npm run test:first-run` (in `npm test`): the web headline and sentence equal the ones read from the Apple TV's
+  `SettingsView.swift` and the Roku's `SignInFlow.brs`; the line is in the hosted build and gone from the self-host
+  build; the address table (17 cases, look-alikes such as `localhost.evil.com` stay blocked); no em dashes.
+  `npm run test:first-run:builds` checks `dist/` and `dist-selfhost/` and runs in CI after both builds.
+- `npm run test:first-run:browser` (needs Playwright), 111 checks: at 1280x800, 960x540 at DPR 2 and 390x844, hosted
+  (served from an https address) and over http: the words, the three choices, nothing scrolls at the two wide sizes,
+  nothing runs off the side on the phone, the line there on the hosted page inside the screen and absent over http;
+  two plain-http addresses refused with no request sent and no CONNECTING screen, by keyboard and by mouse; start to
+  a guide on Jellyfin and on Emby by keyboard alone and by mouse alone; a saved login skipping the start screen.
+  Run against `dist-selfhost/` the same file passes with no https line at any size. Against origin/main it fails 38
+  checks (the old words, no line, a request sent and the CONNECTING screen shown), so the checks do bite.
+- `npm test` and both builds pass.
+
+**Not changed.** Plex's own sign-in (plex.tv is outside the harness; the run checks that CONNECT TO PLEX answers),
+the Apple TV and the Roku, the engine. The https line is web-only by design.
+
+**Half-done.** Branch `web/first-run-start-screen`, committed, not pushed. It needs a review before it goes to main (a
+push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).
+
 ## 2026-11-11 (Roku: #228's review follow-ups, #227)
 
 **Why.** Chad's merge note on #228 (tydude001): time `pushMissing`, which runs on every Settings visit and parses

@@ -221,8 +221,8 @@
            the three choices on the right. What the tuner is and how it connects lives on the site. -->
       <div class="connect-brand">
       <img class="connect-logo" src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
-      <h1 class="connect-title">Your library as live TV.</h1>
-      <p class="connect-lede">Plays your own Plex, Jellyfin or Emby library as live channels.</p>
+      <h1 class="connect-title">CONNECT YOUR SERVER</h1>
+      <p class="connect-lede">Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get started.</p>
       </div>
 
       <!-- The sign-in, screen by screen, as on Apple TV (nostalgex-internal SIGNIN-FLOW.md).
@@ -237,6 +237,12 @@
           <p class="signin-or">OR CONNECT WITH</p>
           <button class="signin-btn signin-btn--secondary" id="connect-jellyfin-btn" type="button">JELLYFIN</button>
           <button class="signin-btn signin-btn--secondary" id="connect-emby-btn" type="button">EMBY</button>
+          <!-- selfhost:strip:start -->
+          <!-- The hosted page is https, so a plain-http server cannot be reached from it. Said here, before the
+               attempt, with the way round it. The Docker tuner is served over http and can reach any address, so
+               it never carries this line (stripped from the self-host build; removed by the script on any http page). -->
+          <p class="signin-hint signin-https-note" id="picker-https-note">On this page Jellyfin and Emby need an https address. To use any address, <a href="/self-host">run the tuner yourself</a>.</p>
+          <!-- selfhost:strip:end -->
         </section>
 
         <!-- 2. Plex code -->
@@ -606,6 +612,10 @@
   // network, so only there is there a FIND MY SERVER (scripts/nostalgex-signin.js, 1 to 3).
   // The hosted page opens on TYPE AN ADDRESS and defaults a typed address to https.
   const CAN_FIND = location.protocol === 'http:';
+  // selfhost:strip:start
+  // An http page reaches any address, so the hosted page's https line would be untrue there.
+  if (CAN_FIND && $('picker-https-note')) $('picker-https-note').remove();
+  // selfhost:strip:end
   const DEFAULT_SCHEME = location.protocol === 'https:' ? 'https' : 'http';
   const KIND_NAME = { jellyfin: 'JELLYFIN', emby: 'EMBY' };
   // run: bumped whenever the viewer leaves a step, so a late answer from it is ignored.
@@ -717,6 +727,11 @@
     stopMedia();
     const run = flow.run;
     flow.origin = origin;
+    // A plain-http address typed on the https page: say so now, with the reason and the way round, before any
+    // attempt. The browser would block the request anyway.
+    if (pageInfo().protocol === 'https:' && S.blockedFromSecurePage(address)) {
+      return backToOrigin(S.checkErrorMessage({ code: 'network', url: String(address).trim() }, flow.kind, pageInfo()));
+    }
     $('checking-status').textContent = C.connecting(label);
     showScreen('checking', 'checking-cancel');
     let server;

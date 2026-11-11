@@ -94,6 +94,9 @@
 }
 .signin-warn { font-size: max(14px, var(--nx-fs)); line-height: 1.5; color: var(--sg-warn); }
 .signin-hint { margin: -6px 0 0 4px; font-size: max(13px, var(--nx-fs)); text-align: left; color: rgba(255, 255, 255, 0.55); }
+/* The hosted page's one line about the https limit, under the three choices. */
+.signin-https-note { margin: 10px 0 0; line-height: 1.5; }
+.signin-https-note a { color: var(--sg-cyan); text-underline-offset: 4px; }
 
 /* Waiting lines: ".", "..", "..." every half second. */
 .signin-dots::after {
