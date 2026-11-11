@@ -3,6 +3,10 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: rebased onto main)
+
+**Changed.** `feature/android` rebased onto main at `c822b507`. The only conflicts were dev log entries at the top of this file; both sides are kept. Nothing on main touched `android/`, and all 292 engine tests pass. The 2026-11-10 entry said the Apple TV doesn't ask Plex's decision before a server stream; it does, and that line is corrected.
+
 ## 2026-11-10 (Android: build 5)
 
 **Shipped.** `versionCode` 5, `versionName` 1.0.0, for the internal track: every open Android parity issue in one build, as Chad asked. Not uploaded from here; Chad makes the release.
@@ -60,7 +64,7 @@ Every failed attempt fell back within the track check, about a second; none wait
 - The app never asked one, before this change or after, so flipping back to a channel whose film was on the server stream showed "Your server wouldn't start this one".
 - Reproduced with curl and the old request: the first start 200, repeats 400 at 1 s, 60 s and 120 s, with one 200 at 30 s.
 - Now `PlexClient.decision` asks `/decision` with the same query and session first, capped at 5 s, off the main thread. The same film tuned six times in a row: 6 of 6 played, decision in 26 to 72 ms.
-- The web tuner, Apple TV and Roku don't ask either. Not checked whether they meet the 400.
+- The Apple TV already asks it first (`PlexAPIService.decisionURL`, corrected on 2026-11-11: an earlier search for the literal path missed it). The web tuner and Roku build no decision request, read from their source; not checked whether they meet the 400.
 
 **#193 (Dolby Vision profile 5 from Plex).**
 - Plex answers 2003, "DoVi (Profile 5) color space is not supported", to a request that doesn't offer HEVC.
