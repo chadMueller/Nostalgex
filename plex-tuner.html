@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" href="./tuner/logo/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="tuner/fonts.css">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" integrity="sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
 <script src="scripts/nostalgex-channel-filter.cjs"></script>
@@ -54,6 +55,9 @@
        a floor is always what the viewer sees, not what the stylesheet says. */
     --nx-z: 1;
     --nx-fs: calc(12px / var(--nx-z));
+    /* One Apple TV pt is 0.5 CSS px on a desktop and on a TV browser (Chad): the TV-browser steps zoom the page, so a pt is
+       0.5 px / zoom of an authored px there and still 0.5 px on screen. */
+    --pt: calc(0.5px / var(--nx-z));
     --nx-fs-tag: calc(16px / var(--nx-z));
     /* The rail is a list of rows, label left and value right. FULLSCREEN with its [F] is the
        widest: 13 characters of DM Mono at 0.6em, the tracking, the gap and the padding. */
@@ -69,10 +73,9 @@
     /* The Apple TV took the guide's row text from 29 to 22 pt (x0.76) and its rows from 76 to 64 pt (x0.84) on
        2026-11-10. Times and the CHANNEL heading stay where they were. --gr is the row text's share of --gs. */
     --gr: 0.76;
-    /* 40 px rows up to about 830 px of window height, then growing with it (4.8vh): about 9 rows at 1280x800 and 1920x1080,
-       as on the Apple TV. */
-    --g-row: clamp(40px, 4.8vh, 60px);
-    --g-head: clamp(38px, 3.9vh, 56px);
+    /* The Apple TV's rows (64 pt) and header (58 pt) in points. */
+    --g-row: calc(64 * var(--pt));
+    --g-head: calc(58 * var(--pt));
     --g-col: 200px;
     --g-promo: 56px;
     /* The info panel beside the rail: the Apple TV's InfoPanelView sizes (tag 36, title 38,
@@ -260,69 +263,64 @@
     border-right: 1px solid rgba(255,255,255,0.08);
     overflow: hidden;
   }
-  .info-main { display: flex; align-items: flex-start; gap: calc(24px * var(--is)); min-width: 0; margin-bottom: calc(14px * var(--is)); }
+  /* The Apple TV's Now Playing panel in points (1 pt = 0.5 CSS px, --pt): all panel text 22 pt, the title 29 pt white up to 3 lines,
+     the CH tag in VT323 at 28 pt with a bar 8 by 24 pt, the poster 120 by 180 pt. */
+  .info-main { display: flex; align-items: flex-start; gap: calc(24 * var(--pt)); min-width: 0; margin-bottom: calc(24 * var(--pt)); }
   .info-text { flex: 1 1 auto; min-width: 0; }
   .info-poster {
     flex: 0 0 auto;
-    width: calc(130px * var(--is));
+    width: calc(120 * var(--pt));
     aspect-ratio: 2 / 3;
     object-fit: cover;
-    border-radius: calc(10px * var(--is));
-    border: 2px solid rgba(255,255,255,0.18);
+    border-radius: calc(10 * var(--pt));
+    border: max(1px, calc(2 * var(--pt))) solid rgba(255,255,255,0.18);
     background: #101024;
   }
   .info-poster[hidden] { display: none; }
-  /* The channel's own colour is a small bar beside the number, never the number (the Apple TV: 12 by 36 pt). */
   .info-channel-tag {
     display: flex;
     align-items: center;
-    gap: calc(14px * var(--is));
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    font-size: max(calc(30px * var(--is)), var(--nx-fs));
+    gap: calc(14 * var(--pt));
+    font-family: 'VT323', monospace;
+    font-size: calc(28 * var(--pt));
     letter-spacing: 0.08em;
     color: #fff;
-    margin-bottom: calc(14px * var(--is));
+    margin-bottom: calc(14 * var(--pt));
   }
-  .info-ch-bar { flex: 0 0 auto; width: calc(12px * var(--is)); height: calc(36px * var(--is)); min-width: 6px; min-height: 16px; border-radius: 2px; }
+  .info-ch-bar { flex: 0 0 auto; width: calc(8 * var(--pt)); height: calc(24 * var(--pt)); border-radius: 1px; }
   .info-channel-name {
-    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    font-size: calc(22 * var(--pt));
     color: rgba(255,255,255,0.7);
     letter-spacing: 0.06em;
-    margin-bottom: calc(12px * var(--is));
+    margin-bottom: calc(12 * var(--pt));
     overflow-wrap: anywhere;
   }
   .info-channel-name:empty { display: none; }
   .info-hint {
-    margin-top: calc(14px * var(--is));
-    min-height: calc(2.8em);
-    font-size: max(calc(18px * var(--is)), var(--nx-fs));
+    margin-top: calc(14 * var(--pt));
+    min-height: 2.8em;
+    font-size: calc(22 * var(--pt));
     line-height: 1.4;
     color: rgba(255,255,255,0.7);
   }
   .info-title {
-    font-size: max(calc(38px * var(--is)), var(--nx-fs));
+    font-size: calc(29 * var(--pt));
     color: #fff;
-    line-height: 1.1;
-    margin-bottom: calc(8px * var(--is));
+    line-height: 1.15;
+    margin-bottom: calc(8 * var(--pt));
     font-weight: 500;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
   .info-episode-title {
-    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    font-size: calc(22 * var(--pt));
     color: rgba(255,255,255,0.7);
-    margin-bottom: calc(12px * var(--is));
+    margin-bottom: calc(12 * var(--pt));
     font-weight: 400;
   }
   /* A short window: the panel still holds the poster and the details, with less description. */
-  @media (pointer: fine) and (max-height: 900px) {
-    .info-poster { width: calc(104px * var(--is)); }
-    .info-hint { min-height: 1.4em; }
-    .info-main { margin-bottom: calc(8px * var(--is)); }
-  }
   .info-progress-wrap {
     display: flex;
     align-items: center;
@@ -343,33 +341,35 @@
   }
   .info-time {
     font-family: 'DM Mono', monospace;
-    font-size: max(calc(20px * var(--is)), var(--nx-fs));
+    font-size: calc(22 * var(--pt));
     color: rgba(255,255,255,0.7);
     white-space: nowrap;
   }
+  /* UP NEXT: one line under the info, not a card. The next title, then a cyan badge straight after it; a long title is cut with an
+     ellipsis and the badge always stays. No background, border or padding on the line itself. */
   .info-upnext {
-    margin-top: calc(18px * var(--is));
-    font-size: max(calc(22px * var(--is)), var(--nx-fs));
+    margin-top: calc(18 * var(--pt));
+    display: flex;
+    align-items: center;
+    gap: calc(12 * var(--pt));
+    font-size: calc(22 * var(--pt));
     color: #fff;
     letter-spacing: 0.04em;
+    min-width: 0;
   }
-  .info-upnext-title {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+  .info-upnext-title { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .info-upnext-chip {
-    display: inline-block;
+    flex: 0 0 auto;
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    font-size: max(calc(16px * var(--is)), var(--nx-fs));
-    letter-spacing: 0.12em;
-    color: #00101a;
-    background: var(--cyan);
+    font-size: calc(22 * var(--pt));
+    letter-spacing: 0.06em;
+    color: var(--cyan);
+    background: #0B2A3A;
+    border: max(1px, calc(1.5 * var(--pt))) solid var(--cyan);
     border-radius: 999px;
-    padding: calc(4px * var(--is)) calc(12px * var(--is));
-    margin-bottom: calc(8px * var(--is));
+    padding: calc(2 * var(--pt)) calc(10 * var(--pt));
+    white-space: nowrap;
   }
 
   /* Unmute button */
@@ -688,7 +688,7 @@
   .v-toolbar {
     display: none;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8 * var(--pt));
     padding: 20px 10px;
     width: var(--nx-rail);
     flex-shrink: 0;
@@ -739,7 +739,9 @@
     background: rgba(0, 0, 0, 0.8);
     border: 2px solid var(--cyan);
     border-radius: 0;
-    padding: 7px 10px;
+    /* The Apple TV's control row: 64 pt high, 18 pt of side padding (1 pt is 0.5 px). */
+    min-height: calc(64 * var(--pt));
+    padding: 0 calc(18 * var(--pt));
     cursor: pointer;
     display: flex;
     flex-direction: row;
@@ -1593,7 +1595,7 @@
     width: var(--g-col);
     flex-shrink: 0;
     font-family: 'DM Mono', monospace;
-    font-size: calc(var(--nx-fs) * var(--gs) * var(--gt-head));
+    font-size: calc(25 * var(--pt) * var(--gt-head));
     color: var(--yellow);
     letter-spacing: 0.08em;
     padding: 0 12px;
@@ -1608,7 +1610,7 @@
     font-family: 'DM Mono', monospace;
     font-weight: 500;
     /* The Apple TV's guide: times 25 pt on a 58 pt header (0.39 of it), in DM Mono Medium. */
-    font-size: calc(max(calc(var(--g-head) * 0.39), calc(12px / var(--nx-z))) * var(--gt-time));
+    font-size: calc(25 * var(--pt) * var(--gt-time));
     color: var(--yellow);
     letter-spacing: 0.02em;
     padding: 0 8px;
@@ -1685,14 +1687,14 @@
     font-family: 'DM Mono', monospace;
     font-weight: 500;
     /* Row text is 22 pt on a 64 pt row (0.34 of it); the floor is the Apple TV's 11 on-screen pixels. */
-    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-num));
+    font-size: calc(22 * var(--pt) * var(--gt-num));
     color: rgba(255,255,255,0.55);
-    min-width: 2.2em;
+    min-width: calc(2.2 * 22 * var(--pt) * var(--gt-num));
   }
   .grid-ch-name {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-name));
+    font-size: calc(22 * var(--pt) * var(--gt-name));
     letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
@@ -1713,8 +1715,8 @@
     padding: 0 8px;
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    font-size: calc(max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z))) * var(--gt-title));
-    color: rgba(255,255,255,0.85);
+    font-size: calc(22 * var(--pt) * var(--gt-title));
+    color: #80879A;   /* DIM: every title but the live one and the focused row, 4.83:1 on the lightest row */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1745,7 +1747,7 @@
     gap: 10px;
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    font-size: max(calc(var(--g-row) * 0.34), calc(11px / var(--nx-z)));
+    font-size: calc(22 * var(--pt));
     letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
@@ -2554,7 +2556,7 @@
   /* PAGE SIZE (#255): a PC on a TV at 1920x1080 draws the page 1:1, so every floor is 12 real pixels from the couch. LARGE lays the page out
      like a 1440 px window and scales it up by a third (the same picture the 960x540 TV step makes at 2x). The rows and the header cancel
      the vh growth, so the guide shows the same number of rows. AUTO turns it on at 1800x1000 and up with a fine pointer; OFF never. */
-  html.nx-large { zoom: 1.3333; --g-row: clamp(40px, calc(4.8vh / 1.3333), 60px); --g-head: clamp(38px, calc(3.9vh / 1.3333), 56px); }
+  html.nx-large { zoom: 1.3333; }
   html.nx-large body { width: calc(100vw / 1.3333); height: calc(100vh / 1.3333); }
   html.nx-large .config-panel { width: min(1320px, calc(96vw / 1.3333)); max-height: calc(85vh / 1.3333); height: min(calc(88vh / 1.3333), 900px); }
 
@@ -2573,7 +2575,7 @@
   }
   @media (pointer: fine) and (orientation: landscape) and (max-width: 1099px) and (max-height: 620px) {
     /* 18px VT323 at this zoom was 12 screen px; 1.35 puts the guide text at 16 (the floor) and the rows at 35. */
-    :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-row: 40px; --g-head: 38px; --g-col: 208px; --g-promo: 58px; }
+    :root { --nx-z: 0.6667; --is: 0.72; --gs: 1.35; --g-col: 208px; --g-promo: 58px; }
     html { zoom: 0.6667; }
     body { width: calc(100vw / 0.6667); height: calc(100vh / 0.6667); }
     .config-panel { width: min(1320px, calc(96vw / 0.6667)); max-height: calc(85vh / 0.6667); height: min(calc(88vh / 0.6667), 900px); }
@@ -2632,6 +2634,9 @@
   ══════════════════════════════════════ */
   @media (max-width: 1024px) and (orientation: portrait), (max-width: 1024px) and (pointer: coarse), (orientation: landscape) and (max-height: 500px) {
     :root { --gs: 1; --gr: 1; --g-row: 38px; --g-head: 32px; --g-col: 160px; --g-promo: 44px; }
+    /* Phones and tablets keep their own table: program titles stay readable (the Apple TV's points are for a TV). */
+    .grid-program { font-size: max(calc(13px * var(--gt-title)), var(--nx-fs)); }
+    .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); }
   }
   @media (max-width: 560px) { :root { --ts: 0.72; } }
   @media (pointer: fine) and (max-height: 900px) { :root { --is: 0.72; } }
@@ -2725,7 +2730,7 @@
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
     .grid-row { height: 34px; }
-    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: 2.2em; }
+    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
@@ -2995,7 +3000,7 @@
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
     .grid-row { height: 30px; }
-    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: 2.2em; }
+    .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
     .grid-footer { display: none; }
@@ -3788,16 +3793,16 @@
           <span class="v-btn-label">CAPTIONS [C]</span><span class="v-btn-short">CAPTIONS</span><span class="v-btn-value" id="tb-cc-val">OFF</span>
         </button>
         <button class="v-btn track-row" type="button" id="tb-sublang" data-track="sublang" hidden onclick="openTrackDialog('sublang')" aria-haspopup="dialog">
-          <span class="v-btn-label">SUBTITLE LANGUAGE</span><span class="v-btn-short">SUB LANGUAGE</span><span class="v-btn-value" id="tb-sublang-val">AUTO</span>
+          <span class="v-btn-label">SUB LANGUAGE</span><span class="v-btn-short">SUB LANGUAGE</span><span class="v-btn-value" id="tb-sublang-val">AUTO</span>
         </button>
         <button class="v-btn track-row" type="button" id="tb-autosubs" data-track="autosubs" hidden onclick="toggleAutoSubsForeignAudio(); renderTrackRows()">
-          <span class="v-btn-label">AUTO SUBTITLES</span><span class="v-btn-short">AUTO SUBS</span><span class="v-btn-value" id="tb-autosubs-val">ON</span>
+          <span class="v-btn-label">AUTO SUBS</span><span class="v-btn-short">AUTO SUBS</span><span class="v-btn-value" id="tb-autosubs-val">ON</span>
         </button>
         <button class="v-btn track-row" type="button" id="tb-audio" data-track="audio" hidden onclick="openTrackDialog('audio')" aria-haspopup="dialog">
           <span class="v-btn-label">AUDIO</span><span class="v-btn-short">AUDIO</span><span class="v-btn-value" id="tb-audio-val">AUTO</span>
         </button>
         <button class="v-btn track-row" type="button" id="tb-audiolang" data-track="audiolang" hidden onclick="openTrackDialog('audiolang')" aria-haspopup="dialog">
-          <span class="v-btn-label">AUDIO LANGUAGE</span><span class="v-btn-short">AUDIO LANG</span><span class="v-btn-value" id="tb-audiolang-val">AUTO</span>
+          <span class="v-btn-label">AUDIO LANG</span><span class="v-btn-short">AUDIO LANG</span><span class="v-btn-value" id="tb-audiolang-val">AUTO</span>
         </button>
         <button class="v-btn" type="button" onclick="showConfig()">
           <span class="v-btn-label">SETTINGS</span>
@@ -6248,7 +6253,8 @@
   async function getJellyfinTranscodeUrl(item, request) {
     const msid = item.partKey || item.ratingKey;
     // Read once per programme: a change in Settings applies from the next one.
-    const streamQualityAtTune = effectiveQualityFor(item);
+    // The capped retry after a failed server stream asks for HIGH when the viewer set no ceiling (see effectiveQualityFor).
+    const streamQualityAtTune = item && item._cappedRetry && !NostalgexStreamQuality.isCapped(NostalgexStreamQuality.current()) ? 'high' : NostalgexStreamQuality.current();
     const startTicks = item.offsetSeconds ? Math.floor(item.offsetSeconds) * 10000000 : 0;
     // No StartTimeTicks on the fallback URL. Jellyfin copies the master's query string onto
     // main.m3u8 and then onto every segment, and its segment handler refuses the parameter:
@@ -7029,7 +7035,7 @@
     // moved later the clock says nothing about the programme shown, so the chip is plain.
     const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
     document.getElementById('info-upnext').innerHTML = next
-      ? `<span class="info-upnext-chip">${escapeHtml(upNextSeconds === null ? 'UP NEXT' : NostalgexUpNext.label(upNextSeconds))}</span><span class="info-upnext-title">${escapeHtml(itemGuideTitle(next))}</span>`
+      ? `<span class="info-upnext-title">${escapeHtml(itemGuideTitle(next))}</span><span class="info-upnext-chip">${escapeHtml(upNextSeconds === null ? 'UP NEXT' : NostalgexUpNext.label(upNextSeconds))}</span>`
       : '';
   }
 
@@ -9535,8 +9541,10 @@
     const per = [];
     for (const server of selectedServers) {
       try {
-        const data = await plexLibraryFetchForServer('/library/sections', server, { timeoutMs: 8000 });
-        const sections = ((data.MediaContainer || {}).Directory || []).filter(d => d.type !== 'photo');
+        const NC = globalThis.NostalgexCollections;
+        const all = await NC.fetchPlexPaged(
+          (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server, { timeoutMs: 8000 }), '/library/sections', 'Directory');
+        const sections = all.filter(d => d.type !== 'photo');
         per.push(NostalgexLibraryRefresh.signature(server.machineIdentifier || server.name || server.url, sections));
       } catch (e) { return null; }
     }

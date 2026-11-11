@@ -126,9 +126,8 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
-// A desktop viewport draws a program title in DM Mono Medium at 0.34 of the row (the Apple TV's 22 pt on a 64 pt row), and a row
-// is clamp(40px, 4.8vh, 60px): 43.2 px in the 900 px tall window this uses.
-const DESKTOP_NORMAL = Math.min(60, Math.max(40, 900 * 0.048)) * 0.34;
+// A desktop viewport draws a program title in DM Mono Medium at 22 pt, and a point is 0.5 CSS px there.
+const DESKTOP_NORMAL = 22 * 0.5;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */
@@ -269,6 +268,7 @@ for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
     const bad = [];
     for (const root of ["#guide-grid", "#info-panel", "#v-toolbar"]) for (const el of document.querySelectorAll(`${root} *`)) {
       if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+      if (el.id === "info-channel-tag" || el.closest("#info-channel-tag")) continue;   // the Apple TV draws the CH tag in VT323
       if (!getComputedStyle(el).fontFamily.includes("DM Mono")) bad.push(`${root} ${el.className}: ${getComputedStyle(el).fontFamily}`);
     }
     return bad.length === 0 ? true : bad.slice(0, 3).join(" | ");

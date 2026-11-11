@@ -25,6 +25,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tunerPath = process.env.TUNER || path.join(root, "plex-tuner.html");
 const rokuPath = process.env.ROKU || path.join(root, "roku/source/subtitles/SubtitleSettings.brs");
+const audioPickPath = path.join(root, "scripts/nostalgex-audio-pick.js");
 const langPath = process.env.LANG_MODULE || path.join(root, "scripts/nostalgex-language.js");
 const tuner = fs.readFileSync(tunerPath, "utf8");
 const roku = fs.readFileSync(rokuPath, "utf8");
@@ -90,6 +91,8 @@ function pageContext(extra = {}) {
   const ctx = { NostalgexJellyfinUrls: JU, ...extra };
   vm.createContext(ctx);
   if (langSource) vm.runInContext(langSource, ctx);
+  // The page's audio pick (pickAudioStream) is the Apple TV's rule, in scripts/nostalgex-audio-pick.js.
+  if (fs.existsSync(audioPickPath)) vm.runInContext(fs.readFileSync(audioPickPath, "utf8"), ctx);
   return ctx;
 }
 const matcher = (() => {

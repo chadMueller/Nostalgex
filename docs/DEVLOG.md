@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: the Apple TV's approved sizes, guide and Now Playing, #251 and #261)
+
+**Why.** Chad approved the Apple TV's final numbers on the basement TV. The web follows them in points, 1 pt = 0.5 CSS px on a desktop and a TV browser (`--pt`, which is
+0.5 px divided by the page zoom on the TV-browser steps, so it stays 0.5 px on screen).
+
+**Guide.** Rows 64 pt (32 px; 48 authored at the 960x540 step), header 58 pt, titles, numbers and names 22 pt (11 px), times and the CHANNEL heading 25 pt (12.5 px). The live
+programme and the focused row are white; every other title is the new DIM `#80879A` (4.83:1 on the lightest row). Guide row text may be below 12 px; state text keeps the floor.
+The phone keeps its own table (13 px titles, 12 px times).
+
+**Now Playing.** All panel text 22 pt; the title 29 pt white, up to 3 lines; the CH tag in VT323 at 28 pt (back on the VT323 face, as on the Apple TV) with a bar 8 by 24 pt; the poster 120 by 180 pt;
+control rows 64 pt high with 18 pt side padding and an 8 pt gap. UP NEXT is one line under the info: the next title, then a cyan badge (`UP NEXT IN 84 MIN`, cyan on `#0B2A3A`, a 1.5 px outline),
+minutes only (`scripts/nostalgex-up-next.js`: 84 MIN, 120 MIN, LESS THAN 1 MIN), a long title cut with an ellipsis and the badge always kept. The left column is only the channel line, the title and the UP NEXT line;
+the progress bar and time stay. Not built, as Chad said: the full-screen channel overlay's poster.
+
+**Tests.** The smokes that slice the page (language match, web tune ownership, plex paging) learned the new modules and the one capped retry; `npm test` passes.
+
 ## 2026-11-10 (web tuner: the parity list, where it stands)
 
 Worked on `web/visual-batch-1-1110` and closed: #248, #249, #250, #251, #252, #255, #256, #257, #258, #259, #260, #261. Open: #254 (the first-guide hint and the first-run

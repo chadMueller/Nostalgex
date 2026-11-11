@@ -10,6 +10,7 @@ const tuner = readFileSync(new URL('plex-tuner.html', root), 'utf8');
 const urls = readFileSync(new URL('scripts/nostalgex-jellyfin-urls.js', root), 'utf8');
 const playbackInfoModule = readFileSync(new URL('scripts/nostalgex-playback-info.js', root), 'utf8');
 const streamQualityModule = readFileSync(new URL('scripts/nostalgex-stream-quality.js', root), 'utf8');
+const recoveryModule = readFileSync(new URL('scripts/nostalgex-playback-recovery.js', root), 'utf8');
 const htmlIds = new Set([...tuner.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1]));
 function between(start, end) {
   const a = tuner.indexOf(start), b = tuner.indexOf(end, a);
@@ -98,6 +99,10 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
     activeSubtitleTracks: [], activeSubtitleBlobUrls: [], subtitleRequestGeneration: 0, subtitleRequestController: null,
     subtitlesEnabled: subtitles, shouldAutoEnableSubs: () => false, pickSubtitle: subs => subs[0],
     pickAudioStream: () => null,
+    // Plex tracks (#249) are driven for real by scripts/plex-tracks-browser-smoke.mjs; the fixture's Plex file has none.
+    loadPlexStreams: async () => null, pickPlexSubtitle: () => null,
+    // The capped retry (#258) is driven for real by scripts/playback-recovery-browser-smoke.mjs.
+    effectiveQualityFor: () => 'auto',
     CHANNELS: [], plexConnected: true, appState: 'connect', retroMode: false,
     fsOverlayVisible: false, fsOverlayTimer: null,
     chNum: channel => channel.id, escapeHtml: value => value, itemGuideTitle: item => item.title,
@@ -123,6 +128,8 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
       createElement() { return { track: {}, events: {}, removed: false, remove() { this.removed = true; }, addEventListener(name, fn) { this.events[name] = fn; } }; },
       ...eventTarget(gestureListeners),
     }, Hls,
+    // The starvation watch (an interval) is driven for real by scripts/playback-recovery-browser-smoke.mjs; here it never ticks.
+    setInterval() { return ++timerSeq; }, clearInterval() {}, performance: { now: () => 0 },
     setTimeout(fn, delay) { const id = ++timerSeq; timers.set(id, { fn, delay }); return id; }, clearTimeout(id) { timers.delete(id); },
     makePlaybackTracker(item) { const tracker = { item, stops: 0, ready: 0, resumes: 0, pauses: 0, stop() { this.stops++; }, onReady() { this.ready++; }, onResume() { this.resumes++; }, onPause() { this.pauses++; } }; trackers.push(tracker); return tracker; },
     fetch(url, options = {}) {
@@ -136,7 +143,7 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
   };
   context.window = context;
   vm.createContext(context);
-  const production = urls + streamQualityModule + playbackInfoModule
+  const production = urls + streamQualityModule + playbackInfoModule + recoveryModule
     + between('  let activeTranscodeSession = null;', "  let appState = 'connect'")
     + between('  function switchChannel(', '  async function getJellyfinTranscodeUrl(')
     + between('  async function getJellyfinTranscodeUrl(', '  // ── Playback tracking')
@@ -254,7 +261,8 @@ await test('queued HLS errors and manifest events from destroyed loader cannot a
   assert.equal(f.context.consecutivePlaybackFailures, 0); assert.equal(f.playCount, 0); assert.equal(f.failures.length, 0);
 });
 await test('old failure skip remains inert after returning to same channel and exact item', async () => {
-  const f = fixture({ backend: 'plex' }); const item = transcode('A'); await f.tune(item);
+  // The one retry capped at 1080p (#258) was already made, so the failure goes straight to the card and the skip.
+  const f = fixture({ backend: 'plex' }); const item = transcode('A'); item._cappedRetry = true; await f.tune(item);
   f.video.onerror(); const skip = [...f.timers.values()].find(t => t.delay === 5000).fn;
   await f.tune(transcode('B'), 2); await f.tune(item, 1); skip();
   assert.equal(f.ended, 0); assert.equal(f.context.currentPlayingItem, item);

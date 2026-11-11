@@ -2,7 +2,7 @@
 /**
  * PAGE SIZE in the real plex-tuner.html (headless) (#255): a PC on a TV at 1920x1080 draws the page 1:1, so LARGE lays it out like a
  * 1440 px window and scales it up by a third (html.nx-large). AUTO does that at 1800x1000 and up with a mouse, never on touch;
- * LARGE does it from 1440 px wide; OFF never. The guide keeps about 9 rows, and nothing leaves the screen.
+ * LARGE does it from 1440 px wide; OFF never. The guide keeps its 64 pt rows, and nothing leaves the screen.
  *
  * Needs Playwright (not a dependency): PLAYWRIGHT=/path/to/playwright/index.mjs, or a resolvable `playwright`.
  * Run: `npm run test:page-size:browser`.
@@ -104,7 +104,7 @@ try {
   check("1920x1080 with a mouse: AUTO is on", await large(page));
   const m = await page.evaluate(() => { const row = document.querySelector(".grid-row[data-channel-id]"); const body = document.getElementById("grid-body"); const z = parseFloat(getComputedStyle(document.documentElement).zoom); return { z, rows: body.getBoundingClientRect().height / row.getBoundingClientRect().height, docW: document.documentElement.scrollWidth, vw: innerWidth }; });
   check("the page is scaled by a third", Math.abs(m.z - 1.3333) < 0.01, String(m.z));
-  check("the guide still shows about 9 rows", m.rows >= 8 && m.rows <= 10.5, String(m.rows));
+  check("the guide keeps its rows (64 pt each, 32 px authored: about 11 to 12 here)", m.rows >= 10 && m.rows <= 13.5, String(m.rows));
   check("nothing leaves the screen", m.docW <= m.vw + 1, `${m.docW} vs ${m.vw}`);
   await page.evaluate(() => showConfig());
   await page.waitForTimeout(400);
