@@ -53,6 +53,6 @@ class LibraryStore(context: Context) {
 
     companion object {
         /** Bump when MediaItem or what the scan fills in changes, so an old copy is read again. */
-        private const val FORMAT = 6 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size
+        private const val FORMAT = 7 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size; 7: audio tracks keep their own title (#286)
     }
 }
