@@ -85,10 +85,24 @@ function NxGuideLightestTitleBg() as String
 end function
 
 ' The focused row's fill (#263): the channel's colour ("#RRGGBB" or
-' "RRGGBB"), opaque and darkened only as far as white titles need for 4.5:1
-' (NxTokDarkenFor). Anything else is white, as GuideView's colorOf.
+' "RRGGBB") at 32% over the panel #0A0F1E, as the Apple TV's
+' GuideRowContrast, darkened only if white titles fall under 4.5:1 on it
+' (NxTokDarkenFor; none of channels.json's colours do). Anything else is
+' white, as GuideView's colorOf.
 function NxGuideFocusFill(hex as Dynamic) as String
-    h = NxToStr(hex).Replace("#", "")
-    if NxTokRgba("#" + h) = invalid then h = "FFFFFF"
-    return NxTokDarkenFor("#" + h, "0xFFFFFFFF", 4.5)
+    return NxTokDarkenFor(NxTokOverAt(NxGuideHex(hex), NxTokens().color.panel, 0.32), "0xFFFFFFFF", 4.5)
+end function
+
+' The live cell on the focused row: the channel's colour at 55% over that
+' row's fill, darkened only as far as white titles need for 4.5:1.
+function NxGuideFocusLiveFill(hex as Dynamic) as String
+    return NxTokDarkenFor(NxTokOverAt(NxGuideHex(hex), NxGuideFocusFill(hex), 0.55), "0xFFFFFFFF", 4.5)
+end function
+
+' "#RRGGBB" from a channel's colour, with or without its #; white when it
+' isn't one, as GuideView's colorOf.
+function NxGuideHex(hex as Dynamic) as String
+    h = "#" + NxToStr(hex).Replace("#", "")
+    if NxTokRgba(h) = invalid then h = "#FFFFFF"
+    return h
 end function

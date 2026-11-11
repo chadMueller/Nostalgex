@@ -156,15 +156,24 @@ end function
 ' either isn't a colour.
 function NxTokOver(top as Dynamic, bottom as Dynamic) as Dynamic
     t = NxTokRgba(top)
+    if t = invalid then return invalid
+    return NxTokOverAt(top, bottom, t[3] / 255.0)
+end function
+
+' `top` laid over the opaque `bottom` at `alpha` (0 to 1), its own alpha
+' ignored: an Apple TV opacity that no 8-bit alpha holds exactly, as #263's
+' 32% focused wash. invalid when either isn't a colour.
+function NxTokOverAt(top as Dynamic, bottom as Dynamic, alpha as Float) as Dynamic
+    t = NxTokRgba(top)
     b = NxTokRgba(bottom)
     if t = invalid or b = invalid then return invalid
-    a = t[3] / 255.0
+    a = alpha
     return NxTokOpaque(t[0] * a + b[0] * (1 - a), t[1] * a + b[1] * (1 - a), t[2] * a + b[2] * (1 - a))
 end function
 
 ' `fill` made opaque and darkened only as far as `text` needs to reach
-' `ratio` on it (#263's focused guide row: the channel's colour, dark enough
-' for white titles): each channel scaled by the largest factor found that
+' `ratio` on it (#263's live cell on the focused guide row, dark enough for
+' white titles): each channel scaled by the largest factor found that
 ' still reaches the ratio. A fill that already reaches it is only made
 ' opaque. invalid when either isn't a colour.
 function NxTokDarkenFor(fill as Dynamic, text as Dynamic, ratio as Float) as Dynamic

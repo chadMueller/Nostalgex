@@ -158,7 +158,7 @@ function applyGuideText() as Boolean
     end if
     m.guideTextLarge = large
     m.guideText = NxGuideTextSizes(large)
-    styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text)
+    styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text2)
     m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
     return true
 end function
@@ -457,8 +457,8 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     row = CreateObject("roSGNode", "Group")
     row.translation = [0, y]
 
-    ' The focused row is the channel's colour, darkened only as far as white
-    ' titles need for 4.5:1 (#263, NxGuideFocusFill); an even row has a stripe.
+    ' The focused row is the channel's colour at 32% over the panel, as the
+    ' Apple TV (#263, NxGuideFocusFill); an even row has a stripe.
     gc = NxGuideColors()
     tc = NxTokens().color
     stripe = invalid
@@ -489,11 +489,14 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
                 if gave.gaveWay.startSec = b.startSec and gave.gaveWay.ratingKey = b.ratingKey then onNow = false
             end if
             past = b.endSec <= t
-            ' The live cell in the channel's colour; on the focused row the
-            ' row's own fill already is.
-            if onNow and not focused then
+            ' The live cell in the channel's colour: 25% over the row, or on
+            ' the focused row 55% over its fill, dark enough for white
+            ' (NxGuideFocusLiveFill). A past programme keeps its tint on both.
+            if onNow and focused then
+                row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideFocusLiveFill(ch.color)))
+            else if onNow then
                 row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
-            else if past and not focused then
+            else if past then
                 row.AppendChild(newRect(x, 0, w, m.rowH, gc.past))
             end if
             row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
@@ -507,15 +510,14 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
         end if
     end for
 
-    ' A channel WATERSHED alone has emptied says when it comes back, dim, in
-    ' place of its airings (ChannelGuideView's watershedRowPlaceholder).
+    ' A channel WATERSHED alone has emptied says when it comes back, in text2
+    ' on the row's past tint, focused or not, in place of its airings
+    ' (ChannelGuideView's watershedRowPlaceholder).
     if ch.held = true then
         x = m.colX + 1
-        if not focused then row.AppendChild(newRect(x, 0, 1920 - x, m.rowH, gc.past))
+        row.AppendChild(newRect(x, 0, 1920 - x, m.rowH, gc.past))
         row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
-        heldColor = tc.textDim
-        if focused then heldColor = tc.text
-        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.held, heldColor, x + 14, m.guideText.heldY, 1920 - x - 28))
+        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.held, tc.text2, x + 14, m.guideText.heldY, 1920 - x - 28))
     end if
 
     ' Channel column, drawn over the programs' left edge; the row's stripe or
