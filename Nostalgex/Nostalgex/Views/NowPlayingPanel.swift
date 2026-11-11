@@ -115,21 +115,20 @@ struct NowPlayingPanel: View {
     @State private var streamQuality = StreamQuality.current
     @AppStorage(LocalPlexOriginalQuality.storageKey, store: AppDefaults.standard) private var localOriginalVideo = false
 
-    /// 628 + 40 + 520 + 32 + 520 fills the width inside the 90 pt safe margins. A row needs about 440 pt of its
-    /// width at the compact 25 pt (PLAYBACK INFORMATION, its value and its chevron), so 520 leaves it room; the
-    /// identity column (poster, CH line, title, UP NEXT) takes the rest.
-    private let infoWidth: CGFloat = 628
-    private let columnWidth: CGFloat = 520
-    private let columnGap: CGFloat = 32
+    /// At the guide's 22 pt a row needs about 410 pt (PLAYBACK INFORMATION, its value and its chevron), so a column
+    /// is 440 and the two are 908 with the gap. The identity column (poster, CH line, title, UP NEXT) takes the rest
+    /// of the width and is as wide as its content wants, left-aligned.
+    private let columnWidth = NowPlayingLayout.columnWidth
+    private let columnGap = NowPlayingLayout.columnGap
 
     var body: some View {
-        HStack(alignment: .top, spacing: 40) {
+        HStack(alignment: .top, spacing: 36) {
             infoZone
             controlsZone
         }
         .padding(.horizontal, NXLayout.safeX)
         .padding(.top, NXLayout.safeY)
-        .padding(.bottom, 56)
+        .padding(.bottom, 44)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             LinearGradient(
@@ -175,18 +174,18 @@ struct NowPlayingPanel: View {
     // MARK: - Info zone (non-focusable)
 
     private var infoZone: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             // The poster (Plex only: its thumbnail transcode carries the token in the URL, so AsyncImage needs no
             // header support) with what is playing beside it, left-aligned to the poster's right edge. Without a
             // poster the details sit where the poster would be, no empty hole.
-            HStack(alignment: .top, spacing: 22) {
+            HStack(alignment: .top, spacing: 18) {
                 if let poster = appState.posterURL(for: item) {
                     AsyncImage(url: poster) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Color.nxRow
                     }
-                    .frame(width: 150, height: 225)
+                    .frame(width: NowPlayingLayout.posterWidth, height: NowPlayingLayout.posterHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -194,17 +193,17 @@ struct NowPlayingPanel: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     // The channel's own color is a small bar beside the number, never the number.
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(channel.color)
-                            .frame(width: 10, height: 31)
+                            .frame(width: 8, height: 24)
                         Text("CH \(channel.number)")
-                            .font(SettingsFont.tag)
+                            .font(NowPlayingFont.tag)
                             .foregroundStyle(Color.nxText)
                         Text(channel.name.uppercased())
-                            .font(SettingsFont.bodyRegular)
+                            .font(NowPlayingFont.textRegular)
                             .foregroundStyle(Color.nxText2)
                             .lineLimit(1)
                     }
@@ -212,7 +211,7 @@ struct NowPlayingPanel: View {
                     // Title leads as the big headline under the channel line (Discord feedback, 2026-10-29:
                     // viewers read this as "what's playing", so the title should dominate).
                     Text(titleLine)
-                        .font(SettingsFont.title)
+                        .font(NowPlayingFont.title)
                         .foregroundStyle(Color.nxText)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -230,28 +229,28 @@ struct NowPlayingPanel: View {
                 }
             }
         }
-        .frame(width: infoWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The next programme as its own element: a cyan chip with the time until it starts, then its title, on the
     /// panel's row surface. Cyan is the time; yellow stays for live things only.
     private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
-                .font(NXFont.captionMedium)
+                .font(NowPlayingFont.textMedium)
                 .tracking(2)
                 .foregroundStyle(Color.nxCyan)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
                 .background(Capsule().fill(Color.nxSelectedRow))
                 .overlay(Capsule().strokeBorder(Color.nxCyan, lineWidth: 1.5))
             Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                .font(SettingsFont.bodyMedium)
+                .font(NowPlayingFont.textMedium)
                 .foregroundStyle(Color.nxText)
                 .lineLimit(2)
         }
-        .padding(.horizontal, SettingsLayout.rowPaddingX)
-        .padding(.vertical, 16)
+        .padding(.horizontal, NowPlayingLayout.rowPaddingX)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous).fill(Color.nxRow))
         .overlay(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous)
@@ -277,7 +276,7 @@ struct NowPlayingPanel: View {
         if let picker = expandedPicker {
             pickerZone(picker)
         } else {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
                 // Each column is as tall as the taller one, and is a focus section: Right or Left from a row
                 // with nothing beside it (OPEN IN PLEX, at the foot of a longer left column) still moves into
                 // the other column, to the row nearest, instead of doing nothing.
@@ -309,17 +308,17 @@ struct NowPlayingPanel: View {
     /// information note is four sentences, so that list gets the full width and room for them.
     private func hintLine(_ text: String, status: String? = nil, lines: Int = 2, width: CGFloat? = nil) -> some View {
         Text(status ?? text)
-            .font(NXFont.captionRegular)
+            .font(NowPlayingFont.textRegular)
             .foregroundStyle(Color.nxText2)
             .lineLimit(lines)
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: width ?? columnWidth, alignment: .topLeading)
-            .frame(minHeight: 56, alignment: .topLeading)
+            .frame(minHeight: 48, alignment: .topLeading)
     }
 
     /// Controls that act on the program playing right now.
     private var programColumn: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             ForEach(
                 NowPlayingPanelLayout.programRows(
                     hasSubtitleTracks: appState.hasSubtitleTracks,
@@ -354,7 +353,7 @@ struct NowPlayingPanel: View {
             audioRow
         case .openInPlex:
             openInPlexRow
-                .padding(.top, 5)
+                .padding(.top, 4)
         case .audioLanguage:
             pickerRow(
                 .audioLanguage,
@@ -367,7 +366,7 @@ struct NowPlayingPanel: View {
 
     /// Controls that act on the device rather than on this program.
     private var deviceColumn: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             groupLabel("PICTURE")
             retroRow
             streamQualityRow
@@ -376,7 +375,7 @@ struct NowPlayingPanel: View {
             }
             pickerRow(.playbackInformation, title: "PLAYBACK INFORMATION", value: "VIEW", focus: .playbackInformation)
             sleepTimerRow
-                .padding(.top, 5)
+                .padding(.top, 4)
         }
         .frame(width: columnWidth, alignment: .leading)
     }
@@ -581,7 +580,7 @@ struct NowPlayingPanel: View {
     /// A list opened from the right column (stream quality, sleep timer) sits under it.
     @ViewBuilder
     private func pickerZone(_ picker: PanelPicker) -> some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             groupLabel(pickerTitle(picker), live: pickerLive(picker))
             switch picker {
             case .playbackInformation:
@@ -605,7 +604,7 @@ struct NowPlayingPanel: View {
             hintLine(pickerHint(picker),
                      lines: (picker == .playbackInformation || picker == .streamQuality) ? 4 : 2,
                      width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
-                .padding(.top, 8)
+                .padding(.top, 6)
         }
         .padding(.leading, pickerOffset(picker))
         .focusSection()
@@ -623,22 +622,22 @@ struct NowPlayingPanel: View {
     /// Reuses the panel's in-place navigation. Playback continues; Back returns focus
     /// to the information row rather than dismissing the whole panel.
     private var playbackInformationContents: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 VStack(alignment: .leading, spacing: 8) {
                     if appState.playbackInformationRows.isEmpty {
                         Text("Playback information is unavailable.")
-                            .font(SettingsFont.bodyRegular)
+                            .font(NowPlayingFont.textRegular)
                             .foregroundStyle(Color.nxText2)
                     } else {
                         ForEach(appState.playbackInformationRows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: 24) {
                                 Text(row.label)
-                                    .font(NXFont.captionMedium)
+                                    .font(NowPlayingFont.textMedium)
                                     .foregroundStyle(Color.nxText2)
-                                    .frame(width: 330, alignment: .leading)
+                                    .frame(width: 260, alignment: .leading)
                                 Text(row.value)
-                                    .font(SettingsFont.bodyRegular)
+                                    .font(NowPlayingFont.textRegular)
                                     .foregroundStyle(Color.nxText)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -655,13 +654,13 @@ struct NowPlayingPanel: View {
             .focused($focusedControl, equals: .option("information-back"))
             .accessibilityLabel("Back to playback controls")
             .frame(width: columnWidth)
-            .padding(.top, 8)
+            .padding(.top, 6)
         }
         .frame(width: columnWidth * 2 + columnGap, alignment: .leading)
     }
 
     private var streamQualityOptions: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             if appState.backendKind == .plex {
                 Button {
                     localOriginalVideo.toggle()
@@ -697,7 +696,7 @@ struct NowPlayingPanel: View {
     }
 
     private var audioTrackOptions: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             ForEach(appState.audioTracks) { track in
                 Button {
                     appState.selectAudioTrack(id: track.id)
@@ -717,7 +716,7 @@ struct NowPlayingPanel: View {
 
     /// OFF and the offered times. A timer that is running shows its countdown beside the title.
     private var sleepOptions: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             ForEach([0] + SleepTimerLogic.offeredMinutes(armed: appState.sleepTimerMinutes), id: \.self) { minutes in
                 let isOff = minutes == 0
                 let armed = appState.sleepTimerEndDate != nil
@@ -763,7 +762,7 @@ struct NowPlayingPanel: View {
         selected: String,
         onPick: @escaping (String) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowGap) {
+        VStack(alignment: .leading, spacing: NowPlayingLayout.rowGap) {
             ForEach(presets) { preset in
                 Button {
                     onPick(preset.code)
@@ -799,7 +798,7 @@ struct NowPlayingPanel: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = SleepTimerLogic.remaining(from: appState.sleepTimerEndDate, now: context.date) ?? 0
                 Text("\(SleepTimerLogic.countdownLabel(remaining: remaining)) LEFT")
-                    .font(SettingsFont.tag)
+                    .font(NowPlayingFont.tag)
                     .foregroundStyle(Color.nxYellow)
             }
         )
@@ -847,10 +846,10 @@ struct NowPlayingPanel: View {
 
     /// A group label: 25 pt, letter-spaced, with a rule under it. `live` is the yellow status at its right.
     private func groupLabel(_ text: String, live: AnyView? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(text)
-                    .font(NXFont.captionMedium)
+                    .font(NowPlayingFont.textMedium)
                     .tracking(3)
                     .foregroundStyle(Color.nxText2)
                 Spacer(minLength: 12)
@@ -860,7 +859,7 @@ struct NowPlayingPanel: View {
                 .fill(Color.nxRestingOutline)
                 .frame(height: 2)
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 3)
         .accessibilityAddTraits(.isHeader)
     }
 }
@@ -888,9 +887,9 @@ private struct PanelRow: View {
     var isStatic: Bool = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text(label)
-                .font(SettingsFont.bodyMedium)
+                .font(NowPlayingFont.textMedium)
                 .foregroundStyle(Color.nxText)
                 .lineLimit(1)
                 // The longest title, "AUTO SUBTITLES (FOREIGN AUDIO)", only just fits; shrink
@@ -900,8 +899,8 @@ private struct PanelRow: View {
             valueView
             trailingView
         }
-        .padding(.horizontal, SettingsLayout.rowPaddingX)
-        .frame(height: SettingsLayout.rowHeight)
+        .padding(.horizontal, NowPlayingLayout.rowPaddingX)
+        .frame(height: NowPlayingLayout.rowHeight)
         .nxRowSurface(isSelected: isFocused, isStatic: isStatic)
         .contentShape(RoundedRectangle(cornerRadius: NXLayout.rowRadius))
         .animation(.easeInOut(duration: 0.12), value: isFocused)
@@ -914,20 +913,20 @@ private struct PanelRow: View {
             EmptyView()
         case .text(let text):
             Text(text)
-                .font(SettingsFont.bodyRegular)
+                .font(NowPlayingFont.textRegular)
                 .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
                 .lineLimit(1)
                 .truncationMode(.tail)
         case .on:
-            Text("ON").font(SettingsFont.bodyMedium).foregroundStyle(Color.nxCyan)
+            Text("ON").font(NowPlayingFont.textMedium).foregroundStyle(Color.nxCyan)
         case .off:
             Text("OFF")
-                .font(SettingsFont.bodyRegular)
+                .font(NowPlayingFont.textRegular)
                 .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
         case .live(let text):
-            Text(text).font(SettingsFont.bodyRegular).foregroundStyle(Color.nxYellow)
+            Text(text).font(NowPlayingFont.textRegular).foregroundStyle(Color.nxYellow)
         case .warning(let text):
-            Text(text).font(SettingsFont.bodyRegular).foregroundStyle(Color.nxAmber)
+            Text(text).font(NowPlayingFont.textRegular).foregroundStyle(Color.nxAmber)
         }
     }
 
@@ -937,13 +936,13 @@ private struct PanelRow: View {
         case .none:
             EmptyView()
         case .chevron:
-            Image(systemName: "chevron.right").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "chevron.right").font(NowPlayingFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .external:
-            Image(systemName: "arrow.up.right").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "arrow.up.right").font(NowPlayingFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .retry:
-            Image(systemName: "arrow.clockwise").font(SettingsFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
+            Image(systemName: "arrow.clockwise").font(NowPlayingFont.icon).foregroundStyle(isFocused ? Color.nxCyan : Color.nxText2)
         case .check:
-            Image(systemName: "checkmark").font(SettingsFont.icon).foregroundStyle(Color.nxCyan)
+            Image(systemName: "checkmark").font(NowPlayingFont.icon).foregroundStyle(Color.nxCyan)
         case .busy:
             ProgressView().tint(Color.nxCyan)
         }
