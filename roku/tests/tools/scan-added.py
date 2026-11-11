@@ -14,8 +14,9 @@ and prints one result per check:
   warns, since a pass on nothing proves nothing.
 
   trailers   an AI co-author or "Generated with" line in a commit message.
-             Commits by an author in $NX_TRAILER_OK (default: tydude001, whose
-             own trailers stay as they are) are counted, not failed.
+             Commits by an author in $NX_TRAILER_OK (default: tydude001 and
+             Owen Voke, whose own trailers stay as they are) are counted, not
+             failed.
   secrets    a token, key, JWT, Supabase project address, private key or
              password in an added line, or a key, .env, Secrets.xcconfig or
              .pkg added as a file. Strong patterns fail; a plain
@@ -35,7 +36,7 @@ DETAIL name text for up to 8 lines. STATUS is PASS, WARN or FAIL.
 import os, re, subprocess, sys
 
 repo, base, ref = sys.argv[1:4]
-allow = [a.lower() for a in os.environ.get("NX_TRAILER_OK", "tydude001").split(",") if a]
+allow = [a.lower() for a in os.environ.get("NX_TRAILER_OK", "tydude001,Owen Voke").split(",") if a]
 extra_allow = sys.argv[4:]
 while extra_allow:
     if extra_allow[0] == "--allow-author" and len(extra_allow) > 1:

@@ -2,7 +2,7 @@
 '
 ' Layout, type and colour follow the Nostalgex Apple TV app's guide (see
 ' GuideView.xml). The grid follows its ChannelGuideView: a two-hour window
-' from the current half hour, 425 px per 30 minutes, scrolled a slot at a
+' from the current half hour, 395 px per 30 minutes (#263), scrolled a slot at a
 ' time with left/right, up to 22 hours ahead, the focused row kept in the
 ' middle. Rounded outlines, glows, the CRT overlay and snow are images from
 ' scripts/look-images.py. Unlike the Apple TV, the grid isn't shifted right
@@ -11,11 +11,14 @@
 
 sub init()
     m.seeded = false
-    m.colX = 220
-    m.slotWidth = 425
-    m.rowPitch = 81
-    ' The grid's rows below its header: 525 - 61.
-    m.viewHeight = 464
+    ' The grid's shape (NxGuideGeometry, #263): a row and the 1 px rule under it
+    ' make a row's pitch, and the rows show below the header and its rule.
+    geo = NxGuideGeometry()
+    m.colX = geo.colX
+    m.slotWidth = geo.slotWidth
+    m.rowH = geo.rowH
+    m.rowPitch = geo.rowH + 1
+    m.viewHeight = 525 - (geo.headerH + 1)
     m.windowSec = 7200
     m.focus = 0
     m.scrollY = 0
@@ -155,7 +158,7 @@ function applyGuideText() as Boolean
     end if
     m.guideTextLarge = large
     m.guideText = NxGuideTextSizes(large)
-    styleLabel("channelHead", "DMMono-Medium", m.guideText.head, "0xFFFFFFB3")
+    styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text2)
     m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
     return true
 end function
@@ -398,7 +401,7 @@ sub renderGrid()
         x = m.colX + i * m.slotWidth
         ' Only as tall as the time text: ChannelGuideView draws them as its overlay.
         slots.AppendChild(newRect(x, m.guideText.slotY, 1, m.guideText.slotH, "0xFFFFFF33"))
-        slots.AppendChild(newLabel(localTimeLabel(wStart& + i * 1800), "DMMono-Medium", m.guideText.slot, "0xFFFFFFF2", x + 14, m.guideText.slotY, 0))
+        slots.AppendChild(newLabel(localTimeLabel(wStart& + i * 1800), "DMMono-Medium", m.guideText.slot, NxTokens().color.text, x + 14, m.guideText.slotY, 0))
     end for
 
     ' Only the rows in or touching the viewport, which clips them.
@@ -434,13 +437,13 @@ sub renderGrid()
 end sub
 
 ' A row's rounded outline with its glow (scripts/look-images.py), tinted:
-' 16 px of glow either side of the 1920 x 80 row.
+' 16 px of glow either side of the 1920 px row.
 function newOutline(name as String, y as Integer, color as String) as Object
     p = CreateObject("roSGNode", "Poster")
     p.uri = "pkg:/images/look/" + name + ".9.png"
     p.translation = [-16, y - 16]
     p.width = 1952
-    p.height = 112
+    p.height = m.rowH + 32
     p.blendColor = color
     return p
 end function
@@ -454,14 +457,18 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     row = CreateObject("roSGNode", "Group")
     row.translation = [0, y]
 
+    ' The focused row is the channel's colour at 32% over the panel, as the
+    ' Apple TV (#263, NxGuideFocusFill); an even row has a stripe.
+    gc = NxGuideColors()
+    tc = NxTokens().color
     stripe = invalid
     if focused then
-        stripe = colorOf(ch.color, "52")
+        stripe = NxGuideFocusFill(ch.color)
     else if idx mod 2 = 0 then
-        stripe = "0xFFFFFF08"
+        stripe = gc.stripe
     end if
-    if stripe <> invalid then row.AppendChild(newRect(0, 0, 1920, 80, stripe))
-    row.AppendChild(newRect(0, 80, 1920, 1, "0xFFFFFF14"))
+    if stripe <> invalid then row.AppendChild(newRect(0, 0, 1920, m.rowH, stripe))
+    row.AppendChild(newRect(0, m.rowH, 1920, 1, "0xFFFFFF14"))
 
     ' Programs, with the now-airing cell in the channel's colour.
     nowB = blockAt(ch, t)
@@ -482,62 +489,61 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
                 if gave.gaveWay.startSec = b.startSec and gave.gaveWay.ratingKey = b.ratingKey then onNow = false
             end if
             past = b.endSec <= t
-            if onNow then
-                fill = colorOf(ch.color, "40")
-                if focused then fill = colorOf(ch.color, "8C")
-                row.AppendChild(newRect(x, 0, w, 80, fill))
+            ' The live cell in the channel's colour: 25% over the row, or on
+            ' the focused row 55% over its fill, dark enough for white
+            ' (NxGuideFocusLiveFill). A past programme keeps its tint on both.
+            if onNow and focused then
+                row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideFocusLiveFill(ch.color)))
+            else if onNow then
+                row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
             else if past then
-                row.AppendChild(newRect(x, 0, w, 80, "0xFFFFFF05"))
+                row.AppendChild(newRect(x, 0, w, m.rowH, gc.past))
             end if
-            row.AppendChild(newRect(x, 0, 1, 80, "0xFFFFFF1F"))
-            ' The title runs to the block's edge, 15 in from its start.
+            row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
+            ' The title runs to the block's edge, 15 in from its start: white
+            ' live and on the focused row, textDim on every other (#263).
             if w > 15 then
-                tc = "0xFFFFFFD9"
-                if onNow or focused then
-                    tc = "0xFFFFFFFF"
-                else if past then
-                    tc = "0xFFFFFF80"
-                end if
-                row.AppendChild(newLabel(b.line, "DMMono-Medium", m.guideText.title, tc, x + 15, m.guideText.titleY, w - 15))
+                titleColor = tc.textDim
+                if onNow or focused then titleColor = tc.text
+                row.AppendChild(newLabel(b.line, "DMMono-Medium", m.guideText.title, titleColor, x + 15, m.guideText.titleY, w - 15))
             end if
         end if
     end for
 
-    ' A channel WATERSHED alone has emptied says when it comes back, dim, in
-    ' place of its airings (ChannelGuideView's watershedRowPlaceholder).
+    ' A channel WATERSHED alone has emptied says when it comes back, in text2
+    ' on the row's past tint, focused or not, in place of its airings
+    ' (ChannelGuideView's watershedRowPlaceholder).
     if ch.held = true then
         x = m.colX + 1
-        row.AppendChild(newRect(x, 0, 1920 - x, 80, "0xFFFFFF05"))
-        row.AppendChild(newRect(x, 0, 1, 80, "0xFFFFFF1F"))
-        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.title, "0xFFFFFF66", x + 14, m.guideText.titleY, 1920 - x - 28))
+        row.AppendChild(newRect(x, 0, 1920 - x, m.rowH, gc.past))
+        row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
+        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.held, tc.text2, x + 14, m.guideText.heldY, 1920 - x - 28))
     end if
 
     ' Channel column, drawn over the programs' left edge; the row's stripe or
     ' focus fill runs through it, as on the Apple TV.
-    row.AppendChild(newRect(0, 0, m.colX, 80, "0x0D0D1FFF"))
-    if stripe <> invalid then row.AppendChild(newRect(0, 0, m.colX, 80, stripe))
+    row.AppendChild(newRect(0, 0, m.colX, m.rowH, gc.grid))
+    if stripe <> invalid then row.AppendChild(newRect(0, 0, m.colX, m.rowH, stripe))
     accentW = 4
     if focused or tuned then
         accentW = 8
-        row.AppendChild(newRect(0, 0, 8, 80, color))
+        row.AppendChild(newRect(0, 0, 8, m.rowH, color))
     else
-        row.AppendChild(newRect(0, 0, 4, 80, colorOf(ch.color, "66")))
+        row.AppendChild(newRect(0, 0, 4, m.rowH, colorOf(ch.color, "66")))
     end if
-    row.AppendChild(newRect(m.colX, 0, 1, 80, "0xFFFFFF26"))
-    numColor = color
-    nameColor = colorOf(ch.color, "F2")
-    if focused then
-        numColor = "0xFFFFFFFF"
-        nameColor = "0xFFFFFFFF"
-    end if
+    row.AppendChild(newRect(m.colX, 0, 1, m.rowH, "0xFFFFFF26"))
+    ' The number and name are white; the channel's colour stays in the bar (#263).
+    numColor = tc.text
+    nameColor = tc.text
     x = accentW + 6
     if tuned then
         ' The live chip: a bolt on the channel's colour, then 6 to the number.
         x = accentW + 8
-        row.AppendChild(newRect(x, 28, 17, 23, color))
+        chipY = (m.rowH - 23) \ 2
+        row.AppendChild(newRect(x, chipY, 17, 23, color))
         bolt = CreateObject("roSGNode", "Poster")
         bolt.uri = "pkg:/images/look/bolt.png"
-        bolt.translation = [x + 4, 33]
+        bolt.translation = [x + 4, chipY + 5]
         bolt.width = 9
         bolt.height = 13
         row.AppendChild(bolt)
@@ -560,24 +566,24 @@ function renderInvite(y as Integer) as Object
     row.translation = [0, y]
     fill = colorOf(accent, "38")
     if focused then fill = colorOf(accent, "FF")
-    row.AppendChild(newRect(0, 0, 1920, 80, fill))
+    row.AppendChild(newRect(0, 0, 1920, m.rowH, fill))
     if focused then
         row.AppendChild(newOutline("seasonal_focus", 0, colorOf(accent, "FF")))
-        row.AppendChild(newRect(0, 0, 8, 80, colorOf(accent, "FF")))
+        row.AppendChild(newRect(0, 0, 8, m.rowH, colorOf(accent, "FF")))
     else
         row.AppendChild(newOutline("seasonal", 0, colorOf(accent, "FF")))
-        row.AppendChild(newRect(0, 0, 4, 80, colorOf(accent, "FF")))
+        row.AppendChild(newRect(0, 0, 4, m.rowH, colorOf(accent, "FF")))
     end if
     hc = colorOf(accent, "FF")
     if focused then hc = "0x000000FF"
-    head = newLabel(NxSeasonalHeadline(m.offer, NxSeasonNow()), "DMMono-Medium", 22, hc, 20, 25, 0)
+    head = newLabel(NxSeasonalHeadline(m.offer, NxSeasonNow()), "DMMono-Medium", 22, hc, 20, NxGuideLineTop(m.rowH, 22), 0)
     row.AppendChild(head)
     px = 20 + head.boundingRect().width + 14
-    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " PACKAGE", "DMMono-Medium", 14, "0x000000FF", px + 11, 31, 0)
+    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " PACKAGE", "DMMono-Medium", 14, "0x000000FF", px + 11, (m.rowH - 28) \ 2 + 5, 0)
     if focused then cta.color = "0x000000A6"
     pill = CreateObject("roSGNode", "Poster")
     pill.uri = "pkg:/images/look/capsule.9.png"
-    pill.translation = [px, 26]
+    pill.translation = [px, (m.rowH - 28) \ 2]
     pill.width = cta.boundingRect().width + 22
     pill.height = 28
     pill.blendColor = colorOf(accent, "FF")
@@ -2687,10 +2693,15 @@ sub keepFocusVisible()
     at = 0
     if m.nav = "grid" then at = m.focus + leadRows()
     total = m.channels.Count() + leadRows()
-    want = (m.viewHeight - 80) \ 2 - at * m.rowPitch
+    want = (m.viewHeight - m.rowH) \ 2 - at * m.rowPitch
     if want < 0 then want = -(((-want) + m.rowPitch \ 2) \ m.rowPitch) * m.rowPitch
-    lowest = m.viewHeight - total * m.rowPitch
-    if lowest > 0 then lowest = 0
+    ' At the end of the list, the last row whole and the top on a whole row:
+    ' the 466 px view isn't a whole number of 65 px rows, and stopping where
+    ' the last row touches the bottom left 11 px of the row above under the
+    ' header (#263's sizes). The spare pixels go below the last row instead.
+    over = total * m.rowPitch - m.viewHeight
+    lowest = 0
+    if over > 0 then lowest = -((over + m.rowPitch - 1) \ m.rowPitch) * m.rowPitch
     if want < lowest then want = lowest
     if want > 0 then want = 0
     m.scrollY = want

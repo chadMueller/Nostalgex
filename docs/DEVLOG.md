@@ -28,6 +28,530 @@ Emby only: Jellyfin wasn't run.
 **Open.** The forced-sidecar branch in `applySubtitles` can't run since #237: both callers of `NxMbSubtitleSidecars`
 pass `drawForced`, and Plex never sets `forcedSub`. Left in here; it comes out as its own change (Chad, #298).
 
+## 2026-11-11 (Roku: #228's review follow-ups, #227)
+
+**Why.** Chad's merge note on #228 (tydude001): time `pushMissing`, which runs on every Settings visit and parses
+`channels.json` on the render thread; press the empty state on a TV; fix the `showPage` comment; and list the
+libraries with no count as a difference from the Apple TV.
+
+**Changed.** `pushMissing` logs `settings: missing channels: n in t ms`, with the read and parse of `channels.json`
+when that visit's first build does it. The comment above `showPage` says it steps up one level onto the link row that
+opened the page. `PORTING.md` gives the libraries with no count (over 30,000 titles, a saved guide with no library)
+their own bullet: no "You have m" there, where the Apple TV counts at any size. The Settings tour has a `fills` state:
+as `on`, then after `after` seconds every channel of the packages on is on air, handed to Settings as
+`refreshSettings` does after a guide build, so MISSING CHANNELS left open shows its empty state.
+
+**Timed** on the 43S45 (OS 16.0.4). A test-data build of `2d79a15` on the lab Emby as `nxlab`, one Settings visit:
+62 missing, 49 ms, of which reading and parsing `channels.json` 15 ms. The Settings tour (24 missing): 33 to 34 ms, the
+parse 13 to 14 ms, four visits; a second build in the same visit, with no parse, 1 to 3 ms. Not on a stick.
+
+**Pressed** on the same TV with the tour, `?state=fills`: MISSING CHANNELS opened from its link row (24 CH), focus on
+the first card; when every channel went on air the page said "Every channel in your packages is on air." with focus on
+that line (its 7% band read off a screenshot); OK changed nothing on screen; Back went to CHANNEL PACKAGES on its first
+package, the link row gone from the end of the list.
+
+## 2026-11-11 (Android: CI's release lint)
+
+**Changed.**
+- GUIDE TIMEOUT (#290) hears the remote through `Activity.onUserInteraction` now, not an override of `dispatchKeyEvent`. Calling `super.dispatchKeyEvent` reaches androidx's `ComponentActivity` override, which is `@RestrictTo`, so `:app:lintRelease` failed on CI with `RestrictedApi`. Measured on a SHIELD (Android 11): 5 D-pad presses called it 10 times, once on key down and once on key up, the same as the override did. `:engine:test :app:lintRelease :app:assembleDebug` pass locally.
+- The Roku job's `trailers` check allows `Owen Voke` as well as `tydude001` (`NX_TRAILER_OK`'s default in `roku/tests/tools/scan-added.py`, and the row in `roku/tests/README.md`). It ran on #151 because the branch edits `.github/workflows/ci.yml`, which is in the Roku path filter, and failed on the Android commits' AI co-author lines. Chad chose this over rewriting the history: #151 is squash-merged with a message he writes, so the trailers don't reach main. The allowance is keyed on the commit's author name, so the GitHub account name would not have matched. Locally the check passes: 71 commits, 70 with a trailer, all counted, none failed. The Roku suite's other checks pass, and its two warnings are read and harmless (`secrets` flags the upload key's passwords, which come from a properties file, not literals; `addresses` lists a placeholder in the server hint, test vectors and version numbers).
+
+**Next.**
+- Once CI is green, #151 comes out of draft for Chad's code owner review and squash merge.
+
+## 2026-11-11 (Android: the Apple TV 1.0.32 look, from the issues' numbers; #267 to #271)
+
+The Apple TV 1.0.32 is not on main yet (main's Apple TV is 1.0.31) and its branch isn't published, so this works from the numbers written out in each issue and from the Roku's port of the same tokens (`roku/source/ui/Tokens.brs`, #262). Two details the issues leave to the 1.0.32 screenshots are provisional; they are listed under Half-done.
+
+**Changed.**
+- **#267, tokens.** `DesignTokens` (engine) holds the type scale, the compact Settings scale, the guide and panel exceptions, the colours and the row geometry; `ui/Tokens` gives the colours to Compose.
+  - `DesignTokensTest` computes WCAG contrast for every pair the issue lists: text, text-2, cyan, yellow, amber and red-text on panel, row and selected-row; text and text-2 on chosen-neutral; on-cyan on cyan; textDim on the guide and on its lightest row. All are at 4.5:1 or more.
+  - textDim is 5.35:1 on the guide (`#0D0D1F`) and 4.82:1 on white at 5% over it (`#19192A`), the issue's 5.36 and 4.83.
+  - Text on a channel's colour is black or white, whichever is higher, at 4.58:1 or more over a sweep of colours.
+  - What the viewer reads says "bundle" where it said "package" (BUNDLES, CHANNEL BUNDLES, "Bundles and the schedule", PRESS TO ADD THE ... BUNDLE); code identifiers keep their names.
+- **#268, the guide grid.** NORMAL is 22 for titles, numbers and names and 25 for times, the CHANNEL heading and BROADCASTS RESUME AT 9 PM; LARGE is 29 for all of them, with the number box 54 wide.
+  - Rows are 64 tall (were 80) and the header 58 (was 60).
+  - Focus is the selected-row fill, a 3 pt cyan outline, a cyan glow and a 3% lift. The lift grows from the row's left edge, because a row as wide as the screen scaled from its centre pushed the channel number off screen (seen on the SHIELD).
+  - Programme titles are white when live or on the focused row, otherwise textDim; channel numbers are white and names text-2, never the channel's colour.
+  - The live block's channel-colour fill stays at 25% when focused (it was 55%), so white titles keep their contrast on a bright channel colour.
+- **#269, Settings.**
+  - The rail is 420 wide with 64-tall rows 10 apart and text at 25. SETTINGS is VT323 at 31 in text-2.
+  - The pane heading is 29, row labels and values 25, captions 25. Rows are 10 apart, with 20 side padding.
+  - Rows use the shared state: resting `#141B33` with a 1.5 pt outline; under the cursor the selected fill, 3 pt cyan outline, glow and lift. The category on show is chosen-neutral.
+  - The toggle is 44 by 26: cyan when on, chosen-neutral when off.
+  - No white with an opacity is left as text. A clip before the lift cut a focused row's sides off; it now clips after.
+- **#270, the bundle list.** 22 pt rows 64 tall, 6 apart, 12 pt corners, the BUNDLES heading at 25 in text-2, a `#0A0F1E` panel, and the shared row states. SETTINGS is first with a cyan accent; each bundle's colour is a stripe down its left edge, 8 wide when selected and 4 at 40% at rest.
+- **#271, the Now Playing panel.**
+  - Layout: margins 90 and 60, the `#0A0F1E` fade (96%, held to 85% of the height), and two control columns 440 wide with a 28 gap.
+  - Poster: 120 by 180 with a 2 pt outline, Plex only.
+  - Info: the channel line (colour bar, CH in VT323 28 white, name in text-2), then the title at 29 up to 3 lines. The content-rating line is gone.
+  - UP NEXT is one line: the next title, then a cyan chip "UP NEXT IN 84 MIN" that re-reads the schedule every 15 s. `UpNextLabel` gives whole minutes rounded down and "LESS THAN 1 MIN" under a minute, with tests.
+  - Controls are the shared rows, 64 high, 8 apart, all text 22; an active value is cyan, not the channel's colour.
+  - A focused row's note goes to one hint line under the columns, two lines tall at a fixed height.
+  - Up from a column's top row now closes the panel; Up from a lower row moves up as before.
+
+**Measured** on a SHIELD (Android 11) with a test copy against a lab Jellyfin:
+- Screenshots of the guide at NORMAL and LARGE, two Settings panes, the bundle list with a row selected, and the panel.
+- Up from STREAM QUALITY moved to RETRO MODE and the panel stayed; Up from RETRO MODE closed it.
+- The chip counted down to "UP NEXT IN LESS THAN 1 MIN".
+- Not seen: the panel with a poster (it needs a Plex server), and a Google TV.
+
+**Half-done.** Two layout details wait for the Apple TV 1.0.32 screenshots on main:
+- the guide's channel column, set to the Apple TV's 340 (Android had 220);
+- the order of the panel's channel line and title, set to channel line first, as the issue lists them.
+
+All 352 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: a file that runs past its slot no longer leaves the player behind the guide, #293)
+
+**Measured first.** On a SHIELD (Android 11), a test copy of the app played a channel of five 2 min 50 s films from a lab Jellyfin; each gets a 2-minute slot, so each runs 50 s past it. A throwaway log line at each natural end recorded what the guide had on, and how far in, against what the player started:
+
+| Natural end | Guide had on | Player started | Player behind the guide |
+|---|---|---|---|
+| 10:53:31 | Drift One, 51 s in | Drift One at 0 s | 51 s |
+| 10:56:22 | Drift Three, 102 s in | Drift Three at 0 s | 102 s |
+| 10:59:13 | Drift Four, 33 s in | Drift Four at 0 s | 33 s |
+| 11:02:04 | Drift Two, 84 s in | Drift Two at 0 s | 84 s |
+| 11:04:55 | Drift Three, 15 s in | Drift Three at 0 s | 15 s |
+
+The lag stays under one slot, because the player always takes the programme the guide has on now. But for most of each programme, Now Playing named one film while the guide showed the next.
+
+**Changed.**
+- At a natural end the engine's pick starts at 0 s (`advancePick(..., fromNaturalEnd = true)`), which main's Apple TV also does, because a file's real length can differ from its metadata.
+- The Apple TV 1.0.32 holds a real file to the guide's clock instead (not on main yet; ported from the issue's description). `NaturalEnd.pick` does it in the app layer, so the shared schedule engine and its golden tests are unchanged:
+  - when the guide has already moved on to the programme the engine picked, the player joins it where the clock says, as a tune-in would;
+  - when the file ended inside its own slot, or the conflict rule picked another programme, the next one starts at 0 s as before.
+- `NaturalEndTest` has the rule's cases and a model channel of 170 s files in 120 s slots over 20 natural ends: up to 50 s or more behind without the rule, never behind with it.
+
+**Measured after,** the same channel for 13 minutes: at each of 7 natural ends the player started at the guide's own position (51 or 52 s in), with picture 0.7 to 0.9 s later, and the ends fell every 2 minutes, at :31 or :32 past. Not measured on a Google TV, or on Plex.
+
+All 344 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: GUIDE TIMEOUT, and the 4K frame size on Jellyfin and Emby checked; #290, #287)
+
+**Changed.**
+- **#290, GUIDE TIMEOUT.** A new row under PLAYBACK & PICTURE, after GUIDE TEXT SIZE, as on the Apple TV, with its wording.
+  - One press cycles OFF, 5 MIN, 15 MIN. The default is 5 MIN, and anything else saved reads as the default. It is saved as "off", "5m" or "15m" under `nostalgex_guide_timeout`, on this TV only.
+  - Every 5 s the app checks; after that long with no remote press, while the guide is in front (not full screen, Settings closed) and a channel is playing, the playing channel goes full screen.
+  - `MainActivity.onUserInteraction` notes every key, as the Apple TV's `RemoteActivityMonitor`, and closing Settings counts as a press.
+  - The rule is `GuideTimeout.shouldGoFullScreen` in the engine, with the issue's cases: OFF, not in front, not playing, under and at the interval, the cycle and the stored values.
+- **#287, frame size.** No code: commit `21977e54` already reads the first video stream's `Width` and `Height` in the Jellyfin and Emby scan, and the 4K watchdog deadline reads them.
+  - `MediaBrowserFrameSizeTest` holds it to two answers saved from a lab Jellyfin 12.4 for the scan's own request: a 3840x1600 film gets 40 s on the server stream and 15 s on direct play, and a 1280x720 film 20 s.
+  - The Emby case serves the same answer through the Emby path; no Emby server was at hand.
+  - The size stays after the PlaybackInfo handshake, which never replaces the scanned item.
+
+**Measured** (#290), on a SHIELD (Android 11) with a test copy of the app signed in to a lab Jellyfin, the guide up and a channel playing:
+- The row cycled and saved "15m", "off" and "5m".
+- With 5 MIN and no press, the guide went full screen on the playing channel 306 s after the last press. The app checks every 5 s and the measuring script polled every 3 s.
+- Back on the guide, a key pressed 180 s later restarted the wait: full screen 307 s after that press, 487 s after returning.
+- On a Google TV emulator too slow to play the stream, the channel stopped after the failure cards and GUIDE TIMEOUT rightly never fired, because nothing was playing.
+- Not measured on a Google TV.
+
+All 339 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: STOP WAITING ends the whole scan, and a killed first setup resumes; #285, #288)
+
+**Changed.**
+- **#285, STOP WAITING.** With more than one server on, the viewer's press now ends the whole scan, as on the Apple TV 1.0.32. No server after it is read, and what the servers before it gave is kept for the guide. Before, the press abandoned only the server being read and the next one started.
+  - A server that stalls by itself (210 s with no progress, no press) is still skipped alone.
+  - The loop is `ServerScan.readAll` in the engine, with 7 tests: a press on the first or second server, a press on a server that gave nothing yet, a stall with no press, and failed servers.
+  - Not measured on a TV: it needs two servers, one of them slow.
+- **#288, resuming a killed first setup.** Each library section is now written to its own file (`SectionStore`, `files/scan-sections`, never the library snapshot) as soon as it has been read in full, as the Apple TV 1.0.32's `LibraryScanProgressStore`.
+  - The next scan uses a kept section instead of asking the server when `ScanResume.reusable` allows: under 6 hours old (the Apple TV's snapshot age), written by this `versionCode`, and on Plex with the same section change stamp (`updatedAt`, `contentChangedAt`). A Plex section with no stamp is read again.
+  - A section abandoned part way is never kept. The kept sections are deleted once a whole library has been read, and on DISCONNECT.
+  - Jellyfin and Emby sections are kept before the server's address and token are added to the items.
+  - `ScanResumeTest`: the rule's cases, and a Jellyfin scan that dies at the third library and then reads only that one.
+- **Measured** on a Google TV emulator against a lab Jellyfin 12.4 with eight video libraries, through a proxy that delayed each library's items by 4 s:
+  - The first setup was killed while it read the fourth library, after keeping the first three.
+  - On the next launch the app's existing guard offered TRY AGAIN (two loads in a row had been interrupted). After the press, the three kept libraries were used, the server was asked only for the five that hadn't finished, the library loaded with all 6 items, and the kept files were gone.
+  - Not measured on Plex or on a TV.
+- **#286 follow-up.** The saved library's `FORMAT` is 7, so a library saved before audio tracks kept their own titles is read again rather than used without them.
+
+All 329 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: no channel starts on a commentary, and the missing-channel lines held to the shared file; #286, #292)
+
+**Changed.**
+- **#292.** `ChannelRequirementsGoldenTest` replays `scripts/channel-requirements-golden.json`.
+  - Android's `ChannelRequirements.plainLanguage` already gives the same lines for all 142 channels in `channels.json`, so no wording changed. No line says "package".
+  - The test fails when one wording is changed ("Movies only" to "Films only" was tried and reverted).
+  - The golden file is a test input in `engine/build.gradle.kts`, so a change to it reruns the test.
+- **#286, the commentary rule.** A track whose title says "commentary" (any case) is never the audio a channel starts on while the file has another track. The viewer's language, the default flag and the channel count are judged over the tracks that are left. With only commentaries, the earlier rules run over all of them.
+  - `AudioPick` ports `scripts/nostalgex-audio-pick.js`, and `LanguageChoice.preferredAudioIndex` uses it for the Jellyfin and Emby track it pins.
+  - `AudioPickGoldenTest` replays `scripts/audio-pick-golden.json`: the commentary titles, the 15 Jellyfin and Emby cases and the 4 Plex cases all pass. Without the rule, the Jellyfin and Emby cases fail. Android's own language order (the viewer's language, then English) gives the file's answers for every case.
+  - Jellyfin and Emby tracks now keep the server's own `Title` beside `DisplayTitle` (`AudioStream.rawTitle`), from the scan and from PlaybackInfo, because the display title can leave the word out.
+  - **In the player** (every backend, direct play included), the language pick skips a track whose label says commentary, as the Roku's direct-play rule (#246).
+  - **On a Plex server stream**, the item's own audio streams are read before the decision call (`PlexClient.audioStreams`, at most 5 s). When Plex's selected stream is a commentary and another exists, `audioStreamID` asks for that one for this stream only, as the web tuner does. The track saved on the Plex account isn't changed.
+- **Measured** on a Google TV emulator against a lab Jellyfin 12.4, with a film whose first audio track is a default-flagged English "Director's Commentary" and whose second is an English "English" track.
+  - **Direct play:** the player opened on the commentary, and the rule moved it to "English".
+  - **Server stream:** PlaybackInfo pinned audio 2, "English".
+  - Before this change both would have started on the commentary: the two tracks have the same language and channels, so the default flag or the first track won.
+- **Not measured:** the Plex paths, which need a claimed Plex server and so were not run.
+
+All 313 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: the Plex code waits 15 minutes, DISCONNECT forgets playback failures, Remux or Transcode; #284, #289, #291)
+
+**Changed.**
+- **#284, the Plex sign-in code.** Android now waits as long as plex.tv keeps the code: the PIN's `expiresIn`, at most 1,800 s, and 300 s when plex.tv doesn't say (`PlexPinWait`, as the Apple TV's `plexPINLifetime` and the Roku's `NxPlexPinWaitSeconds`). It used to stop after 150 polls, which is 5 minutes.
+  - It polls every 2 s by the clock, an approval on the last poll still counts, and an expired code is replaced by a new one, as before.
+  - Measured against plex.tv on 2026-11-11: a new code said `expiresIn=900`, and an unentered code answered 200 at minutes 4, 6, 12 and 14, then 404 at minute 16.
+  - A code approved at minute 12 on a TV was not tried.
+- **#289, the last playback failure.** DISCONNECT clears the saved playback failures and the "Last playback failure" line in Settings, as the Apple TV 1.0.32 does.
+  - A Plex sign-in, the server picker or a Jellyfin or Emby sign-in clears them too, unless the new servers share one with the old ones (`ServerSharing.sharesAServer`): the same machine or server id, or the same host and port. So adding or removing one of several keeps them.
+  - On a Google TV emulator signed in to a lab Jellyfin, the line showed before DISCONNECT, and the saved verdicts were `[]` after.
+  - The rule has 9 tests. The sign-out half has none, because the app module has no unit tests; the emulator run stands in for it.
+- **#291, PLAYBACK INFORMATION.** For a Plex server stream the PLAYBACK row says Remux when Plex's decision copies the video, and Transcode when it re-encodes it. `PlexDecision` reads the video stream's `decision` from the answer the server stream already asks for (#192).
+  - With no decision, and on Jellyfin and Emby, it says "Server stream" as before. Jellyfin's PlaybackInfo answer doesn't plainly say whether the video is copied, so it is left alone, as the issue allows.
+  - Held to two answers for Android's real request, saved from an unclaimed lab Plex 1.43.5 that was deleted straight after: High-profile H.264 copied, and Constrained Baseline H.264 re-encoded.
+  - The row itself was not seen on a screen, because a Plex server stream needs a claimed server.
+
+All 308 engine tests pass. Not pushed yet.
+
+## 2026-11-11 (Android: rebased onto main)
+
+**Changed.** `feature/android` rebased onto main at `c822b507`. The only conflicts were dev log entries at the top of this file; both sides are kept. Nothing on main touched `android/`, and all 292 engine tests pass. The 2026-11-10 entry said the Apple TV doesn't ask Plex's decision before a server stream; it does, and that line is corrected.
+
+## 2026-11-10 (Android: build 5)
+
+**Shipped.** `versionCode` 5, `versionName` 1.0.0, for the internal track: every open Android parity issue in one build, as Chad asked. Not uploaded from here; Chad makes the release.
+
+## 2026-11-10 (Android: the Plex server stream keeps 5.1 and 4K, asks its decision first, and skips Dolby Vision 5; #197, #192, #193 measured)
+
+**How it was measured.**
+- **Server:** a lab Plex Media Server 1.43.5 in Docker, with 13 generated 70-second films and a second library of six Dolby Vision profile 5 films.
+  - Audio: 5.1 AC-3, E-AC-3, DTS (core only; ffmpeg can't make DTS-HD MA) and TrueHD.
+  - Video: AAC 5.1, 10-bit H.264, AV1, MPEG-2 and 4K HEVC Main 10, plus a control and a High-profile H.264 with DTS 5.1.
+  - Dolby Vision: profiles 5 and 8.1, made with `dovi_tool` and `mkvmerge`. The profile 5 file's base layer is HDR10, not Dolby's IPT colour space, so it shows whether a decoder takes it but not what its colours look like.
+- **TVs:** a SHIELD (Android 11) and a Google TV emulator (Android 16). Not measured on a real Google TV.
+- **Method:** a throwaway build, not committed, that played one chosen film through the real playback path and logged the first rendered frame.
+- **The two TVs:**
+  - The SHIELD decodes Dolby Vision profiles 4, 5, 8 and 9 and has no AV1 decoder. It passes AC-3 and E-AC-3 through, but not DTS or TrueHD.
+  - The emulator has no Dolby Vision decoder and no AC-3 or E-AC-3, outputs stereo, and decodes HEVC (not 4K 10-bit) and AV1.
+
+**#197 (direct play decided by trying the file).** No code. On the SHIELD, tune to first frame:
+
+| File | First attempt | Fell back | First frame |
+|---|---|---|---|
+| H.264 + AAC (control) | direct play | no | 0.70 s |
+| AAC 5.1 | direct play | no | 1.09 s |
+| AC-3 5.1 | direct play | no | 0.66 s |
+| E-AC-3 5.1 | direct play | no | 0.69 s |
+| DTS 5.1 | direct play | yes, no audio decoder | 1.26 s |
+| TrueHD 5.1 | direct play | yes, no audio decoder | 1.69 s |
+| 10-bit H.264 | direct play | yes, no video decoder | 1.12 s |
+| AV1 | direct play | yes, no video decoder | 1.15 s |
+| MPEG-2 | direct play | no | 1.04 s |
+| 4K HEVC Main 10 | direct play | no | 2.91 s |
+| Dolby Vision 8.1 | direct play | no | 2.33 s |
+| Dolby Vision 5 | direct play | no | 1.96 s |
+
+Every failed attempt fell back within the track check, about a second; none waited for the 15 s watchdog. By the issue's own test this closes with the table. A Google TV whose decoder claims a file and then shows nothing was not met here.
+
+**#192 (Plex server stream client profile).** Measured first with today's request. Plex's decision and what reached the player both said that DTS 5.1, TrueHD 5.1 and 4K HEVC Main 10 came as 1080p 8-bit H.264 with stereo AAC. Changes:
+- `PlexClientProfile.extra` builds `X-Plex-Client-Profile-Extra` in the Roku's shape (codecs added to Plex's Android profile), with the Apple TV's raised HEVC limits and E-AC-3 cap:
+  - HEVC when the TV decodes it, with 3840x2160 and 10 bits when it decodes those;
+  - AC-3 and E-AC-3 when the TV passes them through or decodes them;
+  - no lossless target.
+- The Apple TV's form, a whole `add-transcode-target`, is ignored by Plex for `X-Plex-Platform=Android`: everything still came as stereo AAC.
+- The request adds `directStream=1` and `directStreamAudio=1`.
+- After, on the SHIELD through the server stream:
+  - DTS, TrueHD and AAC 5.1 arrive as E-AC-3 6ch, and AC-3 5.1 as AC-3 6ch.
+  - High-profile H.264 is copied.
+  - 4K HEVC Main 10 and Dolby Vision 8.1 are copied at 3840x2160 with E-AC-3 6ch, first frame in 2.3 s and 3.1 s.
+- On the emulator (stereo, no Dolby) the profile offers neither, and 5.1 comes as stereo AAC as before.
+- The STARTED log line now ends with the audio codec, channel count and video size that reached the player.
+- The Jellyfin and Emby hand-built stream asks `TranscodingMaxAudioChannels=6`. Not measured against a server.
+- The 8-bit H.264 test films were Constrained Baseline (ffmpeg's ultrafast). Plex re-encodes those even with the profile; High profile is copied.
+
+**Plex's decision before each server stream (found while measuring).**
+- Plex 1.43.5 refuses `start.m3u8` with HTTP 400 ("Denying access due to session lacking decision for transcode") when this client has started that film before and the session has no decision.
+- The app never asked one, before this change or after, so flipping back to a channel whose film was on the server stream showed "Your server wouldn't start this one".
+- Reproduced with curl and the old request: the first start 200, repeats 400 at 1 s, 60 s and 120 s, with one 200 at 30 s.
+- Now `PlexClient.decision` asks `/decision` with the same query and session first, capped at 5 s, off the main thread. The same film tuned six times in a row: 6 of 6 played, decision in 26 to 72 ms.
+- The Apple TV already asks it first (`PlexAPIService.decisionURL`, corrected on 2026-11-11: an earlier search for the literal path missed it). The web tuner and Roku build no decision request, read from their source; not checked whether they meet the 400.
+
+**#193 (Dolby Vision profile 5 from Plex).**
+- Plex answers 2003, "DoVi (Profile 5) color space is not supported", to a request that doesn't offer HEVC.
+- With the #192 profile it copies profile 5 as HEVC instead. A TV without a Dolby Vision decoder then shows the base layer through a plain HEVC decoder, which for real profile 5 is green and purple.
+- So when direct play finds no decoder for a track whose codecs say profile 5 (`dvhe.05`, `PlexClientProfile.withholdHevcFor`), the server stream offers no HEVC. Profile 8 (`dvhe.08`) is still offered HEVC: its base layer is HDR10.
+- A decision that is 2003 naming DoVi (`PlexDecision.isDolbyVisionRefusal`, as the Apple TV's) skips the programme: no card, not one of the channel's five failures, the next programme straight away.
+- The profile isn't read at scan: Plex's bulk listing doesn't carry `DOVIProfile`, only an item's own metadata does, and the decision answers it for nothing extra on the tune that needs it.
+- A channel of nothing but such titles stops after 5 skips in a row (`PlexDecision.SKIPS_BEFORE_STOP`) with the channel-stopped card. Its diagnostics line says "5 failures", though they were skips.
+- Measured on the emulator:
+  - **Before**, profile 5 failed direct play and was refused, and the card said "Your server wouldn't start this one".
+  - **After**: no decoder for `video/dolby-vision`, then a server stream without HEVC, then decision 2003 in 30 ms, a skip, and the next programme.
+  - **A channel of six profile 5 films:** 5 skips in about 15 s, then "Nothing on this channel will play right now".
+- On the SHIELD, which decodes profile 5, it direct plays as before.
+- Tests: `PlexDecisionTest` from decision answers saved from the lab server (`engine/src/test/resources/plex-decision`, library ids and identifiers taken out), `PlexClientProfileTest`.
+
+All 292 engine tests pass.
+
+**Next.** A real Google TV for #192 and #193. Chad to decide whether the other surfaces ask Plex's decision first. The lab server is to be removed from the Plex account afterwards.
+
+## 2026-11-10 (Android: rebased onto main; open on last channel on by default, no tracking line, music video titles)
+
+**Changed.**
+- **Rebased** onto main at `db562ca2`. The only conflicts were dev log entries at the top of this file; both sides are kept.
+- **OPEN ON LAST CHANNEL is on by default** (#225, after the change of default on every surface). `LaunchChannelMemory.ENABLED_BY_DEFAULT` is true. `LaunchChannelMemory.isOn(stored)` reads the switch as the web's `isOn` does: the default only when nothing is stored. So a TV that switched it off stays off, and only a TV that never chose takes the new default.
+- **RETRO MODE no longer draws the VHS tracking line**, as on the web, Apple TV and Roku, because viewers found it distracting. Scanlines, vignette, flicker and 4:3 are unchanged. The row reads "CRT scanlines, vignette, flicker, 4:3 aspect ratio", the Apple TV's and Roku's wording.
+- **Music video titles (N-034).** `MusicTitle.cleanTitle` gets the web's two new passes:
+  - a group made only of noise words goes whole;
+  - parentheses a word came out of are tidied.
+
+  "Song (Official Music Video)" is now "Song", not "Song ( Music )". `MusicTitleGoldenTest` holds Android to all 37 `clean` and 8 `parse` cases in `scripts/music-title-golden.json`; on the old code all 3 of its tests fail. A hand-written case in `MediaBrowserScanTest` had recorded the old output ("One More Time ( )"); it now expects what the fixed web module gives.
+
+All 277 engine tests pass. Not yet on a TV. A saved library keeps the old titles until the background rescan after the next launch.
+
+## 2026-11-09 (Android: libraries hidden on Jellyfin behind one switch, #224)
+
+**Changed.** Libraries hidden from the Jellyfin home screen now sit behind one switch, as on the web tuner. Android had them the Apple TV's way: each one listed and switched on separately. Chad's issue asked for the web's single switch until he says otherwise, and the switch keeps Android the same as the web and Docker.
+- **The switch.** INCLUDE LIBRARIES HIDDEN ON JELLYFIN, with the web's wording. It sits under OPEN ON LAST CHANNEL, only on Jellyfin, and isn't shown in demo mode. It is off by default (`MediaBrowserLibrary.INCLUDE_HIDDEN_DEFAULT`) and kept on the TV under the web's key, `nostalgex_include_hidden_libraries`. Sign-out leaves it alone.
+- **Off.** The scan and library selection send the one plain `/UserViews?userId=` request Android always sent.
+- **On.** The scan asks once, with `includeHidden=true`. Library selection asks both lists so a hidden library can be marked HIDDEN ON JELLYFIN. A hidden library is then on like any other, unless the viewer switches it off.
+- **Pressing it.** The saved library is dropped, as the web does, then read again in the background. The guide, the channel playing and Settings stay where they are, and the result is saved even when nothing changed.
+- **Removed.** The per-library opt-in: `includedHiddenSections` and the key `nostalgex_included_hidden_library_sections`. It was never in a release.
+- **Emby.** Unchanged in both positions.
+
+`JellyfinHiddenLibrariesTest` is rewritten around the switch: the golden `views` paths; off sends exactly the old request; on reads a hidden film library and a hidden show library's episodes; a library the user can't access is never asked; a hidden library switched off stays unread; Emby is the same either way. With the parameter taken out of `userViewsPath`, 3 of its 7 tests fail. All 274 engine tests pass.
+
+**Measured** on a Google TV emulator (Android 16) against a lab Jellyfin 12.4 in Docker. The test user had one film library hidden from My Media (3 films) and one with no access (2 films). On the server, the plain list leaves out the hidden library, `includeHidden=true` adds it, the library without access is in neither list, and asking that library for items directly answers HTTP 401.
+- **Off:** 5 items, 3 channels in the guide.
+- **On:** a background re-read of 8 items in 1.5 s, and 4 channels. LIBRARIES lists the hidden library as "Movies · HIDDEN ON JELLYFIN" and doesn't list the one without access.
+- **Off again:** 5 items and 3 channels.
+
+Not measured on a real Google TV.
+
+## 2026-11-09 (Android: Jellyfin and Emby playlists no longer air as films, #206)
+
+**Changed.**
+- `MediaBrowserLibrary` ports the web tuner's `sectionType`, `itemTypes` and `hasAskedType` and the Apple TV's `JellyfinPlaylistLeakTests`.
+  - The scan used to ask every view that isn't TV or Music Videos for `IncludeItemTypes=Movie`. Jellyfin's Playlists view answers any request with its playlists, and each one became a film.
+  - Now a view whose CollectionType holds no videos (playlists, music, boxsets, books, audiobooks, photos, homevideos, livetv, trailers, folders, channels) gives `other`. It is never asked for items and isn't offered in library selection, as on the Apple TV.
+  - Any row whose `Type` wasn't asked for is dropped. A row with no `Type` is kept.
+  - A view with no CollectionType, or one not known here, is still read as films.
+- `JellyfinPlaylistLeakTest` checks every `sections` and `types` case in `scripts/jellyfin-library-golden.json`. It runs the Swift test's fake server (Playlists, Music, Collections and Home Videos views, and a mixed view holding a playlist and a clip) on Jellyfin and on Emby, and builds every stock channel's pool:
+  - nothing that isn't a film reaches any channel;
+  - the films still reach VHS VAULT;
+  - the MusicVideo rows still reach HIGH ROTATION (I-067).
+  
+  On the old scan, 4 of its 5 tests fail. All 273 engine tests pass.
+
+**Measured.** On a lab Jellyfin 12.4 in Docker: 5 films, a Music library of 8 generated tracks, and an audio playlist of the 8 tracks, 33 minutes long. Asked for `Movie`, the Playlists view answered with the playlist. Android's real scan and the channel filter for every stock channel, old against new:
+- Old: the playlist loaded as a 33 minute film with no year and sat on VHS VAULT, DVD SHELF and FLICKS. The Playlists and Music views were offered as film libraries.
+- New: 2 fewer items requests and no playlist. The pools of NOSTALGEX LOL, BUDDIES, PREMIERES and VHS VAULT hold the same 5 films as before.
+
+On this server the "Collections" view has no CollectionType, so it is still read as films. The row-type check is what keeps a BoxSet out of it. This lab library had none to drop.
+
+Not measured on Emby; whether Emby's Playlists view answers the same way isn't known. Not measured on a Google TV: the SHIELD here is on Plex.
+
+**A library saved before the change.** It still holds the playlist when the app opens, but Android rescans in the background after every launch that restores a saved library, so it goes once that scan ends. No stale marker is needed, as the Apple TV's `scanFieldsVersion` is, because Android never skips a Jellyfin or Emby refresh. The same is true of #209: an Emby library saved before the rating fields is read again at the next launch, not at "the next 6-hour refresh" as the entry below says.
+
+## 2026-11-09 (Android: the Emby ratings test of #209, and #194's row dropped)
+
+**Changed.** `EmbyRatingFieldsTest` ports the Apple TV's `EmbyRatingFieldsTests`, which #209 asks for and `386f3800` shipped without. A fake server answers as Emby 4.10 does, sending `OfficialRating` and `CommunityRating` only when `Fields` names them. The tests run the real scan and the real stock channel filter over `channels.json`:
+- SAT MORNING CARTOONS drops the TV-MA and TV-14 shows and keeps the TV-Y7 one and the unrated one.
+- VHS VAULT holds its 7 R films at 3 PM and airs all 16 at 10 PM.
+- WATERSHED holds R titles on a plain channel.
+- CERTIFIED GOLD and ALL TIME GREATS get the 6 and 5 films that clear 8 and 8.2.
+- Jellyfin reads the same titles.
+- On the Swift test's synthetic library of 400 films and 25 shows, no `ratingMin` channel loses a title.
+
+With the two fields taken out of the request, 7 of the 9 fail. The 2 that still pass are the old-request control and the only-grow check. All 268 engine tests pass.
+
+The Apple TV also marks a saved Emby library from before the fix as stale, because its 24-hour "nothing changed" hold could keep it unrated. Android needs no marker: it keeps no change signature for Jellyfin or Emby, so a saved Emby library is read again at the next 6-hour refresh. Not measured against a real Emby server or on a Google TV.
+
+**#194.** Chad doesn't want the home-screen row. Google TV's documentation covers only the Engage SDK, and preview channels reportedly don't show on API 30 and up. The `nostalgex://channel/<id>` link stays as it is.
+
+## 2026-11-09 (Android: CI's collection test after the four-at-a-time read)
+
+**Changed.** CI failed `CollectionsVectorTest.plexCallsAsTheWebTunersDo` on the push of `cd104f28`. Since `ace692b3` reads collection members four at a time, the order of the Plex calls varies from run to run, and that test compared it exactly. It passed on the Mac by chance. The calls now compare sorted, with their counts, as the BoxSet test beside it already did. The test's stub records them in a synchronized list, since four threads add to it. The results still compare in order, and they are in order. Three clean runs of all 259 engine tests passed. The Vercel check on PR #151 asks for authorisation to deploy a fork's branch; that is the project's Vercel setting, not the code.
+
+## 2026-11-09 (Android: the home-screen row of #194, held for a question)
+
+**Half-done.** The link half of #194 is on `feature/android` (`9f5dc22d`). The "On Now" row isn't built: whether Google TV shows an app's row at all is unanswered, and Google TV is where #194 asks it to be measured.
+
+**What the docs say.** Android TV's home-screen guide (developer.android.com, "Recommend content on the home screen") is the only one Google publishes.
+- An app's first channel is its default and appears without the user approving it (`PreviewChannelHelper.publishDefaultChannel`, or `TvContractCompat.requestChannelBrowsable`).
+- It needs `com.android.providers.tv.permission.WRITE_EPG_DATA` and `androidx.tvprovider`. The library also merges `READ_EPG_DATA` into the manifest.
+- The home screen can be told to create the row at install with `android.media.tv.action.INITIALIZE_PROGRAMS`.
+- The guide says nothing about Google TV. What reports there are say Google TV hides third-party rows or doesn't show them:
+  - an open issue on Google's own `android/tv-samples` (#83) has channels created but never shown on API 30;
+  - open-source TV apps' notes from this year describe the same.
+
+**Measured.**
+- A throwaway build (not committed) published a default "On Now" channel with three cards.
+- On a Google TV emulator (Android 16) the channel was created (id 5), but the home screen can't be reached without signing in to a Google account, so whether it shows wasn't seen.
+- On a SHIELD it was created with `browsable=false` and not shown. That SHIELD's home screen is a third-party launcher, not the stock Android TV one, so that says nothing either way.
+- `PreviewChannelHelper.getAllChannels` in tvprovider 1.0.0 throws on a channel published without a description; the real channel must set one.
+
+**Next.** Chad's answer: whether any app's row shows on his Google TV, or a probe build tried there. If it does, the row is a launcher channel as #194 describes, plus the privacy text, and posters served by the app's own content provider (a Plex poster URL carries the token).
+
+## 2026-11-09 (Android: a link that tunes a channel, the first half of #194)
+
+**Changed.** `nostalgex://channel/<id>` opens the app on that channel full screen, from a cold start or while it runs.
+- `DeepLink` (new, `android/engine`) is the Roku's `DeepLink.brs`: a link names a channel by its id, then by its number on the guide, and one that names no channel leaves the guide as it is. `DeepLinkTest` (6) has the Roku's id-before-number, number, franchise-id and unknown cases, plus malformed links.
+- The manifest takes `VIEW` for `nostalgex://channel`, and the activity is `singleTask`, so a link while the app runs reaches it through `onNewIntent` rather than starting a second copy.
+- A link that arrives before the guide is up waits for it, and the guide opens straight on the linked channel rather than tuning the first one and then that. A link counts as the viewer's own tune, so OPEN ON LAST CHANNEL remembers it.
+- This is the half Chad asked for first. The home-screen row of what's on now is the second.
+
+**Measured on a SHIELD (Android 11, a 11,396-item Plex library).**
+- Cold start, `am start -a android.intent.action.VIEW -d nostalgex://channel/5`: CH 5 full screen, picture 5.1 s after the link, 4.2 s of it the guide being built from the saved library.
+- While running, `nostalgex://channel/7`: CH 7 full screen, picture 0.9 s after the link.
+- `nostalgex://channel/abc`: logged as naming no channel, and the guide stayed as it was.
+
+**Not checked.** A link that arrives during a first full load, though it takes the same waiting path as the cold start.
+
+## 2026-11-09 (Android: RESCAN LIBRARY's coverage line and last playback failure)
+
+**Why.** The Apple TV's RESCAN LIBRARY row has four parts, so a support report can say in one screenshot what the app holds and where it went: the library summary, a coverage line, "Last updated", and the last time playback was given up on. Android's had the first and third (the cap that would have cut the rest went in `cf41c7ad`).
+
+**Changed.**
+- `LibraryDiagnostics` (new, `android/engine`) is the Apple TV's coverage and `coverageLine`: titles on a channel with every package on, titles on none (split by kind when more than one kind has some), and titles skipped for having no runtime.
+- `Lineup.coverage()` filters the channels of packages that are off once, since the guide never needed them, and keeps their pools. It counts a channel with rules whose pool reaches its minItems, plus the collection and franchise channels. `AppModel.ensureLibraryCoverage` runs it in the background when SERVERS & ACCOUNTS opens and again after the lineup changes.
+- Both scans count what they drop for having no runtime (`PlexLibrary.skippedNoRuntime`, `MediaBrowserLibrary.scan`'s `onSkippedNoRuntime`). The count is from the last finished scan, so it reads 0 after a launch from the saved library until the refresh behind the guide ends.
+- `PlaybackDiagnostics` (new) and `PlaybackFailure.diagnosticSummary` are the Apple TV's: the last 5 verdicts, newest first, under `nostalgex_playback_verdicts_v2`, with URLs, tokens and credentials redacted. They are recorded where the Apple TV records them:
+  - the watchdog's direct play to server stream, and its capped 1080p retry;
+  - a stall on direct play, or on the server stream;
+  - an error card, and a channel stopping.
+
+  Each is logged as `WATCHDOG VERDICT`. A direct-play error that falls back at once isn't recorded, as on the Apple TV.
+- Tests: `LibraryDiagnosticsTest` (the Apple TV's `LibraryCoverageTests` wording, case for case, and the counting) and `PlaybackDiagnosticsTest` (the line, the 5 kept, redaction including percent-encoded, the summaries). 253 engine tests, 0 failures.
+
+**Measured on a SHIELD.** On the 11,396-item Plex library the row read "10,305 OF 11,396 ON CHANNELS · 1,091 ON NO CHANNEL (18 MOVIES, 1,073 EPISODES) · 1 SKIPPED (NO RUNTIME)". The count took 2.3 s off the main thread.
+
+**Not checked.** The "Last playback failure" line on a TV: nothing failed after the build went on. The line's format, keeping and redaction are covered by the tests.
+
+## 2026-11-09 (Android: collection members read four at a time, as the web tuner reads them)
+
+**Why.** On a SHIELD, reading a Plex server's 288 collections took 81.3 to 81.6 s on every launch refresh, against 18 to 20 s for the 11,396-item library itself (noted in the entry on collection member order, below). The web tuner's `fetchPlexCollections` and `fetchBoxSetCollections` read the members of four collections at once (`mapLimit(list, 4, ...)`), but the Android port read them one at a time. Its own comment on the BoxSet read said so.
+
+**Changed.**
+- `Collections.mapLimit` is the JS's: at most `COLLECTION_READS_AT_ONCE` (4) calls at a time on a small thread pool, the results in the list's order whatever order they finish in.
+- `fetchPlexCollections` and `fetchBoxSetCollections` read members through it. A collection whose read fails is still dropped, and the progress count still runs from 1 to the total.
+- `CollectionsMapLimitTest` (new, 4): order kept when calls finish out of order, never more than 4 at once, an error comes through, an empty list.
+
+**Measured on the SHIELD.** Two launches: the 288 collections read in 24.1 s and 24.3 s, against 81.3 to 81.6 s before, about 3.4 times faster. Both refreshes said "unchanged", so the parallel read gave the same collections as the one-at-a-time read had saved.
+
+## 2026-11-09 (Android: OPEN ON LAST CHANNEL, hidden Jellyfin libraries, and RESCAN LIBRARY's lines)
+
+**Why.** Three Apple TV changes on main that weren't in the Android parity table yet: OPEN ON LAST CHANNEL (I-017, `a5d84f59`, `15ffeaa3`), Jellyfin libraries hidden from the home screen (`1c0d9458`), and RESCAN LIBRARY drawing every line of its counts (`de710a11`).
+
+**Changed.**
+- **OPEN ON LAST CHANNEL.** `LaunchChannelMemory` (new, `android/engine`) is the Apple TV's rule, under its keys: the saved channel opens only when the switch is on and a channel with the same id and the same name is in the lineup, so a renumbered collection or franchise channel opens the first one instead. Demo mode always opens the first.
+  - `AppModel.tuneFromViewer` remembers a channel the viewer tunes (the guide, the mini strip, channel up and down), whether or not the switch is on. The app's own tunes (the first channel, the 9 PM Watershed lift, coming back from another app) aren't remembered.
+  - The row is under AUDIO LANGUAGE in PLAYBACK & PICTURE, hidden in demo mode. Sign-out clears the saved channel and leaves the switch.
+  - `LaunchChannelMemoryTest` (8) holds the Apple TV's cases: saved, off, nothing saved, gone, renumbered, demo, the default.
+- **Hidden Jellyfin libraries.** `/UserViews` leaves out a library the user hides from My Media unless asked with `includeHidden=true`.
+  - `MediaBrowserLibrary.sections` asks both ways on Jellyfin. A library only in the second answer is `hidden`, listed with "HIDDEN ON JELLYFIN" after its type, and off until switched on.
+  - That choice is its own set (`nostalgex_included_hidden_library_sections`, `LibrarySection.HIDDEN_ON_BY_DEFAULT` false). A new sign-in starts it empty.
+  - The scan asks for the hidden list only when a hidden library is on, so by default its requests are byte for byte what they were and `MediaBrowserScanTest` still matches the web tuner.
+  - The library picker shows even for one library if it is hidden, since nothing else could switch it on. Emby is unchanged.
+  - `JellyfinHiddenLibrariesTest` (6) holds the request to `views` in `scripts/jellyfin-library-golden.json` and covers the listing, a failed second request, the scan off and on, and Emby.
+- **RESCAN LIBRARY.** `ToggleRow` takes `subtitleLines` (3 as before); RESCAN LIBRARY passes no limit.
+
+**Measured on a SHIELD (Android 11).**
+- OPEN ON LAST CHANNEL, with a Plex library: switched on, CH 05 picked in the guide, and a relaunch opened on CH 05 with its programme playing. Switched off, a relaunch opened on CH 01.
+- Hidden libraries, with a copy of the app against the test Jellyfin 12.4 with its Comedy library hidden for the user (`MyMediaExcludes`):
+  - The picker listed Comedy as "Movies · HIDDEN ON JELLYFIN", OFF.
+  - CONTINUE read 7 of 8 libraries and no comedy, without asking for the hidden list.
+  - Settings listed it the same way. Switching it on reloaded with its 5 films, and CH 03, CH 07 and CH 14 came on.
+- RESCAN LIBRARY on the Plex library already fills 3 lines (the summary wraps to two).
+
+**Not ported.** The Apple TV's RESCAN LIBRARY row also has a coverage line (titles on a channel, on none, and skipped for having no runtime: `LibraryDiagnostics.coverageLine`) and the last playback failure (`PlaybackDiagnostics`). Android's row has the summary and "Last updated" only. With them added the old 3-line cap would have cut it, which is why the cap goes now.
+
+## 2026-11-09 (Android: a new member order in a Plex collection no longer rebuilds the guide)
+
+**Why.** On a SHIELD with a 11,396-item Plex library, the launch refresh logged "collections changed, rebuilding" on runs where nothing had changed. A diagnostic build (not committed) logged the difference. All 288 collections matched by id and title, but 4 listed the same members in another order: the same set of child keys in a different sequence. They are adjacent collection ids, most likely smart collections sorted by plays or last watched, which reorder after something is watched. `refreshInBackground` compared the collections as lists, so each reorder rebuilt the whole lineup. A second launch, with no reorder, said "unchanged".
+
+**Changed.**
+- `Collections.sameMembers` (`android/engine`): the same collections, by id, title and server, with the same members in any order.
+- `refreshInBackground` rebuilds only when that says no. A member order that moved is still saved, so the next build follows the server's order as the Apple TV's next load would, and the log says "unchanged (collection members in a new order, saved)".
+- A pool does follow member order, and the running order follows the pool. But a packed day is stored and stays put (`DailyManifest`), so a reorder never needed a mid-day rebuild.
+- `CollectionsSameMembersTest` (new, 3). It pins one limit: two lists of the same length that repeat different members compare as the same, which a server's collection, listing each member once, can't produce.
+
+**Measured.** Three launches on the SHIELD after the change: "unchanged" each time, the refresh reading the items in 18 to 20 s. None of the three happened to reorder a collection, so the saved-reorder branch ran in the tests only.
+
+**Noticed, not changed.** Reading the 288 collections took 81.3 to 81.6 s on every launch, one request per collection in turn, against 18 to 20 s for the library itself. The Apple TV reads Plex collections only when a collection package is on. Android reads them with every load and refresh, as the Roku does (android/README.md lists this). Reading them several at a time would cut it, and is a separate change.
+
+## 2026-11-09 (Android: the library is read again every 6 hours, #195)
+
+**Why.** Android read the library only at launch and on RESCAN LIBRARY, so a film added on the server while the app ran never appeared. The Apple TV (`startDailyRefresh`, `refreshLibraryIfChanged`) and the Roku (`DailyRefresh.brs`) read it again behind the guide on their own (#195).
+
+**Changed.**
+- `DailyRefresh` (new, `android/engine`):
+  - the due rule: every 15 minutes, a refresh once the last load and the last check are both 6 hours old;
+  - the Plex signature from each section's `updatedAt` and `contentChangedAt` (`LibraryChangeSignature`; `scannedAt` is left out because Plex's scheduled scans bump it every run);
+  - the skip: unchanged signature, and a scan under 24 hours old.
+  - `DailyRefreshTest` holds it to the Roku's `DailyRefreshTests.brs` cases and the Apple TV's `LibraryRefreshEfficiencyTests` signature and skip cases.
+- `AppModel`:
+  - The timer runs while the guide is up, never in demo mode, and never starts a refresh while a load or a refresh is running.
+  - On Plex it asks each server's `/library/sections` first (`PlexLibrary.stamps`). Jellyfin and Emby have no signature and always rescan, as before.
+  - A changed library is swapped in by `refreshInBackground` as before, without stopping what is playing.
+  - Every full load and every refresh records the load time, the check time and the signature. An abandoned scan is backdated a day and has no signature, as on the Apple TV.
+  - They live in `Prefs` rather than the saved library, so saved libraries stay valid; sign-out clears them.
+- `MainActivity`: the timer stops with the activity (`onStop`) and starts again with it (`onRestart`), as tvOS suspends the Apple TV's loop. A TV left on another app doesn't rescan behind it, and the first check after coming back is 15 minutes later.
+
+**Measured on a SHIELD (Android 11).** A temporary build with a 30 s check and a 60 s threshold, not committed:
+- On the 11,396-item Plex library, the launch refresh read everything in 34.5 s, with the Java heap peaking at 114 MiB.
+- The next check asked for the section stamps, found them unchanged, and skipped the rebuild in 31 ms, the heap flat at 61 MiB.
+- A copy against the test Jellyfin: with the guide up, a fifth film was added on the server. The next check rescanned (no signature) and read 5 items in 448 ms. The guide gained the film as UP NEXT and two channels, with no relaunch and the programme still playing.
+
+**Not checked.**
+- A Plex library that changes, to see the signature move on a real server. The change rule is covered by the Apple TV's cases.
+- The real 15-minute and 6-hour times on a TV.
+- The launch refresh on this library logged "collections changed" on runs where the library hadn't changed, as in the #196 runs. That looks like the collections comparison, not this change, and is not looked into here.
+
+## 2026-11-09 (Android: Plex titles with a Latin-1 byte, #196)
+
+**Why.** Plex copies a file or folder name into its JSON byte for byte, so an unmatched item named in Latin-1 puts a lone 0xE9 in its title. Android read every Plex answer with OkHttp's `body.string()`, which turns such a byte into U+FFFD, so the guide would read "Caf� Society". The Apple TV, the web tuner and the Roku read the byte as Windows-1252 and show "Café Society" (#196).
+
+**Changed.**
+- `PlexUtf8Repair` (new, `android/engine`) is the Apple TV's `PlexUTF8Repair`. Every byte outside a well-formed UTF-8 sequence (Unicode table 3-7) is read as Windows-1252, and the five bytes Windows-1252 leaves undefined keep their Latin-1 code point. A valid answer is decoded as it is. One leading byte order mark is dropped, as `body.string()` did and a JSON parser expects.
+- `PlexClient.getJson`, which every Plex library, section, episode, collection and plex.tv resources read goes through, reads the bytes, repairs, then parses. A repair logs the Apple TV's line, `PLEX UTF-8 <path>: repaired N byte(s) that were not UTF-8, read as Windows-1252`, with any token left out of the path.
+- `Utf8RepairGoldenTest` holds it to `scripts/utf8-repair-golden.json`, the cases the Apple TV, the web tuner and the Roku already read: all 27 match. It also checks a Plex-shaped page with a lone 0xE9 in a title parses to "Café Society", with valid accents and emoji untouched. With the Windows-1252 table taken out, the curly-quote case and others fail.
+- The not-ported note in `PlexLibrary.kt` and the README line that said titles weren't repaired are gone.
+
+**Measured on a SHIELD (Android 11).** The launch refresh of a 11,396-item Plex library, two runs of each build, alternated:
+
+| Build | Read in | Peak Java heap |
+|---|---|---|
+| Before | 24.3 s, 23.7 s | 143 MiB, 128 MiB |
+| After | 22.2 s, 19.9 s | 120 MiB, 133 MiB |
+
+That library is valid UTF-8 throughout (no repair line was logged), so it measures the cost of reading bytes and checking them, and that is within the run-to-run spread.
+
+**Not checked.** A real Plex item with a Latin-1 name on a TV: the library measured has none. The repair itself is covered by the shared cases.
+
+## 2026-11-09 (Android: a scan where every library fails is a failed load, #198)
+
+**Why.** Chad found it reading the code (#198). When a server lists its libraries and then fails every item request, each library was skipped as one bad library, the scan came back empty, and the empty library was saved. The guide said NO CHANNELS FOUND, and so did every launch after, from the saved copy. A RESCAN LIBRARY from that screen that did find channels left the screen as it was.
+
+**Changed.**
+- `SectionTally` (new, `android/engine`): a scan counts the libraries read and keeps the first error. Both scans use it: `MediaBrowserLibrary.scan` for Jellyfin and Emby, `PlexLibrary.scan` for Plex.
+  - One library that errors is still skipped while the others are read. Android keeps this, where the Apple TV fails the whole scan.
+  - If every library errored and none was read, the scan throws `EveryLibraryFailed` with the first error. The load then shows CONNECTION FAILED in that error's words, and nothing is saved.
+  - A library that answers with no items counts as read, so a genuinely empty library still gives NO CHANNELS FOUND.
+- With several Plex servers, one whose every library failed is skipped like a stalled one. The load fails only if no server was read.
+- `LibraryStore.load` ignores a saved library with no items, so a launch does a full load instead of showing NO CHANNELS FOUND again.
+- `refreshInBackground`: a rescan from NO CHANNELS FOUND that builds channels closes Settings and brings the guide up, as a package switch already did.
+- Tests: `EveryLibraryFailedTest` (new, 4), and `MovieSectionScanProgressTest`'s one-library failure now expects the scan to fail. Removing the check fails 2 of them. 216 engine tests, 0 failures.
+
+**Measured on a SHIELD (Android 11).** A copy of each build under another package name, against a test Jellyfin 12.4 behind a proxy that answers 500 to every library item request:
+- Before: NO CHANNELS FOUND after the load, and again on relaunch from `SAVED LIBRARY 0 items`. A RESCAN with the proxy passing everything read 4 items and built 1 channel, and the screen stayed on NO CHANNELS FOUND.
+- After: CONNECTION FAILED, "Jellyfin returned HTTP 500. Check the server is running, then try again." A relaunch did a full load again rather than reading a saved copy. With every library answering empty, the load gave NO CHANNELS FOUND, and a RESCAN with the proxy passing everything brought the guide up on CH 03, playing in 0.7 s.
+- A Plex sign-in on the same SHIELD still loads its 11,396-item library and plays.
+
+**Not checked.** A Plex server that fails its item requests; the Plex path shares `SectionTally` but was run only against a healthy server.
+
+## 2026-11-09 (Android: rebased onto main at channels.json v50, and the Emby ratings fix #204)
+
+**Changed.** `feature/android` is rebased onto `70686b63` (channels.json v50); only `docs/DEVLOG.md` conflicted. `MediaBrowserLibrary.fetchItems` names `OfficialRating` and `CommunityRating` in `Fields`, as the web tuner and Roku now do (#204). Emby 4.10 leaves both out of an `/Items` answer unless asked, so on Emby every title read as unrated, for the content-rating channels, VHS VAULT's 9 PM hold, WATERSHED and the `ratingMin` channels alike. `MediaBrowserScanTest` caught it: the web's vectors carry the two names and Android's requests did not. 212 engine tests, 0 failures.
+
+The player logs its buffer cap once, as it is made, with the heap limit and the TV's standard and `largeHeap` classes, so a log shows whether `largeHeap` took (asked for on PR #151). On a SHIELD: `PLAYER BUFFER cap 128 MiB, a quarter of a 512 MiB heap limit (this TV: 192 MiB standard, 512 MiB with largeHeap)`. A 4K HEVC film with E-AC-3 audio then direct played in 4.4 s with the Java heap at 176 to 183 MiB over 40 s.
+
+**Not checked.** Against an Emby: the test Emby here refused the sign-in tried, so the fix rests on the web tuner's measurement (0 of 200 films carried either field without the names, 195 and 197 with them).
+
 ## 2026-11-11 (Web tuner: the guide row no longer runs past its window when an airing crosses local midnight)
 
 **Why.** The 24-hour guide window holds two days' blocks, and the next day's first airing starts at 00:00 whatever
@@ -72,6 +596,53 @@ is laid out; it is not touched here and its cause is not established.
 **Shipped.** Pushed to main on 2026-11-11 after a review of the branch and a full `npm test` pass. The push deploys the
 hosted tuner. The Docker image shares the page and picks the fix up at the next `tuner-v` tag; no tag was cut for this,
 so the image on the registry does not have it yet.
+
+## 2026-11-10 (Roku: the guide grid on the Apple TV 1.0.32's sizes, #263)
+
+**Why.** The Roku guide showed about 5.8 rows of 80 px with 18 to 20 px text, its titles in white at 85% or 50% and
+its channel numbers and names in the channel's colour. The Apple TV 1.0.32 grid reads better from the couch and shows
+more rows (#263, on #262's tokens).
+
+**Changed.** `NxGuideGeometry`: rows 64 px, the header 58, the channel column 340, 395 px per 30 minutes. The text tops
+are computed from the row and header heights (`NxGuideLineTop`). NORMAL: titles, numbers and names 22, times, the
+CHANNEL heading and the WATERSHED placeholder 25, a 40 px number box; LARGE all 29 and a 54 px box. Titles are white
+live and on the focused row and `textDim` on every other; the number, name and times are white, the CHANNEL heading
+and the WATERSHED placeholder `text2` (it was white at 40%), the placeholder on the past tint focused or not; the
+channel's colour stays in the bar. The live chip and the seasonal invite row are re-centred in the 64 px row, the
+invite row 64 px tall like the others. The focused row is the channel's colour at 32% over the panel #0A0F1E, as the
+Apple TV's GuideRowContrast (`NxGuideFocusFill`, `NxTokOverAt`); it would be darkened for white at 4.5:1 but no colour
+in `channels.json` needs it. Its live cell is the channel's colour at 55% over that, darkened only as far as white needs
+(`NxGuideFocusLiveFill`, `NxTokDarkenFor`), and past programmes keep their tint on it. At the end of the list the scroll stops on a whole row (`keepFocusVisible`): 466 px isn't
+a whole number of 65 px rows, and stopping where the last row touches the bottom left 11 px of the row above under
+the header, as seen on the 55R617.
+
+**Tests changed.** `GuideNavTests`' "normal is the old grid" case pinned the old sizes; it holds #263's now (tydude001's
+call), with a LARGE case beside it, and the fit checks use the 64 and 58 px row and header.
+
+**Tested off the TV.** `GuideLookTests`, 28 cases: `NxTokOver`, `NxTokOverAt` and `NxTokDarkenFor`, the shape,
+`textDim` on the grid's lightest title background (the even-row stripe and the past tint over the grid, #1A1A2A,
+4.78:1) and the bare grid (5.35:1), `text2` on the header and on an unfocused placeholder's band, the Apple TV's
+cyan and yellow washes (#074E66, #585314), and for all 97 distinct colours in `channels.json` the focused wash (white
+at 4.5:1, none darkened) and its live cell (64 kept, 33 darkened, each 4.5:1 or more and under 4.6:1).
+`tests/run.sh` ends in ALL TESTS PASSED. Not held: `text2` on a focused row's placeholder band is under 4.5:1 for
+six pale colours (4.09:1 on #F5E6C8).
+
+**Seen** on the 55R617 (OS 15.3.4, 1080p UI) with a build signed in to our Plex (5,637 titles, 18 channels on the
+guide), `88a758b` and then `695fddc` (the end stop). Seven rows show. At NORMAL every name of the 15 channels looked at
+fits the 340 px column, SAT MORNING CARTOONS (20 characters) included; at LARGE it ends in an ellipsis after 14. On
+`73639f0` (the TV now on OS 16.0.4), focused rows on yellow, orange and teal channels drew the wash with their live
+cell a step brighter and white titles; on yellow #FFD000 the screenshot's wash, live cell and past tint read within 6
+levels of the computed #584D14, #8D7407 and #5B5019. On `88a758b`, at the end of the list, the
+row above showed as a bar about 11 px tall under the header; on `695fddc` the top row starts whole and the last row is whole. A
+lab-only build (`nxlab`, Jellyfin and Emby) fills one channel, which drew the same at NORMAL. The WATERSHED
+placeholder wasn't seen: switched on at 8:31 AM, no row in view showed it, and the rest weren't scrolled to.
+
+**Open.** Not seen: a stick, 720p (the 55R617 is a 4K TV and wasn't set to it), and three-digit channels on a TV (none in
+that lineup; the number box is held off the TV), the WATERSHED placeholder on a TV. Two things seen and not from
+this change: at midnight two channels had overlapping airings (AFTER SCHOOL TV and VHS VAULT), so their titles drew
+over each other; the shared day-packing loop can end an airing after midnight, and the Apple TV trims the overlap
+(`ProgramRowLayout.segments`) where the Roku draws every airing. And after a launch, Up and Down presses over ECP
+did nothing for a while, then worked, not looked into.
 
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
@@ -2923,6 +3494,29 @@ both runs with the grace at 11.7 s, and its message carries the timeline. Nostal
 
 **Not found.** The cause on GitHub. The new timelines will name the candidate that held the wait if it happens again.
 
+## 2026-11-04 (Android: the 1.0.30 fixes from main, ported)
+
+**Why.** Four of the Apple TV, web and Roku fixes that landed on main on 2026-11-04 apply to Android. `feature/android` is rebased onto `29203c9`.
+
+**Changed.**
+- **Music Videos libraries on Jellyfin and Emby (I-067, #172).** A library typed `musicvideos` is asked for `Movie,MusicVideo`; every other library still asks for `Movie`. `MediaBrowserScanTest` reads the web tuner's vectors, which now hold four clips, and its fake server reads `IncludeItemTypes` as a comma list. Putting `Movie` back makes it fail. Against the test Jellyfin 12.4.0, CH 500 HIGH ROTATION and CH 501 POP filled from its Music Videos library.
+- **Big Jellyfin and Emby movie libraries (N-033).** A movie library reports progress after every 200-item page, as Plex does, so the stall watch sees it arriving. A scan stopped mid-library keeps the pages already read. A library that fails with an error, rather than being stopped, still leaves none of its items, as the web tuner's per-view catch. `MovieSectionScanProgressTest` (new, 3 tests, both backends, 1,000 films): the old scan reported once and kept nothing from a stop at the fourth page; now it reports 0, 200, 400, 600, 800 and 1,000, and keeps 600.
+- **A burned-in forced subtitle the server can't produce (q106).** `PlaybackInfoHandshake.negotiate` fetches the burned stream's master playlist, its first variant and the first segment before choosing it, as `JellyfinPlaybackResolver.negotiate` does. An HTTP error on any of them means the plain answer is used and the refused session is stopped. A timeout, a dropped connection or a playlist it can't read keep the burned stream.
+  - 6 new cases in `PlaybackInfoHandshakeTest`; 4 fail with the check turned off.
+  - Measured on an Android 16 Google TV emulator against the test Jellyfin behind `scripts/lab-forced-subtitle/logproxy.py` in `segments` mode, which answers 500 to the burned stream's segments as Chad's Emby 4.10.1 does:
+    - With the check: the first segment refused, the session stopped 0.13 s later, and the film playing without its forced lines 1.0 s after the handshake.
+    - Without it, Android was worse off than the Apple TV's 20 s wait. ExoPlayer fails on the first HTTP 500, so the programme counted as one that wouldn't start, and the film never played.
+    - With the route healthy, the burned stream is still chosen; the check waited 552 ms for the first segment.
+- **The TV stays awake on the loading screen (N-033, `ScreenAwakePolicy`).** `FLAG_KEEP_SCREEN_ON` is held on the window while the screen is a load (`Loading` or `LibraryLoad`) and released anywhere else. Playback keeps its own hold through the player's view, so neither releases the other. A refresh behind the guide never shows these screens. Checked on the emulator with the server paused mid-load: the flag was on throughout the load and off on the library choice before it.
+- `engine/build.gradle.kts`: the generated vectors are inputs to the test task, not only dependencies. Before, a change to `plex-tuner.html` or a Roku fixture left the test task up to date, and it reported the last result. That is how the music video change first looked like it passed after the rebase.
+
+**Not needed.**
+- **Plex discovery's grace window.** Android's `ServerResolve` is the web tuner's module, which works the outcome out again on every report.
+- **AUDIO LANGUAGE on transcodes (#177).** Android already does this.
+- **Saving the enrichment cache across launches (I-073).** Android keeps its cache in a file with the web's 7-day TTL, and builds the lineup from the saved library on every launch, so there is no saved lineup to lose a channel from.
+
+**Not checked.** A real Emby with the burn-in fault. A movie library big enough to be slow on a real server. Most of the test Jellyfin's films are gone from disk, so only the films still there were played.
+
 ## 2026-11-04 (Apple TV: the enrichment cache survives a relaunch; a rebuild that can't see it keeps the lineup)
 
 **Shipped.** Nothing yet. Branch `appletv/i073-enrichment-cache` off main `7bc68850`, for 1.0.30 (I-073, GitHub #185:
@@ -3329,6 +3923,49 @@ cherry-picked onto this main in a throwaway worktree and run through the same ha
 **Done 2026-11-04.** `fix/forced-burn-probe` is on main for the next Apple TV build, applied on top of AUDIO LANGUAGE
 (I-070), which changed the same function: the burned stream keeps the chosen audio language too.
 
+## 2026-11-04 (Android: the 4K out-of-memory crash, and the Plex server picker)
+
+**Why.** Chad tested release 3 on a Google TV (PR #151). Two of his findings are fixed here.
+- A 4K HDR film played for about 15 seconds, then the app ran out of memory. The TV caps an app's Java heap at 192 MB.
+- After Plex sign-in, the app never asked which server to use. The Apple TV asks when the account reaches more than one.
+
+**Changed.**
+- **The player's buffer is capped at a quarter of the heap the app may use** (`Playback.bufferBytes`), and the manifest asks for `largeHeap`.
+  - Media3's default for a network video is 2,000 x 64 KB, about 128 MB, held as Java byte arrays in the same heap as the library.
+  - A quarter is 48 MB at 192 MB, 96 MB at 384 MB and 128 MB at 512 MB.
+  - Measured on an Android 16 Google TV emulator (192 MB heap, 384 MB with `largeHeap`) with an 80 Mbps test file in demo mode, the library a few demo items:
+
+    | Build | Peak Java heap |
+    |---|---|
+    | Default buffer | 169 MB of 192 |
+    | Cap alone | 72 MB of 192 |
+    | Cap with `largeHeap` | 124 MB of 384 |
+
+  - On a SHIELD with a library of about 11,400 titles, the Java heap is 45 MB with nothing playing and about 70 MB while a 1080p film plays in the guide.
+- **Stalls, measured.** With 300 Mbps and an 8-second dropout every 30 seconds, on the same file:
+
+  | Build | Stalls |
+  |---|---|
+  | Default buffer | none |
+  | Cap with `largeHeap` (96 MB) | none |
+  | Cap alone (48 MB) | one per dropout |
+
+  So the small buffer only applies on a TV that refuses `largeHeap`, where the choice is a stall on a long Wi-Fi dropout or running out of memory.
+- **Plex sign-in finds every reachable server, owned and shared, as the Apple TV does.** Before, it looked only for owned servers (the Roku port's rule) and used all of them without asking. With more than one, it shows the Apple TV's `ServerPickerView`:
+  - the same heading, words and rows ("Your server" or "Shared with you", INCLUDED or OFF);
+  - owned servers ticked, or all of them if none is owned;
+  - focus on CONTINUE.
+
+  The plex.tv token is saved only with the chosen servers, as on the Apple TV. Checked on the emulator with an account that reaches two servers: both ticked, and turning one off gave a library choice from the other alone.
+
+**Not checked.** The fix has not been run against Chad's film or on his TV, and the crash itself was not reproduced, only the memory it ran out of. The library's own memory still grows with its size; trimming what is kept per title needs a heap dump from a debug build first.
+
+**Next.** TRUE CRIME playing one title over and over, Chad's third finding, is not a threshold difference. Its `minItems` has been 1 since 1.0.21, all three apps check `itemPool.count >= minItems`, and Android passes all 148 `filter-golden.json` cases, 36 of them with keywords. So the Android build found a match that the Apple TV didn't for the same library. That needs the title's genres and keywords from Chad, and whether his Android build has enrichment on.
+
+## 2026-11-04 (Android: the Android TV job runs nightly and on demand too)
+
+**Changed.** In `.github/workflows/ci.yml`, the Android TV job now also runs on `schedule` and `workflow_dispatch`, like every other test job since the nightly run was added. Without that, the rebase onto it would have left the Android job skipped every night, since the change filter doesn't run on those events.
+
 ## 2026-11-03 (CI: a nightly run of every test job)
 
 **Shipped.** `.github/workflows/ci.yml` runs every night at 08:00 UTC and on demand (`workflow_dispatch`).
@@ -3398,6 +4035,37 @@ the fixture are untouched.
 
 **Next.** Re-read the section against the app when #151 merges. The existing em dashes in `PRIVACY_POLICY.md` (the event lists) are old and were left alone.
 
+## 2026-11-03 (Android: Back on Android 16 stays in the app, and versionCode 3)
+
+**Why.** Reported by Chad on his Google TV: Back from full screen, or from a Settings page, closed the app instead of going to the guide (as on the Roku) or up a level in Settings. The app targets API 36, and on Android 16 that turns on predictive back. The remote's Back is then never sent to the app as `KEYCODE_BACK`, which every screen's Back handling listened for. It goes to the `OnBackPressedDispatcher`, and with nothing registered there the activity finishes. To confirm the cause, the same build with `android:enableOnBackInvokedCallback="false"` in the manifest went from full screen to the guide on the Android 16 emulator. That opt-out was only a test and was not kept, because a later Android drops it.
+
+**Changed.**
+- `ui/Back.kt` adds `Modifier.onBack(enabled, action)`. It registers a `BackHandler` for Android 16 and keeps the key check for older versions. A key the check consumes never reaches the dispatcher, so only one of the two runs.
+- The guide (full screen, its strip and panel, Settings, the package sidebar, the invite's question, STILL WATCHING?), Settings over a status screen, the connect screens, and START OVER's question all use it. Before, each of these left the app on Android 16.
+- `versionCode` is 3.
+
+Measured in demo mode on Google TV emulators running Android 16 and Android 14, and on a SHIELD running Android 11. The SHIELD used a real library, and on it only the full-screen and Settings steps were checked:
+- Full screen goes to the guide.
+- The STREAM QUALITY picker goes to PLAYBACK & PICTURE, then the Settings menu, then the guide on the live row.
+- Back on the live row leaves the app, as before.
+- On Android 16, CONNECT TO JELLYFIN goes back to the server choice, and Back on the server choice leaves the app.
+
+**Not checked.** Chad has not tried the fix on his Google TV yet. Back from START OVER's question was not pressed on any device.
+
+## 2026-11-03 (Android: release signing for Google Play, and version 1.0.0)
+
+**Changed.** Asked for on PR #151 ahead of Play's internal testing track.
+- `android/app/build.gradle.kts` signs the release build with an upload key when all four of `NOSTALGEX_UPLOAD_STORE_FILE`, `NOSTALGEX_UPLOAD_STORE_PASSWORD`, `NOSTALGEX_UPLOAD_KEY_ALIAS` and `NOSTALGEX_UPLOAD_KEY_PASSWORD` are set as Gradle properties or environment variables. Otherwise it uses the debug key, so `installRelease` still sideloads. No key or password is in the repo.
+- The version is `1.0.0`, versionCode 1, for the first Play build. It shows in Settings and in the Plex, Jellyfin and Emby client headers.
+
+Checked with a throwaway keystore:
+- Environment variables signed both the APK and `bundleRelease`'s `.aab` with it.
+- `-P` properties signed the APK with it.
+- No settings, or only one of the four, signed with the debug key.
+
+A PKCS12 keystore (`keytool`'s default) has one password, so the key password has to be the store password.
+
+**Next.** Not tested with the real upload key, which only the maintainer has.
 
 ## 2026-11-03 (the relay accepts an Android client)
 
@@ -3491,6 +4159,10 @@ are the check.
 **Half-done.** The guide screenshots in those three posts still show the old numbers (images on R2: the slasher guide frame, the channel-surfing cover, the two guide frames and the cover in the franchise post). They need re-shoots on 1.0.29. Still describing the old Settings layout: the iCloud line in the 1.0.26 post (CONNECTION), and "collection Channel Packages" on the Plex, Jellyfin, Emby and support pages.
 
 **Next.** Tag `v1.0.29` on `075b5bc` (the `Apple TV 1.0.29 (53)` commit, already on main, so there is no build-number commit to add) and publish the GitHub release, then push the branch to main.
+
+## 2026-11-02 (Android: the scan comparison checks audio tracks again, after #176)
+
+**Changed.** `MediaBrowserScanTest` compares each Jellyfin and Emby item's `audioStreams` (index, language, codec, channels, title) with the web tuner's, now that 1.0.13 keeps them on the item. Before, the web's items had none, so the field was skipped. All 222 items in the shared fixture match, two of them with several tracks. Setting Android's channel count to 0 made the test fail, so the check catches a difference. `isDefault` stays Android-only, because the web doesn't keep it. 203 engine tests, 0 failures. `feature/android` is rebased onto `4602216`.
 
 ## 2026-11-02 (Web tuner and Docker 1.0.13: Jellyfin and Emby items keep their audio tracks, #176)
 
@@ -3953,6 +4625,159 @@ analysis stops flagging the error. A recorded sign-in script needs one more step
 between USE EMAIL AND PASSWORD and the EMAIL field. The Roku section of the privacy page needs a line saying the app may ask
 Roku for the account email and only fills a field with it (`privacy.html` and
 `Nostalgex/PRIVACY_POLICY.md` together).
+
+## 2026-11-02 (Android TV: rebased onto main; Plex addresses chosen as the Apple TV and Roku do)
+
+**Changed.** On `feature/android`, rebased onto `main` at `e0c41cc`; the 17 commits since `e6cc985` touched no Android file and none of the files its tests read.
+
+- `main` brought the web tuner the Apple TV's and Roku's way of choosing a Plex address (`scripts/nostalgex-server-resolve.js`). Android had the web's old way. It waited for every address before choosing, and preferred remote HTTPS over the home network. It also took any address that answered, even as a different Plex server. Now ported:
+  - `ServerResolve.kt` holds the rules as a state machine with no clock: home network, remote HTTPS, remote plain, relay; settled once nothing better can answer; a silent home address is given up after 3 s once something else has answered; everything ends at 10 s.
+  - `PlexClient.findWorkingConnection` asks every address at once (`/identity`, 5 s), cancels the rest when it settles, and turns down a different `machineIdentifier`. Each server's choice is logged as `SERVER ADDRESS`.
+- `gen-resolve-vectors.mjs` runs the web module on the smoke's virtual clock: its 16 named cases (the Apple TV's `ConnectionDiscoveryEarlyExitTests`, Roku's `ServerResolveTests`) and its 400 seeded random servers. `ServerResolveTest` replays every run, and all 416 choose the same address at the same millisecond. Removing the "once something else has answered" condition made it fail. The CI path filter now includes the module.
+- The other changes on `main` (GUIDE TEXT SIZE, the WATERSHED switch, the failure card in the split view, and the site) were the web catching up with the Apple TV. Android already had all of them.
+
+**Measured** on the SHIELD, on Settings' server list for a real account, twice:
+- An owned server with four addresses settled on its home HTTPS address in 22 to 26 ms, without waiting for the other three.
+- A shared server with three addresses settled on remote HTTPS at 3,008 to 3,015 ms: the 3 s grace, because its home-network address (on its owner's network) never answered. The old code waited out that address's 5 s timeout.
+- A shared server whose only address is plain HTTP failed in 27 to 41 ms with `ConnectException` (refused), as it would have before.
+The `SERVER ADDRESS` log line now says why each address failed: the exception, the HTTP status, or "another server". The different-server check has not been seen to turn anything down on a real network.
+
+## 2026-11-02 (Android TV: the seasonal invite and demo mode)
+
+**Changed.** On `feature/android`. The last two Apple TV features Android lacked; the README's "Not ported yet" list is gone.
+
+- The seasonal invite (`SeasonalPrompt.swift`, `SeasonalInviteRow`). `Season.kt` gains `bundleToOffer`, `isSilenced`, `record` and `headline`, under the Apple TV's storage keys (`nostalgex_seasonal_never_<id>`, `nostalgex_seasonal_dismissed_<id>_<year>`). `SeasonGoldenTest` now also runs the golden file's `offer`, `answers` and `headline` sections, every case passing; the `lead` section is still not read on Android. The row sits above channel one at one channel row's height in the season's colour, and its question offers YES, TURN IT ON, NOT THIS YEAR and DON'T ASK AGAIN. Focus stays inside the question until Back.
+- Demo mode (`enterDemoMode`, `DemoData.swift`). A quiet "demo mode" button under EMBY. The Apple TV's five sample channels go into a `Lineup` through `airFixed`, so schedules, tuning and the guide are the ordinary ones. Every programme plays Apple's bipbop sample at the clock's position modulo its 600 s, through a data source that sends none of this app's headers. As on the Apple TV, the clip ending keeps the programme on (at the clock's position), and a one-second tick moves to the next programme when the block ends. WATCH HISTORY is hidden, RESCAN does nothing, and DISCONNECT leaves; it is not saved. A package switch does nothing in demo mode, so the demo can't change the saved packages. `DemoDataTest`: the five channels, a schedule for each, and the clip offset.
+
+**Measured** on the Android TV emulator, with its clock set to 20 November 2026 for the invite and Jellyfin 12.4 behind it:
+- The invite showed "THE HOLIDAYS ARE HERE. DECK THE CHANNELS." above channel one, and Up from the channel focused it. In the first build Down walked out of the question into the guide behind it; it now holds focus.
+- Back from the question returned focus to the invite. NOT THIS YEAR wrote `nostalgex_seasonal_dismissed_tis-the-season_2026` and the row stayed gone after a relaunch. YES added `tis-the-season` to the packages.
+- Demo mode: the guide showed the five channels. The clip started in 1.7 to 2.9 s, 267 s into the clip for a programme 867 s in. On CH 4 the clip ran out and played on at 2,403 s of the programme, 3 s into the clip. At 19:40:51 the block ended and Late Shift Diner started at 1 s. DISCONNECT went back to the first screen with nothing playing.
+- With the clock moved to 20 November, the demo clip failed its TLS handshake ("Trust anchor for certification path not found") although the CDN's certificate runs from 25 October 2026 to 21 January 2027. With the clock back on automatic it played. This came from the test setup, not the app.
+
+**Not checked:** the SHIELD, SCREAM's October invite (only TIS THE SEASON was shown), the PLAYBACK INFORMATION panel in demo mode, and the invite with a seasonal package that has content in the library.
+
+## 2026-11-02 (Android TV: the PlaybackInfo handshake on Jellyfin and Emby)
+
+**Changed.** On `feature/android`. Android asked Jellyfin and Emby for the stored file, then a hand-built HLS stream, which is only the Apple TV's fallback. It now asks the server first, as the Apple TV does.
+
+- `PlaybackInfoHandshake.kt` ports `JellyfinPlaybackResolver`: the body (`SubtitleStreamIndex` -1 with every subtitle format External; `EnableDirectPlay` and `EnableDirectStream` false on the retry after a failed direct play, because Emby still offers the file with only the first), `resolve` (the server's TranscodingUrl as built, `api_key` added once, the audio track pinned), `forcedSubtitleToBurn` and `negotiate` (a second request burns a forced track in the viewer's SUBTITLE LANGUAGE; if it fails, the first answer plays). 24 tests, the Apple TV's `JellyfinPlaybackInfoTests` cases that apply to this player.
+- Asked where the Apple TV asks: when the app skips direct play (a container Media3 has no extractor for, or a file over the remote ceiling), and on the retry after a direct play failed. The capped 1080p retry stays hand-built, as on the Apple TV. A failed answer, an empty one, or none within 12 s plays the hand-built stream. An answer for a tune already replaced is dropped and its session stopped.
+- The device profile differs from the Apple TV's on purpose: H.264 and AAC in MPEG-TS, the stream the hand-built request already plays, where the Apple TV asks for fMP4 with HEVC for AVPlayer; and no DirectPlayProfiles, because this app decides direct play by trying the file and asks the server only after deciding not to. The 10-bit H.264 cap is kept. The audio track is pinned by the Roku's rule, as the hand-built stream already was.
+- The startup watchdog's fallback now starts from the planned offset, as the Apple TV's (`beginServerFallback(position: seekOffset)`), not from the playhead. Found in this test: an MKV whose video Media3 could not read went ready without its seek, played sound from 0 s, and the server stream then started at 14 s on a programme 137 s in. The starvation fallback still resumes from the playhead, as on the Apple TV.
+
+**Measured** on the Android TV emulator against Jellyfin 12.4 and Emby 4.10.2 in Docker, with two generated files: an MKV in MS-MPEG4 (no decoder on the emulator) with a French default track, an English 5.1 track, a default English subtitle and a forced English one; and a WMV.
+- The MKV: the watchdog moved it off direct play at 15 s; PlaybackInfo with direct play off answered in 58 to 100 ms on both servers, asked a second time for subtitle 4, and played in 1.2 to 1.3 s. Both servers' ffmpeg burned stream 4 (`subtitles=`) and mapped the English 5.1 track (`-map 0:2`, AAC 6 channels) into MPEG-TS with libx264. The forced line shows in the guide preview.
+- The WMV: one request, no forced track, answered in 56 to 77 ms, played in 0.6 to 0.7 s, no subtitle filter.
+- An AVI whose direct play failed for lack of a decoder: answered in 163 ms, played in 1.5 s at the right offset.
+- The next programme stopped the last one's encode by the server's session id: Jellyfin deleted its stream files 13 ms before the next PlaybackInfo; Emby answered the `DELETE /Videos/ActiveEncodings` 204.
+- Through a proxy holding PlaybackInfo: held 8 s with Home pressed at 3 s, the answer was dropped at 8.1 s and its session stopped; held 15 s, the request gave up at 12.1 s and the hand-built stream played in 1.3 s.
+
+**Not checked:** the SHIELD, a real library, an HEVC or Dolby Vision file through the handshake (the profile offers H.264 only, so those are re-encoded, as by the hand-built request), and a file over the remote bitrate ceiling.
+
+## 2026-11-02 (Android TV: STOP WAITING, SHOW NOW PLAYING and MARK WATCHED)
+
+**Changed.** On `feature/android`. Two Apple TV features Android lacked.
+
+- STOP WAITING (`LibraryLoadStallWatch.swift`). `LibraryLoadStallDetector` is ported to the engine with the 12 cases of its Swift tests: a scan is judged by whether its counters (section, items, shows done, server) still move, never by how long it has run; quiet for 60 s is slow, 210 s stalled. Each server's scan runs under the watch, sampled every 2 s. Slow, the loading screen says "Still waiting on your server" and offers STOP WAITING (focused as it appears; a stray press only keeps what has loaded); pressed, or at 210 s, the scan is abandoned. Both scans now hand over each library once it is read whole, so an abandoned scan builds the guide from those; with none the load fails in the Apple TV's words. The Jellyfin and Emby scan blocks on its requests, so it checks a stop flag before each one, and its per-show and per-library catches pass the stop through, so a half-read library is never counted whole. A background refresh is watched silently and, abandoned, keeps the guide on screen.
+- Measured on the emulator through a proxy that answers two listings and then holds the third open, sending a byte every 20 s (a connection that neither fails nor finishes): the block appeared at about 60 s; STOP WAITING at 68 s kept the 19 items of the two libraries read and the guide came up; with the server quiet from the first listing and no press, the watchdog acted at 210 s and the load ended on "Your server stopped sending data partway through the scan and never resumed"; a background refresh against the same server gave up at 210 s and the saved guide stayed. Found and fixed while measuring: after an abandoned scan the collections read asked the same quiet server and hung on DISCOVERING COLLECTIONS; it is now skipped for that load. A first attempt with a proxy that went silent never reached 60 s: the client's 60 s read timeout fails each request, the scan moves on to the next library, and progress keeps moving, which is the design (a request that times out ends in a real error).
+- SHOW NOW PLAYING and MARK WATCHED (`PlaybackTracker.swift`, plex-tuner.html `makePlaybackTracker`), under WATCH HISTORY in PLAYBACK & PICTURE, both off by default, under the Apple TV's keys. The pure half of `scripts/nostalgex-watch-state.js` is in the engine (`WatchState.kt`: the cleanup plans, the pulse backoff, the reporting scope's epochs, the 15% and 75% gates, the 89% stop), held to `scripts/watch-cleanup-golden.json` (the Apple TV's WatchStateGuardTests read it too) and to the web tuner's answers over the Roku's scripts (`genWatchVectors`). The app's `WatchReporter` sends Plex a position-free `/:/timeline` (PUT, as the Apple TV) every 10 s and `/:/scrobble`, and Jellyfin and Emby `/Sessions/Playing`, `Progress` and `Stopped` and `PlayedItems`, all through one queue so a restore lands after the last report.
+- Measured on the emulator against Jellyfin 12.4: Jellyfin listed the programme as now playing from client "Nostalgex"; a film tuned in at 17% (past the entry gate) was stopped and its state put back (unplayed, play count 0, no resume point); a film watched from its start was marked watched at 140 s of 180 s and left played, play count 1, no resume point. Not checked: Plex (no Plex server in the harness), Emby, and turning a switch off mid-programme.
+
+## 2026-11-02 (Android TV: the transcode's audio track, and the 4K deadline)
+
+**Changed.** On `feature/android`. Two small gaps from the earlier entries.
+
+- A Jellyfin or Emby transcode now asks for its audio track. The scan keeps each source's audio tracks (`MediaItem.audioStreams`: index, language, codec, channels, title, and IsDefault) and `LanguageChoice.preferredAudioIndex` picks one (JellyfinPlaybackResolver.preferredAudioIndex), which goes on the HLS request as `AudioStreamIndex`, only when there is more than one track. `AudioTrackSelectionTest` carries the cases of `AudioTrackSelectionTests.swift` and the language cases of `LanguageCodeMatchingTests.swift` (Estonian is not Spanish, `cze` and `ces` are Czech, and so on).
+- The rule is the Roku's (`NxMbChosenAudioIndex`, issue #62), which the owner chose over the Apple TV's: the viewer's AUDIO LANGUAGE ranks first and English only after it. The Apple TV adds English to the wanted languages and takes the most channels, first on a tie, so a German viewer gets an English 5.1 mix over German stereo. Measured on the emulator with AUDIO LANGUAGE Norwegian: Kon-Tiki (English default first, Norwegian second, both mono) was asked for in English, where Android's direct play picks the Norwegian; after the change it asks for track 2 (Norwegian), and The 39 Steps (French default, English) still gets English. Probed against Jellyfin 12.4: the same transcode request decodes to different audio with `AudioStreamIndex=2` than without it.
+- The startup watchdog's deadline reads the frame size, so a 4K transcode gets the Apple TV's 40 s: `videoWidth` and `videoHeight` from Plex's Media and Jellyfin's or Emby's video stream (Kon-Tiki saved as 1280 x 720). `LibraryStore` format 6.
+
+**Found, in the web tuner.** Its Jellyfin and Emby scan builds `audioStreams` in `mediaInfo` (plex-tuner.html around line 9313) but the item only takes `subtitles: mi.subtitles` (lines 9400 and 9460), never `audioStreams`. So `pickAudioStream(item.audioStreams || [])` always gets an empty list: the web tuner never asks for the viewer's audio language on Jellyfin or Emby, and its foreign-audio subtitle fallback never switches on there. Not changed here: it is the web tuner's to fix, in its own pull request. `MediaBrowserScanTest` leaves the field out of its comparison and says why.
+
+**Not checked:** an actual 4K file (the deadline function is tested, the frame size reaches the item; no 4K file in the test library), Emby, and the SHIELD.
+
+## 2026-11-02 (Android TV: franchises and server collections)
+
+**Changed.** On `feature/android`. Android had the seven classics as an ordinary package and nothing else: no film series found in the library, no server collections, no FRANCHISES or MY COLLECTIONS pages. It now has all of it as the Apple TV 1.0.29 has it, ported from the web tuner's modules, each held to the Apple TV's or the web tuner's own answers.
+
+- Engine, four ports: `FranchiseBuilder.kt` (`scripts/nostalgex-franchise-builder.js`; grapheme clusters through `BreakIterator`, names compared NFC, `uppercase(Locale.ROOT)` for ß to SS), `Collections.kt` (`nostalgex-collections.js`: name cleaning, stock matching, manifest overlap, the member index, candidates, numbering, the Plex and BoxSet reads as pure request and response functions), `CollectionClassifier.kt` (`CollectionClassifier.swift`) and `FranchiseLineup.kt` (`nostalgex-franchise-lineup.js`: found franchises, a classic's pool widened by the shows the dictionary puts on it unless another channel's lock owns them, the Apple TV's four-step fold, Settings rows, CH 310-399 and 400-499). The first two were ported by two agents in parallel and merged here.
+- Tests: 57 new, 139 engine tests in all, 0 failures. `FranchiseGoldenTest` runs `scripts/franchise-golden.json`; `FranchiseVectorTest` and `CollectionsVectorTest` compare against the JS run over the Roku's fixtures (new Gradle tasks `genFranchiseVectors`, `genCollectionsVectors`); `CollectionClassifierTest` transcribes the Swift classifier tests; `FranchiseLineupGoldenTest` builds the 9 whole lineups of `scripts/franchise-lineup-golden.json`, whose answers the Apple TV wrote, and matches every found franchise, classic pool, row, fold, channel, number and guide. Controls: switching the fold off fails it, and so does leaving the shows off the classics' pools; a 99% fold threshold alone did not, as no golden fold reaches the fourth step.
+- App: collections are read with every load and background refresh (a COLLECTIONS step on the loading rail) and saved with the library (`LibraryStore` format 5). Episodes carry `showKey` from both scans, held to the web tuner's by `MediaBrowserScanTest`. `Lineup` runs the franchise step after the rule pools and on every franchise or collection switch, without filtering again. Settings: FRANCHISES (the package switch, ADD ALL / REMOVE ALL, one A to Z list, the "Up to 90" note) and MY COLLECTIONS (OTHER COLLECTIONS, "N% already on CH X"); FRANCHISES left CHANNEL PACKAGES. Choices under the Apple TV's keys (`nostalgex_enabled_franchises`, `nostalgex_disabled_franchises`, `nostalgex_enabled_collections`). `franchises.json` ships as an asset beside `channels.json`.
+
+**Checked on the emulator** against Jellyfin 12.4 with three BoxSets made for it: 3 collections read in 199 ms; a trilogy of three films filed as a franchise, a set of two films and a series as another collection ("2 movies · 1 show"); switched on, CH 310 and CH 400 joined the guide with schedules and CH 400 played (direct play, 1.5 s); FRANCHISES off took CH 310 out and left CH 400, on brought it back; a collection changed on the server was picked up by the background refresh. Committed as `f609657`, not pushed.
+
+**Enrichment end to end, against stand-ins.** A new `nostalgex.relayUrl` setting in `local.properties` points a build at a local relay; without it the real one is asked. A local stand-in answered as the relay (TMDB-shaped answers from the test Jellyfin's own TMDB and IMDb ids, with made-up collections) and as an empty shared cache. One full load, 21 TMDB ids: 1 cache read (0 rows), 21 relay lookups asked as `android`, 4 OMDb lookups (the films given "cult film" and "french cinema", the only two OMDb gates in `channels.json` being keyword ones), then 2 write-backs, 21 rows in the TMDB columns and 4 in the OMDb columns, 230 ms in all. Three films given STAR TREK's TMDB collection (151) became STAR TREK, on by the dictionary, at CH 310; three given a made-up collection became BLENDER OPEN MOVIE, off as an auto-found franchise is, and the server's "Blender Open Movie Trilogy" folded into it; switched on it took CH 310 and STAR TREK moved to 311. The CBS network on The Twilight Zone filled PARAMOUNT+ (CH 164). Relaunched: 21 local hits in 15 ms before the guide, and the refresh asked the stand-in nothing. The loading rail read LINEUP, LIBRARY, COLLECTIONS, METADATA, CHANNELS, READY.
+
+Not checked: a classic taking a show (the test library has no classic's films), the real relay and shared cache, Plex collections, Emby BoxSets, the SHIELD.
+
+## 2026-11-02 (Android TV: rebased onto 1.0.29's main again; one title on one channel at a time)
+
+**Changed.** `feature/android` rebased onto `main` at `8ebd1e2` (33 new commits, Roku 1.0.9 and web tuner 1.0.12). Only this log conflicted; both sides kept, entries back in date order, none of main's entries changed. After the rebase `ScheduleParityGoldenTest` failed 4 of 4 cases, as it should: main now packs each day across the whole lineup (`scripts/nostalgex-daily-manifest.js`, `DailyManifestScheduler` on the Apple TV, `DailyManifest.brs` on the Roku), with new golden vectors.
+
+- `DailyManifest.kt` follows it function for function: `setLineup`, `Occupancy`, `pickCandidate` (the next 8 in the running order), `packLineupDay` (time-gated channels last, then by id; stored days and yesterday's overruns fixed; a channel off the guide packs after the lineup and adds nothing), the multi-part guard, the off-guide memo, schema 3. `ScheduleChannel` carries `gated` (the channel has `timeRestrictions`), and `Lineup` registers the guide's channels with their pools at the hour asked about, as the web tuner's `guideLineup` does.
+- All four golden cases match the Apple TV again, byte for byte. `ScheduleLineupTest` ports the 10 property checks of `scripts/nostalgex-schedule-lineup-smoke.mjs` over its generated library (24 overlapping channels, 3 days): no title on two channels at once against more than 20 clashes a day packed alone, the same days in any order, a rescan that changed nothing changes nothing, a changed pool moves only its channel, off-guide and time-gated channels change nothing else, parts in order. One check is not ported: the smoke's control that patches the engine's source to break the memo key. Cost: 24 channels' day in 2.8 ms together, 1.7 ms alone.
+- The LINEUP log line counts guide minutes with one title on two channels. On the emulator, against Jellyfin with every package on (the test library fills 2 channels), the same day: 58 of 2,882 minutes on the pre-rebase build, 0 of 2,882 on this one.
+
+**From the PR thread.** Chad is fine with `android` on the relay, as the Roku got; it goes live when the PR merges. Android uses the same Supabase project as the web tuner, as the Roku does, not one of its own. The Jellyfin music-video request is #172, held on every app until the library and server reading is looked at (#73); it stays reverted here. The playback recovery ladder was checked against Plex on the SHIELD by the owner.
+
+**Half-done.** Nothing. The rebased branch is pushed; the pre-rebase state is kept locally as `backup/android-pre-rebase-1102`.
+
+**Next.** Build with the web tuner's Supabase values in `local.properties` to check enrichment against the shared cache. Not ported yet: the Jellyfin and Emby transcode's audio track by language, franchises and collections.
+
+## 2026-11-02 (Android TV: the playback recovery ladder)
+
+**Changed.** On `feature/android`. Android had the direct-play-to-transcode fallback, the failure card and the five-in-a-row stop, but nothing watched a stream that never showed a picture or one its source couldn't keep up with. It now has the Apple TV's ladder (`AppState+Playback.swift`): `PlaybackWatchdog` and `PlaybackStarvation` ported to `engine/PlaybackRecovery.kt` with the Apple TV's tests transcribed (`PlaybackRecoveryTest`), and `Playback.kt` running them per attempt, numbered so a late callback from an earlier attempt does nothing.
+
+- Startup watchdog: no picture (ready, playhead moved 0.25 s across 2 s, a decoded frame) by 15 s moves a direct play to the server stream; by 20 s moves a transcode to one retry capped at 1080p (Plex: the HIGH preset, 1920x1080 at 12 Mbps; Jellyfin and Emby: `MaxWidth=1920`, 8 Mbps, a new `PlaySessionId`); then the card.
+- Starvation monitor, once a second after picture: three stalls in 2 minutes, or one of 20 s, moves a direct play to the server stream and a transcode to the capped retry, from where the viewer is; a capped stream that starves too ends in "Your server couldn't keep up".
+- The five-in-a-row count now resets on a confirmed picture, not on reaching ready, as on the Apple TV.
+- PLAYBACK INFORMATION gains the two reasons ("No picture reached the startup deadline", "Playback stopped making progress") and the RECOVERY REQUEST row. Its BACKEND row said "Plex" on every server; it now names the server.
+- A log line for every rebuffer and every counted stall, so a stall can be counted from `adb logcat -s Nostalgex`.
+
+**Measured** on the emulator against Jellyfin 12.4, through a proxy that throttles or cuts media delivery. Before: direct play at 0.67x real time froze for 2.6 to 2.9 s every 8 to 9 s, 16 times in 150 s, and never stepped down; a direct play that never sent a byte was black for 36 s before the transcode; with segments cut too, 72 s of black per programme and a card saying "Can't reach your server". After: the starving direct play moved to the server stream after 3 stalls (27 to 38 s after picture) at the same point in the film, and that stream started in 0.9 to 1.1 s and played clean; a hung direct play moved at 15 s; a transcode that never pictured reached the capped retry at 20 s and the card ("couldn't keep up") at 55 s; a capped stream that starved ended on that card after 3 stalls of 9 to 10 s. Healthy direct play and healthy transcoding, 3 minutes each: no stall counted.
+
+**One number differs from the Apple TV, on measurement.** A stall counts from 2 s, not 3. AVPlayer froze for good on a starving source; ExoPlayer stops and carries on, and at 3 s the monitor counted none of 20 freezes in 120 s. Healthy rebuffers on the emulator peaked at 511 ms (31 in 200 s, median 61 ms). `PlaybackRecoveryTest` samples both shapes at ten phases of the once-a-second clock. A 4K transcode also gets 20 s, not 40, because `MediaItem` carries no frame size yet (since fixed, in the entry on the transcode's audio track).
+
+**Seen, and left as the Apple TV does it.** A transcode already on screen but mid-stall at its 20 s deadline (moved 0.1 s across the window) counts as no picture, gets the capped retry, and if that is mid-stall too ends on "This one wouldn't play" rather than "couldn't keep up". It is the Apple TV's rule as written; changing it belongs in both apps.
+
+**Not checked.** Plex (the capped request and the HLS clock rule, `hlsBaseOffset`, are unmeasured there; no Plex server in the harness), Emby, and a real SHIELD.
+
+**Next.** Check on the SHIELD against Plex, ideally with a file the server transcodes slower than real time.
+
+## 2026-11-02 (Android TV: TMDB and OMDb enrichment)
+
+**Changed.** On `feature/android`. Enrichment is ported from the web tuner's `scripts/nostalgex-enrichment.js` (the mirror of `EnrichmentService.swift`), as the Roku did, because a large part of the lineup (TEEN MOVIES, MUSICALS, TRUE CRIME, CULT CLASSICS, the network and studio channels) matches on TMDB keywords, networks and companies or IMDb ratings, and without them Android only had the server's genres.
+
+- `engine/EnrichmentService.kt`: one work item per TMDB id, the local cache (7 days, 1 for a miss), the shared Supabase cache in chunks of 200, the relay at concurrency 6, OMDb for at most 50 gated candidates a load at concurrency 4 with the backoff to UTC midnight, and write-backs with TMDB and OMDb columns kept apart. Only TMDB and IMDb ids leave the TV. `Enrichment` gained the fields the caches and write-backs carry (ids, media type, franchise, `fetchedAt`).
+- Parity: `EnrichmentVectorTest` (8 tests) compares parsing, Supabase rows both ways, work items, the gates from the shipped `channels.json` and the quota clock with the web tuner's own answers, over the Roku's fixture documents (`roku/tests/gen-enrichment.mjs`, run by the new `genEnrichmentVectors` task). The JS `Number()` and `parseInt` readings of OMDb strings ("0x10", " 7.5 ", "1e400", "1%00") are copied, not approximated. `EnrichmentServiceTest` (11 tests) runs the cases of `scripts/nostalgex-enrichment-smoke.mjs` with the same stub backends and expected numbers. All 57 engine tests pass.
+- The app: a METADATA step on the loading rail between LIBRARY and CHANNELS, with the Apple TV's lines ("Checking metadata cache", "Fetching metadata n/total") and bar. A launch from the saved library reads only the local cache before the guide, then the background refresh asks the network and rebuilds only if the library or its enrichment changed.
+- Switched on only by `local.properties` (`nostalgex.enrichment=on` plus the Supabase URL and anon key, the Roku's three `.env` values); the default build has it off and the METADATA step hidden.
+- `api/tmdb.js` accepts `X-Nostalgex-Client: android` (`CLIENT_VALUES`), with a case in `scripts/tmdb-proxy-smoke.mjs` (163 passed). The existing "wrong client" case used `android` as its example of a bad value; it now uses `crawler`.
+- One difference from the web tuner, as on the Roku: a 403 from the relay ends the TMDB and OMDb steps for that load, so until the deployed relay accepts `android` the app reads the shared cache and asks for nothing else.
+
+**Tested on the emulator** against Jellyfin 12.4 (20 films and one series, 21 TMDB ids) with a local stand-in for Supabase holding rows for 6 of them, and the real relay. Full load: 1 Supabase read of 21 ids, 6 rows; the relay refused the first round of 6 with 403 and was asked nothing more; nothing written back; 693 ms. Launch from the saved library: 6 local hits in 7 ms before the guide; the refresh asked the stand-in for the 15 others only, found nothing new and did not rebuild. The shared filter, run over the emulator's own saved library and cache, gave MUSICALS 1 title with the cache attached and 0 without; the test library is too small for any channel to reach its minimum, so no change in the guide was seen. Not measured: a relay that answers 200 for `android`, OMDb lookups, and the real Supabase project.
+
+**Half-done.** Committed and pushed on `feature/android` (`83ef73d`). The relay change only takes effect once Chad agrees to it and it deploys; Chad agreed on the PR (see the rebase entry above).
+
+**Next.** With the relay accepting `android` and a build with the Supabase values, check on the SHIELD: the METADATA step's counts, OMDb's 50 a load, and which channels a real library gains.
+
+## 2026-11-02 (Android TV: rebased onto 1.0.29's main; sidebar order, languages, GUIDE TEXT SIZE)
+
+**Changed.** `feature/android` rebased onto `main` at `0795e19` (102 new commits) after Chad's note on PR #151 that main has settled (Apple TV 1.0.29, Roku 1.0.8, web tuner 1.0.11). Only this log conflicted; the resolution had left the 2026-10-29 Android entry twice and the Android entries above newer ones, both fixed. The engine's golden tests passed against the new main unchanged: the new channel blocks (NOSTALGEX at 1 to HIGH ROTATION at 500) come from `channels.json` with no code, and the MediaBrowser scan vectors, generated from the current `plex-tuner.html`, still match item for item, so Jellyfin and Emby episodes are in the web tuner's show order. The stock FRANCHISES channels (300 to 306) are still rule-based and the FRANCHISES switch gates them; this app builds no found franchises or collections, so the 300s beyond 306 and the 400s don't apply.
+
+- The package sidebar lists packages in guide order, each at its earliest channel there (`bundleJumpTargets`), so HIGH ROTATION comes last and a seasonal package that leads the guide leads the sidebar. `LineupTest.theSidebarFollowsTheGuideOrder`.
+- Languages: `LanguageChoice` carries the shared ISO 639-2 table (`LanguageMatchTest` holds it to `scripts/nostalgex-language.js` character for character), `primaryLanguage`, `languageKey` and `sameLanguage`, with the smoke's traps (Estonian is not Spanish, Czech "ces" is "cs", "und" matches nothing). Track choice is `tagMatchesPreferred`: unchanged, plus Norwegian as one language in any spelling, which the old prefix compare missed.
+- GUIDE TEXT SIZE under PLAYBACK, NORMAL or LARGE, the Apple TV's `GuideTextMetrics` (titles and times 26, heading 22, number 24 in a 44 box, name 20, the Watershed placeholder 22) under its `nostalgex_guide_text_size` key. On the emulator: times, number and name grew, rows and blocks stayed where they were.
+
+- Settings is the Apple TV's rail (`SettingsContainerView`, N-028), four categories by the owner's choice: PLAYBACK & PICTURE, CHANNELS & BUNDLES, SERVERS & ACCOUNTS and ABOUT, with Chad's 16x16 pixel icons (copied from `Assets.xcassets/SettingsHero`, drawn without smoothing) in the hero and, in place of SF Symbols, on the rail. CHANNELS & BUNDLES is a list (CHANNEL PACKAGES, WATERSHED) with sub-pages: CHANNEL PACKAGES gains the amber count of channels short of content, and WHY AREN'T THESE ON AIR? became MISSING CHANNELS with focusable cards, as on the Apple TV. SUPPORT NOSTALGEX and NOSTALGEX PRO are left out, and FRANCHISES and MY COLLECTIONS as pages, since found franchises and collections aren't ported. Checked on the emulator: Up and Down swap the pane; Right goes into the rows; Left returns to the selected category; Back steps MISSING CHANNELS, CHANNEL PACKAGES (focus on the row that opened it), the list, the rail, the guide; closing STREAM QUALITY returns to its row. Two focus bugs found that way and fixed: removing the focused row (a page swap or a closing picker) dropped focus on the first rail row, which switched the category, and the rebuilt screen after a picker forgot the row it should return to.
+
+**Tested on the emulator afterwards**, against Jellyfin 12.4 with a music-video library and a film carrying English (default, first) and Norwegian ("nor") audio: the Settings rail's rows that change things (a library off and on, a package on, WATERSHED on and off, RESCAN) each did what the old page did; the package sidebar listed PRIME TIME then HIGH ROTATION; the full-screen banner on a music video read title, artist, then year and genres, and Now Playing read "Cyndi Lauper · Girls Just Want to Have Fun" with UP NEXT "Toto · Africa"; with the audio language stored as "nb" (what MATCH TV LANGUAGE gives on a Norwegian TV; neither app offers Norwegian in its list) the Norsk track was chosen over English; Settings opened from CONNECTION FAILED and Back returned to it, and RETRY recovered once Jellyfin was up. MISSING CHANNELS' "every channel is on air" line was not seen: its link only shows while a channel is missing, on the Apple TV too.
+
+**Found while testing, in every app.** A Jellyfin music-video library gives nothing: each app (web tuner `fetchItems(view.Id, 'Movie')`, Apple TV and Emby services, Roku `NxMbMorePages(..., "Movie", ...)`, and Android) asks it for `IncludeItemTypes=Movie`, and Jellyfin files those items as `MusicVideo`. Measured: the view answered 0 for `Movie` and 4 for `MusicVideo`. HIGH ROTATION is therefore empty on Jellyfin everywhere. Asking for `Movie,MusicVideo` in a music-video library fixed it on Android (the banner test above ran on that local change), but it was reverted: `MediaBrowserScanTest` holds Android to the web tuner's requests, so the fix belongs in every app at once. Not checked against Emby.
+
+**Half-done.** Not ported: the Jellyfin and Emby transcode's audio track by language (the Apple TV pins `AudioStreamIndex`; this app takes the server's default track when it has to transcode). Held, as Chad asked: the schedule change so one title never airs on two channels at once; it will arrive with new golden vectors (since ported, in the entry above).
+
+**Next.** Installed on the SHIELD (Plex) and checked there by the owner: working. Not pushed.
 
 ## 2026-11-01 (Roku: one title on one channel at a time, the lineup's days packed together)
 
@@ -4760,6 +5585,32 @@ also gives MYSTERY BOX TV, CRINGE TV and A24 numbers), and MARVEL "on 101" in
 ## 2026-10-31
 
 **Changed.** On `release/1.0.29-rc`, not pushed. Demo mode's Now Playing panel now names the programme the guide shows: the one 600 s demo clip used to be seeked past its end (87% of tune-ins land 600 s or more into a block), finish at once and hand the panel the schedule's upNext. The clip now seeks to the elapsed time modulo 600, a clip end stays on the live block, and a once-a-second demo tick moves to the next programme when the block ends; real libraries are untouched. `DemoNowPlayingAgreementTests` walks five demo channels across ten programme boundaries on a simulated clock: 797 of 2,764 samples mismatched before, 0 after. Not yet watched on a real Apple TV.
+
+## 2026-10-30 (Android TV: rebased again; Now Playing order, WHY AREN'T THESE ON AIR?)
+
+**Changed.** `feature/android` rebased onto `main` at `0fe27e9` (12 new commits); only this log conflicted, and both sides were kept. The Android 2026-10-29 entry was moved below `main`'s 2026-10-30 ones to keep the log newest first. The engine's golden tests passed against the new `main` unchanged; no shared channel data had moved.
+
+- The channel banner and the Now Playing panel lead with the title, the channel name smaller under it, as `02ac78f`. The banner also gains the Apple TV's music-video lines (title, artist, year and genres), and Now Playing shows "Artist · Title" for a music video, as `PlexMediaItem+MusicDisplay.swift`.
+- WHY AREN'T THESE ON AIR? under each package that is on, as `ef872f7`: for each rule-based channel that didn't fill, its rules in plain words (`ChannelRequirements`, with `ChannelEmptyExplainerTests.swift`'s cases ported) and "needs at least N, your library has M". M is the size of the pool the last build filtered for that channel, the same pass that left it off, so unlike the Apple TV (`9d3762b`) there is no re-filter and nothing to slow Settings. Checked on the emulator against Jellyfin: 22 off-air channels under NOSTALGEX and 15 under PRIME TIME, with counts such as FLICKS 7 of 10.
+
+**Looked at and not ported.** Roku `f506510` (filter pools one server at a time): a memory workaround for Roku sticks that gives the same pools; the SHIELD builds 11,436 items in about 1.5 s. Roku `08ffb80` (kbps rounding): a BrightScript integer bug; Android rounds in doubles and `scripts/stream-quality-golden.json`'s 19,269,499 case already passes. Roku `0bc748d` (on-device Plex password sign-in): a Roku certification requirement the Apple TV doesn't have. Apple TV `5aa2ea2`, `571b8b0`, `d809098` (Dolby Vision MKV audio, ORIGINAL (LOCAL PLEX), recovery) and `9fdd123` (overlay stuck after a stall) are fixes to AVPlayer's path; this app direct plays the stored file first. Noted in `android/README.md`.
+
+**Next.** Install on the SHIELD. Not pushed: the owner asked to hold pushes.
+
+## 2026-10-30 (Android TV: the README catches up)
+
+**Changed.** `android/README.md` described the first Plex-only spike: it said Jellyfin, Emby, Settings, the package sidebar, subtitles, retro mode, stream quality and the music-video split were missing, all of which are now built. It now lists what the app does and keeps only the real gaps against the Apple TV, adding two found since: demo mode, and the PlaybackInfo handshake on Jellyfin and Emby. `feature/android` was rebased onto `main` at `ee2f5d9`; only this log conflicted, and both sides' entries were kept. Rebased again onto `c4d936f`, which changed the shared channel filter: 16 of the Apple TV's filter cases then failed on Android (STAND-UP, ANIME, CERTIFIED GOLD, THE 60S). `ChannelFilter.kt` now has `manifestOnlyGenreFallback` and the OMDb fallback for `ratingMin`, and `FilterGoldenTest` now reads a case's OMDb values, which it had been dropping, so the OMDb gates are tested for the first time. All 24 engine tests pass.
+
+**Watershed on Android.** Ported from `fb260ec`: Settings has the SCHEDULE section with WATERSHED (off by default, the Apple TV's `nostalgex_watershed` key). While on, every channel without its own `blockRatings` drops R, NC-17 and TV-MA titles (GB-15 and GB-18 through the US mapping) before 9 PM, in `ChannelConfig.timeFilteredPool`, which every schedule, tune and next programme reads. A channel left empty only by that shows the cyan BROADCASTS WILL RESUME AT 9 PM card in the tuner and full screen, and BROADCASTS RESUME AT 9 PM across its guide row. `WatershedGoldenTest` checks `scripts/watershed-golden.json`: 13 of 13 match the Apple TV. On the emulator against Jellyfin, with every test title set to R: the channel held at 08:30 and at 20:59; switching Watershed off put it back on the air at once (0.8 s); with the emulator clock started at 20:59, the 21:00 minute tick brought it on by itself (a transcode, 0.75 s). Episodes take their series' rating in the MediaBrowser scan, so R episodes of a GB-12 series stayed on the air, which is the scan's behaviour, not a Watershed bug. Fixed on the way: the tuner's info panel stayed blank when a channel gained a schedule with nothing else changing, as at 9 PM; it now redraws on the schedule tick. Not run on the SHIELD.
+
+**Library selection on Android.** Ported from `521157b` (I-054). After sign-in, when the servers in use have more than one library, CHOOSE YOUR LIBRARIES lists them all on, with focus on CONTINUE; a library left off is never scanned. Settings has a LIBRARIES list under SERVERS, where the last library on has no switch and changing one reads the library again. The choice is stored under the Apple TV's `nostalgex_deselected_library_sections` key, as `serverId::key`, and resets to every library on at each sign-in, as `presentLibrarySelectionOrScan` does. Both scanners drop excluded libraries from the list before any item request: `MediaBrowserScanTest.anExcludedLibraryIsNeverFetched` checks that no request names the excluded view over the Roku fixture server. On the emulator against Jellyfin (Movies and Shows): the picker showed both; with Shows off the read gave 19 items (the films) in 99 ms; switching Shows back on in Settings gave 25 in 279 ms and an empty stored list. Not tried: Plex (the SHIELD is signed in, and the picker only appears at sign-in, though Settings' LIBRARIES list will show there), Emby, and a single-library server, which should skip the picker.
+
+**Loading screen, START OVER and unfinished loads on Android.** Ported from `LoadingView`, `LibraryLoadPhase`, `LaunchGuard` and `UnfinishedLoadsView` (`b24c570`, `e7f2424`). A full library read now shows the step rail (LINEUP, LIBRARY, CHANNELS, READY: the Apple TV's COLLECTIONS, METADATA and MUSIC have no work behind them here), the first-setup warning on the first full load, the headline with what is being read ("TV SHOWS 3/10", "MOVIES"), the section line, a progress bar for sections and then channels, and START OVER behind the Apple TV's question. A short wait with nothing to report is the logo and a heartbeat. Both scanners report `ScanProgress` (library of how many, items, shows done). `LaunchGuard` uses the Apple TV's keys: a marker set as a foreground load starts and cleared as it ends (reading the saved library clears it without resetting the count; a background refresh is not tracked), and two loads in a row that never finished make the next launch ask LOADING DIDN'T FINISH, TRY AGAIN or START OVER. The reinstall half is not needed on Android (app data goes with the app; backup is off). The Apple TV's STOP WAITING for a scan that goes quiet is not ported: there is no stall watch here yet. Measured on the emulator through a proxy holding each Jellyfin library request for 1.5 s and then 8 s: the rail moved LINEUP to LIBRARY to CHANNELS and read 25 items in 6.7 s; two launches stopped mid-load gave counts 1 and 2 and the third opened on LOADING DIDN'T FINISH; START OVER asked first, KEEP LOADING went back to the load, and confirming signed out with nothing from the cancelled load landing in the 20 s after.
+
+Found and fixed on the way: after typing in a text field (an address, a username, a password), the next screen's first OK press did nothing. Logging the keys showed OK arriving as key code 45, the letter q: Android TV's keyboard stayed attached but unseen after its field went away, and turned OK into the key it had focused; arrows got through, so any arrow press "fixed" it. This was also the SETTINGS press ignored once on 2026-10-29. Fields now close the keyboard whenever they stop editing; the same sequence then delivered key code 23 and CONTINUE took the first press. Also: on Emby, `Lineup` passed "plex" to the channel filter, so Dolby Vision profile 5 titles stayed on channels; it now passes the real backend, with a test.
+
+**On the SHIELD (Plex), `022f073`.** Installed over the earlier build: the sign-in and settings were kept. Launch from the saved library: 11,436 items read in 1,425 ms, 28 channels built in 1,385 ms, first picture (direct play) 1.6 s after that; the load marker was set and cleared. Settings listed the server's five libraries under LIBRARIES, all included. A forced full read (the saved copy removed, nothing else changed) showed the new loading screen against a real server: CONNECTING TO PLEX, then per-library progress up to TV SHOWS 245/291 in section 3 of 5, then BUILDING CHANNELS; 20.4 s to read, 1.5 s to build, then the guide as before. The channel-count progress bar under BUILDING CHANNELS was not caught on screen (the build took 1.5 s between screenshots 3 s apart), so it is unverified on a device. Watershed was left off and no library was switched off on this device. Not tried on the SHIELD: Jellyfin or Emby, START OVER, LOADING DIDN'T FINISH (all tested on the emulator). Library selection was then used on the SHIELD from Settings, three changes in a row, each re-reading the library (19 to 20 s) and keeping 28 channels: a Plex music library is read but adds nothing, on Android or the Apple TV (Plex lists artists, with no running time, and the scan drops entries without one), so switching one off only saves its requests; a small Other Videos library held 39 items and a Sports library 5 episodes with no genres.
+
 
 ## 2026-10-30 (Roku: port the two filter engine changes of 2026-10-29, so the `roku` job goes green)
 
@@ -5648,6 +6499,64 @@ reviewed.
 **Next.** Reviewer pass, then the tester with two or more real servers enabled on
 the stick, watching the `library: ... memory N%` lines through a full build. Then
 Chad's go to merge.
+
+## 2026-10-29 (Android TV: a native spike)
+
+**Shipped.** Nothing. Branch `android/spike`, off main `46abf29`, not pushed.
+
+**Why.** To watch on an NVIDIA SHIELD. The web tuner in a TV browser gets no D-pad or Back (2026-10-16 entry), and a browser direct plays only MP4, WebM and MOV, so everything else is transcoded. A native app on Media3 ExoPlayer can direct play MKV and HEVC and pass surround through. The question for this spike is how much more that is on a SHIELD, measured before porting the rest.
+
+**Changed.**
+- `android/engine`: the schedule (`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`) and the channel filter (`ChannelFilter.kt`, from `scripts/nostalgex-channel-filter.cjs`) in plain Kotlin with no Android in it, so the tests run on the JVM. Where the JS reads the browser's time zone the port takes a `ZoneId`, and the JS text rules that differ from Kotlin's (`\s`, `.`, `trim`, the ASCII `\b`) are spelled out in `JsText.kt`.
+- `ScheduleParityGoldenTest` runs the walk of `scripts/schedule-parity-dump.mjs` field for field against `scripts/schedule-parity-golden.json`: all 3 cases (Plex in New York, Jellyfin in Santiago, Emby in London, with 23 and 25 hour days) match the Apple TV. `FilterGoldenTest` runs all 102 cases of `scripts/filter-golden.json` against the shipped `channels.json` (v43), its exclusive rules and `channels-memberships.json`.
+- `Lineup.kt`: library to guide, as `repopulateChannelsFromLibrary`, `applyBundleFilter`, `autoEnableBundlesWithContent`, `rebuildAllSchedules` and `nextAfterEnd` in `plex-tuner.html`. `minItems || 50`, NOSTALGEX on by default, guide ordered by number.
+- `android/app`: Plex PIN sign-in with the Apple TV's QR (`plex.tv/link/?pin=`), owned servers first, each on the first address that answers `/identity`; the library scan of `scanOnePlexServer` in library order; a full-screen player with the channel banner, Up and Down for channel, OK for the guide over the picture. Each programme tries direct play for any container Media3 reads and falls back to a Plex HLS transcode (its own session id, stopped on change) on a player error, or when a video or audio track has no decoder, since ExoPlayer otherwise plays a DTS film silent with no error. `adb logcat -s Nostalgex` logs each choice, why a direct play fell back, and time to first frame.
+- Channel data comes in through symlinks in `android/app/src/main/assets/`, as `roku/data/`. The fonts are VT323 and DM Mono, as on the Apple TV and Roku (`THIRD-PARTY-LICENSES.md`).
+- `ci.yml`: an `android` job runs `:engine:test` and `:app:assembleDebug` when `android/`, the shared data or the two golden files change. `scripts/vercel-ignore-build.sh` skips the site deploy for a push that touches only `roku/` or `android/`, checked in a scratch repo (android only: skip; with `index.html`: build).
+
+**Measured.** Planted bugs fail the tests: two in a row becoming three, a changed xorshift constant, and the higher channel keeping a shared title each fail the schedule golden file; ignoring exclusive locks and dropping the kids adult-rating gate each fail the filter golden file. Filtering every channel over a made-up library of 4,200 items took 5,274 ms on the JVM at first, because each of the 139 channels re-read its rules from JSON and re-lowercased every item's title. With channel and item facts worked out once it takes 640 ms, all golden cases unchanged. That is a MacBook, not a TV. On an Android TV emulator (API 31, the SHIELD runs Android 11) the APK installs, launches and gets a real code from plex.tv.
+
+**Found.** `scripts/filter-golden.json` has no case that tells a whole word from a substring: the JS filter with `titleContainsWord` replaced by `includes` still passes all 102 cases. The Android tests pin it directly (`titleRulesMatchWholeWordsOnly`); a golden case would cover the Apple TV and Roku too.
+
+**On a SHIELD (Android 11), against a Plex library of 11,435 items.** Every programme flipped to direct played, none transcoded: MP4 with H.264 and AAC, MKV with H.264 or HEVC, MKV with HEVC and AC3, AVI with MPEG-4 and MP3. First frame 0.6 to 2.2 s after the tune (3.1 s for the first stream after a launch), each at the clock's offset into the programme. The browser would have transcoded all but the MP4.
+
+**Then, on the SHIELD's numbers.**
+- Reading the library took 46 to 53 s on every launch, and filtering all 139 channels 10.9 to 11.2 s. The guide only shows the packages that are on, so `Lineup.build` now filters those packages' channels first, on every core (`parallelStream`), and every channel only when they fill nothing, as the web tuner builds every channel only on a first load (`staticChannelIDsForPoolBuild`). 3.2 s for the 19 channels shown, from 10.9 s. On the JVM at 11,400 items: 178 ms against 1,265 ms for all of them. On the JVM the 19-channel build is about 100 ms warm, so most of the SHIELD's 2.5 s is the debug build on a cold runtime. The app now parses `channels.json` and the 1.3 MB `channels-memberships.json` once per launch, alongside the saved-library read rather than after it (390 ms on the API 31 emulator), and logs the split of config, item facts and filtering. A release build type, signed with the local debug key so it sideloads over the debug one, is not debuggable. On the SHIELD it read the saved library in 860 ms (from 2.0 s), parsed the config in 297 ms alongside it, built the 19 channels in 1,836 ms (per-item facts 1,390, filtering 446) and read Plex again behind the picture in 18.3 s (from 49 s). Per-item facts then went onto every core, each distinct content rating is mapped once, and the exclusive locks reuse the item's lowercased title; all golden cases unchanged. Measured over two relaunches after the first (which runs before Android has compiled the app): saved library 0.60 to 0.62 s, 19 channels in 0.96 to 1.03 s (facts 353 to 371 ms, filtering 604 to 660 ms), first frame about 3 s after launch, from about 67 s this morning.
+- The first build of that crashed on the SHIELD: `Stream.toList()` is Java 16, Android 11 lacks it, and `engine` compiled against JDK 21 never said so. Lint's API check skips a plain Kotlin module (it has no minSdk), so `engine` now compiles against the JDK 8 API (`-Xjdk-release=1.8`): the same call planted again fails to compile. The app's lint makes NewApi fatal, and the CI job runs `:app:lintRelease`. Lint, while it briefly covered `engine`, also found literal byte-order mark and line separator characters in `JsText.kt` where `\u` escapes were meant; they are escapes now. R8 shrinking stays off until its kotlinx.serialization rules are checked on a device.
+- `LibraryStore`: the library as last read, one file in the app's storage, written to a temporary file and renamed, used only for the same servers and format. A launch builds the guide from it and reads the servers again behind the picture (the guide header says UPDATING LIBRARY), swapping the lineup in only if the library changed, which is the Roku port's start-up. Measured: saved library read in 2.0 s, guide built in 2.5 s, picture 5.7 s after launch, against about 67 s before; the refresh read 11,435 items in 49 s and found them unchanged. `LineupTest.aSavedLibraryBuildsTheSameGuide` holds the round trip to the same pools and schedules.
+- The remote follows the Apple TV's full screen (`PlayerView.swift`): Left and Right change channel, wrapping; Up opens the guide; Down shows the banner, where the Apple TV opens Now Playing. The first build had Up and Down changing channel, wrongly described as the Apple TV's. The guide opens on the key's release: opened on the press, the release reached the focused row as a click and closed it again at once.
+
+**Then, the Apple TV's tuner.** The overlay guide (now and next only) is gone. The app opens on TunerView as the Apple TV does, built from `TunerView.swift`, `InfoPanelView.swift` and `ChannelGuideView.swift` at their 1920 x 1080 measurements (one Apple TV point scaled to the screen): the info panel for the focused channel, the picture in a 4:3 box at 51.43% of the height, and the timeline grid with `ProgramRowLayout`'s segments, the two-hour window, Left and Right by the half hour up to 44 slots, the cyan now line, the bolt and the channel-coloured focus. OK on the live row goes full screen (`PlayerView.swift`'s ChannelOSD for 8 s), on another row tunes it; Back from full screen returns to the live row, and from the live row leaves the app (GuideExitAction). Episodes now carry `seTag`, so the saved library's format went to 2 and is read again once. Checked on the SHIELD by screenshot through `adb`: layout, full screen and back, the window scroll, and the panel following focus. Two fixes on the way: the zoomed picture drew past its box over the info panel until the tuner used a TextureView and Compose clipped it (full screen keeps a SurfaceView), and an episode's extra line pushed UP NEXT out of the panel, so its summary gets one line. The header's 12 points of overflow are kept in line with the rows, as the Roku port does. Not ported yet: the mini channel strip (Up), Now Playing (Down), the CRT overlay and tuning snow, the package sidebar (Left at the first slot), the seasonal invite row, SETTINGS in the nav bar.
+
+**Then, full screen's overlays** (`PlayerView.swift`, `NowPlayingPanel.swift`). Up opens the mini channel strip: a card per channel along the bottom with what is on, focus on the channel playing, OK tunes it and flashes the OSD. Down opens Now Playing: the poster (Plex's `/photo/:/transcode` at 300 wide, so items now carry `thumb` and the saved library's format went to 3), channel, title and year, rating and UP NEXT, then CAPTIONS (CC, subtitles in full screen only, off by default, as `subtitlesInFullscreenEnabled`), AUDIO (the file's tracks, a choice for that programme only), PICTURE (RETRO MODE, which for now switches the 4:3 crop to the whole picture; the CRT overlay is not ported) and SLEEP TIMER (OFF, 15 MIN, 30 MIN, 1 HR with a countdown, then STILL WATCHING? for 20 s, then playback stops and the tuner returns). Back closes either overlay before leaving full screen, and while one is open its rows take the D-pad. The OSD now also flashes on each new programme. Checked on the SHIELD by screenshot: the strip and focus moving along it, the panel and its rows, Back from each, and RETRO MODE off (letterboxed in the tuner's box) and on again. Not seen on a device: CC with a file that has subtitles, an audio switch on a file with two tracks, the sleep timer running out. Not ported in the panel: SUBTITLE LANGUAGE, AUTO SUBTITLES, AUDIO LANGUAGE, STREAM QUALITY, PLAYBACK INFORMATION; OPEN IN PLEX has nothing to act on here, as on the Roku.
+
+**Then, the rest of Now Playing, and RETRO MODE's look.**
+- `engine/StreamQuality.kt`: the five levels, held to `scripts/stream-quality-golden.json` by `StreamQualityGoldenTest`, with `isLikelyLocalServer` (private, loopback and link-local addresses, plain or as a plex.direct name). The transcode request carries `location`, `maxVideoBitrate`, `videoQuality`, `videoResolution` and `autoAdjustQuality=0`; away from home a file over the level's direct-play ceiling (20 Mbps on Auto, none on Maximum) is transcoded, so items carry `bitrate` and the saved library's format went to 4. Read at each programme's start: the row's note says it takes effect on the next one.
+- `engine/LanguageChoice.kt`: the sixteen presets (the first reads MATCH TV LANGUAGE where the Apple TV says APPLE TV), and `SubtitleSelectionLogic`'s rules. The app applies them as `applySubtitleSelection` and `applyAudioTrackSelection` do: the preferred audio language once per programme (a choice in the panel stands), subtitles in full screen when CC is on or when AUTO SUBTITLES (on by default) finds every audio track known and none in the preferred language, and then only a matching track; otherwise a forced track in the preferred language, else none. ExoPlayer normalises track languages to two letters, so "eng" matches "en".
+- The panel's program column follows `NowPlayingPanelLayout.programRows`: SUBTITLE LANGUAGE and AUTO SUBTITLES only with real subtitle tracks, AUDIO LANGUAGE only with two or more audio tracks. STREAM QUALITY, the language lists (two columns) and PLAYBACK INFORMATION (backend, Direct Play or Server stream, quality at tune, player size, codecs from an allowlist, the fallback reason, as `PlaybackInformation.swift`) take over the controls; Back closes the picker to its row, then the panel.
+- `ui/Retro.kt`: `CRTOverlayView` at RetroLook's numbers (scanlines every 3 points at 0.18, an 8% flicker each 80 ms, the tracking line at a 45% chance every 6 to 15 s, the vignette) over the picture in the tuner and in full screen, and `StaticScreenView`'s snow (its LCG, 4-point blocks at 0.45, 0.32 settling to 0.14) drawn as one small bitmap scaled up rather than a rectangle per block, after 0.75 s of loading. With RETRO MODE off, the plain TUNING card. The white-noise sound is off on the Apple TV too and is not ported.
+- Checked on the SHIELD by screenshot: the CRT look in both modes, the panel, PLAYBACK INFORMATION (Direct Play, 1920 x 1080, HEVC and E-AC-3), the STREAM QUALITY picker, Back from a picker returning to its row (it went to CC until the panel remembered the picker however it closed), and the snow on a 1.9 s start. Not seen on a device: subtitles of any kind, an audio language switch, AUTO SUBTITLES firing, a transcode at a capped level; none of the files played had subtitles or a second audio track, and none transcoded.
+
+**Then, Settings and the package sidebar** (`BundleManagerView.swift`'s SettingsPageView and `ChannelGuideView.swift`'s BundleJumpSidebar). SETTINGS sits in the tuner's nav bar (Up from channel one), and first in the sidebar that Left opens at the guide's first half hour; the sidebar lists each package on and jumps to its first channel in the guide. The page has CONNECTION (each server the account reaches, owned or shared, the last one locked on; RESCAN LIBRARY with LibraryDiagnostics' summary and "Updating..." while a refresh runs; DISCONNECT FROM PLEX), PLAYBACK (RETRO MODE, STREAM QUALITY, SUBTITLES cycling OFF, FOREIGN AUDIO and ALWAYS, SUBTITLE LANGUAGE while subtitles can show, AUDIO LANGUAGE; the pickers are pages, as the sheets are), CHANNEL PACKAGES (availability for the packages on, the amber "Needs more content" line, BUILDING while a package's channels filter, the last package locked on) and the version. A package switched on filters only its own channels (`Lineup.setBundles`). `engine/Season.kt` ports `scripts/nostalgex-season.js`'s isInSeason and spotlight label, held to `scripts/season-golden.json` (38 in-season cases, the labels, Thanksgiving dates), so off-season packages say SPOTLIGHTED and switched-on seasonal packages in season lead the guide. Not here: SUPPORT NOSTALGEX (App Store), SHOW NOW PLAYING and MARK WATCHED (watch state not ported), iCloud sync, the enrichment status, MY COLLECTIONS and found franchises. Checked on the SHIELD by screenshot: the sidebar, Settings from it and from the nav bar, the package list, KIDZ ZONE switched on (13 of 15, two needing content) and off again.
+
+**Then, taking out what the Apple TV doesn't have.** Asked whether the port adds anything the Apple TV lacks, the code was read again for each: the app remembered the last channel at launch (the Apple TV keeps none and tunes the first; removed), the sleep timer left a message on screen (the Apple TV pauses and returns to the guide; now the same), NO CHANNELS FOUND offered TRY AGAIN and SIGN OUT (now the Apple TV's two lines and OPEN SETTINGS, which opens the settings page; a package with content then brings the guide up). An earlier "UPDATING LIBRARY" note in the guide header had already gone with the overlay guide; the Apple TV sets `libraryUpdateNotice` but no view shows it. Remaining differences are listed in `android/README.md`.
+
+**Then, the Apple TV's failure card and connection screen.** `engine/PlaybackFailure.kt` ports `PlaybackFailure.swift` (the cases, `classify`'s order, headline, detail, next step and the amber-or-red side) and `ChannelFailureRun` (five in a row stop a channel; a picture or a viewer's tune resets it), with `PlaybackFailureTest`. The app reads ExoPlayer's error for the evidence (an HTTP status from the response, 404 for a missing file, unreachable for a failed or timed-out connection, decoder errors, whether a frame was ever drawn) and shows the card for 5 s before the next programme, compact in the tuner's box and full size in full screen; a stopped channel retries when selected again. "Apple TV couldn't play this file" reads "This TV couldn't play this file", as the Roku's reads "This Roku". A library that fails to load shows `Plex90App.swift`'s CONNECTION FAILED with `userFacingPlexAPIServiceError`'s wording for each cause (HTTP 401, other HTTP codes, no server reachable, a reply that won't parse) and `recoverPlexServersIfNeeded`'s for sign-in, with RETRY and SETTINGS in the onboarding button style; NO CHANNELS FOUND takes the same frame and logo.
+- Checked on an Android TV emulator against a fake Plex server on the Mac (a library of 12 films, every media request answered HTTP 500): CONNECTION FAILED with the HTTP 500 wording and with the unreachable wording, the card ("Your server wouldn't start this one", amber) within 0.1 to 0.5 s of each tune, the channel stopping after the fifth, and no request after that.
+- The harness found ExoPlayer retrying refused requests: 30 transcode starts for 5 programmes. A load error policy now fails an HTTP error at once (network errors keep their retries): 5 starts for 5 programmes. Each failure also sent the transcode stop twice, once on failing and again on the next tune; the session is now forgotten once its stop is sent: 5 stops.
+
+**Then, checked on the SHIELD awake.** (A launch while it slept had every request time out: Android's standby firewall held the app's uid at REJECT_ALL, `dumpsys netpolicy`, while the shell reached the server. Not the app.)
+- Home and back: with a programme playing the app holds its own audio output (the E-AC-3 passthrough, `dumpsys media.audio_flinger`); after Home that output is gone, and on return the channel re-tunes by the clock and plays in 0.5 s.
+- Flipping: 60 channel changes in three rounds of 20 (adb sends a key about every 1.4 s). No crash, the last tune always the one left on screen. PSS 276 MB before, 307 to 310 MB across the rounds after, Java heap 70, then 95, then 53 MB once collected; 34 to 38 threads. No growth round on round.
+- The first transcode against the real server: an MKV with MPEG-4 Part 2 video and MP3 (Big Train), which Media3's Matroska reader leaves with no decoder (`video/x-unknown`). The track check caught it in 0.2 s, the transcode was asked from the same second and drew a picture in 3.0 s, the player at 1169 s of 1725 s, the clock's offset, so it starts mid-programme and not from the top. PLAYBACK INFORMATION: Server stream, 852 x 480, MPEG-4 and MP3, "Direct Play failed. Trying a server stream."
+
+**Half-done.** Not seen on a device: subtitles of any kind, a second audio track, surround passed to a receiver, a library change swapped in by the refresh, the sleep timer running out, a midnight in the guide, an evening's session. Plex only. Not ported: Jellyfin and Emby, collections and found franchises, enrichment, watch state, the seasonal invite row, the loading screen's step rail, the sign-in flow's look, the starvation and watchdog recovery ladder, the Plex title byte repair, the music-video artist split.
+
+**The Fire TV fork.** WSINTRA's `feature/android-firetv` (discussion #2) was looked at as a base and not used: it branched from main on 2026-09-28, 817 commits ago, before both golden files existed, and its filter has the differences Chad listed in that thread. Its `MediaBackend` seam, Jellyfin backend, saved-library snapshot and Fire OS 6 support are the parts to borrow, with credit, when this app gets there.
+
+**Next.** The loading screen's step rail and the sign-in flow's look, then Jellyfin and Emby. Find a file that has to transcode and check the transcode starts at the clock's offset. Split and cut the remaining 2.5 s of the build. Whether Android becomes a contributed port like Roku or part of the main app is Chad's call.
+
+**Later the same day: Jellyfin on Android (uncommitted, on `feature/android`).** The library scan is a port of the web tuner's `fetchJellyfinLibraryFromServer` (`MediaBrowserLibrary.kt`), held to it by vectors generated from `roku/tests/gen-mediabrowser.mjs`: 222 items, identical. The app side follows the Apple TV's `SettingsView` and `SignInFlow`: a picker (CONNECT TO PLEX, then JELLYFIN), LAN discovery on UDP 7359, a typed address that tries `:8096` first, Quick Connect first when the server has it on, otherwise user tiles or a name and password, with the Apple TV's wording for each failure. Playback reuses the Plex path: direct play of the stored file (`Static=true`, `stream.mp4` for the MP4 family), falling back to the hand-built `master.m3u8` (H.264, AAC, MPEG-TS, its own `PlaySessionId`, no start time, the player seeks), stopped with `DELETE /Videos/ActiveEncodings`. Settings shows the one server, RESCAN and DISCONNECT FROM JELLYFIN; no posters, as on the Apple TV. Measured on the Android TV emulator against Jellyfin 12.4.0 in Docker with 25 generated test files: library read in 676 ms; direct play of H.264 MP4 0.9 s and MKV 1.8 s to picture; a DivX AVI failed direct play (no decoder) and the transcode joined at 154 s of 180 s in 6.5 s; auto subtitles came on for a French-audio film in full screen. Jellyfin 12.4 answers 401 to `api_key` alone, so the direct-play URL now carries `ApiKey` too, as the HLS one already did. Fixed while testing: a pressed text field closed itself at once, the address keyboard said Next instead of Go, and typing a username lost focus after one letter. The password sign-in was rerun afterwards and passed: the full username went in, Next moved to the password, a wrong one showed "Incorrect username or password." with focus back on the password, and the right one signed in and played. That run read the library in 6,125 ms against a freshly restarted container, not the 676 ms measured warm. Emby followed: the picker offers EMBY, and stopping an encode on Emby also posts `/Sessions/Playing/Stopped`, as `EmbyAPIService.stopTranscode` does; everything else is the shared path. Measured on the emulator against Emby Server 4.10.2.0 in Docker with the same 25 files: discovery answered to "who is EmbyServer?"; the check read Emby (no ProductName, no Quick Connect) and its two public users, shown as WHO'S WATCHING? tiles; the user with a password moved focus to PASSWORD FOR NOSTALGEX and signed in, the one without signed in on the press; library read in 59 to 114 ms; direct play in 1.3 to 1.4 s. The app's hand-built HLS request, sent by curl, answered 200 for master, variant and segments, with `PlaySessionId` on every segment URL and H.264 and AAC in TS; segment 30 came back in 0.42 s; the stop and the stopped report both answered 204. Fixed: a label too long for its button (SOMEONE ELSE in a tile) was cut off, and now shrinks to as little as 60%, as the Apple TV's `minimumScaleFactor(0.6)`. Unverified: an Emby transcode inside the app (none came up in the schedule during the run; the request itself is checked above), the encode stop as seen by the Jellyfin server, and anything on the SHIELD, which stays signed in to Plex. One report not reproduced at the time: a single SETTINGS press was ignored once, then opened 4 of 4 times (explained on 2026-10-30: the keyboard left attached after typing). Next: try Jellyfin and Emby on the SHIELD.
 
 ## 2026-10-29 (Watershed: an opt-in 9 PM hold for 18/R-rated content, every channel)
 
@@ -6571,6 +7480,46 @@ unchanged.
 
 **Next.** The Tunarr post still has a build-notes reminder to add this walkthrough in "How does Nostalgex compare to Tunarr and ErsatzTV?". That was not in today's publish list.
 
+## 2026-10-27 (Roku: Settings' package rows stopped the app, and a check for it)
+
+**Shipped.** Nothing until the PR for #72 (#114) takes it. Branch `roku/playback-report`.
+
+**Why.** The tester found the 1.0.6 release candidate crashing as soon as Settings scrolled to CHANNEL PACKAGES: `Use of uninitialized variable (runtime error &he9)` in `SettingsView.drawRow`. My own bug in #114: renaming `on` to `isOn` for the two reporting rows also changed the package rows' `if on then`, and that branch never sets `isOn`. The tester had run Settings on this branch without scrolling that far. Neither the suite nor static analysis can see a variable read before it is assigned.
+
+**Changed.**
+- `components/SettingsView.brs`: the package rows read `on` again.
+- `tests/tools/check-uninit.py` (new), run by `tests/run.sh`: flags a plain name an `if`, `else if` or `while` condition reads when this path has not assigned it, following if / else-if branches (a branch sees what came before the chain, not what a sibling set). On the broken commit and on the candidate it reports exactly this line; on the fixed tree and the rest of the repo it reports nothing. It checks conditions only, so it is not a general lint: a variable read outside a condition, or set on only some paths into a later read, is not caught.
+
+## 2026-10-27 (Roku: SHOW NOW PLAYING and MARK WATCHED, off by default)
+
+**Shipped.** Nothing until it lands on main. Branch `roku/playback-report`, off #108 (`cd8f783`).
+
+**Why.** Issue #72: the Roku never told Plex, Jellyfin or Emby what was playing, and never counted a watch. The Apple TV has two opt-in switches for that (w6trp's work, in 1.0.28's source). Chad asked for the Roku to match.
+
+**Changed.**
+- `source/guide/PlaybackReport.brs` (new): the two choices, saved through `NxRegSection("player")` and off until turned on; the epochs that revoke queued work when a choice goes off; the 15% entry / 75% watched gate; the tracker. The tracker is pure: it takes the clock and returns events.
+- `source/guide/ReportExecutor.brs` (new): what goes to the server, one event at a time, as upstream's queued operations.
+  - **Plex:** position-free `PUT /:/timeline` with the session in `X-Plex-Session-Identifier`. A counted watch is `GET /:/scrobble` with the bare key. For a counted episode whose show wasn't already in Continue Watching, the next-up entry is removed (three lookups, a second apart).
+  - **Jellyfin and Emby:** the item's UserData is read first. With no reading there is no report and no mark. Then `/Sessions/Playing`, `/Progress` and `/Stopped`, the stop capped at 89% of the runtime. A counted watch is an explicit `POST PlayedItems`. When the session ends, the prior UserData goes back, or the counted state.
+  - **Pulse backoff:** a server that stops answering gets fewer pulses (skip 1, 2, 4 ... 30). The setting never changes.
+- `components/ReportTask.*` (new): runs the events on its own thread, so a slow or silent server never holds up the picture or the guide. It is created only once there is something to send; with both choices off since launch, nothing is created and nothing is sent.
+- `components/GuideView.*`:
+  - a tracker per airing (a retry or a step down keeps it), started at the first picture, pulsed every 10 s and stopped on a channel change, the card, the sleep timer, a rebuild or sign-out, and Back;
+  - leaving with Back waits up to 4 s for the stop and the cleanup.
+- `components/SettingsView.*`: SHOW NOW PLAYING ON <SERVER> and MARK WATCHED ON <SERVER> under CONNECTION, with upstream's wording.
+- `source/guide/GuideSchedule.brs`: a block carries its item's runtime.
+- Tests: `tests/ReportTests.brs`, 80 cases.
+  - The cleanup plans against `scripts/watch-cleanup-golden.json` and upstream's module.
+  - The backoff against `nostalgex-watch-state.js` (`tests/gen-watch.mjs`).
+  - The gate, all four combinations of the two choices on Plex, Jellyfin and Emby, an unreadable baseline, the next-up removal with its retry, revocation and epochs, and the request shapes.
+- `README.md` Security and the read-only notes in the playback files.
+
+**Measured.** Off-device only: the tester owns the stick. The new suite crashes on the base (the functions don't exist) and passes here. Mutating the 89% cap or the 15% gate fails it.
+
+**Half-done.**
+- Not on a TV yet.
+- The Roku section of the privacy page and the store listing still say read-only. Updating them needs the maintainer's OK (issue #72) and the site agent.
+
 ## 2026-10-26 (Roku: a small library no longer lands on an empty guide)
 
 **Shipped.** Nothing until the PR for #60 lands on main. Branch `roku/small-library`, off main `ae3cd6d`.
@@ -6679,46 +7628,6 @@ unchanged.
   - Soldier's 1080p stream, from 0 s and at the join, comes in even 2 s pieces of 1.1 to 2.9 MB, H.264 Main level 4.0.
   - The copied stream's piece at the join is 18 MB.
 - `tests/FallbackTests.brs`: 12 more cases. The Jellyfin/Emby ones fail on the first commit.
-
-## 2026-10-27 (Roku: Settings' package rows stopped the app, and a check for it)
-
-**Shipped.** Nothing until the PR for #72 (#114) takes it. Branch `roku/playback-report`.
-
-**Why.** The tester found the 1.0.6 release candidate crashing as soon as Settings scrolled to CHANNEL PACKAGES: `Use of uninitialized variable (runtime error &he9)` in `SettingsView.drawRow`. My own bug in #114: renaming `on` to `isOn` for the two reporting rows also changed the package rows' `if on then`, and that branch never sets `isOn`. The tester had run Settings on this branch without scrolling that far. Neither the suite nor static analysis can see a variable read before it is assigned.
-
-**Changed.**
-- `components/SettingsView.brs`: the package rows read `on` again.
-- `tests/tools/check-uninit.py` (new), run by `tests/run.sh`: flags a plain name an `if`, `else if` or `while` condition reads when this path has not assigned it, following if / else-if branches (a branch sees what came before the chain, not what a sibling set). On the broken commit and on the candidate it reports exactly this line; on the fixed tree and the rest of the repo it reports nothing. It checks conditions only, so it is not a general lint: a variable read outside a condition, or set on only some paths into a later read, is not caught.
-
-## 2026-10-27 (Roku: SHOW NOW PLAYING and MARK WATCHED, off by default)
-
-**Shipped.** Nothing until it lands on main. Branch `roku/playback-report`, off #108 (`cd8f783`).
-
-**Why.** Issue #72: the Roku never told Plex, Jellyfin or Emby what was playing, and never counted a watch. The Apple TV has two opt-in switches for that (w6trp's work, in 1.0.28's source). Chad asked for the Roku to match.
-
-**Changed.**
-- `source/guide/PlaybackReport.brs` (new): the two choices, saved through `NxRegSection("player")` and off until turned on; the epochs that revoke queued work when a choice goes off; the 15% entry / 75% watched gate; the tracker. The tracker is pure: it takes the clock and returns events.
-- `source/guide/ReportExecutor.brs` (new): what goes to the server, one event at a time, as upstream's queued operations.
-  - **Plex:** position-free `PUT /:/timeline` with the session in `X-Plex-Session-Identifier`. A counted watch is `GET /:/scrobble` with the bare key. For a counted episode whose show wasn't already in Continue Watching, the next-up entry is removed (three lookups, a second apart).
-  - **Jellyfin and Emby:** the item's UserData is read first. With no reading there is no report and no mark. Then `/Sessions/Playing`, `/Progress` and `/Stopped`, the stop capped at 89% of the runtime. A counted watch is an explicit `POST PlayedItems`. When the session ends, the prior UserData goes back, or the counted state.
-  - **Pulse backoff:** a server that stops answering gets fewer pulses (skip 1, 2, 4 ... 30). The setting never changes.
-- `components/ReportTask.*` (new): runs the events on its own thread, so a slow or silent server never holds up the picture or the guide. It is created only once there is something to send; with both choices off since launch, nothing is created and nothing is sent.
-- `components/GuideView.*`:
-  - a tracker per airing (a retry or a step down keeps it), started at the first picture, pulsed every 10 s and stopped on a channel change, the card, the sleep timer, a rebuild or sign-out, and Back;
-  - leaving with Back waits up to 4 s for the stop and the cleanup.
-- `components/SettingsView.*`: SHOW NOW PLAYING ON <SERVER> and MARK WATCHED ON <SERVER> under CONNECTION, with upstream's wording.
-- `source/guide/GuideSchedule.brs`: a block carries its item's runtime.
-- Tests: `tests/ReportTests.brs`, 80 cases.
-  - The cleanup plans against `scripts/watch-cleanup-golden.json` and upstream's module.
-  - The backoff against `nostalgex-watch-state.js` (`tests/gen-watch.mjs`).
-  - The gate, all four combinations of the two choices on Plex, Jellyfin and Emby, an unreadable baseline, the next-up removal with its retry, revocation and epochs, and the request shapes.
-- `README.md` Security and the read-only notes in the playback files.
-
-**Measured.** Off-device only: the tester owns the stick. The new suite crashes on the base (the functions don't exist) and passes here. Mutating the 89% cap or the 15% gate fails it.
-
-**Half-done.**
-- Not on a TV yet.
-- The Roku section of the privacy page and the store listing still say read-only. Updating them needs the maintainer's OK (issue #72) and the site agent.
 
 ## 2026-10-26 (Roku: a test build can keep its own saved data)
 
@@ -7361,6 +8270,21 @@ Emby has no Quick Connect (`/QuickConnect/Enabled` is a 404 on 4.10.1.0), so its
 - Seen on the way, not changed: on a phone the Settings footer's key hints (ESC, TABS, ENTER, DEL, coffee) don't fit and overlap. They mean nothing on touch.
 - Draft changelog line, not in `content/changelog.json`: "The web tuner shows its version at the bottom of Settings."
 
+## 2026-10-20 (publish Apple TV channel surfing post)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/apple-tv-channel-surfing-apps`.
+
+**Why.** Chad's daily schedule, one post per morning. This one sat as a draft. The Oct 20 morning recheck found TubeTime+ had left TestFlight and landed on the App Store, so the reviewed copy was swapped in rather than flipping `draft: false` on the old Oct 9 competitor numbers.
+
+**Changed.**
+- `content/blog/apple-tv-channel-surfing-apps.md`: `draft: false`, `date` and `updated` both 2026-10-20. Competitor details rechecked on the vendors' own pages today: Coax and Bunny Ears prices and tvOS mins unchanged, TubeTime+ now on the App Store with Premium after 1 hour free, NostalgiaTV still not on Apple TV. Emby links and a tracked App Store link (`ct=blog_channel_surfing`) are in the copy. The HTML comment block of build notes stays in the Markdown because `scripts/build-blog.mjs` strips comments before rendering.
+- `content/blog/jellyfin-tv-guide-own-library.md`: date and updated stay 2026-10-19. The last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" now links to the new post. The App Store link carries `ct=blog_jellyfin_guide`. The HTML build-notes comment marks that Oct 20 link as done.
+- `npm run blog:render` wrote six live posts into `public/sitemap.xml`, including `/blog/apple-tv-channel-surfing-apps` with lastmod 2026-10-20. The blog block moved below the channels block, because the script always re-inserts it just before `</urlset>`. Images stay on R2. `scripts/media-sizes.json` already had the three R2 images for this post, so none were added.
+
+**Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
+
+**Next.** Nothing on this post. Indexing `/jellyfin` in Search Console is still Chad's, from the Jellyfin post's build notes. Oct 26, once `/blog/plex-virtual-channels-own-movies` is live: add the Plex Live TV link named in this post's build notes.
+
 ## 2026-10-19 (Emby A/V sync fix moved onto build 50)
 
 **Shipped.** Nothing. Branch `fix/emby-avsync-ts` is rebased onto `build-50`, not merged, not in any build. The 2026-10-16 entry below has the cause and the first measurements.
@@ -7409,21 +8333,6 @@ The same file joined at 247.3 s: -1832 / -15 ms. The flash-per-second H.264 + DT
 - The November headline is a placeholder for Chad's copy.
 - Roku port. Its `NxSeasonalOffer` and `NxBundleInSeason` take a month (and year), so to match it needs the local day too: in season when the month is active, or when it is the start's month and the day is on or after the start's day. US Thanksgiving from `roDateTime` (Nov 1's `GetDayOfWeek`, then the fourth Thursday), plus `days`. The same check for the guide lead in `NxGuideOrder`, and `NxSeasonalHeadline` says December only in December. The per-year registry key (`seasonalDismissed_<id>_<year>`) works as is. Vendor `scripts/season-golden.json` next to the other vectors and add it to `run.sh`'s comparison; its zones don't matter to a runner that works in local date parts. Until then the port reads v42 and offers the holiday bundle in December, as before. Separately, `NxPoolChannelIds` still builds a seasonal bundle's pools only in season, which upstream stopped doing on 2026-10-16.
 - Draft changelog line, not in `content/changelog.json`: "TIS THE SEASON shows up a week before US Thanksgiving now, in time for TURKEY DAY."
-
-## 2026-10-20 (publish Apple TV channel surfing post)
-
-**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/apple-tv-channel-surfing-apps`.
-
-**Why.** Chad's daily schedule, one post per morning. This one sat as a draft. The Oct 20 morning recheck found TubeTime+ had left TestFlight and landed on the App Store, so the reviewed copy was swapped in rather than flipping `draft: false` on the old Oct 9 competitor numbers.
-
-**Changed.**
-- `content/blog/apple-tv-channel-surfing-apps.md`: `draft: false`, `date` and `updated` both 2026-10-20. Competitor details rechecked on the vendors' own pages today: Coax and Bunny Ears prices and tvOS mins unchanged, TubeTime+ now on the App Store with Premium after 1 hour free, NostalgiaTV still not on Apple TV. Emby links and a tracked App Store link (`ct=blog_channel_surfing`) are in the copy. The HTML comment block of build notes stays in the Markdown because `scripts/build-blog.mjs` strips comments before rendering.
-- `content/blog/jellyfin-tv-guide-own-library.md`: date and updated stay 2026-10-19. The last sentence of "Do I have to set up M3U, XMLTV or a tuner for this?" now links to the new post. The App Store link carries `ct=blog_jellyfin_guide`. The HTML build-notes comment marks that Oct 20 link as done.
-- `npm run blog:render` wrote six live posts into `public/sitemap.xml`, including `/blog/apple-tv-channel-surfing-apps` with lastmod 2026-10-20. The blog block moved below the channels block, because the script always re-inserts it just before `</urlset>`. Images stay on R2. `scripts/media-sizes.json` already had the three R2 images for this post, so none were added.
-
-**Half-done.** The other drafts are still drafts: `make-plex-feel-like-cable-tv`, `plex-virtual-channels-own-movies`.
-
-**Next.** Nothing on this post. Indexing `/jellyfin` in Search Console is still Chad's, from the Jellyfin post's build notes. Oct 26, once `/blog/plex-virtual-channels-own-movies` is live: add the Plex Live TV link named in this post's build notes.
 
 ## 2026-10-19 (Emby: Dolby Vision profile 5 stays off channels)
 
@@ -9007,23 +9916,6 @@ render, no NOTABLE STARS. Not tested on hardware.
 **Watch.** The iCloud KVS entitlement comes in with this merge (sync is off by default).
 The 10-10 entry showed a Release archive signs with it; still no two-TV hardware pass.
 
-## 2026-10-12 (community PRs)
-
-**Changed.** Two fixes from @w6trp landed on main with their commits kept, thanks:
-
-- #19: watchdog verdicts strip URLs and credentials before they reach the system log or
-  Settings, so a support screenshot can no longer carry a server token. Kept main's
-  verdict line format (no em dashes) with the redaction applied to it.
-- #20: music enrichment and channel pools key on the server-qualified item id, so two
-  servers that reuse a rating key no longer swap each other's music metadata.
-
-NostalgexTests 495 passed, 2 skipped, 0 failed; web tests green. Not tested on hardware.
-
-**Half-done.** #21 (keep the chosen Plex media version and multipart offsets) is on
-`land-pr-21`, not main. It touches playback, so it waits for a hardware pass on a
-multi-version title and a three-part film. On landing we dropped its snapshot schema bump
-(2 to 3); `LibrarySnapshotCompatibilityTests` proves a pre-#21 snapshot still loads.
-
 ## 2026-10-13 (app, build 47)
 
 **Shipped.** 1.0.26 (47) uploaded to TestFlight for beta review. 1.0.25 (46) is still in
@@ -9059,6 +9951,23 @@ iCloud opt-in, enrichment in the app, Report Playback rebuilt on PR #18) is on b
 Emby's fallback HLS still fails on an empty `PlaySessionId`.
 
 **Next.** Watch 47 through beta review; hardware-test PR #21; start 1.0.27.
+
+## 2026-10-12 (community PRs)
+
+**Changed.** Two fixes from @w6trp landed on main with their commits kept, thanks:
+
+- #19: watchdog verdicts strip URLs and credentials before they reach the system log or
+  Settings, so a support screenshot can no longer carry a server token. Kept main's
+  verdict line format (no em dashes) with the redaction applied to it.
+- #20: music enrichment and channel pools key on the server-qualified item id, so two
+  servers that reuse a rating key no longer swap each other's music metadata.
+
+NostalgexTests 495 passed, 2 skipped, 0 failed; web tests green. Not tested on hardware.
+
+**Half-done.** #21 (keep the chosen Plex media version and multipart offsets) is on
+`land-pr-21`, not main. It touches playback, so it waits for a hardware pass on a
+multi-version title and a three-part film. On landing we dropped its snapshot schema bump
+(2 to 3); `LibrarySnapshotCompatibilityTests` proves a pre-#21 snapshot still loads.
 
 ## 2026-10-11 (web tuner)
 
@@ -9409,6 +10318,32 @@ before the next archive. Then rescan on a device and watch for
 README's "What leaves your network" now names the proxy hop; the privacy page
 covers TMDB lookups in general terms but does not name nostalgex.app as a hop,
 worth a line before that build ships.
+
+## 2026-10-11 (selected Plex version and multipart position)
+
+**Changed.** Plex items retain the selected media index, complete part descriptors and exact duration. Decision/start/recovery requests use that media and part instead of always requesting index zero. Later parts keep the remaining stack and their own codec facts. A whole-film tune offset maps to the correct part and local offset when every part duration is available. Part changes keep one tracker and pause its clock during loading. Library snapshots keep schema 2 (changed on landing): an older snapshot decodes the new fields as version 0, part 0 and no part lengths, which is the previous behaviour, until the next full library scan fills them in. That avoids forcing every user to rescan.
+
+**Validation.** Regression coverage checks whole-film offsets, third-part continuity, per-part SDR/codec facts, persistence and transcode query identities. Xcode 27 / tvOS 27 native suite passed 440 tests, with 2 optional live tests skipped and no failures.
+
+**Half-done.** Unknown part lengths retain the existing offset fallback; this does not infer missing server metadata. Real multi-version and multi-file direct/HLS playback still needs hardware acceptance. Codec policy, heartbeat reporting and unrelated recovery fixes are excluded.
+
+**Next.** Upstream review on `fix/preserve-plex-media-parts`; verify recognizable multi-version and three-part files on hardware before treating playback acceptance as complete.
+
+## 2026-10-11 (Plex heartbeat-only activity)
+
+**Shipped.** Prepared on `feature/plex-heartbeat-only` against upstream `c2f32e6`. No release, store upload or upstream merge.
+
+**Changed.** Added a separate opt-in Plex Heartbeat Only setting, mutually exclusive with History & Resume. Existing history preferences and reporting endpoints remain intact. Heartbeat POSTs carry the item key, playback state and exact session header, with no time, duration or watched/scrobble operation. AVPlayer state feeds heartbeat updates. Reporting continues until disabled or a request fails; there is no elapsed-time cutoff or title-count limit.
+
+Each server's heartbeat queue preserves playing/stopped order and tracks only the sessions it opened. Channel changes, disable and disconnect close those exact sessions. Reactivation waits for earlier cleanup and uses a fresh identity. Normal backgrounding requests bounded OS time for stop delivery; it cannot promise delivery after force-quit, network loss or OS expiration. A failed request stops further activity updates and makes one bounded cleanup attempt without stopping the stream. No account permissions, tokens, telemetry, app identifiers, artwork or branding are changed.
+
+**Validation.** Xcode 27 / tvOS 27 simulator suite: 447 passed, 2 optional live harnesses skipped. Eleven new tests cover exact request fields, ordering, disable during an in-flight request, background/foreground, tracker release, rapid reactivation, failure cleanup, exclusive settings, and 100 consecutive pulses without an artificial count cutoff. Pulsed tests are not a real-time sustained playback measurement.
+
+Earlier short hardware experiments using the same position-free timeline approach observed unchanged watch count, resume offset, last-viewed time and history digest, plus stopped-session cleanup. Those experiments used separate instrumentation and do not certify this exact upstream branch or general server behavior.
+
+**Half-done.** Sustained playback beyond ten minutes, completion, delayed persistence, network failure and force-quit remain unverified on this branch. A draft PR should remain explicit about that gap. No claim of guaranteed history suppression is made.
+
+**Next.** With an owner-approved hardware window, capture baseline stored fields/history for selected titles, watch one title at least eleven minutes, switch twice, disable heartbeat while leaving playback running, then re-enable and exit to Home. Verify activity remains present past minute ten, outgoing sessions clear, and stored fields/history match the baseline after stopping and a later read. Keep History & Resume off and never reset history.
 
 ## 2026-10-10 (iCloud sync, now opt-in, branch only)
 
