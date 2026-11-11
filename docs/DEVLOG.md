@@ -12,8 +12,9 @@ more rows (#263, on #262's tokens).
 **Changed.** `NxGuideGeometry`: rows 64 px, the header 58, the channel column 340, 395 px per 30 minutes. The text tops
 are computed from the row and header heights (`NxGuideLineTop`). NORMAL: titles, numbers and names 22, times, the
 CHANNEL heading and the WATERSHED placeholder 25, a 40 px number box; LARGE all 29 and a 54 px box. Titles are white
-live and on the focused row and `textDim` on every other; the number, name, times and heading are white; the
-channel's colour stays in the bar. The focused row is the channel's colour darkened only as far as white titles need
+live and on the focused row and `textDim` on every other, the WATERSHED placeholder too (it was white at 40%); the
+number, name, times and heading are white; the channel's colour stays in the bar. The live chip and the seasonal
+invite row are re-centred in the 64 px row, the invite row 64 px tall like the others. The focused row is the channel's colour darkened only as far as white titles need
 for 4.5:1 (`NxGuideFocusFill`, `NxTokDarkenFor`), drawn across the whole row, so its live cell isn't set apart and the
 past tint isn't drawn on it. At the end of the list the scroll stops on a whole row (`keepFocusVisible`): 466 px isn't
 a whole number of 65 px rows, and stopping where the last row touches the bottom left 11 px of the row above under

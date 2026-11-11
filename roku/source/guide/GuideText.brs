@@ -74,7 +74,7 @@ end function
 ' header, an even row's stripe, a past programme's tint and the alpha of a
 ' live programme's cell in the channel's colour. The lightest background an
 ' unfocused title sits on is the stripe and the past tint over the grid
-' (NxGuideLightestTitleBg), which tests/GuideNavTests.brs holds textDim to.
+' (NxGuideLightestTitleBg), which tests/GuideLookTests.brs holds textDim to.
 function NxGuideColors() as Object
     return { grid: "0x0D0D1FFF", header: "0x0A0A14FF", stripe: "0xFFFFFF08", past: "0xFFFFFF05", liveAlpha: "40" }
 end function
