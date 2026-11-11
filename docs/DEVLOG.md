@@ -3,6 +3,34 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Apple TV 1.0.32 design branch: Chad's TV feedback, focus sound, dim titles, Now Playing, UP NEXT)
+
+Built and looked at on the basement Apple TV 4K (tvOS 27.2) by Chad. Unit tests were not run for these; the focus sound is checked by ear.
+
+**No tvOS focus tick (`FocusSound.swift`).** Moving focus along the full-screen channel strip played tvOS's focus tick over the video's
+audio. UIKit asks the focus environment chain for a sound: `UIFocusEnvironment.soundIdentifierForFocusUpdate(in:)` (Obj-C
+`soundIdentifierForFocusUpdateInContext:`), where `UIFocusSoundIdentifier.none` opts out, `.default` is the system sound and nil defers to the
+parent. SwiftUI has no modifier for it on tvOS and the app has no UIKit root of its own, so the answer is given where every chain ends:
+overrides on `UIWindow` and `UIViewController` return `.none`. A view or controller that returns its own sound still wins. Playback audio,
+the channel-change static and the system sound settings are not touched. Verified by ear on the basement TV (tvOS 27.2): the tick is gone. The
+simulator plays no focus sounds, and nothing was checked on another tvOS version or for a system control that returns its own sound.
+
+**Guide titles that are not live are clearly dimmer.** Chad: the upcoming titles did not look dimmer. text-2 (#B9C3DE) is 9.9 to 10.9:1 on the
+guide, too close to white at couch distance. New token `NXColor.textDim` #80879A, the text-2 hue pulled toward black to the dimmest value that
+holds 4.5:1 on the lightest guide surface: 5.36:1 on the bare guide (#0D0D1F), 5.06:1 on the even-row wash, 5.16:1 on a past block, 4.83:1 on
+both together; white is 17.2:1. Used for every non-live, non-focused title, past and upcoming alike; the live block and the focused row stay
+white (the focused row's fill is calibrated for white). The pairs are in `NXColor.textPairs`, so `DesignTokensTests` holds them at 4.5:1.
+
+**Now Playing at the guide's scale (`NowPlayingMetrics.swift`).** Row labels and values, the channel line, the UP NEXT line and the hint line are
+22 pt (were 25); the item title 29 (was 38); the CH tag 28 (was 31); rows stay the guide's 64 pt. Row side padding 18 (was 20), row gap 8 (was
+10), control columns 440 each with a 28 gap (were 520 and 32), poster 120 x 180 (was 150 x 225), panel bottom padding 44 (was 56). The identity
+column takes the remaining width. The guide, Settings and the shared type tokens are unchanged.
+
+**UP NEXT is one line.** The next programme's title, then a cyan badge directly after it: "Movie Title [UP NEXT IN 84 MIN]". No card around
+it. The badge counts minutes only, never hours (84 minutes is 84 MIN, 120 is 120 MIN), whole minutes rounded down, under a minute "LESS THAN
+1 MIN". A long title ends in an ellipsis and the badge keeps its full text. It re-reads the schedule every 15 s; nothing else in the panel
+ticks. `UpNextLabelTests` (3) pass.
+
 ## 2026-11-10 (Apple TV 1.0.32: bug decisions folded into appletv/1.0.32-design)
 
 Simulator tests only; nothing here has run on an Apple TV.

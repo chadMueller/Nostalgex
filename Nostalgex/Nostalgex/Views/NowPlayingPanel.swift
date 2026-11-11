@@ -232,29 +232,30 @@ struct NowPlayingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The next programme as its own element: a cyan chip with the time until it starts, then its title, on the
-    /// panel's row surface. Cyan is the time; yellow stays for live things only.
+    /// The next programme on one line: its title, then a cyan badge with the minutes until it starts, like
+    /// "Movie Title [UP NEXT IN 84 MIN]". No card around it. A long title ends in an ellipsis; the badge never
+    /// shrinks or wraps. Cyan is the time; yellow stays for live things only.
     private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
+            Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                .font(NowPlayingFont.textMedium)
+                .foregroundStyle(Color.nxText)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
                 .font(NowPlayingFont.textMedium)
                 .tracking(2)
                 .foregroundStyle(Color.nxCyan)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(Color.nxSelectedRow))
                 .overlay(Capsule().strokeBorder(Color.nxCyan, lineWidth: 1.5))
-            Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                .font(NowPlayingFont.textMedium)
-                .foregroundStyle(Color.nxText)
-                .lineLimit(2)
+                .layoutPriority(1)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, NowPlayingLayout.rowPaddingX)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous).fill(Color.nxRow))
-        .overlay(RoundedRectangle(cornerRadius: NXLayout.rowRadius, style: .continuous)
-            .strokeBorder(Color.nxRestingOutline, lineWidth: NXLayout.restingOutline))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("nowPlayingUpNext")
     }

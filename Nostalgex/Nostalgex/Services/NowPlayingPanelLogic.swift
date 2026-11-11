@@ -212,20 +212,13 @@ enum SleepTimerLogic {
     }
 }
 
-/// The words the Now Playing panel uses for time: the time until the next programme. Pure, so the
+/// The words the Now Playing panel uses for the time until the next programme. Pure, so the
 /// wording is decided in one place.
 enum UpNextLabel {
-    /// "UP NEXT IN 12 MIN", "UP NEXT IN 1 HR 5 MIN", "UP NEXT IN 2 HR", "UP NEXT IN LESS THAN 1 MIN". Whole minutes
-    /// rounded down, so it never promises sooner than it is.
+    /// "UP NEXT IN 12 MIN", "UP NEXT IN 84 MIN", "UP NEXT IN LESS THAN 1 MIN". Minutes only, never hours (Chad,
+    /// 2026-11-10: 1 h 24 min is 84 min). Whole minutes rounded down, so it never promises sooner than it is.
     static func text(secondsUntilStart seconds: TimeInterval) -> String {
         guard seconds >= 60 else { return "UP NEXT IN LESS THAN 1 MIN" }
-        let minutes = Int(seconds / 60)
-        return "UP NEXT IN \(span(minutes: minutes))"
-    }
-
-    private static func span(minutes: Int) -> String {
-        guard minutes >= 60 else { return "\(minutes) MIN" }
-        let hours = minutes / 60, rest = minutes % 60
-        return rest == 0 ? "\(hours) HR" : "\(hours) HR \(rest) MIN"
+        return "UP NEXT IN \(Int(seconds / 60)) MIN"
     }
 }
