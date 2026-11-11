@@ -20,9 +20,13 @@ TV for the O, the logo of the site, the Roku app and the web tuner (`logo/`). Ch
   screenshot of the launch screen shows the wordmark. The guide's nav bar was not rendered (it needs a signed-in or demo session); it uses the same
   asset. Not checked on a Home screen except by install on one Apple TV.
 
-**Half-done.** The Top Shelf images (`topshelf.png` 1920 x 720, `topshelf@2x.png` 3840 x 1440, `topshelf-wide.png` 2320 x 720, `topshelf-wide@2x.png`
-4640 x 1440) still show the bolt; left alone on purpose. The App Store screenshots and `docs/images/nostalgex-guide.png` also still show the bolt
-and need re-shooting.
+**Top Shelf.** The four Top Shelf images were the bolt logo, centered at about 45% of the width on a near-black background. They are now the
+wordmark centered at 60% of the width on navy #11142B: `topshelf.png` 1920 x 720, `topshelf@2x.png` 3840 x 1440, `topshelf-wide.png` 2320 x 720,
+`topshelf-wide@2x.png` 4640 x 1440 (the wordmark is 153 px and 185 px tall at 1x, well inside the safe area). The Top Shelf extension draws no
+logo of its own (it shows scheduled programme posters), so nothing else needed a swap.
+
+**Half-done.** The App Store screenshots and `docs/images/nostalgex-guide.png` still show the bolt and need re-shooting. The Top Shelf was not looked at
+on a TV.
 
 ## 2026-11-10 (Apple TV 1.0.32 design branch: Chad's TV feedback, focus sound, dim titles, Now Playing, UP NEXT)
 
