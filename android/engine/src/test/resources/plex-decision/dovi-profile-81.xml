@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MediaContainer size="1" allowSync="1" directPlayDecisionCode="3000" directPlayDecisionText="App cannot direct play this item. No direct play video profile exists for protocol http, with container mkv, and video codec hevc." generalDecisionCode="1001" generalDecisionText="Direct play not available; Conversion OK." resourceSession="nostalgex-fixture" transcodeDecisionCode="1001" transcodeDecisionText="Direct play not available; Conversion OK.">
+<Video duration="70016" librarySectionKey="/library/sections/1" type="movie">
+<Media hasVoiceActivity="0" videoProfile="main 10" audioChannels="2" audioCodec="aac" bitrate="20379" container="mpegts" duration="70016" height="1080" protocol="hls" videoCodec="h264" videoFrameRate="24p" videoResolution="1080p" width="1920" selected="1">
+<Part videoProfile="main 10" bitrate="20379" container="mpegts" duration="70016" height="1080" protocol="hls" width="1920" decision="transcode" selected="1">
+<Stream bitDepth="8" bitrate="20121" codec="h264" default="1" displayTitle="4K DoVi/HDR10" extendedDisplayTitle="4K DoVi/HDR10 (HEVC Main 10)" frameRate="24" height="1080" language="English" languageCode="eng" languageTag="en" streamType="1" width="1920" decision="transcode" location="segments-av" />
+<Stream bitrate="258" bitrateMode="cbr" canNormalizeLoudness="0" channels="2" codec="aac" default="1" displayTitle="English (EAC3 5.1)" extendedDisplayTitle="English (EAC3 5.1)" language="English" languageCode="eng" languageTag="en" selected="1" streamType="2" decision="transcode" location="segments-av" />
+</Part>
+</Media>
+</Video>
+</MediaContainer>

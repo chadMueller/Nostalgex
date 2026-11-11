@@ -274,8 +274,10 @@ air." Differences:
   `counts`: the same filter pass, reusing the guide build's result for a channel
   it built), so until that is done a card says "Counting yours…", as the Apple
   TV's does while it counts.
-  The coverage count doesn't run for a library over 30,000 titles or a saved
-  guide with no library behind it; there the line stops at what the channel needs.
+- **No count at all for some libraries.** The coverage count doesn't run for a
+  library over 30,000 titles or a saved guide with no library behind it, so
+  there the line stops at what the channel needs, with no "You have m"; the
+  Apple TV counts at any size.
 - The cards' lines wrap by characters (the type is monospaced), so each card's
   height is known before it is drawn; the 12 pt gap above the link row isn't
   ported.

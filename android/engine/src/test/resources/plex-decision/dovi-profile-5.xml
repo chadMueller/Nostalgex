@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MediaContainer size="0" allowSync="1" directPlayDecisionCode="3000" directPlayDecisionText="App cannot direct play this item. No direct play video profile exists for protocol http, with container mkv, and video codec hevc." generalDecisionCode="2000" generalDecisionText="Neither direct play nor conversion is available." transcodeDecisionCode="2003" transcodeDecisionText="File is unplayable. DoVi (Profile 5) color space is not supported.">
+</MediaContainer>
