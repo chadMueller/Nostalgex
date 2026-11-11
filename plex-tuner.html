@@ -30,6 +30,7 @@
 <script src="scripts/nostalgex-enrichment.js"></script>
 <script src="scripts/nostalgex-collections.js"></script>
 <script src="scripts/nostalgex-library-coverage.js"></script>
+<script src="scripts/nostalgex-sliced-filter.js"></script>
 <script src="scripts/nostalgex-franchise-builder.js"></script>
 <script src="scripts/nostalgex-franchise-lineup.js"></script>
 <script src="scripts/nostalgex-watch-state.js"></script>
@@ -4895,6 +4896,20 @@
     // list saved under plex90_blacklist is no longer read: titles hidden through
     // a tab nobody can open would stay missing with no way to bring them back.
     return pool.items;
+  }
+
+  /**
+   * filterItems for a rules channel, a block of titles at a time with the page given back between slices
+   * (scripts/nostalgex-sliced-filter.js). The rows are exactly filterItems' rows, in the same order; `nowSec`
+   * is read once by the caller so every block sees one clock. Resolves null when `slicer` was cancelled.
+   */
+  function filterItemsSliced(items, rules, channelID, category, slicer, nowSec) {
+    const CF = channelFilter();
+    const SF = globalThis.NostalgexSlicedFilter;
+    if (!CF || !SF || !rules) return Promise.resolve(filterItems(items, rules, channelID, category));
+    return SF.filterPool(CF, items, { id: channelID, rules, category }, {
+      manifest: channelMembershipManifest, exclusiveRules, backend: mediaBackend, nowSec,
+    }, slicer);
   }
 
   function getCoveredGenres() {
@@ -10535,6 +10550,8 @@
     try { localStorage.removeItem(COLLECTION_SCAN_KEY); } catch (e) {}
     libraryExtrasGeneration++;
     rawCollections = null;
+    // So does a refilter still working through it.
+    refilterGen++;
     // The count belongs to the library that just went.
     libraryCoverageGen++;
     clearTimeout(libraryCoverageTimer);
@@ -10970,7 +10987,7 @@
       onCacheReady: (records) => {
         if (isCancelled()) return;
         enrichmentRecords = records;
-        refilterChannelsWithEnrichment();
+        refilterChannelsWithEnrichment().catch(err => console.warn('[Enrichment] Refilter failed:', err));
         rebuiltEarly = true;
       },
     });
@@ -10979,7 +10996,7 @@
     if (result.skipped) return;
     enrichmentRecords = result.records;
     if (result.stats.fetched > 0 || (result.omdb && result.omdb.fetched > 0) || !rebuiltEarly) {
-      refilterChannelsWithEnrichment();
+      await refilterChannelsWithEnrichment();
     }
   }
 
@@ -10993,42 +11010,86 @@
     return b.every(it => keys.has(poolMemberKey(it)));
   }
 
-  /** Rebuilds every rules channel whose pool the enrichment changed. Returns how many. */
-  function refilterChannelsWithEnrichment() {
+  let refilterGen = 0;                          // a newer refilter, a newer library or a sign-out stops the one in flight
+  let refilterApplying = Promise.resolve();     // resolves when the refilter now writing pools has finished
+
+  /**
+   * Rebuilds every rules channel whose pool the enrichment changed. Resolves to how many, or to null when a
+   * newer refilter, a newer library or a sign-out replaced this one before it wrote anything.
+   *
+   * Two steps. First every rules channel's pool is filtered in slices that give the page back: one pass over a
+   * 10,700-title library took 5 s as a single task with all bundles on (GitHub #294), and the page answered
+   * nothing for that long. Nothing is written while that runs, so the guide keeps the pools it has. Then the
+   * pools that moved are written together, the schedules rebuilt in the order they always were (each is packed
+   * against the whole lineup, so all the pools are in before the first is built), and the page is given back
+   * between schedules. Once the second step has begun it runs to the end even if a newer refilter starts: a
+   * channel whose pool is written and whose schedule is not would stay stale, because the newer one would find
+   * its pool already right and leave it.
+   */
+  async function refilterChannelsWithEnrichment() {
     const EN = globalThis.NostalgexEnrichment;
     if (EN && enrichmentRecords) EN.attach(allItemsCache, enrichmentRecords);
     if (!allItemsCache.length) return 0;
+    const gen = ++refilterGen;
+    const items = allItemsCache;
+    const stale = () => gen !== refilterGen || items !== allItemsCache;
+    const SF = globalThis.NostalgexSlicedFilter;
+    const slicer = SF ? SF.makeSlicer({ isCancelled: stale }) : { tired: () => false, rest: async () => false };
     const LL = globalThis.NostalgexLibraryLoad;
     const poolIDs = LL.staticChannelIDsForPoolBuild({
       buildAll: false, bundles, enabledBundleIDs, allChannelsUnfiltered,
     });
-    const changed = [];
-    for (const ch of allChannelsUnfiltered) {
+    const nowSec = Math.floor(Date.now() / 1000);   // one clock for the whole pass, as one synchronous pass had
+
+    // Step 1: filter, change nothing.
+    const found = [];
+    for (const ch of allChannelsUnfiltered.slice()) {
       if (isRuntimeChannel(ch) || !ch.rules) continue;
       // The rule's own pool, not the one with a franchise union on top: the union is
       // made again below, and would otherwise count as a change every time.
       const before = rulePoolOf(ch);
       if (!poolIDs.has(ch.id) && before.length === 0) continue;
-      const matched = filterItems(allItemsCache, ch.rules, ch.id, ch.category);
-      if (samePoolMembers(before, matched)) continue;
-      setRulePool(ch, matched);
-      ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
-      changed.push({ ch, before: before.length });
+      const matched = await filterItemsSliced(items, ch.rules, ch.id, ch.category, slicer, nowSec);
+      if (matched === null || stale()) return null;
+      if (!samePoolMembers(rulePoolOf(ch), matched)) found.push({ ch, matched });
+      if (slicer.tired() && await slicer.rest()) return null;
     }
-    if (changed.length) {
-      applyBundleFilter();
-      changed.forEach(({ ch }) => { if (ch.enabled) buildChannelSchedule(ch); });
-      console.log(`[Enrichment] Re-filtered ${changed.length} channels: `
-        + changed.map(({ ch, before }) => `CH ${chNum(ch)} ${ch.name} ${before}->${ch.itemPool.length}`).join(', '));
+    // An apply step an older refilter had begun finishes first.
+    await refilterApplying;
+    if (stale()) return null;
+
+    // Step 2: write the pools that moved, then the schedules.
+    let finished;
+    refilterApplying = new Promise(resolve => { finished = resolve; });
+    try {
+      const changed = [];
+      for (const { ch, matched } of found) {
+        const before = rulePoolOf(ch);
+        if (samePoolMembers(before, matched)) continue;
+        setRulePool(ch, matched);
+        ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
+        changed.push({ ch, before: before.length });
+      }
+      if (changed.length) {
+        applyBundleFilter();
+        for (const { ch } of changed) {
+          if (ch.enabled) buildChannelSchedule(ch);
+          if (slicer.tired()) await slicer.rest();
+        }
+        console.log(`[Enrichment] Re-filtered ${changed.length} channels: `
+          + changed.map(({ ch, before }) => `CH ${chNum(ch)} ${ch.name} ${before}->${ch.itemPool.length}`).join(', '));
+      }
+      // Enrichment is what says which films share a TMDB collection, so the franchises are
+      // found again after it even when no rule's pool moved.
+      refreshDynamicChannels();
+      renderConfig();
+      if (guideVisible) renderActiveGuide();
+      if (configVisible && configTab === 'bundles') renderBundleList();
+      scheduleLibraryCoverage();
+      return changed.length;
+    } finally {
+      finished();
     }
-    // Enrichment is what says which films share a TMDB collection, so the franchises are
-    // found again after it even when no rule's pool moved.
-    refreshDynamicChannels();
-    renderConfig();
-    if (guideVisible) renderActiveGuide();
-    if (configVisible && configTab === 'bundles') renderBundleList();
-    scheduleLibraryCoverage();
-    return changed.length;
   }
 
   // ── Server collections ──

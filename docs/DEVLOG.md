@@ -30,6 +30,69 @@ OFF, the guide rebuilt with the same two channels (Saga's channel built but not 
 gated, and on again Saga read ON. That round showed Saga's CH 310 on its gated row, so a gated row now hides it
 (`db76012`, seen gated without it).
 
+## 2026-11-11 (Web tuner: the launch-time channel refilter no longer freezes the page, #294)
+
+**Why.** When the enrichment cache comes back, `refilterChannelsWithEnrichment()` ran the shared channel filter over
+every title for every rules channel in one synchronous pass, so the page answered nothing until it ended. The Apple
+TV had the same freeze and moved it off the main thread in 1.0.32; a browser has no thread to move it to that shares
+the page's data (a Web Worker would copy all 10,700 titles each way), so this runs the same filter in slices and
+gives the page back between them.
+
+**Measured before, on origin/main.** A 10,700-title stub Plex, a stub enrichment service holding a row for every
+title, headless Chromium, no CPU throttling, the tuner started cold and then restarted with the cache filled:
+- All 14 bundles on: one task of 4.9 s cold and 5.0 s on the restarted launch, 40 channels changed.
+- Default bundle only: one task of 1.8 s cold and 0.58 s on the restarted launch.
+- CPU slowed 4 times, as a rough Google TV: one task of 21 to 22 s with all bundles on.
+
+**Changed.**
+- `scripts/nostalgex-sliced-filter.js` (new): the channel filter over a library a block of 128 titles at a time,
+  giving the page back whenever a 12 ms slice is used up. `filterPool` is per title, so joining the blocks gives the
+  rows the whole-array call gives, in the same order; the clock (`nowSec`) is read once and passed to every block.
+  The file the Apple TV mirrors (`nostalgex-channel-filter.cjs`) is untouched.
+- `plex-tuner.html`: `refilterChannelsWithEnrichment()` is async and runs in two steps. Step one filters every
+  channel in slices and writes nothing, so the guide keeps the pools it has. Step two writes the pools that moved
+  together, then rebuilds their schedules in the same order as before (each schedule is packed against the whole
+  lineup, so every pool is in before the first is built), giving the page back between schedules. A newer refilter,
+  a replaced library or a sign-out stops step one. Once step two has begun it finishes, because a channel with a
+  new pool and an old schedule would otherwise stay that way: the newer refilter would find the pool already right.
+- The yield is a message to itself, not `scheduler.yield()`. With `scheduler.yield()` the pass answered input and
+  drew frames but ran no timer at all until it was done (0 timer beats in 22 s on the slowed CPU), and the player's
+  retries and the guide's clock are timers. With a message, timers run through it.
+
+**Measured after, same harness.** Same page, same stubs:
+- Which title is on which channel did not change. All 142 channels hold the same titles, in the same order, with the
+  same on and off, as origin/main, for default bundles and for all 14, cold and restarted; the guide's lineup and
+  the count of enriched titles are the same. Two runs of origin/main agree with each other byte for byte, so the
+  comparison is not noise. In the page, the new filter and the old one-pass filter return the same rows (members,
+  order and how each got in) on all 142 channels.
+- No long task over 50 ms inside the refilter at normal speed, all bundles or default. The longest wait for a 4 ms
+  timer while it ran was 44 to 52 ms (measured while the machine was busy), against 4.9 s.
+- With the CPU slowed 4 times: no wait over 133 ms between timers and no long task over 121 ms, against one 21 to
+  22 s task. The tasks that remain inside the refilter are the franchise pass after the schedules, about 110 ms there.
+- It takes longer in total, because the page now does its own work between slices: 6.5 s against 5.0 s with all
+  bundles on at normal speed, 34 to 35 s against 21 to 22 s at 4 times slower, and 0.62 s against 0.58 s for the
+  default restarted launch. In Node the sliced pass costs the same as one pass (4.7 s against 4.8 to 5.1 s for all
+  142 channels), so the difference is the page being alive, not the slicing.
+
+**Tested.** `npm run test:sliced-filter` (in `npm test`): sliced against whole-library `filterPool` on all 142 rules
+channels, Plex and Emby, block sizes 1 to 100,000, a give-back after every block, plus the clock, the slice
+budget, cancellation and two negative controls (blocks joined in the wrong order or short by one are not equal).
+`npm run test:refilter:browser` is the real-browser run behind the numbers above (needs Playwright; `OUT=` writes the
+fingerprint of one tree and `COMPARE=` checks another against it). `npm test`, both builds and
+`test:tuner-version:builds` pass; the library-coverage, franchise-channels, library-refresh and cache-restore-crash
+browser smokes pass.
+
+**Not changed.** Which titles land on which channel, the rule thresholds, the engine and its goldens, the Apple TV,
+Roku. Two things the harness showed that are not new: with all 14 bundles, 8 pools keep an older `poolVia` label
+when enrichment leaves their members alone (the refilter keeps a pool whose members did not change; members and
+order always match a fresh filter), and the first library build after a scan is its own 0.8 s task at normal speed,
+which this does not touch.
+
+**Half-done.** Branch `web/launch-refilter-yield`, committed, not pushed. It needs a review before it goes to main
+(a push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag). Not measured on a
+real TV browser, only on a slowed CPU. The first library build's 0.8 s task and the franchise pass's 110 ms at 4
+times slower would be the next two to slice.
+
 ## 2026-11-11 (Roku: #228's review follow-ups, #227)
 
 **Why.** Chad's merge note on #228 (tydude001): time `pushMissing`, which runs on every Settings visit and parses
