@@ -23,7 +23,10 @@
     return {
       get armed() { return armed; },
       observe(playhead, wall, paused, remaining) {
-        if (!Number.isFinite(playhead) || paused) return null;
+        if (!Number.isFinite(playhead)) return null;
+        // A deliberate pause is not a stall, and a stall that began before it does not carry across it (the Swift ignores paused samples;
+        // this also forgets the one in progress, so a long pause cannot read as a 20 s freeze on resume).
+        if (paused) { stallStartedAt = null; lastPlayhead = null; return null; }
         if (remaining != null && Number.isFinite(remaining) && remaining <= TAIL_SECONDS) return null;
         if (firstPlayhead === null) firstPlayhead = playhead;
         const last = lastPlayhead;

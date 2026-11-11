@@ -36,6 +36,14 @@ const frozen = (at, seconds) => Array(seconds).fill(at);
   check("paused samples are ignored", any === null);
 }
 {
+  // A stall begins, the viewer pauses for a minute and resumes: that is not a freeze.
+  const m = R.createStarvationMonitor(); for (let i = 0; i < 10; i++) m.observe(i, i, false, 3000);
+  m.observe(10, 10, false, 3000); m.observe(10, 12, false, 3000);
+  let any = null; for (let i = 13; i < 73; i++) { const v = m.observe(10, i, true, 3000); if (v) any = v; }
+  const after = m.observe(10, 73, false, 3000);
+  check("a stall in progress does not survive a pause", any === null && after === null, JSON.stringify(after));
+}
+{
   const m = R.createStarvationMonitor();
   const v = feed(m, playing(0, 30).concat(frozen(30, 40)), 4);   // 4 s from the end: the tail belongs to the end fallback
   check("the tail of an item is not starvation", v === null);

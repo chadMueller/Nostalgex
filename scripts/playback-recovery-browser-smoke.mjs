@@ -105,9 +105,9 @@ async function openPage() {
   return { ctx, page, errors };
 }
 const starts = () => log.filter((x) => x.includes("/transcode/universal/start.m3u8"));
-const play = async (page, i = 0) => {
+const play = async (page, i = 0, offset = 0) => {
   log.length = 0;
-  await page.evaluate((n) => { const item = allItemsCache.filter((x) => /^Recovery/.test(x.title))[n]; playCurrentItem({ ...item, offsetSeconds: 0 }, CHANNELS.find((c) => c.id === currentChannel)); }, i);
+  await page.evaluate(([n, off]) => { const item = allItemsCache.filter((x) => /^Recovery/.test(x.title))[n]; playCurrentItem({ ...item, offsetSeconds: off }, CHANNELS.find((c) => c.id === currentChannel)); }, [i, offset]);
 };
 
 try {
@@ -158,11 +158,11 @@ try {
   // 4. A stream that was playing and freezes for 20 s is asked again capped at 1080p, from where it is, once; then it is skipped.
   ({ ctx, page, errors } = await openPage());
   mode = "hang";
-  await play(page, 2);
+  await play(page, 2, 3000);   // a join mid-programme: the player's time is on the programme timeline, 3000 and up
   await page.waitForTimeout(800);
   await page.evaluate(() => {
     const v = document.getElementById("plex-video");
-    window.__head = 0;
+    window.__head = 3000;
     Object.defineProperty(v, "currentTime", { configurable: true, get: () => window.__head, set: () => {} });
     Object.defineProperty(v, "paused", { configurable: true, get: () => false });
   });
@@ -171,7 +171,7 @@ try {
   await page.clock.runFor("00:25");
   await page.waitForTimeout(800);
   s = starts();
-  check("a 20 second freeze after playing: one capped retry from where it froze", s.length >= 1 && s[0].includes("videoResolution=1920x1080") && /offset=[1-9]/.test(s[0]), s.join(" | "));
+  check("a 20 second freeze after playing: one capped retry from where it froze", s.length >= 1 && s[0].includes("videoResolution=1920x1080") && /offset=30(0[4-9]|[1-3]\d)\b/.test(s[0]), s.join(" | "));
   const retries = s.length;
   await page.evaluate(() => {
     const v = document.getElementById("plex-video");

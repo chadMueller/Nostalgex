@@ -6920,7 +6920,9 @@
     if (!ownsPlaybackRequest(request) || request.item !== item) return false;
     const delivery = request.delivery || 'server';
     if (NostalgexPlaybackRecovery.nextRung(delivery, NostalgexStreamQuality.isCapped(NostalgexStreamQuality.current()), !!item._cappedRetry) !== 'capped1080') return false;
-    const where = Math.floor((item.offsetSeconds || 0) + (video && video.currentTime > 0 ? video.currentTime : 0));
+    // video.currentTime is already on the programme's own timeline (measured on a lab Plex and a lab Jellyfin: a join at 20 s starts at 20.x),
+    // so it is the position as it stands; before anything played, the start offset.
+    const where = Math.floor(video && video.currentTime > 0 ? video.currentTime : (item.offsetSeconds || 0));
     console.warn('[PLEX 90] Server stream failed, retrying once capped at 1080p from', where, 's:', item.title);
     playCurrentItem({ ...item, _forceTranscode: true, _retryHls: true, _cappedRetry: true, offsetSeconds: where }, channel);
     return true;
@@ -8285,7 +8287,7 @@
   // ── PAGE SIZE ──
   const PAGE_SIZE_KEY = 'nostalgex_page_size';
   // OFF unless the viewer chooses: nobody's window gets larger unasked (Chad, 2026-11-10).
-  let pageSize = ['auto', 'large', 'off'].includes(localStorage.getItem(PAGE_SIZE_KEY)) ? localStorage.getItem(PAGE_SIZE_KEY) : 'off';
+  let pageSize = (() => { try { const v = localStorage.getItem(PAGE_SIZE_KEY); return ['auto', 'large', 'off'].includes(v) ? v : 'off'; } catch (e) { return 'off'; } })();
   function pageSizeApplies() {
     if (pageSize === 'off') return false;
     // The TV-browser steps already scale small viewports; this is for big ones. A phone or tablet (touch) never gets it.
@@ -8313,7 +8315,7 @@
   // After OFF, 5 MIN or 15 MIN with no key, click, tap or pointer move, and while a channel plays under a visible guide, the page
   // shows the picture alone (body.nx-idle: not browser full screen, which a timer may not enter). Any input brings it all back.
   // Settings, the loading screen and a guide with nothing playing are left alone.
-  let guideTimeout = NostalgexGuideTimeout.parse(localStorage.getItem(NostalgexGuideTimeout.STORAGE_KEY));
+  let guideTimeout = NostalgexGuideTimeout.parse((() => { try { return localStorage.getItem(NostalgexGuideTimeout.STORAGE_KEY); } catch (e) { return null; } })());
   let lastActivityAt = Date.now();
   function renderGuideTimeoutChips() {
     for (const b of document.querySelectorAll('#cfg-guide-timeout-chips .sleep-chip')) {
@@ -10499,6 +10501,7 @@
     sessionStorage.removeItem('plex90_selected_servers');
     sessionStorage.removeItem('plex90_backend');
     sessionStorage.removeItem('plex90_jellyfin_user_id');
+    try { localStorage.removeItem('nostalgex_library_signature'); } catch (e) {}   // the refresh fingerprint goes with the library it describes
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
     // The channel last watched is this account's too (the Apple TV clears it on disconnect). The OPEN ON LAST
     // CHANNEL switch is a preference and stays.
