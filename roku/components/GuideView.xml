@@ -63,6 +63,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/PlaybackReport.brs" />
   <script type="text/brightscript" uri="pkg:/source/subtitles/SubtitleSelection.brs" />
   <script type="text/brightscript" uri="pkg:/source/subtitles/SubtitleSettings.brs" />
+  <script type="text/brightscript" uri="pkg:/source/subtitles/Srt.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/PlaybackVerdict.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
@@ -71,6 +72,12 @@
     <Rectangle id="screen" width="1920" height="1080" color="0x000000FF" />
     <Rectangle id="videoBg" translation="[1180,0]" width="740" height="555" color="0x05050DFF" />
     <Video id="video" translation="[1180,0]" width="740" height="555" />
+    <!-- A forced subtitle line the app draws itself (#237, drawForcedSub): under
+         the CRT overlay, as part of the picture. The dark copy behind is its edge. -->
+    <Group id="forcedSub" visible="false">
+      <Label id="forcedSubEdge" horizAlign="center" vertAlign="bottom" wrap="true" color="0x000000FF" />
+      <Label id="forcedSubText" horizAlign="center" vertAlign="bottom" wrap="true" color="0xFFFFFFFF" />
+    </Group>
     <!-- RETRO MODE's CRT overlay (CRTOverlayView): scanlines and vignette.
          Images from scripts/look-images.py. -->
     <Group id="crt" translation="[1180,0]">

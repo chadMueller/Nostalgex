@@ -24,6 +24,38 @@ fails the four `text2` pairs (3.04:1 down to 1.84:1). `tests/run.sh` ends in ALL
 are not quite the panel and row colours. Read literally, #262's list also puts `textDim` on the selected row, which is 4.16:1; it is left out here, as `textDim` is only for rows that aren't focused. #263, written before `textDim` was added to #262, has the guide's text in white and #B9C3DE only; which surfaces `textDim` sits on there is for that issue. Of the other text colours on the four surfaces, below 4.5:1: `textDim` on the chosen neutral (3.22:1) and `redText` on
 the chosen neutral (4.22:1).
 
+## 2026-11-10 (Roku: a commentary on the player's own list is passed over on a direct play, #246)
+
+**Why.** After #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
+didn't name it one: Emby 4.10.1.0 kept no title for the lab MP4's audio tracks (its `Title` is empty, where Jellyfin
+12.2.0 reads the same file's), so the app's pick from that list can be a commentary. And on a Plex direct play with no film track
+in AUDIO LANGUAGE the pick names no track, which left the player on the track it started with, which can be a commentary.
+
+**Changed.** Both on the player's own list (`availableAudioTracks`, by each track's `Name`), as Chad scoped it on
+#246. A Jellyfin or Emby pick the player names a commentary, beside another track, goes to the first track in the
+pick's language that isn't one, else the first that isn't one (`NxAudioTrackPastCommentary`). With no pick, a player
+on a commentary beside another track moves to the first that isn't one (`NxAudioTrackOffCommentary`), as #246 asks of the
+Plex track: the selected one, else the first, never a commentary while another is left. The console's `audio track` line marks a commentary.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose; that half stays open on #246.
+
+**Tested off the TV.** 15 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Pressed** on the 43S45 (OS 16.0.4), test-data builds signed in to the lab Emby as `nxlab`, item-linked. Two silent
+60 s lab clips, H.264 with two AAC stereo tracks: an English "Director's Commentary" marked default, then a Portuguese
+track titled "Portuguese", one as MKV and one as MP4 (the titles also as the MP4's handler names). The Roku's `Name` holds
+"commentary" for the first track in both.
+
+| | `3ea0ca9` (the no-pick rule only) | `a2972b8` (this PR's code; `111659d` is the same tree, its message reworded) |
+|---|---|---|
+| MKV | `audio track 3 of 2=eng (commentary) 3=por, was 2`, 1 play | the same, 4 plays of 4 |
+| MP4 | `audio track 2 of 2=eng (commentary) 3=por, was `: the commentary, 1 play | `audio track 3 of 2=eng (commentary) 3=por, was `, 2 plays of 5 |
+
+**Open.** On 3 of the 5 MP4 plays of `a2972b8` the console has no `audio track` line: `applyAudioPick` returned
+before any pick, so the player kept its own track, which wasn't read. The early return is main's, ahead of this
+change, and why it happens on the MP4 (3 plays of 6 over both builds) and not the MKV (none of 5) wasn't looked into. Not run on a TV: the no-pick rule
+(`NxAudioTrackOffCommentary`), which a Plex direct play is the case for, a Plex file at all, and Jellyfin.
+
 ## 2026-11-10 (web tuner and Docker 1.0.17)
 
 **Shipped.** `tunerVersion` 1.0.17, tag `tuner-v1.0.17`, on main after the web branch merged (hosted nostalgex.app deploys with main; the image `ghcr.io/chadmueller/nostalgex:1.0.17`,
@@ -354,6 +386,57 @@ Large default for that class, which halves the visible rows, so it waits for Cha
 and Silkscreen are still in package.json.
 
 **Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+
+
+## 2026-11-10 (Roku: a Jellyfin or Emby forced subtitle track is drawn by the app, #237, first half)
+
+**Why.** Roku shows its captions only while the TV's caption mode is on, so the app switched that setting on to show
+a forced track and put it back afterwards. Back restores it since #170; Home leaves it on until the next launch
+(#117). Drawing the lines in the app means the setting is never touched (#117's option A).
+
+**Changed, Jellyfin and Emby.** The forced track in SUBTITLE LANGUAGE is no longer handed to the player as a
+sidecar. `ForcedSubTask` fetches the server's SRT at tune, `source/subtitles/Srt.brs` reads it into cues, and
+`GuideView.drawForcedSub` puts the current line in a Label under the CRT overlay, in full screen and in the guide's
+preview, ten times a second. The player reports its position every half second, so the time since the last report is
+added (`NxForcedSubMs`). The line gives way while the player's own subtitles show. SUBTITLES (OFF, FOREIGN AUDIO,
+ALWAYS) and its full tracks are as they were, through the TV's captions.
+
+**Not yet: Plex, and a picture track.** The Roku keeps no list of a Plex file's subtitle tracks; it would take the
+per-tune request asked about on #246. A forced track that is a picture (PGS, VobSub) has no text to draw.
+
+**A TV refused `box` as a variable name** ("Builtin function call expected", five lines of `GuideView.brs`) after the
+interpreter, static analysis and the guards had passed it. Renamed, and `check-guards.sh` now refuses it as it does
+`run`.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of `ad74ada` to `227f4af`
+plus three scratch aids (a linked item starts 285 s in, an input that sets the TV's caption mode, a log line per drawn
+change), with *American Dad!* "Pilot": an HEVC MKV whose one forced English line runs 4:57.208 to 5:02.166.
+- The track came in 6 to 16 ms once the server had it (281 ms the first time) and was read in 0 to 2 ms.
+- First build, the reported position alone: drawn 291 ms late, cleared 338 ms late.
+- With the time since the report added (`227f4af`), by the app's own clock: direct play, drawn 30 to 96 ms after
+  the line's start and cleared 1 to 76 ms after its end (six runs); server stream, 87 and 88 ms, 35 and 35 ms.
+- TV captions On: On before, during and after. Set Off: Off before, during and after, and 6 s and 21 s after Home.
+- Two dev screenshots show the line: at the foot of the full screen picture, and inside the guide's preview box.
+
+**Then on the lab clip *Lab Forced Opus*** (30 MB, silent; a Portuguese AAC and an English Opus track, an English
+forced track with lines at 0:10 and 0:40 and a full one at 0:20), signed in as the lab-clips user, a test-data build
+of `c21c2a9` plus the scratch aids. The English Opus track is picked, so each run is a server stream.
+- Jellyfin 12.2.0, TV captions On: both lines drawn 33 ms after their starts and cleared 33 ms after their ends; On
+  before, 15 s in and after. Captions Off: 75 ms and 75 ms; Off throughout.
+- Emby 4.10.1.0, captions Off: 33 ms and 33 ms; Off throughout. Captions On: 70 ms and 70 ms; On throughout.
+- SUBTITLES on ALWAYS (Jellyfin, captions Off before): as before this change. The full track showed through the TV's
+  captions, which the app switched On for it (On 15 s in) and back Off when the clip ended, and no forced line was
+  drawn.
+- A long track, made on the TV: 2,000 cues (186 KB) were read in 322 ms, and 100 looks near its end took 307 ms.
+  So `NxSrtTextAt` now finds the last cue to have started by halving and looks at the 16 before it.
+- An unchanged build of `6ebdd4a` (no scratch aids), the same clip on Emby, TV captions On: it compiled and ran; the
+  node tree had the first line up with the player at 13.0 s and hidden at 16.5 s, the second up at 41.0 s and
+  hidden at 48.0 s (one look every 2 to 3 s); captions On before, during and after; and a dev screenshot at 13.0 s
+  shows LAB FORCED LINE ONE at the foot of the screen.
+
+**Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
+times are the player's). A stick, and a real film with a long forced track. The timings above are from the builds
+with the scratch log line; the unchanged build was looked at only through the node tree and one screenshot.
 ## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
 
 **Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more

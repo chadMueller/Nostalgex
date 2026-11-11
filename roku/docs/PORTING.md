@@ -1135,6 +1135,8 @@ at `6f05937` with 5,363 items on one server:
 - Roku draws subtitles only while the TV-wide caption mode is On. The app
   turns it on while they show and puts it back after, saving the old value
   (`captionModeBefore`) so a launch after leaving with Home restores it.
+  Not for a Jellyfin or Emby forced track since #237: the app draws that
+  itself (`docs/JELLYFIN-EMBY.md`), and the mode is left alone.
 - `LCase` on the TV isn't JS `toLowerCase` beyond ASCII. It leaves
   full-width letters (`Ｓ`) and Roman numerals (`Ⅻ`) alone, maps `Έ` to `ҽ`,
   and never gives a final `ς`. The off-device interpreter uses JS's, so it
