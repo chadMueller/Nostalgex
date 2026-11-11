@@ -1,5 +1,13 @@
 package com.muellhaus.nostalgex.ui
 
+import com.muellhaus.nostalgex.engine.UpNextLabel
+import com.muellhaus.nostalgex.engine.DesignTokens
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -168,8 +176,11 @@ internal enum class PanelPicker(val title: String) {
  * on here, as on the Roku.
  */
 @Composable
-internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem, picker: PanelPicker?, onPicker: (PanelPicker?) -> Unit) {
+internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem, picker: PanelPicker?, onPicker: (PanelPicker?) -> Unit, onClose: () -> Unit = {}) {
     val color = hex(ch.def.colorHex)
+    val focusManager = LocalFocusManager.current
+    // The note of the row under the cursor, on the one hint line under the columns (#271).
+    var hint by remember { mutableStateOf<String?>(null) }
     val cc = remember { FocusRequester() }
     val owners = remember { PanelPicker.entries.associateWith { FocusRequester() } }
     // Where focus goes when the columns come back: the row that owned the picker, however it
@@ -178,21 +189,37 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
     LaunchedEffect(picker) { if (picker != null) returnTo = picker }
     val now = ticking()
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
-        Row(
+    Box(
+        Modifier
+            .fillMaxSize()
+            // Up closes the panel only when it had nowhere to go: the top row of a column, never
+            // from inside an open list (#271, NowPlayingPanelLayout.upClosesPanel).
+            .onKeyEvent { e ->
+                if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_UP || e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                if (picker == null && !focusManager.moveFocus(FocusDirection.Up)) onClose()
+                true
+            },
+        contentAlignment = Alignment.TopStart,
+    ) {
+        CompositionLocalProvider(LocalHint provides { hint = it }) {
+        Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.92f), Color.Transparent)))
-                .padding(start = u(48), end = u(48), top = u(40), bottom = u(32)),
-            verticalAlignment = Alignment.Top,
+                // #0A0F1E at 96%, held to 85% of the height, then fading out (#271).
+                .background(Brush.verticalGradient(0f to Tokens.Panel.copy(alpha = 0.96f), 0.85f to Tokens.Panel.copy(alpha = 0.96f), 1f to Color.Transparent))
+                .padding(start = u(90), end = u(90), top = u(60), bottom = u(56)),
         ) {
-            InfoZone(model, ch, item, color)
-            Spacer(Modifier.weight(1f).widthIn(min = u(24)))
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                InfoZone(model, ch, item, color)
+                UpNextLine(model, ch)
+            }
+            Spacer(Modifier.width(u(40)))
             if (picker != null) {
                 PickerZone(model, picker, color, onDone = { onPicker(null) })
-            } else Row(horizontalArrangement = Arrangement.spacedBy(u(40)), verticalAlignment = Alignment.Top) {
+            } else Row(horizontalArrangement = Arrangement.spacedBy(u(28)), verticalAlignment = Alignment.Top) {
                 // What this program is doing right now (NowPlayingPanelLayout.programRows).
-                Column(Modifier.width(u(420)), verticalArrangement = Arrangement.spacedBy(u(10))) {
+                Column(Modifier.width(u(440)), verticalArrangement = Arrangement.spacedBy(u(8))) {
                     ControlHeader("CAPTIONS")
                     // Always focusable, so focus lands here first; with no subtitles it says NONE.
                     ControlRow(
@@ -233,7 +260,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                     }
                 }
                 // What the device is doing.
-                Column(Modifier.width(u(420)), verticalArrangement = Arrangement.spacedBy(u(10))) {
+                Column(Modifier.width(u(440)), verticalArrangement = Arrangement.spacedBy(u(8))) {
                     ControlHeader("PICTURE")
                     ControlRow(label = "RETRO MODE", value = if (model.retroMode) "ON" else "OFF", color = color, active = model.retroMode, disabled = false, onClick = model::toggleRetroMode)
                     // Shown for every program: nothing says whether this one is transcoded, and the
@@ -271,6 +298,56 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                 }
             }
         }
+        // One hint line under the columns, two lines tall at a fixed height so rows never jump.
+        Text(
+            hint ?: "",
+            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.End).padding(top = u(16)).width(u(440 * 2 + 28)).height(u(DesignTokens.PanelSize.TEXT * 2 + 12)),
+        )
+        }
+        }
+    }
+}
+
+/** Where a focused row puts its note: the panel's one hint line (#271). */
+private val LocalHint = staticCompositionLocalOf<(String?) -> Unit> { {} }
+
+/**
+ * UP NEXT as one line under the info (#271): the next programme's title in white, then a cyan
+ * chip with the minutes. A long title truncates; the chip stays. It re-reads the schedule every
+ * 15 s; the rest of the panel doesn't tick.
+ */
+@Composable
+private fun UpNextLine(model: AppModel, ch: GuideChannel) {
+    var nowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000.0) }
+    LaunchedEffect(ch.id) {
+        while (true) {
+            nowSec = System.currentTimeMillis() / 1000.0
+            kotlinx.coroutines.delay(UpNextLabel.REFRESH_MS)
+        }
+    }
+    model.scheduleTick
+    val next = model.lineup?.schedules?.get(ch.id)?.upNext ?: return
+    Row(Modifier.padding(top = u(22)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
+        Text(
+            if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title,
+            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Text(
+            UpNextLabel.text(next.startSec - nowSec),
+            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Cyan),
+            maxLines = 1,
+            modifier = Modifier
+                .clip(RoundedCornerShape(u(6)))
+                .background(Tokens.SelectedRow)
+                .border(u(1.5), Tokens.Cyan, RoundedCornerShape(u(6)))
+                .padding(horizontal = u(10), vertical = u(4)),
+        )
     }
 }
 
@@ -287,19 +364,19 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                 PanelPicker.SUBTITLE_LANGUAGE -> "Choose which subtitle track to prefer when multiple are available."
                 PanelPicker.AUDIO_LANGUAGE -> "Choose which audio track to prefer when multiple are available."
             },
-            style = font(DMMono, 17, Color.White.copy(alpha = 0.6f)),
-            modifier = Modifier.widthIn(max = u(880)).padding(bottom = u(2)),
+            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
+            modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
         )
         when (picker) {
             PanelPicker.PLAYBACK_INFORMATION -> Column(Modifier.width(u(880)), verticalArrangement = Arrangement.spacedBy(u(10))) {
                 val rows = model.playbackInfo?.rows(model.videoSize?.first, model.videoSize?.second)
                 Column(verticalArrangement = Arrangement.spacedBy(u(8))) {
                     if (rows == null) {
-                        Text("Playback information is unavailable.", style = font(DMMono, 20, Color.White.copy(alpha = 0.8f)))
+                        Text("Playback information is unavailable.", style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2))
                     } else for (r in rows) {
                         Row(Modifier.padding(vertical = u(3)), horizontalArrangement = Arrangement.spacedBy(u(16))) {
-                            Text(r.label, style = font(DMMonoMedium, 17, Color.White.copy(alpha = 0.6f)), modifier = Modifier.width(u(220)))
-                            Text(r.value, style = font(DMMono, 21, Color.White))
+                            Text(r.label, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2), modifier = Modifier.width(u(260)))
+                            Text(r.value, style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text))
                         }
                     }
                 }
@@ -341,37 +418,46 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
     LaunchedEffect(picker) { runCatching { selected.requestFocus() } }
 }
 
+/**
+ * The info beside the poster (#271): the channel line (the channel's colour as a bar, CH in VT323
+ * 28 white, the name in text-2) and the title at 29. The order follows the issue's list until
+ * the Apple TV 1.0.32 screenshots land on main.
+ */
 @Composable
 private fun InfoZone(model: AppModel, ch: GuideChannel, item: MediaItem, color: Color) {
     var poster by remember(item.ratingKey) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item.ratingKey) { poster = model.poster(item) }
-    Row(horizontalArrangement = Arrangement.spacedBy(u(24)), verticalAlignment = Alignment.Top) {
-        // Only when the server serves one (Plex's thumbnail transcode).
+    Row(horizontalArrangement = Arrangement.spacedBy(u(22)), verticalAlignment = Alignment.Top) {
+        // Only when the server serves one (Plex's thumbnail transcode); with none, no hole.
         poster?.let {
-            Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(u(150), u(225)).clip(RoundedCornerShape(u(8))))
+            val shape = RoundedCornerShape(u(10))
+            Image(
+                it, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.size(u(120), u(180)).clip(shape).border(u(2), Tokens.RestingOutline, shape),
+            )
         }
-        Column(Modifier.widthIn(max = u(640)), verticalArrangement = Arrangement.spacedBy(u(8))) {
-            Box(Modifier.size(u(48), u(4)).background(color))
-            Text("CH ${ch.number}", style = font(DMMonoMedium, 23, color))
-            // The title leads and the channel name follows smaller (NowPlayingPanel, 02ac78f).
+        Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(12))) {
+                Box(Modifier.size(u(8), u(24)).background(color))
+                Text("CH ${ch.number}", style = font(VT323, DesignTokens.PanelSize.TAG, Tokens.Text))
+                Text(ch.name.uppercase(), style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
             val line = if (item.isMusicVideo) item.musicDisplayLine else item.title + (item.year?.let { "  $it" } ?: "")
-            Text(line, style = font(DMMonoMedium, 30, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(ch.name, style = font(DMMono, 25, Color.White.copy(alpha = 0.9f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            item.contentRating?.takeIf { it.isNotEmpty() }?.let {
-                Text(it.uppercase(), style = font(DMMono, 18, Color.White.copy(alpha = 0.7f)))
-            }
-            model.lineup?.schedules?.get(ch.id)?.upNext?.item?.let { next ->
-                Text("UP NEXT: ${if (next.isMusicVideo) next.musicDisplayLine else next.title}", style = font(DMMono, 18, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = u(4)))
-            }
+            Text(line, style = font(DMMonoMedium, DesignTokens.PanelSize.ITEM_TITLE, Tokens.Text), maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun ControlHeader(text: String) {
-    Text(text, style = font(DMMonoMedium, 16, Color.White.copy(alpha = 0.6f), tracking = 1.5))
+    Text(text, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2, tracking = 1.5))
 }
 
+/**
+ * A control row in the shared style (#271): 64 high, 18 side padding, 22 pt text; resting #141B33,
+ * under the cursor #0B2A3A with a 3 pt cyan outline, glow and lift. An active value is cyan: a
+ * channel's own colour is never text. The note goes to the panel's hint line while focused.
+ */
 @Composable
 private fun ControlRow(
     label: String,
@@ -385,36 +471,32 @@ private fun ControlRow(
     onClick: () -> Unit = {},
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(u(6))
-    val border = when {
-        focused -> color
-        active -> color.copy(alpha = 0.5f)
-        else -> Color.White.copy(alpha = 0.22f)
-    }
-    Column(
+    val setHint = LocalHint.current
+    val shape = RoundedCornerShape(u(DesignTokens.Row.CORNER))
+    Row(
         modifier
             .fillMaxWidth()
-            .then(if (focusable) Modifier.onFocusChanged { focused = it.isFocused }.focusable().onSelect(onClick) else Modifier)
+            .zIndex(if (focused) 1f else 0f)
+            .graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
+            .then(if (focused) Modifier.cyanGlow() else Modifier)
+            .height(u(64))
+            .then(if (focusable) Modifier.onFocusChanged { focused = it.isFocused; if (it.isFocused) setHint(note) }.focusable().onSelect(onClick) else Modifier)
             .clip(shape)
-            .background(if (focused) CardFocused else Color.White.copy(alpha = 0.14f))
-            .border(u(if (focused) 2 else 1), border, shape)
-            .padding(horizontal = u(16), vertical = u(12)),
-        verticalArrangement = Arrangement.spacedBy(u(4)),
+            .background(if (focused) Tokens.SelectedRow else Tokens.Row)
+            .border(u(if (focused) DesignTokens.Row.SELECTED_OUTLINE.toFloat() else DesignTokens.Row.RESTING_OUTLINE), if (focused) Tokens.Cyan else Tokens.RestingOutline, shape)
+            .padding(horizontal = u(18)),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                label,
-                style = font(DMMonoMedium, 20, Color.White.copy(alpha = if (disabled) 0.35f else 1f)),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (value != null) {
-                Text(value, style = font(DMMono, 18, if (active) color else Color.White.copy(alpha = 0.75f)), maxLines = 1)
-            }
+        Text(
+            label,
+            style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, if (disabled) Tokens.Text2 else Tokens.Text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (value != null) {
+            Text(value, style = font(DMMono, DesignTokens.PanelSize.TEXT, if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
         }
-        // What a label and a value can't say on their own.
-        if (note != null) Text(note, style = font(DMMono, 16, Color.White.copy(alpha = 0.6f)), maxLines = 2)
     }
 }
 

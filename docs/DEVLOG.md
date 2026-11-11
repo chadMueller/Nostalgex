@@ -3,6 +3,49 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: the Apple TV 1.0.32 look, from the issues' numbers; #267 to #271)
+
+The Apple TV 1.0.32 is not on main yet (main's Apple TV is 1.0.31) and its branch isn't published, so this works from the numbers written out in each issue and from the Roku's port of the same tokens (`roku/source/ui/Tokens.brs`, #262). Two details the issues leave to the 1.0.32 screenshots are provisional; they are listed under Half-done.
+
+**Changed.**
+- **#267, tokens.** `DesignTokens` (engine) holds the type scale, the compact Settings scale, the guide and panel exceptions, the colours and the row geometry; `ui/Tokens` gives the colours to Compose.
+  - `DesignTokensTest` computes WCAG contrast for every pair the issue lists: text, text-2, cyan, yellow, amber and red-text on panel, row and selected-row; text and text-2 on chosen-neutral; on-cyan on cyan; textDim on the guide and on its lightest row. All are at 4.5:1 or more.
+  - textDim is 5.35:1 on the guide (`#0D0D1F`) and 4.82:1 on white at 5% over it (`#19192A`), the issue's 5.36 and 4.83.
+  - Text on a channel's colour is black or white, whichever is higher, at 4.58:1 or more over a sweep of colours.
+  - What the viewer reads says "bundle" where it said "package" (BUNDLES, CHANNEL BUNDLES, "Bundles and the schedule", PRESS TO ADD THE ... BUNDLE); code identifiers keep their names.
+- **#268, the guide grid.** NORMAL is 22 for titles, numbers and names and 25 for times, the CHANNEL heading and BROADCASTS RESUME AT 9 PM; LARGE is 29 for all of them, with the number box 54 wide.
+  - Rows are 64 tall (were 80) and the header 58 (was 60).
+  - Focus is the selected-row fill, a 3 pt cyan outline, a cyan glow and a 3% lift. The lift grows from the row's left edge, because a row as wide as the screen scaled from its centre pushed the channel number off screen (seen on the SHIELD).
+  - Programme titles are white when live or on the focused row, otherwise textDim; channel numbers are white and names text-2, never the channel's colour.
+  - The live block's channel-colour fill stays at 25% when focused (it was 55%), so white titles keep their contrast on a bright channel colour.
+- **#269, Settings.**
+  - The rail is 420 wide with 64-tall rows 10 apart and text at 25. SETTINGS is VT323 at 31 in text-2.
+  - The pane heading is 29, row labels and values 25, captions 25. Rows are 10 apart, with 20 side padding.
+  - Rows use the shared state: resting `#141B33` with a 1.5 pt outline; under the cursor the selected fill, 3 pt cyan outline, glow and lift. The category on show is chosen-neutral.
+  - The toggle is 44 by 26: cyan when on, chosen-neutral when off.
+  - No white with an opacity is left as text. A clip before the lift cut a focused row's sides off; it now clips after.
+- **#270, the bundle list.** 22 pt rows 64 tall, 6 apart, 12 pt corners, the BUNDLES heading at 25 in text-2, a `#0A0F1E` panel, and the shared row states. SETTINGS is first with a cyan accent; each bundle's colour is a stripe down its left edge, 8 wide when selected and 4 at 40% at rest.
+- **#271, the Now Playing panel.**
+  - Layout: margins 90 and 60, the `#0A0F1E` fade (96%, held to 85% of the height), and two control columns 440 wide with a 28 gap.
+  - Poster: 120 by 180 with a 2 pt outline, Plex only.
+  - Info: the channel line (colour bar, CH in VT323 28 white, name in text-2), then the title at 29 up to 3 lines. The content-rating line is gone.
+  - UP NEXT is one line: the next title, then a cyan chip "UP NEXT IN 84 MIN" that re-reads the schedule every 15 s. `UpNextLabel` gives whole minutes rounded down and "LESS THAN 1 MIN" under a minute, with tests.
+  - Controls are the shared rows, 64 high, 8 apart, all text 22; an active value is cyan, not the channel's colour.
+  - A focused row's note goes to one hint line under the columns, two lines tall at a fixed height.
+  - Up from a column's top row now closes the panel; Up from a lower row moves up as before.
+
+**Measured** on a SHIELD (Android 11) with a test copy against a lab Jellyfin:
+- Screenshots of the guide at NORMAL and LARGE, two Settings panes, the bundle list with a row selected, and the panel.
+- Up from STREAM QUALITY moved to RETRO MODE and the panel stayed; Up from RETRO MODE closed it.
+- The chip counted down to "UP NEXT IN LESS THAN 1 MIN".
+- Not seen: the panel with a poster (it needs a Plex server), and a Google TV.
+
+**Half-done.** Two layout details wait for the Apple TV 1.0.32 screenshots on main:
+- the guide's channel column, set to the Apple TV's 340 (Android had 220);
+- the order of the panel's channel line and title, set to channel line first, as the issue lists them.
+
+All 352 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: a file that runs past its slot no longer leaves the player behind the guide, #293)
 
 **Measured first.** On a SHIELD (Android 11), a test copy of the app played a channel of five 2 min 50 s films from a lab Jellyfin; each gets a 2-minute slot, so each runs 50 s past it. A throwaway log line at each natural end recorded what the guide had on, and how far in, against what the player started:

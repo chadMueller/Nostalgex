@@ -1,5 +1,6 @@
 package com.muellhaus.nostalgex.ui
 
+import androidx.compose.foundation.layout.PaddingValues
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.LayoutInflater
 import androidx.annotation.OptIn
@@ -44,6 +45,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.composed
+import com.muellhaus.nostalgex.engine.DesignTokens
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -114,9 +118,12 @@ private val PanelTop = Color(0.04f, 0.04f, 0.10f)
 internal val BrandCyan = Color(0f, 0.831f, 1f)
 private val Yellow = Color(0xFFFFE500)
 
-private const val CHANNEL_COLUMN = 220
-private const val ROW_HEIGHT = 80
-private const val HEADER_HEIGHT = 60
+// The Apple TV 1.0.32 grid (#268). The column is its 340, to be checked against its
+// screenshots when they land on main: the width is what lets three-digit numbers and 22 pt
+// names fit.
+private const val CHANNEL_COLUMN = 340
+private const val ROW_HEIGHT = 64
+private const val HEADER_HEIGHT = 58
 /** 24-hour horizon in 30-minute slots, four visible: Left and Right scroll up to 44 slots on. */
 private const val MAX_SLOT_OFFSET = 44
 private const val VISIBLE_SECONDS = 7200L
@@ -358,7 +365,7 @@ private fun FullScreen(
                 onOverlay(Overlay.NONE)
                 onFlash()
             })
-            Overlay.PANEL -> if (ch != null && item != null) NowPlayingPanel(model, ch, item, picker, onPicker)
+            Overlay.PANEL -> if (ch != null && item != null) NowPlayingPanel(model, ch, item, picker, onPicker, onClose = { onOverlay(Overlay.NONE) })
             Overlay.NONE -> {}
         }
     }
@@ -699,13 +706,13 @@ private fun GridHeader(visibleStart: Long, programsWidth: Float) {
     Row(Modifier.fillMaxWidth().height(u(HEADER_HEIGHT)).background(Color(0.04f, 0.04f, 0.08f)), verticalAlignment = Alignment.CenterVertically) {
         // The Apple TV's header runs 12 points wide of the rows (its padding is outside the
         // column's frame); kept in line with the rows here, as the Roku port does.
-        Text("CHANNEL", style = font(DMMonoMedium, LocalGuideText.current.channelHeading, Color.White.copy(alpha = 0.7f)), modifier = Modifier.width(u(CHANNEL_COLUMN)).padding(start = u(12)))
+        Text("CHANNEL", style = font(DMMonoMedium, LocalGuideText.current.channelHeading, Tokens.Text2), modifier = Modifier.width(u(CHANNEL_COLUMN)).padding(start = u(12)))
         for (i in 0 until 4) {
             Box(Modifier.width(u(programsWidth / 4)).fillMaxHeight()) {
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.2f)))
                 Text(
                     time(visibleStart + i * 1800L),
-                    style = font(DMMonoMedium, LocalGuideText.current.timeLabel, Color.White.copy(alpha = 0.95f)),
+                    style = font(DMMonoMedium, LocalGuideText.current.timeLabel, Tokens.Text),
                     modifier = Modifier.align(Alignment.CenterStart).padding(start = u(14)),
                 )
             }
@@ -739,6 +746,14 @@ private fun EpgRow(
         Box(
             Modifier
                 .fillMaxWidth()
+                // The shared focus (#267): a 3% lift and a cyan glow behind the row. A guide row is
+                // as wide as the screen, so it grows from its left edge, keeping the number on screen.
+                .graphicsLayer {
+                    val k = if (focused) DesignTokens.Row.LIFT else 1f
+                    scaleX = k; scaleY = k
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                }
+                .then(if (focused) Modifier.cyanGlow() else Modifier)
                 .height(u(ROW_HEIGHT))
                 .focusRequester(requester)
                 .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
@@ -753,8 +768,8 @@ private fun EpgRow(
                         else -> false
                     }
                 }
-                // A third-strength fill of the channel colour, so the focused row reads from the couch.
-                .background(if (focused) color.copy(alpha = 0.32f) else if (isEvenRow) Color.White.copy(alpha = 0.03f) else Color.Transparent),
+                // The selected-row fill under the cursor (#267), not the channel colour.
+                .background(if (focused) Tokens.SelectedRow else if (isEvenRow) Color.White.copy(alpha = 0.03f) else Tokens.Guide),
         ) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(u(if (accent) 8 else 4)).fillMaxHeight().background(if (accent) color else color.copy(alpha = 0.4f)))
@@ -768,13 +783,14 @@ private fun EpgRow(
                     }
                     Text(
                         ch.number.toString(),
-                        style = font(DMMonoMedium, LocalGuideText.current.number, if (focused) Color.White else color),
+                        // A channel's own colour is never text (#267).
+                        style = font(DMMonoMedium, LocalGuideText.current.number, Tokens.Text),
                         modifier = Modifier.width(u(LocalGuideText.current.numberWidth + 8)).padding(end = u(8)),
                         maxLines = 1,
                     )
                     Text(
                         ch.name.uppercase(),
-                        style = font(DMMonoMedium, LocalGuideText.current.name, if (focused) Color.White else color.copy(alpha = 0.95f)),
+                        style = font(DMMonoMedium, LocalGuideText.current.name, if (focused) Tokens.Text else Tokens.Text2),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -783,7 +799,8 @@ private fun EpgRow(
                 ProgramBlocks(schedule, watershedHold, color, focused, programsWidth, visibleStart, now)
             }
             if (focused) {
-                Box(Modifier.matchParentSize().padding(u(2)).border(u(3), color, RoundedCornerShape(u(6))))
+                // The shared focus outline: 3 pt cyan, not the channel colour (#268).
+                Box(Modifier.matchParentSize().padding(u(2)).border(u(DesignTokens.Row.SELECTED_OUTLINE), Tokens.Cyan, RoundedCornerShape(u(6))))
             }
         }
         Box(Modifier.fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.08f)))
@@ -844,7 +861,7 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
             // ChannelGuideView's watershedRowPlaceholder.
             if (watershedHold) Row(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.02f)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.12f)))
-                Text("BROADCASTS RESUME AT 9 PM", style = font(DMMonoMedium, LocalGuideText.current.placeholder, Color.White.copy(alpha = 0.4f)), maxLines = 1, modifier = Modifier.padding(start = u(14)))
+                Text("BROADCASTS RESUME AT 9 PM", style = font(DMMonoMedium, LocalGuideText.current.placeholder, Tokens.Text2), maxLines = 1, modifier = Modifier.padding(start = u(14)))
             }
             return@Row
         }
@@ -861,7 +878,8 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                             .fillMaxHeight()
                             .background(
                                 when {
-                                    e.isNowPlaying -> color.copy(alpha = if (focused) 0.55f else 0.25f)
+                                    // Kept at 25% when focused: white titles stay at 4.5:1 on a bright channel colour.
+                                    e.isNowPlaying -> color.copy(alpha = 0.25f)
                                     isPast -> Color.White.copy(alpha = 0.02f)
                                     else -> Color.Transparent
                                 },
@@ -873,11 +891,9 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                             entryTitle(e),
                             style = font(
                                 DMMonoMedium, LocalGuideText.current.title,
-                                when {
-                                    e.isNowPlaying || focused -> Color.White
-                                    isPast -> Color.White.copy(alpha = 0.5f)
-                                    else -> Color.White.copy(alpha = 0.85f)
-                                },
+                                // White for the live programme and the focused row; every other title,
+                                // past or upcoming, textDim (#268).
+                                if (e.isNowPlaying || focused) Tokens.Text else Tokens.TextDim,
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -905,18 +921,19 @@ private fun PackageSidebar(
             Modifier
                 .width(u(380))
                 .fillMaxHeight()
-                .background(Color(0.03f, 0.03f, 0.08f).copy(alpha = 0.95f)),
+                .background(Tokens.Panel),
         ) {
             Text(
                 "BUNDLES",
-                style = font(DMMonoMedium, 22, Color.White.copy(alpha = 0.6f)),
+                style = font(DMMonoMedium, DesignTokens.Size.CAPTION, Tokens.Text2),
                 modifier = Modifier.padding(horizontal = u(24), vertical = u(18)),
             )
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(u(2))) {
+            // 6 between rows, with room for the selected row's lift and glow (#270).
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(u(6)), contentPadding = PaddingValues(horizontal = u(16), vertical = u(4))) {
                 item(key = "settings") {
-                    // A row of the list, first, so Up from the first package reaches it.
-                    SidebarRow("\u2699  SETTINGS", Yellow, Modifier, onSettings)
-                    Box(Modifier.padding(horizontal = u(16)).padding(bottom = u(6)).fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.1f)))
+                    // A row of the list, first, so Up from the first package reaches it. Its accent is cyan.
+                    SidebarRow("\u2699  SETTINGS", Tokens.Cyan, Modifier, onSettings)
+                    Box(Modifier.padding(top = u(6)).fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.1f)))
                 }
                 itemsIndexed(targets, key = { _, t -> t.first.id }) { i, (bundle, ch) ->
                     SidebarRow(bundle.name, hex(ch.def.colorHex), if (i == 0) Modifier.focusRequester(first) else Modifier) { onSelect(ch) }
@@ -929,14 +946,22 @@ private fun PackageSidebar(
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 }
 
+/**
+ * A row of the bundle list (#270): the shared row (resting #141B33 with a 1.5 pt outline;
+ * selected #0B2A3A with a 3 pt cyan outline, glow and lift), 64 tall, 22 pt text in white when
+ * selected and text-2 at rest. The bundle's own colour is a stripe down the left edge, not text.
+ */
 @Composable
 private fun SidebarRow(title: String, color: Color, modifier: Modifier, onSelect: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(u(DesignTokens.Row.CORNER))
     Box(
         modifier
             .fillMaxWidth()
-            .height(u(72))
             .zIndex(if (focused) 1f else 0f)
+            .graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
+            .then(if (focused) Modifier.cyanGlow() else Modifier)
+            .height(u(64))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .onKeyEvent { e ->
@@ -948,29 +973,31 @@ private fun SidebarRow(title: String, color: Color, modifier: Modifier, onSelect
                     else -> false
                 }
             }
-            .background(if (focused) color.copy(alpha = 0.32f) else Color.Transparent),
+            .clip(shape)
+            .background(if (focused) Tokens.SelectedRow else Tokens.Row)
+            .border(u(if (focused) DesignTokens.Row.SELECTED_OUTLINE.toFloat() else DesignTokens.Row.RESTING_OUTLINE), if (focused) Tokens.Cyan else Tokens.RestingOutline, shape),
     ) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
             Box(Modifier.width(u(if (focused) 8 else 4)).fillMaxHeight().background(if (focused) color else color.copy(alpha = 0.4f)))
-            Text(title, style = font(DMMonoMedium, 24, Color.White.copy(alpha = if (focused) 1f else 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = font(DMMonoMedium, DesignTokens.GuideSize.ROW, if (focused) Tokens.Text else Tokens.Text2), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (focused) Box(Modifier.matchParentSize().padding(u(2)).border(u(3), color, RoundedCornerShape(u(6))))
     }
 }
 
 // ── GUIDE TEXT SIZE (GuideTextSize.swift, Roku's GuideText.brs) ──────────
 
 /**
- * Type sizes for the text the guide grid draws. Only text changes: rows stay 80 high, the
- * header 60, the channel column 220, and blocks are laid out from times alone, so LARGE never
- * moves a row or a block. The number sits in a box that grows with it.
+ * Type sizes for the text the guide grid draws, the Apple TV 1.0.32's (#268). Only text
+ * changes: rows stay 64 high, the header 58, the channel column 340, and blocks are laid out
+ * from times alone, so LARGE never moves a row or a block. The number sits in a box that grows
+ * with it.
  */
 internal data class GuideText(val title: Int, val timeLabel: Int, val channelHeading: Int, val number: Int, val numberWidth: Int, val name: Int, val placeholder: Int) {
     companion object {
-        /** The sizes the guide drew before GUIDE TEXT SIZE. Must not change. */
-        val NORMAL = GuideText(title = 20, timeLabel = 20, channelHeading = 18, number = 20, numberWidth = 36, name = 18, placeholder = 18)
-        /** Roku's LARGE: titles and times 26, heading 22, number 24 in a wider box, name 20. */
-        val LARGE = GuideText(title = 26, timeLabel = 26, channelHeading = 22, number = 24, numberWidth = 44, name = 20, placeholder = 22)
+        /** 22 for rows, 25 for the times and the CHANNEL heading. */
+        val NORMAL = GuideText(title = 22, timeLabel = 25, channelHeading = 25, number = 22, numberWidth = 40, name = 22, placeholder = 25)
+        /** Everything 29, the number in a box 54 wide. */
+        val LARGE = GuideText(title = 29, timeLabel = 29, channelHeading = 29, number = 29, numberWidth = 54, name = 29, placeholder = 29)
     }
 }
 
@@ -1250,6 +1277,28 @@ internal fun FailureCard(failure: PlaybackFailure, compact: Boolean) {
                 modifier = Modifier.widthIn(max = u(if (compact) 520 else 900)),
             )
             Text(failure.nextStep, style = font(DMMono, if (compact) 13 else 17, Color.White.copy(alpha = 0.4f)))
+        }
+    }
+}
+
+/**
+ * The shared selected glow (#267): cyan, 30 pt radius at 55%, drawn behind the content as rings
+ * that fade outwards, since Compose has no coloured blur of its own.
+ */
+internal fun Modifier.cyanGlow(): Modifier = composed {
+    val unit = LocalUnit.current
+    drawBehind {
+        val radius = DesignTokens.Row.GLOW_RADIUS * unit.toPx()
+        val steps = 10
+        for (i in steps downTo 1) {
+            val spread = radius * i / steps
+            val alpha = DesignTokens.Row.GLOW_ALPHA * (1f - i.toFloat() / (steps + 1)) / steps * 2
+            drawRoundRect(
+                Tokens.Cyan.copy(alpha = alpha),
+                topLeft = androidx.compose.ui.geometry.Offset(-spread, -spread),
+                size = androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(DesignTokens.Row.CORNER * unit.toPx() + spread),
+            )
         }
     }
 }
