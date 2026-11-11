@@ -87,6 +87,17 @@ sub init()
     m.video.ObserveField("availableAudioTracks", "onAudioTracks")
     m.subs = NxSubtitleSettings()
     m.hasSubs = false
+    ' The forced track the app draws itself (#237): its cues, the text on
+    ' screen, and whether the player's own subtitles are showing instead.
+    m.forcedCues = invalid
+    m.forcedText = ""
+    m.forcedBoxFull = false
+    m.forcedTask = invalid
+    m.playerSubsShown = false
+    m.forcedTimer = newTimer(0.1, true, "drawForcedSub")
+    ' The player's last reported position and when it changed (NxForcedSubMs).
+    m.forcedPos = -1
+    m.forcedPosClock = CreateObject("roTimespan")
     restoreCaptionMode()
     m.tick = CreateObject("roSGNode", "Timer")
     m.tick.repeat = true
@@ -966,6 +977,7 @@ sub startTune(idx as Integer)
     ' LANGUAGE among the tracks the player lists (issue #62).
     m.tuneAudio = stream.audioTrack
     m.tuneForced = stream.forcedSub = true
+    startForcedSub(stream.forcedUrl)
     if m.tuneAudio = invalid then m.tuneAudio = { language: NxAudioPreferredLanguage(), byLanguage: true }
     m.deadlineTimer.duration = NxPictureDeadline(m.attempt.rung, b.videoWidth, b.videoHeight)
     m.deadlineTimer.control = "start"
@@ -1652,8 +1664,83 @@ sub applySubtitles()
         print "player: forced subtitles ("; NxToStr(sidecar.Language); ")"
         show = true
     end if
+    ' The drawn forced line gives way to the player's own subtitles.
+    m.playerSubsShown = show
     setCaptions(show)
+    drawForcedSub()
     refreshNowPlaying()
+end sub
+
+' ── A forced track drawn by the app (#237, option A of #117) ────────────────
+
+' Roku shows its captions only while the TV's caption mode is on, and that
+' is the viewer's setting. So a Jellyfin or Emby forced track is not handed
+' to the player: its SRT is fetched (ForcedSubTask) and the current line is
+' drawn here, timed off the player's position, in full screen and over the
+' guide's preview, as upstream burns it in. The TV's setting is never read
+' or changed for it. `url` is NxMbStreamContent's forcedUrl, "" or invalid
+' for an airing with none; every start drops the last airing's lines.
+sub startForcedSub(url as Dynamic)
+    m.forcedTimer.control = "stop"
+    m.forcedCues = invalid
+    m.forcedText = ""
+    m.top.FindNode("forcedSub").visible = false
+    if m.forcedTask <> invalid then
+        m.forcedTask.UnobserveField("cues")
+        m.forcedTask.control = "stop"
+        m.forcedTask = invalid
+    end if
+    if not NxIsString(url) then return
+    if url = "" then return
+    m.forcedTask = CreateObject("roSGNode", "ForcedSubTask")
+    m.forcedTask.ObserveField("cues", "onForcedCues")
+    m.forcedTask.url = url
+    m.forcedTask.control = "run"
+end sub
+
+sub onForcedCues()
+    if m.forcedTask = invalid then return
+    cues = m.forcedTask.cues
+    m.forcedTask = invalid
+    if cues = invalid then return
+    if cues.Count() = 0 then return
+    m.forcedCues = cues
+    print "player: forced subtitles drawn by the app ("; cues.Count(); " lines)"
+    m.forcedTimer.control = "start"
+    drawForcedSub()
+end sub
+
+' Ten times a second while an airing has forced lines: the line for the
+' player's position, redrawn only when it changes. The player reports its
+' position every half second, which drew a line up to that late (0.29 and
+' 0.34 s on a 43S45), so the time since the last report is added while it
+' plays (NxForcedSubMs).
+sub drawForcedSub()
+    if m.forcedCues = invalid then return
+    text = ""
+    position = m.video.position
+    if position <> m.forcedPos then
+        m.forcedPos = position
+        m.forcedPosClock.Mark()
+    end if
+    if not m.playerSubsShown and m.video.state = "playing" then text = NxSrtTextAt(m.forcedCues, NxForcedSubMs(position, m.forcedPosClock.TotalMilliseconds()))
+    spot = NxForcedSubBox(m.fullscreen)
+    if text = m.forcedText and m.forcedBoxFull = m.fullscreen then return
+    m.forcedText = text
+    m.forcedBoxFull = m.fullscreen
+    group = m.top.FindNode("forcedSub")
+    group.visible = text <> ""
+    if text = "" then return
+    edge = m.top.FindNode("forcedSubEdge")
+    lbl = m.top.FindNode("forcedSubText")
+    for each l in [edge, lbl]
+        l.font = fontOf("DMMono-Medium", spot.size)
+        l.width = spot.w
+        l.height = spot.h
+        l.text = text
+    end for
+    lbl.translation = [spot.x, spot.y]
+    edge.translation = [spot.x + spot.edge, spot.y + spot.edge]
 end sub
 
 ' Roku draws subtitles only while its caption mode is on, and that mode is the

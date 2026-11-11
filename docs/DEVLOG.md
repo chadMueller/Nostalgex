@@ -333,6 +333,56 @@ Large default for that class, which halves the visible rows, so it waits for Cha
 and Silkscreen are still in package.json.
 
 **Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+
+## 2026-11-10 (Roku: a Jellyfin or Emby forced subtitle track is drawn by the app, #237, first half)
+
+**Why.** Roku shows its captions only while the TV's caption mode is on, so the app switched that setting on to show
+a forced track and put it back afterwards. Back restores it since #170; Home leaves it on until the next launch
+(#117). Drawing the lines in the app means the setting is never touched (#117's option A).
+
+**Changed, Jellyfin and Emby.** The forced track in SUBTITLE LANGUAGE is no longer handed to the player as a
+sidecar. `ForcedSubTask` fetches the server's SRT at tune, `source/subtitles/Srt.brs` reads it into cues, and
+`GuideView.drawForcedSub` puts the current line in a Label under the CRT overlay, in full screen and in the guide's
+preview, ten times a second. The player reports its position every half second, so the time since the last report is
+added (`NxForcedSubMs`). The line gives way while the player's own subtitles show. SUBTITLES (OFF, FOREIGN AUDIO,
+ALWAYS) and its full tracks are as they were, through the TV's captions.
+
+**Not yet: Plex, and a picture track.** The Roku keeps no list of a Plex file's subtitle tracks; it would take the
+per-tune request asked about on #246. A forced track that is a picture (PGS, VobSub) has no text to draw.
+
+**A TV refused `box` as a variable name** ("Builtin function call expected", five lines of `GuideView.brs`) after the
+interpreter, static analysis and the guards had passed it. Renamed, and `check-guards.sh` now refuses it as it does
+`run`.
+
+**Pressed** on the 43S45 (OS 16.0.4) against the lab Jellyfin 12.2.0, test-data builds of `ad74ada` to `227f4af`
+plus three scratch aids (a linked item starts 285 s in, an input that sets the TV's caption mode, a log line per drawn
+change), with *American Dad!* "Pilot": an HEVC MKV whose one forced English line runs 4:57.208 to 5:02.166.
+- The track came in 6 to 16 ms once the server had it (281 ms the first time) and was read in 0 to 2 ms.
+- First build, the reported position alone: drawn 291 ms late, cleared 338 ms late.
+- With the time since the report added (`227f4af`), by the app's own clock: direct play, drawn 30 to 96 ms after
+  the line's start and cleared 1 to 76 ms after its end (six runs); server stream, 87 and 88 ms, 35 and 35 ms.
+- TV captions On: On before, during and after. Set Off: Off before, during and after, and 6 s and 21 s after Home.
+- Two dev screenshots show the line: at the foot of the full screen picture, and inside the guide's preview box.
+
+**Then on the lab clip *Lab Forced Opus*** (30 MB, silent; a Portuguese AAC and an English Opus track, an English
+forced track with lines at 0:10 and 0:40 and a full one at 0:20), signed in as the lab-clips user, a test-data build
+of `c21c2a9` plus the scratch aids. The English Opus track is picked, so each run is a server stream.
+- Jellyfin 12.2.0, TV captions On: both lines drawn 33 ms after their starts and cleared 33 ms after their ends; On
+  before, 15 s in and after. Captions Off: 75 ms and 75 ms; Off throughout.
+- Emby 4.10.1.0, captions Off: 33 ms and 33 ms; Off throughout. Captions On: 70 ms and 70 ms; On throughout.
+- SUBTITLES on ALWAYS (Jellyfin, captions Off before): as before this change. The full track showed through the TV's
+  captions, which the app switched On for it (On 15 s in) and back Off when the clip ended, and no forced line was
+  drawn.
+- A long track, made on the TV: 2,000 cues (186 KB) were read in 322 ms, and 100 looks near its end took 307 ms.
+  So `NxSrtTextAt` now finds the last cue to have started by halving and looks at the 16 before it.
+- An unchanged build of `6ebdd4a` (no scratch aids), the same clip on Emby, TV captions On: it compiled and ran; the
+  node tree had the first line up with the player at 13.0 s and hidden at 16.5 s, the second up at 41.0 s and
+  hidden at 48.0 s (one look every 2 to 3 s); captions On before, during and after; and a dev screenshot at 13.0 s
+  shows LAB FORCED LINE ONE at the foot of the screen.
+
+**Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
+times are the player's). A stick, and a real film with a long forced track. The timings above are from the builds
+with the scratch log line; the unchanged build was looked at only through the node tree and one screenshot.
 ## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
 
 **Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
