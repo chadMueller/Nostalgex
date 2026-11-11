@@ -5,7 +5,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-11 (Roku: #272's review follow-ups, #237)
 
-**Why.** Chad's merge note on #272 (tydude001) asked for four small things.
+**Why.** Chad's merge note on #272 (tydude001) asked for four small things and one TV check.
 
 **Changed.** `NxSrtParse`: a file with no blank line between two cues kept the next cue's counter as the last line of
 the one before ("A" then "2"); an all-digit line just before a timing line is now taken as the counter and dropped,
@@ -15,6 +15,11 @@ hand the player the forced track as a sidecar. The #237 entry names its author.
 
 **Tests changed.** `SrtTests`' "no blank line between cues" checked only the second cue, so it passed with the first
 reading `A` and `2`; it now compares both cues whole (Tyler's call). A new case keeps a line of digits before a blank line.
+
+**Seen** on the 43S45 (OS 16.0.4) with a test-data build of `37cc228` signed in to the lab Emby as `nxlab`, the TV's
+captions set Off first by a one-off app: *Lab Forced Opus* item-linked, and Home pressed within 40 ms of a poll of
+the node tree (about two a second) seeing its forced line shown, 12 s after the link, in two runs. The TV's caption
+mode read Off 1, 6 and 21 s after each, and 5 and 25 s into a relaunch after the first. Set back On afterwards.
 
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
