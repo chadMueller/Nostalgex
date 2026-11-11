@@ -2691,8 +2691,13 @@ sub keepFocusVisible()
     total = m.channels.Count() + leadRows()
     want = (m.viewHeight - m.rowH) \ 2 - at * m.rowPitch
     if want < 0 then want = -(((-want) + m.rowPitch \ 2) \ m.rowPitch) * m.rowPitch
-    lowest = m.viewHeight - total * m.rowPitch
-    if lowest > 0 then lowest = 0
+    ' At the end of the list, the last row whole and the top on a whole row:
+    ' the 466 px view isn't a whole number of 65 px rows, and stopping where
+    ' the last row touches the bottom left 11 px of the row above under the
+    ' header (#263's sizes). The spare pixels go below the last row instead.
+    over = total * m.rowPitch - m.viewHeight
+    lowest = 0
+    if over > 0 then lowest = -((over + m.rowPitch - 1) \ m.rowPitch) * m.rowPitch
     if want < lowest then want = lowest
     if want > 0 then want = 0
     m.scrollY = want
