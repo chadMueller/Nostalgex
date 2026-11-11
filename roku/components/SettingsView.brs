@@ -319,8 +319,10 @@ function shownPage() as String
     return ""
 end function
 
-' Opens a CHANNELS & BUNDLES page from its link row, or steps back to the list
-' (page "") onto the row that opened `from`, as showChannelsPage. A page opens
+' Opens a CHANNELS & BUNDLES page from its link row, or steps up one level onto
+' the link row that opened `from` (NxChannelsPageParent): from a page to the
+' list (page ""), or from MISSING CHANNELS to CHANNEL PACKAGES, as
+' showChannelsPage. A page opens
 ' scrolled to its top, on its first row; one with nothing to focus (MY
 ' COLLECTIONS before any collection is read) leaves focus nowhere, and Back or
 ' Left still leaves it.
@@ -343,7 +345,14 @@ end sub
 ' is missing; the page says so when none is. A card's lines are wrapped here,
 ' so its height is known before it is drawn.
 sub pushMissing()
-    if m.defs = invalid then m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+    ' Timed (#228's review): on the render thread, and the first build of a
+    ' Settings visit reads and parses channels.json.
+    clock = CreateObject("roTimespan")
+    parsedMs = -1
+    if m.defs = invalid then
+        m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+        parsedMs = clock.TotalMilliseconds()
+    end if
     groups = NxMissingGroups(m.top.bundles, m.enabled, m.top.builtBundles, m.building, m.onAir, m.defs)
     m.missingCount = NxMissingCount(groups)
     if m.missingCount > 0 then add({ kind: "channelsLink", page: "missing", title: "WHY ARE SOME CHANNELS MISSING?" })
@@ -351,6 +360,7 @@ sub pushMissing()
     add({ kind: "header", title: "MISSING CHANNELS", subtitle: "A channel goes on air once your library has enough titles that fit it" }, "channels")
     if groups.Count() = 0 then
         add({ kind: "missingNone" })
+        logMissingTime(clock, parsedMs)
         return
     end if
     cols = Int((m.rowW - 40) / advanceOf("DMMono-Regular", 20))
@@ -366,6 +376,13 @@ sub pushMissing()
             add({ kind: "missingCard", key: NxToStr(g.bundle.id) + ":" + NxToStr(def.id), def: def, needsLines: needs, bullets: bullets, cols: cols })
         end for
     end for
+    logMissingTime(clock, parsedMs)
+end sub
+
+sub logMissingTime(clock as Object, parsedMs as Integer)
+    parsed = ""
+    if parsedMs >= 0 then parsed = ", channels.json read and parsed in " + parsedMs.ToStr() + " ms"
+    print "settings: missing channels: "; m.missingCount; " in "; clock.TotalMilliseconds(); " ms"; parsed
 end sub
 
 ' The counts arrived, or changed: only the MISSING CHANNELS page shows them.

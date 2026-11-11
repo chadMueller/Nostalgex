@@ -45,7 +45,7 @@ Options: `--base REF` (default `origin/main`; use the main the branch was built 
 | `dupkeys` | no associative-array literal names a key twice (what keeping both sides of a conflict makes) | the right value was kept |
 | `guards` | no secret in a `print`, saved data only through `NxRegSection` and `NxCacheRoot`, no variable named `m` or `run` | |
 | `package` | the staged channel has nothing from `tests/` or this tooling | |
-| `trailers` | no AI co-author or "Generated with" line in a commit message; commits by `tydude001` are counted and left as they are. The allowance is keyed on the commit's author name (`NX_TRAILER_OK` changes who), not the email or the GitHub account, so a commit that only mentions him doesn't get it | |
+| `trailers` | no AI co-author or "Generated with" line in a commit message; commits by `tydude001` or `Owen Voke` (the Android TV port, #151, squash-merged with a hand-written message) are counted and left as they are. The allowance is keyed on the commit's author name (`NX_TRAILER_OK` changes who), not the email or the GitHub account, so a commit that only mentions one of them doesn't get it | |
 | `secrets` | no token, key, JWT, Supabase project address, private key, `.env`, `Secrets.xcconfig` or `.pkg` in what the change adds; a plain `NAME = value` assignment is a warning | a secret in an unusual shape |
 | `addresses` | no address from the deny list (the hosts in `roku/.env`, which is git-ignored, and `NX_PRCHECK_DENY`; none is written in the repo) or `plex.direct` machine id; other IPv4 addresses are a warning | |
 | `dashes` | no em or en dash in a commit message or an added line of a text file | |

@@ -47,7 +47,7 @@ sub onArgs()
 
     dot = " " + Chr(183) + " "
     franchises = []
-    if state = "on" or state = "folded" or state = "overcap" then
+    if state = "on" or state = "fills" or state = "folded" or state = "overcap" then
         franchises = [
             { id: "dict:DIE HARD", name: "DIE HARD", countLabel: "5 movies", stockChannelID: 101, channelNumber: 104, enabled: true },
             { id: "dict:JAMES BOND", name: "JAMES BOND", countLabel: "24 movies", stockChannelID: 102, channelNumber: 105, enabled: true },
@@ -99,6 +99,29 @@ sub onArgs()
     m.top.AppendChild(m.settings)
     m.settings.callFunc("open", invalid)
     print "TOUR settings open: state "; state; ", "; bundles.Count(); " packages, "; franchises.Count(); " franchises, "; rows.Count(); " collections"
+    ' fills: as "on", then after `after` seconds (default 30) every channel of
+    ' the packages on, FRANCHISES included, is on air, handed over as GuideView's refreshSettings
+    ' does after a guide build, so MISSING CHANNELS, left open, has none.
+    if state = "fills" then
+        m.fillIds = []
+        for each b in bundles
+            if NxHasValue(enabled, b.id) then m.fillIds.Append(b.channelIDs)
+        end for
+        m.fillBuilt = enabled
+        after = Val(NxToStr(a.after))
+        if after <= 0 then after = 30
+        m.fillTimer = CreateObject("roSGNode", "Timer")
+        m.fillTimer.duration = after
+        m.fillTimer.ObserveField("fire", "onFill")
+        m.fillTimer.control = "start"
+    end if
+end sub
+
+sub onFill()
+    m.settings.onAirIds = m.fillIds
+    m.settings.builtBundles = m.fillBuilt
+    m.settings.callFunc("refreshRows", invalid)
+    print "TOUR every channel of the packages on is on air ("; m.fillIds.Count(); " channels)"
 end sub
 
 sub onResult()
