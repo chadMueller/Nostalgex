@@ -3,6 +3,50 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Web tuner: the guide row no longer runs past its window when an airing crosses local midnight)
+
+**Why.** The 24-hour guide window holds two days' blocks, and the next day's first airing starts at 00:00 whatever
+the day's last airing is doing. When that last airing runs past midnight the two overlap, and `renderGrid` tiled blocks
+end to end, so the overlap was counted twice. Found by a harness on the Roku issue #297 night (a 104 minute movie from
+23:24 to 01:08, 68 minutes past midnight); the Apple TV already handles it (`ProgramRowLayout.segments` trims the
+later airing), so this brings the page in line.
+
+**Measured before, on the real engine and the page's own `renderGrid` (stub DOM).** Movie channel, that night, every
+minute of the three hours before midnight: the row was wider than the 2-hour window in 90 of 180 windows, up to 156.7%
+of it (the excess is clipped by the row, so what shows is an airing drawn where it does not air, 60 windows, and an
+hour before midnight the row totalled 150%). Episode channel, a 36 minute episode 15 minutes past midnight: wider in
+90 of 180 windows (112.5%) and the programmes after the overlap drawn up to 15 minutes late. In a real browser
+(headless Chromium, clock pinned to the evenings before midnight, a Jellyfin-shaped lab server) every window checked
+at phone, tablet, desktop and 960x540 had a row wider than its strip, for example 1525 px of programmes in a 1220 px
+strip on desktop.
+
+**Changed.**
+- `scripts/nostalgex-program-row-layout.js` (new): the Apple TV's cursor walk. An airing that overlaps the one before it
+  is trimmed at its start, one wholly inside it is not drawn, and a hole between airings is a spacer at its true
+  position, so the row totals exactly the window.
+- `plex-tuner.html`: `renderGrid` draws from those segments. A trimmed block is not marked live (the airing that owns
+  those minutes is). Holes were also pulling every later programme left on a time-restricted channel; they hold their
+  place now.
+- A block under 8% of the window (about 10 minutes) drops its side padding. A browser will not draw a block narrower
+  than its padding, and the real-browser run found 6 to 12 px of overflow from exactly that once overlaps were trimmed
+  to a few minutes. It applies to any sliver at a window edge, not only to the midnight case.
+
+**Tested.** `npm run test:program-row-layout` (in `npm test`): the module against the cases of `ProgramRowLayoutTests`,
+the page's own `renderGrid` on the two nights above, and the hole, trim, sliver and empty-row cases. Against the old
+`renderGrid` it fails 12 checks (the same runs: widest 156.7% and 112.5%, 15 minutes late); after, 0 windows wider and
+0 programmes off their time. `npm run test:program-row-layout:browser` is the real-browser run (needs Playwright,
+like the other `:browser` smokes): 20 checks pass after; against the old page every viewport fails with rows wider
+than the window in all 12 windows.
+
+**Not changed.** Playback and the tune: no retune happens on the web at slot end (`tickProgress` only rebuilds the
+panels), so this is the guide row only. The engine and its goldens, the Apple TV and Roku are untouched. After
+midnight the harness also saw the guide row name the next day's first airing at the now line while the info panel
+still named the movie that is playing. That is which airing the engine calls "now" in the overlap, not how the row
+is laid out; it is not touched here and its cause is not established.
+
+**Half-done.** Branch `web/guide-midnight-overlap`, committed, not pushed. Needs a review before it goes to main
+(a push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).
+
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
 **Why.** Each Roku screen carries its own sizes and greys (white at 70% for hints, at 80% for rail titles, sizes
