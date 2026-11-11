@@ -3,6 +3,14 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: CI's release lint)
+
+**Changed.**
+- GUIDE TIMEOUT (#290) hears the remote through `Activity.onUserInteraction` now, not an override of `dispatchKeyEvent`. Calling `super.dispatchKeyEvent` reaches androidx's `ComponentActivity` override, which is `@RestrictTo`, so `:app:lintRelease` failed on CI with `RestrictedApi`. Measured on a SHIELD (Android 11): 5 D-pad presses called it 10 times, once on key down and once on key up, the same as the override did. `:engine:test :app:lintRelease :app:assembleDebug` pass locally.
+
+**Half-done.**
+- The Roku job on #151 fails `trailers`: `roku/tests/pr-check.sh` fails any commit with an AI co-author line, and it runs on this branch because the branch edits `.github/workflows/ci.yml`, which is in the Roku path filter. It has failed on every run since 2026-11-09. Nothing on the Roku side is broken: the suite and the other checks pass, and its two warnings are read and harmless (`secrets` flags the upload key's passwords, which come from a properties file, not literals; `addresses` lists a placeholder in the server hint, test vectors and version numbers). Left for Chad to say whether the Android commits keep their trailers.
+
 ## 2026-11-11 (Android: the Apple TV 1.0.32 look, from the issues' numbers; #267 to #271)
 
 The Apple TV 1.0.32 is not on main yet (main's Apple TV is 1.0.31) and its branch isn't published, so this works from the numbers written out in each issue and from the Roku's port of the same tokens (`roku/source/ui/Tokens.brs`, #262). Two details the issues leave to the 1.0.32 screenshots are provisional; they are listed under Half-done.
@@ -77,7 +85,7 @@ All 344 engine tests pass. Not pushed yet.
 - **#290, GUIDE TIMEOUT.** A new row under PLAYBACK & PICTURE, after GUIDE TEXT SIZE, as on the Apple TV, with its wording.
   - One press cycles OFF, 5 MIN, 15 MIN. The default is 5 MIN, and anything else saved reads as the default. It is saved as "off", "5m" or "15m" under `nostalgex_guide_timeout`, on this TV only.
   - Every 5 s the app checks; after that long with no remote press, while the guide is in front (not full screen, Settings closed) and a channel is playing, the playing channel goes full screen.
-  - `MainActivity.dispatchKeyEvent` notes every key, as the Apple TV's `RemoteActivityMonitor`, and closing Settings counts as a press.
+  - `MainActivity.onUserInteraction` notes every key, as the Apple TV's `RemoteActivityMonitor`, and closing Settings counts as a press.
   - The rule is `GuideTimeout.shouldGoFullScreen` in the engine, with the issue's cases: OFF, not in front, not playing, under and at the interval, the cycle and the stored values.
 - **#287, frame size.** No code: commit `21977e54` already reads the first video stream's `Width` and `Height` in the Jellyfin and Emby scan, and the 4K watchdog deadline reads them.
   - `MediaBrowserFrameSizeTest` holds it to two answers saved from a lab Jellyfin 12.4 for the scan's own request: a 3840x1600 film gets 40 s on the server stream and 15 s on direct play, and a 1280x720 film 20 s.

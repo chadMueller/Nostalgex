@@ -44,10 +44,14 @@ class MainActivity : ComponentActivity() {
         model.openLink(intent?.dataString)
     }
 
-    /** Every remote press, before any screen sees it, restarts GUIDE TIMEOUT's wait (#290). */
-    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    /**
+     * Every remote press, before any screen sees it, restarts GUIDE TIMEOUT's wait (#290).
+     * `Activity.dispatchKeyEvent` calls this for each key event before dispatching it; overriding
+     * `dispatchKeyEvent` itself means calling androidx's restricted `ComponentActivity` override.
+     */
+    override fun onUserInteraction() {
+        super.onUserInteraction()
         if (::model.isInitialized) model.noteRemoteActivity()
-        return super.dispatchKeyEvent(event)
     }
 
     /** A link while the app runs (singleTask): tunes now, or once the guide is up. */
