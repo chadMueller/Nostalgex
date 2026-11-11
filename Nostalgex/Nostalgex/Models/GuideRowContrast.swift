@@ -57,6 +57,36 @@ enum GuideRowContrast {
 
     private static func scaled(_ c: NXRGB, _ k: Double) -> NXRGB { NXRGB(r: c.r * k, g: c.g * k, b: c.b * k) }
 
+    // MARK: - Second-tier text on a focused row
+
+    /// What the Watershed placeholder ("BROADCASTS RESUME AT 9 PM") sits on in a focused row: the row's
+    /// own fill with the placeholder's 2% white lift over it.
+    static func placeholderSurface(for channel: NXRGB) -> NXRGB {
+        mix(NXColor.text, over: fills(for: channel).row, opacity: 0.02)
+    }
+
+    /// Text-2 (`NXColor.text2`) as it is when it already reads on `surface`; otherwise the same grey
+    /// brightened toward white by the least amount that gets it to `minimum`. Text-2 is 4.3 to 4.7:1 on
+    /// the focused wash of the pale channels (cream, grey, the yellows), and the placeholder's lift takes
+    /// it to 4.1 to 4.4, so on those it steps up a little and stays a different grey from the white
+    /// program titles. White was already the answer for the titles; this is the same rule for the one
+    /// other text on that wash.
+    static func secondaryText(on surface: NXRGB, minimum: Double = GuideRowContrast.minimum) -> NXRGB {
+        if NXRGB.contrast(NXColor.text2, surface) >= minimum { return NXColor.text2 }
+        var lo = 0.0, hi = 1.0   // lo does not read, hi (white) does
+        for _ in 0..<24 {
+            let mid = (lo + hi) / 2
+            if NXRGB.contrast(mix(NXColor.text, over: NXColor.text2, opacity: mid), surface) >= minimum { hi = mid } else { lo = mid }
+        }
+        return mix(NXColor.text, over: NXColor.text2, opacity: hi)
+    }
+
+    /// The Watershed placeholder's text color on a focused row of this channel color.
+    static func placeholderText(forHex hex: String) -> NXRGB {
+        let channel = rgb(fromHex: hex)
+        return secondaryText(on: placeholderSurface(for: channel))
+    }
+
     static func rgb(fromHex hex: String) -> NXRGB {
         let digits = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return NXRGB(0xFFFFFF) }

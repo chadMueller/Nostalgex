@@ -948,7 +948,11 @@ private struct EPGRow: View {
 
             Text("BROADCASTS RESUME AT 9 PM")
                 .font(.custom("DMMono-Medium", size: text.placeholder))
-                .foregroundStyle(Color.nxText2)
+                // Text-2 is 4.1 to 4.4:1 on a pale channel's focused wash (GuideRowContrast), so a focused
+                // row brightens it only as far as 4.5:1 needs.
+                .foregroundStyle(isFocused
+                    ? GuideRowContrast.placeholderText(forHex: channel.color.snapshotHexString).color
+                    : Color.nxText2)
                 .lineLimit(1)
                 .padding(.leading, 14)
 

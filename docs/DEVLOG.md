@@ -3,6 +3,29 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Apple TV 1.0.33 queue: the Watershed placeholder reads on a pale focused row)
+
+**State.** Branch `appletv/1.0.33-focus-contrast`, cut from `appletv/1.0.32-rc2` (`4a4a1c19`). Not merged, not pushed, not in a build. 1.0.32 (56) is untouched.
+
+**Why.** On a focused guide row the fill is the channel color at 32% over the guide's dark panel, darkened only if white text needs it (`GuideRowContrast`). White program titles read there everywhere (7.5:1 or better), so the fill is never darkened for the pale channels. The one other text on that fill is the Watershed placeholder, "BROADCASTS RESUME AT 9 PM", drawn in text-2 (`#B9C3DE`) over the fill and its own 2% white lift. On six of the 97 channel colors that is under 4.5:1.
+
+**Changed.** `GuideRowContrast.secondaryText(on:)` keeps text-2 where it already reads and otherwise mixes it toward white by the least amount that reaches 4.5:1, so it stays a different grey from the white titles. The placeholder uses it on a focused row (`placeholderSurface`, `placeholderText`); an unfocused row is as before. No other text-2 sits on a focused-row fill (the other text-2 uses are the grid header, the bundle list heading and Settings rows). No channel, rule or schedule change.
+
+**Measured** (text-2 on the placeholder's surface, WCAG contrast, from the Swift constants and `channels.json`; 91 of the 97 colors already read and are untouched):
+
+| Color | Channel | Before | After |
+|---|---|---|---|
+| `#F5E6C8` | CRITERION | 4.07 | 4.50 |
+| `#E5E5E5` | A24 | 4.10 | 4.50 |
+| `#FFE81F` | STAR WARS | 4.16 | 4.50 |
+| `#FFE500` | REWATCHABLES MOVIES | 4.22 | 4.50 |
+| `#F7DC6F` | CRINGE TV | 4.32 | 4.50 |
+| `#FFD700` | ALL TIME GREATS, OSCAR WINNERS | 4.43 | 4.50 |
+
+Text-2 on the plain focused fill (without the 2% lift) was 4.29 to 4.68 on the same colors; the placeholder is the case that drew it lower.
+
+**Tests.** `GuideRowContrastTests`: every distinct color in `channels.json` holds 4.5:1 for the placeholder, a changed color was below 4.5 before, is brightened no further than needed and never to white, the six pale colors are pinned with their numbers, and text-2 is kept where it already reads. Full `NostalgexTests`: 1,374 passed, 1 failed, 32 skipped. The failure is `ColdPlexScaleHarness.testASmallColdRunLeavesTheRealStoresByteIdentical`: the system URL cache files in the test container (`Cache.db`, `fsCachedData`) changed during the run. It fails the same way on the unmodified `appletv/1.0.32-rc2`, so it is not from this change. Simulator only; not looked at on a TV.
+
 ## 2026-11-10 (Apple TV 1.0.32 rc2: the launch-time freeze, filter pass moved off the main actor)
 
 **Shipped.** Apple TV 1.0.32 (56) to TestFlight, built from `appletv/1.0.32-rc2` at `bfe88229` (the 1.0.32 design branch at `1d75a684` plus the fix below).
