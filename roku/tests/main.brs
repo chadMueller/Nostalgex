@@ -105,6 +105,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("settings-rail") then failures = failures + NxRunSettingsRailTests()
     if NxTestWants("channels-missing") then failures = failures + NxRunChannelsMissingTests("pkg:/data/channels.json")
     if NxTestWants("design-tokens") then failures = failures + NxRunDesignTokensTests()
+    if NxTestWants("guide-look") then failures = failures + NxRunGuideLookTests("pkg:/data/channels.json")
     if failures = 0 then print "ALL TESTS PASSED" else print "TESTS FAILED"
 end sub
 

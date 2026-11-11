@@ -25,31 +25,70 @@ sub NxSaveGuideTextLarge(on as Boolean)
     reg.Flush()
 end sub
 
-' The grid's type sizes and where each line sits, the row 80 px tall and the
-' header 60. NORMAL is what the guide has always drawn. A line's top is the
-' middle of its row less half its height (about 1.3 times its size).
+' The grid's shape (#263, the Apple TV 1.0.32's guide): rows 64 px tall, the
+' time header 58, the channel column 340 wide and 395 px per 30 minutes, so
+' four half hours fill the 1580 px after the column.
+function NxGuideGeometry() as Object
+    return { rowH: 64, headerH: 58, colX: 340, slotWidth: 395 }
+end function
+
+' The top of a line of text `size` px tall, centred in a space `height` px
+' tall: the middle less half the line's height (about 1.3 times its size).
+function NxGuideLineTop(height as Integer, size as Integer) as Integer
+    return Int((height - size * 1.3) / 2 + 0.5)
+end function
+
+' The grid's type sizes and where each line sits, computed from the row and
+' header heights (NxGuideGeometry), so the tops move with them. #263's sizes:
+' NORMAL has titles, numbers and names at 22 and the times, the CHANNEL
+' heading and the WATERSHED placeholder at 25; LARGE has them all at 29. The
+' number box is three digits wide, 40 and 54. LARGE never moves a row or the
+' column.
 '   slot, slotY, slotH: a time label, and the rule beside it
 '   title, titleY: a program's title
 '   num, numW, numY: a channel's number, its width (three digits) and top
 '   name, nameY, nameGap: the name, its top, and its start from the number's
 '   head, headY: the CHANNEL heading
-' LARGE grows the program titles most, as the channel column is only 220 px
-' wide: its number and name grow less, and the name keeps what room is left.
+'   held, heldY: WATERSHED's placeholder (BROADCASTS RESUME AT 9 PM)
 function NxGuideTextSizes(large as Boolean) as Object
+    g = NxGuideGeometry()
+    text = 22
+    time = 25
+    numW = 40
     if large then
-        return {
-            slot: 26, slotY: 13, slotH: 34,
-            title: 26, titleY: 23,
-            num: 24, numW: 44, numY: 24,
-            name: 20, nameY: 27, nameGap: 52,
-            head: 22, headY: 16
-        }
+        text = 29
+        time = 29
+        numW = 54
     end if
     return {
-        slot: 20, slotY: 17, slotH: 26,
-        title: 20, titleY: 27,
-        num: 20, numW: 36, numY: 27,
-        name: 18, nameY: 29, nameGap: 44,
-        head: 18, headY: 18
+        slot: time, slotY: NxGuideLineTop(g.headerH, time), slotH: Int(time * 1.3 + 0.5),
+        title: text, titleY: NxGuideLineTop(g.rowH, text),
+        num: text, numW: numW, numY: NxGuideLineTop(g.rowH, text),
+        name: text, nameY: NxGuideLineTop(g.rowH, text), nameGap: numW + 8,
+        head: time, headY: NxGuideLineTop(g.headerH, time),
+        held: time, heldY: NxGuideLineTop(g.rowH, time)
     }
+end function
+
+' The grid's surfaces, as GuideView draws them: the grid under its rows, the
+' header, an even row's stripe, a past programme's tint and the alpha of a
+' live programme's cell in the channel's colour. The lightest background an
+' unfocused title sits on is the stripe and the past tint over the grid
+' (NxGuideLightestTitleBg), which tests/GuideNavTests.brs holds textDim to.
+function NxGuideColors() as Object
+    return { grid: "0x0D0D1FFF", header: "0x0A0A14FF", stripe: "0xFFFFFF08", past: "0xFFFFFF05", liveAlpha: "40" }
+end function
+
+function NxGuideLightestTitleBg() as String
+    c = NxGuideColors()
+    return NxTokOver(c.past, NxTokOver(c.stripe, c.grid))
+end function
+
+' The focused row's fill (#263): the channel's colour ("#RRGGBB" or
+' "RRGGBB"), opaque and darkened only as far as white titles need for 4.5:1
+' (NxTokDarkenFor). Anything else is white, as GuideView's colorOf.
+function NxGuideFocusFill(hex as Dynamic) as String
+    h = NxToStr(hex).Replace("#", "")
+    if NxTokRgba("#" + h) = invalid then h = "FFFFFF"
+    return NxTokDarkenFor("#" + h, "0xFFFFFFFF", 4.5)
 end function

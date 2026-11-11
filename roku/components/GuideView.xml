@@ -52,6 +52,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
+  <script type="text/brightscript" uri="pkg:/source/ui/Tokens.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/DirectPlay.brs" />
@@ -125,11 +126,11 @@
     </Group>
     <Group id="grid" translation="[0,555]">
       <Rectangle width="1920" height="525" color="0x0D0D1FFF" />
-      <Rectangle width="1920" height="60" color="0x0A0A14FF" />
+      <Rectangle width="1920" height="58" color="0x0A0A14FF" />
       <Label id="channelHead" text="CHANNEL" translation="[12,18]" />
       <Group id="slots" />
-      <Rectangle translation="[0,60]" width="1920" height="1" color="0xFFFFFF40" />
-      <Group id="rows" translation="[0,61]" clippingRect="[0,0,1920,464]" />
+      <Rectangle translation="[0,58]" width="1920" height="1" color="0xFFFFFF40" />
+      <Group id="rows" translation="[0,59]" clippingRect="[0,0,1920,466]" />
       <Rectangle id="nowLine" width="2" height="525" color="0x00D4FFFF" />
     </Group>
     <Group id="sidebar" translation="[0,555]" visible="false" />

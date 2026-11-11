@@ -115,3 +115,74 @@ function NxTokTextOn(fill as Dynamic) as String
     if b > w then return black
     return white
 end function
+
+' A colour's red, green, blue and alpha, 0 to 255: "0xRRGGBBAA", or
+' "#RRGGBB" as opaque. invalid when it isn't one.
+function NxTokRgba(colour as Dynamic) as Dynamic
+    if not NxIsString(colour) then return invalid
+    h = UCase(colour)
+    if Left(h, 2) = "0X" and Len(h) = 10 then
+        h = Mid(h, 3)
+    else if Left(h, 1) = "#" and Len(h) = 7 then
+        h = Mid(h, 2) + "FF"
+    else
+        return invalid
+    end if
+    digits = "0123456789ABCDEF"
+    out = []
+    for i = 0 to 3
+        hi = Instr(1, digits, Mid(h, 2 * i + 1, 1)) - 1
+        lo = Instr(1, digits, Mid(h, 2 * i + 2, 1)) - 1
+        if hi < 0 or lo < 0 then return invalid
+        out.Push(hi * 16 + lo)
+    end for
+    return out
+end function
+
+' "0xRRGGBBFF" from three channels, each rounded and held to 0 to 255.
+function NxTokOpaque(r as Float, g as Float, b as Float) as String
+    s = "0x"
+    for each v in [r, g, b]
+        n = Int(v + 0.5)
+        if n < 0 then n = 0
+        if n > 255 then n = 255
+        s = s + Mid("0123456789ABCDEF", n \ 16 + 1, 1) + Mid("0123456789ABCDEF", n mod 16 + 1, 1)
+    end for
+    return s + "FF"
+end function
+
+' `top` (its alpha used) laid over the opaque `bottom`: the opaque colour a
+' viewer sees, as a translucent Rectangle over another draws. invalid when
+' either isn't a colour.
+function NxTokOver(top as Dynamic, bottom as Dynamic) as Dynamic
+    t = NxTokRgba(top)
+    b = NxTokRgba(bottom)
+    if t = invalid or b = invalid then return invalid
+    a = t[3] / 255.0
+    return NxTokOpaque(t[0] * a + b[0] * (1 - a), t[1] * a + b[1] * (1 - a), t[2] * a + b[2] * (1 - a))
+end function
+
+' `fill` made opaque and darkened only as far as `text` needs to reach
+' `ratio` on it (#263's focused guide row: the channel's colour, dark enough
+' for white titles): each channel scaled by the largest factor found that
+' still reaches the ratio. A fill that already reaches it is only made
+' opaque. invalid when either isn't a colour.
+function NxTokDarkenFor(fill as Dynamic, text as Dynamic, ratio as Float) as Dynamic
+    f = NxTokRgba(fill)
+    if f = invalid or NxTokRgba(text) = invalid then return invalid
+    whole = NxTokOpaque(f[0], f[1], f[2])
+    if NxTokContrast(text, whole) >= ratio then return whole
+    lo = 0.0
+    hi = 1.0
+    for i = 1 to 20
+        k = (lo + hi) / 2
+        if NxTokContrast(text, NxTokScaled(f, k)) >= ratio then lo = k else hi = k
+    end for
+    return NxTokScaled(f, lo)
+end function
+
+' The colour `f` (NxTokRgba) with each channel scaled by k and rounded down,
+' opaque.
+function NxTokScaled(f as Object, k as Float) as String
+    return NxTokOpaque(Int(f[0] * k), Int(f[1] * k), Int(f[2] * k))
+end function
