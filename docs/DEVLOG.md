@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Apple TV 1.0.32 design branch: the brand logo replaces the lightning bolt, #226)
+
+**Changed.** The Apple TV drew the retired lightning-bolt logo (Trello I-086, GitHub #226 from tydude001). It now draws the NOSTALGEX wordmark with a
+TV for the O, the logo of the site, the Roku app and the web tuner (`logo/`). Chad: use that brand everywhere, no more waiting on a redesign.
+- `Assets.xcassets/NostalgexLogo.imageset` keeps its name, so every call site (loading and splash, the connect and picker screens, the idle
+  overlay, the guide's top-left nav bar) picks it up. The image is `logo/png/nostalgex-white-1600w.png` (cream letters, transparent, 1600 x 212),
+  replacing the bolt SVG.
+- Frames: the wordmark is about 7.5 times as wide as tall (the bolt was 2 to 1). Every `maxWidth`-based call site keeps its frame and scales to
+  fit, so the setup and picker screens are unchanged apart from the image. The guide's top-left logo was `frame(height: 80)`, which would have been
+  600 pt wide, so it is now 36 pt tall (272 wide).
+- App icon (`App Icon & Top Shelf Image.brandassets`): Back layer an opaque navy #11142B, Front layer the wordmark at 78% of the width on
+  transparency, as the Roku icon does. 400 x 240 and 800 x 480 for the home screen icon, 1280 x 768 for the App Store icon. The Middle layers stay
+  empty as before. Rendered from `logo/nostalgex-white.svg` with `rsvg-convert`. The build has no asset catalog warnings.
+- Checked: the built app's `Assets.car` holds `NostalgexLogo` at 1600 x 212 and the icon layers (back opaque, front with alpha); a simulator
+  screenshot of the launch screen shows the wordmark. The guide's nav bar was not rendered (it needs a signed-in or demo session); it uses the same
+  asset. Not checked on a Home screen except by install on one Apple TV.
+
+**Half-done.** The Top Shelf images (`topshelf.png` 1920 x 720, `topshelf@2x.png` 3840 x 1440, `topshelf-wide.png` 2320 x 720, `topshelf-wide@2x.png`
+4640 x 1440) still show the bolt; left alone on purpose. The App Store screenshots and `docs/images/nostalgex-guide.png` also still show the bolt
+and need re-shooting.
+
 ## 2026-11-10 (Apple TV 1.0.32 design branch: Chad's TV feedback, focus sound, dim titles, Now Playing, UP NEXT)
 
 Built and looked at on the basement Apple TV 4K (tvOS 27.2) by Chad. Unit tests were not run for these; the focus sound is checked by ear.

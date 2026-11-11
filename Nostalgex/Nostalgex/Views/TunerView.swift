@@ -239,10 +239,12 @@ private struct NavBar: View {
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             // Logo
+            // The wordmark is about 7.5 times as wide as it is tall (the old bolt logo was 2 to 1), so the
+            // same 80 pt height would be 600 pt wide. 36 pt tall is 272 wide.
             Image("NostalgexLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 80)
+                .frame(height: 36)
                 .padding(.leading, 40)
 
             Spacer()
