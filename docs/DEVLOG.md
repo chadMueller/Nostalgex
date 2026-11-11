@@ -12,35 +12,43 @@ more rows (#263, on #262's tokens).
 **Changed.** `NxGuideGeometry`: rows 64 px, the header 58, the channel column 340, 395 px per 30 minutes. The text tops
 are computed from the row and header heights (`NxGuideLineTop`). NORMAL: titles, numbers and names 22, times, the
 CHANNEL heading and the WATERSHED placeholder 25, a 40 px number box; LARGE all 29 and a 54 px box. Titles are white
-live and on the focused row and `textDim` on every other, the WATERSHED placeholder too (it was white at 40%); the
-number, name, times and heading are white; the channel's colour stays in the bar. The live chip and the seasonal
-invite row are re-centred in the 64 px row, the invite row 64 px tall like the others. The focused row is the channel's colour darkened only as far as white titles need
-for 4.5:1 (`NxGuideFocusFill`, `NxTokDarkenFor`), drawn across the whole row, so its live cell isn't set apart and the
-past tint isn't drawn on it. At the end of the list the scroll stops on a whole row (`keepFocusVisible`): 466 px isn't
+live and on the focused row and `textDim` on every other; the number, name and times are white, the CHANNEL heading
+and the WATERSHED placeholder `text2` (it was white at 40%), the placeholder on the past tint focused or not; the
+channel's colour stays in the bar. The live chip and the seasonal invite row are re-centred in the 64 px row, the
+invite row 64 px tall like the others. The focused row is the channel's colour at 32% over the panel #0A0F1E, as the
+Apple TV's GuideRowContrast (`NxGuideFocusFill`, `NxTokOverAt`); it would be darkened for white at 4.5:1 but no colour
+in `channels.json` needs it. Its live cell is the channel's colour at 55% over that, darkened only as far as white needs
+(`NxGuideFocusLiveFill`, `NxTokDarkenFor`), and past programmes keep their tint on it. At the end of the list the scroll stops on a whole row (`keepFocusVisible`): 466 px isn't
 a whole number of 65 px rows, and stopping where the last row touches the bottom left 11 px of the row above under
 the header, as seen on the 55R617.
 
 **Tests changed.** `GuideNavTests`' "normal is the old grid" case pinned the old sizes; it holds #263's now (Tyler's
 call), with a LARGE case beside it, and the fit checks use the 64 and 58 px row and header.
 
-**Tested off the TV.** `GuideLookTests`, 19 cases: `NxTokOver` and `NxTokDarkenFor`, the shape, `textDim` on the grid's
-lightest title background (the even-row stripe and the past tint over the grid, #1A1A2A, 4.78:1) and the bare grid
-(5.35:1), and the focused fill for all 97 distinct colours in `channels.json` (31 kept, 66 darkened, each 4.5:1 or more
-and under 4.6:1). With the darkening left out in a throwaway copy, the every-colour case fails. `tests/run.sh` ends in
-ALL TESTS PASSED.
+**Tested off the TV.** `GuideLookTests`, 28 cases: `NxTokOver`, `NxTokOverAt` and `NxTokDarkenFor`, the shape,
+`textDim` on the grid's lightest title background (the even-row stripe and the past tint over the grid, #1A1A2A,
+4.78:1) and the bare grid (5.35:1), `text2` on the header and on an unfocused placeholder's band, the Apple TV's
+cyan and yellow washes (#074E66, #585314), and for all 97 distinct colours in `channels.json` the focused wash (white
+at 4.5:1, none darkened) and its live cell (64 kept, 33 darkened, each 4.5:1 or more and under 4.6:1).
+`tests/run.sh` ends in ALL TESTS PASSED. Not held: `text2` on a focused row's placeholder band is under 4.5:1 for
+six pale colours (4.09:1 on #F5E6C8).
 
 **Seen** on the 55R617 (OS 15.3.4, 1080p UI) with a build signed in to our Plex (5,637 titles, 18 channels on the
 guide), `88a758b` and then `695fddc` (the end stop). Seven rows show. At NORMAL every name of the 15 channels looked at
-fits the 340 px column, SAT MORNING CARTOONS (20 characters) included; at LARGE it ends in an ellipsis after 14. Focused rows
-on yellow, orange, green and teal channels drew darker shades with white titles. On `88a758b`, at the end of the list, the
+fits the 340 px column, SAT MORNING CARTOONS (20 characters) included; at LARGE it ends in an ellipsis after 14. On
+`73639f0` (the TV now on OS 16.0.4), focused rows on yellow, orange and teal channels drew the wash with their live
+cell a step brighter and white titles; on yellow #FFD000 the screenshot's wash, live cell and past tint read within 6
+levels of the computed #584D14, #8D7407 and #5B5019. On `88a758b`, at the end of the list, the
 row above showed as a bar about 11 px tall under the header; on `695fddc` the top row starts whole and the last row is whole. A
-lab-only build (`nxlab`, Jellyfin and Emby) fills one channel, which drew the same at NORMAL.
+lab-only build (`nxlab`, Jellyfin and Emby) fills one channel, which drew the same at NORMAL. The WATERSHED
+placeholder wasn't seen: switched on at 8:31 AM, no row in view showed it, and the rest weren't scrolled to.
 
 **Open.** Not seen: a stick, 720p (the 55R617 is a 4K TV and wasn't set to it), and three-digit channels on a TV (none in
-that lineup; the number box is held off the TV). Two things seen and not from this change: at midnight two channels
-had overlapping airings (AFTER SCHOOL TV and VHS VAULT, an airing running past 12:00 AM beside one starting at it), so
-their titles drew over each other; and after a launch, Up and Down presses over ECP did nothing for a while on both
-builds, then worked, not looked into.
+that lineup; the number box is held off the TV), the WATERSHED placeholder on a TV. Two things seen and not from
+this change: at midnight two channels had overlapping airings (AFTER SCHOOL TV and VHS VAULT), so their titles drew
+over each other; the shared day-packing loop can end an airing after midnight, and the Apple TV trims the overlap
+(`ProgramRowLayout.segments`) where the Roku draws every airing. And after a launch, Up and Down presses over ECP
+did nothing for a while, then worked, not looked into.
 
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
