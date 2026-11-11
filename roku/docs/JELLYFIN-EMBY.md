@@ -490,13 +490,13 @@ against the test Emby, 2026-10-26:
   file. On the test Emby 297 items have an English forced track, 28 of them
   only as an image; those play without it.
 
-**With SUBTITLES on ALWAYS, a server stream's full track is a sidecar too
+**With SUBTITLES on ALWAYS, a server stream's full track is a sidecar
 (issue #120).** A server stream's playlist lists no subtitles: on Emby 4.10
 the app's request for *Wuthering Heights* (28 SRT tracks) gives 0 renditions,
 and still 0 with `SubtitleStreamIndex=2&SubtitleMethod=Hls`. Jellyfin 12.2
 lists them with that query (37 for *28 Years Later*), but each address
 carries the token as `ApiKey` in the URL, which the port keeps out of URLs.
-So the full track comes the way the forced one does: the scan keeps a
+So the full track comes the way the forced one did until #237: the scan keeps a
 file's other text tracks, the first per language (`NxMbFullSubs`), and on a
 server stream with ALWAYS the one in SUBTITLE LANGUAGE (`NxMbFullSub`) goes
 beside the stream as the server's SRT (`NxMbSubtitleSidecars`), which
@@ -508,7 +508,8 @@ picked. Only on ALWAYS, so a server makes the file only for a viewer who
 reads it; the warm-up asks for it too, for airings this TV won't play as
 stored (`NxMbDirectPlays`, STREAM QUALITY's ceiling included, so a file
 LOW sends to the server is warmed too). Measured on a TCL 55R617 (Roku OS 15.3.4)
-against the test Emby, 2026-10-28, with silent lab clips:
+against the test Emby, 2026-10-28, with silent lab clips, before #237, when
+the forced track was a sidecar too:
 
 - *Lab Forced Opus* (English forced and full tracks; a Portuguese AAC and
   an English Opus track, so with AUDIO LANGUAGE English a server stream),

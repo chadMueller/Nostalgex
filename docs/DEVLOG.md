@@ -10,16 +10,23 @@ Commits carry the detail of *what*; this carries the *why*.
 **Changed.** `NxSrtParse`: a file with no blank line between two cues kept the next cue's counter as the last line of
 the one before ("A" then "2"); an all-digit line just before a timing line is now taken as the counter and dropped,
 and one before a blank line stays the cue's. `check-guards.sh` also refuses `for each box in`. The `applySubtitles`
-header, `NxMbMediaInfo`'s and `NxMbSubtitleSidecars`' comments and `JELLYFIN-EMBY.md` no longer say Jellyfin and Emby
-hand the player the forced track as a sidecar. The #237 entry names its author.
+header, the comments on `NxMbMediaInfo`, `NxMbFullSubs`, `NxMbSubtitleSidecars` and `NxPanelProgramRows`, and
+`JELLYFIN-EMBY.md` no longer say Jellyfin and Emby hand the player the forced track as a sidecar; that file's
+2026-10-28 measurements say they are from before #237. `NxSrtParse`'s header says the counter is dropped. The #237
+entry names its author.
 
 **Tests changed.** `SrtTests`' "no blank line between cues" checked only the second cue, so it passed with the first
-reading `A` and `2`; it now compares both cues whole (Tyler's call). A new case keeps a line of digits before a blank line.
+reading `A` and `2`; it now compares both cues whole (tydude001's call). A new case keeps a line of digits before a
+blank line.
 
 **Seen** on the 43S45 (OS 16.0.4) with a test-data build of `37cc228` signed in to the lab Emby as `nxlab`, the TV's
 captions set Off first by a one-off app: *Lab Forced Opus* item-linked, and Home pressed within 40 ms of a poll of
 the node tree (about two a second) seeing its forced line shown, 12 s after the link, in two runs. The TV's caption
 mode read Off 1, 6 and 21 s after each, and 5 and 25 s into a relaunch after the first. Set back On afterwards.
+Emby only: Jellyfin wasn't run.
+
+**Open.** The forced-sidecar branch in `applySubtitles` can't run since #237: both callers of `NxMbSubtitleSidecars`
+pass `drawForced`, and Plex never sets `forcedSub`. Left in here; it comes out as its own change (Chad, #298).
 
 ## 2026-11-11 (Web tuner: the guide row no longer runs past its window when an airing crosses local midnight)
 

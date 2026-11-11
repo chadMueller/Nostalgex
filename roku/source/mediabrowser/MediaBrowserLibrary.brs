@@ -318,8 +318,9 @@ end function
 ' language }, the first in each language, in the file's order, or invalid
 ' when it has none with a language. A server stream carries no subtitles
 ' (Emby lists none in its playlist), so with SUBTITLES on ALWAYS the one
-' in SUBTITLE LANGUAGE comes as a sidecar, as a forced one does (issue
-' #120). Only the first per language, as only the first is picked
+' in SUBTITLE LANGUAGE comes as a sidecar, the server's SRT beside the
+' stream (issue #120); a forced one the app fetches and draws itself
+' (#237). Only the first per language, as only the first is picked
 ' (pickLegibleOption), so a film with 28 tracks keeps a few.
 function NxMbFullSubs(src as Object) as Dynamic
     tracks = []

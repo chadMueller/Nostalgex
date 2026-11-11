@@ -3,9 +3,10 @@
 ' Upstream's NowPlayingPanelLayout (Services/NowPlayingPanelLogic.swift):
 ' which rows the panel's program column shows, in order. A language
 ' preference is offered only when there is something to pick between:
-' SUBTITLE LANGUAGE with a subtitle track (a forced sidecar alone doesn't
-' count), AUDIO LANGUAGE with more than one audio track. OPEN IN PLEX is
-' left out, as the Roku can't open another app on an item.
+' SUBTITLE LANGUAGE with a subtitle track the player lists (a forced track,
+' which the app draws itself since #237, isn't one), AUDIO LANGUAGE with
+' more than one audio track. OPEN IN PLEX is left out, as the Roku can't
+' open another app on an item.
 
 ' captionsHeader, captions, subtitleLanguage, autoSubtitles, audioHeader,
 ' audioTracks, audioLanguage.

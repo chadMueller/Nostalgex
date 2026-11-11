@@ -11,7 +11,9 @@
 ' The cues of an SRT text, in time order: [{ startMs, endMs, text }]. A cue
 ' is its timing line ("00:01:02,500 --> 00:01:04,000", a full stop for the
 ' comma too, anything after the end time ignored) and the lines under it up
-' to a blank one; the counter line above is not needed. Markup is dropped
+' to a blank one; the counter line above is not needed. With no blank line
+' before the next cue, a last line of digits alone just before its timing
+' line is that cue's counter and is dropped. Markup is dropped
 ' (<i>, <font ...>, {\an8}), lines are joined with a line feed, and a cue
 ' with no text left or that ends before it starts is left out. A byte order
 ' mark and CR LF line ends are taken as they come.
