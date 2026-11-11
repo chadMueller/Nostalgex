@@ -1591,8 +1591,10 @@ sub onAudioTracks()
 end sub
 
 ' A Jellyfin or Emby direct play selects the audio track the stream picked
-' (NxMbAudioPick), once the player lists the file's tracks; their server
-' stream already carries only that one. Any other stream takes the first
+' (NxMbAudioPick), once the player lists the file's tracks, unless the
+' player names that track a commentary beside another (#246,
+' NxAudioTrackPastCommentary); their server stream already carries only
+' that one. Any other stream takes the first
 ' track in AUDIO LANGUAGE, as upstream's applyAudioTrackSelection. Once per
 ' start, so a track the viewer chooses in Now Playing stays chosen. Only
 ' after the first picture: a switch while the start still buffered ended it
@@ -1605,11 +1607,17 @@ sub applyAudioPick()
     if m.tuneAudio.byLanguage = true then
         track = NxAudioTrackForLanguage(tracks, m.tuneAudio.language)
     else
-        track = NxAudioTrackToSelect(tracks, m.tuneAudio)
+        track = NxAudioTrackPastCommentary(tracks, NxAudioTrackToSelect(tracks, m.tuneAudio), m.tuneAudio.language)
     end if
+    ' No pick, and the player started on a commentary beside another track:
+    ' the first that isn't one (#246): a Plex direct play whose film track isn't
+    ' in AUDIO LANGUAGE, where the player started on a commentary.
+    if track = invalid then track = NxAudioTrackOffCommentary(tracks, m.video.currentAudioTrack)
     listed = []
     for each a in tracks
-        listed.Push(NxToStr(a.Track) + "=" + NxToStr(a.Language))
+        mark = ""
+        if NxIsCommentaryTitle(a.Name) then mark = " (commentary)"
+        listed.Push(NxToStr(a.Track) + "=" + NxToStr(a.Language) + mark)
     end for
     print "player: audio track "; track; " of "; listed.Join(" "); ", was "; m.video.currentAudioTrack
     if track <> invalid and NxToStr(track) <> NxToStr(m.video.currentAudioTrack) then m.video.audioTrack = track

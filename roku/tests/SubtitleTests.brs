@@ -62,6 +62,25 @@ function NxRunSubtitleTests() as Integer
     NxCheck(r, "audio track: a commentary first is passed over", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "eng", Name: "Director's Commentary" }, { Track: "m", Language: "eng", Name: "English 5.1" }], "en")), "m")
     NxCheck(r, "audio track: a commentary marked #uniq: too", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "eng", Name: "#uniq:Commentary" }, { Track: "m", Language: "eng" }], "en")), "m")
     NxCheck(r, "audio track: a commentary alone in the language leaves the player's choice", NxToStr(NxAudioTrackForLanguage([{ Track: "p", Language: "por", Name: "Portuguese" }, { Track: "c", Language: "eng", Name: "Commentary" }], "en") = invalid), "true")
+    ' Issue #246: no pick in the language, and the player is on a commentary beside another track.
+    plexFilm = [{ Track: "1", Language: "por", Name: "Portuguese" }, { Track: "2", Language: "eng", Name: "Director's Commentary" }]
+    NxCheck(r, "off commentary: no english film track, so no pick by language", NxToStr(NxAudioTrackForLanguage(plexFilm, "en") = invalid), "true")
+    NxCheck(r, "off commentary: the player on the commentary moves to the film's track", NxToStr(NxAudioTrackOffCommentary(plexFilm, "2")), "1")
+    NxCheck(r, "off commentary: the player on the film's track stays", NxToStr(NxAudioTrackOffCommentary(plexFilm, "1") = invalid), "true")
+    NxCheck(r, "off commentary: the first track that isn't one, in the file's order", NxToStr(NxAudioTrackOffCommentary([{ Track: "a", Language: "eng", Name: "Commentary 1" }, { Track: "b", Language: "eng", Name: "commentary 2" }, { Track: "c", Language: "jpn", Name: "Japanese" }, { Track: "d", Language: "kor" }], "a")), "c")
+    NxCheck(r, "off commentary: commentaries alone, the player stays", NxToStr(NxAudioTrackOffCommentary([{ Track: "a", Language: "eng", Name: "Commentary 1" }, { Track: "b", Language: "eng", Name: "Commentary 2" }], "a") = invalid), "true")
+    NxCheck(r, "off commentary: a track not in the list, the player stays", NxToStr(NxAudioTrackOffCommentary(plexFilm, "9") = invalid), "true")
+    NxCheck(r, "off commentary: no current track, the player stays", NxToStr(NxAudioTrackOffCommentary(plexFilm, invalid) = invalid), "true")
+    NxCheck(r, "off commentary: a track with no name isn't a commentary", NxToStr(NxAudioTrackOffCommentary([{ Track: "1", Language: "eng" }, { Track: "2", Language: "eng", Name: "Commentary" }], "1") = invalid), "true")
+    NxCheck(r, "off commentary: Roku's #uniq: mark doesn't hide the word", NxToStr(NxAudioTrackOffCommentary([{ Track: "1", Language: "eng", Name: "#uniq:Commentary" }, { Track: "2", Language: "eng", Name: "English" }], "1")), "2")
+    ' Issue #246: a server pick the player names a commentary (Emby keeps no MP4 track titles; the 43S45 lists them).
+    labMp4 = [{ Track: "2", Language: "eng", Name: "Director's Commentary" }, { Track: "3", Language: "por", Name: "Portuguese" }]
+    NxCheck(r, "past commentary: Emby's pick of the MP4's commentary goes to the film's track", NxToStr(NxAudioTrackPastCommentary(labMp4, "2", "eng")), "3")
+    NxCheck(r, "past commentary: a pick that isn't a commentary stays", NxToStr(NxAudioTrackPastCommentary(labMp4, "3", "eng")), "3")
+    NxCheck(r, "past commentary: no pick stays no pick", NxToStr(NxAudioTrackPastCommentary(labMp4, invalid, "eng") = invalid), "true")
+    NxCheck(r, "past commentary: a film track in the pick's language comes before the first", NxToStr(NxAudioTrackPastCommentary([{ Track: "1", Language: "eng", Name: "Commentary" }, { Track: "2", Language: "por", Name: "Portuguese" }, { Track: "3", Language: "eng", Name: "English" }], "1", "eng")), "3")
+    NxCheck(r, "past commentary: commentaries alone, the pick stays", NxToStr(NxAudioTrackPastCommentary([{ Track: "1", Language: "eng", Name: "Commentary 1" }, { Track: "2", Language: "eng", Name: "Commentary 2" }], "2", "eng")), "2")
+    NxCheck(r, "past commentary: a pick with no language goes to the first that isn't one", NxToStr(NxAudioTrackPastCommentary([{ Track: "1", Language: "eng", Name: "Commentary" }, { Track: "2", Language: "por", Name: "Portuguese" }, { Track: "3", Language: "eng" }], "1", invalid)), "2")
     NxCheck(r, "audio track: commentaries alone go by language", NxToStr(NxAudioTrackForLanguage([{ Track: "p", Language: "por", Name: "Commentary (pt)" }, { Track: "c", Language: "eng", Name: "Commentary" }], "en")), "c")
     NxCheck(r, "audio track: a commentary in another language doesn't matter", NxToStr(NxAudioTrackForLanguage([{ Track: "c", Language: "ger", Name: "Kommentar / Commentary" }, { Track: "m", Language: "eng" }], "en")), "m")
 

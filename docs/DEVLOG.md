@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: a commentary on the player's own list is passed over on a direct play, #246)
+
+**Why.** After #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
+didn't name it one: Emby 4.10.1.0 kept no title for the lab MP4's audio tracks (its `Title` is empty, where Jellyfin
+12.2.0 reads the same file's), so the app's pick from that list can be a commentary. And on a Plex direct play with no film track
+in AUDIO LANGUAGE the pick names no track, which left the player on the track it started with, which can be a commentary.
+
+**Changed.** Both on the player's own list (`availableAudioTracks`, by each track's `Name`), as Chad scoped it on
+#246. A Jellyfin or Emby pick the player names a commentary, beside another track, goes to the first track in the
+pick's language that isn't one, else the first that isn't one (`NxAudioTrackPastCommentary`). With no pick, a player
+on a commentary beside another track moves to the first that isn't one (`NxAudioTrackOffCommentary`), as #246 asks of the
+Plex track: the selected one, else the first, never a commentary while another is left. The console's `audio track` line marks a commentary.
+
+**Not changed.** Plex's server stream, which carries the track Plex chose; that half stays open on #246.
+
+**Tested off the TV.** 15 new audio track cases; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Pressed** on the 43S45 (OS 16.0.4), test-data builds signed in to the lab Emby as `nxlab`, item-linked. Two silent
+60 s lab clips, H.264 with two AAC stereo tracks: an English "Director's Commentary" marked default, then a Portuguese
+track titled "Portuguese", one as MKV and one as MP4 (the titles also as the MP4's handler names). The Roku's `Name` holds
+"commentary" for the first track in both.
+
+| | `3ea0ca9` (the no-pick rule only) | `a2972b8` (this PR's code; `111659d` is the same tree, its message reworded) |
+|---|---|---|
+| MKV | `audio track 3 of 2=eng (commentary) 3=por, was 2`, 1 play | the same, 4 plays of 4 |
+| MP4 | `audio track 2 of 2=eng (commentary) 3=por, was `: the commentary, 1 play | `audio track 3 of 2=eng (commentary) 3=por, was `, 2 plays of 5 |
+
+**Open.** On 3 of the 5 MP4 plays of `a2972b8` the console has no `audio track` line: `applyAudioPick` returned
+before any pick, so the player kept its own track, which wasn't read. The early return is main's, ahead of this
+change, and why it happens on the MP4 (3 plays of 6 over both builds) and not the MKV (none of 5) wasn't looked into. Not run on a TV: the no-pick rule
+(`NxAudioTrackOffCommentary`), which a Plex direct play is the case for, a Plex file at all, and Jellyfin.
+
 ## 2026-11-10 (web tuner and Docker 1.0.17)
 
 **Shipped.** `tunerVersion` 1.0.17, tag `tuner-v1.0.17`, on main after the web branch merged (hosted nostalgex.app deploys with main; the image `ghcr.io/chadmueller/nostalgex:1.0.17`,
@@ -333,6 +365,7 @@ Large default for that class, which halves the visible rows, so it waits for Cha
 and Silkscreen are still in package.json.
 
 **Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+
 
 ## 2026-11-10 (Roku: a Jellyfin or Emby forced subtitle track is drawn by the app, #237, first half)
 

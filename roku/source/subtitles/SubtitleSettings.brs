@@ -142,6 +142,47 @@ function NxAudioTrackForLanguage(listed as Object, lang as String) as Dynamic
     return invalid
 end function
 
+' The track to move to when the pick above names none and the player is on a
+' commentary (#246): the first listed track that isn't one, as #246 asks of
+' the Plex track (the selected one, else the first, never a commentary while
+' another is left). invalid when the
+' player's track (`current`, its Track) isn't a commentary, isn't in the
+' list, or every track is one, which leaves the player where it is.
+function NxAudioTrackOffCommentary(listed as Object, current as Dynamic) as Dynamic
+    onCommentary = false
+    for each t in listed
+        if type(t) = "roAssociativeArray" then
+            if NxToStr(t.Track) = NxToStr(current) and NxToStr(current) <> "" then onCommentary = NxIsCommentaryTitle(t.Name)
+        end if
+    end for
+    if not onCommentary then return invalid
+    for each t in listed
+        if type(t) = "roAssociativeArray" then
+            if not NxIsCommentaryTitle(t.Name) then return t.Track
+        end if
+    end for
+    return invalid
+end function
+
+' A Jellyfin or Emby direct play's pick (`picked`, from NxAudioTrackToSelect)
+' checked against the player's own names (#246): a server that kept no title
+' for a track can pick a commentary the player names one. Emby 4.10.1.0 had no
+' title for a lab MP4's audio tracks, where a Roku 43S45 named them by the
+' file's titles (2026-11-10). Such a pick goes to the first track in the pick's language
+' (`lang`, the server's tag, "eng" as "en") that isn't a commentary
+' (NxAudioTrackForLanguage), else the first that isn't one. Any other pick,
+' invalid included, is returned as it is.
+function NxAudioTrackPastCommentary(listed as Object, picked as Dynamic, lang as Dynamic) as Dynamic
+    off = NxAudioTrackOffCommentary(listed, picked)
+    if off = invalid then return picked
+    tag = NxSubComparableTag(lang)
+    if tag <> invalid then
+        byLang = NxAudioTrackForLanguage(listed, tag)
+        if byLang <> invalid then return byLang
+    end if
+    return off
+end function
+
 ' The player's listed tracks less those named a commentary (NxIsCommentaryTitle
 ' on the track's Name), when at least one other is left; all of them when
 ' every track is a commentary, as NxMbSkipCommentary does for the scan's.
