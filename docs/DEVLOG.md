@@ -5,6 +5,13 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-10 (Apple TV 1.0.32 rc2: the launch-time freeze, filter pass moved off the main actor)
 
+**Shipped.** Apple TV 1.0.32 (56) to TestFlight, built from `appletv/1.0.32-rc2` at `bfe88229` (the 1.0.32 design branch at `1d75a684` plus the fix below).
+Uploaded 20:52 ET on 2026-11-10 (delivery `4ffadf57-8655-4a91-98b2-8148877ca6d1`, IPA md5 `36dc2a1b04cebb8d0627e719885cfb40`), processed VALID within about a
+minute, export compliance "no non-exempt encryption", What to Test set (en-CA), in Beta-Users and Beta-Testers-2, submitted for external Beta App Review
+at 17:54 PT (WAITING_FOR_REVIEW). A first archive without the fix (`1d75a684`, md5 `b351f979d5560969d3289cfaa17b96df`) was validated and not uploaded. Not
+done and held: App Store submission (new screenshots are being shot), tag, merge to main, a look at the new Top Shelf images on a TV, the TV pass of the test
+sheet. The I-076 big-library memory check passed on an Apple TV HD (90k items 308 MB peak, about 1,430 MB headroom).
+
 **Why.** A tester's Apple TV 4K (1st generation) stalled the remote and the picture for about 40 s, twice, at launch. Measured in the simulator, and the
 same on 1.0.31, so not a regression: after every snapshot restore, when the enrichment cache (`enrichment_cache_v1.json`) is missing or older than
 7 days, `refillEnrichmentAfterRestoreIfNeeded` ran `refilterChannelsWithEnrichment` and `rebuildFoundFranchises` on the main actor.
