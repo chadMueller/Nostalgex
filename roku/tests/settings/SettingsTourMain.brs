@@ -15,6 +15,8 @@
 '   state=empty     FRANCHISES on, nothing to list yet
 '   state=folded    every collection the server has is a franchise
 '   state=overcap   the shared block is full: its one note
+'   state=fills     as on, then after `after` s (default 30) every channel of
+'                   the packages on is on air: MISSING CHANNELS's empty state
 sub Main(args = invalid as Dynamic)
     screen = CreateObject("roSGScreen")
     port = CreateObject("roMessagePort")
