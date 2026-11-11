@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: parity group 4, GUIDE TIMEOUT, background library refresh, PAGE SIZE, #252 #259 #255)
+
+**#252.** GUIDE TIMEOUT: OFF, 5 MIN, 15 MIN in PLAYBACK & PICTURE, 5 MIN by default, key `nostalgex_guide_timeout` (the Apple TV's). Left alone that long, with a
+channel playing under a visible guide, the page shows the picture alone (`body.nx-idle`: the guide, panels, rail and logo hidden, the
+video filling the window; not browser full screen, which a timer may not enter). Any key, click, tap or pointer move brings it back. Settings, a loading
+screen, an open dialog and a guide with nothing playing are left alone. `scripts/nostalgex-guide-timeout.js` (10 checks, in `npm test`) and
+`guide-timeout-browser-smoke.mjs` (16 checks, with Playwright's clock).
+
+**#259.** The page reads the library again while it stays open, as the Apple TV does: a check every 15 minutes (and when a hidden tab returns), a read once 6 hours
+have passed, in the background with no loading screen and no retune. On Plex it first asks each server for its section fingerprint
+(`updatedAt`, `contentChangedAt`) and skips the read while nothing changed, up to a 24 hour cap. Jellyfin and Emby have no fingerprint, so they read every
+6 hours. `scripts/nostalgex-library-refresh.js` (12 checks) and `library-refresh-browser-smoke.mjs` (10 checks, a Plex stub and a fake clock). **Roku**
+already has the Apple TV's loop (#67); the Android port compares against the same numbers.
+
+**#255.** PAGE SIZE (AUTO, LARGE, OFF) in PLAYBACK & PICTURE, `nostalgex_page_size`: `html.nx-large` lays the page out like a 1440 px window and scales it by a
+third (zoom 1.3333), the same picture the 960x540 TV step makes at 2x, with the guide still showing about 9 rows. AUTO does it at 1800x1000 and up with a mouse
+and never on touch; LARGE from 1440 px wide; OFF never. AUTO is the default, which makes every 1920x1080 mouse window larger; that is the decision
+to confirm. `page-size-browser-smoke.mjs` (13 checks).
+
 ## 2026-11-10 (web tuner: parity group 3, CHANNELS & BUNDLES as link rows and MISSING CHANNELS, #260 and #257)
 
 **Why.** The Apple TV and the Roku show CHANNELS & BUNDLES as a short list of link rows, each opening its page, with WATERSHED on the list

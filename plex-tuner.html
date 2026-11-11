@@ -40,6 +40,8 @@
 <script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-up-next.js"></script>
 <script src="scripts/nostalgex-channel-requirements.js"></script>
+<script src="scripts/nostalgex-guide-timeout.js"></script>
+<script src="scripts/nostalgex-library-refresh.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -701,6 +703,15 @@
 
   .player-screen.layout-side.has-channel .v-toolbar {
     display: flex;
+  }
+
+
+  /* GUIDE TIMEOUT: the picture alone. Everything else keeps its place (hidden, not removed), so coming back is instant. */
+  body.nx-idle .info-panel, body.nx-idle .v-toolbar, body.nx-idle .guide-grid, body.nx-idle .player-logo,
+  body.nx-idle .m-topbar, body.nx-idle .channel-display { visibility: hidden !important; }
+  body.nx-idle #video-container {
+    position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important;
+    aspect-ratio: auto !important; z-index: 80; background: #000; border-radius: 0 !important;
   }
 
   /* ══════════════════════════════════════
@@ -2539,6 +2550,13 @@
     .v-social { margin-top: 3px; padding: 5px; }
   }
 
+  /* PAGE SIZE (#255): a PC on a TV at 1920x1080 draws the page 1:1, so every floor is 12 real pixels from the couch. LARGE lays the page out
+     like a 1440 px window and scales it up by a third (the same picture the 960x540 TV step makes at 2x). The rows and the header cancel
+     the vh growth, so the guide shows the same number of rows. AUTO turns it on at 1800x1000 and up with a fine pointer; OFF never. */
+  html.nx-large { zoom: 1.3333; --g-row: clamp(40px, calc(4.8vh / 1.3333), 60px); --g-head: clamp(38px, calc(3.9vh / 1.3333), 56px); }
+  html.nx-large body { width: calc(100vw / 1.3333); height: calc(100vh / 1.3333); }
+  html.nx-large .config-panel { width: min(1320px, calc(96vw / 1.3333)); max-height: calc(85vh / 1.3333); height: min(calc(88vh / 1.3333), 900px); }
+
   /* TV browsers. A browser on a TV (TV Bro on Google TV, for one) reports a
      mouse pointer and a small viewport, so it gets the desktop layout at about
      twice the size it was drawn for: four guide rows, the rail cut off below
@@ -4095,6 +4113,32 @@
         <div class="sleep-chips" id="cfg-guide-text-chips" role="group" aria-label="Guide text size">
           <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">NORMAL</button>
           <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGE</button>
+        </div>
+      </div>
+
+      <!-- A PC on a TV: the whole page one step larger. -->
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Page size</div>
+          <div class="cfg-row-desc">LARGE draws everything a third bigger, for a screen across the room. AUTO does it at 1920x1080 and up with a mouse.</div>
+        </div>
+        <div class="sleep-chips" id="cfg-page-size-chips" role="group" aria-label="Page size">
+          <button class="sleep-chip" type="button" data-size="auto" onclick="setPageSize('auto')" aria-pressed="true">AUTO</button>
+          <button class="sleep-chip" type="button" data-size="large" onclick="setPageSize('large')" aria-pressed="false">LARGE</button>
+          <button class="sleep-chip" type="button" data-size="off" onclick="setPageSize('off')" aria-pressed="false">OFF</button>
+        </div>
+      </div>
+
+      <!-- The Apple TV's GUIDE TIMEOUT (#234): left alone this long, the guide gives way to the plain picture. -->
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Guide timeout</div>
+          <div class="cfg-row-desc">Hide the guide and the panels when the guide is left alone, to protect OLED screens</div>
+        </div>
+        <div class="sleep-chips" id="cfg-guide-timeout-chips" role="group" aria-label="Guide timeout">
+          <button class="sleep-chip" type="button" data-timeout="off" onclick="setGuideTimeout('off')" aria-pressed="false">OFF</button>
+          <button class="sleep-chip" type="button" data-timeout="5m" onclick="setGuideTimeout('5m')" aria-pressed="true">5 MIN</button>
+          <button class="sleep-chip" type="button" data-timeout="15m" onclick="setGuideTimeout('15m')" aria-pressed="false">15 MIN</button>
         </div>
       </div>
 
@@ -8194,6 +8238,69 @@
     }
   }
 
+  // ── PAGE SIZE ──
+  const PAGE_SIZE_KEY = 'nostalgex_page_size';
+  let pageSize = ['auto', 'large', 'off'].includes(localStorage.getItem(PAGE_SIZE_KEY)) ? localStorage.getItem(PAGE_SIZE_KEY) : 'auto';
+  function pageSizeApplies() {
+    if (pageSize === 'off') return false;
+    // The TV-browser steps already scale small viewports; this is for big ones. A phone or tablet (touch) never gets it.
+    const fine = window.matchMedia('(pointer: fine)').matches && !window.matchMedia('(pointer: coarse)').matches;
+    if (pageSize === 'large') return window.innerWidth >= 1440 && fine;
+    return window.innerWidth >= 1800 && window.innerHeight >= 1000 && fine;
+  }
+  function applyPageSize() {
+    document.documentElement.classList.toggle('nx-large', pageSizeApplies());
+    for (const b of document.querySelectorAll('#cfg-page-size-chips .sleep-chip')) {
+      const on = b.dataset.size === pageSize;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+  function setPageSize(value) {
+    pageSize = ['auto', 'large', 'off'].includes(value) ? value : 'auto';
+    lsSet(PAGE_SIZE_KEY, pageSize);
+    applyPageSize();
+  }
+  window.addEventListener('resize', applyPageSize);
+  applyPageSize();
+
+  // ── GUIDE TIMEOUT ──
+  // After OFF, 5 MIN or 15 MIN with no key, click, tap or pointer move, and while a channel plays under a visible guide, the page
+  // shows the picture alone (body.nx-idle: not browser full screen, which a timer may not enter). Any input brings it all back.
+  // Settings, the loading screen and a guide with nothing playing are left alone.
+  let guideTimeout = NostalgexGuideTimeout.parse(localStorage.getItem(NostalgexGuideTimeout.STORAGE_KEY));
+  let lastActivityAt = Date.now();
+  function renderGuideTimeoutChips() {
+    for (const b of document.querySelectorAll('#cfg-guide-timeout-chips .sleep-chip')) {
+      const on = b.dataset.timeout === guideTimeout;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+  function setGuideTimeout(value) {
+    guideTimeout = NostalgexGuideTimeout.parse(value);
+    lsSet(NostalgexGuideTimeout.STORAGE_KEY, guideTimeout);
+    leaveIdleView();
+    lastActivityAt = Date.now();
+    renderGuideTimeoutChips();
+  }
+  function guideCanTimeOut() {
+    return !!currentChannel && guideVisible && !configVisible
+      && !document.getElementById('player-screen').classList.contains('building')
+      && !document.querySelector('.nx-dialog:not([hidden])');
+  }
+  function leaveIdleView() { document.body.classList.remove('nx-idle'); }
+  function noteGuideActivity() {
+    lastActivityAt = Date.now();
+    if (document.body.classList.contains('nx-idle')) leaveIdleView();
+  }
+  for (const ev of ['keydown', 'mousedown', 'mousemove', 'touchstart', 'wheel', 'pointerdown']) window.addEventListener(ev, noteGuideActivity, { capture: true, passive: true });
+  setInterval(() => {
+    if (document.body.classList.contains('nx-idle')) { if (!guideCanTimeOut()) leaveIdleView(); return; }
+    if (guideCanTimeOut() && NostalgexGuideTimeout.isDue(guideTimeout, lastActivityAt, Date.now())) document.body.classList.add('nx-idle');
+  }, 5000);
+  renderGuideTimeoutChips();
+
   function setGuideTextSize(size) {
     lsSet(GUIDE_TEXT_KEY, size === 'large' ? 'large' : 'normal');
     applyGuideTextSize();
@@ -9378,6 +9485,53 @@
   // The web tuner had no visible way to pull a fresh copy of the library: only the hidden-libraries
   // switch rescanned, and the daily refresh. This clears the saved copy and reads the server again in
   // the background (the guide stays up and what is playing keeps playing), rebuilding every channel.
+  // ── Reading the library again while the page stays open (#259) ──
+  // The Apple TV checks every 15 minutes and reads the library again once 6 hours have passed since the last read, in the background
+  // with the guide staying up. On Plex it first asks each server for a fingerprint of its sections and skips the read while nothing
+  // changed, up to a 24 hour cap. A tab or TV browser coming back to the foreground runs the same check. (scripts/nostalgex-library-refresh.js)
+  let lastLibraryLoadAt = Date.now();
+  let lastLibraryCheckAt = Date.now();
+  let libraryRefreshRunning = false;
+  const LIBRARY_SIGNATURE_KEY = 'nostalgex_library_signature';
+  async function plexLibrarySignature() {
+    const per = [];
+    for (const server of selectedServers) {
+      try {
+        const data = await plexLibraryFetchForServer('/library/sections', server, { timeoutMs: 8000 });
+        const sections = ((data.MediaContainer || {}).Directory || []).filter(d => d.type !== 'photo');
+        per.push(NostalgexLibraryRefresh.signature(server.machineIdentifier || server.name || server.url, sections));
+      } catch (e) { return null; }
+    }
+    return NostalgexLibraryRefresh.combine(per);
+  }
+  async function refreshLibraryIfChanged() {
+    const LR = NostalgexLibraryRefresh;
+    const loader = document.getElementById('loading-library');
+    if (!plexConnected || rescanRunning || libraryRefreshRunning || (loader && loader.style.display === 'flex')) return;
+    const nowSec = Date.now() / 1000;
+    if (!LR.isDue(nowSec, lastLibraryLoadAt / 1000, lastLibraryCheckAt / 1000)) return;
+    lastLibraryCheckAt = Date.now();
+    libraryRefreshRunning = true;
+    try {
+      let current = null;
+      if (!isMediaBrowserBackend(mediaBackend)) {
+        current = await plexLibrarySignature();
+        const stored = localStorage.getItem(LIBRARY_SIGNATURE_KEY);
+        if (LR.shouldSkipRefresh(nowSec - lastLibraryLoadAt / 1000, stored, current, LR.HARD_CAP_SECONDS)) return;
+      }
+      await fetchLibraryFromServer({ background: true, buildAllChannels: true });
+      if (current) lsSet(LIBRARY_SIGNATURE_KEY, current);
+      renderActiveGuide();
+      if (typeof refreshLibraryRows === 'function') refreshLibraryRows();
+    } catch (err) {
+      console.warn('[Nostalgex] Background library refresh failed:', err);   // the guide stays as it was; the next check tries again
+    } finally {
+      libraryRefreshRunning = false;
+    }
+  }
+  setInterval(refreshLibraryIfChanged, NostalgexLibraryRefresh.CHECK_EVERY_SECONDS * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLibraryIfChanged(); });
+
   let rescanRunning = false, rescanQueued = false;
   async function rescanLibrary() {
     if (!plexConnected) return;
@@ -10485,6 +10639,7 @@
     items = items.map(it => (it && it.enrichment ? { ...it, enrichment: undefined } : it));
     // skippedNoRuntime rides along so the library line in Settings survives a reload (an
     // older cache without it reads as 0, no version bump needed).
+    lastLibraryLoadAt = Date.now();
     const payload = { v: LIBRARY_CACHE_VERSION, ts: Date.now(), url: plexServerUrl, items, skippedNoRuntime: librarySkippedNoRuntime, scanRevision: LIBRARY_SCAN_REVISION };
     // Not awaited: the guide builds while this writes. It never throws; when it cannot cache,
     // the next visit reads the library from the server, which is what happened before the
@@ -11992,6 +12147,7 @@
       const cached = await loadLibraryCache(true);
       if (cached && cached.items && cached.items.length > 0) {
         errorSource = 'cache-restore';
+        lastLibraryLoadAt = cached.ts || Date.now();
         librarySkippedNoRuntime = cached.skippedNoRuntime || 0;
         LL.show();
         LL.refreshStepRail(false);
