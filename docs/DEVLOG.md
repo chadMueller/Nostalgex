@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: follow-ups from the #151 review)
+
+#151 is in main as `dd720f17` (squash). These are the two code follow-ups from Chad's review, on branch `android/follow-ups`.
+
+**Changed.**
+- The info panel's channel line reads `CH 03 - NAME` with a hyphen. The Apple TV's `InfoPanelView.swift` still has an em dash there (`\u{2014}`), so the two differ until it changes too.
+- `MediaItem.serverToken` is no longer saved. It was written once per item into `library.json` and the kept scan sections (#288). It is `@Transient` now, `ServerTokens.fill` puts it back from the signed-in server with the item's address when `library.json` is read, and a kept section's items take their own server's token. `LibraryStore.FORMAT` is 8, so a copy saved by an older build, token included, is read again and overwritten on the first launch after the update. Playback code is unchanged: it still reads `item.serverToken`.
+  - Measured on a Google TV emulator (API 34) against the Docker Jellyfin lab: after a full read, `library.json` had 5 items with their addresses, 0 `serverToken` keys and 0 copies of the token. Relaunched from it, the fill gave all 5 items the token (a throwaway log line, not committed), and the first channel direct-played in 1268 ms.
+  - `ServerTokensTest`: the token is never written, an old copy's token isn't read back, and each item gets its own server's token, or none when no signed-in server has its address. 355 engine tests pass, and so do `:app:lintRelease` and `:app:assembleDebug`.
+
+**Half-done.**
+- Not measured against Plex, which is where the token is actually used (direct play, the transcode, the audio pick, stopping the transcode, watch reporting); Jellyfin and Emby playback uses the signed-in server's own token. The lab Plex server was taken down. Plex items get their address from the same `server.url` the fill matches, so a Plex library opened from `library.json` should behave as the Jellyfin one did. The kept-section path (a first setup killed part way) wasn't exercised on a device.
+- No device build yet: the TV pass Chad asked for before the next Play upload is still to do.
+
+**Next.**
+- A TV pass on a SHIELD with a build from main plus this branch, signed in to Plex: open from the saved library and play a channel.
+
 ## 2026-11-11 (Roku: WATERSHED's placeholder at 4.5:1 on a focused guide row, #301)
 
 **Why.** #263 left `text2` on a focused row's placeholder band (the past tint over the row's fill) under 4.5:1 for six

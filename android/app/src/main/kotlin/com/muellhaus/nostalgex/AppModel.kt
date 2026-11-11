@@ -516,12 +516,13 @@ class AppModel(private val context: Context) : Playback.Listener {
      * The scan's question about each section of one server (#288): a kept section stands in for
      * reading it while ScanResume.reusable says so, and each section read in full is kept.
      */
-    private fun keepFor(serverId: String, stampRequired: Boolean) = object : com.muellhaus.nostalgex.engine.SectionKeep {
+    private fun keepFor(serverId: String, server: PlexServer, stampRequired: Boolean) = object : com.muellhaus.nostalgex.engine.SectionKeep {
         override fun kept(key: String, stamp: String?): List<MediaItem>? {
             val k = sectionStore.load(serverId, key) ?: return null
             if (!ScanResume.reusable(k, System.currentTimeMillis() / 1000, BuildConfig.VERSION_CODE, stamp, stampRequired)) return null
             Log.i(TAG, "RESUME section $key: ${k.items.size} items kept from a scan that didn't finish, ${System.currentTimeMillis() / 1000 - k.savedAtSec} s ago")
-            return k.items
+            // Kept sections hold no token (MediaItem.serverToken): every item in one is this server's.
+            return k.items.map { it.copy(serverToken = server.token) }
         }
 
         override fun done(key: String, stamp: String?, items: List<MediaItem>) =
@@ -1468,7 +1469,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             val skipped = java.util.concurrent.atomic.AtomicInteger()
             val (items, abandoned, _) = watched(foreground, mb.name) { onSection, cancelled ->
                 mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, includeHiddenOn, { skipped.incrementAndGet() },
-                    keepFor(mb.serverId.ifEmpty { mb.url }, stampRequired = false))
+                    keepFor(mb.serverId.ifEmpty { mb.url }, servers.first(), stampRequired = false))
             }
             return ScanResult(items, abandoned, skipped.get())
         }
@@ -1481,7 +1482,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val (got, gaveUp, byViewer) = watched(foreground, server.name) { onSection, _ ->
                     library.scan(server, { p -> progress(p, server.name) }, readSoFar,
                         LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier), onSection,
-                        keepFor(server.machineIdentifier, stampRequired = true))
+                        keepFor(server.machineIdentifier, server, stampRequired = true))
                 }
                 readSoFar += got.size
                 ServerScan.Outcome.Read(got, gaveUp, byViewer)
