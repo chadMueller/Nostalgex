@@ -862,7 +862,8 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         ' Among the franchises, a collection says so, as the Apple TV's
         ' COLLECTION tag does.
         if row.kind = "franchiseCollection" then detail = detail + " · COLLECTION"
-        if cr.channelNumber <> invalid then detail = detail + " · CH " + cr.channelNumber.ToStr()
+        ' No channel number on a row that doesn't air (#273: a gated one).
+        if cr.channelNumber <> invalid and row.gated <> true then detail = detail + " · CH " + cr.channelNumber.ToStr()
         state = "OFF"
         stateColor = "0xFFFFFF59"
         readsOn = collectionOn(cr)
