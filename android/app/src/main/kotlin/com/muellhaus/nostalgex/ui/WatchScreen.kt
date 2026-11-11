@@ -908,7 +908,7 @@ private fun PackageSidebar(
                 .background(Color(0.03f, 0.03f, 0.08f).copy(alpha = 0.95f)),
         ) {
             Text(
-                "PACKAGES",
+                "BUNDLES",
                 style = font(DMMonoMedium, 22, Color.White.copy(alpha = 0.6f)),
                 modifier = Modifier.padding(horizontal = u(24), vertical = u(18)),
             )
@@ -994,7 +994,7 @@ fun ConnectionFailedScreen(model: AppModel, message: String) = StatusScreen(mode
 fun NoChannelsScreen(model: AppModel) = StatusScreen(model) {
     Text("NO CHANNELS FOUND", style = font(DMMonoMedium, 28, Color.White.copy(alpha = 0.6f)))
     Text(
-        "Your library didn't have enough content to fill any channels.\nOpen Settings to see which packages your library supports.",
+        "Your library didn't have enough content to fill any channels.\nOpen Settings to see which bundles your library supports.",
         style = font(DMMono, 18, Color.White.copy(alpha = 0.3f)),
         textAlign = TextAlign.Center,
     )
@@ -1148,7 +1148,7 @@ private fun SeasonalInviteRow(
             )
             // One call to action, not two.
             Text(
-                "PRESS TO ADD THE ${bundle.name} PACKAGE",
+                "PRESS TO ADD THE ${bundle.name} BUNDLE",
                 style = font(DMMonoMedium, 14, if (focused) Color.Black.copy(alpha = 0.65f) else Color.Black),
                 maxLines = 1,
                 modifier = Modifier

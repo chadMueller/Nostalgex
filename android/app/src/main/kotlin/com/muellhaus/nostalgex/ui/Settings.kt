@@ -430,7 +430,7 @@ private fun ChannelsList(model: AppModel) {
     Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
         model.franchiseTick
         val on = lineupPackages(model).count { it.id in model.enabledBundles }
-        LinkRow("CHANNEL PACKAGES", "$on ON", Modifier.paneRow(model, "channels_packages")) { model.openChannelsPage("packages") }
+        LinkRow("CHANNEL BUNDLES", "$on ON", Modifier.paneRow(model, "channels_packages")) { model.openChannelsPage("packages") }
         val packageOn = Lineup.FRANCHISES_BUNDLE in model.enabledBundles
         val franchisesOn = franchiseOnCount(model)
         LinkRow("FRANCHISES", if (!packageOn && franchisesOn == 0) "OFF" else "$franchisesOn ON", Modifier.paneRow(model, "channels_franchises")) {
@@ -461,7 +461,7 @@ private fun PackagesPage(model: AppModel) {
     val now = LocalDateTime.now()
     val missingCount = missingGroups(model).sumOf { it.second.size }
     Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
-        SectionHeader("CHANNEL PACKAGES", "Each package adds a set of channels")
+        SectionHeader("CHANNEL BUNDLES", "Each bundle adds a set of channels")
         Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
             for (bundle in lineupPackages(model)) {
                 val enabled = bundle.id in model.enabledBundles
@@ -473,7 +473,7 @@ private fun PackagesPage(model: AppModel) {
                 // A seasonal package works in any month; its months decide when it's offered and leads.
                 val subtitle = when {
                     building -> "Finding $total channel${if (total == 1) "" else "s"} in your library"
-                    enabled && available == 0 -> "Not enough content to build this package"
+                    enabled && available == 0 -> "Not enough content to build this bundle"
                     Season.isSeasonal(bundle) && !Season.isInSeason(bundle, now) -> Season.spotlightLabel(bundle, now)
                     else -> bundle.description
                 }
@@ -637,7 +637,7 @@ private fun MissingPage(model: AppModel) {
         if (groups.isEmpty()) {
             var focused by remember { mutableStateOf(false) }
             Text(
-                "Every channel in your packages is on air.",
+                "Every channel in your bundles is on air.",
                 style = font(DMMono, 20, Color.White.copy(alpha = if (focused) 1f else 0.7f)),
                 modifier = Modifier.paneRow(model, "missing_none").onFocusChanged { focused = it.isFocused }.focusable(),
             )

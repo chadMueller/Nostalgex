@@ -121,7 +121,7 @@ sealed interface Screen {
 /** Settings' rail (SettingsCategory.swift). SUPPORT NOSTALGEX and NOSTALGEX PRO have no counterpart here. */
 enum class SettingsCategory(val title: String, val subtitle: String, val icon: Int) {
     PLAYBACK("PLAYBACK & PICTURE", "Picture, quality, subtitles and audio", R.drawable.settings_hero_playback),
-    CHANNELS("CHANNELS & BUNDLES", "Packages and the schedule", R.drawable.settings_hero_channels),
+    CHANNELS("CHANNELS & BUNDLES", "Bundles and the schedule", R.drawable.settings_hero_channels),
     SERVERS("SERVERS & ACCOUNTS", "Servers, libraries, rescans and sign out", R.drawable.settings_hero_servers),
     ABOUT("ABOUT", "Version and links", R.drawable.settings_hero_about),
 }
