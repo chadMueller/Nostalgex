@@ -7,9 +7,10 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.**
 - GUIDE TIMEOUT (#290) hears the remote through `Activity.onUserInteraction` now, not an override of `dispatchKeyEvent`. Calling `super.dispatchKeyEvent` reaches androidx's `ComponentActivity` override, which is `@RestrictTo`, so `:app:lintRelease` failed on CI with `RestrictedApi`. Measured on a SHIELD (Android 11): 5 D-pad presses called it 10 times, once on key down and once on key up, the same as the override did. `:engine:test :app:lintRelease :app:assembleDebug` pass locally.
+- The Roku job's `trailers` check allows `Owen Voke` as well as `tydude001` (`NX_TRAILER_OK`'s default in `roku/tests/tools/scan-added.py`, and the row in `roku/tests/README.md`). It ran on #151 because the branch edits `.github/workflows/ci.yml`, which is in the Roku path filter, and failed on the Android commits' AI co-author lines. Chad chose this over rewriting the history: #151 is squash-merged with a message he writes, so the trailers don't reach main. The allowance is keyed on the commit's author name, so the GitHub account name would not have matched. Locally the check passes: 71 commits, 70 with a trailer, all counted, none failed. The Roku suite's other checks pass, and its two warnings are read and harmless (`secrets` flags the upload key's passwords, which come from a properties file, not literals; `addresses` lists a placeholder in the server hint, test vectors and version numbers).
 
-**Half-done.**
-- The Roku job on #151 fails `trailers`: `roku/tests/pr-check.sh` fails any commit with an AI co-author line, and it runs on this branch because the branch edits `.github/workflows/ci.yml`, which is in the Roku path filter. It has failed on every run since 2026-11-09. Nothing on the Roku side is broken: the suite and the other checks pass, and its two warnings are read and harmless (`secrets` flags the upload key's passwords, which come from a properties file, not literals; `addresses` lists a placeholder in the server hint, test vectors and version numbers). Left for Chad to say whether the Android commits keep their trailers.
+**Next.**
+- Once CI is green, #151 comes out of draft for Chad's code owner review and squash merge.
 
 ## 2026-11-11 (Android: the Apple TV 1.0.32 look, from the issues' numbers; #267 to #271)
 
