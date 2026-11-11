@@ -38,4 +38,30 @@ class PlexDecisionTest {
         assertNull(PlexDecision.parse("<html><body>400 Bad Request</body></html>"))
         assertFalse(PlexDecision.isDolbyVisionRefusal(null))
     }
+
+    /**
+     * #291, from answers to Android's request with the #192 profile, saved from an unclaimed lab
+     * Plex 1.43.5: High-profile H.264 is copied (a remux), Constrained Baseline H.264 re-encoded.
+     */
+    @Test fun aCopiedVideoIsARemux() {
+        val a = PlexDecision.parse(saved("remux-h264-dts-51.xml"))
+        assertEquals("copy", a?.videoDecision)
+        assertEquals(true, a?.videoCopied)
+    }
+
+    @Test fun aReEncodedVideoIsATranscode() {
+        assertEquals(false, PlexDecision.parse(saved("transcode-h264-dts-51.xml"))?.videoCopied)
+        assertEquals(false, PlexDecision.parse(saved("dts-51.xml"))?.videoCopied)
+    }
+
+    /** No video stream in the answer (a refusal): nobody said, so the row stays "Server stream". */
+    @Test fun aRefusalSaysNothingAboutTheVideo() = assertNull(PlexDecision.parse(saved("dovi-profile-5.xml"))?.videoCopied)
+
+    /** The audio stream's decision is not the video's. */
+    @Test fun onlyTheVideoStreamCounts() {
+        val body = """<MediaContainer transcodeDecisionCode="1001"><Video><Media><Part>""" +
+            """<Stream streamType="2" codec="eac3" decision="copy" /><Stream streamType="1" codec="h264" decision="transcode" />""" +
+            """</Part></Media></Video></MediaContainer>"""
+        assertEquals(false, PlexDecision.parse(body)?.videoCopied)
+    }
 }

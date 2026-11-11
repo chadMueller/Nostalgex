@@ -368,7 +368,7 @@ class Playback(
         loadStatus = null
         loadUnreachable = false
         loadedBytes = false
-        info = info?.copy(delivery = delivery, reason = reason, ready = false, capped = capped)
+        info = info?.copy(delivery = delivery, reason = reason, ready = false, capped = capped, videoCopied = null)
         if (demo) return startDemo(item, offsetSec)
         val server = item.serverUrl ?: return listener.onFailed(item, PlaybackFailure.NoPlayableSource(serverName))
         val token = item.serverToken ?: ""
@@ -442,6 +442,8 @@ class Playback(
                     stopSession()
                     return@post listener.onSkipped(item, "Plex can't convert Dolby Vision profile 5 and this TV didn't play it as it stands")
                 }
+                // Remux or Transcode in PLAYBACK INFORMATION, as the server decided (#291).
+                decision?.videoCopied?.let { copied -> info = info?.copy(videoCopied = copied) }
                 load(ExoItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build(), item, offsetSec, Delivery.TRANSCODE, capped)
             }
         }

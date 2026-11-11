@@ -17,6 +17,11 @@ data class PlaybackInfo(
     val capped: Boolean = false,
     /** Plex, Jellyfin or Emby: the server signed in to. */
     val backend: String = "Plex",
+    /**
+     * A Plex server stream's video, from the server's decision (#291): true when copied (a
+     * remux), false when re-encoded, null when nobody said (Jellyfin and Emby, or no decision).
+     */
+    val videoCopied: Boolean? = null,
 ) {
     /** Observed recovery decisions, never a guessed cause. */
     enum class Reason(val message: String) {
@@ -33,7 +38,11 @@ data class PlaybackInfo(
         Row("BACKEND", backend),
         Row("PLAYBACK", if (!ready) "Loading" else when (delivery) {
             Delivery.DIRECT_PLAY -> "Direct Play"
-            Delivery.TRANSCODE -> "Server stream"
+            Delivery.TRANSCODE -> when (videoCopied) {
+                true -> "Remux"
+                false -> "Transcode"
+                null -> "Server stream"
+            }
             null -> "Unknown"
         }),
         Row("QUALITY AT TUNE", qualityAtTune.displayName),
@@ -46,7 +55,7 @@ data class PlaybackInfo(
         /** The Apple TV's note; "AVPlayer" is ExoPlayer here. */
         const val EVIDENCE_NOTE = "Source codecs come from library metadata. Player size is reported by ExoPlayer. " +
             "Quality is the selection at tune time, not a measured output. Server streams may copy or convert media; " +
-            "the current resolver does not identify which."
+            "on Plex the server's decision says which (Remux or Transcode), and elsewhere it is not identified."
 
         private val VIDEO = mapOf(
             "h264" to "H.264", "avc" to "H.264", "avc1" to "H.264", "hevc" to "HEVC", "h265" to "HEVC", "hev1" to "HEVC",
