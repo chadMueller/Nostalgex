@@ -507,7 +507,7 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
     Column(Modifier.fillMaxSize().padding(u(40))) {
         Spacer(Modifier.height(u(24)))
         Text(
-            "CH %02d — %s".format(ch.number, ch.name.uppercase()),
+            "CH %02d - %s".format(ch.number, ch.name.uppercase()),
             style = font(VT323, 36, color, tracking = 2),
             maxLines = 1,
             modifier = Modifier.padding(bottom = u(20)),
