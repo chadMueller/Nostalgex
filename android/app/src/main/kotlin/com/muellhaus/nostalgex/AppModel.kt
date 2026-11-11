@@ -15,6 +15,7 @@ import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
+import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
@@ -1036,6 +1037,8 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     fun closeSettings() {
         settingsOpen = false
+        // Back from Settings, the guide gets the full timeout again (#290), as on the Apple TV.
+        noteRemoteActivity()
         settingsPicker = null
         playback.player.volume = 1f
     }
@@ -1869,6 +1872,39 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun toggleOpenOnLastChannel() {
         openOnLastChannel = !openOnLastChannel
         prefs.openOnLastChannel = openOnLastChannel
+    }
+
+    /** GUIDE TIMEOUT (#290): 5 MIN unless the viewer chose otherwise. */
+    var guideTimeout by mutableStateOf(prefs.guideTimeout)
+        private set
+
+    /** One press on the row: OFF, 5 MIN, 15 MIN, and round again. */
+    fun cycleGuideTimeout() {
+        guideTimeout = guideTimeout.next
+        prefs.guideTimeout = guideTimeout
+    }
+
+    /** The last remote press anywhere (the Apple TV's RemoteActivityMonitor); MainActivity notes every key. */
+    private var lastRemoteActivityMs = SystemClock.elapsedRealtime()
+
+    fun noteRemoteActivity() {
+        lastRemoteActivityMs = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Every 5 s, as the Apple TV's timer: a guide left alone that long, in front of the viewer
+     * with a channel playing, goes full screen on the playing channel, the same as Select on it.
+     */
+    private val guideTimeoutJob = scope.launch {
+        while (true) {
+            delay(GuideTimeout.CHECK_MS)
+            val frontmost = screen == Screen.Watching && !fullScreen && !settingsOpen
+            val playing = channel != null && playback.player.isPlaying
+            if (GuideTimeout.shouldGoFullScreen(guideTimeout, lastRemoteActivityMs, SystemClock.elapsedRealtime(), frontmost, playing)) {
+                Log.i(TAG, "GUIDE TIMEOUT: ${guideTimeout.label} with no press on the guide; full screen on CH ${channel?.number}")
+                fullScreen = true
+            }
+        }
     }
 
     /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#224): off unless the viewer turns it on. */

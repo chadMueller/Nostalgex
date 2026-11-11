@@ -3,6 +3,28 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: GUIDE TIMEOUT, and the 4K frame size on Jellyfin and Emby checked; #290, #287)
+
+**Changed.**
+- **#290, GUIDE TIMEOUT.** A new row under PLAYBACK & PICTURE, after GUIDE TEXT SIZE, as on the Apple TV, with its wording.
+  - One press cycles OFF, 5 MIN, 15 MIN. The default is 5 MIN, and anything else saved reads as the default. It is saved as "off", "5m" or "15m" under `nostalgex_guide_timeout`, on this TV only.
+  - Every 5 s the app checks; after that long with no remote press, while the guide is in front (not full screen, Settings closed) and a channel is playing, the playing channel goes full screen.
+  - `MainActivity.dispatchKeyEvent` notes every key, as the Apple TV's `RemoteActivityMonitor`, and closing Settings counts as a press.
+  - The rule is `GuideTimeout.shouldGoFullScreen` in the engine, with the issue's cases: OFF, not in front, not playing, under and at the interval, the cycle and the stored values.
+- **#287, frame size.** No code: commit `21977e54` already reads the first video stream's `Width` and `Height` in the Jellyfin and Emby scan, and the 4K watchdog deadline reads them.
+  - `MediaBrowserFrameSizeTest` holds it to two answers saved from a lab Jellyfin 12.4 for the scan's own request: a 3840x1600 film gets 40 s on the server stream and 15 s on direct play, and a 1280x720 film 20 s.
+  - The Emby case serves the same answer through the Emby path; no Emby server was at hand.
+  - The size stays after the PlaybackInfo handshake, which never replaces the scanned item.
+
+**Measured** (#290), on a SHIELD (Android 11) with a test copy of the app signed in to a lab Jellyfin, the guide up and a channel playing:
+- The row cycled and saved "15m", "off" and "5m".
+- With 5 MIN and no press, the guide went full screen on the playing channel 306 s after the last press. The app checks every 5 s and the measuring script polled every 3 s.
+- Back on the guide, a key pressed 180 s later restarted the wait: full screen 307 s after that press, 487 s after returning.
+- On a Google TV emulator too slow to play the stream, the channel stopped after the failure cards and GUIDE TIMEOUT rightly never fired, because nothing was playing.
+- Not measured on a Google TV.
+
+All 339 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: STOP WAITING ends the whole scan, and a killed first setup resumes; #285, #288)
 
 **Changed.**

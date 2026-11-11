@@ -327,6 +327,15 @@ private fun PlaybackRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "guide_text_size"),
         ) { model.toggleGuideTextSize() }
+        // OFF, 5 MIN, 15 MIN; select moves to the next (#290, the Apple TV's row).
+        ToggleRow(
+            title = "GUIDE TIMEOUT",
+            subtitle = "Go fullscreen when the guide is left alone, to protect OLED screens",
+            detail = model.guideTimeout.label,
+            on = true,
+            showToggle = false,
+            modifier = Modifier.paneRow(model, "guide_timeout"),
+        ) { model.cycleGuideTimeout() }
         ToggleRow(
             title = "STREAM QUALITY",
             subtitle = "Lower this when your connection is slow or shared",

@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex
 
 import android.content.Context
 import com.muellhaus.nostalgex.engine.ChannelConfig
+import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaBrowserLibrary
@@ -153,6 +154,11 @@ class Prefs(context: Context) {
     var playbackVerdicts: List<String>
         get() = prefs.getString(PlaybackDiagnostics.KEY, null)?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
         set(value) = prefs.edit().putString(PlaybackDiagnostics.KEY, json.encodeToString(value)).apply()
+
+    /** GUIDE TIMEOUT (#290), on this TV only, as "off", "5m" or "15m" under the Apple TV's and web's key. */
+    var guideTimeout: GuideTimeout
+        get() = GuideTimeout.parse(prefs.getString(GuideTimeout.STORAGE_KEY, null))
+        set(value) = prefs.edit().putString(GuideTimeout.STORAGE_KEY, value.stored).apply()
 
     /** OPEN ON LAST CHANNEL's switch and the channel last tuned (LaunchChannelMemory), on this TV only. */
     var openOnLastChannel: Boolean
