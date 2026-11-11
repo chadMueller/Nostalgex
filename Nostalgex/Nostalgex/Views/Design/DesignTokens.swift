@@ -107,6 +107,11 @@ enum NXColor {
     static let text = NXRGB(0xFFFFFF)
     /// The only other text grey: resting values, hints, section labels, chevrons, OFF.
     static let text2 = NXRGB(0xB9C3DE)
+    /// Guide programme titles that are not live, not focused: clearly dimmer than text-2 (Chad, 2026-11-10, "the
+    /// upcoming is not dimmer"). The text-2 hue pulled toward black to the dimmest value that still holds 4.5:1 on
+    /// the lightest thing a guide title sits on (the even-row wash and the past-block wash over the guide's
+    /// #0D0D1F): 4.83:1 there, 5.36:1 on the bare guide, 17.2:1 for white, 10.9:1 for text-2.
+    static let textDim = NXRGB(0x80879A)
     /// Selection, ON, links, a focused chevron. The same value as the BrandCyan asset.
     static let cyan = NXRGB(0x00D4FF)
     /// Live status only: the sleep countdown, UP NEXT.
@@ -117,6 +122,12 @@ enum NXColor {
     static let redText = NXRGB(0xFF6B81)
     /// Danger fill or outline only, never text on a row.
     static let red = NXRGB(0xFF2244)
+    /// What the guide grid sits on (ChannelGuideView's background), and the two washes a programme title can
+    /// have over it: the even row's 3% white, and a past block's 2% white on top of that.
+    static let guide = NXRGB(r: 0.05, g: 0.05, b: 0.12)
+    static let guideEvenRow = GuideRowContrast.mix(NXRGB(0xFFFFFF), over: guide, opacity: 0.03)
+    static let guideEvenRowPast = GuideRowContrast.mix(NXRGB(0xFFFFFF), over: guideEvenRow, opacity: 0.02)
+
     /// Text on a solid cyan fill.
     static let onCyan = NXRGB(0x00101A)
 
@@ -142,6 +153,10 @@ enum NXColor {
         pairs.append(("text on chosenNeutral", text, chosenNeutral, 4.5))
         pairs.append(("text2 on chosenNeutral", text2, chosenNeutral, 4.5))
         pairs.append(("onCyan on cyan", onCyan, cyan, 4.5))
+        // The guide's dim title colour on everything a non-live title sits on.
+        for (sn, s) in [("guide", guide), ("guideEvenRow", guideEvenRow), ("guideEvenRowPast", guideEvenRowPast)] {
+            pairs.append(("textDim on \(sn)", textDim, s, 4.5))
+        }
         return pairs
     }()
 
@@ -155,6 +170,7 @@ enum NXColor {
 extension Color {
     static let nxText = NXColor.text.color
     static let nxText2 = NXColor.text2.color
+    static let nxTextDim = NXColor.textDim.color
     static let nxCyan = NXColor.cyan.color
     static let nxYellow = NXColor.yellow.color
     static let nxAmber = NXColor.amber.color

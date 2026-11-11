@@ -902,12 +902,14 @@ private struct EPGRow: View {
 
                             Text(entryTitle(entry))
                                 .font(.custom("DMMono-Medium", size: text.title))
-                                // White is for live only (Chad 2026-11-10): every other title is text-2. The focused row
-                                // stays white, because its fill is calibrated for white at 4.5:1 (GuideRowContrast).
+                                // White is for live only (Chad 2026-11-10): every other title is the dim colour, past
+                                // and upcoming alike (4.5:1 or better on the guide's washes, see NXColor.textDim). The
+                                // focused row stays white, because its fill is calibrated for white at 4.5:1
+                                // (GuideRowContrast).
                                 .foregroundStyle(
                                     entry.isNowPlaying || isFocused
                                         ? Color.nxText
-                                        : Color.nxText2
+                                        : Color.nxTextDim
                                 )
                                 .lineLimit(1)
                                 .truncationMode(.tail)
