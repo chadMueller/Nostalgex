@@ -3,6 +3,44 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (Roku: the guide grid on the Apple TV 1.0.32's sizes, #263)
+
+**Why.** The Roku guide showed about 5.8 rows of 80 px with 18 to 20 px text, its titles in white at 85% or 50% and
+its channel numbers and names in the channel's colour. The Apple TV 1.0.32 grid reads better from the couch and shows
+more rows (#263, on #262's tokens).
+
+**Changed.** `NxGuideGeometry`: rows 64 px, the header 58, the channel column 340, 395 px per 30 minutes. The text tops
+are computed from the row and header heights (`NxGuideLineTop`). NORMAL: titles, numbers and names 22, times, the
+CHANNEL heading and the WATERSHED placeholder 25, a 40 px number box; LARGE all 29 and a 54 px box. Titles are white
+live and on the focused row and `textDim` on every other; the number, name, times and heading are white; the
+channel's colour stays in the bar. The focused row is the channel's colour darkened only as far as white titles need
+for 4.5:1 (`NxGuideFocusFill`, `NxTokDarkenFor`), drawn across the whole row, so its live cell isn't set apart and the
+past tint isn't drawn on it. At the end of the list the scroll stops on a whole row (`keepFocusVisible`): 466 px isn't
+a whole number of 65 px rows, and stopping where the last row touches the bottom left 11 px of the row above under
+the header, as seen on the 55R617.
+
+**Tests changed.** `GuideNavTests`' "normal is the old grid" case pinned the old sizes; it holds #263's now (Tyler's
+call), with a LARGE case beside it, and the fit checks use the 64 and 58 px row and header.
+
+**Tested off the TV.** `GuideLookTests`, 19 cases: `NxTokOver` and `NxTokDarkenFor`, the shape, `textDim` on the grid's
+lightest title background (the even-row stripe and the past tint over the grid, #1A1A2A, 4.78:1) and the bare grid
+(5.35:1), and the focused fill for all 97 distinct colours in `channels.json` (31 kept, 66 darkened, each 4.5:1 or more
+and under 4.6:1). With the darkening left out in a throwaway copy, the every-colour case fails. `tests/run.sh` ends in
+ALL TESTS PASSED.
+
+**Seen** on the 55R617 (OS 15.3.4, 1080p UI) with a build signed in to our Plex (5,637 titles, 18 channels on the
+guide), `88a758b` and then `695fddc` (the end stop). Seven rows show. At NORMAL every name of the 15 channels looked at
+fits the 340 px column, SAT MORNING CARTOONS (20 characters) included; at LARGE it ends in an ellipsis after 14. Focused rows
+on yellow, orange, green and teal channels drew darker shades with white titles. On `88a758b`, at the end of the list, the
+row above showed as a bar about 11 px tall under the header; on `695fddc` the top row starts whole and the last row is whole. A
+lab-only build (`nxlab`, Jellyfin and Emby) fills one channel, which drew the same at NORMAL.
+
+**Open.** Not seen: a stick, 720p (the 55R617 is a 4K TV and wasn't set to it), and three-digit channels on a TV (none in
+that lineup; the number box is held off the TV). Two things seen and not from this change: at midnight two channels
+had overlapping airings (AFTER SCHOOL TV and VHS VAULT, an airing running past 12:00 AM beside one starting at it), so
+their titles drew over each other; and after a launch, Up and Down presses over ECP did nothing for a while on both
+builds, then worked, not looked into.
+
 ## 2026-11-10 (Roku: the Apple TV 1.0.32 design tokens in one place, #262)
 
 **Why.** Each Roku screen carries its own sizes and greys (white at 70% for hints, at 80% for rail titles, sizes
