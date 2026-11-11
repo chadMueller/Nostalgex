@@ -3,6 +3,14 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-10 (web tuner: the parity list, where it stands)
+
+Worked on `web/visual-batch-1-1110` and closed: #248, #249, #250, #251, #252, #255, #256, #257, #258, #259, #260, #261. Open: #254 (the first-guide hint and the first-run
+wording are a design call; the start screen, the http message and the Apple TV's words after connecting are in, and the connect page's TV-browser height is
+fixed) and #253 (THEME waits for PR #235). Nothing is on main, nothing is tagged, `tunerVersion` is unchanged. New shared logic with tests: `nostalgex-audio-pick.js`,
+`nostalgex-up-next.js`, `nostalgex-channel-requirements.js`, `nostalgex-guide-timeout.js`, `nostalgex-library-refresh.js`, `nostalgex-playback-recovery.js`. No existing engine file
+and not `channels.json` were changed, so the Roku golden vectors are untouched; Roku ports compare against the new vectors listed in PARITY.md.
+
 ## 2026-11-10 (web tuner: parity group 5, the playback recovery ladder, #258)
 
 **Why.** From reading the code (not measured): the web stopped a channel after 3 failures in a row where the Apple TV allows 5, never tried a 1080p
