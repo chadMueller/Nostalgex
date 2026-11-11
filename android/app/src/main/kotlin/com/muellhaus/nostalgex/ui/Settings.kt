@@ -1,5 +1,6 @@
 package com.muellhaus.nostalgex.ui
 
+import com.muellhaus.nostalgex.engine.DesignTokens
 import android.text.format.DateUtils
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
@@ -150,13 +152,13 @@ private fun RailAndPane(model: AppModel) {
 private fun Rail(model: AppModel, requesters: Map<SettingsCategory, FocusRequester>) {
     Column(
         Modifier
-            .width(u(470))
+            .width(u(420))
             .fillMaxHeight()
-            .background(Color(0.03f, 0.03f, 0.08f).copy(alpha = 0.95f))
+            .background(Tokens.Panel)
             .drawBehind {
                 // A very faint scanline texture, the rail's only.
                 var y = 0f
-                val step = 4 * size.width / 470f
+                val step = 4 * size.width / 420f
                 while (y < size.height) {
                     drawRect(Color.White.copy(alpha = 0.05f), topLeft = Offset(0f, y), size = Size(size.width, step / 4))
                     y += step
@@ -164,8 +166,8 @@ private fun Rail(model: AppModel, requesters: Map<SettingsCategory, FocusRequest
                 drawRect(Color.White.copy(alpha = 0.1f), topLeft = Offset(size.width - 1f, 0f), size = Size(1f, size.height))
             },
     ) {
-        Text("SETTINGS", style = font(VT323, 44, Color.White.copy(alpha = 0.6f)), modifier = Modifier.padding(start = u(40), top = u(70), bottom = u(24)))
-        Column(Modifier.padding(horizontal = u(20)), verticalArrangement = Arrangement.spacedBy(u(4))) {
+        Text("SETTINGS", style = font(VT323, DesignTokens.CompactSize.TAG, Tokens.Text2), modifier = Modifier.padding(start = u(40), top = u(70), bottom = u(24)))
+        Column(Modifier.padding(horizontal = u(20)), verticalArrangement = Arrangement.spacedBy(u(10))) {
             val all = SettingsCategory.entries
             for ((i, category) in all.withIndex()) {
                 RailRow(
@@ -199,11 +201,12 @@ private fun RailRow(
 ) {
     var focused by remember { mutableStateOf(false) }
     val lit = focused || selected
-    val shape = RoundedCornerShape(u(8))
+    val shape = RoundedCornerShape(u(DesignTokens.Row.CORNER))
     Row(
         Modifier
             .fillMaxWidth()
-            .height(u(76))
+            .settingsLift(focused)
+            .height(u(64))
             .focusRequester(requester)
             .onFocusChanged {
                 focused = it.isFocused
@@ -225,8 +228,9 @@ private fun RailRow(
                 }
             }
             .clip(shape)
-            .background(if (focused) Cyan.copy(alpha = 0.22f) else if (selected) Color.White.copy(alpha = 0.06f) else Color.Transparent)
-            .then(if (focused) Modifier.border(u(3), Cyan, shape) else Modifier)
+            // The shared selected state under the cursor; the category on show, chosen-neutral (#269).
+            .background(if (focused) Tokens.SelectedRow else if (selected) Tokens.ChosenNeutral else Color.Transparent)
+            .then(if (focused) Modifier.border(u(DesignTokens.Row.SELECTED_OUTLINE), Tokens.Cyan, shape) else Modifier)
             .padding(end = u(16)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(u(18)),
@@ -237,7 +241,7 @@ private fun RailRow(
             ImageBitmap.imageResource(category.icon), contentDescription = null, filterQuality = FilterQuality.None,
             modifier = Modifier.size(u(32)).alpha(if (lit) 1f else 0.6f),
         )
-        Text(category.title, style = font(DMMonoMedium, 24, if (lit) Color.White else Color.White.copy(alpha = 0.7f)), maxLines = 1)
+        Text(category.title, style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, if (lit) Tokens.Text else Tokens.Text2), maxLines = 1)
     }
 }
 
@@ -274,8 +278,8 @@ private fun Pane(model: AppModel) {
             // 16x16 pixel art at six design units a pixel, drawn without smoothing.
             Image(ImageBitmap.imageResource(category.icon), contentDescription = null, filterQuality = FilterQuality.None, modifier = Modifier.size(u(96)))
             Column(verticalArrangement = Arrangement.spacedBy(u(6))) {
-                Text(category.title, style = font(DMMonoMedium, 34, Color.White), maxLines = 1)
-                Text(category.subtitle, style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)))
+                Text(category.title, style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, Tokens.Text), maxLines = 1)
+                Text(category.subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
             }
         }
         Box(Modifier.padding(horizontal = u(80)).fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.06f)))
@@ -311,7 +315,7 @@ private fun Pane(model: AppModel) {
 
 @Composable
 private fun PlaybackRows(model: AppModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         ToggleRow(
             title = "RETRO MODE",
             subtitle = "CRT scanlines, vignette, flicker, 4:3 aspect ratio",
@@ -427,7 +431,7 @@ private fun lineupPackages(model: AppModel) = model.bundles.filter { !it.id.star
 /** The Channels list (ChannelsHomePage): CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS with how many are on, then WATERSHED. */
 @Composable
 private fun ChannelsList(model: AppModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         model.franchiseTick
         val on = lineupPackages(model).count { it.id in model.enabledBundles }
         LinkRow("CHANNEL BUNDLES", "$on ON", Modifier.paneRow(model, "channels_packages")) { model.openChannelsPage("packages") }
@@ -460,9 +464,9 @@ private fun PackagesPage(model: AppModel) {
     val lineup = model.lineup
     val now = LocalDateTime.now()
     val missingCount = missingGroups(model).sumOf { it.second.size }
-    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         SectionHeader("CHANNEL BUNDLES", "Each bundle adds a set of channels")
-        Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+        Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
             for (bundle in lineupPackages(model)) {
                 val enabled = bundle.id in model.enabledBundles
                 val availability = if (enabled) lineup?.availability(bundle) ?: emptyList() else emptyList()
@@ -532,7 +536,7 @@ private fun FranchisesPage(model: AppModel) {
     val entries = ((if (on) f?.rows?.map { Entry("franchise_${it.id}", it.name, it.enabled, it, null) } ?: emptyList() else emptyList()) +
         collections.map { Entry("collection_${it.id}", it.title, it.enabled, null, it) })
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-    Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         val building = on && Lineup.FRANCHISES_BUNDLE in model.buildingBundles
         ToggleRow(
             title = "FRANCHISES",
@@ -545,7 +549,7 @@ private fun FranchisesPage(model: AppModel) {
             Text(
                 if (model.demoMode) "Demo mode has no library to search. Connect a server to find your franchises."
                 else "Franchises you own show up here once your library has been enriched.",
-                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(vertical = u(12)),
+                style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.padding(vertical = u(12)),
             )
         }
         if (entries.isNotEmpty()) {
@@ -594,22 +598,22 @@ private fun CollectionsPage(model: AppModel) {
     model.franchiseTick
     val f = model.lineup?.franchises
     val rows = otherCollections(model)
-    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         SectionHeader("MY COLLECTIONS", "Turn your server's collections into channels")
         val all = f?.candidates ?: emptyList()
         when {
             all.isEmpty() -> Text(
                 "Franchise collections go under FRANCHISES; the rest show up here after a scan.",
-                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.paneRow(model, "collections_none").focusable(),
+                style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.paneRow(model, "collections_none").focusable(),
             )
             rows.isEmpty() -> Text(
                 "All ${all.size} of your ${if (all.size == 1) "collection is a franchise" else "collections are franchises"}, under FRANCHISES.",
-                style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.paneRow(model, "collections_none").focusable(),
+                style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.paneRow(model, "collections_none").focusable(),
             )
-            else -> Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+            else -> Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
                 Row(horizontalArrangement = Arrangement.spacedBy(u(12)), verticalAlignment = Alignment.Bottom) {
                     Subheader("OTHER COLLECTIONS")
-                    Text("${rows.count { it.enabled }}/${rows.size} ON", style = font(VT323, 22, Color.White.copy(alpha = 0.4f)))
+                    Text("${rows.count { it.enabled }}/${rows.size} ON", style = font(VT323, DesignTokens.CompactSize.TAG, Tokens.Text2))
                 }
                 val over = f?.overCapCustom ?: 0
                 if (over > 0) CapNote("Up to 100 of these fit in the guide. $over more are on but not shown.")
@@ -626,24 +630,24 @@ private fun CollectionsPage(model: AppModel) {
 }
 
 @Composable
-private fun CapNote(text: String) = Text(text, style = font(DMMono, 18, Color.White.copy(alpha = 0.45f)), modifier = Modifier.padding(vertical = u(6)))
+private fun CapNote(text: String) = Text(text, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.padding(vertical = u(6)))
 
 /** MISSING CHANNELS: each channel's rules in plain words, and how many titles match. Read-only. */
 @Composable
 private fun MissingPage(model: AppModel) {
     val groups = missingGroups(model)
-    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         SectionHeader("MISSING CHANNELS", "A channel goes on air once your library has enough titles that fit it")
         if (groups.isEmpty()) {
             var focused by remember { mutableStateOf(false) }
             Text(
                 "Every channel in your bundles is on air.",
-                style = font(DMMono, 20, Color.White.copy(alpha = if (focused) 1f else 0.7f)),
+                style = font(DMMono, DesignTokens.Size.CAPTION, if (focused) Tokens.Text else Tokens.Text2),
                 modifier = Modifier.paneRow(model, "missing_none").onFocusChanged { focused = it.isFocused }.focusable(),
             )
         }
         for ((bundle, channels) in groups) {
-            Column(verticalArrangement = Arrangement.spacedBy(u(6))) {
+            Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
                 Subheader(bundle.name)
                 for (o in channels) RequirementCard(o, Modifier.paneRow(model, "missing_card_${o.def.id}"))
             }
@@ -723,7 +727,7 @@ private fun ServerRows(model: AppModel) {
 
 @Composable
 private fun AboutRows(model: AppModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(u(20))) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         // Focusable so the remote has somewhere to land; OK does nothing.
         ToggleRow(
             title = "VERSION",
@@ -749,14 +753,15 @@ private fun AboutRows(model: AppModel) {
 
 @Composable
 private fun SectionHeader(title: String, subtitle: String?) {
-    Column(verticalArrangement = Arrangement.spacedBy(u(6))) {
-        Text(title, style = font(DMMonoMedium, 28, Color.White.copy(alpha = 0.8f)))
-        if (subtitle != null) Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)))
+    // Rows sit 10 apart (#269); a section heading keeps a little more above it.
+    Column(Modifier.padding(top = u(14)), verticalArrangement = Arrangement.spacedBy(u(6))) {
+        Text(title, style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, Tokens.Text))
+        if (subtitle != null) Text(subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
     }
 }
 
 @Composable
-private fun Subheader(text: String) = Text(text, style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)), modifier = Modifier.padding(top = u(4)))
+private fun Subheader(text: String) = Text(text, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.padding(top = u(4)))
 
 /** SettingsLinkRow: a title, its value on the right in cyan when focused, and a chevron. */
 @Composable
@@ -773,16 +778,14 @@ private fun LinkRow(title: String, value: String, modifier: Modifier = Modifier,
                 if (e.type == KeyEventType.KeyUp) onClick()
                 true
             }
-            .clip(shape)
-            .background(Color.White.copy(alpha = if (focused) 0.07f else 0.02f))
-            .border(u(1.5), if (focused) Cyan.copy(alpha = 0.5f) else Color.Transparent, shape)
-            .padding(horizontal = u(24), vertical = u(22)),
+            .settingsRow(focused, shape)
+            .padding(horizontal = u(20), vertical = u(20)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(u(16)),
     ) {
-        Text(title, style = font(DMMonoMedium, 22, Color.White), modifier = Modifier.weight(1f))
-        Text(value, style = font(DMMonoMedium, 22, if (focused) Cyan else Color.White.copy(alpha = 0.6f)))
-        Text("›", style = font(DMMonoMedium, 30, if (focused) Cyan else Color.White.copy(alpha = 0.35f)))
+        Text(title, style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, Tokens.Text), modifier = Modifier.weight(1f))
+        Text(value, style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, if (focused) Tokens.Cyan else Tokens.Text2))
+        Text("›", style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, if (focused) Tokens.Cyan else Tokens.Text2))
     }
 }
 
@@ -833,24 +836,22 @@ private fun ToggleRow(
                     else -> false
                 }
             }
-            .clip(shape)
-            .background(Color.White.copy(alpha = if (focused) 0.07f else 0.02f))
-            .border(u(1.5), if (focused) Cyan.copy(alpha = 0.5f) else Color.Transparent, shape)
-            .padding(horizontal = u(24), vertical = u(18)),
+            .settingsRow(focused, shape)
+            .padding(horizontal = u(20), vertical = u(16)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(u(16)),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(4))) {
-            Text(title, style = font(DMMonoMedium, 22, Color.White.copy(alpha = if (on) 1f else 0.35f)))
-            if (subtitle != null) Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = if (on) 0.8f else 0.5f)), maxLines = subtitleLines)
-            if (warning != null) Text(warning, style = font(DMMono, 20, Amber), maxLines = 2)
+            Text(title, style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, if (on) Tokens.Text else Tokens.Text2))
+            if (subtitle != null) Text(subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), maxLines = subtitleLines)
+            if (warning != null) Text(warning, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Amber), maxLines = 2)
         }
         if (loading != null) {
-            Text(loading, style = font(DMMono, 20, Cyan.copy(alpha = 0.7f)))
+            Text(loading, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Cyan))
         } else {
             if (badge != null) AlertBadge(badge)
             if (detail != null) {
-                Text(detail, style = if (prominentDetail) font(DMMonoMedium, 22, Color.White.copy(alpha = 0.85f)) else font(VT323, 20, Color.White.copy(alpha = 0.2f)))
+                Text(detail, style = if (prominentDetail) font(DMMonoMedium, DesignTokens.CompactSize.BODY, Tokens.Text2) else font(VT323, DesignTokens.CompactSize.TAG, Tokens.Text2))
             }
         }
         if (loading == null && showToggle) ToggleSwitch(on)
@@ -868,20 +869,18 @@ private fun RequirementCard(o: Lineup.OffAir, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .clip(shape)
-            .background(Color.White.copy(alpha = if (focused) 0.07f else 0.03f))
-            .border(u(1.5), if (focused) Cyan.copy(alpha = 0.5f) else Color.Transparent, shape)
+            .settingsRow(focused, shape)
             .padding(horizontal = u(20), vertical = u(14)),
         verticalArrangement = Arrangement.spacedBy(u(8)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10))) {
             Box(Modifier.size(u(4), u(18)).background(hex(o.def.colorHex)))
-            Text(o.def.name.uppercase(), style = font(DMMonoMedium, 20, Color.White))
+            Text(o.def.name.uppercase(), style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, Tokens.Text))
         }
-        Text("Needs $need matching title${if (need == 1) "" else "s"}. You have ${o.matched}.", style = font(DMMono, 18, Amber))
+        Text("Needs $need matching title${if (need == 1) "" else "s"}. You have ${o.matched}.", style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Amber))
         Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
             for (line in ChannelRequirements.plainLanguage(o.def.rules)) {
-                Text("\u2022 $line", style = font(DMMono, 18, Color.White.copy(alpha = 0.65f)))
+                Text("\u2022 $line", style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
             }
         }
     }
@@ -891,14 +890,15 @@ private fun RequirementCard(o: Lineup.OffAir, modifier: Modifier = Modifier) {
 private fun ToggleSwitch(on: Boolean) {
     Box(
         Modifier
-            .size(u(52), u(30))
+            .size(u(44), u(26))
             .clip(CircleShape)
-            .background(if (on) Cyan.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f))
-            .border(u(1), if (on) Cyan.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.15f), CircleShape)
+            // ON is cyan, OFF the chosen-neutral track (#269).
+            .background(if (on) Tokens.Cyan else Tokens.ChosenNeutral)
+            .border(u(1), if (on) Tokens.Cyan else Tokens.RestingOutline, CircleShape)
             .padding(u(3)),
         contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
-        Box(Modifier.size(u(24)).clip(CircleShape).background(if (on) Cyan else Color.White.copy(alpha = 0.7f)))
+        Box(Modifier.size(u(20)).clip(CircleShape).background(if (on) Tokens.OnCyan else Tokens.Text2))
     }
 }
 
@@ -914,9 +914,9 @@ private fun PickerPage(title: String, subtitle: String, options: List<Triple<Str
             .padding(horizontal = u(80), vertical = u(60)),
         verticalArrangement = Arrangement.spacedBy(u(20)),
     ) {
-        Text(title, style = font(DMMonoMedium, 28, Color.White.copy(alpha = 0.8f)))
-        Text(subtitle, style = font(DMMono, 20, Color.White.copy(alpha = 0.7f)))
-        Column(verticalArrangement = Arrangement.spacedBy(u(6))) {
+        Text(title, style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, Tokens.Text))
+        Text(subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
+        Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
             for ((code, label, note) in options) {
                 val isSel = code == selected
                 var focused by remember { mutableStateOf(false) }
@@ -935,15 +935,13 @@ private fun PickerPage(title: String, subtitle: String, options: List<Triple<Str
                                 else -> false
                             }
                         }
-                        .clip(shape)
-                        .background(Color.White.copy(alpha = if (focused) 0.07f else 0.02f))
-                        .border(u(1.5), if (focused) Cyan.copy(alpha = 0.5f) else Color.Transparent, shape)
-                        .padding(horizontal = u(24), vertical = u(18)),
+                        .settingsRow(focused, shape)
+                        .padding(horizontal = u(20), vertical = u(16)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(u(4))) {
-                        Text(label, style = font(DMMonoMedium, 22, if (isSel) Cyan else Color.White.copy(alpha = 0.85f)))
-                        if (note != null) Text(note, style = font(DMMono, 20, Color.White.copy(alpha = 0.6f)))
+                        Text(label, style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, if (isSel) Tokens.Cyan else Tokens.Text))
+                        if (note != null) Text(note, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
                     }
                     if (isSel) Text("ACTIVE", style = font(VT323, 20, Cyan.copy(alpha = 0.7f)))
                 }
@@ -953,3 +951,19 @@ private fun PickerPage(title: String, subtitle: String, options: List<Triple<Str
     LaunchedEffect(Unit) { runCatching { current.requestFocus() } }
 }
 
+
+/** The shared lift (#267): the row under the cursor grows by 3%. */
+private fun Modifier.settingsLift(focused: Boolean): Modifier =
+    graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
+
+/**
+ * A Settings row in the shared state (#267, #269): a resting row with a 1.5 pt outline; under the
+ * cursor, the selected-row fill, a 3 pt cyan outline, a cyan glow and a 3% lift.
+ */
+@Composable
+private fun Modifier.settingsRow(focused: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.settingsLift(focused)
+        .then(if (focused) Modifier.cyanGlow() else Modifier)
+        .clip(shape)
+        .background(if (focused) Tokens.SelectedRow else Tokens.Row)
+        .border(u(if (focused) DesignTokens.Row.SELECTED_OUTLINE.toFloat() else DesignTokens.Row.RESTING_OUTLINE), if (focused) Tokens.Cyan else Tokens.RestingOutline, shape)
