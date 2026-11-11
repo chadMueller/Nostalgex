@@ -124,8 +124,11 @@ object LanguageChoice {
      * Norwegian second, both mono) was asked for in English for a Norwegian viewer.
      */
     fun preferredAudioIndex(streams: List<AudioStream>?, preferredLanguages: List<String>): Int? {
-        val audio = streams ?: return null
-        if (audio.size <= 1) return null
+        val all = streams ?: return null
+        if (all.size <= 1) return null
+        // A commentary is never it while another track exists (#286, AudioPick); with only
+        // commentaries, the rules below run over all of them.
+        val audio = AudioPick.skippingCommentary(all) { listOf(it.title, it.rawTitle) }
         fun best(keys: Set<String>) = audio.filter { languageKey(it.lang)?.let { k -> k in keys } == true }.maxByOrNull { it.channels }
         val viewer = preferredLanguages.mapNotNull { languageKey(it) }.toSet()
         (best(viewer) ?: best(setOf("en")))?.let { return it.index }

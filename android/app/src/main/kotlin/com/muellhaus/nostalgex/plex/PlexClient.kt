@@ -14,10 +14,12 @@ import android.util.Log
 import com.muellhaus.nostalgex.engine.ServerResolve
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -222,6 +224,27 @@ class PlexClient(private val clientId: String, versionName: String) {
     fun decision(startUrl: String): Pair<Int, String>? = runCatching {
         val url = startUrl.replace("/video/:/transcode/universal/start.m3u8", "/video/:/transcode/universal/decision")
         decisionHttp.newCall(Request.Builder().url(url).build()).execute().use { it.code to (it.body?.string() ?: "") }
+    }.getOrNull()
+
+    /**
+     * An item's own audio streams (the bulk listing has none), for the commentary rule on a
+     * server stream (#286, as the web tuner reads them). Blocking, at most 5 s; null on any failure.
+     */
+    fun audioStreams(server: String, token: String, ratingKey: String): List<com.muellhaus.nostalgex.engine.AudioPick.PlexAudio>? = runCatching {
+        val url = "$server/library/metadata/$ratingKey".toHttpUrl().newBuilder().addQueryParameter("X-Plex-Token", token).build()
+        decisionHttp.newCall(request(url.toString()).build()).execute().use { res ->
+            if (!res.isSuccessful) return@runCatching null
+            val o = json.parseToJsonElement(res.body.string()).jsonObject
+            val part = ((((o["MediaContainer"] as? JsonObject)?.get("Metadata") as? JsonArray)?.firstOrNull() as? JsonObject)
+                ?.get("Media") as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.get("Part") as? JsonArray }?.firstOrNull() as? JsonObject
+            (part?.get("Stream") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+                .filter { (it["streamType"] as? JsonPrimitive)?.intOrNull == 2 }
+                .mapNotNull { s ->
+                    val id = (s["id"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+                    val selected = (s["selected"] as? JsonPrimitive)?.let { it.booleanOrNull ?: (it.intOrNull == 1) } ?: false
+                    com.muellhaus.nostalgex.engine.AudioPick.PlexAudio(id, selected, s.str("title"), s.str("displayTitle"))
+                }
+        }
     }.getOrNull()
 
     /** At most 5 s: the startup watchdog only begins once the stream loads. */

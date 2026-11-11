@@ -93,4 +93,6 @@ data class AudioStream(
     val channels: Int = 0,
     val title: String = "",
     val isDefault: Boolean = false,
+    /** The track's own Title as the server has it, for the commentary rule (#286): DisplayTitle can leave it out. */
+    val rawTitle: String = "",
 )

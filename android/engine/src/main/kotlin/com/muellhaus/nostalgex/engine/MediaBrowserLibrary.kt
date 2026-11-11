@@ -276,6 +276,7 @@ class MediaBrowserLibrary(
                     channels = s.long("Channels")?.toInt() ?: 0,
                     title = s.str("DisplayTitle")?.ifEmpty { null } ?: s.str("Title")?.ifEmpty { null } ?: s.str("Language")?.ifEmpty { null } ?: "Audio",
                     isDefault = (s["IsDefault"] as? JsonPrimitive)?.content == "true",
+                    rawTitle = s.str("Title") ?: "",
                 )
             },
             width = v?.long("Width")?.toInt()?.takeIf { it > 0 },

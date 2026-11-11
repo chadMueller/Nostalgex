@@ -112,6 +112,8 @@ object PlaybackInfoHandshake {
     data class Stream(
         val index: Int?, val type: String?, val language: String?, val isDefault: Boolean,
         val isForced: Boolean, val channels: Int?, val codec: String?,
+        /** Title and DisplayTitle, for the commentary rule (#286). */
+        val title: String? = null, val displayTitle: String? = null,
     )
 
     data class Source(
@@ -133,7 +135,7 @@ object PlaybackInfoHandshake {
                 supportsDirectPlay = s.b("SupportsDirectPlay"),
                 transcodingUrl = s.s("TranscodingUrl"),
                 streams = (s["MediaStreams"] as? JsonArray)?.map { it.jsonObject }?.map { m ->
-                    Stream(m.i("Index"), m.s("Type"), m.s("Language"), m.b("IsDefault"), m.b("IsForced"), m.i("Channels"), m.s("Codec"))
+                    Stream(m.i("Index"), m.s("Type"), m.s("Language"), m.b("IsDefault"), m.b("IsForced"), m.i("Channels"), m.s("Codec"), m.s("Title"), m.s("DisplayTitle"))
                 } ?: emptyList(),
             )
         } ?: emptyList()
@@ -158,7 +160,8 @@ object PlaybackInfoHandshake {
     /** The source's audio tracks, for [LanguageChoice.preferredAudioIndex]. */
     fun audioStreams(streams: List<Stream>?): List<AudioStream> =
         streams.orEmpty().filter { it.type?.lowercase() == "audio" && it.index != null }.map {
-            AudioStream(index = it.index!!, lang = it.language?.lowercase() ?: "", codec = it.codec ?: "", channels = it.channels ?: 0, isDefault = it.isDefault)
+            AudioStream(index = it.index!!, lang = it.language?.lowercase() ?: "", codec = it.codec ?: "", channels = it.channels ?: 0, isDefault = it.isDefault,
+                title = it.displayTitle ?: "", rawTitle = it.title ?: "")
         }
 
     data class Resolution(val url: String, val playSessionId: String?, val isDirectPlay: Boolean)

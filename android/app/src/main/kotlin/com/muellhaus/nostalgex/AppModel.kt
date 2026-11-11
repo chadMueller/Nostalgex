@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
@@ -351,7 +352,10 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (current != null && audioChosenFor != current && audio.isNotEmpty()) {
             audioChosenFor = current
             val preferred = LanguageChoice.resolved(audioLanguage).lowercase()
-            val pick = audio[LanguageChoice.preferredTrackIndex(audio.map { it.tag }, preferred)]
+            // Never a commentary while the file has another track (#286, the Roku's direct-play rule):
+            // the player names it by the track's label, from the file or the server's playlist.
+            val pool = AudioPick.skippingCommentary(audio) { listOf(it.format.label) }
+            val pick = pool[LanguageChoice.preferredTrackIndex(pool.map { it.tag }, preferred)]
             if (!pick.group.isTrackSelected(pick.index)) selectAudioTrack(AudioTrack("", false, pick.group, pick.index))
         }
         applySubtitles()

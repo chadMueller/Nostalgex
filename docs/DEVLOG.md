@@ -3,6 +3,27 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: no channel starts on a commentary, and the missing-channel lines held to the shared file; #286, #292)
+
+**Changed.**
+- **#292.** `ChannelRequirementsGoldenTest` replays `scripts/channel-requirements-golden.json`.
+  - Android's `ChannelRequirements.plainLanguage` already gives the same lines for all 142 channels in `channels.json`, so no wording changed. No line says "package".
+  - The test fails when one wording is changed ("Movies only" to "Films only" was tried and reverted).
+  - The golden file is a test input in `engine/build.gradle.kts`, so a change to it reruns the test.
+- **#286, the commentary rule.** A track whose title says "commentary" (any case) is never the audio a channel starts on while the file has another track. The viewer's language, the default flag and the channel count are judged over the tracks that are left. With only commentaries, the earlier rules run over all of them.
+  - `AudioPick` ports `scripts/nostalgex-audio-pick.js`, and `LanguageChoice.preferredAudioIndex` uses it for the Jellyfin and Emby track it pins.
+  - `AudioPickGoldenTest` replays `scripts/audio-pick-golden.json`: the commentary titles, the 15 Jellyfin and Emby cases and the 4 Plex cases all pass. Without the rule, the Jellyfin and Emby cases fail. Android's own language order (the viewer's language, then English) gives the file's answers for every case.
+  - Jellyfin and Emby tracks now keep the server's own `Title` beside `DisplayTitle` (`AudioStream.rawTitle`), from the scan and from PlaybackInfo, because the display title can leave the word out.
+  - **In the player** (every backend, direct play included), the language pick skips a track whose label says commentary, as the Roku's direct-play rule (#246).
+  - **On a Plex server stream**, the item's own audio streams are read before the decision call (`PlexClient.audioStreams`, at most 5 s). When Plex's selected stream is a commentary and another exists, `audioStreamID` asks for that one for this stream only, as the web tuner does. The track saved on the Plex account isn't changed.
+- **Measured** on a Google TV emulator against a lab Jellyfin 12.4, with a film whose first audio track is a default-flagged English "Director's Commentary" and whose second is an English "English" track.
+  - **Direct play:** the player opened on the commentary, and the rule moved it to "English".
+  - **Server stream:** PlaybackInfo pinned audio 2, "English".
+  - Before this change both would have started on the commentary: the two tracks have the same language and channels, so the default flag or the first track won.
+- **Not measured:** the Plex paths, which need a claimed Plex server and so were not run.
+
+All 313 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: the Plex code waits 15 minutes, DISCONNECT forgets playback failures, Remux or Transcode; #284, #289, #291)
 
 **Changed.**

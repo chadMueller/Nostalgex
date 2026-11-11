@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.PlexClientProfile
 import com.muellhaus.nostalgex.engine.PlexDecision
 import androidx.media3.common.PlaybackException
@@ -429,6 +430,16 @@ class Playback(
         // The old programme stops now, not when the answer comes.
         player.stop()
         handshakes.execute {
+            // The track the server stream carries: never a commentary while another exists (#286).
+            // Plex sends the stream it has selected for this account otherwise; `audioStreamID`
+            // asks for another for this stream only, as the web tuner does.
+            val streams = plex.audioStreams(item.serverUrl ?: "", item.serverToken ?: "", item.ratingKey)
+            val pick = streams?.let { AudioPick.plexAudioStream(it) }
+            val chosen = streams?.firstOrNull { it.selected }
+            val url = if (pick != null && chosen != null && pick.id != chosen.id) {
+                Log.i(TAG, "AUDIO TRACK ${pick.id} instead of the selected ${chosen.id} (a commentary) for ${describe(item)}")
+                url.buildUpon().appendQueryParameter("audioStreamID", pick.id.toString()).build()
+            } else url
             val answer = plex.decision(url.toString())
             main.post {
                 if (a != attempt) return@post
