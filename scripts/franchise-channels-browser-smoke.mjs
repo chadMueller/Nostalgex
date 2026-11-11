@@ -286,10 +286,12 @@ await block("Settings, by click", async () => {
   const { ctx, page, errors } = await openPage("desktop");
   await settled(page);
   await page.evaluate(() => showConfig());
+  // CHANNELS & BUNDLES is a list of link rows; FRANCHISES is the second, a click away.
+  await page.locator(".chan-link", { hasText: "FRANCHISES" }).click();
   const list = page.locator("#franchise-list");
   const row = (name) => list.locator(".bundle-row", { hasText: name }).first();
 
-  const titles = await list.locator(".bundle-row:not(.franchise-all) div[style*='font-size: 16px']").allInnerTexts();
+  const titles = await list.locator(".bundle-row:not(.franchise-all) div[style*='font-size: var(--fs-body)']").allInnerTexts();
   const names = titles.map((t) => t.trim());
   check("the FRANCHISES section starts with the package switch", names[0] === "FRANCHISES", JSON.stringify(names.slice(0, 3)));
   check("the classics are listed with the found franchises, A to Z",
@@ -299,8 +301,12 @@ await block("Settings, by click", async () => {
   check("a classic shows its channel number", /CH 300/.test(await row("STAR WARS").innerText()));
   check("a found franchise on air shows its channel number", /CH 311/.test(await row("JOHN WICK").innerText()), await row("JOHN WICK").innerText());
   check("a folded collection is not listed again", (await list.locator(".bundle-row", { hasText: "WIZARDING WORLD" }).count()) === 0);
-  check("MY COLLECTIONS lists only the other collections",
-    (await page.locator("#collection-list .bundle-row").allInnerTexts()).every((t) => !/SAGA|VOYAGER MIX/.test(t)));
+  await page.locator("#chan-back").click();
+  await page.locator(".chan-link", { hasText: "MY COLLECTIONS" }).click();
+  const collectionRows = await page.locator("#collection-list .bundle-row").allInnerTexts();
+  check("MY COLLECTIONS lists only the other collections", collectionRows.length > 0 && collectionRows.every((t) => !/SAGA|VOYAGER MIX/.test(t)), JSON.stringify(collectionRows));
+  await page.locator("#chan-back").click();
+  await page.locator(".chan-link", { hasText: "FRANCHISES" }).click();
 
   await row("JOHN WICK").click();
   let nums = await guideRuntime(page);
@@ -340,14 +346,16 @@ await block("Settings, by click", async () => {
 await block("Settings, by key", async () => {
   const { ctx, page } = await openPage("desktop");
   await settled(page);
-  await page.evaluate(() => { showConfig(); });
+  await page.evaluate(() => showConfig());
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { switchConfigTab("bundles"); showChannelsPage("franchises"); enterConfigContent(); });   // the keys act in the content, not the rail
   const index = await page.evaluate(() => {
     const m = bundleTabModel();
     return m.packages.length + m.franchises.findIndex((r) => r.kind === "row" && r.row.id === "dict:JOHN WICK");
   });
   for (let i = 0; i < index; i++) await page.keyboard.press("ArrowDown");
   const at = await page.evaluate(() => bundleFocusIndex);
-  check("the arrow keys walk packages, then the FRANCHISES rows", at === index, `${at} vs ${index}`);
+  check("the arrow keys walk the FRANCHISES page's rows", at === index, `${at} vs ${index}`);
   await page.keyboard.press("Enter");
   check("Enter switches the focused franchise", !(await guideRuntime(page)).some((c) => /JOHN WICK/.test(c)), (await guideRuntime(page)).join());
   await page.keyboard.press("Enter");
@@ -362,7 +370,7 @@ await block("Settings, by key", async () => {
 await block("a reload", async () => {
   const { ctx, page } = await openPage("desktop");
   await settled(page);
-  await page.evaluate(() => showConfig());
+  await page.evaluate(() => { showConfig(); showChannelsPage("franchises"); });
   await page.locator("#franchise-list .bundle-row", { hasText: "SPY KIDS" }).first().click();
   const before = await guideRuntime(page);
   await page.reload();
@@ -376,7 +384,7 @@ await block("a reload", async () => {
 for (const name of Object.keys(VIEWPORTS)) await block(`the section at ${name}`, async () => {
   const { ctx, page, errors } = await openPage(name);
   await settled(page);
-  await page.evaluate(() => showConfig());
+  await page.evaluate(() => { showConfig(); showChannelsPage("franchises"); });
   await page.locator("#franchise-list").scrollIntoViewIfNeeded();
   const m = await page.evaluate(() => {
     const list = document.getElementById("franchise-list");

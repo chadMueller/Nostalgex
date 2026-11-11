@@ -42,7 +42,7 @@ An app for Roku TVs and players. Connect one or more servers, then flip channels
 
 <a id="web-tuner-web-tunerhtml--plex-tunerhtml"></a>
 <a id="web-tuner"></a>
-## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.16`
+## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.17`
 
 Nothing to install. Works on computers and phones.
 
@@ -50,7 +50,7 @@ Nothing to install. Works on computers and phones.
 
 <a id="run-it-on-your-server"></a>
 <a id="docker-container"></a>
-## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.16`
+## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.17`
 
 The same web tuner, packaged as a Docker container that runs on a computer at home, so it can reach servers the website can't. Most Plex users don't need it.
 
@@ -62,14 +62,14 @@ docker run -d --name nostalgex -p 8080:8080 --restart unless-stopped ghcr.io/cha
 
 Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker container guide](https://www.nostalgex.app/self-host).
 
-**Latest: `tuner-v1.0.16`.** Open on last channel is now on by default, so the tuner starts on the channel you were last watching (turn it off in Settings, General, Playback), and Retro mode no longer draws the white line that drifted down the picture. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.16). Already running it? `docker compose pull && docker compose up -d`.
+**Latest: `tuner-v1.0.17`.** The tuner now sets up and looks like the Apple TV app: a black start screen, CHOOSE YOUR SERVERS and CHOOSE YOUR LIBRARIES, a Settings rail with CHANNELS & BUNDLES, the guide's bundle stripes, a Now Playing panel with the poster and an UP NEXT line, Plex subtitles and audio language, and a guide that goes quiet when you leave it alone. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.17). Already running it? `docker compose pull && docker compose up -d`.
 
 <a id="whats-new-in-1029"></a>
 ## What's new in 1.0.29
 
 [Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.29)
 
-- **Channel numbers change in this update.** Every package has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
+- **Channel numbers change in this update.** Every bundle has its own block with room to grow: NOSTALGEX from 1, KIDZ ZONE from 30, PRIME TIME from 50, franchises in the 300s, your other collections from 400 and HIGH ROTATION from 500. [`CHANNELS.md`](CHANNELS.md) has the full table.
 - **A new Settings layout.** Pick a category on the left and its settings open on the right. Settings also tells you why a channel isn't on the air.
 - **Pick which libraries load** when your server has more than one. A library you leave off is never scanned.
 - **Three new 80s channels** in NOSTALGEX: 80S SITCOMS, 80S LOL and 80S AFTER SCHOOL TV.
@@ -142,7 +142,7 @@ services:
     restart: unless-stopped
 ```
 
-**Settings for every browser (optional).** Mount a volume on `/data` and the container keeps one lineup for everyone who opens it: the packages that are on, the channel settings, collections and franchises. A new browser or device starts from it. Your sign-in, guide layout and language stay in each browser. The last change wins, and the first browser to change something after you add the volume becomes the shared lineup. In Compose add `volumes: ["nostalgex-data:/data"]` to the service and a `nostalgex-data:` entry under top-level `volumes:`; with `docker run`, add `-v nostalgex-data:/data`. A folder on the host needs `chown 101:101` first. Anyone who can reach the port can change the lineup file, so keep the port on your home network or behind a proxy that asks for a login, or turn the feature off with `NOSTALGEX_SHARED_SETTINGS=off`. With no writable `/data`, each browser keeps its own settings, as before.
+**Settings for every browser (optional).** Mount a volume on `/data` and the container keeps one lineup for everyone who opens it: the bundles that are on, the channel settings, collections and franchises. A new browser or device starts from it. Your sign-in, guide layout and language stay in each browser. The last change wins, and the first browser to change something after you add the volume becomes the shared lineup. In Compose add `volumes: ["nostalgex-data:/data"]` to the service and a `nostalgex-data:` entry under top-level `volumes:`; with `docker run`, add `-v nostalgex-data:/data`. A folder on the host needs `chown 101:101` first. Anyone who can reach the port can change the lineup file, so keep the port on your home network or behind a proxy that asks for a login, or turn the feature off with `NOSTALGEX_SHARED_SETTINGS=off`. With no writable `/data`, each browser keeps its own settings, as before.
 
 **Update:** `docker compose pull && docker compose up -d`, or `docker pull ghcr.io/chadmueller/nostalgex:latest` and recreate the container. Image tags are `latest`, `1.0` and `1.0.0`; each release adds its own version tag. Releases are tagged `tuner-v*`. The bottom of Settings says which one you're running, e.g. `WEB TUNER 1.0.13 · DOCKER`.
 

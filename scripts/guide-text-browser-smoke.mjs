@@ -126,6 +126,8 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
+// A desktop viewport draws a program title in DM Mono Medium at 22 pt, and a point is 0.5 CSS px there.
+const DESKTOP_NORMAL = 22 * 0.5;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */
@@ -174,7 +176,9 @@ async function openSettingsGeneral(page) {
   if (await rail.first().isVisible().catch(() => false)) await rail.first().click();
   else { await page.locator("#m-menu-btn").click(); await page.locator(".m-drawer-item:has-text('SETTINGS')").click(); }
   await settle(page, 300);
-  await page.locator("#tab-general").click();
+  // Wide screens have the Settings rail (#rail-general); a phone has the tab strip (#tab-general).
+  const railItem = page.locator("#rail-general");
+  if (await railItem.isVisible().catch(() => false)) await railItem.click(); else await page.locator("#tab-general").click();
   await settle(page, 300);
 }
 // Settings and the guide scroll rows into view smoothly; measure once the guide has stopped moving.
@@ -259,7 +263,16 @@ for (const name of Object.keys(viewports)) try {
 for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
   const { page, errors } = await launch("desktop", { stored });
   const s = await read(page);
-  check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && s.program === 18, `${s.large} ${s.program}`);
+  check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && near(s.program, DESKTOP_NORMAL), `${s.large} ${s.program}`);
+  check(`stored ${JSON.stringify(stored)}: guide, info panel and rail are all DM Mono`, await page.evaluate(() => {
+    const bad = [];
+    for (const root of ["#guide-grid", "#info-panel", "#v-toolbar"]) for (const el of document.querySelectorAll(`${root} *`)) {
+      if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+      if (el.id === "info-channel-tag" || el.closest("#info-channel-tag")) continue;   // the Apple TV draws the CH tag in VT323
+      if (!getComputedStyle(el).fontFamily.includes("DM Mono")) bad.push(`${root} ${el.className}: ${getComputedStyle(el).fontFamily}`);
+    }
+    return bad.length === 0 ? true : bad.slice(0, 3).join(" | ");
+  }) === true);
   check(`stored ${JSON.stringify(stored)}: no page errors`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {
@@ -268,7 +281,7 @@ for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
 try {
   const { page, errors } = await launch("desktop", { stored: "large" });
   const s = await read(page);
-  check("stored 'large' on a new page: LARGE on first draw", s.large && near(s.program, 18 * ratio.title), `${s.large} ${s.program}`);
+  check("stored 'large' on a new page: LARGE on first draw", s.large && near(s.program, DESKTOP_NORMAL * ratio.title), `${s.large} ${s.program}`);
   check("stored 'large': no page errors", errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {

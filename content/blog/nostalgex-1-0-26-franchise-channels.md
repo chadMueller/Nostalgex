@@ -67,7 +67,7 @@ None of these are flashy, but together they are the reason the app feels so much
 
 ## Can Nostalgex sync across Apple TVs?
 
-It can now, if you want it to. iCloud sync is off by default. Turn it on in **Settings > CONNECTION** and every Apple TV on your Apple ID shares the same lineup and settings. Switch a package on in the basement and the living room follows.
+It can now, if you want it to. iCloud sync is off by default. Turn it on in **Settings > CONNECTION** and every Apple TV on your Apple ID shares the same lineup and settings. Switch a bundle on in the basement and the living room follows.
 
 Your server logins never leave the device. Only the lineup and settings sync.
 

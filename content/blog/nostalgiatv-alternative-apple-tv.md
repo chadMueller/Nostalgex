@@ -54,7 +54,7 @@ So if you have an Android TV box or a Fire TV Stick, go try NostalgiaTV. If your
 
 Nostalgex is a native Apple TV app (tvOS 18 or later) that turns your Plex, Jellyfin or Emby library into live channels with a retro guide.
 
-The big difference in approach: Nostalgex is plug and play. You connect your server, and it builds 130+ themed channels in 14 packages from what you actually own. Rewatchables, Saturday Morning Cartoons, 90s Sitcoms, Teen Movies, Buddies, Retro Toons and a lot more. Nostalgex runs the schedules. You don't set up time slots or playlists. You just turn on the packages you like in Settings and start flipping.
+The big difference in approach: Nostalgex is plug and play. You connect your server, and it builds 130+ themed channels in 14 bundles from what you actually own. Rewatchables, Saturday Morning Cartoons, 90s Sitcoms, Teen Movies, Buddies, Retro Toons and a lot more. Nostalgex runs the schedules. You don't set up time slots or playlists. You just turn on the bundles you like in Settings and start flipping.
 
 ![Nostalgex retro mode on Apple TV, playing The Little Mermaid full screen on the Retro Toons channel with CRT scanlines](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/nostalgiatv-alternative-apple-tv/retro-mode-retro-toons.webp)
 

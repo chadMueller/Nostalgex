@@ -4,10 +4,10 @@
       "version": "1.0.31",
       "date": "NOV 2026",
       "released": false,
-      "title": "Package stripes in the guide, a channel list for every package, and Open on last channel on by default",
+      "title": "Bundle stripes in the guide, a channel list for every bundle, and Open on last channel on by default",
       "bullets": [
-        "The guide has a coloured stripe down its left edge for each package, with the package name on it. Press Left from the programs to move onto the stripe, Up and Down to jump from package to package, Right to go back to the programs, and Select to open the package list. Pressing Left twice opens the package list too.",
-        "CHANNEL PACKAGES in Settings lists the channels in each package, so you can see what a package adds before you switch it on.",
+        "The guide has a coloured stripe down its left edge for each bundle, with the bundle name on it. Press Left from the programs to move onto the stripe, Up and Down to jump from bundle to bundle, Right to go back to the programs, and Select to open the bundle list. Pressing Left twice opens the bundle list too.",
+        "CHANNEL BUNDLES in Settings lists the channels in each bundle, so you can see what a bundle adds before you switch it on.",
         "OPEN ON LAST CHANNEL is on by default, so Nostalgex starts on the channel you were last watching. Turn it off in Settings under PLAYBACK & PICTURE. The first time you open the app after this update it starts on channel 1, then it remembers the last channel you tuned.",
         "The guide opens on the channel you are watching, with no visible jump after a channel change.",
         "Retro mode no longer draws the white tracking line. The scanlines, vignette, flicker and 4:3 picture stay.",

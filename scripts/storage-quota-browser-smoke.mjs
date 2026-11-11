@@ -275,7 +275,7 @@ async function snapshot(page) {
       loadingDone: document.getElementById("loading-library").style.display === "none",
       errorShown: document.getElementById("plex-error-label").style.display === "block",
       errorText: document.getElementById("plex-error-label").textContent,
-      connectShown: document.getElementById("plex-connect").style.display === "flex",
+      connectShown: document.getElementById("plex-connect").style.display === "grid",
       enabled: typeof CHANNELS !== "undefined" ? CHANNELS.filter((c) => c.enabled).length : -1,
       hasConfig: localStorage.getItem("plex90_channel_config") !== null,
       configChars: (localStorage.getItem("plex90_channel_config") || "").length,

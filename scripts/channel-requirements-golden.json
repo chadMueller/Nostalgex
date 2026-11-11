@@ -1,0 +1,690 @@
+{
+ "note": "plain-words lines per channel id, from scripts/nostalgex-channel-requirements.js (a port of ChannelRules.plainLanguageRequirements)",
+ "channels": {
+  "1": [
+   "Movies only",
+   "Watched three times or more"
+  ],
+  "2": [
+   "TV episodes only",
+   "Watched three times or more"
+  ],
+  "3": [
+   "Movies only",
+   "Genre: Comedy",
+   "Not genre: Animation, Animated",
+   "Released 1980 to 1999"
+  ],
+  "4": [
+   "TV episodes only",
+   "Genre: Animation or Kids or Children or Cartoon or Animated",
+   "Released 1960 to 1999",
+   "Rated: TV-Y, TV-Y7, TV-G, G"
+  ],
+  "5": [
+   "TV episodes only",
+   "Genre: Comedy",
+   "Not genre: Anime, Animation",
+   "Released 1990 to 1999"
+  ],
+  "6": [
+   "TV episodes only",
+   "Genre: Comedy or Drama or Family",
+   "Not genre: Animation, Anime, Cartoon",
+   "Released 1980 to 1999",
+   "Rated: TV-G, TV-PG, TV-14"
+  ],
+  "7": [
+   "Movies only",
+   "Released 1980 to 1999"
+  ],
+  "8": [
+   "Movies only",
+   "Needs every one of these genres: Family",
+   "Not genre: Animation, Anime",
+   "Released 1960 to 1999"
+  ],
+  "9": [
+   "Movies only",
+   "Needs every one of these genres: Romance",
+   "Not genre: Family, Children, Kids, Action, Adventure, Horror, Thriller, Crime, War, Western, Science Fiction, Documentary",
+   "Released 1960 to 2004"
+  ],
+  "10": [
+   "Movies only",
+   "Genre: Comedy or Drama or Romance",
+   "Not genre: Animation, Horror, Family",
+   "Released 1980 to 1999",
+   "About: high school, coming of age, teenager, teen movie"
+  ],
+  "11": [
+   "Movies only",
+   "Genre: Animation",
+   "Released before 1999",
+   "Rated: G, PG, TV-Y, TV-Y7, TV-G, TV-PG",
+   "About: villain, musical, cartoon, good versus evil"
+  ],
+  "12": [
+   "Movies only",
+   "Genre: Action or Adventure",
+   "Not genre: Thriller, Crime, War, Horror, Animation",
+   "Released 1980 to 1999"
+  ],
+  "13": [
+   "Movies only",
+   "Genre: Action or Thriller",
+   "Not genre: Family, Kids, Children, Animation, Animated, Fantasy, Comedy",
+   "Released 1980 to 2002",
+   "About: one man army, action hero, shootout, explosion",
+   "Runs 85 minutes or longer"
+  ],
+  "14": [
+   "Movies only",
+   "Genre: Action or Comedy",
+   "Not genre: Animation, Animated, Horror, Kids, Children, Family, Romance",
+   "Released 1980 to 2004",
+   "About: buddy comedy, buddy cop, buddy film, mismatched pair"
+  ],
+  "20": [
+   "Movies only",
+   "Needs every one of these genres: Family",
+   "Rated: G, PG, PG-13"
+  ],
+  "21": [
+   "Movies only",
+   "Studio: Disney or Walt Disney or Walt Disney Pictures or Walt Disney Animation Studios",
+   "Rated: G, PG, PG-13, TV-Y, TV-Y7, TV-G, TV-PG, TV-14"
+  ],
+  "22": [
+   "Movies only",
+   "Needs every one of these genres: Animation",
+   "Studio: Disney or Walt Disney or Walt Disney Pictures or Walt Disney Animation Studios",
+   "Rated: G, PG, PG-13, TV-Y, TV-Y7, TV-G, TV-PG"
+  ],
+  "23": [
+   "TV episodes only",
+   "Studio: Disney Junior or Disney Television Animation or Ludo Studio or Brown Bag Films or Wild Canary Animation or Mercury Filmworks",
+   "Released 2010 or later",
+   "Rated: TV-Y, TV-Y7, TV-G, G"
+  ],
+  "24": [
+   "TV episodes only",
+   "Studio: Disney or Disney Channel or Disney Television Animation or Disney XD or Disney+",
+   "Network: Disney Channel or Disney XD or Disney+",
+   "Rated: TV-Y, TV-Y7, TV-G, TV-PG, TV-14, G, PG"
+  ],
+  "25": [
+   "Movies only",
+   "Genre: Animation",
+   "Rated: G, PG, PG-13, TV-G, TV-PG"
+  ],
+  "26": [
+   "TV episodes only",
+   "Network: Nickelodeon or Nick at Nite",
+   "Rated: TV-Y, TV-Y7, TV-G, TV-PG, TV-14, G, PG"
+  ],
+  "27": [
+   "Movies only",
+   "Studio: Pixar or Pixar Animation Studios",
+   "Rated: G, PG, PG-13, TV-Y, TV-Y7, TV-G, TV-PG"
+  ],
+  "28": [
+   "Movies only",
+   "Studio: Illumination or Illumination Entertainment"
+  ],
+  "29": [
+   "TV episodes only",
+   "Not genre: Animation, Anime, Cartoon",
+   "Studio: Disney Channel or Nickelodeon or Nickelodeon Productions or Nick or Disney XD or Freeform or ABC Family or Teen Nick or It's a Laugh Productions or Schneider's Bakery",
+   "Released 1989 or later",
+   "Rated: TV-G, TV-PG, TV-Y7"
+  ],
+  "30": [
+   "TV episodes only",
+   "Genre: Drama or Romance or Comedy",
+   "Not genre: Animation, Anime",
+   "Released 2000 or later",
+   "Rated: TV-14, TV-PG",
+   "About: teenager, high school, coming of age, teen drama"
+  ],
+  "33": [
+   "TV episodes only",
+   "Genre: Family or Comedy or Drama",
+   "Not genre: Kids, Children, Cartoon",
+   "Released 2000 or later",
+   "Rated: TV-G, TV-PG, TV-14"
+  ],
+  "34": [
+   "Genre: Family or Kids or Children or Comedy or Adventure",
+   "Not genre: Horror, Thriller",
+   "Studio: Netflix or Netflix Animation or Netflix Family",
+   "Rated: TV-Y, TV-Y7, TV-G, G, PG, TV-PG"
+  ],
+  "40": [
+   "Genre: Documentary or Docuseries",
+   "Needs every one of these genres: Documentary",
+   "About: true crime, serial killer, murder, murderer"
+  ],
+  "41": [
+   "Movies only",
+   "Genre: Crime",
+   "Not genre: Documentary",
+   "About: gangster, mafia, organized crime, neo-noir"
+  ],
+  "42": [
+   "Movies only",
+   "Genre: Thriller",
+   "Not genre: Horror, Documentary",
+   "About: psychological thriller, suspense, investigation, neo-noir"
+  ],
+  "43": [
+   "Movies only",
+   "Genre: Mystery",
+   "Not genre: Horror, Documentary",
+   "About: whodunit, detective, murder mystery, neo-noir"
+  ],
+  "44": [
+   "TV episodes only",
+   "Genre: Crime",
+   "Not genre: Documentary, Animation",
+   "About: police procedural, crime investigation, murder investigation, detective"
+  ],
+  "50": [
+   "TV episodes only",
+   "Genre: Comedy",
+   "Not genre: Animation, Anime, Kids, Children, Family",
+   "About: sitcom, ensemble cast, workplace comedy, family sitcom"
+  ],
+  "51": [
+   "Movies only",
+   "Not genre: Horror, Kids, Children, Family"
+  ],
+  "52": [
+   "Movies only",
+   "Needs every one of these genres: Romance, Comedy",
+   "Not genre: Horror, Thriller, Action, Animation, Family"
+  ],
+  "53": [
+   "TV episodes only"
+  ],
+  "54": [
+   "TV episodes only",
+   "Genre: Reality or Reality-TV or Docuseries",
+   "Not genre: Game Show, Game-Show, Competition"
+  ],
+  "55": [
+   "TV episodes only",
+   "Genre: Game Show or Game-Show or Competition"
+  ],
+  "56": [
+   "Genre: Documentary",
+   "Not genre: Sport",
+   "About: nature, biography, based on true story, food"
+  ],
+  "57": [
+   "Movies only",
+   "Genre: Comedy",
+   "Not genre: Horror, War, History, Documentary",
+   "Plex star rating 7.0 or higher"
+  ],
+  "58": [
+   "Genre: Comedy or Documentary or Stand-Up",
+   "About: stand-up comedy, comedian"
+  ],
+  "59": [
+   "TV episodes only",
+   "Genre: Crime or Action",
+   "Not genre: Family, Children, Kids"
+  ],
+  "60": [
+   "Genre: Animation or Anime",
+   "About: anime, based on manga, seinen, shounen"
+  ],
+  "61": [
+   "Movies only",
+   "Genre: Music or Musical",
+   "About: musical, based on play or musical, song and dance, broadway"
+  ],
+  "62": [
+   "Movies only",
+   "Runs 60 minutes or longer"
+  ],
+  "63": [
+   "TV episodes only",
+   "Genre: Animation or Animated or Cartoon"
+  ],
+  "64": [
+   "Movies only",
+   "Needs every one of these genres: Romance",
+   "Not genre: Horror, Animation, Family, Children, Kids",
+   "About: love story, forbidden love, passion, affair"
+  ],
+  "65": [
+   "Movies only"
+  ],
+  "66": [
+   "Movies only",
+   "Genre: Action or Adventure or Science Fiction",
+   "Plex star rating 6.0 or higher"
+  ],
+  "67": [
+   "Movies only",
+   "Plex star rating 8.2 or higher",
+   "Runs 60 minutes or longer"
+  ],
+  "68": [
+   "Movies only",
+   "Plex star rating 8.0 or higher",
+   "Runs 60 minutes or longer"
+  ],
+  "69": [
+   "Movies only"
+  ],
+  "70": [
+   "Movies only",
+   "Genre: Adventure or Fantasy",
+   "Not genre: Animation, Animated, Family, Children, Kids",
+   "Runs 110 minutes or longer"
+  ],
+  "71": [
+   "Movies only",
+   "Not genre: Animation, Animated, Family, Fantasy, Romance"
+  ],
+  "72": [
+   "Movies only",
+   "Genre: Action or Thriller",
+   "Not genre: Family, Kids, Children, Animation, Animated, Fantasy",
+   "Released 2000 or later",
+   "Plex star rating 5.5 or higher",
+   "About: car chase, heist, martial arts, assassin",
+   "Runs 80 minutes or longer"
+  ],
+  "73": [
+   "Movies only",
+   "Genre: Science Fiction or Horror",
+   "Needs every one of these genres: Science Fiction",
+   "Not genre: Animation, Family, Kids",
+   "About: dystopia, alien, cyberpunk, space travel"
+  ],
+  "74": [
+   "Movies only",
+   "Genre: Fantasy or Adventure",
+   "Not genre: Animation, Horror, Science Fiction",
+   "About: sword and sorcery, magic, good versus evil, fairy tale"
+  ],
+  "75": [
+   "Genre: Western",
+   "About: gunslinger, bounty hunter, shootout, outlaw"
+  ],
+  "76": [
+   "Genre: War or War & Politics",
+   "Not genre: Documentary, Docuseries, Animation, Animated",
+   "About: world war ii, world war i, korean war, civil war"
+  ],
+  "80": [
+   "Movies only",
+   "Genre: Sport or Sports or Sports Film"
+  ],
+  "81": [
+   "TV episodes only",
+   "Genre: Sport or Sports"
+  ],
+  "82": [
+   "Genre: Documentary",
+   "Needs every one of these genres: Sport"
+  ],
+  "90": [
+   "Released 1960 to 1969",
+   "Plex star rating 6.0 or higher"
+  ],
+  "91": [
+   "Released 1970 to 1979",
+   "Plex star rating 6.0 or higher"
+  ],
+  "92": [
+   "Released 1980 to 1989",
+   "Plex star rating 6.0 or higher"
+  ],
+  "93": [
+   "Released 1990 to 1999",
+   "Plex star rating 6.0 or higher"
+  ],
+  "94": [
+   "Released 2000 to 2009",
+   "Plex star rating 6.0 or higher"
+  ],
+  "95": [
+   "Released 2010 to 2019",
+   "Plex star rating 6.0 or higher"
+  ],
+  "96": [
+   "Released 2020 to 2029",
+   "Plex star rating 6.0 or higher"
+  ],
+  "100": [
+   "Movies only"
+  ],
+  "101": [
+   "Movies only",
+   "Studio: Marvel Studios"
+  ],
+  "102": [
+   "Movies only"
+  ],
+  "103": [
+   "A specific, curated list of titles rather than a general rule"
+  ],
+  "104": [
+   "Movies only"
+  ],
+  "105": [
+   "Movies only"
+  ],
+  "106": [
+   "Movies only"
+  ],
+  "120": [
+   "Studio: HBO or HBO Films or HBO Max",
+   "Network: HBO or Max or HBO Max"
+  ],
+  "121": [
+   "Studio: Apple TV+ or Apple or Apple Studios",
+   "Network: Apple TV+"
+  ],
+  "122": [
+   "Studio: Netflix or Netflix Animation or Netflix Studios or Netflix International Pictures or Netflix Originals",
+   "Network: Netflix"
+  ],
+  "123": [
+   "Studio: Paramount+ or Paramount Television or Paramount Television Studios or CBS Studios or MTV Entertainment Studios or Nickelodeon",
+   "Network: Paramount+ or Paramount Network or Showtime or CBS or MTV or Comedy Central or Nickelodeon"
+  ],
+  "124": [
+   "Studio: Amazon or Amazon Studios or Amazon MGM Studios or Amazon Prime Video or Prime Video or Amazon Original",
+   "Network: Amazon Prime Video or Prime Video or Amazon"
+  ],
+  "125": [
+   "Studio: Hulu or Hulu Originals or Onyx Collective or 20th Television or ABC Signature",
+   "Network: Hulu"
+  ],
+  "126": [
+   "Movies only",
+   "Studio: Sony or Sony Pictures or Sony Pictures Television or Columbia Pictures or TriStar Pictures or Screen Gems"
+  ],
+  "127": [
+   "Movies only",
+   "Studio: Warner Bros. or Warner Bros. Pictures or Warner Bros. Television or New Line Cinema or Castle Rock Entertainment or HBO Max"
+  ],
+  "128": [
+   "Movies only",
+   "Studio: Universal or Universal Pictures or Universal Television or DreamWorks or Focus Features or Peacock"
+  ],
+  "129": [
+   "Movies only",
+   "Studio: 20th Century Fox or 20th Century Studios or 20th Television or Fox or FX or FX Productions or Searchlight Pictures or Blue Sky Studios"
+  ],
+  "130": [
+   "Movies only",
+   "Genre: Holiday or Christmas",
+   "Plex star rating 5.0 or higher"
+  ],
+  "131": [
+   "Movies only",
+   "Not genre: Horror",
+   "Rated: G, PG, TV-Y, TV-Y7, TV-G, TV-PG"
+  ],
+  "132": [
+   "Movies only",
+   "Genre: Horror or Thriller",
+   "Not genre: Family, Children, Kids, Animation, Animated",
+   "Rated: R, NC-17, PG-13, TV-MA"
+  ],
+  "141": [
+   "Genre: Horror"
+  ],
+  "150": [
+   "Music videos only"
+  ],
+  "151": [
+   "Music videos only",
+   "Genre: Pop"
+  ],
+  "152": [
+   "Music videos only",
+   "Genre: Rock or Hard Rock or Classic Rock"
+  ],
+  "153": [
+   "Music videos only",
+   "Genre: Country or Country Rock"
+  ],
+  "154": [
+   "Music videos only",
+   "Genre: Hip-Hop or Hip Hop"
+  ],
+  "155": [
+   "Music videos only",
+   "Genre: Rap"
+  ],
+  "156": [
+   "Music videos only",
+   "Genre: Alternative or Indie Rock or Alternative Rock"
+  ],
+  "157": [
+   "Music videos only",
+   "Genre: R&B or Soul or Acoustic"
+  ],
+  "159": [
+   "Music videos only",
+   "Released 2000 to 2019"
+  ],
+  "160": [
+   "Music videos only",
+   "Released 2020 to 2100"
+  ],
+  "161": [
+   "Music videos only",
+   "Genre: Electronic or Dance or House or Techno or EDM or Trance"
+  ],
+  "162": [
+   "Music videos only",
+   "Genre: Latin or Reggaeton"
+  ],
+  "163": [
+   "Music videos only",
+   "Genre: Metal"
+  ],
+  "164": [
+   "Music videos only",
+   "Genre: Funk or Disco"
+  ],
+  "200": [
+   "TV episodes only",
+   "Genre: Drama",
+   "Not genre: Animation, Comedy, Documentary, Horror, Reality, Kids, Children, Family",
+   "About: drama series, prestige drama, limited series, critically acclaimed"
+  ],
+  "201": [
+   "Movies only",
+   "About: biopic, based on a true story, based on true events, biographical"
+  ],
+  "210": [
+   "Movies only",
+   "Genre: Music"
+  ],
+  "211": [
+   "Movies only"
+  ],
+  "212": [
+   "Movies only",
+   "IMDb rating 6.5 or higher",
+   "About: foreign language film, french cinema, japanese cinema, italian cinema"
+  ],
+  "213": [
+   "Movies only",
+   "About: midnight movie, cult film, grindhouse, exploitation"
+  ],
+  "214": [
+   "Movies only",
+   "About: cult film, cult following, cult classic, underground film"
+  ],
+  "215": [
+   "TV episodes only",
+   "Network: Cartoon Network"
+  ],
+  "216": [
+   "TV episodes only",
+   "Genre: Animation or Kids or Children or Cartoon or Animated",
+   "Released 2000 to 2009",
+   "Rated: TV-Y, TV-Y7, TV-G, G, TV-PG"
+  ],
+  "217": [
+   "TV episodes only",
+   "Genre: Comedy or Talk Show or News"
+  ],
+  "218": [
+   "Studio: DreamWorks Animation or Pacific Data Images",
+   "Rated: G, PG, PG-13, TV-Y, TV-Y7, TV-G, TV-PG"
+  ],
+  "219": [
+   "Movies only",
+   "About: spy, espionage, secret agent, mi6"
+  ],
+  "400": [
+   "Movies only",
+   "Rated: G, PG, PG-13",
+   "About: live action and animation"
+  ],
+  "401": [
+   "Movies only",
+   "Studio: Miramax or Miramax Films or Dimension Films"
+  ],
+  "402": [
+   "Movies only",
+   "Genre: Comedy",
+   "Not genre: Animation, Family, Children, Kids",
+   "Released 1995 to 2029",
+   "Rated: R"
+  ],
+  "403": [
+   "Genre: Action or Adventure or Animation or Anime or Biography or Cartoon or Children or Comedy or Crime or Documentary or Docuseries or Drama or Fantasy or History or Holiday or Horror or Kids or Music or Musical or Mystery or News or Romance or Science Fiction or Sport or Talk Show or Thriller or War or War & Politics or Western"
+  ],
+  "404": [
+   "Movies only",
+   "Genre: History or Biography",
+   "Not genre: Documentary, Docuseries, Animation, Animated"
+  ],
+  "405": [
+   "Movies only",
+   "Released 2000 to 2009"
+  ],
+  "406": [
+   "Movies only",
+   "Genre: Comedy",
+   "Not genre: Animation, Animated",
+   "Released 2000 to 2009"
+  ],
+  "407": [
+   "TV episodes only",
+   "Genre: Comedy",
+   "Not genre: Anime, Animation",
+   "Released 2000 to 2009"
+  ],
+  "408": [
+   "Movies only",
+   "Genre: Horror",
+   "Not genre: Family, Children, Kids, Animation, Animated",
+   "Released 1975 to 1999"
+  ],
+  "409": [
+   "Movies only",
+   "Genre: Holiday or Christmas",
+   "Rated: G, PG, TV-Y, TV-Y7, TV-G, TV-PG"
+  ],
+  "410": [
+   "Movies only",
+   "Genre: Holiday or Christmas",
+   "Rated: PG-13, R, TV-14, TV-MA"
+  ],
+  "411": [
+   "Movies only",
+   "Genre: Holiday or Christmas",
+   "Released before 1999"
+  ],
+  "412": [
+   "Movies only",
+   "Needs every one of these genres: Romance",
+   "Not genre: Animation, Animated",
+   "Released 1980 or later",
+   "Rated: G, PG, TV-Y, TV-Y7, TV-G, TV-PG, NR, Not Rated",
+   "About: christmas, christmas romance, christmastime, christmas eve",
+   "Runs 70 to 120 minutes"
+  ],
+  "413": [
+   "Rated: TV-PG, PG, TV-14, TV-MA, PG-13, R, NR, Not Rated",
+   "Runs 65 minutes or shorter"
+  ],
+  "414": [
+   "Rated: TV-Y, TV-Y7, TV-G, G",
+   "Runs 65 minutes or shorter"
+  ],
+  "415": [
+   "Movies only",
+   "Genre: Horror",
+   "Not genre: Family, Children, Kids, Animation, Animated",
+   "About: slasher, masked killer, teen slasher, final girl"
+  ],
+  "416": [
+   "Movies only",
+   "Genre: Horror",
+   "Needs every one of these genres: Horror, Comedy",
+   "Not genre: Family, Children, Kids, Animation, Animated",
+   "Rated: PG, PG-13, R, NC-17, TV-14, TV-MA, NR"
+  ],
+  "417": [
+   "Movies only",
+   "Genre: Horror",
+   "Not genre: Family, Children, Kids, Animation, Animated",
+   "About: found footage, found footage horror"
+  ],
+  "418": [
+   "Movies only",
+   "Genre: Horror",
+   "Not genre: Family, Children, Kids, Animation, Animated"
+  ],
+  "419": [
+   "TV episodes only",
+   "Genre: Mystery or Horror"
+  ],
+  "420": [
+   "TV episodes only",
+   "Genre: Comedy or Documentary",
+   "About: cringe, cringe comedy, awkwardness, awkward"
+  ],
+  "421": [
+   "Movies only",
+   "Studio: A24"
+  ],
+  "422": [
+   "Runs 65 minutes or shorter"
+  ],
+  "423": [
+   "TV episodes only",
+   "Genre: Comedy",
+   "Not genre: Anime, Animation",
+   "Released 1980 to 1989"
+  ],
+  "424": [
+   "Movies only",
+   "Genre: Comedy",
+   "Not genre: Animation, Animated",
+   "Released 1980 to 1989"
+  ],
+  "425": [
+   "TV episodes only",
+   "Genre: Comedy or Drama or Family",
+   "Not genre: Animation, Anime, Cartoon",
+   "Released 1980 to 1989",
+   "Rated: TV-G, TV-PG, TV-14"
+  ]
+ }
+}

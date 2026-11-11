@@ -35,6 +35,337 @@ before any pick, so the player kept its own track, which wasn't read. The early 
 change, and why it happens on the MP4 (3 plays of 6 over both builds) and not the MKV (none of 5) wasn't looked into. Not run on a TV: the no-pick rule
 (`NxAudioTrackOffCommentary`), which a Plex direct play is the case for, a Plex file at all, and Jellyfin.
 
+## 2026-11-10 (web tuner and Docker 1.0.17)
+
+**Shipped.** `tunerVersion` 1.0.17, tag `tuner-v1.0.17`, on main after the web branch merged (hosted nostalgex.app deploys with main; the image `ghcr.io/chadmueller/nostalgex:1.0.17`,
+`1.0` and `latest` come from the tag). The Apple TV v1.0.29 stays the Latest release on GitHub. Nothing else was tagged.
+
+**Changed.** Everything in the entries below: the Apple TV's setup, loader, Settings rail, bundle stripes and list, Now Playing details and program rows, the guide's approved sizes, Plex subtitles and
+audio language, the commentary rule, MISSING CHANNELS, CHANNELS & BUNDLES as link rows, GUIDE TIMEOUT, background library refresh, PAGE SIZE (off unless chosen), the playback recovery ladder, and "bundle" in the
+words. The site's wording commit (README, privacy, how channels work, three blog posts, the web tuner features doc) went with it. The Apple TV and Roku apps were not touched.
+
+**Verified.** `npm test`, `npm run build`, `npm run build:selfhost` and the tuner version check pass; 31 browser smokes pass except `empty-lineup` and two negative controls in `stop-waiting`, which fail the same way on
+main before this work (they are not caused by it). The empty-guide smoke was failing before and now reads the visible copy line. Not verified on a real TV browser, and the burned-in Plex subtitle text and a really starving
+stream were checked by request, not by picture. A reviewer pass ran on the final head before the push.
+
+**Half-done.** #254 (first-run onboarding: the first-guide hint and the first-run wording need a design call) and #253 (THEME, waiting for PR #235) stay open. The Roku and Android ports listed in `projects/nostalgex-internal/docs/PARITY.md` are not started.
+
+## 2026-11-10 (web tuner: the Apple TV's approved sizes, guide and Now Playing, #251 and #261)
+
+**Why.** Chad approved the Apple TV's final numbers on the basement TV. The web follows them in points, 1 pt = 0.5 CSS px on a desktop and a TV browser (`--pt`, which is
+0.5 px divided by the page zoom on the TV-browser steps, so it stays 0.5 px on screen).
+
+**Guide.** Rows 64 pt (32 px; 48 authored at the 960x540 step), header 58 pt, titles, numbers and names 22 pt (11 px), times and the CHANNEL heading 25 pt (12.5 px). The live
+programme and the focused row are white; every other title is the new DIM `#80879A` (4.83:1 on the lightest row). Guide row text may be below 12 px; state text keeps the floor.
+The phone keeps its own table (13 px titles, 12 px times).
+
+**Now Playing.** All panel text 22 pt; the title 29 pt white, up to 3 lines; the CH tag in VT323 at 28 pt (back on the VT323 face, as on the Apple TV) with a bar 8 by 24 pt; the poster 120 by 180 pt;
+control rows 64 pt high with 18 pt side padding and an 8 pt gap. UP NEXT is one line under the info: the next title, then a cyan badge (`UP NEXT IN 84 MIN`, cyan on `#0B2A3A`, a 1.5 px outline),
+minutes only (`scripts/nostalgex-up-next.js`: 84 MIN, 120 MIN, LESS THAN 1 MIN), a long title cut with an ellipsis and the badge always kept. The left column is only the channel line, the title and the UP NEXT line;
+the progress bar and time stay. Not built, as Chad said: the full-screen channel overlay's poster.
+
+**Tests.** The smokes that slice the page (language match, web tune ownership, plex paging) learned the new modules and the one capped retry; `npm test` passes.
+
+## 2026-11-10 (web tuner: the parity list, where it stands)
+
+Worked on `web/visual-batch-1-1110` and closed: #248, #249, #250, #251, #252, #255, #256, #257, #258, #259, #260, #261. Open: #254 (the first-guide hint and the first-run
+wording are a design call; the start screen, the http message and the Apple TV's words after connecting are in, and the connect page's TV-browser height is
+fixed) and #253 (THEME waits for PR #235). Nothing is on main, nothing is tagged, `tunerVersion` is unchanged. New shared logic with tests: `nostalgex-audio-pick.js`,
+`nostalgex-up-next.js`, `nostalgex-channel-requirements.js`, `nostalgex-guide-timeout.js`, `nostalgex-library-refresh.js`, `nostalgex-playback-recovery.js`. No existing engine file
+and not `channels.json` were changed, so the Roku golden vectors are untouched; Roku ports compare against the new vectors listed in PARITY.md.
+
+## 2026-11-10 (web tuner: parity group 5, the playback recovery ladder, #258)
+
+**Why.** From reading the code (not measured): the web stopped a channel after 3 failures in a row where the Apple TV allows 5, never tried a 1080p
+stream, and skipped a frozen stream after 8 s without asking for a smaller one.
+
+**Changed.** `scripts/nostalgex-playback-recovery.js`, a port of `PlaybackStarvation.swift`, `ChannelFailureRun.swift` and the ladder rule in `AppState+Playback.swift`
+(18 checks replaying the Apple TV's starvation tests, in `npm test`). The page now goes direct play, then the server stream (as before), then ONE retry capped at 1080p from where the
+program is (Plex: `maxVideoBitrate=12000`, `videoResolution=1920x1080`, `autoAdjustQuality=0`; Jellyfin and Emby: the HIGH ceiling), then the failure card. It skips that retry
+when STREAM QUALITY already caps at 1080p or lower. A stream that was playing and starves (three stalls of 3 s inside two minutes, or one freeze of 20 s) gets the same retry, then is
+skipped; the old 8 s freeze also tries the retry first. Five failures in a row stop the channel (was three). `playback-recovery-browser-smoke.mjs` (13 checks, a Plex stub that fails
+on demand and Playwright's clock). **Roku and Android** have their own ladders (PARITY rows 100 and 101); compare against `nostalgex-playback-recovery-smoke.mjs`.
+
+**Not verified.** Against a real server on a stream that really starves; the 20 s and 3-stall paths are driven by a faked playhead.
+
+## 2026-11-10 (web tuner: parity group 4, GUIDE TIMEOUT, background library refresh, PAGE SIZE, #252 #259 #255)
+
+**#252.** GUIDE TIMEOUT: OFF, 5 MIN, 15 MIN in PLAYBACK & PICTURE, 5 MIN by default, key `nostalgex_guide_timeout` (the Apple TV's). Left alone that long, with a
+channel playing under a visible guide, the page shows the picture alone (`body.nx-idle`: the guide, panels, rail and logo hidden, the
+video filling the window; not browser full screen, which a timer may not enter). Any key, click, tap or pointer move brings it back. Settings, a loading
+screen, an open dialog and a guide with nothing playing are left alone. `scripts/nostalgex-guide-timeout.js` (10 checks, in `npm test`) and
+`guide-timeout-browser-smoke.mjs` (16 checks, with Playwright's clock).
+
+**#259.** The page reads the library again while it stays open, as the Apple TV does: a check every 15 minutes (and when a hidden tab returns), a read once 6 hours
+have passed, in the background with no loading screen and no retune. On Plex it first asks each server for its section fingerprint
+(`updatedAt`, `contentChangedAt`) and skips the read while nothing changed, up to a 24 hour cap. Jellyfin and Emby have no fingerprint, so they read every
+6 hours. `scripts/nostalgex-library-refresh.js` (12 checks) and `library-refresh-browser-smoke.mjs` (10 checks, a Plex stub and a fake clock). **Roku**
+already has the Apple TV's loop (#67); the Android port compares against the same numbers.
+
+**#255.** PAGE SIZE (AUTO, LARGE, OFF) in PLAYBACK & PICTURE, `nostalgex_page_size`: `html.nx-large` lays the page out like a 1440 px window and scales it by a
+third (zoom 1.3333), the same picture the 960x540 TV step makes at 2x, with the guide still showing about 9 rows. AUTO does it at 1800x1000 and up with a mouse
+and never on touch; LARGE from 1440 px wide; OFF never. OFF is the default (Chad, 2026-11-10: nobody's window gets larger unasked); LARGE and AUTO are opt-in.
+`page-size-browser-smoke.mjs` (14 checks).
+
+## 2026-11-10 (web tuner: parity group 3, CHANNELS & BUNDLES as link rows and MISSING CHANNELS, #260 and #257)
+
+**Why.** The Apple TV and the Roku show CHANNELS & BUNDLES as a short list of link rows, each opening its page, with WATERSHED on the list
+and a WHY ARE SOME CHANNELS MISSING? page under the bundles. The web had one long scrolling page and no way to learn why a channel is not on air.
+
+**Changed.** The category is a list of CHANNEL BUNDLES, FRANCHISES and MY COLLECTIONS (each with its value on the right) and the WATERSHED
+switch, which moved here from PLAYBACK & PICTURE (the card's OPEN SETTINGS opens this list). Each page has a back button; Esc or Left goes
+back to the row it came from; the arrow-key index works per page (`channelsPage`, `showChannelsPage`). Switching a bundle, franchise or collection is
+unchanged. The bundle rows carry an amber MISSING count and the page ends with `WHY ARE SOME CHANNELS MISSING?` and its count, which opens MISSING CHANNELS: a
+card per channel (its colour bar, `Needs 15 matching titles. You have 3.`, and its rules in plain words). The plain words are
+`scripts/nostalgex-channel-requirements.js`, a port of `ChannelRules.plainLanguageRequirements`, with every channel's lines in
+`scripts/channel-requirements-golden.json` (142 channels, 154 checks, in `npm test`). **Roku and Android** compare against that file.
+`watershed-browser-smoke.mjs` and `franchise-channels-browser-smoke.mjs` navigate the pages now (the franchise one also had a stale selector and
+a focus race, fixed).
+
+**Not verified.** The plain-words lines are checked against the Swift by reading it, not by running the Swift; the golden file is this port's own output.
+
+## 2026-11-10 (web tuner: parity group 3 so far, the guide in DM Mono, #251)
+
+**Why.** The guide was the one place still drawn in VT323; the Apple TV draws it in DM Mono Medium.
+
+**Changed.** Every text node in the guide, the info panel and the rail is DM Mono now (`guide-text-browser-smoke.mjs` checks it).
+Guide row text is 0.34 of the row (the Apple TV's 22 pt on a 64 pt row) and times 0.39 of the header (25 on 58), with the 11 and 12 px
+on-screen floors; LARGE multiplies by the same 1.3 ratios. Rows are `clamp(40px, 4.8vh, 60px)` so about 9 show at 1280x800 and 9.6 at
+1920x1080 (the Apple TV shows 9 to 10). Phone keeps its own table at 12 px. The info panel's channel tag and time, the Settings rail title,
+the channel number in Settings, the overlay and the sleep countdown moved to DM Mono too; the VT323 stylesheet link is gone.
+
+## 2026-11-10 (web tuner: parity group 2, Now Playing details, program rows, and "bundles" in the words)
+
+**Why.** #261 and #248, then Chad's call that the apps' mixed "package" and "bundle" become "bundle" everywhere a person reads it.
+
+**#261, Now Playing details.** The info panel's left column is now what the Apple TV's Now Playing panel shows and nothing more (Chad's
+correction the same day: no description, genres, year, rating or runtime): the Plex poster beside the info (hidden when there is none),
+CH with a bar in the channel's colour, the title (and the episode or artist line), the channel name, then the UP NEXT card, a cyan chip
+`UP NEXT IN 12 MIN` (`LESS THAN 1 MIN`, `1 HR 5 MIN`, rounded down; `scripts/nostalgex-up-next.js`, 12 checks in `npm test`) and the next title. A
+hint line under the details says what the control the viewer is on does. The progress bar and time stay (the guide's panel uses them).
+The web's panel is always on screen, so there is no open and close to mirror. Jellyfin and Emby show no poster (the Apple TV's is Plex only).
+
+**#248, program rows.** CAPTIONS, SUBTITLE LANGUAGE, AUTO SUBTITLES, AUDIO and AUDIO LANGUAGE on the rail and in the phone drawer, each shown
+only when the playing file has something to choose; AUDIO, AUDIO LANGUAGE and SUBTITLE LANGUAGE open one list. A track chosen in AUDIO holds for
+that program. `plex-tracks-browser-smoke.mjs` covers the rows and the choice (17 checks).
+
+**Words.** PACKAGES, Packages and package became BUNDLES, Bundles and bundle in every string a person reads (the empty-guide line, the
+list heading and its aria label, Settings pane lines, the hint, the keyboard help line, the seasonal offer pill). Identifiers, ids, CSS
+classes (`pkg-*`), storage keys, function names and log lines are unchanged. `empty-guide-browser-smoke.mjs` expects the new line.
+
+## 2026-11-10 (web tuner: parity group 1, the audio pick, Plex tracks and the /decision check, same branch)
+
+**Why.** Chad asked for all the web parity issues (#248 to #261) to be worked and closed before the next web and Docker release.
+This is the first group: #256, #250, #249.
+
+**#256, Plex and `/decision`.** Measured, no change needed. `scripts/plex-start-decision-probe.mjs` sends the web tuner's own
+`start.m3u8` request (same query, same order) to a real Plex server for a channel change every 1.5 s and every 0.3 s, 20 changes each, with and
+without the old session stopped (12 changes at 0.4 s with the stop lost), plain and with `/decision` first. Lab Plex 1.43.5 in a Linux
+container, software transcode: 0 of 92 `start.m3u8` answers were not 200 in either mode, median 10 ms plain and 15 ms with the
+decision call. The Apple TV saw its 400s on a Mac with a hardware encoder, so this does not prove a hardware encoder behaves the same;
+the probe takes `PLEX_URL`, so it can be pointed at any server.
+
+**#250, commentary.** New `scripts/nostalgex-audio-pick.js` (`isCommentary`, `skippingCommentary`, `preferredAudioStream`,
+`plexAudioStream`), a JS port of `AudioTrackCommentary.swift` and `JellyfinPlaybackResolver.preferredAudioIndex`, with
+`scripts/audio-pick-golden.json` (the Apple TV test vectors) and `nostalgex-audio-pick-smoke.mjs` (33 checks, in `npm test`). The web's
+Jellyfin and Emby pick now follows the Apple TV: never a commentary while another track exists, then AUDIO LANGUAGE, then a track in the
+browser's language or English with the most channels, then the file's default. Auto used to leave the server's default alone; it now
+pins like the Apple TV. `jellyfin-audio-streams-browser-smoke.mjs` expects that and has a default-flagged commentary case.
+
+**#249, Plex tracks.** At tune time a Plex program's metadata is read (2.5 s cap, cached) for its audio and subtitle streams. AUDIO
+LANGUAGE, the Apple TV's pick and the commentary rule choose an audio track and the server stream is asked for it (`audioStreamID`); a
+file that would play directly but needs another track goes to a server stream. Subtitles inside the file are burned into the server stream
+(`subtitles=burn`, `subtitleStreamID`), a subtitle file beside the film (SRT) is fetched from `/library/streams/<id>` and drawn by the page.
+Plex accepts both parameters (200 playlist on the lab server); `plex-tracks-browser-smoke.mjs` (11 checks) covers the requests
+against a stub. Not verified: that the burned text shows in the picture, and an image subtitle (PGS) burn. The "Jellyfin and Emby only"
+wording is gone from Settings and the keyboard list. **Roku and Android** port `audio-pick-golden.json` (#236, #245, #246 on the Roku side).
+
+## 2026-11-10 (web tuner: text one step smaller, same branch)
+
+**Why.** Chad, on the preview: the guide text is too big, and the font increases overall were more than he wanted. The Apple TV took
+the same step the same day: guide row text 29 to 22 pt, rows 76 to 64 pt, Settings one step down (row text 29 to 25, headings 34
+to 29, rail rows 76 to 64, rail width 470 to 420, toggle 52x30 to 44x26). The web follows by ratio, keeping its face and tokens.
+
+**Changed.** Guide row text (titles, numbers, names) is 0.76 of what it was (`--gr`), rows are 40 px (50 before; 52 on the
+TV-browser step), the header 38 (42), times and the CHANNEL heading stay. About 9 rows show at 1280x800, 7.6 at 960x540 (8.9 and 8.5
+on main). The info panel steps down one notch (`--is` 1 to 0.85, and 0.85 to 0.72 under 900 px tall). Settings and every dialog take
+`--ts` 0.85 (phones 0.72), the rail is 300 wide (340), its rows 14 px type and about 44 px tall, the pane title 22 (26), the bundle
+switch 48x26 (56x30). Setup screens: title 40 to 34, button 24 to 20, row padding 22/30 to 18/26. Loader: first-setup line 22 to 19,
+rail label 16 to 14, rail circle 28 to 24, headline 32 to 27, detail 22 to 19, caption 19 to 16, stall line 20 to 17, stall note 17 to
+14, STOP WAITING 24 to 20, START OVER 16 to 14. The 12 px floor on text that carries state (ON and OFF, labels, errors) is unchanged;
+only guide row text goes under it, on the TV-browser step (12.3 px on screen). The phone guide keeps its own table (as on main).
+
+Before and after, in CSS px as the page measures them (960x540 values are authored px; multiply by 0.667 for what is on screen):
+
+| What | Main | Before this pass | After | At |
+|---|---|---|---|---|
+| guide time (25 pt, unchanged) | 20 | 26 | 26 | 1280x800 |
+| guide time (25 pt, unchanged) | 20 | 27 | 27 | 960x540 (authored px, zoom 0.667) |
+| guide CHANNEL heading (unchanged) | 8 | 15.6 | 15.6 | 1280x800 |
+| guide CHANNEL heading (unchanged) | 8 | 24.3 | 24.3 | 960x540 (authored px, zoom 0.667) |
+| guide CHANNEL heading (unchanged) | 7 | 12 | 12 | 390x844 |
+| guide channel number | 20 | 26 | 19.8 | 1280x800 |
+| guide channel number | 20 | 27 | 20.5 | 960x540 (authored px, zoom 0.667) |
+| guide channel name | 18 | 23.4 | 17.8 | 1280x800 |
+| guide channel name | 18 | 24.3 | 18.5 | 960x540 (authored px, zoom 0.667) |
+| guide program title | 18 | 23.4 | 17.8 | 1280x800 |
+| guide program title | 18 | 24.3 | 18.5 | 960x540 (authored px, zoom 0.667) |
+| guide row height | 38 | 50 | 40 | 1280x800 |
+| guide row height | 38 | 52 | 40 | 960x540 (authored px, zoom 0.667) |
+| info channel tag | 12 | 30.6 | 25.9 | 1280x800 |
+| info channel tag | 12 | 25.9 | 25.9 | 960x540 (authored px, zoom 0.667) |
+| info channel tag | 8 | 18 | 18 | 390x844 |
+| info title | 42 | 32.3 | 27.4 | 1280x800 |
+| info title | 42 | 27.4 | 27.4 | 960x540 (authored px, zoom 0.667) |
+| info title | 20 | 14 | 14 | 390x844 |
+| info badges and time | 8 | 20.4 | 17.3 | 1280x800 |
+| info badges and time | 8 | 24 | 24 | 960x540 (authored px, zoom 0.667) |
+| info badges and time | 7 | 16 | 16 | 390x844 |
+| info UP NEXT | 20 | 15.3 | 13 | 1280x800 |
+| info UP NEXT | 20 | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item | - | 16 | 14 | 1280x800 |
+| Settings rail item | - | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item height | - | 53 | 44 | 1280x800 |
+| Settings rail item height | - | 56 | 50 | 960x540 (authored px, zoom 0.667) |
+| Settings rail item height | - | - | - | 390x844 |
+| Settings rail width | - | 340 | 300 | 1280x800 |
+| Settings rail width | - | 340 | 300 | 960x540 (authored px, zoom 0.667) |
+| Settings pane title | - | 26 | 22 | 1280x800 |
+| Settings pane title | - | 26 | 22 | 960x540 (authored px, zoom 0.667) |
+| Settings pane line | - | 20 | 17 | 1280x800 |
+| Settings pane line | - | 20 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings section label | 10 | 17 | 14.5 | 1280x800 |
+| Settings section label | 10 | 18 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings section label | 10 | 14.5 | 12.2 | 390x844 |
+| Settings row title | 22 | 22 | 18.7 | 1280x800 |
+| Settings row title | 22 | 22 | 18.7 | 960x540 (authored px, zoom 0.667) |
+| Settings row title | 22 | 18.7 | 15.8 | 390x844 |
+| Settings row description | 12 | 20 | 17 | 1280x800 |
+| Settings row description | 12 | 20 | 18 | 960x540 (authored px, zoom 0.667) |
+| Settings row description | 12 | 17 | 14.4 | 390x844 |
+
+**Tests.** `guide-text-browser-smoke.mjs` held a desktop title size of 18 px that has been stale since the 1.3x guide, and clicked
+the old Settings tab strip; it now expects 18 x 1.3 x 0.76 and uses the rail. It passes (104 checks).
+
+## 2026-11-10 (web tuner: the loading screen as the Apple TV's, BUNDLES button removed, same branch)
+
+**Why.** The loading screen was the last first-run screen still in the old look: a coffee ask under the rail, a bordered card on
+phones, the CRT edge tint over a black page, a detail line louder than the headline.
+
+**Changed.** `.loading-library` is now the Apple TV's `LoadingView` column on the same scale as the setup screens: logo (500),
+the first-setup line (22), the step rail (28 circles, 16 labels, upcoming steps dimmer than finished ones), the cyan headline (32)
+with the Apple TV's dots, one quiet detail line (22 at 45%), the progress bar (420 wide, 19 caption), the stall block with STOP
+WAITING (24, the setup screens' primary button), and START OVER always present and quiet (16). The buy-me-a-coffee block is gone
+from the loader. The retro overlay, the chromatic edge and the CRT corners no longer draw over it. Focus is the page's 3 px ring on
+both buttons. Phones get the same column with no card and nothing under 12 px. No loader logic, phase or number changed.
+The guide header's BUNDLES button (`#grid-pkg-btn`) is removed: the Apple TV has none, and Left at the start of the guide
+still opens the bundle list.
+
+**Parity issues filed (label `web parity`).** One per gap against the Apple TV, found by reading this branch and `appletv/1.0.32-design`:
+#261 Now Playing panel as the Variant A (poster, CH tag, title, year and rating, UP NEXT, hint line); #248 AUDIO, AUDIO LANGUAGE,
+SUBTITLE LANGUAGE and AUTO SUBTITLES rows in the rail and drawer; #249 Plex subtitles and Plex language picks; #250 skip audio
+tracks titled commentary; #251 the guide in DM Mono Medium at the Apple TV's sizes (it is still VT323); #252 GUIDE TIMEOUT; #253 THEME
+(after #235 merges); #254 first-run onboarding; #255 a large text step for a 1920x1080 PC on a TV; #256 check Plex's 400 on
+`start.m3u8` and call `/decision` first if it happens; #257 WHY ARE SOME CHANNELS MISSING?; #258 playback recovery ladder;
+#259 background library refresh; #260 CHANNELS & BUNDLES as link rows. Settings as a left rail, SUPPORT with every link,
+libraries first with RESCAN LIBRARY and SIGN OUT last, bundle stripes and the bundle list, the library picker, the two-column
+pickers and the loader are done on this branch, so they are not issues. The Apple TV tried the one-server default and reverted it
+on `appletv/1.0.32-design`; the web keeps it until Chad decides.
+
+**Not verified.** The bundle list is now reachable only by key on the web: a mouse or touch user, and a TV browser, has no other
+way in. Not measured on a real TV browser.
+
+## 2026-11-10 (web tuner: setup pickers in two columns, one server on by default, same branch)
+
+**Why.** The setup pickers were a single stacked column on desktop and the TV browser, although the layout (logo, title and
+copy left, list and CONTINUE right) was already in the CSS. Four places set the connect screen's inline `display` to `flex`,
+which beat the stylesheet's `grid`; they now set `grid`. Chad also wanted a first setup to start with one server on, not all.
+
+**Changed.** The server list starts with exactly one server on: the first one you own, else the first listed; the rest are OFF.
+All off is allowed and disables CONTINUE (Up and Down skip a disabled button). The list height now follows the screen instead
+of a `vh` cap, which came out too short on a TV browser where the page is zoomed (a third row was cut off at 960x540). One
+column only at 760px wide and under (and short portrait). Saved selection keys and ids are untouched. CHOOSE YOUR LIBRARIES
+still starts with every library on, because it is opting a library out; only the server step changed.
+
+**Tests.** `plex-resolve-browser-smoke.mjs` switches the other servers on before CONTINUE for its multi-server cases, and
+three browser smokes read the connect screen's display as `grid`. `empty-guide-browser-smoke.mjs` already fails 5 checks on
+this branch without this change (the empty-guide copy line); not touched here.
+
+**Apple TV / Roku.** Apple TV still defaults to owned servers (all if none owned). Roku and Android pickers are not ported.
+
+## 2026-11-10 (web tuner: CHOOSE YOUR LIBRARIES, same branch)
+
+**Why.** Chad asked for the library pick the Apple TV has: choose which libraries become channels, so a library you do not
+want is never scanned.
+
+**Changed.** New `scripts/nostalgex-library-selection.js`: one stored set of libraries switched OFF, under
+`nostalgex_deselected_library_sections` (the Apple TV's key name), entries `<serverId>::<sectionKey>`. The server id is the
+Plex machineIdentifier (the name when there is none) or the Jellyfin/Emby server URL (lower case, no trailing slash); the
+section key is the Plex section key or the Jellyfin/Emby view Id, so a rename or rescan never changes it. Default is none
+off, so existing installs see no change. The scan loops (`scanOnePlexServerSections`, `fetchJellyfinLibraryScan`) skip OFF
+libraries and nothing else. First setup shows CHOOSE YOUR LIBRARIES between the server step and the scan (Apple TV layout,
+logo left, list right, CONTINUE focused, Up/Down walk, Enter/Space toggle, Esc/Left back to the server list on Plex with more
+than one server); only on a visit straight from a sign-in, never on a restored saved login. Settings > SERVERS & ACCOUNTS
+lists the libraries first; toggling clears the library cache and rebuilds like RESCAN LIBRARY (guide stays up), the last
+library that is on cannot be turned off (as on the Apple TV), a change made during a rescan runs a second rescan after it.
+
+**Tests.** `npm run test:library-selection` (23 checks, in `npm test`). `nostalgex-plex-paging-smoke.mjs` counts the paged
+section-list calls in the page, now four. `saved-login-browser-smoke.mjs` presses CONTINUE on the first sign-in.
+
+**Roku / Android.** No Roku or Android equivalent exists yet; the key and the id rule above are the contract to port.
+
+## 2026-11-10 (web tuner round 2, same branch)
+
+**Why.** Chad looked at the batch 1 preview: everything read small, the guide most, the support strip was skipped by the
+keyboard, and Settings should be the Apple TV's rail and content. Branch `web/visual-batch-1-1110`, pushed (branch only).
+
+**Changed.** The guide is 1.3x as a whole (row 38 to 50, header 32 to 42, channel column 160 to 200, text 18 to 23.4 and 20
+to 26; `--gs` and `--g-*` in `plex-tuner.html`), against the Apple TV's 80pt rows with 20pt text; at the 960x540 step 1.35,
+which also puts the guide text at the 16 floor. GUIDE TEXT SIZE multiplies on top and its ratios hold. Under 1025px
+wide and on touch screens the old sizes stay. The corner logo is 170px, the info panel uses the Apple TV's InfoPanelView
+sizes (tag 36, title 38, episode 22, description 20, badges and times 24, up next 18) stepped down on short windows.
+Keyboard: Up and Down walk every guide row including SUPPORT, INFO and the seasonal invite (Enter presses it, Left and
+Right walk the invite's buttons); Enter and Space press the focused control instead of tuning in; the guide is a Tab
+stop; Settings, the dialogs and the drawer keep focus inside and hand it back; the hidden full-screen controls are out of
+the Tab order. Settings is a rail of the Apple TV's categories (SUPPORT NOSTALGEX, PLAYBACK & PICTURE, CHANNELS & BUNDLES,
+SERVERS & ACCOUNTS, ABOUT) with the content beside it; Up and Down in the rail swap the content, Right or Tab goes in,
+Left or Esc comes back, Esc in the rail closes. Under 701px wide the tab strip stays.
+
+**Not run.** No test suites for this round (Chad's call); the existing smokes that click Settings tabs were not re-run.
+
+## 2026-11-10 (web tuner and Docker: first visual batch, branch only)
+
+**Why.** The Apple TV and the web tuner had drifted apart on type, contrast and states. Chad asked for the audit's first
+batch, and then for the web tuner to use the Apple TV's face. Branch `web/visual-batch-1-1110`, off main at `8a06696d`,
+not pushed: hosted and Docker take the same two pages, so it ships as one change when Chad says go.
+
+**Changed.**
+- **Face.** DM Mono Regular (values and text) and Medium (labels) are served by the tuner itself, `tuner/fonts/` and
+  `tuner/fonts.css`, the same TTFs the tvOS app and the Roku package ship, with the OFL text beside them and in the
+  Docker image's `vendor/licenses/`. Before this the CSS named DM Mono and never loaded it, so those lines drew in the
+  browser's monospace. VT323 stays for channel numbers, CH tags, times, countdowns and the guide rows. Press Start 2P and
+  Silkscreen are gone from the tuner pages and from the Google Fonts request and the Docker font sheet. The sign-in panel
+  on `web-tuner.html` follows (it called Space Mono a stand-in for DM Mono).
+- **Floors, in screen pixels.** DM Mono and anything carrying state 12px, VT323 16px (Chad's rule: 1 Apple TV pt is 0.5
+  CSS px on a desktop and on a TV browser). The two TV-browser steps zoom the whole page (0.875 and 0.6667), so the audit's
+  px numbers were not what the screen drew; `--nx-z`, `--nx-fs` and `--nx-fs-tag` keep the floors true to the screen at
+  every step. Guide rows keep their own sizes (GUIDE TEXT SIZE owns them).
+- **The rail** is a list of rows, label left and value right, so SETTINGS can no longer run into QUALITY (they shared two
+  58px tiles). On a 960x540 TV browser it is two columns of 48px cells with no key hints and no APPLE TV tile.
+- **Text colour.** Every white text alpha is now one of four steps (0.55, 0.7, 0.85, 1), channel colours used as text are
+  mixed toward white until they reach 4.5:1, the playing cell of a selected guide row is 45% of the channel colour on the
+  page background (white on it is 5.19:1 or better on all 97 colours in channels.json).
+- **States.** One look for every ON/OFF button: OFF grey, ON cyan outline, focus the cyan slab. Chips: chosen is a bar under
+  the chip, never a fill, so a focused chip cannot look chosen. A 3px white focus ring replaces the browser's 1px one.
+- **Phone Settings tabs** share the width (they ran 9px off both edges at 390) and are 44px high.
+
+**Half-done / not done.** Guide rows at the 960x540 step draw VT323 at 12 screen px (floor 16): the fix is a taller row and a
+Large default for that class, which halves the visible rows, so it waits for Chad. A few glyphs DM Mono and VT323 lack
+(arrows, star, check, cup, triangles) still come from the system font. The unused @fontsource packages for Press Start 2P
+and Silkscreen are still in package.json.
+
+**Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
+
 ## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
 
 **Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more

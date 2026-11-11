@@ -5,8 +5,9 @@
    SIGN-IN (web-tuner.html #signin): the Apple TV connect screens (1.0.28) in a
    browser. Colours, focus styles and sizes follow the Apple TV spec
    (nostalgex-internal SIGNIN-FLOW.md, "Focus styles"). The panel is black in
-   both page themes, like a TV screen. Space Mono stands in for DM Mono: the
-   page already loads it, and the Docker build vendors it.
+   both page themes, like a TV screen. The face is the Apple TV's DM Mono (tuner/fonts.css,
+   Regular and Medium only, so what was bold is Medium). Space Mono, which the page already
+   loads, is the fallback while the file loads.
    Exactly one thing is bright: the focused control. A cursor remote (TV Bro)
    and a mouse get the same look on hover.
    ========================================================================== */
@@ -18,7 +19,7 @@
   --sg-warn: #ffb020;
   --sg-wait: #00c4ff;
   --sg-ease: 0.14s ease-out;
-  --sg-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sg-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   width: 100%;
   padding: 36px 32px;
@@ -54,45 +55,45 @@
 .signin p { margin: 0; }
 .signin-title {
   margin: 0;
-  font: 700 22px/1.25 var(--sg-mono);
+  font: 500 22px/1.25 var(--sg-mono);
   letter-spacing: 0.06em;
   color: var(--sg-cyan);
 }
-.signin-text { font-size: 15px; line-height: 1.55; color: rgba(255, 255, 255, 0.7); }
-.signin-small { font-size: 14px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.78); }
+.signin-text { font-size: max(15px, var(--nx-fs)); line-height: 1.55; color: rgba(255, 255, 255, 0.7); }
+.signin-small { font-size: max(14px, var(--nx-fs)); letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.85); }
 .signin-small a { color: var(--sg-cyan); text-underline-offset: 4px; }
 .signin-dim, .signin-or {
-  font-size: 13px;
+  font-size: max(13px, var(--nx-fs));
   letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
 }
 .signin-or { margin-top: 6px; }
 .signin-meta { letter-spacing: 0.04em; overflow-wrap: anywhere; }
 .signin-server {
-  font: 700 26px/1.2 var(--sg-mono);
+  font: 500 26px/1.2 var(--sg-mono);
   letter-spacing: 0.04em;
   color: var(--sg-cyan);
   overflow-wrap: anywhere;
 }
 .signin-head { display: flex; flex-direction: column; gap: 6px; }
 .signin-code {
-  font: 700 clamp(46px, 9vw, 68px)/1.1 var(--sg-mono);
+  font: 500 clamp(46px, 9vw, 68px)/1.1 var(--sg-mono);
   letter-spacing: 0.18em;
   color: #fff;
   padding-left: 0.18em; /* balance the trailing letter-spacing */
 }
 .signin-code--digits { letter-spacing: 0.24em; padding-left: 0.24em; }
-.signin-status { font-size: 15px; letter-spacing: 0.12em; color: var(--sg-wait); }
+.signin-status { font-size: max(15px, var(--nx-fs)); letter-spacing: 0.12em; color: var(--sg-wait); }
 .signin-error {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: max(14px, var(--nx-fs));
+  font-weight: 500;
   line-height: 1.5;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--sg-error);
 }
-.signin-warn { font-size: 14px; line-height: 1.5; color: var(--sg-warn); }
-.signin-hint { margin: -6px 0 0 4px; font-size: 13px; text-align: left; color: rgba(255, 255, 255, 0.45); }
+.signin-warn { font-size: max(14px, var(--nx-fs)); line-height: 1.5; color: var(--sg-warn); }
+.signin-hint { margin: -6px 0 0 4px; font-size: max(13px, var(--nx-fs)); text-align: left; color: rgba(255, 255, 255, 0.55); }
 
 /* Waiting lines: ".", "..", "..." every half second. */
 .signin-dots::after {
@@ -121,7 +122,7 @@
   padding: 12px 20px;
   border: 0;
   border-radius: 14px;
-  font: 700 17px/1.2 var(--sg-mono);
+  font: 500 max(17px, var(--nx-fs))/1.2 var(--sg-mono);
   letter-spacing: 0.08em;
   cursor: pointer;
   outline: none;
@@ -138,7 +139,7 @@
 .signin-btn--secondary {
   background: rgba(255, 255, 255, 0.03);
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.28);
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.7);
 }
 .signin-btn--quiet {
   width: auto;
@@ -147,8 +148,8 @@
   padding: 8px 28px;
   border-radius: 999px;
   background: none;
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.42);
+  font-size: max(15px, var(--nx-fs));
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* Focused: the solid cyan slab. */
@@ -197,7 +198,7 @@
   background: rgba(255, 255, 255, 0.03);
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
   color: #fff;
-  font: 700 16px/1.25 var(--sg-mono);
+  font: 500 max(16px, var(--nx-fs))/1.25 var(--sg-mono);
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -211,7 +212,7 @@
   padding: 14px 18px;
   text-align: left;
 }
-.signin-row-address { font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, 0.55); overflow-wrap: anywhere; }
+.signin-row-address { font-size: max(13px, var(--nx-fs)); font-weight: 400; color: rgba(255, 255, 255, 0.55); overflow-wrap: anywhere; }
 .signin-tile { min-height: 72px; padding: 12px 8px; overflow-wrap: anywhere; }
 .signin-tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px rgba(0, 212, 255, 0.75); color: var(--sg-cyan); }
 .signin-row:focus-visible,
@@ -241,10 +242,10 @@
 .signin-caption {
   display: block;
   margin: 0 0 8px 4px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: max(13px, var(--nx-fs));
+  font-weight: 500;
   letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
   transition: color var(--sg-ease);
 }
 .signin-field:focus-within .signin-caption { color: var(--sg-cyan); }
@@ -257,20 +258,20 @@
   border-radius: 14px;
   background: #0f0f0f;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.85);
   caret-color: rgba(255, 255, 255, 0.9);
   font: 400 20px var(--sg-mono);
   outline: none;
   transition: transform var(--sg-ease), background-color var(--sg-ease), box-shadow var(--sg-ease), color var(--sg-ease);
 }
-.signin-input::placeholder { color: rgba(255, 255, 255, 0.48); opacity: 1; }
+.signin-input::placeholder { color: rgba(255, 255, 255, 0.55); opacity: 1; }
 .signin-input:focus {
   background: #081a21;
   box-shadow: 0 0 0 4px var(--sg-cyan), 0 0 26px rgba(0, 212, 255, 0.55);
   color: #fff;
   transform: scale(1.02);
 }
-.signin-input:focus::placeholder { color: rgba(255, 255, 255, 0.6); }
+.signin-input:focus::placeholder { color: rgba(255, 255, 255, 0.55); }
 .signin-input[type="password"]:not(:placeholder-shown) { letter-spacing: 0.25em; }
 @media (hover: hover) {
   .signin-input:not(:focus):hover { box-shadow: inset 0 0 0 1.5px rgba(0, 212, 255, 0.6); }
@@ -292,3 +293,21 @@
   .signin-btn--primary { font-size: 18px; }
   .signin-server { font-size: 22px; }
 }
+
+
+/* The panel is the right-hand list of the Apple TV's setup layout: no card, left-aligned. */
+.page-connect .signin {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  text-align: left;
+}
+.page-connect .signin-screen { align-items: stretch; }
+.page-connect .signin-title { font-size: max(28px, var(--nx-fs)); }
+.page-connect .signin-btn--quiet { align-self: flex-start; }
+.page-connect .signin-code { text-align: left; }
+.page-connect .signin-qr { align-items: flex-start; }
+.page-connect .signin-or { text-align: left; }
+.page-connect .signin-tiles { grid-template-columns: repeat(2, 1fr); }
+.signin-btn:not(:disabled):focus-visible, .signin-row:focus-visible, .signin-tile:focus-visible { outline: none; }

@@ -29,7 +29,7 @@ const shots = process.env.SHOTS || "";
 if (shots) mkdirSync(shots, { recursive: true });
 
 const HEADING = "NO CHANNELS FOUND";
-const LINE = "Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports.";
+const LINE = "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports.";
 
 const odd = {
   Id: "odd1", Name: "Odd One", Type: "Movie", ProductionYear: 2023, Genres: ["Western"], OfficialRating: null,
@@ -84,7 +84,7 @@ const read = (page) => page.evaluate(() => {
   const box = (id) => { const el = document.getElementById(id); if (!el) return { shown: false, r: { l: 0, t: 0, rt: 0, b: 0 } }; const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); const shown = cs.display !== "none" && cs.visibility !== "hidden" && r.width > 0 && r.height > 0; return { shown, r: { l: r.left, t: r.top, rt: r.right, b: r.bottom } }; };
   return {
     heading: document.querySelector(".plex-empty-title")?.textContent || "",
-    line: (document.querySelector(".plex-empty-text")?.innerText || "").replace(/\s+/g, " ").trim(),
+    line: (document.querySelector(".c-empty .setup-text")?.innerText || "").replace(/\s+/g, " ").trim(),
     block: box("plex-empty"), btn: box("plex-empty-settings-btn"),
     btnText: document.getElementById("plex-empty-settings-btn")?.textContent || "",
     fullscreen: !!document.fullscreenElement,

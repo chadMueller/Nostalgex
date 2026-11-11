@@ -98,28 +98,11 @@ const FONT_SHEETS = [
     out: 'vendor/fonts/tuner.css',
     css: [
       { file: '@fontsource/vt323/400.css' },
-      { file: '@fontsource/press-start-2p/400.css' },
-      { file: '@fontsource/silkscreen/400.css' },
-      { file: '@fontsource/silkscreen/700.css' },
-    ],
-  },
-  {
-    key: 'Bricolage+Grotesque',
-    out: 'vendor/fonts/site.css',
-    css: [
-      // Google serves the opsz axis; the fontsource-variable opsz file is the same font.
-      { file: '@fontsource-variable/bricolage-grotesque/opsz.css', family: ['Bricolage Grotesque Variable', 'Bricolage Grotesque'] },
-      { file: '@fontsource/space-mono/400.css' },
-      { file: '@fontsource/space-mono/700.css' },
     ],
   },
 ]
 const FONT_LICENSES = [
   '@fontsource/vt323/LICENSE',
-  '@fontsource/press-start-2p/LICENSE',
-  '@fontsource/silkscreen/LICENSE',
-  '@fontsource-variable/bricolage-grotesque/LICENSE',
-  '@fontsource/space-mono/LICENSE',
 ]
 
 const GOOGLE_FONTS_LINK = /<link href="https:\/\/fonts\.googleapis\.com\/css2\?([^"]*)" rel="stylesheet">/g
@@ -267,6 +250,10 @@ export function selfhostPlugins({ root, version }) {
         for (const lic of FONT_LICENSES) {
           copyInto(outDir, mod(lic), `vendor/licenses/${lic.split('/')[1]}.txt`)
         }
+        // DM Mono is not an npm font here: the tuner ships the same TTFs as the tvOS app and the
+        // Roku package (tuner/fonts/, linked from tuner/fonts.css, which Vite bundles), so the
+        // licence text comes from beside them.
+        copyInto(outDir, resolve(root, 'tuner/fonts/OFL-DMMono.txt'), 'vendor/licenses/OFL-DMMono.txt')
 
         // Defaults for running dist-selfhost/ without the container. In the image,
         // docker/40-config.sh writes the real one from the environment at start.

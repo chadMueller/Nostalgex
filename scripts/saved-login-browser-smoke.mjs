@@ -152,6 +152,9 @@ const holders = (page, needles) => page.evaluate(async (needles) => {
   await page.fill("#signin-pass", PASSWORD);
   await page.click("#signin-btn");
   await page.waitForURL(/plex-tuner\.html/, { timeout: 15000 });
+  // A first sign-in stops at CHOOSE YOUR LIBRARIES; one Enter on CONTINUE (all libraries on) starts the scan.
+  await page.waitForSelector("#library-picker.active .library-continue", { timeout: 15000 });
+  await page.click(".library-continue");
   await page.waitForFunction(() => localStorage.getItem("nostalgex_completed_initial_load") === "1", null, { timeout: 30000 });
 
   const saved = JSON.parse(await page.evaluate(() => localStorage.getItem("plex90_saved_auth")));

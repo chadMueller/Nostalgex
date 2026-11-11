@@ -141,9 +141,17 @@ async function signIn(servers, { waitMs = 40000 } = {}) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 160)));
   await page.goto(`${base}/plex-tuner.html`);
-  // Two or more servers: the picker, with everything selected. CONNECT is a button.
+  // Two or more servers: the picker, with the first one on and the rest off. The cases that want every
+  // server switch the others on, then press CONTINUE (a button).
   let clickedAt = null;
-  if (servers.length > 1) { await page.locator(".server-picker-connect").click({ timeout: 20000 }); clickedAt = t0(); }
+  if (servers.length > 1) {
+    await page.locator(".server-picker-connect").waitFor({ timeout: 20000 });
+    for (let i = 1; i < servers.length; i += 1) await page.locator("#server-picker .setup-row").nth(i).click({ timeout: 20000 });
+    await page.locator(".server-picker-connect").click({ timeout: 20000 }); clickedAt = t0();
+  }
+  // A first sign-in stops at CHOOSE YOUR LIBRARIES once a server answers: one press of CONTINUE (all on) starts the scan.
+  // Where nothing answers there is no list, so the wait is short and the case goes on to its failure.
+  await page.locator(".library-continue").click({ timeout: waitMs }).catch(() => {});
   let loaded = false;
   try {
     await page.waitForFunction(() => typeof allItemsCache !== "undefined" && allItemsCache.length > 0, null, { timeout: waitMs });
