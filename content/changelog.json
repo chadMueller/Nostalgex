@@ -83,9 +83,9 @@
         "GUIDE TEXT SIZE, in Settings under PLAYBACK & PICTURE, makes the guide's program titles, times and channel numbers and names bigger. Pick LARGE if the TV is across the room. NORMAL keeps the guide as it was.",
         "Settings tells you why a channel isn't on the air: what it looks for, in plain words, and how many titles in your library match next to how many it needs.",
         "In Now Playing, the title of what's on is the big line and the channel name sits under it.",
-        "STREAM QUALITY has an Original choice for a Plex server on your home network. It keeps 4K video exactly as it is and only converts the sound when it has to. Some 4K Dolby Vision streams that played with no sound have sound again. Thanks to @w6trp.",
+        "STREAM QUALITY has an Original choice for a Plex server on your home network. It keeps 4K video exactly as it is and only converts the sound when it has to. Some 4K Dolby Vision streams that played with no sound have sound again.",
         "Plex sign-in is much quicker. Once your server answers on your home network, Nostalgex stops waiting on slower routes it won't use. It could take 45 seconds before.",
-        "STOP WAITING only stops the server you pressed it on. Before, a press could carry over to the next server and cut its scan short, leaving part of your library out. Thanks to @androbwebb for the report.",
+        "STOP WAITING only stops the server you pressed it on. Before, a press could carry over to the next server and cut its scan short, leaving part of your library out.",
         "Every franchise channel is in the 300s: the FRANCHISES classics from 300, then the franchises found in your library and your server's franchise collections together, A to Z, from 310. Your other collections start at 400, and up to 100 of them fit in the guide. Settings says when more are switched on.",
         "The package list you get by pressing left in the guide follows the guide from top to bottom, with one FRANCHISES for all of them and HIGH ROTATION last. A seasonal package that leads the guide leads the list too.",
         "On Emby, channels that pick films by rating, like BLOCKBUSTER, ALL TIME GREATS and the decade channels, could come up empty because Emby had no rating for the film. They now use the film's IMDb rating (from OMDb) when one is available.",
@@ -124,9 +124,9 @@
         "TOON TOWN no longer airs The Hobbit.",
         "RATE opens the Nostalgex page in the App Store.",
         "Your server's collections of TV shows now become channels too, not just collections of movies.",
-        "Report Playback is now two switches: SHOW NOW PLAYING and MARK WATCHED. Use either one on its own. Thanks to @w6trp.",
-        "PLAYBACK INFORMATION at the bottom of the Now Playing panel shows how the current programme is playing and why it fell back, which makes a not-playing report much quicker to sort out. Thanks to @w6trp.",
-        "Channel changes during a stall can no longer let an old stream take over the new channel. Thanks to @w6trp.",
+        "Report Playback is now two switches: SHOW NOW PLAYING and MARK WATCHED. Use either one on its own.",
+        "PLAYBACK INFORMATION at the bottom of the Now Playing panel shows how the current programme is playing and why it fell back, which makes a not-playing report much quicker to sort out.",
+        "Channel changes during a stall can no longer let an old stream take over the new channel.",
         "A Plex library with a file or folder name in an old text encoding loads again instead of stopping with an unexpected data error.",
         "A channel where nothing will play stops after five tries and says so, instead of retrying forever.",
         "Emby's backup stream works, and stalled Jellyfin and Emby streams recover by asking the server again.",
@@ -143,8 +143,8 @@
         "FRANCHISES finds the film series in your own library, from Star Wars to American Pie, and gives each one its own channel with its own switch in Settings.",
         "Your Plex collections still become channels, now filed as FRANCHISES or OTHER COLLECTIONS. NOTABLE STARS is gone: actor and director sets move to OTHER COLLECTIONS, and series like John Wick and The Hunger Games are filed as franchises.",
         "iCloud sync, off until you turn it on in Settings under CONNECTION. Every Apple TV on your Apple ID then shares the same lineup and settings, and a new TV takes the lineup you already have.",
-        "REPORT PLAYBACK shows what you are watching in Now Playing and counts a real watch, and never fills your Continue Watching row. Thanks to @w6trp for the Plex heartbeat it is built on.",
-        "Plex films with more than one version, or split across several files, play the right version and start in the right part. Thanks to @w6trp.",
+        "REPORT PLAYBACK shows what you are watching in Now Playing and counts a real watch, and never fills your Continue Watching row.",
+        "Plex films with more than one version, or split across several files, play the right version and start in the right part.",
         "More channels fill up: titles are matched against TMDB and IMDb data, which fills channels that used to come up empty.",
         "A tip jar in Settings: Popcorn, TV Dinner and Pizza Night, as many as you like. A tip is just a thank you. Paid through your Apple account.",
         "Very large libraries no longer crash right after the guide appears. The app now saves your library in small pieces in the background, so a library of several hundred thousand titles opens from the saved copy next time instead of scanning from scratch.",
@@ -153,7 +153,7 @@
         "Settings is easier to find your way around: PLAYBACK holds picture, quality, subtitles and audio, and CONNECTION holds your servers and sync. A package shows BUILDING while its channels come in.",
         "A small banner after a few long watches asks for a star rating. RATE takes you to the App Store and Back brings you right here. It asks once, and never again after you rate.",
         "Channel line ups are tidier: whole film series no longer land on channels outside their genre, and real musicals stay on MUSICALS.",
-        "Thanks to @w6trp: saved playback diagnostics no longer keep server tokens, and music videos from two servers no longer get crossed."
+        "Saved playback diagnostics no longer keep server tokens, and music videos from two servers no longer get crossed."
       ]
     },
     {
@@ -175,7 +175,7 @@
       "released": false,
       "title": "Emby libraries load, and the app tells you when something won't play",
       "bullets": [
-        "Emby libraries load again. The app was asking Emby for its libraries using Jellyfin's spelling of the address, and Emby answers that with a 404, so the scan failed on the very first request no matter what your libraries were called or how big they were. Every Emby user hit this. Thanks to Jay for the report.",
+        "Emby libraries load again. The app was asking Emby for its libraries using Jellyfin's spelling of the address, and Emby answers that with a 404, so the scan failed on the very first request no matter what your libraries were called or how big they were. Every Emby user hit this.",
         "When a programme won't play, the app now says why instead of quietly jumping to the next one. You get a card on the channel for a few seconds: whether your server refused it, couldn't keep up, couldn't find the file, or whether it's the Apple TV that can't decode it. It's amber when your server is the thing to go and look at, red when it's the file.",
         "Finding out which of those it is meant asking your server directly, because Apple TV doesn't tell an app the status code behind a failed stream. So on a failure the app makes one small request to the stream that just died and reads the real answer.",
         "Jellyfin and Emby step the quality down before giving up. If a stream starts falling behind, the app now asks your server for a smaller one and keeps the programme going. Plex has done this for a while; the other two were skipping straight to the next title on a single stall.",

@@ -85,7 +85,7 @@ Yes. Nostalgex is free and open source under the MIT licence. There is now a sma
 
 ## Thanks
 
-Thank you to @w6trp for four pull requests (#18 to #21) in this release, and to everyone who sent in a bug report. Every one of those reports made this update better.
+Thank you to everyone who sent in a bug report. Every one of those reports made this update better.
 
 ## How do I get Nostalgex 1.0.26?
 
