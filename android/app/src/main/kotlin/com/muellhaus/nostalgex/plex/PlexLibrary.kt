@@ -60,6 +60,8 @@ class PlexLibrary(private val client: PlexClient) {
         excluded: Set<String> = emptySet(),
         /** Each library once it is read whole, so a scan abandoned later still has these (LibraryScanInterrupted). */
         onSection: (List<MediaItem>) -> Unit = {},
+        /** Sections kept from a scan that didn't finish, and each one read in full (#288). */
+        keep: com.muellhaus.nostalgex.engine.SectionKeep = com.muellhaus.nostalgex.engine.SectionKeep.NONE,
     ): List<MediaItem> {
         val sections = directories(server).filter { (it.str("key") ?: "") !in excluded }
         val out = ArrayList<MediaItem>()
@@ -68,6 +70,16 @@ class PlexLibrary(private val client: PlexClient) {
             val sectionStart = out.size
             val title = section.str("title") ?: ""
             val type = section.str("type") ?: ""
+            val key = section.str("key") ?: ""
+            val stamp = com.muellhaus.nostalgex.engine.ScanResume.plexStamp(section.long("updatedAt"), section.long("contentChangedAt"))
+            // Read in full by a scan that didn't finish, unchanged on the server since: not read again (#288).
+            keep.kept(key, stamp)?.let { kept ->
+                out += kept
+                onSection(kept)
+                tally.read()
+                progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size))
+                continue
+            }
             try {
                 val items = fetchSectionPaged(server, section.str("key")!!) { loaded, _ ->
                     progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded))
@@ -86,6 +98,7 @@ class PlexLibrary(private val client: PlexClient) {
                 }
                 onSection(out.subList(sectionStart, out.size).toList())
                 tally.read()
+                keep.done(key, stamp, out.subList(sectionStart, out.size).toList())
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

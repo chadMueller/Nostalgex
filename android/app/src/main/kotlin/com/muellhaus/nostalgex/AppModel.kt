@@ -17,6 +17,8 @@ import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
+import com.muellhaus.nostalgex.engine.ScanResume
+import com.muellhaus.nostalgex.engine.ServerScan
 import com.muellhaus.nostalgex.engine.ServerSharing
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
@@ -505,6 +507,25 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     private val libraryStore = LibraryStore(context)
 
+    /** Sections read in full by a scan that hasn't finished (#288). */
+    private val sectionStore = SectionStore(context)
+
+    /**
+     * The scan's question about each section of one server (#288): a kept section stands in for
+     * reading it while ScanResume.reusable says so, and each section read in full is kept.
+     */
+    private fun keepFor(serverId: String, stampRequired: Boolean) = object : com.muellhaus.nostalgex.engine.SectionKeep {
+        override fun kept(key: String, stamp: String?): List<MediaItem>? {
+            val k = sectionStore.load(serverId, key) ?: return null
+            if (!ScanResume.reusable(k, System.currentTimeMillis() / 1000, BuildConfig.VERSION_CODE, stamp, stampRequired)) return null
+            Log.i(TAG, "RESUME section $key: ${k.items.size} items kept from a scan that didn't finish, ${System.currentTimeMillis() / 1000 - k.savedAtSec} s ago")
+            return k.items
+        }
+
+        override fun done(key: String, stamp: String?, items: List<MediaItem>) =
+            sectionStore.save(ScanResume.Kept(serverId, key, System.currentTimeMillis() / 1000, BuildConfig.VERSION_CODE, stamp, items))
+    }
+
     /** TMDB and OMDb, in a build that turned them on (EnrichmentSetup); null otherwise. */
     private val enrichment = EnrichmentSetup.create(context)
     val enrichmentOn: Boolean get() = enrichment != null
@@ -714,6 +735,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         forgetPlaybackFailures()
         mbServer = null
         libraryStore.clear()
+        sectionStore.clear()
         lineup = null
         showPicker()
     }
@@ -1344,6 +1366,8 @@ class AppModel(private val context: Context) : Playback.Listener {
                         emptyList()
                     } else readCollections(servers)
                     withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
+                    // The whole library is read and saved: the kept sections have done their job (#288).
+                    if (!scanned.abandoned) sectionStore.clear()
                     scannedItems = items
                     libraryUpdatedMs = System.currentTimeMillis()
                     markLoaded(scanned.abandoned)
@@ -1438,37 +1462,36 @@ class AppModel(private val context: Context) : Playback.Listener {
         mbServer?.let { mb ->
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
             val skipped = java.util.concurrent.atomic.AtomicInteger()
-            val (items, abandoned) = watched(foreground, mb.name) { onSection, cancelled ->
-                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, includeHiddenOn) { skipped.incrementAndGet() }
+            val (items, abandoned, _) = watched(foreground, mb.name) { onSection, cancelled ->
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, includeHiddenOn, { skipped.incrementAndGet() },
+                    keepFor(mb.serverId.ifEmpty { mb.url }, stampRequired = false))
             }
             return ScanResult(items, abandoned, skipped.get())
         }
         val library = PlexLibrary(plex)
-        val items = ArrayList<MediaItem>()
-        var abandoned = false
-        var stalled: LoadStalled? = null
-        var failed: EveryLibraryFailed? = null
-        var read = 0
-        for (server in servers) {
+        // STOP WAITING ends the whole scan: no server after the press is read (#285, ServerScan).
+        // Items read from the servers before, so the loading screen keeps counting across servers.
+        var readSoFar = 0
+        val totals = ServerScan.readAll(servers) { server ->
             try {
-                val (got, gaveUp) = watched(foreground, server.name) { onSection, _ ->
-                    library.scan(server, { p -> progress(p, server.name) }, items.size,
-                        LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier), onSection)
+                val (got, gaveUp, byViewer) = watched(foreground, server.name) { onSection, _ ->
+                    library.scan(server, { p -> progress(p, server.name) }, readSoFar,
+                        LibrarySection.excludedKeys(deselectedSections, server.machineIdentifier), onSection,
+                        keepFor(server.machineIdentifier, stampRequired = true))
                 }
-                items += got
-                abandoned = abandoned || gaveUp
-                read++
+                readSoFar += got.size
+                ServerScan.Outcome.Read(got, gaveUp, byViewer)
             } catch (e: LoadStalled) {
-                abandoned = true
-                stalled = e
+                ServerScan.Outcome.Stalled(e.userInitiated, e)
             } catch (e: EveryLibraryFailed) {
                 // A server whose every library failed adds nothing; the others still count (#198).
                 Log.w(TAG, "Every library on ${server.name} failed", e)
-                failed = failed ?: e
+                ServerScan.Outcome.Failed(e)
             }
         }
-        if (read == 0) (stalled ?: failed)?.let { throw it }
-        return ScanResult(items, abandoned, library.skippedNoRuntime.get())
+        if (totals.serversSkipped > 0) Log.i(TAG, "STOP WAITING: ${totals.serversSkipped} server(s) not read; building from the ${totals.items.size} items kept")
+        totals.error?.let { throw it }
+        return ScanResult(totals.items, totals.abandoned, library.skippedNoRuntime.get())
     }
 
     /**
@@ -1481,8 +1504,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         foreground: Boolean,
         label: String,
         run: suspend (onSection: (List<MediaItem>) -> Unit, cancelled: () -> Boolean) -> List<MediaItem>,
-    ): Pair<List<MediaItem>, Boolean> {
-        // A press meant for the server before belongs to it (issue #146).
+    ): Triple<List<MediaItem>, Boolean, Boolean> {
+        // Each server's watch starts unpressed; a press ends the whole scan (#285, ServerScan),
+        // so none can be left over from the server before.
         stopWaitingRequested = false
         if (foreground) loadStalling = false
         val sections = java.util.Collections.synchronizedList(ArrayList<MediaItem>())
@@ -1493,7 +1517,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         try {
             while (true) {
                 val done = withTimeoutOrNull(2_000) { job.await() }
-                if (done != null) return done to false
+                if (done != null) return Triple(done, false, false)
                 val user = stopWaitingRequested
                 val verdict = detector.evaluate(scanSample, now())
                 // A background refresh has no loading screen: it says nothing and keeps the guide.
@@ -1507,7 +1531,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     Log.i(TAG, "STALL ${if (user) "viewer stopped waiting on" else "no progress from"} $label after ${quiet.toInt()} s quiet; " +
                         "${kept.size} items kept from what was read")
                     if (kept.isEmpty()) throw LoadStalled(user)
-                    return kept to true
+                    return Triple(kept, true, user)
                 }
             }
         } finally {
@@ -1536,6 +1560,8 @@ class AppModel(private val context: Context) : Playback.Listener {
                 }
                 val items = scanned.items
                 markLoaded(abandoned = false)
+                // A whole library read: the kept sections have done their job (#288).
+                sectionStore.clear()
                 skippedNoRuntime = scanned.skippedNoRuntime
                 val took = SystemClock.elapsedRealtime() - t0
                 libraryUpdatedMs = System.currentTimeMillis()

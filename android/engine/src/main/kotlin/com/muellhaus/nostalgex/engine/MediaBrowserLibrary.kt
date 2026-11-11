@@ -89,6 +89,8 @@ class MediaBrowserLibrary(
         includeHidden: Boolean = INCLUDE_HIDDEN_DEFAULT,
         /** A movie or episode dropped for having no runtime, for the coverage line (skippedNoRuntimeCount). */
         onSkippedNoRuntime: () -> Unit = {},
+        /** Sections kept from a scan that didn't finish, and each one read in full (#288). */
+        keep: SectionKeep = SectionKeep.NONE,
     ): List<MediaItem> {
         // A view with no videos in it is never asked for items (#206).
         val viewList = views(includeHidden).filter { (it.str("Id") ?: "") !in excluded && holdsVideos(it) }
@@ -100,6 +102,15 @@ class MediaBrowserLibrary(
             val isMusicVideoSection = type == "musicvideo"
             val name = view.str("Name") ?: "Library"
             progress.update(ScanProgress(index, viewList.size, name, type, out.size))
+            val viewId = view.str("Id") ?: ""
+            // Read in full by a scan that didn't finish, and still good: not asked again (#288).
+            keep.kept(viewId, null)?.let { items ->
+                out += items
+                onSection(items)
+                tally.read()
+                progress.update(ScanProgress(index, viewList.size, name, type, out.size))
+                continue
+            }
             try {
                 if (type == "show") {
                     val shows = fetchItems(view.str("Id") ?: "", itemTypes(type)!!)
@@ -205,6 +216,7 @@ class MediaBrowserLibrary(
                 // A TV library goes in whole; a movie library already went in page by page.
                 if (type == "show") onSection(out.subList(sectionStart, out.size).toList())
                 tally.read()
+                keep.done(viewId, null, out.subList(sectionStart, out.size).toList())
             } catch (e: ScanCancelled) {
                 throw e
             } catch (e: Exception) {

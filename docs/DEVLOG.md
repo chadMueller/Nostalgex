@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: STOP WAITING ends the whole scan, and a killed first setup resumes; #285, #288)
+
+**Changed.**
+- **#285, STOP WAITING.** With more than one server on, the viewer's press now ends the whole scan, as on the Apple TV 1.0.32. No server after it is read, and what the servers before it gave is kept for the guide. Before, the press abandoned only the server being read and the next one started.
+  - A server that stalls by itself (210 s with no progress, no press) is still skipped alone.
+  - The loop is `ServerScan.readAll` in the engine, with 7 tests: a press on the first or second server, a press on a server that gave nothing yet, a stall with no press, and failed servers.
+  - Not measured on a TV: it needs two servers, one of them slow.
+- **#288, resuming a killed first setup.** Each library section is now written to its own file (`SectionStore`, `files/scan-sections`, never the library snapshot) as soon as it has been read in full, as the Apple TV 1.0.32's `LibraryScanProgressStore`.
+  - The next scan uses a kept section instead of asking the server when `ScanResume.reusable` allows: under 6 hours old (the Apple TV's snapshot age), written by this `versionCode`, and on Plex with the same section change stamp (`updatedAt`, `contentChangedAt`). A Plex section with no stamp is read again.
+  - A section abandoned part way is never kept. The kept sections are deleted once a whole library has been read, and on DISCONNECT.
+  - Jellyfin and Emby sections are kept before the server's address and token are added to the items.
+  - `ScanResumeTest`: the rule's cases, and a Jellyfin scan that dies at the third library and then reads only that one.
+- **Measured** on a Google TV emulator against a lab Jellyfin 12.4 with eight video libraries, through a proxy that delayed each library's items by 4 s:
+  - The first setup was killed while it read the fourth library, after keeping the first three.
+  - On the next launch the app's existing guard offered TRY AGAIN (two loads in a row had been interrupted). After the press, the three kept libraries were used, the server was asked only for the five that hadn't finished, the library loaded with all 6 items, and the kept files were gone.
+  - Not measured on Plex or on a TV.
+- **#286 follow-up.** The saved library's `FORMAT` is 7, so a library saved before audio tracks kept their own titles is read again rather than used without them.
+
+All 329 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: no channel starts on a commentary, and the missing-channel lines held to the shared file; #286, #292)
 
 **Changed.**

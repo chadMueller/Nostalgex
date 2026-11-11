@@ -249,9 +249,11 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN. */
         includeHidden: Boolean = false,
         onSkippedNoRuntime: () -> Unit = {},
+        /** Sections kept from a scan that didn't finish (#288); they hold no address or token. */
+        keep: com.muellhaus.nostalgex.engine.SectionKeep = com.muellhaus.nostalgex.engine.SectionKeep.NONE,
     ): List<MediaItem> = withContext(Dispatchers.IO) {
         fun stamp(items: List<MediaItem>) = items.map { it.copy(serverUrl = server.url, serverToken = server.token) }
-        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includeHidden, onSkippedNoRuntime).let(::stamp)
+        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includeHidden, onSkippedNoRuntime, keep).let(::stamp)
     }
 
     /**
