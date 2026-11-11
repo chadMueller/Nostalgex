@@ -16,6 +16,7 @@ import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
+import com.muellhaus.nostalgex.engine.NaturalEnd
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
@@ -1974,7 +1975,11 @@ class AppModel(private val context: Context) : Playback.Listener {
         // Demo mode: the clip running out says nothing about the schedule. Stay on the block
         // that is on, at the clock's position (advanceToNextItem's demo branch).
         if (demoMode) return play(lineup?.tune(ch))
-        play(lineup?.next(ch, item, fromNaturalEnd = true))
+        // Held to the guide's clock: a file that ran past its slot joins the next programme
+        // where the guide is, not at 0 s (#293, NaturalEnd).
+        val guide = lineup?.tune(ch)
+        val next = NaturalEnd.pick(item.ratingKey, lineup?.next(ch, item, fromNaturalEnd = true), guide)
+        play(next)
     }
 
     /**

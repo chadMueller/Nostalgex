@@ -3,6 +3,31 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: a file that runs past its slot no longer leaves the player behind the guide, #293)
+
+**Measured first.** On a SHIELD (Android 11), a test copy of the app played a channel of five 2 min 50 s films from a lab Jellyfin; each gets a 2-minute slot, so each runs 50 s past it. A throwaway log line at each natural end recorded what the guide had on, and how far in, against what the player started:
+
+| Natural end | Guide had on | Player started | Player behind the guide |
+|---|---|---|---|
+| 10:53:31 | Drift One, 51 s in | Drift One at 0 s | 51 s |
+| 10:56:22 | Drift Three, 102 s in | Drift Three at 0 s | 102 s |
+| 10:59:13 | Drift Four, 33 s in | Drift Four at 0 s | 33 s |
+| 11:02:04 | Drift Two, 84 s in | Drift Two at 0 s | 84 s |
+| 11:04:55 | Drift Three, 15 s in | Drift Three at 0 s | 15 s |
+
+The lag stays under one slot, because the player always takes the programme the guide has on now. But for most of each programme, Now Playing named one film while the guide showed the next.
+
+**Changed.**
+- At a natural end the engine's pick starts at 0 s (`advancePick(..., fromNaturalEnd = true)`), which main's Apple TV also does, because a file's real length can differ from its metadata.
+- The Apple TV 1.0.32 holds a real file to the guide's clock instead (not on main yet; ported from the issue's description). `NaturalEnd.pick` does it in the app layer, so the shared schedule engine and its golden tests are unchanged:
+  - when the guide has already moved on to the programme the engine picked, the player joins it where the clock says, as a tune-in would;
+  - when the file ended inside its own slot, or the conflict rule picked another programme, the next one starts at 0 s as before.
+- `NaturalEndTest` has the rule's cases and a model channel of 170 s files in 120 s slots over 20 natural ends: up to 50 s or more behind without the rule, never behind with it.
+
+**Measured after,** the same channel for 13 minutes: at each of 7 natural ends the player started at the guide's own position (51 or 52 s in), with picture 0.7 to 0.9 s later, and the ends fell every 2 minutes, at :31 or :32 past. Not measured on a Google TV, or on Plex.
+
+All 344 engine tests pass. Not pushed yet.
+
 ## 2026-11-11 (Android: GUIDE TIMEOUT, and the 4K frame size on Jellyfin and Emby checked; #290, #287)
 
 **Changed.**
