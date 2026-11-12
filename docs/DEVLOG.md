@@ -3,6 +3,12 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (README: Roku in the "Pick your way to watch" table)
+
+**Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
+
+**Unverified.** The Roku icon is the generic lucide TV icon, not a Roku badge, so the column looks like the web tuner's.
+
 ## 2026-11-12 (Apple TV: no empty headings on SERVERS & ACCOUNTS, ON or OFF in words beside the switches, #232 items 5 and 6)
 
 **State.** Branch `appletv/232-readability` off main `776c54ae`. Not in a build yet; it goes in the next Apple TV build (1.0.33). The guide is not touched.
