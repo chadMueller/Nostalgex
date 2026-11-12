@@ -67,6 +67,30 @@ changed to "Rating: " in a throwaway copy, 28 channels differ and the suite fail
 
 **Not done.** On a stick: the same suite runs in `deploy.sh --test`, not run here.
 
+## 2026-11-12 (Roku: the audio pick is held to the shared audio-pick golden file, #279)
+
+**Why.** The Roku's commentary pass-over and Jellyfin/Emby pick (#236, #245) were written from the Apple TV's tests by hand.
+`scripts/audio-pick-golden.json` is those tests as vectors for the web module, and the Roku can be held to the same file.
+
+**Changed (tests only).** `tests/gen-vectors.mjs` copies the file byte for byte; `tests/AudioPickGoldenTests.brs` (suite
+`audio-pick`, listed in `main.brs`, `run.sh` and `deploy.sh`) runs it. `commentaryTitles` go through `NxIsCommentaryTitle`.
+Each `jellyfinAndEmby` case builds MediaStreams, reads them with `NxMbAudioTracks` as the scan does, and picks with
+`NxMbChosenAudioIndex` when the case has an AUDIO LANGUAGE and `NxMbPreferredAudioIndex` when it has only the browser
+languages; the latter is also run the way a tune on Auto runs it (one language, the TV's). The four `plex` cases run through
+`NxAudioTrackOffCommentary`, the direct play's rule on the player's own list, because the Roku has no Plex server-stream pick.
+
+**Tested off the TV.** 30 cases pass (11 titles, 15 Jellyfin/Emby, 4 Plex), and on Auto the tune agrees with the file on all
+15. With "commentary" misspelt in `NxIsCommentaryTitle` in a throwaway copy, the commentary-title cases and the three commentary
+pick cases fail.
+
+**Differences, none found in the file.** The Plex half of #246 (a server stream that skips a commentary) cannot be held to the
+four Plex cases: Plex ignores an audio stream id on a transcode start (decoded audio identical with and without the commentary's
+id on two films, 2026-11-12), so the Roku has no such pick to test. The golden file has no case where the Auto language and the
+web's rule differ (a German TV with an English 5.1 track beside a German stereo one): the Roku takes the German track, the web
+tuner's single rule would take the 5.1.
+
+**Not done.** On a stick: the suite runs in `deploy.sh --test`, not run here.
+
 ## 2026-11-12 (README: Roku in the "Pick your way to watch" table)
 
 **Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
