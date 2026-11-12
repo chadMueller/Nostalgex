@@ -190,6 +190,26 @@ function NxTokDarkenFor(fill as Dynamic, text as Dynamic, ratio as Float) as Dyn
     return NxTokScaled(f, lo)
 end function
 
+' `text` made opaque and brightened toward white only as far as it needs to
+' reach `ratio` on the opaque `fill` (#301, the Apple TV's
+' GuideRowContrast.secondaryText: WATERSHED's placeholder on a focused guide
+' row): white laid over it at the smallest share found that reaches the
+' ratio, not all the way to white. Text that already reaches it is only
+' made opaque. invalid when either isn't a colour.
+function NxTokLightenFor(text as Dynamic, fill as Dynamic, ratio as Float) as Dynamic
+    t = NxTokRgba(text)
+    if t = invalid or NxTokRgba(fill) = invalid then return invalid
+    whole = NxTokOpaque(t[0], t[1], t[2])
+    if NxTokContrast(whole, fill) >= ratio then return whole
+    lo = 0.0
+    hi = 1.0
+    for i = 1 to 20
+        k = (lo + hi) / 2
+        if NxTokContrast(NxTokOverAt("0xFFFFFFFF", whole, k), fill) >= ratio then hi = k else lo = k
+    end for
+    return NxTokOverAt("0xFFFFFFFF", whole, hi)
+end function
+
 ' The colour `f` (NxTokRgba) with each channel scaled by k and rounded down,
 ' opaque.
 function NxTokScaled(f as Object, k as Float) as String

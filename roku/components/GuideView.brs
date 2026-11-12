@@ -512,12 +512,15 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
 
     ' A channel WATERSHED alone has emptied says when it comes back, in text2
     ' on the row's past tint, focused or not, in place of its airings
-    ' (ChannelGuideView's watershedRowPlaceholder).
+    ' (ChannelGuideView's watershedRowPlaceholder). On the focused row text2
+    ' is brightened where it would read under 4.5:1 (NxGuideFocusHeldText).
     if ch.held = true then
         x = m.colX + 1
+        heldColor = tc.text2
+        if focused then heldColor = NxGuideFocusHeldText(ch.color)
         row.AppendChild(newRect(x, 0, 1920 - x, m.rowH, gc.past))
         row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
-        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.held, tc.text2, x + 14, m.guideText.heldY, 1920 - x - 28))
+        row.AppendChild(newLabel(NxWatershedRowLabel(), "DMMono-Medium", m.guideText.held, heldColor, x + 14, m.guideText.heldY, 1920 - x - 28))
     end if
 
     ' Channel column, drawn over the programs' left edge; the row's stripe or

@@ -99,6 +99,15 @@ function NxGuideFocusLiveFill(hex as Dynamic) as String
     return NxTokDarkenFor(NxTokOverAt(NxGuideHex(hex), NxGuideFocusFill(hex), 0.55), "0xFFFFFFFF", 4.5)
 end function
 
+' WATERSHED's placeholder on the focused row (#301, the Apple TV's
+' GuideRowContrast.secondaryText): text2 where it reads 4.5:1 on the past
+' tint over that row's fill, and otherwise brightened toward white only as
+' far as 4.5:1 needs. An unfocused row's placeholder stays text2.
+function NxGuideFocusHeldText(hex as Dynamic) as String
+    band = NxTokOver(NxGuideColors().past, NxGuideFocusFill(hex))
+    return NxTokLightenFor(NxTokens().color.text2, band, 4.5)
+end function
+
 ' "#RRGGBB" from a channel's colour, with or without its #; white when it
 ' isn't one, as GuideView's colorOf.
 function NxGuideHex(hex as Dynamic) as String
