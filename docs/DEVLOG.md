@@ -18,6 +18,25 @@ pages; 5,025 free, 466,262 inactive, 16,577 purgeable) gives 7,622 MB, so 3 at o
 no `vm_stat`, the whole RAM (24,576 MB); Linux still reads `MemAvailable`. The awk gives the same under GNU awk
 `--posix` and BusyBox awk. `tests/run.sh` on Linux ends in ALL TESTS PASSED. Not yet run on a Mac or under macOS's awk.
 
+## 2026-11-12 (Roku: the guide's stripes are worked out when the guide changes, not on every key, #276)
+
+**Why.** Chad on 1.0.13 candidate v4 (build 4a11edafd769): "the guide is ultra laggy". Measured on the stick with a
+build that times `onKeyEvent`, `renderGrid` and `renderInfo` on the render thread: 10 single Down and 10 single Up
+presses took a median 772 ms each on v4 against a median 75 ms before #276 (held Down: 6 of 30 presses handled in
+the time it took to send them). Bisected by sideloading main at `38a5646f` (74 ms), `01d7b0b7` (73 ms), `dfc5a5b8`
+(#276; 795 ms) and `540d8998` (898 ms with #266 on top). Timing inside `renderGrid` on v4: `refreshStripes` took 713 to
+836 ms of a 857 to 1,011 ms render; the eight `renderRow` calls took 5 to 13 ms each and `drawStripeNames` 1 to 3 ms.
+
+**Cause.** `refreshStripes` built its cache key from `m.top.guide.enabledBundles`, `.bundles` and `.jumps` on every
+render. `guide` is an assocarray field, and every read of one copies the whole guide (every channel with its
+schedule), five reads to look at the key, on every Up, Down, Left and Right.
+
+**Changed.** `onGuide` marks the stripes stale and `refreshStripes` works them out once, from one read of the guide,
+at the next render. The key and `m.stripeKey` are gone; nothing else changes the bundles without a new guide.
+
+**Not changed.** The stripes' drawing, focus and keys. `renderGrid` still rebuilds every visible row on each press
+(about 60 to 70 ms before #276 as well).
+
 ## 2026-11-12 (Roku: applySubtitles no longer looks for a forced sidecar, #237)
 
 **Why.** The 2026-11-11 #272 follow-ups entry left this open, and Chad's #298 merge note left it for its own change

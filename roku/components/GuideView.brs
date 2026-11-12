@@ -49,7 +49,7 @@ sub init()
     m.fullscreen = false
     ' Bundle stripes (#276): a 20 px column at the guide's left edge.
     m.stripeW = 20
-    m.stripeKey = ""
+    m.stripeStale = false
     m.stripeGroups = []
     m.stripeRowGroup = []
     m.stripeIdx = -1
@@ -200,6 +200,7 @@ end function
 sub onGuide()
     previous = m.channels
     m.channels = m.top.guide.channels
+    m.stripeStale = true
     m.gaveWay = invalid
     ' One channel from the cold-boot seed while the library loads (#155):
     ' no packages behind it, so SETTINGS and the sidebar wait for the guide.
@@ -587,16 +588,16 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     return row
 end function
 
-' The stripes' runs, worked out again only when the lineup or the bundles change.
+' The stripes' runs, worked out when the guide changes (onGuide marks them
+' stale), not on every key: m.top.guide is an assocarray field, and each read of
+' one copies the whole guide, which cost 700 to 800 ms a press when this checked
+' the bundles on every render (measured on the stick, build 4a11edafd769).
 sub refreshStripes()
+    if m.stripeStale <> true then return
     if m.channels = invalid or m.top.guide = invalid then return
-    n = m.channels.Count()
-    key = n.ToStr()
-    if n > 0 then key = key + "|" + NxToStr(m.channels[0].id) + "|" + NxToStr(m.channels[n - 1].id)
-    key = key + "|" + FormatJson(NxList(m.top.guide.enabledBundles)) + "|" + NxList(m.top.guide.bundles).Count().ToStr() + "|" + NxList(m.top.guide.jumps).Count().ToStr()
-    if key = m.stripeKey then return
-    m.stripeKey = key
-    mem = NxStripeMembership(m.top.guide.bundles, m.top.guide.enabledBundles, m.top.guide.jumps)
+    m.stripeStale = false
+    g = m.top.guide
+    mem = NxStripeMembership(g.bundles, g.enabledBundles, g.jumps)
     m.stripeGroups = NxStripeGroups(m.channels, mem)
     m.stripeRowGroup = []
     for gi = 0 to m.stripeGroups.Count() - 1
