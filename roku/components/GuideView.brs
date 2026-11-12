@@ -2747,9 +2747,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             setFullscreen(false)
             return true
         end if
-        if key = "left" or key = "right" then
+        ' (NxOverlayKey: the same map the overlays close by.)
+        act = NxOverlayKey("", key, false, false)
+        if act = "previous" or act = "next" then
             d = 1
-            if key = "left" then d = -1
+            if act = "previous" then d = -1
             idx = (m.tuned + d + m.channels.Count()) mod m.channels.Count()
             m.focus = idx
             keepFocusVisible()
@@ -2757,11 +2759,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             showOsd()
             return true
         end if
-        if key = "up" then
+        if act = "strip" then
             openStrip()
             return true
         end if
-        if key = "down" then
+        if act = "panel" then
             openNowPlaying()
             return true
         end if

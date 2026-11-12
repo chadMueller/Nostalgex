@@ -18,6 +18,35 @@ pages; 5,025 free, 466,262 inactive, 16,577 purgeable) gives 7,622 MB, so 3 at o
 no `vm_stat`, the whole RAM (24,576 MB); Linux still reads `MemAvailable`. The awk gives the same under GNU awk
 `--posix` and BusyBox awk. `tests/run.sh` on Linux ends in ALL TESTS PASSED. Not yet run on a Mac or under macOS's awk.
 
+## 2026-11-12 (Roku: the Now Playing panel's controls on the Apple TV 1.0.32's layout, and Up and Down close the overlays, #266)
+
+**Why.** Chad on 1.0.13 candidate v4: "the up and down to move the top or the bottom overlays dont work and the now
+playing overlay doesnt look the same as apple parity". #266 had only done the info zone. Key code for full screen, the
+strip and the panel is byte for byte what 1.0.12 shipped, so this is not a break since then: the overlays had no way
+back. The Apple TV closes each by the reverse of what opened it: the panel comes down with Down and Up closes it when
+Up had nowhere to go (the first row of a column, `NowPlayingPanelLogic.upClosesPanel`), the strip comes up with Up and
+Down closes it (`MiniChannelStrip`). The Roku did neither, and the slow guide of #276 (see the entry above) made the
+overlays feel dead on top of it.
+
+**Changed.** `NxOverlayKey` (source/guide/NowPlayingLayout.brs) is the one map: full screen with neither overlay
+(Down the panel, Up the strip, Left and Right the channel), the panel (Up on the first row of a column, never inside
+a list, closes) and the strip (Down closes). `GuideView`, `NowPlayingView` and `MiniStripView` ask it. The controls are
+laid out on `NxPanelMetrics`, the Apple TV's NowPlayingMetrics: text 22, title 29, CH tag 28, rows 64 with 18 each side
+and 8 between, two columns 440 wide 28 apart at the right (90 from the edge, 60 from the top), the poster 120 by 180
+with 18 to the text, 44 under the content. Rows are the compact row: the row fill with a 2 px resting outline, the
+selected fill with a 3 px cyan outline and glow; ON and ACTIVE in cyan, chevrons on the rows that open a list. The
+panel is the panel colour at 96% over the top 85%, fading out below, with no drop shadows. The hint line under the
+columns says what the row does (`NxPanelHint`, NowPlayingPanelHints' words); STREAM QUALITY's note moved there.
+SLEEP TIMER is one row opening its list in place, as the Apple TV's sleepRow; AUTO SUBTITLES is no longer spelled
+with "(FOREIGN AUDIO)".
+
+**Not changed.** The audio tracks stay rows under an AUDIO header (the Apple TV collapses them into one AUDIO row
+opening a list), and the CAPTIONS and AUDIO headers stay two (the Apple TV has one, AUDIO & CAPTIONS). OPEN IN PLEX
+and RETRY ORIGINAL VIDEO are not on the Roku.
+
+**Tests.** `sleep-timer` suite 54 checks (was 23): the metrics, the hints, and the key map, including that Up never
+closes the panel from inside a list and that Down closes the strip; the strip rule fails when it is broken.
+
 ## 2026-11-12 (Roku: the guide's stripes are worked out when the guide changes, not on every key, #276)
 
 **Why.** Chad on 1.0.13 candidate v4 (build 4a11edafd769): "the guide is ultra laggy". Measured on the stick with a

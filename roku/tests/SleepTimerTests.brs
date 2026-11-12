@@ -45,6 +45,38 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "up next: already started", NxUpNextBadge(-30), "UP NEXT IN LESS THAN 1 MIN")
     NxCheck(r, "up next: no number", NxUpNextBadge(invalid), "UP NEXT IN LESS THAN 1 MIN")
 
+    ' ── The panel's measures: the Apple TV 1.0.32's NowPlayingMetrics.swift (#266) ──
+    pm = NxPanelMetrics()
+    NxCheck(r, "metrics: text 22, title 29, tag 28", pm.text.ToStr() + "," + pm.title.ToStr() + "," + pm.tag.ToStr(), "22,29,28")
+    NxCheck(r, "metrics: row 64, padding 18, gap 8", pm.rowH.ToStr() + "," + pm.padX.ToStr() + "," + pm.rowGap.ToStr(), "64,18,8")
+    NxCheck(r, "metrics: columns 440, 28 apart", pm.colW.ToStr() + "," + pm.colGap.ToStr(), "440,28")
+    NxCheck(r, "metrics: poster 120 by 180, 18 to the text", pm.posterW.ToStr() + "," + pm.posterH.ToStr() + "," + pm.posterGap.ToStr(), "120,180,18")
+    NxCheck(r, "metrics: the two columns are 908 wide", (2 * pm.colW + pm.colGap).ToStr(), "908")
+
+    ' ── The hint line under the controls (NowPlayingPanelHints) ──
+    NxCheck(r, "hint: cc", NxPanelHint("cc"), "Subtitles on or off for every program.")
+    NxCheck(r, "hint: retro", NxPanelHint("retro"), "CRT scanlines, vignette, flicker, 4:3 aspect ratio.")
+    NxCheck(r, "hint: stream quality", NxPanelHint("pick:streamQuality"), "Takes effect on the next program.")
+    NxCheck(r, "hint: sleep timer", NxPanelHint("pick:sleep"), "Stops playback after the time you pick. A still-watching prompt comes first.")
+    NxCheck(r, "hint: playback information", NxPanelHint("info"), "Source codecs and how this program reaches the screen: direct play, remux or transcode.")
+    NxCheck(r, "hint: an option in a list has none", NxPanelHint("sleep:15"), "")
+    NxCheck(r, "hint: no id has none", NxPanelHint(invalid), "")
+
+    ' ── Up and Down in full screen (PlayerView): Down opens the Now Playing panel at the top, Up the
+    ' channel strip at the bottom, and each is closed by the reverse of what opened it. ──
+    NxCheck(r, "keys: bare Down opens the panel", NxOverlayKey("", "down", false, false), "panel")
+    NxCheck(r, "keys: bare Up opens the strip", NxOverlayKey("", "up", false, false), "strip")
+    NxCheck(r, "keys: bare Left is the previous channel", NxOverlayKey("", "left", false, false), "previous")
+    NxCheck(r, "keys: bare Right is the next channel", NxOverlayKey("", "right", false, false), "next")
+    NxCheck(r, "keys: bare OK is not an overlay key", NxOverlayKey("", "OK", false, false), "")
+    NxCheck(r, "keys: Up on a column's first row closes the panel", NxOverlayKey("panel", "up", true, false), "close")
+    NxCheck(r, "keys: Up on any other row moves", NxOverlayKey("panel", "up", false, false), "")
+    NxCheck(r, "keys: Up inside a list never closes the panel", NxOverlayKey("panel", "up", true, true), "")
+    NxCheck(r, "keys: Down in the panel moves", NxOverlayKey("panel", "down", true, false), "")
+    NxCheck(r, "keys: Down closes the strip", NxOverlayKey("strip", "down", false, false), "close")
+    NxCheck(r, "keys: Up in the strip does nothing", NxOverlayKey("strip", "up", false, false), "")
+    NxCheck(r, "keys: Left and Right keep moving along the strip", NxOverlayKey("strip", "left", false, false) + NxOverlayKey("strip", "right", false, false), "")
+
     print "sleep timer cases (upstream SleepTimerLogic, NowPlayingPanelLayout): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

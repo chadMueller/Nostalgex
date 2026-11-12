@@ -15,6 +15,7 @@
     <function name="open" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/NowPlayingLayout.brs" />
   <script type="text/brightscript" uri="pkg:/components/MiniStripView.brs" />
   <children>
     <Rectangle id="band" width="1920" height="170" translation="[0,910]" color="0x000000D9" />

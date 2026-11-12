@@ -115,7 +115,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         render()
     else if key = "OK" then
         m.top.picked = m.focus
-    else if key = "back" then
+    else if key = "back" or NxOverlayKey("strip", key, false, false) = "close" then
+        ' Down is the reverse of Up, which pushed the strip up from the bottom.
         m.top.closed = true
     end if
     ' Every other key stays here while the strip is up.

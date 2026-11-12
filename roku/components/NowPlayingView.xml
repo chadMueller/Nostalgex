@@ -26,13 +26,14 @@
   <script type="text/brightscript" uri="pkg:/source/guide/NowPlayingLayout.brs" />
   <script type="text/brightscript" uri="pkg:/components/NowPlayingView.brs" />
   <children>
-    <!-- About 15%, so the video reads behind the panel (issue #148); the
-         labels carry a drop shadow instead (shadowLabels). -->
-    <Rectangle id="shade" width="1920" height="600" color="0x00000026" />
+    <!-- The panel colour at 96%, as the Apple TV's (#266), fading out over the
+         foot of it (the "fade" bands, built in render). -->
+    <Rectangle id="shade" width="1920" height="600" color="0x0A0F1EF5" />
+    <Group id="fade" />
     <!-- Upstream's poster, 120 by 180 (Variant A, #266), left of the info zone (Plex only):
          a 14% white placeholder until the file comes. -->
-    <Rectangle id="posterBack" translation="[48, 40]" width="120" height="180" color="0xFFFFFF24" visible="false" />
-    <Poster id="poster" translation="[48, 40]" width="120" height="180" loadDisplayMode="scaleToZoom" visible="false" />
+    <Rectangle id="posterBack" translation="[90, 60]" width="120" height="180" color="0xFFFFFF24" visible="false" />
+    <Poster id="poster" translation="[90, 60]" width="120" height="180" loadDisplayMode="scaleToZoom" visible="false" />
     <Group id="info" />
     <Group id="controls" />
   </children>
