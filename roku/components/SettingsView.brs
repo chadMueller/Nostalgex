@@ -413,6 +413,8 @@ end sub
 ' opened: one switched on during the visit has nothing on air to count yet.
 sub pushPackage(i as Integer)
     b = m.top.bundles[i]
+    ' The channel names the focused row lists (#277).
+    if m.defs = invalid then m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
     row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
     add(row)
 end sub
@@ -513,6 +515,9 @@ function rowHeight(row as Object) as Integer
     ' line(s) and the rules, 32 px a line (25 px text), and 6 px between cards.
     if row.kind = "missingCard" then return 14 + 36 + 32 * (row.needsLines + row.bullets.Count()) + 14 + 6
     if row.kind = "missingNone" then return 60
+    ' The focused bundle on CHANNEL BUNDLES lists its channels under the
+    ' description (#277): the lines renderPane laid out, 28 px each.
+    if row.kind = "bundle" and row.listLines <> invalid then return 74 + 8 + 28 * row.listLines.Count()
     ' Two lines under its detail, and a third when the library line (#207)
     ' and a playback failure are both there.
     if row.kind = "rescan" then
@@ -727,6 +732,10 @@ sub renderPane()
     page.AppendChild(newLabel(t.line, m.tk.font.text, m.sz.body, m.t2, 124, 114))
     page.AppendChild(newRect(0, 176, m.rowW, 1, "0xFFFFFF0F"))
 
+    ' The focused bundle's channel list is laid out first: its height is part of
+    ' where every row below it sits.
+    layoutBundleList()
+
     ' Where each row sits in the whole list, then a scroll that keeps the
     ' focused row in view, with the headings just above it when they fit.
     tops = []
@@ -789,6 +798,48 @@ sub renderPane()
     end for
 end sub
 
+' The focused bundle row on CHANNEL BUNDLES opens to list its channels (#277);
+' only that row, and no other page or key. Its lines are kept on the row
+' (`listLines`) for rowHeight and drawRow.
+sub layoutBundleList()
+    if m.defs = invalid then return
+    adv = advanceOf(m.tk.font.tag, m.sz.body)
+    maxChars = Int((m.rowW - 80) / adv)
+    for i = 0 to rowCount() - 1
+        row = m.rows[i]
+        if row.kind = "bundle" then
+            row.listLines = invalid
+            b = m.top.bundles[row.index]
+            if m.channelsPage = "packages" and m.where = "rows" and i = m.focus and b.id <> NxFranchisesBundleID() then
+                on = NxHasValue(m.enabled, b.id)
+                row.listOn = on
+                listing = NxPackageChannelListing(b.channelIDs, m.defs, m.onAir, on, m.building.DoesExist(b.id), row.built)
+                row.listLines = NxPackageListLines(listing, maxChars)
+            end if
+        end if
+    end for
+end sub
+
+' The listing under the focused bundle's description: dim when the bundle is
+' off, bright when on, a channel short of titles in amber.
+sub drawBundleList(page as Object, row as Object, x as Float, y as Float)
+    adv = advanceOf(m.tk.font.tag, m.sz.body)
+    ly = y
+    for each line in row.listLines
+        cx = x
+        for each piece in line
+            color = m.tk.color.text2
+            if row.listOn then color = m.tk.color.text
+            if piece.isShort or piece.legend then color = m.tk.color.amber
+            lbl = newLabel(piece.text, m.tk.font.tag, m.sz.body, color, cx, ly)
+            if not row.listOn and not piece.isShort and not piece.legend then lbl.opacity = 0.6
+            page.AppendChild(lbl)
+            cx = cx + Len(piece.text) * adv
+        end for
+        ly = ly + 28
+    end for
+end sub
+
 function serversOnCount() as Integer
     n = 0
     for each x in m.serversOn
@@ -834,8 +885,9 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         else if on and not m.building.DoesExist(b.id) then
             ' How many of its channels are on air, and the count of those that
             ' are not, as the Apple TV's "9/10 CH" and amber circle. Only for a
-            ' package the guide held when Settings opened.
-            badge = NxPackageBadge(on, false, row.built, row.avail)
+            ' package the guide held when Settings opened. The count is read
+            ' from the same list as the amber names (NxPackageChannelListing).
+            badge = NxPackageChannelListing(b.channelIDs, m.defs, m.onAir, on, false, row.built).badge
             if row.built and row.avail.available > 0 then detail = row.avail.available.ToStr() + "/" + row.avail.total.ToStr() + " CHANNELS"
         end if
         ' A seasonal package works in every month; outside its season the row
@@ -1114,6 +1166,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             ly = ly + 28
         end for
     end if
+    if row.kind = "bundle" and row.listLines <> invalid then drawBundleList(page, row, indent + 30, y + 72)
     stateWidth = 0
     if state <> "" then
         ' A value that is a line of its own (ABOUT's version and addresses) sits

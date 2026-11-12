@@ -134,6 +134,84 @@ function NxRunSettingsChannelsTests(configPath as String) as Integer
     NxCheck(r, "real: and it shows a 1", NxBadgeOf(NxPackageBadge(true, false, true, real)), "1")
     NxCheck(r, "real: FRANCHISES is a package of its own", FormatJson(franchisesBundle <> invalid), "true")
 
+    ' ── The focused bundle lists its channels (#277, PackageChannelListing) ──
+    listDefs = NxChannelDefsById(config)
+    listBad = []
+    listLongest = 0
+    listChecked = 0
+    for each b in config.bundles
+        ids = b.channelIDs
+        if ids.Count() = 0 then continue for
+        all = {}
+        half = {}
+        none = {}
+        k = 0
+        for each id in ids
+            all[NxToStr(id)] = true
+            if k mod 2 = 0 then half[NxToStr(id)] = true
+            k = k + 1
+        end for
+        order = []
+        for each id in ids
+            order.Push(NxToStr(id))
+        end for
+        ' Every state: on and built (all on air, half, none), off, building, not built.
+        states = [
+            { name: "all on air", on: true, building: false, built: true, onAir: all, short: 0 },
+            { name: "half on air", on: true, building: false, built: true, onAir: half, short: ids.Count() - (ids.Count() + 1) \ 2 },
+            { name: "none on air", on: true, building: false, built: true, onAir: none, short: 0 },
+            { name: "off", on: false, building: false, built: true, onAir: half, short: 0 },
+            { name: "building", on: true, building: true, built: true, onAir: half, short: 0 },
+            { name: "not built", on: true, building: false, built: false, onAir: half, short: 0 }
+        ]
+        for each st in states
+            listing = NxPackageChannelListing(ids, listDefs, st.onAir, st.on, st.building, st.built)
+            got = []
+            for each e in listing.entries
+                got.Push(NxToStr(e.id))
+            end for
+            if got.Join("|") <> order.Join("|") then listBad.Push(b.id + "/" + st.name + ": order")
+            if listing.shortCount <> st.short then listBad.Push(b.id + "/" + st.name + ": " + NxToStr(listing.shortCount) + " short, wanted " + NxToStr(st.short))
+            ' One list: the row's count is the same number the amber names make, and the old badge rule agrees.
+            avail = NxBundleAvailability(ids, st.onAir)
+            old = NxPackageBadge(st.on, st.building, st.built, avail)
+            if NxToStr(old) <> NxToStr(listing.badge) then listBad.Push(b.id + "/" + st.name + ": badge " + NxToStr(listing.badge) + " vs " + NxToStr(old))
+            amberNames = 0
+            for each e in listing.entries
+                if e.isShort then amberNames = amberNames + 1
+                if e.name = "" then listBad.Push(b.id + "/" + st.name + ": a nameless channel " + NxToStr(e.id))
+            end for
+            if amberNames <> listing.shortCount then listBad.Push(b.id + "/" + st.name + ": amber names vs count")
+            lines = NxPackageListLines(listing, 60)
+            wantLines = 0
+            if listing.shortCount > 0 then wantLines = 1
+            text = ""
+            for each line in lines
+                width = 0
+                for each piece in line
+                    width = width + Len(piece.text)
+                    if not piece.legend then text = text + piece.text
+                end for
+                if width > 60 and line.Count() > 1 then listBad.Push(b.id + "/" + st.name + ": a line of " + NxToStr(width))
+                if width > listLongest then listLongest = width
+            end for
+            names = []
+            for each e in listing.entries
+                names.Push(e.name)
+            end for
+            if text <> names.Join(", ") then listBad.Push(b.id + "/" + st.name + ": the lines do not read as the names")
+            hasLegend = lines.Count() > 0 and lines[lines.Count() - 1][0].legend
+            if hasLegend <> (listing.shortCount > 0) then listBad.Push(b.id + "/" + st.name + ": the legend line")
+            listChecked = listChecked + 1
+        end for
+    end for
+    NxCheck(r, "bundle listing: every shipped bundle, every state (order, count, one list, lines, legend)", listBad.Join(" | "), "")
+    print "settings channels: bundle listing "; listChecked; " bundle states checked, longest line "; listLongest; " characters"
+    one = NxPackageChannelListing([1, 2], { "1": { name: "ONE" } }, { "1": true }, true, false, true)
+    NxCheck(r, "bundle listing: a channel with no definition reads CH n", one.entries[1].name, "CH 2")
+    NxCheck(r, "bundle listing: only the channel not on air is short", NxToStr(one.entries[0].isShort) + "|" + NxToStr(one.entries[1].isShort), "false|true")
+    NxCheck(r, "bundle listing: the lines wrap, a name is not split", NxPackageListLines(NxPackageChannelListing([1, 2, 3], { "1": { name: "AAAA" }, "2": { name: "BBBB" }, "3": { name: "CC" } }, {}, true, false, true), 12)[0][0].text, "AAAA, ")
+
     print "settings channels cases (upstream SettingsChannelsView): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

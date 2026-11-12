@@ -34,6 +34,63 @@ function NxBundleAvailability(channelIDs as Object, onAir as Object) as Object
     return { total: total, available: available, missing: total - available }
 end function
 
+' The channels a focused bundle row lists under its description (#277, the Apple
+' TV's PackageChannelListing, discussion #217): names only, in the bundle's own
+' order from channels.json. One rule marks the channels short of titles, and the
+' row's amber count is read from this same list, so the count names what it
+' counts: a bundle that is off lists its channels and marks none; one still
+' building, or the guide did not hold when Settings opened (`built` false), marks
+' none; one with nothing on air marks none (the row says it is short, and dims);
+' otherwise the channels not on air are marked and `badge` is how many.
+' `defs` is NxChannelDefsById, `onAir` the guide's on-air ids. Returns
+' { entries: [{ id, name, isShort }], shortCount, badge (invalid for none) }.
+function NxPackageChannelListing(channelIDs as Dynamic, defs as Object, onAir as Object, on as Boolean, building as Boolean, built as Boolean) as Object
+    available = 0
+    for each id in NxList(channelIDs)
+        if onAir.DoesExist(NxToStr(id)) then available = available + 1
+    end for
+    marks = on and built and not building and available > 0
+    entries = []
+    shortCount = 0
+    for each id in NxList(channelIDs)
+        name = "CH " + NxToStr(id)
+        d = defs[NxToStr(id)]
+        if type(d) = "roAssociativeArray" and NxIsString(d.name) then name = d.name
+        isShort = marks and not onAir.DoesExist(NxToStr(id))
+        if isShort then shortCount = shortCount + 1
+        entries.Push({ id: id, name: name, isShort: isShort })
+    end for
+    badge = invalid
+    if shortCount > 0 then badge = shortCount
+    return { entries: entries, shortCount: shortCount, badge: badge }
+end function
+
+' The lines a focused bundle row draws for its listing (#277): the names joined
+' with ", " in the bundle's order and wrapped at `maxChars` characters, each piece
+' { text, isShort, legend }, then one line "Amber: not enough titles yet" when
+' any channel is short. A name is not split across lines.
+function NxPackageListLines(listing as Object, maxChars as Integer) as Object
+    lines = []
+    line = []
+    used = 0
+    n = listing.entries.Count()
+    for i = 0 to n - 1
+        e = listing.entries[i]
+        text = e.name
+        if i < n - 1 then text = text + ", "
+        if used > 0 and used + Len(text) > maxChars then
+            lines.Push(line)
+            line = []
+            used = 0
+        end if
+        line.Push({ text: text, isShort: e.isShort, legend: false })
+        used = used + Len(text)
+    end for
+    if line.Count() > 0 then lines.Push(line)
+    if listing.shortCount > 0 then lines.Push([{ text: "Amber: not enough titles yet", isShort: false, legend: true }])
+    return lines
+end function
+
 ' The amber count beside a package's channel count (packageRow's missingBadge):
 ' the channels still short of content, for a package that is on, not building
 ' and has some channels on air. An OFF package is an invitation, never a

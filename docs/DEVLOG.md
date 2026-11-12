@@ -29,6 +29,33 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: the focused bundle on CHANNEL BUNDLES lists its channels, #277)
+
+**Why.** A viewer could not see what a bundle held before switching it on: the page showed its name, a description and a count.
+The Apple TV (1.0.31, `PackageChannelListing`, discussion #217) opens the focused bundle row to list its channels.
+
+**Changed.** The focused bundle row on CHANNEL BUNDLES grows to list its channels under the description: names only, no numbers,
+in the bundle's own order from `channels.json`, wrapped at the row's width. Off, they are small and dim (text-2 at 0.6); on,
+white; a channel short of titles in amber, with one line "Amber: not enough titles yet". Only the focused row opens, and the
+page's scroll takes its new height (the lines are laid out before row positions are summed). `NxPackageChannelListing` is the one
+list: the row's amber count (`badge`) and the amber names are read from it, so the count names what it counts: bundle on, not
+building, held by the guide when Settings opened, at least one channel on air, and the channels not on air. `NxPackageListLines`
+wraps it. Nothing new is stored.
+
+**Tested off the TV.** `SettingsChannelsTests`, 4 more cases (73) over every shipped bundle (14) in six states (84): all on air,
+half, none, off, building, not built. Per state: the entries keep `channels.json`'s order, the short count is the expected one,
+the old `NxPackageBadge` rule gives the same number, the amber names equal the count, no name is empty, the lines read back as
+the names, none is wider than the wrap, and the legend line is there exactly when a channel is short. The longest line is 60
+characters at a 60 wrap.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) on the real library, through the node tree: NOSTALGEX focused lists its 22
+channels in order over two lines, 19 names in white and 2 in amber (`#FFB020`) with the legend line, and its row reads
+"20/22 CHANNELS" with the amber 2; KIDZ ZONE focused (15 of 15) lists 15 names and no legend. The focused row stays on screen
+as it grows. Not seen by eye.
+
+**Not done.** An off bundle on a stick; the Apple TV's wait for the sizes to settle before it places the focused row is not
+copied (the Roku re-lays the page on every focus move and keeps the row in view).
+
 ## 2026-11-12 (Roku: the bundle list on the Apple TV 1.0.32's footing, #264)
 
 **Why.** The guide's BUNDLES sidebar had its own look: a 22 px heading in white at 60%, rows 72 high filled with the bundle's
