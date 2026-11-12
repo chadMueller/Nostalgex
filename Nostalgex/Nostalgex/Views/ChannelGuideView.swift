@@ -84,6 +84,10 @@ struct ChannelGuideView: View {
             // from fullscreen (where the tuner view can pause timers).
             let visibleStart = windowStart.addingTimeInterval(TimeInterval(slotOffset * 1800))
             let visibleLabels = timeSlotLabels(from: visibleStart)
+            // One clock reading for every row's piece of the "now" line. Each row reading its own put rows redrawn
+            // by a focus move a few seconds ahead of the rest, a step of 2 to 3 pt. Rounded down to 15 s, so the
+            // rows only all redraw for it when it changes.
+            let nowLineTime = Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate / 15).rounded(.down) * 15)
             let highlighted = highlightedID
             let stripeGroups = self.stripeGroups
             let stripeCells = GuideStripes.rowCells(groups: stripeGroups, count: appState.channels.count)
@@ -151,6 +155,7 @@ struct ChannelGuideView: View {
                                             channelColumnWidth: channelColumnWidth,
                                             programsWidth: programsWidth,
                                             visibleWindowStart: visibleStart,
+                                            nowLineTime: nowLineTime,
                                             rowHeight: rowHeight,
                                             stripe: stripeCells.indices.contains(index) ? stripeCells[index] : nil
                                         )
@@ -724,6 +729,8 @@ private struct EPGRow: View {
     let channelColumnWidth: CGFloat
     let programsWidth: CGFloat
     let visibleWindowStart: Date
+    /// Where the "now" line goes. The same for every row (ChannelGuideView.body).
+    let nowLineTime: Date
     let rowHeight: CGFloat
     /// This row's piece of the package stripe, in the slot at the row's left edge.
     var stripe: GuideStripes.RowCell? = nil
@@ -752,7 +759,7 @@ private struct EPGRow: View {
                 // Colored left accent bar using channel color
                 Rectangle()
                     .fill(isLive || isFocused ? channel.color : channel.color.opacity(0.4))
-                    .frame(width: isLive || isFocused ? 8 : 4)
+                    .frame(width: accentWidth)
 
                 // Channel column
                 channelColumn
@@ -792,6 +799,9 @@ private struct EPGRow: View {
     }
 
     // MARK: - Channel column
+
+    /// The coloured bar at the row's left edge, wider on the live and focused rows.
+    private var accentWidth: CGFloat { isLive || isFocused ? 8 : 4 }
 
     private var isLive: Bool {
         appState.currentChannel?.id == channel.id
@@ -902,13 +912,14 @@ private struct EPGRow: View {
             Spacer(minLength: 0)
         }
         .frame(width: programsWidth, alignment: .leading)
-        .background(alignment: .leading) { nowLine(at: now) }
+        .overlay(alignment: .leading) { nowLine(at: nowLineTime) }
         .clipped()
     }
 
-    /// The row's piece of the "now" line, placed from the row's own program area so it lines up with this row's
-    /// blocks. It stops short of the title band: drawn through it, even behind the text, it split words
-    /// ("Pa|trol"). The gap scales with GUIDE TEXT SIZE.
+    /// The row's piece of the "now" line. An overlay, so it shows on the focused row's solid fill too; it stops
+    /// short of the title band, so it never touches a letter ("Pa|trol"). The gap scales with GUIDE TEXT SIZE.
+    /// The row is wider than the screen and centred, so the 4 pt wider accent on the live and focused rows moves
+    /// their program area 2 pt right; the piece is pulled back by that much so the line runs straight down.
     @ViewBuilder
     private func nowLine(at now: Date) -> some View {
         let fraction = CGFloat(now.timeIntervalSince(visibleWindowStart) / visibleDuration)
@@ -919,7 +930,7 @@ private struct EPGRow: View {
                 Rectangle().fill(Color("BrandCyan"))
             }
             .frame(width: 2, height: rowHeight)
-            .offset(x: fraction * programsWidth)
+            .offset(x: fraction * programsWidth - (accentWidth - 4) / 2)
         }
     }
 

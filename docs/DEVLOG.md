@@ -3,25 +3,34 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-## 2026-11-11 (Apple TV: the guide's "now" line no longer cuts through titles, #232 item 1)
+## 2026-11-11 (Apple TV: the guide's "now" line no longer cuts through titles, #232 item 1, PR #307)
 
 **Why.** The cyan "now" line was one rectangle laid over the whole guide, so it ran through the middle of program
 titles ("Rep|licant Trial", "Channel Pha|ntom"). It was also placed from the header's left edge, not each row's, so it
 sat about 36 pt left of where the rows' own blocks put the current time.
 
 **Changed.** `ChannelGuideView` no longer draws the guide-wide line, and `nowFractionInWindow` is gone with it. Each
-`EPGRow` draws its own piece behind its program blocks (`EPGRow.nowLine`), placed from the row's program area with the
-same 2-hour window the blocks use. It stops short of the title band, a gap of 1.5x the GUIDE TEXT SIZE title size
-(capped at the row height less 16 pt), so it never crosses a letter. Drawing it behind the text at full height was
-tried first: the line still showed between the strokes ("Pa|trol").
+`EPGRow` draws its own piece as an overlay on its program blocks (`EPGRow.nowLine`), placed from the row's program
+area with the same 2-hour window the blocks use. It stops short of the title band, a gap of 1.5x the GUIDE TEXT SIZE
+title size (capped at the row height less 16 pt), so it never crosses a letter. Drawing it behind the text at full
+height was tried first: the line still showed between the strokes ("Pa|trol").
 
-**Left as is.** The time bar has no marker now. The header's labels sit about 25 pt left of the rows' program areas,
-so a marker placed from the header would not line up with the rows below it. The live and focused rows' program areas
-start a few points right of the other rows (the package-stripe slot is narrower there), so their pieces of the line
-are a few points right too; each piece is correct for its own row.
+**After review (#307).** Two fixes from the review. First, the pieces were a background, so the focused row's solid
+fill hid them; they are an overlay now. Second, the line stepped sideways on some rows, for two reasons. The row is
+wider than the screen and centred, so the 4 pt wider accent bar on the live and focused rows moved their program area
+2 pt right; the piece is pulled back by half the extra accent width. Also, each row read the clock when it redrew, so
+rows redrawn by a focus move ran a few seconds, 2 to 3 pt, ahead of the rest. `ChannelGuideView.body` now reads the
+clock once, rounded down to 15 s, and passes it to every row (`nowLineTime`), so all rows redraw for it together and
+at most once per 15 s. Measured on 4K simulator screenshots: all six visible rows put the line on the same pixel column
+(811 px in one shot, 818 px in another), where before the steps were 5 to 6 px.
+
+**Left as is.** The time bar has no marker. The header's labels sit about 25 pt left of the rows' program areas, so a
+marker placed from the header would not line up with the rows below it. The line still moves only when the guide
+redraws, as it did before; there is no timer.
 
 **Tests.** `NostalgexTests` and `npm test` pass. Checked by eye in demo mode on the Apple TV 4K (3rd generation)
-simulator at NORMAL text size. Not checked at the larger GUIDE TEXT SIZE settings or on a real Apple TV.
+simulator at NORMAL and LARGE text size. Not checked on a real Apple TV, or on top of 1.0.32's guide changes, which are
+not on main yet.
 
 ## 2026-11-11 (Android: follow-ups from the #151 review)
 
