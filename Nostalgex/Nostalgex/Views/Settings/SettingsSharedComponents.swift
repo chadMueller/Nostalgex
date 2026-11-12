@@ -280,6 +280,9 @@ struct SettingsToggleRow: View {
     var isLoading: Bool = false
     var loadingMessage: String? = nil
     var showToggle: Bool = true
+    /// ON or OFF in words beside the switch (#232), so the state does not rest on the switch's colour alone.
+    /// Off for the rows whose detail already says it (INCLUDED, OFF).
+    var showStateText: Bool = true
     /// Pro-only row: a lock and a PRO pill replace the switch, and select calls
     /// onLockedTap instead of onToggle. Off by default, so existing rows are unchanged.
     var proLocked: Bool = false
@@ -357,7 +360,17 @@ struct SettingsToggleRow: View {
                 if proLocked {
                     ProLockBadge()
                 } else if !isLoading && showToggle {
-                    ToggleSwitch(isOn: isOn)
+                    HStack(spacing: 12) {
+                        if showStateText {
+                            // Fixed width, so the switches line up down the pane.
+                            Text(isOn ? "ON" : "OFF")
+                                .font(NXFont.captionMedium)
+                                .foregroundStyle(isOn ? Color.nxCyan : Color.nxText2)
+                                .frame(width: 52, alignment: .trailing)
+                                .accessibilityHidden(true)
+                        }
+                        ToggleSwitch(isOn: isOn)
+                    }
                 }
             }
             .padding(.horizontal, 20)

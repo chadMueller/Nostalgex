@@ -34,7 +34,8 @@ function NxRunSettingsRailTests() as Integer
         NxCheck(r, "tab of: " + kind, NxSettingsTabOf(kind), "servers")
     end for
     NxCheck(r, "tab of: the version line is an ABOUT row", NxSettingsTabOf("version"), "about")
-    NxCheck(r, "tab of: GITHUB", NxSettingsTabOf("github"), "about")
+    NxCheck(r, "tab of: an ABOUT link line", NxSettingsTabOf("aboutLink"), "about")
+    NxCheck(r, "tab of: the old GITHUB kind is gone, it is one of the links", NxSettingsTabOf("github"), "")
     NxCheck(r, "tab of: WATERSHED (#211's row) is a CHANNELS row", NxSettingsTabOf("watershed"), "channels")
     NxCheck(r, "tab of: a text row has none of its own", NxSettingsTabOf("header"), "")
     NxCheck(r, "tab of: an unknown kind", NxSettingsTabOf("nothing"), "")
@@ -122,6 +123,30 @@ function NxRunSettingsRailTests() as Integer
     NxCheck(r, "back from a page: MY COLLECTIONS", NxSettingsLinkRowOf(list, "collections").ToStr(), "2")
     NxCheck(r, "back from a page: a page with no link", NxSettingsLinkRowOf(list, "missing").ToStr(), "-1")
     NxCheck(r, "back from a page: no list", NxSettingsLinkRowOf(invalid, "packages").ToStr(), "-1")
+
+    ' ── ABOUT > LINKS: the Apple TV's list (AboutLinks.swift), one place (#282) ──
+    links = NxAboutLinks()
+    ids = []
+    titles = []
+    addresses = []
+    plain = true
+    sentences = true
+    for each link in links
+        ids.Push(link.id)
+        titles.Push(link.title)
+        addresses.Push(link.address)
+        if Instr(1, link.address, "://") > 0 or Left(link.address, 4) = "www." then plain = false
+        if Right(link.subtitle, 1) <> "." then sentences = false
+    end for
+    NxCheck(r, "about links: Discord, website, web tuner, Roku, GitHub, in the Apple TV's order", ids.Join("|"), "discord|website|web_tuner|roku|github")
+    NxCheck(r, "about links: titles", titles.Join("|"), "DISCORD|WEBSITE|WEB TUNER|ROKU|GITHUB")
+    NxCheck(r, "about links: the addresses the Apple TV lists", addresses.Join("|"), "discord.gg/FgnZcr5bDT|nostalgex.app|nostalgex.app/web-tuner|my.roku.com/account/add/NOSTALGEX|github.com/chadMueller/Nostalgex")
+    NxCheck(r, "about links: readable addresses, no https://", plain.ToStr(), "true")
+    NxCheck(r, "about links: each line ends as a sentence", sentences.ToStr(), "true")
+    NxCheck(r, "about links: the Roku line gives the channel code", NxToStr(Instr(1, NxAboutLink("roku").subtitle, "NOSTALGEX") > 0), "true")
+    NxCheck(r, "about links: look one up by id", NxAboutLink("web_tuner").address, "nostalgex.app/web-tuner")
+    NxCheck(r, "about links: an unknown id", NxToStr(NxAboutLink("nothing") = invalid), "true")
+    NxCheck(r, "about links: the line takes focus like the version line", NxSettingsRowFocusable("aboutLink").ToStr(), "true")
 
     print "settings rail cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail

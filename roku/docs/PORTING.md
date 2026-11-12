@@ -265,7 +265,9 @@ lists, under each package's name, the channels of every package that is on,
 built and not building that aren't on air, each as a card: its colour and name,
 "Needs n matching titles. You have m.", and its rules as `plainLanguageRequirements`
 words them (the same fields, order and text; the Swift tests' cases are ported
-one for one). With none missing it says "Every channel in your packages is on
+one for one, and since #280 every channel's lines are held to
+`scripts/channel-requirements-golden.json`, with the amber line held to the web module's
+`needsLine`, so a change to a channel's rules turns the suite red until the Roku follows). With none missing it says "Every channel in your packages is on
 air." Differences:
 
 - **When the count is made.** The Apple TV filters the library for the page's
@@ -340,7 +342,8 @@ draws them.
   BUNDLES has the link rows and pages above. SERVERS &
   ACCOUNTS has the servers, RESCAN LIBRARY and SIGN OUT (still two presses;
   the Apple TV's DISCONNECT is one). ABOUT has VERSION as a row and LINKS with
-  GITHUB, both focusable with nothing to press, as there. The CONNECTION heading
+  the Apple TV's five lines (`source/guide/AboutLinks.brs`: DISCORD, WEBSITE, WEB TUNER, ROKU, GITHUB, each an address to read),
+  all focusable with nothing to press, as there (#282). The CONNECTION heading
   and the footer line are gone. The accent is Settings' cyan (BrandCyan,
   `0x00D4FF`), not the Roku's yellow.
 - **Sound.** The playing channel is muted while Settings is open, as there

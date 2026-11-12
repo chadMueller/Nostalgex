@@ -38,7 +38,7 @@ function NxSettingsTabOf(kind as String) as String
     ' first: a kind missing from these lists is in no tab and never shows.
     channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone"]
     servers = ["server", "includeHidden", "rescan", "signOut"]
-    about = ["version", "github"]
+    about = ["version", "aboutLink"]
     if kind = "support" then return "support"
     if NxHasValue(playback, kind) then return "playback"
     if NxHasValue(channels, kind) then return "channels"
@@ -76,7 +76,7 @@ end function
 ' ── Focus ───────────────────────────────────────────────────────────────────
 
 ' Whether a row of `kind` takes focus. Text rows never do, nor the QR card:
-' scanning it is the action. VERSION and GITHUB do, as on the Apple TV, where
+' scanning it is the action. VERSION and the ABOUT links do, as on the Apple TV, where
 ' the remote has somewhere to land and select does nothing.
 function NxSettingsRowFocusable(kind as String) as Boolean
     return kind <> "header" and kind <> "subheader" and kind <> "info" and kind <> "support"

@@ -218,7 +218,7 @@ end sub
 '   (STREAM QUALITY), qualityChoice, subtitles, language (SUBTITLE or AUDIO
 '   LANGUAGE), languageChoice, reportNowPlaying, reportMarkWatched, bundle,
 '   franchiseAll, franchise, franchiseCollection, collectionsToggle,
-'   collection, version, github: rows
+'   collection, version, aboutLink (one ABOUT > LINKS line, `linkId` names it): rows
 '   channelsLink: a CHANNELS & BUNDLES link row; `page` is the page it opens
 ' Every row has `inTab`, and `inPage` for the CHANNELS & BUNDLES page it is
 ' on ("" for the tab's list, and for every other tab's rows).
@@ -303,7 +303,9 @@ sub buildRows()
 
     add({ kind: "version" })
     add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
-    add({ kind: "github" })
+    for each link in NxAboutLinks()
+        add({ kind: "aboutLink", linkId: link.id })
+    end for
 
     pickTab()
 end sub
@@ -1041,11 +1043,17 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         state = NxVersionValue()
         stateColor = "0xFFFFFFFF"
         stateW = 760
-    else if row.kind = "github" then
-        ' tvOS has no browser and nor has a Roku: an address to read, not a link.
-        label = "GITHUB"
-        detail = "Source code and issues. Open it on a phone or computer."
-        state = "github.com/chadMueller/Nostalgex"
+    else if row.kind = "aboutLink" then
+        ' The Apple TV's ABOUT > LINKS (AboutLinks.swift): an address to read, not a link.
+        link = NxAboutLink(row.linkId)
+        label = "LINK"
+        detail = ""
+        state = ""
+        if link <> invalid then
+            label = link.title
+            detail = link.subtitle
+            state = link.address
+        end if
         stateColor = "0xFFFFFFFF"
         stateW = 760
     else

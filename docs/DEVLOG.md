@@ -29,6 +29,65 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: ABOUT lists the project's links as readable addresses, #282)
+
+**Why.** The Roku's ABOUT held the version line and one GitHub row. The Apple TV's ABOUT (1.0.32, `AboutLinks.swift`) lists
+Discord, the website, the web tuner, Roku and GitHub as addresses to read, since a TV opens none of them.
+
+**Changed.** `source/guide/AboutLinks.brs` is the one list (`NxAboutLinks`), in the Apple TV's order with its titles,
+lines and addresses, shown without `https://`; `SettingsView` builds one `aboutLink` row per entry under LINKS in place of
+the single `github` row, drawn as the version line is (focusable, OK does nothing). `SettingsRail` puts the `aboutLink` kind
+on the ABOUT tab. An address now changes in one place.
+
+**Tested off the TV.** `SettingsRailTests`, 10 more cases (102): the five links in order with their titles and addresses,
+no scheme, each line a sentence, the Roku line carrying the channel code, a lookup by id and an unknown id, the kind's tab
+and focus. `tests/run.sh`'s settings-rail suite passes.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) in the Settings tour (test data): ABOUT shows the VERSION row, the LINKS heading and
+the five lines with their addresses (discord.gg/FgnZcr5bDT, nostalgex.app, nostalgex.app/web-tuner,
+my.roku.com/account/add/NOSTALGEX, github.com/chadMueller/Nostalgex), read from the node tree.
+
+**Not done.** The Apple TV's text is copied by hand; nothing re-checks it when `AboutLinks.swift` changes. Not seen by eye.
+
+## 2026-11-12 (Roku: WHY ARE SOME CHANNELS MISSING? is held to the shared channel-requirements golden file, #280)
+
+**Why.** The Roku's plain-language lines were checked once against a transcription of the Apple TV's
+`plainLanguageRequirements` (all 142 channels matched), and nothing re-checked them when `channels.json` changed. The web
+tuner now has the same words as shared code and a shared file, `scripts/channel-requirements-golden.json`.
+
+**Changed (tests only).** `tests/gen-vectors.mjs` copies the golden file byte for byte and writes `tests/vectors/channel-needs.json`
+from the web module's `needsLine` (`tests/gen-requirements.mjs`, 6 minimums by 5 counts); the generator also fails before any
+BrightScript runs if the module and the golden file disagree on a channel. `ChannelsMissingTests` compares
+`NxPlainRequirements` for every channel in `channels.json` with the file, both ways (a channel missing from the file, or in it
+and not in `channels.json`), and `NxMissingNeedsLine` for every pair. No app code changed.
+
+**Tested off the TV.** The channels-missing suite: 70 cases, 142 of 142 channels match, 30 pairs match. With the Roku's "Rated: "
+changed to "Rating: " in a throwaway copy, 28 channels differ and the suite fails. Roku-only on purpose: the "none" state
+(a library over the coverage limit, or a saved guide with no library) has no web counterpart.
+
+**Not done.** On a stick: the same suite runs in `deploy.sh --test`, not run here.
+
+## 2026-11-12 (README: Roku in the "Pick your way to watch" table)
+
+**Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
+
+**Changed (later the same day).** The Roku button uses the Roku logo (Simple Icons, in Roku purple), the same way the Docker column uses the Docker logo. It is the logo, not an official Roku store badge.
+
+## 2026-11-12 (Apple TV: no empty headings on SERVERS & ACCOUNTS, ON or OFF in words beside the switches, #232 items 5 and 6)
+
+**State.** Branch `appletv/232-readability` off main `776c54ae`. Not in a build yet; it goes in the next Apple TV build (1.0.33). The guide is not touched.
+
+**Why.** #232 asked for two small things. In demo mode SERVERS and LIBRARIES had a heading and nothing under it. And the Settings switches were only a pill, where the Now Playing panel and the FRANCHISES row already say ON or OFF in words.
+
+**Changed.**
+- `SettingsServersView`: the SERVERS and LIBRARIES headings are drawn only when there is a server or a library to list. `firstRowID` already fell back to RESCAN LIBRARY, so focus lands there.
+- `SettingsToggleRow`: ON (cyan) or OFF (the second text grey, 4.5:1 or better) in 25 pt DM Mono sits beside the switch, in a fixed 52 pt slot so the switches still line up down the pane. It is hidden from VoiceOver; the row's own "On" or "Off" value is unchanged. `showStateText: false` for the server and library rows, whose detail already says INCLUDED or OFF.
+- The pill stays: it is the 1.0.32 size (44 x 26), a design decision, and the text is added beside it.
+
+**Left as is.** The rows with a link and a value (FRANCHISES and the others) and the Now Playing rows already read ON or OFF. Item 6 of the issue also noted that SETTINGS on the main screen looked like plain text: since 1.0.32 it is a pill button.
+
+**Tests.** Full `NostalgexTests`, serial on the one visible Simulator: 1,374 passed, 32 skipped, and one test, `PlaybackFailureRunTests.testOneBadProgrammeStillSkipsAndThePlayingCarriesOn`, crashed with a terminate signal when the Simulator was shut down under it; the class passes alone (8 of 8). The Settings UI tests that open these rows (OPEN ON LAST CHANNEL, the RESCAN row, package channels, the channels drill-down) ran through the visible Simulator, parallel off: 6 of 6 passed. Simulator only; not looked at on a TV.
+
 ## 2026-11-11 (Roku: an airing that runs past midnight is no longer cut off at 12:00 AM, #297)
 
 **Why.** A Discord report said a movie stops at midnight every night. Run through the Roku's own schedule code in the
