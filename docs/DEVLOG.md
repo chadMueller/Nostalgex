@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: tests/run.sh counts free memory on macOS too, #168 follow-up)
+
+**Why.** Chad's #168 review note: on macOS the worker cap read the whole RAM, so his 24 GB Mac with 14 threads still
+started 12 interpreters at once (`tests: 12 at a time (14 CPU threads, 24576 MB free, memory scope 0)`), at up to
+1.7 GB each. He suggested `vm_stat`'s free, inactive and purgeable pages (tydude001).
+
+**Changed.** With no `/proc/meminfo`, `run.sh` sums those three page counts from `vm_stat` and multiplies by the page
+size it prints. If that gives no number (no `vm_stat`, or no page size in its header), it falls back to the whole
+RAM from `sysctl`, as before. Linux is unchanged (`MemAvailable`). `NX_TEST_JOBS` still overrides the result.
+
+**Tests.** The memory block alone, on Linux with stand-ins for `vm_stat` and `sysctl`: a sample in `vm_stat`'s format (16 KB
+pages; 5,025 free, 466,262 inactive, 16,577 purgeable) gives 7,622 MB, so 3 at once; without its page-size line, or with
+no `vm_stat`, the whole RAM (24,576 MB); Linux still reads `MemAvailable`. The awk gives the same under GNU awk
+`--posix` and BusyBox awk. `tests/run.sh` on Linux ends in ALL TESTS PASSED. Not yet run on a Mac or under macOS's awk.
+
 ## 2026-11-12 (Roku: applySubtitles no longer looks for a forced sidecar, #237)
 
 **Why.** The 2026-11-11 #272 follow-ups entry left this open, and Chad's #298 merge note left it for its own change
