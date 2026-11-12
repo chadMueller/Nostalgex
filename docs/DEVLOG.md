@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Site: Apple TV 1.0.32 is live, new branding on the site)
+
+**Why.** Apple TV 1.0.32 went live on the App Store on 2026-11-11. The site speaks only about the App Store version, and the
+1.0.32 logo and look replace the old lightning-bolt branding.
+
+**Changed.**
+- `content/changelog.json`: 1.0.30, 1.0.31 and 1.0.32 are `released: true` (1.0.30 and 1.0.31 were TestFlight only, so a person
+  on 1.0.29 gets all three). `npm run changelog:render` shows them on the home page.
+- Thank-you lines are gone from the website (changelog, home page, two blog posts). Credits stay in GitHub releases, the
+  README's contributor line and the Discord post.
+- The Apple TV, Plex, Jellyfin and Emby pages and the bundles hub use the new App Store images (`public/screens/atv-*.webp`);
+  the old guide, lineup and player images are deleted. A new `og-site-1200.png` is the share image for the site pages, and
+  `og-image-1200.png` and `og-image.png` now hold the same new image. The email header is a new wordmark file.
+- README: the Apple TV version, the "What's new" section and the guide image.
+
+**Not done.** The hero video and its poster (`public/screens/nostalgex-hero-*`, `guide-hero*.webp`) and the 27 blog images on
+R2 still show the old look and need new captures. The web tuner pages and the Docker output are untouched.
+
 ## 2026-11-12 (Web tuner: LARGE guide text follows the Apple TV 1.0.32 sizes)
 
 **Why.** The Apple TV's LARGE guide text changed in 1.0.32: everything goes to body (29), where it used to be a mix of
