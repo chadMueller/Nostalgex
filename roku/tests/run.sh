@@ -44,11 +44,20 @@ brs=$(npx -y -p @rokucommunity/brs@0.47.6 -c 'command -v brs')
 cpus=$(getconf _NPROCESSORS_ONLN)
 # One interpreter takes up to 1.7 GB, so at most one per 2 GB free: 20 at once
 # filled a 31 GB Linux desktop and the kernel killed the desktop, not them
-# (2026-10-25). Free memory is MemAvailable on Linux; macOS has no
-# /proc/meminfo, so there it is the whole RAM.
+# (2026-10-25). Free memory is MemAvailable on Linux. macOS has no
+# /proc/meminfo: there it is vm_stat's free, inactive and purgeable pages, as
+# the whole RAM still started 12 at once on a 24 GB Mac (#168). If neither
+# gives a number, it is the whole RAM.
+mem_mb=0
 if [ -r /proc/meminfo ]; then
     mem_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
-else
+elif command -v vm_stat >/dev/null 2>&1; then
+    mem_mb=$(vm_stat | awk '
+        /page size of/ { for (i = 1; i < NF; i++) if ($i == "of") size = $(i + 1) }
+        /^Pages (free|inactive|purgeable):/ { pages += $NF }
+        END { if (size > 0) print int(pages * size / 1048576); else print 0 }')
+fi
+if [ "${mem_mb:-0}" -le 0 ]; then
     mem_mb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
 fi
 jobs=$cpus
