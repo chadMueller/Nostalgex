@@ -54,6 +54,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeout.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeCursor.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideStripes.brs" />
   <script type="text/brightscript" uri="pkg:/source/ui/Tokens.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />

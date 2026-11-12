@@ -29,6 +29,37 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: bundle stripes in the guide, with a way to move along them, #276)
+
+**Why.** The guide had a BUNDLES list to jump to a bundle, but nothing in the grid said which bundle a row belonged to; a row's
+bar is the channel's own colour. The Apple TV (1.0.31, `GuideStripes`) and the web tuner draw a stripe down the left edge, one run
+per bundle with its name written up it.
+
+**Changed.** `source/guide/GuideStripes.brs` is the pure part: which bundle a channel is in (the first enabled bundle that lists it,
+then the jump lists, the same lists `NxGuideJumpTargets` reads), the runs of consecutive rows, a name's colour (FNV-1a over the
+upper-cased name, halves folded, modulo ten channel colours: the Apple TV's, so a name is the same colour everywhere and on every
+launch), black or white for the name by contrast, the lift for the focused stripe, and the step to the previous or next bundle.
+`GuideView` draws a 20 px stripe in a slot of its own at the left edge of each row (the number and name sit 20 px further right; a
+channel in no bundle gets a plain stripe; a thin dark line above a run's first row), and the name rotated up the stripe, centred on
+the part of the run that is on screen. Left from the rows with the window at its start focuses the stripe (the bundle of the focused
+row, the next one when that row is in none): a lifted colour with the guide's cyan outline and glow. Up and Down jump to the previous
+and next bundle and scroll its first channel to the top, Right goes back to the rows on that channel, OK or Left opens the BUNDLES
+list, Back returns to the rows. With no bundle on screen Left opens the list as before. The stripe only takes focus after that Left,
+so first focus and the return from full screen never land on it. Nothing is stored.
+
+**Tested off the TV.** `GuideStripesTests`, 26 cases (suite `guide-stripes`): the palette index of every shipped bundle name against the
+Apple TV's hash (worked out with the same FNV-1a), neighbouring shipped bundles in guide order never share a colour, every palette
+colour and its focused lift reads at 4.5:1 with the name colour chosen, membership (first bundle wins, jump lists, a bundle that is
+off), the runs (a plain run, a bundle listed apart is a second run, none), and stepping (skips the plain run, no wrap).
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) on the real library, through the node tree: the NOSTALGEX name rotated up a stripe that
+spans the visible rows (x 0 to 20, y 5 to 461), black on its colour; Left puts the cyan outline on it; Down gives KIDZ ZONE, Down again
+PRIME TIME, Up KIDZ ZONE; Right returns to the rows with the focus on KIDZ ZONE's first channel and both NOSTALGEX and KIDZ ZONE names on
+screen as the view scrolls. Not seen by eye.
+
+**Not done.** The names sit in a 20 px slot that is a little narrower than the Apple TV's 28 px; the channel name column is 20 px
+shorter, so the longest names end sooner. FRANCHISES' found-franchise channels count as the bundle only as far as the jump lists name them.
+
 ## 2026-11-12 (Roku: the info panel follows the guide through time, #275)
 
 **Why.** Right and Left step the guide's window 30 minutes at a time, but the panel at the top left kept showing what is on now:

@@ -47,6 +47,12 @@ sub init()
     m.slotOffset = 0
     m.playing = invalid
     m.fullscreen = false
+    ' Bundle stripes (#276): a 20 px column at the guide's left edge.
+    m.stripeW = 20
+    m.stripeKey = ""
+    m.stripeGroups = []
+    m.stripeRowGroup = []
+    m.stripeIdx = -1
     ' GUIDE TIMEOUT (#274): the last remote press, and the chosen time.
     m.lastActivity = nowSec()
     m.guideTimeout = NxGuideTimeoutRead()
@@ -413,6 +419,7 @@ sub renderGrid()
     rows = m.top.FindNode("rows")
     rows.RemoveChildrenIndex(rows.GetChildCount(), 0)
     lead = leadRows()
+    refreshStripes()
     ' One title on two channels: the lowest channel id keeps it (NxGaveWay),
     ' once per second however often the grid redraws.
     if m.gaveWay = invalid or m.gaveWayAt <> t then
@@ -430,6 +437,7 @@ sub renderGrid()
         rows.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
     end if
     if lead > 0 and m.scrollY > -m.rowPitch then rows.AppendChild(renderInvite(m.scrollY))
+    drawStripeNames(rows, lead)
 
     line = m.top.FindNode("nowLine")
     ' Floats throughout: LongInteger / Integer divides as integers (giving 0
@@ -532,21 +540,35 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     ' focus fill runs through it, as on the Apple TV.
     row.AppendChild(newRect(0, 0, m.colX, m.rowH, gc.grid))
     if stripe <> invalid then row.AppendChild(newRect(0, 0, m.colX, m.rowH, stripe))
+    ' The bundle's stripe in its own slot at the left edge (#276); a plain one
+    ' for a channel in no bundle. The first row of a run has a thin dark line
+    ' above it so two stripes never run together.
+    sw = m.stripeW
+    gi = -1
+    if idx < m.stripeRowGroup.Count() then gi = m.stripeRowGroup[idx]
+    if gi >= 0 and m.stripeGroups[gi].name <> invalid then
+        hex = NxStripeHex(m.stripeGroups[gi].name)
+        if m.nav = "stripe" and gi = m.stripeIdx then hex = NxStripeFocusedHex(hex)
+        row.AppendChild(newRect(0, 0, sw, m.rowH + 1, colorOf(hex, "FF")))
+        if idx = m.stripeGroups[gi].firstRow then row.AppendChild(newRect(0, 0, sw, 2, "0x0A0A2AFF"))
+    else
+        row.AppendChild(newRect(0, 0, sw, m.rowH, "0xFFFFFF1A"))
+    end if
     accentW = 4
     if focused or tuned then
         accentW = 8
-        row.AppendChild(newRect(0, 0, 8, m.rowH, color))
+        row.AppendChild(newRect(sw, 0, 8, m.rowH, color))
     else
-        row.AppendChild(newRect(0, 0, 4, m.rowH, colorOf(ch.color, "66")))
+        row.AppendChild(newRect(sw, 0, 4, m.rowH, colorOf(ch.color, "66")))
     end if
     row.AppendChild(newRect(m.colX, 0, 1, m.rowH, "0xFFFFFF26"))
     ' The number and name are white; the channel's colour stays in the bar (#263).
     numColor = tc.text
     nameColor = tc.text
-    x = accentW + 6
+    x = sw + accentW + 6
     if tuned then
         ' The live chip: a bolt on the channel's colour, then 6 to the number.
-        x = accentW + 8
+        x = sw + accentW + 8
         chipY = (m.rowH - 23) \ 2
         row.AppendChild(newRect(x, chipY, 17, 23, color))
         bolt = CreateObject("roSGNode", "Poster")
@@ -564,6 +586,130 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
     row.AppendChild(newLabel(UCase(ch.name), "DMMono-Medium", gt.name, nameColor, x + gt.nameGap, gt.nameY, m.colX - x - gt.nameGap))
     return row
 end function
+
+' The stripes' runs, worked out again only when the lineup or the bundles change.
+sub refreshStripes()
+    if m.channels = invalid or m.top.guide = invalid then return
+    n = m.channels.Count()
+    key = n.ToStr()
+    if n > 0 then key = key + "|" + NxToStr(m.channels[0].id) + "|" + NxToStr(m.channels[n - 1].id)
+    key = key + "|" + FormatJson(NxList(m.top.guide.enabledBundles)) + "|" + NxList(m.top.guide.bundles).Count().ToStr() + "|" + NxList(m.top.guide.jumps).Count().ToStr()
+    if key = m.stripeKey then return
+    m.stripeKey = key
+    mem = NxStripeMembership(m.top.guide.bundles, m.top.guide.enabledBundles, m.top.guide.jumps)
+    m.stripeGroups = NxStripeGroups(m.channels, mem)
+    m.stripeRowGroup = []
+    for gi = 0 to m.stripeGroups.Count() - 1
+        g = m.stripeGroups[gi]
+        for r = g.firstRow to g.firstRow + g.rowCount - 1
+            m.stripeRowGroup.Push(gi)
+        end for
+    end for
+    if m.stripeIdx >= m.stripeGroups.Count() then m.stripeIdx = -1
+end sub
+
+' Each bundle's name written up its stripe, sticky: centred on the part of the
+' run that is on screen, so it stays readable while the viewer scrolls through
+' the bundle. The focused stripe (after Left from the rows) gets the cyan
+' outline and glow over it.
+sub drawStripeNames(rows as Object, lead as Integer)
+    tk = NxTokens()
+    for gi = 0 to m.stripeGroups.Count() - 1
+        g = m.stripeGroups[gi]
+        top = m.scrollY + (g.firstRow + lead) * m.rowPitch
+        bottom = top + g.rowCount * m.rowPitch - 1
+        vt = top
+        if vt < 0 then vt = 0
+        vb = bottom
+        if vb > m.viewHeight then vb = m.viewHeight
+        if g.name <> invalid and vb - vt >= 56 then
+            hex = NxStripeHex(g.name)
+            focused = m.nav = "stripe" and gi = m.stripeIdx
+            if focused then hex = NxStripeFocusedHex(hex)
+            fg = "0xFFFFFFFF"
+            if NxStripeNameIsBlack(hex) then fg = "0x000000FF"
+            len = vb - vt - 10
+            lbl = newLabel(UCase(g.name), tk.font.label, 15, fg, 0, 0, len)
+            lbl.horizAlign = "center"
+            lbl.height = 20
+            lbl.rotation = 1.5708
+            lbl.translation = [0, vb - 5]
+            rows.AppendChild(lbl)
+        end if
+        if g.name <> invalid and m.nav = "stripe" and gi = m.stripeIdx and vb - vt > 4 then
+            outline = CreateObject("roSGNode", "Poster")
+            outline.uri = "pkg:/images/look/focus.9.png"
+            outline.translation = [-16, vt - 16]
+            outline.width = m.stripeW + 32
+            outline.height = vb - vt + 32
+            outline.blendColor = tk.color.cyan
+            rows.AppendChild(outline)
+        end if
+    end for
+end sub
+
+' ── Moving along the stripe (#276) ───────────────────────────────────────────
+
+' Left from the rows with the window at its start focuses the stripe, on the
+' bundle the focused row is in (the next one when that row is in none). With no
+' bundle on screen Left opens the bundle list as it always did.
+sub enterStripe()
+    if not NxStripeHasBundles(m.stripeGroups) then
+        openSidebar()
+        return
+    end if
+    gi = NxStripeGroupIndex(m.stripeGroups, m.focus)
+    if gi < 0 or m.stripeGroups[gi].name = invalid then
+        n = NxStripeNeighbour(m.stripeGroups, gi, 1)
+        if n < 0 then n = NxStripeNeighbour(m.stripeGroups, gi, -1)
+        gi = n
+    end if
+    m.stripeIdx = gi
+    m.nav = "stripe"
+    renderGrid()
+end sub
+
+' Up and Down jump to the previous and next bundle, scrolling so its first
+' channel is at the top; Right goes back to the rows on that bundle's first
+' channel; OK or Left opens the bundle list; Back returns to the rows.
+function stripeKey(key as String) as Boolean
+    if key = "up" or key = "down" then
+        dir = 1
+        if key = "up" then dir = -1
+        n = NxStripeNeighbour(m.stripeGroups, m.stripeIdx, dir)
+        if n >= 0 then
+            m.stripeIdx = n
+            scrollToRow(m.stripeGroups[n].firstRow)
+            renderGrid()
+        end if
+    else if key = "right" then
+        m.focus = m.stripeGroups[m.stripeIdx].firstRow
+        m.nav = "grid"
+        keepFocusVisible()
+        renderGrid()
+        renderInfo()
+    else if key = "OK" or key = "left" then
+        m.nav = "grid"
+        renderGrid()
+        openSidebar()
+    else if key = "back" then
+        m.nav = "grid"
+        renderGrid()
+    end if
+    return true
+end function
+
+' Scrolls so `row` is the first one in view, as far as the end of the list allows.
+sub scrollToRow(row as Integer)
+    total = m.channels.Count() + leadRows()
+    want = -(row + leadRows()) * m.rowPitch
+    over = total * m.rowPitch - m.viewHeight
+    lowest = 0
+    if over > 0 then lowest = -((over + m.rowPitch - 1) \ m.rowPitch) * m.rowPitch
+    if want < lowest then want = lowest
+    if want > 0 then want = 0
+    m.scrollY = want
+end sub
 
 ' The seasonal invite (SeasonalInviteRow): one row tall, in the season's
 ' colour, with its one call to action in a capsule.
@@ -2630,6 +2776,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     ' Above the grid: the invite row, then SETTINGS, as ChannelGuideView
     ' moves focus up off its first row.
+    if m.nav = "stripe" then return stripeKey(key)
     if m.nav <> "grid" then
         if key = "up" and m.nav = "invite" then
             setNav("settings")
@@ -2675,7 +2822,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     if key = "left" then
-        openSidebar()
+        enterStripe()
         return true
     end if
     ' With no channel there is nothing to tune or fill the screen with.
