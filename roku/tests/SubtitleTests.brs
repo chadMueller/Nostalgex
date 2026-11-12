@@ -71,6 +71,8 @@ function NxRunSubtitleTests() as Integer
     NxCheck(r, "off commentary: commentaries alone, the player stays", NxToStr(NxAudioTrackOffCommentary([{ Track: "a", Language: "eng", Name: "Commentary 1" }, { Track: "b", Language: "eng", Name: "Commentary 2" }], "a") = invalid), "true")
     NxCheck(r, "off commentary: a track not in the list, the player stays", NxToStr(NxAudioTrackOffCommentary(plexFilm, "9") = invalid), "true")
     NxCheck(r, "off commentary: no current track, the player stays", NxToStr(NxAudioTrackOffCommentary(plexFilm, invalid) = invalid), "true")
+    NxCheck(r, "off commentary: no current track and a commentary first, the first that isn't one", NxToStr(NxAudioTrackOffCommentary([{ Track: "1", Name: "Commentary" }, { Track: "2", Name: "English" }], invalid)), "2")
+    NxCheck(r, "off commentary: an empty current track is no current track", NxToStr(NxAudioTrackOffCommentary([{ Track: "2", Language: "eng", Name: "Director's Commentary" }, { Track: "3", Language: "por", Name: "Portuguese" }], "")), "3")
     NxCheck(r, "off commentary: a track with no name isn't a commentary", NxToStr(NxAudioTrackOffCommentary([{ Track: "1", Language: "eng" }, { Track: "2", Language: "eng", Name: "Commentary" }], "1") = invalid), "true")
     NxCheck(r, "off commentary: Roku's #uniq: mark doesn't hide the word", NxToStr(NxAudioTrackOffCommentary([{ Track: "1", Language: "eng", Name: "#uniq:Commentary" }, { Track: "2", Language: "eng", Name: "English" }], "1")), "2")
     ' Issue #246: a server pick the player names a commentary (Emby keeps no MP4 track titles; the 43S45 lists them).

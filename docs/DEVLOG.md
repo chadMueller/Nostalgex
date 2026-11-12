@@ -3,6 +3,37 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: no current audio track is the first listed, #283's review follow-ups, #246)
+
+**Why.** Chad's merge note on #283 (tydude001): a player that reports no current audio track (the 43S45's `was ` on a
+lab MP4) left `NxAudioTrackOffCommentary` with nothing to compare, so the no-pick rule never moved off a commentary
+there.
+
+**Changed.** `NxAudioTrackOffCommentary` takes a missing or empty current track as the first listed one.
+`NxAudioTrackPastCommentary` returns no pick as no pick before asking it, so a Jellyfin or Emby start with no pick
+still leaves the choice to the no-pick rule. The #246 entry names its author.
+
+**Not measured.** That a player reporting no current track is on the first listed one is assumed, not measured: in
+all 11 lab clips with more than one audio track (the lab Emby's files, read with `ffprobe`) the default track is
+also the first, so the two can't be told apart.
+
+**One case changes.** A file that lists a commentary first, with no track in the viewer's AUDIO LANGUAGE and its real
+default a later one (say the third), started before the player reports its current track: the rule now moves the
+viewer to the first track that isn't a commentary, where before it left them on the default. Small and bounded, and
+written down at Chad's ask (#299).
+
+**Tests.** Two new cases: Chad's (a commentary first, then English, no current track: `2`), and an empty current
+track on the lab MP4's layout. The existing "no current track, the player stays" case still holds: its first track is
+Portuguese, not a commentary. Subtitle suite: 105 cases, 0 failed; `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Seen** on the 43S45 (OS 16.0.4), a test-data build of `73f82ba` signed in to the lab Emby as `nxlab`, *Lab
+Commentary* (MKV) and *Lab Commentary MP4* item-linked three times each: every play logged `audio track 3 of 2=eng
+(commentary) 3=por`, the MKV's with `was 2` and the MP4's with `was ` (no current track). Those plays had a pick, so
+the no-pick rule this changes wasn't reached on the TV. On Jellyfin and Emby it is reached when the scan lists fewer
+than two audio tracks and the player lists no film track in AUDIO LANGUAGE, or when the player lists a different
+number of tracks than the scan and none in the pick's language, or the pick has none (`NxAudioTrackToSelect`); no lab
+file does either. On Plex, a direct play with no film track in AUDIO LANGUAGE, not run.
+
 ## 2026-11-11 (Roku: #272's review follow-ups, #237)
 
 **Why.** Chad's merge note on #272 (tydude001) asked for four small things and one TV check.
@@ -837,7 +868,7 @@ the chosen neutral (4.22:1).
 
 ## 2026-11-10 (Roku: a commentary on the player's own list is passed over on a direct play, #246)
 
-**Why.** After #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
+**Why.** Measured by tydude001 (PR #283): after #236 a Jellyfin or Emby direct play still played a commentary when the server's track list
 didn't name it one: Emby 4.10.1.0 kept no title for the lab MP4's audio tracks (its `Title` is empty, where Jellyfin
 12.2.0 reads the same file's), so the app's pick from that list can be a commentary. And on a Plex direct play with no film track
 in AUDIO LANGUAGE the pick names no track, which left the player on the track it started with, which can be a commentary.
