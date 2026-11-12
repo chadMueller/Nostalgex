@@ -12,6 +12,10 @@ struct PlexAPIService: MediaBackend {
     var reportTransport: any ReportTransport = URLSessionReportTransport.shared
     /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
     let scanSkips = ScanSkipCounter()
+    /// Reads that came back short without failing the section: a show whose episodes could not
+    /// be read, or a page list that ended before the server's own total. A section whose scan
+    /// moved this is not kept by `LibraryScanProgressStore` (I-076): kept sections must be whole.
+    let incompleteReads = ScanSkipCounter()
     var skippedNoRuntime: Int { scanSkips.count }
 
     /// URLSession with timeout configured for Plex API calls
@@ -208,7 +212,12 @@ struct PlexAPIService: MediaBackend {
     // `LoadProgressEvent` / `LoadProgress` now live in MediaBackend.swift (shared by all backends).
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: excludedSectionKeys, checkpoint: nil, progress: progress)
+    }
+
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
+        incompleteReads.reset()
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         // Time the first request to size every page that follows. This call returns a
         // handful of rows, so its duration is essentially pure round-trip latency.
@@ -239,6 +248,20 @@ struct PlexAPIService: MediaBackend {
                 totalShows: nil
             ))
             let baseItemCount = allItems.count
+            // A section a killed first setup finished is taken from disk, not asked for again.
+            let signature = Self.sectionSignature(section)
+            if let kept = checkpoint?.resumable(sectionKey: section.key, signature: signature) {
+                print("[Plex90] RESUME: section '\(section.title)' kept from the earlier scan, \(kept.items.count) items")
+                scanSkips.add(kept.skippedNoRuntime)
+                allItems.append(contentsOf: kept.items)
+                progress?(LoadProgressEvent(
+                    sectionIndex: i, totalSections: sections.count, sectionTitle: section.title,
+                    sectionType: section.type, itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
+                ))
+                continue
+            }
+            let skipsBeforeSection = scanSkips.count
+            let incompleteBeforeSection = incompleteReads.count
             let items: [PlexMediaItem]
             do {
                 items = try await fetchSection(section, pageSize: pageSize) { showsDone, totalShows, episodesSoFar in
@@ -264,6 +287,12 @@ struct PlexAPIService: MediaBackend {
                 throw error
             }
             allItems.append(contentsOf: items)
+            // Kept only when the section was read to the end: a cancel (Stop Waiting, the stall
+            // watch) makes the fetch hand back the pages it had, which is not the section.
+            if !Task.isCancelled, incompleteReads.count == incompleteBeforeSection {
+                checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: signature,
+                                   skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
+            }
 
             // A cancelled section now returns the rows it managed to read rather than
             // throwing, so surface the partial scan here instead of looping into the
@@ -274,6 +303,13 @@ struct PlexAPIService: MediaBackend {
         }
         try failures.finish(items: allItems)
         return allItems
+    }
+
+    /// Plex's own change counters for a section; nil when it sends neither. Kept sections are
+    /// reused for longer when these have not moved (`LibraryScanProgressStore`).
+    static func sectionSignature(_ section: PlexSection) -> String? {
+        guard section.updatedAt != nil || section.contentChangedAt != nil else { return nil }
+        return "u\(section.updatedAt ?? 0)/c\(section.contentChangedAt ?? 0)"
     }
 
     /// Page size for library section fetches. Plex serializes the entire requested
@@ -331,7 +367,11 @@ struct PlexAPIService: MediaBackend {
             // the entire scan, because the caller's partial list was still empty.
             if Task.isCancelled { break }
 
-            if page.isEmpty { break }
+            if page.isEmpty {
+                // The server said there were more and sent none: a short section.
+                if let total = container.totalSize, all.count < total { incompleteReads.add() }
+                break
+            }
             if let total = container.totalSize, all.count >= total { break }
             // Servers that omit totalSize: stop on the first short page.
             if container.totalSize == nil, page.count < pageSize { break }
@@ -518,6 +558,7 @@ struct PlexAPIService: MediaBackend {
             }
             return episodes.compactMap { makeEpisodeItem($0, show: show) }
         } catch {
+            incompleteReads.add()   // the guide goes on without this show; the section is no longer whole
             return [] // skip shows that fail individually
         }
     }
@@ -947,13 +988,13 @@ struct PlexAPIService: MediaBackend {
             let second = await prepareTranscodeSession(startURL: remux)
             if second.code.hasPrefix("1") {
                 print("[Plex90] DECISION: Dolby Vision remux accepted for \"\(item.title)\"")
-                return (PlaybackResolution(url: remux, playSessionId: sessionID, isDirectPlay: false), offsetSeconds > 0)
+                return (PlaybackResolution(url: remux, playSessionId: sessionID, isDirectPlay: false, serverStream: second.serverStream), offsetSeconds > 0)
             }
             PlaybackDiagnostics.record(outcome: "server refused", title: item.title, detail: "decision \(decision.code): \(decision.text); remux retry \(second.code): \(second.text)")
         } else if decision.code.hasPrefix("2") {
             PlaybackDiagnostics.record(outcome: "server refused", title: item.title, detail: "decision \(decision.code): \(decision.text)")
         }
-        return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false), offsetSeconds > 0)
+        return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false, serverStream: decision.serverStream), offsetSeconds > 0)
     }
 
     struct TranscodeDecision: Sendable, Equatable {
@@ -962,6 +1003,8 @@ struct PlexAPIService: MediaBackend {
         var preservesOriginalVideo: Bool = false
         var preservesOriginalAudio: Bool = false
         var convertsAudioToAC3Surround: Bool = false
+        /// Copy or convert per stream, as the decision listed them; nil when it did not say.
+        var serverStream: PlaybackInformation.ServerStream? = nil
         static let unknown = TranscodeDecision(code: "?", text: "")
     }
 
@@ -1031,8 +1074,7 @@ struct PlexAPIService: MediaBackend {
         guard let currentKey = part.key, let cachedKey = item.partKey,
               Self.samePlexPart(currentKey, cachedKey) else { return item }
         let video = part.Stream?.first { $0.streamType == 1 }
-        let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-            ?? part.Stream?.first { $0.streamType == 2 }
+        let audio = PlexRawItem.PlexMedia.playbackAudioStream(in: part.Stream)
         guard video?.codec == item.videoCodec, audio?.codec == item.audioCodec else { return item }
         var enriched = currentKey == cachedKey ? item : item.withPartKey(currentKey)
         if currentKey != cachedKey, let cachedParts = enriched.playbackParts {
@@ -1123,7 +1165,7 @@ struct PlexAPIService: MediaBackend {
             return nil // The caller chooses normal recovery or explicit Original failure.
         }
         return (PlaybackResolution(url: url, playSessionId: sessionID, isDirectPlay: false,
-                                   requiresOriginalVideo: requiresOriginalVideo), offsetSeconds > 0)
+                                   requiresOriginalVideo: requiresOriginalVideo, serverStream: decision.serverStream), offsetSeconds > 0)
     }
 
     /// Auto/Maximum prefer a copy, but playback and capped recovery still take priority.
@@ -1197,6 +1239,31 @@ struct PlexAPIService: MediaBackend {
             && ["mp4", "fmp4"].contains(reader.containers[0])
     }
 
+    /// What the decision says about the streams of the one video and the one audio track it
+    /// lists: `<Stream streamType="1" decision="copy"/>`, `<Stream streamType="2" decision="transcode"/>`
+    /// (the same elements `decisionPreservesOriginalVideo` reads). Only streams that say copy or
+    /// transcode count, so a track the server did not choose, or any other word, is left out. Nil
+    /// unless that leaves exactly one video and one audio stream: anything else is not an answer.
+    static func serverStream(fromDecision data: Data) -> PlaybackInformation.ServerStream? {
+        final class Reader: NSObject, XMLParserDelegate {
+            var video: [String?] = []
+            var audio: [String?] = []
+            func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?,
+                        qualifiedName: String?, attributes: [String: String]) {
+                guard name == "Stream" else { return }
+                guard let decision = attributes["decision"], decision == "copy" || decision == "transcode" else { return }
+                if attributes["streamType"] == "1" { video.append(decision) }
+                if attributes["streamType"] == "2" { audio.append(decision) }
+            }
+        }
+        let reader = Reader()
+        let parser = XMLParser(data: data)
+        parser.delegate = reader
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), reader.video.count == 1, reader.audio.count == 1 else { return nil }
+        return PlaybackInformation.ServerStream(video: reader.video[0], audio: reader.audio[0])
+    }
+
     /// The `decision` call Plex's own players make before `start.m3u8`, with the same
     /// session and query. Without it the server answers `start.m3u8` with 400 (surfaced as
     /// "resource unavailable") whenever it is not idle, which on a channel-flipping app is
@@ -1215,8 +1282,10 @@ struct PlexAPIService: MediaBackend {
             let code = Self.attribute("transcodeDecisionCode", in: body) ?? Self.attribute("generalDecisionCode", in: body) ?? "?"
             let text = Self.attribute("transcodeDecisionText", in: body) ?? Self.attribute("generalDecisionText", in: body) ?? ""
             print("[Plex90] DECISION: HTTP \(status) code=\(code) \(text)")
+            let accepted = (200..<300).contains(status) && code.hasPrefix("1")
             return TranscodeDecision(code: code, text: text, preservesOriginalVideo: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data), preservesOriginalAudio: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAudioCopy: true),
-                convertsAudioToAC3Surround: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAC3Conversion: true))
+                convertsAudioToAC3Surround: (200..<300).contains(status) && Self.decisionPreservesOriginalVideo(data, requireAC3Conversion: true),
+                serverStream: accepted ? Self.serverStream(fromDecision: data) : nil)
         } catch {
             print("[Plex90] DECISION: failed (\(error.localizedDescription)), starting anyway")
             return .unknown
@@ -1282,7 +1351,21 @@ struct PlexAPIService: MediaBackend {
 
     // MARK: - PIN Auth
 
-    static func requestPIN() async throws -> (id: Int, code: String) {
+    /// What plex.tv sends back for a new code. `expiresIn` is seconds the code stays valid
+    /// (measured 2026-11-09: 900, with `expiresAt` 15 minutes after `createdAt`); nil when
+    /// the reply leaves it out.
+    struct PINGrant: Equatable, Sendable {
+        let id: Int
+        let code: String
+        let expiresIn: Int?
+    }
+
+    static func decodePINGrant(_ data: Data) throws -> PINGrant {
+        let decoded = try JSONDecoder().decode(PINResponse.self, from: data)
+        return PINGrant(id: decoded.id, code: decoded.code, expiresIn: decoded.expiresIn)
+    }
+
+    static func requestPIN() async throws -> PINGrant {
         guard var components = URLComponents(string: "https://plex.tv/api/v2/pins") else {
             throw APIError.invalidResponse
         }
@@ -1296,9 +1379,13 @@ struct PlexAPIService: MediaBackend {
         let (data, response) = try await Self.session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         guard http.statusCode == 201 else { throw APIError.httpFailure(statusCode: http.statusCode) }
-        let decoded = try JSONDecoder().decode(PINResponse.self, from: data)
-        return (decoded.id, decoded.code)
+        return try decodePINGrant(data)
     }
+
+    /// The account token once the code has been approved, nil while it waits. Throws
+    /// `PINError.expired` when plex.tv no longer has the code (404, "Code not found or
+    /// expired", measured 2026-11-09): waiting longer cannot help.
+    enum PINError: Error { case expired }
 
     static func checkPIN(id: Int) async throws -> String? {
         guard let url = URL(string: "https://plex.tv/api/v2/pins/\(id)") else {
@@ -1306,7 +1393,8 @@ struct PlexAPIService: MediaBackend {
         }
         var req = URLRequest(url: url)
         pinHeaders.forEach { req.setValue($1, forHTTPHeaderField: $0) }
-        let (data, _) = try await Self.session.data(for: req)
+        let (data, response) = try await Self.session.data(for: req)
+        if (response as? HTTPURLResponse)?.statusCode == 404 { throw PINError.expired }
         let decoded = try JSONDecoder().decode(PINStatusResponse.self, from: data)
         return decoded.authToken
     }
@@ -1681,6 +1769,25 @@ private extension Data {
 private struct PINResponse: Decodable {
     let id: Int
     let code: String
+    let expiresIn: Int?
+
+    private enum CodingKeys: String, CodingKey { case id, code, expiresIn }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        code = try c.decode(String.self, forKey: .code)
+        // An Int in the reply today; tolerate a Double or a numeric string so a change in
+        // plex.tv's spelling cannot fail the sign-in itself.
+        var value: Int?
+        if let n = try? c.decodeIfPresent(Int.self, forKey: .expiresIn) {
+            value = n
+        } else if let d = try? c.decodeIfPresent(Double.self, forKey: .expiresIn), d.isFinite {
+            value = Int(d)
+        } else if let text = try? c.decodeIfPresent(String.self, forKey: .expiresIn) {
+            value = Int(text)
+        }
+        expiresIn = value
+    }
 }
 
 private struct PINStatusResponse: Decodable {
@@ -1869,6 +1976,10 @@ struct PlexRawItem: Decodable {
             var channels: Int? = nil
             var id: Int? = nil
             var selected: Int? = nil
+            /// The track's name ("Director's Commentary"). Plex sends `title` for a track
+            /// the file names and `displayTitle` always; both are read so either shows.
+            var title: String? = nil
+            var displayTitle: String? = nil
             let colorTrc: String?
             let colorPrimaries: String?
             let colorSpace: String?
@@ -1877,6 +1988,7 @@ struct PlexRawItem: Decodable {
             }
             private enum CodingKeys: String, CodingKey {
                 case streamType, codec, bitDepth, DOVIProfile, DOVIBLCompatID, channels, id, selected
+                case title, displayTitle
                 case colorTrc, colorPrimaries, colorSpace
             }
             init(from decoder: Decoder) throws {
@@ -1891,6 +2003,8 @@ struct PlexRawItem: Decodable {
                 colorSpace = try c.decodeIfPresent(String.self, forKey: .colorSpace)
                 channels = try c.decodeIfPresent(Int.self, forKey: .channels)
                 id = try c.decodeIfPresent(Int.self, forKey: .id)
+                title = try? c.decodeIfPresent(String.self, forKey: .title)
+                displayTitle = try? c.decodeIfPresent(String.self, forKey: .displayTitle)
                 selected = (try? c.decode(Bool.self, forKey: .selected)).map { $0 ? 1 : 0 }
                     ?? (try? c.decode(Int.self, forKey: .selected))
             }
@@ -1899,8 +2013,7 @@ struct PlexRawItem: Decodable {
             (Part ?? []).compactMap { part in
                 guard let key = part.key else { return nil }
                 let video = part.Stream?.first { $0.streamType == 1 }
-                let audio = part.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-                    ?? part.Stream?.first { $0.streamType == 2 }
+                let audio = Self.playbackAudioStream(in: part.Stream)
                 return PlexPartPlaybackInfo(key: key, container: part.container ?? container,
                     videoCodec: video?.codec ?? videoCodec, audioCodec: audio?.codec ?? audioCodec,
                     bitDepth: video?.bitDepth, doviProfile: video?.DOVIProfile,
@@ -1909,8 +2022,15 @@ struct PlexRawItem: Decodable {
             }
         }
         var audioStream: PlexStream? {
-            Part?.first?.Stream?.first { $0.streamType == 2 && $0.selected == 1 }
-                ?? Part?.first?.Stream?.first { $0.streamType == 2 }
+            Self.playbackAudioStream(in: Part?.first?.Stream)
+        }
+        /// The audio track the app keeps facts and a remux URL for: the one Plex marks
+        /// selected, else the first, but never a track titled "commentary" while another
+        /// audio track exists (I-075). A file whose only audio is a commentary keeps it.
+        static func playbackAudioStream(in streams: [PlexStream]?) -> PlexStream? {
+            let audio = (streams ?? []).filter { $0.streamType == 2 }
+            let pool = AudioTrackCommentary.skippingCommentary(audio) { [$0.title, $0.displayTitle] }
+            return pool.first { $0.selected == 1 } ?? pool.first
         }
         var videoStream: PlexStream? {
             Part?.first?.Stream?.first { $0.streamType == 1 }

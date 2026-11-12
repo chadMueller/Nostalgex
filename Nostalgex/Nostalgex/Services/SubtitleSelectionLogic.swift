@@ -133,6 +133,21 @@ enum SubtitleSelectionLogic {
         return norwegianCodes.contains(primary(tag)) && norwegianCodes.contains(primary(preferred))
     }
 
+    /// The same pick for audio options that carry a name: an option whose name says
+    /// "commentary" is passed over while another option exists (I-075). `titles` runs
+    /// parallel to `tags`; the index returned is into the full list.
+    static func preferredTrackIndex(tags: [String?], titles: [[String?]], preferredLowercased: String) -> Int {
+        guard titles.count == tags.count, !tags.isEmpty else {
+            return preferredTrackIndex(tags: tags, preferredLowercased: preferredLowercased)
+        }
+        let keep = tags.indices.filter { i in !titles[i].contains { AudioTrackCommentary.isCommentary($0) } }
+        guard !keep.isEmpty, keep.count < tags.count else {
+            return preferredTrackIndex(tags: tags, preferredLowercased: preferredLowercased)
+        }
+        let sub = preferredTrackIndex(tags: keep.map { tags[$0] }, preferredLowercased: preferredLowercased)
+        return keep[sub]
+    }
+
     /// Index of the best option for `preferredLowercased` (BCP‑47 primary or full tag); falls back to `0`.
     static func preferredTrackIndex(tags: [String?], preferredLowercased: String) -> Int {
         let want = preferredLowercased

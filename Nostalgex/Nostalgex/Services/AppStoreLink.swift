@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Apple TV App Store URLs for Nostalgex (tvOS supports star ratings only, no written reviews).
 ///
@@ -76,4 +77,17 @@ enum AppStoreLink {
 
     /// The URL RATE opens (banner and Settings).
     static var productPage: URL { activeVariant.url }
+
+    /// The one place RATE opens the App Store, for the rating banner and the Settings tile
+    /// alike, so the two can never open different links. `completion` gets the variant and
+    /// URL that were opened and whether tvOS accepted them; each caller logs and tracks it
+    /// under its own name.
+    static func openRate(
+        using openURL: OpenURLAction,
+        completion: @escaping (_ variant: RateLinkVariant, _ url: URL, _ accepted: Bool) -> Void
+    ) {
+        let variant = activeVariant
+        let url = variant.url
+        openURL(url) { accepted in completion(variant, url, accepted) }
+    }
 }

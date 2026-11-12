@@ -22,6 +22,10 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     var hiddenSectionsOnByDefault: Bool = LibrarySectionSelectionStore.hiddenSectionsOnByDefault
     /// What the last scan dropped for having no runtime (`MediaBackend.skippedNoRuntime`).
     let scanSkips = ScanSkipCounter()
+    /// Reads that came back short without failing the section: a show whose episodes could not
+    /// be read, or a page list that ended before the server's own total. A section whose scan
+    /// moved this is not kept by `LibraryScanProgressStore` (I-076): kept sections must be whole.
+    let incompleteReads = ScanSkipCounter()
     var skippedNoRuntime: Int { scanSkips.count }
 
     /// Stable per-install device id. Reuses the same UUID Plex uses so the value is
@@ -207,7 +211,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     private static let pageSize = 200
 
     func loadLibrary(excludedSectionKeys: Set<String> = [], progress: LoadProgress? = nil) async throws -> [PlexMediaItem] {
+        try await loadLibrary(excludedSectionKeys: excludedSectionKeys, checkpoint: nil, progress: progress)
+    }
+
+    func loadLibrary(excludedSectionKeys: Set<String>, checkpoint: LibraryScanProgressStore.Checkpoint?, progress: LoadProgress?) async throws -> [PlexMediaItem] {
         scanSkips.reset()
+        incompleteReads.reset()
         let allSections = try await loadSections()
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
@@ -229,6 +238,19 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
             ))
             let baseItemCount = allItems.count
+            // A section a killed first setup finished is taken from disk, not asked for again.
+            if let kept = checkpoint?.resumable(sectionKey: section.key, signature: nil) {
+                print("[Jellyfin] RESUME: section '\(section.title)' kept from the earlier scan, \(kept.items.count) items")
+                scanSkips.add(kept.skippedNoRuntime)
+                allItems.append(contentsOf: kept.items)
+                progress?(LoadProgressEvent(
+                    sectionIndex: i, totalSections: sections.count, sectionTitle: section.title,
+                    sectionType: section.type, itemsLoadedSoFar: allItems.count, showsCompleted: nil, totalShows: nil
+                ))
+                continue
+            }
+            let skipsBeforeSection = scanSkips.count
+            let incompleteBeforeSection = incompleteReads.count
             let items: [PlexMediaItem]
             do {
                 if section.type == "show" {
@@ -271,6 +293,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                 throw error
             }
             allItems.append(contentsOf: items)
+            // Kept only when the section was read to the end: a cancel makes the fetch hand
+            // back the pages it had, which is not the section.
+            if !Task.isCancelled, incompleteReads.count == incompleteBeforeSection {
+                checkpoint?.record(sectionKey: section.key, sectionTitle: section.title, signature: nil,
+                                   skippedNoRuntime: max(0, scanSkips.count - skipsBeforeSection), items: items)
+            }
 
             // A cancelled section now returns the rows it managed to read rather than
             // throwing, so surface the partial scan here instead of issuing another
@@ -336,7 +364,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             // section discarded the whole scan, because the caller only preserved
             // partials once at least one section had completed.
             if Task.isCancelled { break }
-            if items.isEmpty || collected.count >= total { break }
+            if items.isEmpty {
+                // The server said there were more and sent none: a short list.
+                if collected.count < total { incompleteReads.add() }
+                break
+            }
+            if collected.count >= total { break }
         }
         return collected
     }
@@ -412,10 +445,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     librarySource: .tv,
                     serverID: serverID.isEmpty ? nil : serverID,
                     videoBitDepth: source?.videoBitDepth,
+                    videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
                     showKey: show.Id
                 )
             }
         } catch {
+            incompleteReads.add()   // the section goes on without this show and is no longer whole
             return []   // skip shows that fail individually, matching the Plex path
         }
     }
@@ -477,7 +512,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             imdbID: item.imdbID,
             librarySource: isMusicVideo ? .musicVideo : .movie,
             serverID: serverID.isEmpty ? nil : serverID,
-            videoBitDepth: source?.videoBitDepth
+            videoBitDepth: source?.videoBitDepth,
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -1025,6 +1061,7 @@ struct JellyfinItem: Decodable {
         var audioCodec: String? { MediaStreams?.first(where: { $0.streamType == "Audio" })?.Codec }
         var videoProfile: String? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Profile }
         var videoHeight: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Height }
+        var videoWidth: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.Width }
         var videoBitDepth: Int? { MediaStreams?.first(where: { $0.streamType == "Video" })?.BitDepth }
         var videoExtendedSubType: String? { MediaStreams?.first(where: { $0.streamType == "Video" })?.ExtendedVideoSubType }
     }

@@ -51,7 +51,7 @@ struct GuideStripeOverlay: View {
     /// The run that is shown with the focus ring, while the stripe has focus.
     let focusedGroup: Int?
 
-    private static let font = Font.custom("DMMono-Medium", size: 18)
+    private static let font = NXFont.captionMedium
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// How far the focused stripe lifts out of its slot, over the row's left edge.
     private static let liftWidth: CGFloat = 38
@@ -85,8 +85,8 @@ struct GuideStripeOverlay: View {
                     : GuideStripes.Palette.hex(for: label.name)
                 Text(label.name)
                     .font(Self.font)
-                    .tracking(1.5)
-                    .foregroundStyle(GuideStripes.Palette.nameIsBlack(onHex: hex) ? Color.black : Color.white)
+                    .tracking(1)
+                    .foregroundStyle(GuideStripes.Palette.nameIsBlack(onHex: hex) ? Color.black : Color.nxText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(width: max(label.height - 16, 0), height: GuideStripes.stripeWidth)

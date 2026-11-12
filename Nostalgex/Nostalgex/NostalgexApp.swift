@@ -18,6 +18,7 @@ struct NostalgexApp: App {
         // Apple TV keeps the host app's own launch off the real stores too.
         HarnessIsolation.activateFromEnvironmentIfRequested()
         #endif
+        FocusMoveFailureMonitor.install()
         Self.registerCustomFonts()
         Self.configureAnalytics()
         // When the viewer has turned sync on, pull synced preferences from iCloud before

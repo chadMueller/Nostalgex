@@ -18,6 +18,35 @@ struct PlaybackInformation: Equatable {
         }
     }
 
+    /// What the server said it does to the streams of a server stream, read from its own
+    /// answer (Plex's `decision` reply), never inferred: Plex lists each stream as copied or
+    /// transcoded. Remux is the container rewritten with both streams copied.
+    enum ServerStream: Equatable, Sendable {
+        case remux, transcodeVideo, transcodeAudio, transcodeVideoAndAudio
+        var label: String {
+            switch self {
+            case .remux: return "Remux"
+            case .transcodeAudio: return "Transcode (audio)"
+            case .transcodeVideo: return "Transcode (video)"
+            case .transcodeVideoAndAudio: return "Transcode (video and audio)"
+            }
+        }
+
+        static let allLabels = [ServerStream.remux, .transcodeAudio, .transcodeVideo, .transcodeVideoAndAudio].map(\.label)
+
+        /// From each stream's `decision` attribute. Anything but copy or transcode is not an
+        /// answer: nil, and the row keeps saying "Server stream".
+        init?(video: String?, audio: String?) {
+            switch (video, audio) {
+            case ("copy", "copy"): self = .remux
+            case ("copy", "transcode"): self = .transcodeAudio
+            case ("transcode", "copy"): self = .transcodeVideo
+            case ("transcode", "transcode"): self = .transcodeVideoAndAudio
+            default: return nil
+            }
+        }
+    }
+
     /// These describe observed recovery decisions, never a guessed root cause such as
     /// "slow Wi-Fi" or an arbitrary server error that might contain credentials.
     enum FallbackReason: Equatable {
@@ -71,6 +100,8 @@ struct PlaybackInformation: Equatable {
     let qualityAtTune: StreamQuality
     let source: Source
     private(set) var delivery: Delivery = .unknown
+    /// Set only when the server said which streams it copies or converts.
+    private(set) var serverStream: ServerStream?
     private(set) var reason: FallbackReason = .none
     private(set) var recoveryRequest: RecoveryRequest?
     private(set) var isReady = false
@@ -88,12 +119,15 @@ struct PlaybackInformation: Equatable {
     @discardableResult
     mutating func beginAttempt(generation: Int, delivery: Delivery,
                                reason: FallbackReason = .none,
-                               recoveryRequest: RecoveryRequest? = nil) -> UUID? {
+                               recoveryRequest: RecoveryRequest? = nil,
+                               serverStream: ServerStream? = nil) -> UUID? {
         guard generation == self.generation else { return nil }
         let attempt = UUID()
         attemptID = attempt
         isReady = false
         self.delivery = delivery
+        // A new attempt describes its own stream; a direct play has none.
+        self.serverStream = delivery == .serverStream ? serverStream : nil
         self.reason = reason
         if let recoveryRequest { self.recoveryRequest = recoveryRequest }
         return attempt
@@ -109,7 +143,7 @@ struct PlaybackInformation: Equatable {
     func rows(presentationWidth: Double? = nil, presentationHeight: Double? = nil) -> [Row] {
         var rows = [
             Row(id: "backend", label: "BACKEND", value: backend.rawValue),
-            Row(id: "delivery", label: "PLAYBACK", value: isReady ? delivery.label : "Loading"),
+            Row(id: "delivery", label: "PLAYBACK", value: isReady ? deliveryLabel : "Loading"),
             Row(id: "quality", label: "QUALITY AT TUNE", value: qualityAtTune.displayName),
         ]
         if let recoveryRequest {
@@ -123,6 +157,11 @@ struct PlaybackInformation: Equatable {
         return rows
     }
 
+    /// "Server stream" until the server has said which streams it copies or converts.
+    private var deliveryLabel: String {
+        delivery == .serverStream ? (serverStream?.label ?? delivery.label) : delivery.label
+    }
+
     private static func sizeLabel(width: Double?, height: Double?) -> String {
         guard let width, let height, width.isFinite, height.isFinite,
               width >= 1, height >= 1, width <= 65_536, height <= 65_536 else { return "Unknown" }
@@ -130,6 +169,6 @@ struct PlaybackInformation: Equatable {
     }
 
     var evidenceNote: String {
-        "Source codecs come from library metadata. Player size is reported by AVPlayer. Quality is the selection at tune time, not a measured output. Server streams may copy or convert media; the current resolver does not identify which."
+        "Source codecs come from library metadata. Player size is reported by AVPlayer. Quality is the selection at tune time, not a measured output. A server stream is shown as Remux or Transcode only when the server's own answer said which streams it copies or converts; otherwise it stays Server stream."
     }
 }

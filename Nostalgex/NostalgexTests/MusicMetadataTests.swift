@@ -213,3 +213,66 @@ extension PlexMediaItem {
         )
     }
 }
+
+/// N-034: a YouTube-style suffix in brackets used to lose only its "official" and "video", so
+/// "Song (Official Music Video)" became "Song ( Music )" and "Song (Official Video)" became
+/// "Song ( )". The cleaned title is what MusicBrainz and Deezer are searched with and what the
+/// guide shows, so the leftovers found nothing and read as noise. A bracket made only of those
+/// words now goes whole; a bracket that says anything else stays.
+struct MusicTitleSuffixTests {
+
+    @Test func aBracketOfNoiseWordsGoesWhole() {
+        let cases: [(String, String)] = [
+            ("Song (Official Music Video)", "Song"),
+            ("Song (Official Video)", "Song"),
+            ("Artist - Song (Official Music Video)", "Artist - Song"),
+            ("Artist - Song (Official Lyric Video)", "Artist - Song"),
+            ("Artist - Song (Official Audio)", "Artist - Song"),
+            ("Artist - Song (Official Visualizer)", "Artist - Song"),
+            ("Artist - Song (Lyrics)", "Artist - Song"),
+            ("Artist - Song (Music Video)", "Artist - Song"),
+            ("Artist - Song (Video)", "Artist - Song"),
+            ("Artist - Song (HD)", "Artist - Song"),
+            ("Artist - Song (HQ)", "Artist - Song"),
+            ("Artist - Song (4K)", "Artist - Song"),
+            ("Artist - Song (Remastered)", "Artist - Song"),
+            ("Artist - Song (Official Music Video HD)", "Artist - Song"),
+            ("Artist - Song (OFFICIAL MUSIC VIDEO)", "Artist - Song"),
+            ("Artist - Song (official video) [4K]", "Artist - Song"),
+            ("Artist - Song (Official Video) (1999)", "Artist - Song"),
+            ("Artist - Song (Official Video) ft. Other Artist", "Artist - Song ft. Other Artist"),
+        ]
+        for (raw, want) in cases {
+            #expect(MusicTitleParser.clean(raw) == want, "\(raw)")
+        }
+    }
+
+    @Test func aBracketThatSaysSomethingElseStays() {
+        for title in ["Artist - Song (Live at Wembley)", "Artist - Song (Remix)", "Artist - Song (Radio Edit)",
+                      "Artist - Song (Acoustic Version)", "Artist - Song (Part 2)", "Artist - (What's the Story) Morning Glory"] {
+            #expect(MusicTitleParser.clean(title) == title, "\(title)")
+        }
+        // A noise word beside a real one in the same bracket is not "only noise".
+        #expect(MusicTitleParser.clean("Artist - Song (Live Video)") == "Artist - Song (Live)")
+    }
+
+    @Test func theOldCasesStillClean() {
+        #expect(MusicTitleParser.clean("Avril Lavigne - Don't Tell Me video!") == "Avril Lavigne - Don't Tell Me")
+        #expect(MusicTitleParser.clean("the_used-take_it_away-vgb-prv") == "the used-take it away")
+        #expect(MusicTitleParser.clean("Ruff_Ryders_-_Get_Wild_[MMV]") == "Ruff Ryders - Get Wild")
+    }
+
+    @Test func noCleanedTitleKeepsEmptyBrackets() {
+        for raw in ["Song (Official Video)", "Song ( Official )", "Song (Official) (Video)", "Song ()", "Song (HD) (HQ)"] {
+            let out = MusicTitleParser.clean(raw)
+            #expect(!out.contains("()") && !out.contains("( )"), "\(raw) -> \(out)")
+        }
+    }
+
+    @Test func parseGivesTheSongAndTheArtist() {
+        let a = MusicTitleParser.parse("Michael Jackson - Billie Jean (Official Music Video)")
+        #expect(a.artist == "Michael Jackson" && a.song == "Billie Jean")
+        let b = MusicTitleParser.parse("Billie Jean (Official Video)")
+        #expect(b.artist == nil && b.song == "Billie Jean")
+    }
+}

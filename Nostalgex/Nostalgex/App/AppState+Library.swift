@@ -242,6 +242,12 @@ extension AppState {
                 loadCancelRequested = false
                 isLoadStalling = false
                 do {
+                    // A foreground load keeps each section as it finishes and picks up the ones
+                    // an earlier, killed first setup finished. A background refresh has a
+                    // library on screen and wants a fresh read, so it uses neither.
+                    let checkpoint: LibraryScanProgressStore.Checkpoint? = isBackground ? nil
+                        : LibraryScanProgressStore.Checkpoint(identity: snapshotIdentitySeed, serverID: scanAPI.serverID,
+                                                              scanFieldsVersion: LibrarySnapshotStore.scanFieldsVersion)
                     let items = try await withLibraryLoadStallWatch(
                         sample: { [weak self] in self?.libraryScanProgressSample() ?? LibraryLoadProgressSample() },
                         onVerdict: { [weak self] verdict in
@@ -262,7 +268,7 @@ extension AppState {
                             return self.consumeLoadCancelRequest() || self.librarySessionGeneration != session
                         },
                         operation: {
-                            try await scanAPI.loadLibrary(excludedSectionKeys: excludedKeys) { [weak self] event in
+                            try await scanAPI.loadLibrary(excludedSectionKeys: excludedKeys, checkpoint: checkpoint) { [weak self] event in
                                 Task { @MainActor [weak self] in
                                     guard let self else { return }
                                     self.scanSectionIndex = event.sectionIndex
@@ -300,7 +306,7 @@ extension AppState {
                 } catch let interrupted as LibraryScanInterrupted {
                     // Abandoned partway, but whole sections came back. Those count as a
                     // success: a reduced guide beats an error screen.
-                    print("[Plex90] LOAD: server '\(serverLabel)' abandoned with \(interrupted.partialItems.count) items already fetched")
+                    print("[Plex90] LOAD: server '\(serverLabel)' abandoned with \(interrupted.partialItems.count) items already fetched (userInitiated=\(interrupted.userInitiated))")
                     merged.append(contentsOf: interrupted.partialItems)
                     skippedNoRuntime += scanAPI.skippedNoRuntime
                     if !interrupted.partialItems.isEmpty { successCount += 1 }
@@ -312,10 +318,18 @@ extension AppState {
                         lostSectionsLastLoad += interrupted.failedSections.map { multiServer ? "\(serverLabel): \($0)" : $0 }
                         InstallDiagnostics.note("LOAD: server '\(serverLabel)' lost section(s) \(interrupted.failedSections.joined(separator: ", ")), kept \(interrupted.partialItems.count) items from the others")
                     }
+                    // "Stop Waiting" means stop the whole sync now, not just this one
+                    // server/section. Without this break, the next server in the list gets
+                    // its own fresh stall watch and the screen sits in the identical "Still
+                    // waiting on your server" state for however long THAT one takes to
+                    // time out, same text, same button, no sign the first tap did
+                    // anything, which is what issue #146 describes across 3-4 libraries.
+                    if interrupted.userInitiated { break }
                 } catch let stalled as LibraryLoadStalled {
                     print("[Plex90] LOAD: server '\(serverLabel)' stalled (userInitiated=\(stalled.userInitiated))")
                     scanWasAbandoned = true
                     lastError = stalled
+                    if stalled.userInitiated { break }
                 } catch {
                     print("[Plex90] LOAD: server '\(serverLabel)' failed: \(error)")
                     lastError = error
@@ -334,9 +348,12 @@ extension AppState {
 
             if scanWasAbandoned {
                 // Distinguish "user tapped stop waiting" from "watchdog gave up" so the
-                // dashboard can tell frustration from unreliability.
+                // dashboard can tell frustration from unreliability. `LibraryScanInterrupted`
+                // now carries its own verdict (stamped by withLibraryLoadStallWatch) instead
+                // of being assumed user-initiated just for existing, a section that read a
+                // few pages before an AUTOMATIC stall also throws this.
                 let userInitiated = (lastError as? LibraryLoadStalled)?.userInitiated == true
-                    || (lastError as? LibraryScanInterrupted).map({ $0.failedSections.isEmpty }) == true
+                    || (lastError as? LibraryScanInterrupted).map({ $0.failedSections.isEmpty && $0.userInitiated }) == true
                 Analytics.track(.libraryLoadAbandoned(
                     background: isBackground,
                     itemsFound: merged.count,
@@ -491,7 +508,7 @@ extension AppState {
             lastLoadAtUnix = scanWasAbandoned ? completedAt - 86_400 : completedAt
             librarySignature = signature
             lastLibraryCheckAtUnix = completedAt
-            saveLibrarySnapshotIfNeeded()
+            saveLibrarySnapshotIfNeeded(clearsScanProgress: !scanWasAbandoned)
             LibraryLoadProbe.mark("snapshotSaved")
 
             let durationMs = Int(Date().timeIntervalSince(loadStartedAt) * 1000)
@@ -810,8 +827,11 @@ extension AppState {
             await self.enrichmentService.enrichItems(items, omdbGates: gates)
             guard !Task.isCancelled, session == self.librarySessionGeneration, !self.isLoading else { return }
             guard !self.enrichmentService.cache.isEmpty else { return }
-            self.refilterChannelsWithEnrichment()
-            self.rebuildFoundFranchises()
+            // The two slow passes run off the main actor and are applied in one step each (a launch used to hold
+            // the main actor for 9 to 14 s here); a result made stale meanwhile is discarded and recomputed.
+            guard await self.refilterChannelsWithEnrichmentOffMain() else { return }
+            await self.rebuildFoundFranchisesOffMain()
+            guard !Task.isCancelled, session == self.librarySessionGeneration, !self.isLoading else { return }
             self.materializeDynamicChannels()
             self.applyBundleFilter()
             self.saveLibrarySnapshotIfNeeded()
@@ -835,7 +855,11 @@ extension AppState {
 
     /// Captures the library on the main actor (copy-on-write, no copying) and writes it on
     /// a background queue in chunks. Returns immediately.
-    func saveLibrarySnapshotIfNeeded() {
+    ///
+    /// `clearsScanProgress`: this save follows a scan that read every section, so the sections
+    /// a first setup kept on disk (`LibraryScanProgressStore`) are removed once, and only once,
+    /// the snapshot has committed.
+    func saveLibrarySnapshotIfNeeded(clearsScanProgress: Bool = false) {
         guard !isUITestStubLibrarySuccess else { return }
         let payload = LibrarySnapshotStore.makePayload(
             identity: snapshotIdentitySeed,
@@ -854,6 +878,10 @@ extension AppState {
             skippedNoRuntime: skippedNoRuntimeCount
         )
         LibraryLoadProbe.mark("snapshot.capture")
-        LibrarySnapshotStore.saveInBackground(payload)
+        if clearsScanProgress {
+            LibrarySnapshotStore.saveInBackground(payload, onCommit: { LibraryScanProgressStore.clearAll() })
+        } else {
+            LibrarySnapshotStore.saveInBackground(payload)
+        }
     }
 }

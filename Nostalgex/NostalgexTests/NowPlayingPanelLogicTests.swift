@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Nostalgex
 
 /// Unit tests for the pure logic behind the in-player Now Playing panel:
@@ -187,7 +188,7 @@ final class NowPlayingPanelLogicTests: XCTestCase {
         // Nothing to pick between, so neither language preference is offered.
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: false, audioTrackCount: 1, canOpenInPlex: false),
-            [.captionsHeader, .captions, .audioHeader, .audioTracks]
+            [.header, .captions, .audio]
         )
     }
 
@@ -202,35 +203,63 @@ final class NowPlayingPanelLogicTests: XCTestCase {
     func testProgramRows_withSubtitles_addsSubtitlePreferences() {
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 1, canOpenInPlex: false),
-            [.captionsHeader, .captions, .subtitleLanguage, .autoSubtitles, .audioHeader, .audioTracks]
+            [.header, .captions, .subtitleLanguage, .autoSubtitles, .audio]
         )
     }
 
     func testProgramRows_multipleAudioTracks_addsAudioLanguage() {
         XCTAssertEqual(
             NowPlayingPanelLayout.programRows(hasSubtitleTracks: false, audioTrackCount: 2, canOpenInPlex: false),
-            [.captionsHeader, .captions, .audioHeader, .audioTracks, .audioLanguage]
+            [.header, .captions, .audio, .audioLanguage]
         )
     }
 
     func testProgramRows_everythingAvailable_fullOrder() {
         XCTAssertEqual(
-            NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 3, canOpenInPlex: false),
-            [
-                .captionsHeader, .captions, .subtitleLanguage, .autoSubtitles,
-                .audioHeader, .audioTracks, .audioLanguage
-            ]
+            NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 3, canOpenInPlex: true),
+            [.header, .captions, .subtitleLanguage, .autoSubtitles, .audio, .audioLanguage, .openInPlex]
         )
     }
 
-    func testProgramRows_headersAlwaysPrecedeTheirRows() {
+    func testProgramRows_theGroupLabelLeadsAndIsOneRow() {
         let rows = NowPlayingPanelLayout.programRows(hasSubtitleTracks: true, audioTrackCount: 2, canOpenInPlex: false)
-        let captionsHeader = rows.firstIndex(of: .captionsHeader)
-        let audioHeader = rows.firstIndex(of: .audioHeader)
-        XCTAssertEqual(captionsHeader, 0)
-        XCTAssertLessThan(rows.firstIndex(of: .captions)!, audioHeader!)
-        XCTAssertLessThan(rows.firstIndex(of: .autoSubtitles)!, audioHeader!)
-        XCTAssertLessThan(audioHeader!, rows.firstIndex(of: .audioTracks)!)
+        XCTAssertEqual(rows.first, .header)
+        XCTAssertEqual(rows.filter { $0 == .header }.count, 1, "AUDIO & CAPTIONS is one group, not two")
+    }
+
+    // MARK: - The AUDIO row and the hint line
+
+    func testAudioRow_opensAListOnlyWhenThereIsAChoice() {
+        XCTAssertFalse(NowPlayingPanelLayout.audioRowOpensList(trackCount: 0))
+        XCTAssertFalse(NowPlayingPanelLayout.audioRowOpensList(trackCount: 1))
+        XCTAssertTrue(NowPlayingPanelLayout.audioRowOpensList(trackCount: 2))
+    }
+
+    func testHints_everyControlRowHasOneAndAnOptionInsideAListDoesNot() {
+        let rows: [NowPlayingFocus] = [.cc, .subtitleLanguage, .autoSubtitles, .audioRow, .audioLanguage, .openInPlex,
+                                       .retro, .streamQuality, .compatibilityRetry, .playbackInformation, .sleepRow]
+        for focus in rows {
+            XCTAssertNotNil(NowPlayingPanelHints.hint(for: focus), "\(focus)")
+        }
+        for focus: NowPlayingFocus? in [.audio(1), .sleep(30), .option("en"), nil] {
+            XCTAssertNil(NowPlayingPanelHints.hint(for: focus), "\(String(describing: focus))")
+        }
+    }
+
+    func testHints_arePlainWordsWithNoDashesEmojiOrFutureTalk() {
+        for hint in NowPlayingPanelHints.all {
+            XCTAssertFalse(hint.contains("\u{2014}") || hint.contains("\u{2013}"), hint)
+            XCTAssertTrue(hint.unicodeScalars.allSatisfy { $0.value < 0x2000 }, "no emoji or symbols: \(hint)")
+            XCTAssertTrue(hint.hasSuffix("."), hint)
+            XCTAssertLessThanOrEqual(hint.count, 100, "two lines at 25 pt: \(hint)")
+        }
+    }
+
+    func testHints_reuseSettingsWordsWhereTheyExist() {
+        XCTAssertEqual(NowPlayingPanelHints.retro, "CRT scanlines, vignette, flicker, 4:3 aspect ratio.")
+        XCTAssertEqual(NowPlayingPanelHints.subtitleLanguage, "Choose which subtitle track to prefer when multiple are available.")
+        XCTAssertEqual(NowPlayingPanelHints.audioLanguage, "Choose which audio track to prefer when multiple are available.")
+        XCTAssertEqual(NowPlayingPanelHints.streamQuality, "Takes effect on the next program.")
     }
 
     // MARK: - SubtitleLanguagePreset
@@ -255,5 +284,26 @@ final class NowPlayingPanelLogicTests: XCTestCase {
         // rows the same focus identity.
         let codes = SubtitleLanguagePreset.all.map(\.code)
         XCTAssertEqual(Set(codes).count, codes.count)
+    }
+
+    // MARK: - Up closes the panel only when Up had nowhere to go
+
+    func testUpClosesPanel_onlyWhenTheMoveFailed() {
+        XCTAssertTrue(NowPlayingPanelLayout.upClosesPanel(moveFailed: true, pickerOpen: false))
+        XCTAssertFalse(NowPlayingPanelLayout.upClosesPanel(moveFailed: false, pickerOpen: false),
+                       "Up that moved focus to a row above must not close the panel")
+        XCTAssertFalse(NowPlayingPanelLayout.upClosesPanel(moveFailed: true, pickerOpen: true),
+                       "Up from the first option of an open list must not close the panel")
+    }
+
+    func testFocusMoveFailureMonitor_answersForTheHeadingAndOnlyBrieflyAfterwards() {
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        FocusMoveFailureMonitor.record(heading: .up, at: t0)
+        XCTAssertTrue(FocusMoveFailureMonitor.didFail(.up, now: t0.addingTimeInterval(0.05)))
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.down, now: t0.addingTimeInterval(0.05)), "a failed Up is not a failed Down")
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.up, now: t0.addingTimeInterval(FocusMoveFailureMonitor.window + 0.1)),
+                       "an old failure must not close the panel on a later press")
+        FocusMoveFailureMonitor.forget()
+        XCTAssertFalse(FocusMoveFailureMonitor.didFail(.up, now: t0))
     }
 }

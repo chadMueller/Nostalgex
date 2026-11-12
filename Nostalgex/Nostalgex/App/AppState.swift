@@ -784,6 +784,10 @@ class AppState {
     /// Demo mode only: when the block the demo clip is standing in for ends. See
     /// `demoScheduleTick()`.
     @ObservationIgnored var demoBlockEnd: Date?
+    /// Real libraries: when the schedule slot of the item now loading ends, or nil when the
+    /// loading item is not the one the schedule has on air (a random fallback, an early
+    /// advance) or is a multi-disc film. See `liveScheduleTick()`.
+    @ObservationIgnored var liveSlotEnd: Date?
     /// Offset the server was asked to start an HLS transcode at (0 = none). See hlsBaseOffset.
     var hlsRequestedOffset: Int = 0
     /// Added to the player's clock for every position report. An HLS transcode started at an

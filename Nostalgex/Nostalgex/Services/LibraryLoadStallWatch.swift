@@ -94,6 +94,12 @@ struct LibraryLoadStalled: Error {
 /// something to say: backends throw `LibraryScanInterrupted` carrying the sections they had
 /// already read, which is how a stalled load still produces a guide. Only a bare
 /// cancellation, which carries nothing, is replaced by the stall.
+///
+/// `LibraryScanInterrupted` itself can't say *why* it was cancelled, the backend that
+/// throws it only sees `Task.isCancelled`, not the watchdog's verdict. Before re-throwing
+/// it, this stamps it with the same `userInitiated` the watcher resolved to, so a user who
+/// tapped "Stop Waiting" on a section that had already read some pages isn't silently
+/// recorded (and treated) the same as an automatic stall.
 @MainActor
 func withLibraryLoadStallWatch<T: Sendable>(
     warnAfter: TimeInterval = LibraryLoadStallDetector.defaultWarnAfter,
@@ -144,8 +150,13 @@ func withLibraryLoadStallWatch<T: Sendable>(
         }
     } catch {
         watcher.cancel()
-        if isBareCancellation(error), let stall = await watcher.value {
+        let verdict = await watcher.value
+        if isBareCancellation(error), let stall = verdict {
             throw stall
+        }
+        if var interrupted = error as? LibraryScanInterrupted, let stall = verdict {
+            interrupted.userInitiated = stall.userInitiated
+            throw interrupted
         }
         throw error
     }

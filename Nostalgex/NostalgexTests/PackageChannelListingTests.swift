@@ -130,7 +130,7 @@ final class PackageChannelListingTests: XCTestCase {
         XCTAssertNil(listing.badge)
     }
 
-    /// Nothing on air at all: the row's own line says "Not enough content to build this package", and
+    /// Nothing on air at all: the row's own line says "Not enough content to build this bundle", and
     /// the row dims. No amber count, so no amber names.
     func testAPackageWithNothingOnAirMarksNothing() {
         let listing = PackageChannelListing(availability: availability([false, false, false]), enabled: true, building: false)

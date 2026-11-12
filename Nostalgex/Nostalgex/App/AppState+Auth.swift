@@ -146,12 +146,27 @@ extension AppState {
 
     /// Replaces the selected-server list, keeps the primary display fields in sync, and persists.
     func setSelectedServers(_ servers: [ServerRef]) {
+        let previous = selectedServers
         selectedServers = Self.dedupingServers(servers)
+        // Moving to a server none of the old ones is: the last playback failure Settings
+        // shows was about a library the viewer has left. Adding or removing one server of
+        // several keeps it.
+        if !previous.isEmpty, !Self.sharesAServer(previous, selectedServers) {
+            PlaybackDiagnostics.clear()
+        }
         syncPrimaryServerFields()
         persistSelectedServers()
         // A different server set is a different library; nothing a running scan brings
         // back belongs in it.
         invalidateInFlightLibraryLoads()
+    }
+
+    /// Whether two server lists have a server in common: the same identifier, or the same
+    /// host and port (a pre-multi-server install keyed its one server by URL).
+    static func sharesAServer(_ a: [ServerRef], _ b: [ServerRef]) -> Bool {
+        let ids = Set(b.map(\.machineIdentifier))
+        let hosts = Set(b.map { serverHostKey($0.baseURL) })
+        return a.contains { ids.contains($0.machineIdentifier) || hosts.contains(serverHostKey($0.baseURL)) }
     }
 
     /// One entry per physical server. A pre-multi-server install migrated its single server
@@ -461,6 +476,9 @@ extension AppState {
     }
 
     func clearCredentials() {
+        // The last playback failure belongs to the sign-in that is ending. Settings kept
+        // showing it under the next one (PlaybackDiagnostics.clear was never called).
+        PlaybackDiagnostics.clear()
         // A deliberate sign-out (or a proven-dead token) must not read as "the device lost
         // your sign-in" on the next launch.
         AppDefaults.standard.removeObject(forKey: Self.hasHeldSignInMarkerKey)
@@ -746,11 +764,11 @@ extension AppState {
             var lastError: Error?
             for attempt in 0 ..< Self.pinRequestAttempts {
                 do {
-                    let (id, code) = try await PlexAPIService.requestPIN()
+                    let grant = try await PlexAPIService.requestPIN()
                     guard !Task.isCancelled else { return }
-                    pinID = id
-                    pinCode = code
-                    startPolling()
+                    pinID = grant.id
+                    pinCode = grant.code
+                    startPolling(lifetime: Self.plexPINLifetime(expiresIn: grant.expiresIn))
                     return
                 } catch {
                     guard !Task.isCancelled else { return }
@@ -770,7 +788,18 @@ extension AppState {
 
     static let pinRequestAttempts = 4
 
-    /// Shown on the picker when a Plex code runs out (5 minutes). The picker is where the
+    /// How long to wait for a Plex code to be approved: as long as plex.tv keeps it (900 s
+    /// today). It was a fixed five minutes, so someone slow at plex.tv/link could approve a
+    /// code the TV had already dropped (N-007). A reply with no usable
+    /// `expiresIn` keeps the old five minutes; the cap stops a bad value waiting for hours.
+    static let plexPINFallbackLifetime: TimeInterval = 300
+    static let plexPINMaxLifetime: TimeInterval = 1800
+    static func plexPINLifetime(expiresIn: Int?) -> TimeInterval {
+        guard let expiresIn, expiresIn > 0 else { return plexPINFallbackLifetime }
+        return min(TimeInterval(expiresIn), plexPINMaxLifetime)
+    }
+
+    /// Shown on the picker when a Plex code runs out. The picker is where the
     /// viewer lands, so the line names the button that gets a new code.
     static let plexCodeExpiredMessage = "The code expired. Press CONNECT TO PLEX for a new one."
 
@@ -926,19 +955,21 @@ extension AppState {
         Analytics.setDemoMode(false)
     }
 
-    private func startPolling() {
+    private func startPolling(lifetime: TimeInterval = AppState.plexPINFallbackLifetime) {
         let id = pinID
-        var attempts = 0
+        let deadline = Date().addingTimeInterval(lifetime)
+        func expire() {
+            Analytics.track(.connectCodeExpired(backend: .plex, method: .pin))
+            authError = Self.plexCodeExpiredMessage
+            isAuthInProgress = false
+            currentAuthAttempt = nil
+        }
         pinPollTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { break }
-                attempts += 1
-                if attempts > 150 {
-                    Analytics.track(.connectCodeExpired(backend: .plex, method: .pin))
-                    authError = Self.plexCodeExpiredMessage
-                    isAuthInProgress = false
-                    currentAuthAttempt = nil
+                if Date() >= deadline {
+                    expire()
                     break
                 }
                 do {
@@ -994,6 +1025,11 @@ extension AppState {
                         }
                         break
                     }
+                } catch PlexAPIService.PINError.expired {
+                    // plex.tv dropped the code before our own deadline.
+                    guard !Task.isCancelled else { break }
+                    expire()
+                    break
                 } catch {
                     // Network error — keep polling
                 }

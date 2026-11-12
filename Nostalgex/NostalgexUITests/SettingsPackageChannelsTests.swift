@@ -66,7 +66,7 @@ final class SettingsPackageChannelsTests: XCTestCase {
         for _ in 0..<4 where !rail("channels").hasFocus { press(.down) }
         XCTAssertTrue(rail("channels").hasFocus, focusedLabel())
         press(.right, 1.2)
-        XCTAssertTrue(focusedLabel().hasPrefix("CHANNEL PACKAGES"), focusedLabel())
+        XCTAssertTrue(focusedLabel().hasPrefix("CHANNEL BUNDLES"), focusedLabel())
         press(.select, 1.5)
     }
 

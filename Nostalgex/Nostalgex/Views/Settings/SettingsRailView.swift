@@ -14,18 +14,18 @@ struct SettingsRailView: View {
     /// Select on a rail row: move focus into that category's rows.
     let onActivate: (SettingsCategory) -> Void
 
-    static let width: CGFloat = 470
-    private static let rowHeight: CGFloat = 76
+    static let width: CGFloat = 420
+    private static let rowHeight: CGFloat = 64
     private let accent = Color("BrandCyan")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("SETTINGS")
-                .font(.custom("VT323-Regular", size: 44))
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.horizontal, 40)
-                .padding(.top, 70)
-                .padding(.bottom, 24)
+                .font(SettingsFont.tag)
+                .foregroundStyle(Color.nxText2)
+                .padding(.horizontal, 34)
+                .padding(.top, 60)
+                .padding(.bottom, 20)
 
             VStack(spacing: 4) {
                 ForEach(SettingsCategory.pinned) { category in
@@ -35,8 +35,8 @@ struct SettingsRailView: View {
                 Rectangle()
                     .fill(Color.white.opacity(0.1))
                     .frame(height: 1)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
 
                 ForEach(SettingsCategory.unpinned) { category in
                     row(category)
@@ -70,7 +70,7 @@ struct SettingsRailView: View {
         return Button {
             onActivate(category)
         } label: {
-            HStack(spacing: 18) {
+            HStack(spacing: 14) {
                 Rectangle()
                     .fill(isFocused || isSelected ? accent : accent.opacity(0.3))
                     .frame(width: isFocused ? 8 : (isSelected ? 6 : 4))
@@ -78,34 +78,33 @@ struct SettingsRailView: View {
                 Image(systemName: category.sfSymbolPlaceholder)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 26, height: 26)
-                    .foregroundStyle(isFocused || isSelected ? .white : .white.opacity(0.6))
+                    .frame(width: 22, height: 22)
+                    .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
 
                 Text(category.title)
-                    .font(.custom("DMMono-Medium", size: 24))
-                    .foregroundStyle(isFocused || isSelected ? .white : .white.opacity(0.7))
+                    .font(SettingsFont.bodyMedium)
+                    .foregroundStyle(isFocused || isSelected ? Color.nxText : Color.nxText2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
                 Spacer(minLength: 0)
             }
-            .padding(.trailing, 16)
+            .padding(.trailing, 14)
             .frame(height: Self.rowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        isFocused ? accent.opacity(0.22)
-                            : (isSelected ? Color.white.opacity(0.06) : .clear)
-                    )
+                    .fill(isFocused ? Color.nxSelectedRow : (isSelected ? Color.nxChosenNeutral : .clear))
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // The same selected state as every Settings row: 3 pt cyan outline, glow, 3% lift.
             .overlay {
                 if isFocused {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(accent, lineWidth: 3)
-                        .shadow(color: accent.opacity(0.7), radius: 14)
+                        .strokeBorder(Color.nxCyan, lineWidth: 3)
                 }
             }
+            .shadow(color: isFocused ? Color.nxCyan.opacity(0.55) : .clear, radius: isFocused ? 30 : 0)
+            .scaleEffect(isFocused ? 1.03 : 1)
             .zIndex(isFocused ? 1 : 0)
             .animation(.easeInOut(duration: 0.12), value: isFocused)
         }

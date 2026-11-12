@@ -29,7 +29,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .support: return "A star rating or a tip, whichever suits"
         case .playback: return "Picture, quality, subtitles and audio"
-        case .channels: return "Packages, franchises, collections and the schedule"
+        case .channels: return "Bundles, franchises, collections and the schedule"
         case .servers: return "Servers, libraries, rescans and sign out"
         case .pro: return "What Pro adds"
         case .about: return "Version and links"

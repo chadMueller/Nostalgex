@@ -30,7 +30,7 @@ struct SettingsProView: View {
                 title: "LOCKED ROW EXAMPLE",
                 subtitle: "How a Pro-only setting reads inside any category"
             )
-            .padding(.top, 24)
+            .padding(.top, 20)
 
             SettingsToggleRow(
                 title: "EXAMPLE PRO SETTING",
@@ -69,10 +69,10 @@ struct ProUpsellSheet: View {
             )
             .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 14) {
                     Text("NOSTALGEX PRO")
-                        .font(.custom("DMMono-Medium", size: 40))
+                        .font(.custom("DMMono-Medium", size: 34))
                         .foregroundStyle(.white)
                     ProLockBadge()
                 }
@@ -95,8 +95,8 @@ struct ProUpsellSheet: View {
                 .accessibilityIdentifier("proUpsellClose")
             }
             // Fill the sheet like the picker sheets do, instead of a small card.
-            .padding(.horizontal, 80)
-            .padding(.vertical, 60)
+            .padding(.horizontal, 72)
+            .padding(.vertical, 52)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .defaultFocus($closeFocused, true)

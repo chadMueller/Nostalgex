@@ -124,9 +124,9 @@ struct SettingsContainerView: View {
     private var detailPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             hero
-                .padding(.horizontal, 80)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 72)
+                .padding(.top, 52)
+                .padding(.bottom, 16)
 
             // Only the rows scroll. Future rows will land across categories, so nothing
             // here assumes a category fits on screen.
@@ -141,9 +141,9 @@ struct SettingsContainerView: View {
                     // Room for the focused row's stroke and the Support tiles' lift,
                     // so neither is clipped at the scroll edges. At the top that room
                     // sits below the fade, so the first row is never dimmed.
-                    .padding(.horizontal, 80)
+                    .padding(.horizontal, 72)
                     .padding(.top, Self.rowsTopInset)
-                    .padding(.bottom, 80)
+                    .padding(.bottom, 70)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: focus) { previous, newFocus in
@@ -176,7 +176,7 @@ struct SettingsContainerView: View {
             .overlay(alignment: .top) {
                 // A thin line where rows slide under the pinned hero.
                 SettingsDivider()
-                    .padding(.horizontal, 80)
+                    .padding(.horizontal, 72)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -257,22 +257,22 @@ struct SettingsContainerView: View {
     /// The category's pixel icon beside its title. Falls back to the SF Symbol
     /// placeholder until the asset is in Assets.xcassets/SettingsHero.
     private var hero: some View {
-        HStack(alignment: .center, spacing: 28) {
+        HStack(alignment: .center, spacing: 24) {
             heroArt
                 .id(selected)
                 .transition(.opacity)
                 .frame(width: Self.heroSize, height: Self.heroSize)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(selected.title)
-                    .font(.custom("DMMono-Medium", size: 34))
-                    .foregroundStyle(.white)
+                    .font(SettingsFont.heading)
+                    .foregroundStyle(Color.nxText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(selected.subtitle)
-                    .font(.custom("DMMono-Regular", size: 20))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(NXFont.captionRegular)
+                    .foregroundStyle(Color.nxText2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .id(selected)
@@ -283,15 +283,15 @@ struct SettingsContainerView: View {
     }
 
     /// Height of the fade at the top of the scrolling rows, under the hero's divider.
-    static let rowsTopFade: CGFloat = 32
+    static let rowsTopFade: CGFloat = 28
 
     /// Where the first row rests: below the fade, plus the 16 points the focused row's
     /// stroke and glow and the Support tiles' lift have always had.
     static let rowsTopInset: CGFloat = rowsTopFade + 16
 
-    /// The icons are 16x16 pixel art. 96 points is 6 points per pixel, and the assets
-    /// are rendered at exactly 6x and 12x, so every pixel lands on whole points.
-    static let heroSize: CGFloat = 96
+    /// The icons are 16x16 pixel art. 80 points is 5 points per pixel (Settings' step down from
+    /// the 96 of 6 per pixel), so every pixel still lands on whole points.
+    static let heroSize: CGFloat = 80
 
     @ViewBuilder
     private var heroArt: some View {
@@ -307,8 +307,8 @@ struct SettingsContainerView: View {
             Image(systemName: selected.sfSymbolPlaceholder)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 110, height: 110)
-                .foregroundStyle(Color("BrandCyan"))
+                .frame(width: 92, height: 92)
+                .foregroundStyle(Color.nxCyan)
         }
     }
 }

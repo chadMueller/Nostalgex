@@ -66,28 +66,40 @@ final class GuideTextSizeTests: XCTestCase {
 
     // MARK: Metrics
 
-    /// The literals ChannelGuideView drew before this setting existed. If this fails,
-    /// NORMAL no longer draws today's guide.
-    func testNormalIsTodaysGuide() {
+    /// NORMAL row text is 22 pt (Chad 2026-11-10, an exception to the 25 pt floor for the guide's rows only); times,
+    /// heading and placeholder stay at the 25 pt floor.
+    func testNormalSizes() {
         let n = GuideTextSize.normal.metrics
-        XCTAssertEqual(n.title, 20)
-        XCTAssertEqual(n.timeLabel, 20)
-        XCTAssertEqual(n.channelHeading, 18)
-        XCTAssertEqual(n.number, 20)
-        XCTAssertEqual(n.numberWidth, 36)
-        XCTAssertEqual(n.name, 18)
-        XCTAssertEqual(n.placeholder, 18)
+        XCTAssertEqual(n.title, 22)
+        XCTAssertEqual(n.timeLabel, NXType.caption)
+        XCTAssertEqual(n.channelHeading, NXType.caption)
+        XCTAssertEqual(n.number, 22)
+        XCTAssertEqual(n.numberWidth, 40)
+        XCTAssertEqual(n.name, 22)
+        XCTAssertEqual(n.placeholder, NXType.caption)
     }
 
-    /// Same numbers as Roku's GuideText.brs LARGE.
-    func testLargeMatchesRoku() {
+    /// LARGE is one step up the same scale: body everywhere. (It no longer matches Roku's GuideText.brs LARGE.)
+    func testLargeIsOneStepUpTheScale() {
         let l = GuideTextSize.large.metrics
-        XCTAssertEqual(l.title, 26)
-        XCTAssertEqual(l.timeLabel, 26)
-        XCTAssertEqual(l.channelHeading, 22)
-        XCTAssertEqual(l.number, 24)
-        XCTAssertEqual(l.numberWidth, 44)
-        XCTAssertEqual(l.name, 20)
+        XCTAssertEqual(l.title, NXType.body)
+        XCTAssertEqual(l.timeLabel, NXType.body)
+        XCTAssertEqual(l.channelHeading, NXType.body)
+        XCTAssertEqual(l.number, NXType.body)
+        XCTAssertEqual(l.numberWidth, 54)
+        XCTAssertEqual(l.name, NXType.body)
+        XCTAssertEqual(l.placeholder, NXType.body)
+    }
+
+    /// Header text and the placeholder are never below the 25 pt floor, and row text never below 22, at either size.
+    func testNoGuideTextIsBelowTheFloor() {
+        for size in GuideTextSize.allCases {
+            let m = size.metrics
+            for s in [m.title, m.number, m.name] { XCTAssertGreaterThanOrEqual(s, 22, "\(size) \(s) pt") }
+            for s in [m.timeLabel, m.channelHeading, m.placeholder] {
+                XCTAssertGreaterThanOrEqual(s, NXType.floor, "\(size) \(s) pt")
+            }
+        }
     }
 
     func testLargeIsBiggerEverywhere() {
@@ -123,9 +135,9 @@ final class GuideTextSizeTests: XCTestCase {
     }
 
     /// A line is never taller than its row once the focus outline (3 pt, inset 2 pt) is
-    /// taken off top and bottom, nor than the 60 pt header.
+    /// taken off top and bottom, nor than the 58 pt header (which keeps at least 8 pt above and below a header line).
     func testLinesFitTheRowAndTheHeader() throws {
-        let rowRoom: CGFloat = 80 - 2 * (3 + 2)
+        let rowRoom: CGFloat = GuideTextMetrics.rowHeight - 2 * (3 + 2)
         for size in GuideTextSize.allCases {
             let m = size.metrics
             for s in [m.title, m.number, m.name, m.placeholder] {
@@ -133,16 +145,16 @@ final class GuideTextSizeTests: XCTestCase {
                 XCTAssertLessThanOrEqual(try font(s).lineHeight, rowRoom, "\(size) \(s) pt")
             }
             for s in [m.timeLabel, m.channelHeading] {
-                XCTAssertLessThanOrEqual(try font(s).lineHeight, 60, "\(size) header \(s) pt")
+                XCTAssertLessThanOrEqual(try font(s).lineHeight, 58 - 2 * 8, "\(size) header \(s) pt")
             }
         }
     }
 
     /// The longest header label still fits its quarter of the programme area at the
-    /// narrowest guide this app draws (1920 wide minus the 220 pt channel column, then
+    /// narrowest guide this app draws (1920 wide minus the 340 pt channel column, then
     /// the 14 pt lead-in).
     func testTimeLabelsFitTheirSlot() throws {
-        let slot = (1920 - 220) / 4 - 14
+        let slot = (1920 - 340) / 4 - 14
         for size in GuideTextSize.allCases {
             let w = try width("12:30 AM", size.metrics.timeLabel)
             print("GUIDE-TEXT \(size) time label 12:30 AM: \(w) wide, slot \(slot)")

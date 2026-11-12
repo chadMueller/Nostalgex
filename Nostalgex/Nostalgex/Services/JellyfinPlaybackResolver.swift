@@ -8,6 +8,8 @@ struct PlaybackResolution: Sendable {
     let playSessionId: String?
     let isDirectPlay: Bool
     var requiresOriginalVideo: Bool = false
+    /// What the server said it does to this stream (Plex's decision), when it said.
+    var serverStream: PlaybackInformation.ServerStream? = nil
 }
 
 extension JellyfinPlaybackResolver {
@@ -413,7 +415,9 @@ enum JellyfinPlaybackResolver {
     /// languages or English; within either, most channels first so a 5.1 mix wins over a
     /// stereo one. Then whatever the file calls default; then the first audio track there
     /// is. Returns nil when there is nothing to choose between, which leaves the server's
-    /// own choice alone.
+    /// own choice alone. A track titled "commentary" is skipped when another track exists,
+    /// so a file with one real track and a commentary is pinned to the real one even when
+    /// the commentary is the file's default.
     ///
     /// AUDIO LANGUAGE used to be ignored here (I-070, #177): a viewer who picked German on an
     /// English Apple TV got the English track whenever Jellyfin or Emby transcoded.
@@ -422,8 +426,11 @@ enum JellyfinPlaybackResolver {
         audioLanguage: String? = nil,
         preferredLanguages: [String] = Locale.preferredLanguages
     ) -> Int? {
-        let audio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
-        guard audio.count > 1 else { return nil }
+        let allAudio = (streams ?? []).filter { $0.mediaType?.lowercased() == "audio" }
+        guard allAudio.count > 1 else { return nil }
+        // A commentary track is passed over whenever another track exists (I-075), before
+        // any language rule: the rules below then choose among the rest, unchanged.
+        let audio = AudioTrackCommentary.skippingCommentary(allAudio) { [$0.Title, $0.DisplayTitle] }
 
         if let audioLanguage, audioLanguage != "__system__",
            let chosen = SubtitleSelectionLogic.languageKey(audioLanguage),
@@ -482,9 +489,13 @@ enum JellyfinPlaybackResolver {
             let IsDefault: Bool?
             let IsForced: Bool?
             let Channels: Int?
+            /// The track's name as the server shows it ("Director's Commentary"). Optional
+            /// so a PlaybackInfo answer without them still decodes.
+            let Title: String?
+            let DisplayTitle: String?
 
             enum CodingKeys: String, CodingKey {
-                case Index, Language, IsDefault, IsForced, Channels
+                case Index, Language, IsDefault, IsForced, Channels, Title, DisplayTitle
                 case mediaType = "Type"
             }
         }

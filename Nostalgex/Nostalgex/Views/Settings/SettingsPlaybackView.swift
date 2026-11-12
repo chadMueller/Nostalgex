@@ -19,7 +19,7 @@ struct SettingsPlaybackView: View {
     static let firstRowID = "retro"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsToggleRow(
                 title: "RETRO MODE",
                 subtitle: "CRT scanlines, vignette, flicker, 4:3 aspect ratio",
@@ -131,7 +131,7 @@ struct SettingsPlaybackView: View {
                     title: "WATCH HISTORY",
                     subtitle: "What \(appState.backendDisplayName) is told about what you watch"
                 )
-                .padding(.top, 24)
+                .padding(.top, 20)
 
                 SettingsToggleRow(
                     title: "SHOW NOW PLAYING ON \(appState.backendDisplayName.uppercased())",

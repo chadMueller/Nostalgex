@@ -548,6 +548,242 @@ All 292 engine tests pass.
 
 All 277 engine tests pass. Not yet on a TV. A saved library keeps the old titles until the background rescan after the next launch.
 
+## 2026-11-10 (Apple TV 1.0.32 rc2: the launch-time freeze, filter pass moved off the main actor)
+
+**Shipped.** Apple TV 1.0.32 (56) to TestFlight, built from `appletv/1.0.32-rc2` at `bfe88229` (the 1.0.32 design branch at `1d75a684` plus the fix below).
+Uploaded 20:52 ET on 2026-11-10 (delivery `4ffadf57-8655-4a91-98b2-8148877ca6d1`, IPA md5 `36dc2a1b04cebb8d0627e719885cfb40`), processed VALID within about a
+minute, export compliance "no non-exempt encryption", What to Test set (en-CA), in Beta-Users and Beta-Testers-2, submitted for external Beta App Review
+at 17:54 PT (WAITING_FOR_REVIEW). A first archive without the fix (`1d75a684`, md5 `b351f979d5560969d3289cfaa17b96df`) was validated and not uploaded. Not
+done and held: App Store submission (new screenshots are being shot), tag, merge to main, a look at the new Top Shelf images on a TV, the TV pass of the test
+sheet. The I-076 big-library memory check passed on an Apple TV HD (90k items 308 MB peak, about 1,430 MB headroom).
+
+**Why.** A tester's Apple TV 4K (1st generation) stalled the remote and the picture for about 40 s, twice, at launch. Measured in the simulator, and the
+same on 1.0.31, so not a regression: after every snapshot restore, when the enrichment cache (`enrichment_cache_v1.json`) is missing or older than
+7 days, `refillEnrichmentAfterRestoreIfNeeded` ran `refilterChannelsWithEnrichment` and `rebuildFoundFranchises` on the main actor.
+
+**Changed.** The two slow passes now run in a background task on an immutable snapshot and are applied on the main actor in one step each:
+`refilterChannelsWithEnrichment` is split into prepare (main), `buildEnrichedStaticPools` (pure, off-main) and apply (main), and the franchise builder
+runs off-main the same way (`refilterChannelsWithEnrichmentOffMain`, `rebuildFoundFranchisesOffMain`). A result is applied only if the library
+session, the item count, the enrichment count, the enabled bundles, the config channels and the library signature did not move meanwhile; otherwise it
+is thrown away and the pass runs again (three tries). The synchronous functions stay and use the same three pieces. No filter rule, threshold,
+`channels.json` or schedule change.
+
+**Measured** (launch harness `LaunchBlockHarness`, simulator, Debug, a 10,693 item library, every bundle on, 104 channels):
+
+| | Before | After |
+|---|---|---|
+| Main-actor work after enrichment lands | 13,786 ms (12,429 ms refilter, 1,355 ms franchises) | 1.7 ms |
+| Main-thread hangs over 250 ms | 1, longest 13,962 ms | 0 |
+| Background work, wall clock | n/a | 12.5 s and 1.4 s |
+
+Results are identical: the same fingerprint of every channel's pool in order, the guide order and the found franchises (`poolHash`, `guideHash`,
+`franchiseHash`) from the synchronous and the off-main path. New `EnrichedRefilterOffMainTests` (2): the off-main result equals the synchronous one for
+every bundle, the first three and the default; and a result made stale by a bundle switch is recomputed (it fails with the staleness guard removed).
+218 existing tests in the channel filter, golden, franchise, enrichment, snapshot, PackageChannelListing, schedule and guide order classes pass
+unchanged. The full NostalgexTests run on the branch: 1,371 passed, 0 failed, 32 skipped.
+
+**Not measured.** An Apple TV: the numbers are a Mac simulator in Debug (an optimized build was 9.1 s for the refilter), and the 40 s on the TV is an
+estimate that the 1st-generation CPU makes it about three times slower. The background pass now competes with the main thread for the TV's cores; the
+priority is user-initiated. Roku and Android have not been looked at for the same cost.
+
+## 2026-11-10 (Apple TV 1.0.32 design branch: the brand logo replaces the lightning bolt, #226)
+
+**Changed.** The Apple TV drew the retired lightning-bolt logo (Trello I-086, GitHub #226 from tydude001). It now draws the NOSTALGEX wordmark with a
+TV for the O, the logo of the site, the Roku app and the web tuner (`logo/`). Chad: use that brand everywhere, no more waiting on a redesign.
+- `Assets.xcassets/NostalgexLogo.imageset` keeps its name, so every call site (loading and splash, the connect and picker screens, the idle
+  overlay, the guide's top-left nav bar) picks it up. The image is `logo/png/nostalgex-white-1600w.png` (cream letters, transparent, 1600 x 212),
+  replacing the bolt SVG.
+- Frames: the wordmark is about 7.5 times as wide as tall (the bolt was 2 to 1). Every `maxWidth`-based call site keeps its frame and scales to
+  fit, so the setup and picker screens are unchanged apart from the image. The guide's top-left logo was `frame(height: 80)`, which would have been
+  600 pt wide, so it is now 36 pt tall (272 wide).
+- App icon (`App Icon & Top Shelf Image.brandassets`): Back layer an opaque navy #11142B, Front layer the wordmark at 78% of the width on
+  transparency, as the Roku icon does. 400 x 240 and 800 x 480 for the home screen icon, 1280 x 768 for the App Store icon. The Middle layers stay
+  empty as before. Rendered from `logo/nostalgex-white.svg` with `rsvg-convert`. The build has no asset catalog warnings.
+- Checked: the built app's `Assets.car` holds `NostalgexLogo` at 1600 x 212 and the icon layers (back opaque, front with alpha); a simulator
+  screenshot of the launch screen shows the wordmark. The guide's nav bar was not rendered (it needs a signed-in or demo session); it uses the same
+  asset. Not checked on a Home screen except by install on one Apple TV.
+
+**Top Shelf.** The four Top Shelf images were the bolt logo, centered at about 45% of the width on a near-black background. They are now the
+wordmark centered at 60% of the width on navy #11142B: `topshelf.png` 1920 x 720, `topshelf@2x.png` 3840 x 1440, `topshelf-wide.png` 2320 x 720,
+`topshelf-wide@2x.png` 4640 x 1440 (the wordmark is 153 px and 185 px tall at 1x, well inside the safe area). The Top Shelf extension draws no
+logo of its own (it shows scheduled programme posters), so nothing else needed a swap.
+
+**Half-done.** The App Store screenshots and `docs/images/nostalgex-guide.png` still show the bolt and need re-shooting. The Top Shelf was not looked at
+on a TV.
+
+## 2026-11-10 (Apple TV 1.0.32 design branch: Chad's TV feedback, focus sound, dim titles, Now Playing, UP NEXT)
+
+Built and looked at on the basement Apple TV 4K (tvOS 27.2) by Chad. Unit tests were not run for these; the focus sound is checked by ear.
+
+**No tvOS focus tick (`FocusSound.swift`).** Moving focus along the full-screen channel strip played tvOS's focus tick over the video's
+audio. UIKit asks the focus environment chain for a sound: `UIFocusEnvironment.soundIdentifierForFocusUpdate(in:)` (Obj-C
+`soundIdentifierForFocusUpdateInContext:`), where `UIFocusSoundIdentifier.none` opts out, `.default` is the system sound and nil defers to the
+parent. SwiftUI has no modifier for it on tvOS and the app has no UIKit root of its own, so the answer is given where every chain ends:
+overrides on `UIWindow` and `UIViewController` return `.none`. A view or controller that returns its own sound still wins. Playback audio,
+the channel-change static and the system sound settings are not touched. Verified by ear on the basement TV (tvOS 27.2): the tick is gone. The
+simulator plays no focus sounds, and nothing was checked on another tvOS version or for a system control that returns its own sound.
+
+**Guide titles that are not live are clearly dimmer.** Chad: the upcoming titles did not look dimmer. text-2 (#B9C3DE) is 9.9 to 10.9:1 on the
+guide, too close to white at couch distance. New token `NXColor.textDim` #80879A, the text-2 hue pulled toward black to the dimmest value that
+holds 4.5:1 on the lightest guide surface: 5.36:1 on the bare guide (#0D0D1F), 5.06:1 on the even-row wash, 5.16:1 on a past block, 4.83:1 on
+both together; white is 17.2:1. Used for every non-live, non-focused title, past and upcoming alike; the live block and the focused row stay
+white (the focused row's fill is calibrated for white). The pairs are in `NXColor.textPairs`, so `DesignTokensTests` holds them at 4.5:1.
+
+**Now Playing at the guide's scale (`NowPlayingMetrics.swift`).** Row labels and values, the channel line, the UP NEXT line and the hint line are
+22 pt (were 25); the item title 29 (was 38); the CH tag 28 (was 31); rows stay the guide's 64 pt. Row side padding 18 (was 20), row gap 8 (was
+10), control columns 440 each with a 28 gap (were 520 and 32), poster 120 x 180 (was 150 x 225), panel bottom padding 44 (was 56). The identity
+column takes the remaining width. The guide, Settings and the shared type tokens are unchanged.
+
+**UP NEXT is one line.** The next programme's title, then a cyan badge directly after it: "Movie Title [UP NEXT IN 84 MIN]". No card around
+it. The badge counts minutes only, never hours (84 minutes is 84 MIN, 120 is 120 MIN), whole minutes rounded down, under a minute "LESS THAN
+1 MIN". A long title ends in an ellipsis and the badge keeps its full text. It re-reads the schedule every 15 s; nothing else in the panel
+ticks. `UpNextLabelTests` (3) pass.
+
+## 2026-11-10 (Apple TV 1.0.32: bug decisions folded into appletv/1.0.32-design)
+
+Simulator tests only; nothing here has run on an Apple TV.
+
+**Already in the branch, confirmed.** The RATE link (I-090) is the `b711a983` itms-apps form with the single `AppStoreLink.openRate` path from
+`eadb7e88`; the variants are `AppStoreLink.RateLinkVariant` from `226d7709`. The franchise collections grey-out while FRANCHISES is off (N-032)
+is in (`ef8d73d4`, devlog `1768d7be`). Jellyfin and Emby views that hold no videos are not scanned as films (I-085, #205/#206, `ca781c9c`:
+`JellyfinAPIService.sectionType`/`itemTypes`/`isAskedType`, pinned by `scripts/jellyfin-library-golden.json`), and the Emby scan names
+`OfficialRating` and `CommunityRating` with `LibrarySnapshotStore.scanFieldsVersion = 2` so a saved library from before rescans once (I-087.2,
+#204, `98e73809`). Re-run on the simulator for this entry, 45 test cases, 0 failures: `JellyfinPlaylistLeakTests` (2: an audio playlist in a
+Playlists view reaches neither VHS VAULT nor any channel, on Jellyfin and on Emby), `JellyfinLibraryGoldenTests` (5), `EmbyRatingFieldsTests`
+(10: a fake Emby 4.10 sends the two ratings only when Fields names them; SAT MORNING CARTOONS drops TV-MA and TV-14, VHS VAULT holds its R
+titles before 9 PM), `SnapshotUpgradePathTests` (2). Not verified: a real Jellyfin or Emby with a Playlists view, no TV run (nobody could test it).
+
+**Merged now.** `fix/clear-playback-failures`: Disconnect clears the last playback failure, and so does moving to a server list that shares no
+server with the old one (`PlaybackFailureClearingTests` 4, `PlaybackDiagnosticsTests` 5, 0 failures). `investigate/issue-146-stop-waiting`:
+STOP WAITING ends the whole scan instead of the current server, and `LibraryScanInterrupted` now carries `userInitiated`, stamped by
+`withLibraryLoadStallWatch` from the watchdog's own verdict. The branch overlapped the section-failure work already here (`failedSections`);
+kept both: a failed section is still reported and the scan goes on, a viewer's STOP WAITING breaks out of the server loop, and the abandoned-load
+event counts as user-initiated only when the scan was stamped so and no section failed. New `StopWaitingVerdictStampTests` (3): the viewer's tap
+stamps `true`, the watchdog giving up stamps `false`, a section that failed for good keeps its name; with the stamp line taken out the first one
+fails, with it all three pass. The older stop-waiting tests still pass (`StopWaitingCancellationIsolationTests` 1, `StopWaitingHarnessTests` 2,
+`LibraryLoadStallDetectorTests` 12). Not verified: pressing STOP WAITING on a real multi-server scan.
+
+## 2026-11-10 (Apple TV 1.0.32 design branch: appletv/1.0.32-design, off appletv/1.0.32-fixes)
+
+Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per change.
+
+**Shared design tokens, Settings first.** One file, `Views/Design/DesignTokens.swift`, holds the type scale (hero 96, title 44,
+heading 34, body 29, caption 25, tag VT323 36), the color list (text #FFFFFF, text-2 #B9C3DE, cyan #00D4FF, yellow, amber,
+red-text, on-cyan; surfaces panel #0A0F1E, row #141B33, selected row #0B2A3A, chosen-neutral #2B3760) and one row surface:
+resting is the row fill with a 1.5 pt quiet outline; selected is the cyan-tinted fill, a 3 pt solid cyan outline, a 30 pt
+cyan glow and a 3% lift. Rules: nothing the viewer reads is below 25 pt, nothing pressed is below 29 pt, every text color is
+at least 4.5:1 on every surface it sits on, white with an opacity is not a text color, a channel's own color is never text.
+Moved onto it: the shared Settings rows (toggle, link, franchise buttons, channel requirement cards, the SUPPORT tiles
+including RATE, the language and stream quality pickers), the rail, the SUPPORT, ABOUT and LINKS pages (they use those rows),
+the page titles in the container, and the rating banner. Row text went from 18 to 22 pt up to 25 and 29 pt, so rows are taller
+and long subtitles wrap to two lines; the RATE tile wraps its title and instruction. The old low-contrast grays (white at
+0.2 to 0.85) are gone from these files: for example the title of a switched-off row was white at 0.35, about 3:1, and is now text-2 at 10.8:1. `DesignTokensTests`
+(8) checks every text/background pair in `NXColor.textPairs` (21 pairs) at 4.5:1, the proposal's published ratios, that cyan is
+the BrandCyan asset, the six sizes and the 25 and 29 floors, and scans the migrated files for literal font sizes and faded
+white as text. Not migrated, on purpose: the guide grid (its sizes follow row height and GUIDE TEXT SIZE), the Now Playing
+panel (being redesigned), the package channel names inside a package row (own tested contrast math), and the other Settings
+pages' own literals (Channels, Servers, Pro, Playback screens still carry some 18 to 20 pt text of their own). Not measured on a TV.
+
+**Full screen: the reverse direction closes what the direction opened; Now Playing identity column rearranged (Chad's TV check, 2026-11-10).**
+In full screen, Down opens the Now Playing panel at the top and Up opens the channel strip at the bottom (the code reads this way and the panel
+UI test presses Down to open it). The reverse now closes each: with the strip open, Down closes it (the strip handles only Down, so Left and
+Right keep moving along it); with the panel open, Up closes it, but only when focus is on the first row of a column (CC on the left, RETRO MODE
+on the right, `NowPlayingPanelLayout.upClosesPanel`), so Up still moves between rows everywhere else, and never from inside an open list. What
+opens them, Menu and Back, the touch surface and focus order are unchanged. Both are `onMoveCommand` handlers on the container, the pattern
+the guide already uses; not run on the TV or in a test, by request. In the panel's left column the poster is back to 150 x 225 pt with the
+details beside it, left-aligned against its right edge (the CH tag with its channel bar, the title at 44 pt wrapping to up to three lines, the
+channel name, year and rating); UP NEXT sits under the poster across the column's 540 pt. With no poster the details take the poster's place
+and there is no empty hole. Token sizes and floors, the 560 pt row columns and everything else are as before.
+
+**The guide grid moved onto the design tokens (Chad, 2026-11-10, before 1.0.32 is cut).** Titles, channel numbers and names are body (29 pt,
+was 20 and 18), the time labels, the CHANNEL heading, the placeholder and the package names up the stripe are caption (25, was 20, 18 and 18).
+Text colors are text and text-2 only: the channel's own color is no longer text (the number and name are white, the color stays in the left
+bar), past programs are text-2 instead of white at 50%, and the near-black header and stripe backgrounds are the panel color. The row is the shared
+76 pt row height (was 80), the header 58 (was 60) and the channel column 340 (was 220), sized for a three-digit number box (54 pt), the live bolt
+and 15 characters of name at 29 pt (90% of the channels; the rest end in an ellipsis, on the live row at 13). Programme width goes from 1700 to 1580
+pt, so a 30 minute column is 395 pt (was 425); the window is still two hours, four columns. At 1080p the grid area is about 525 pt: 6.05 rows
+fit (was 5.7). The stripe slot at the rows' left edge is unchanged at 29.5 pt on the focused and live row (it depends on the header's paddings,
+not on the column width), so the 25 pt stripe names fit by cap height (about 17.5 pt in a 28 pt stripe). The seasonal invite row's 22 and 14 pt
+text is 29 and 25, in white (black when selected) instead of the season color. GUIDE TEXT SIZE still works: NORMAL is the token sizes, LARGE one
+step up (titles, number and name 34, times and heading 29), so LARGE no longer matches Roku's LARGE numbers (Roku's guide text is unchanged).
+Focus, order, the time cursor, stripes, snap-back, GUIDE TIMEOUT and the selected-row look are untouched, and no cell effects were added. Not
+migrated: the package list (the left jump rail, 22 and 24 pt), which was not in the scope. Compiled (simulator and TV), one simulator screenshot,
+no tests run; `GuideTextSizeTests` and the stripe slot test were updated to the new numbers and have not been run.
+
+**Up closes the Now Playing panel only when the focus engine had nowhere to go (a bug in the change above, found 2026-11-10).** While hunting a
+reported remote stall I logged the app on the simulator and saw the panel's Up handler read `FocusState` after the engine had already moved
+focus: Up from STREAM QUALITY (second row, right column) moved focus to RETRO MODE, the handler then saw RETRO MODE and closed the panel. The
+state it reads lags the move unevenly (sometimes stale, sometimes new), so it cannot say "nothing above". The engine itself says it: it posts
+`UIFocusSystem.movementDidFailNotification` in the same turn, just before SwiftUI calls the handler (seen in the log on every press that
+could not move). `FocusMoveFailureMonitor` records that, and `NowPlayingPanelLayout.upClosesPanel(moveFailed:pickerOpen:)` closes only on a
+failed Up and never from an open list. `NowPlayingPanelLogicTests` has two tests (the rule, and the monitor's heading and 0.25 s window);
+making the rule ignore `moveFailed` fails the first. The old behaviour had no seam to test, so there is no "before" run of the same test;
+the evidence of the bug is the simulator log. `NowPlayingPanelFocusTests` walks up a column with a `stopAt` so it no longer presses Up on the
+first row (which now closes the panel), and has a UI test for the Up-from-second-row case; that test passed on the old code on the row path
+I used (Right from CC), so it is not proof of the fix. Not run on the TV. The remote stall that started the hunt did not reproduce
+(diagnostic build on the TV, 19 minute session, no blocked main thread); the `appletv/stall-diag` branch is kept for if it returns.
+
+**Smaller SETTINGS pill, narrower Now Playing columns (Chad's review, 2026-11-10).** The guide header's SETTINGS pill keeps 29 pt, the press
+floor, and its padding went from 36 across and 14 up and down to 22 and 6: measured in the simulator, 211 x 66 pt before, 183 x 50 pt
+after (13% narrower, 24% shorter). A 25 pt caption version was built and photographed as an option (about 160 x 43 pt, computed from
+the 29 pt measurement) but breaks the 29 pt rule for pressed things, so it is not the default. In the Now Playing panel the two control
+columns went from 650 pt to 560 pt each and the identity column from 360 pt to 540 pt, which the poster uses (150 x 225 became 200 x 300).
+560 is what the longest row still needs at 29 pt: PLAYBACK INFORMATION with its value and chevron is 495 pt of the 504 pt inside a row's
+padding, so 540 or less would need that row's "VIEW" dropped. To get there the row's inner spacing went from 20 to 12 pt, the label "AUTO
+SUBTITLES (FOREIGN AUDIO)" became "AUTO SUBTITLES" (the parenthetical was already what its hint line says), the RETRY ORIGINAL VIDEO row shows a
+spinner while it runs instead of "CHECKING SERVER" (that wording is the hint line), and the hint line now spans both columns so a three
+sentence hint still fits in two lines. Floors (25 and 29 pt), row height 76, the 3 pt selected state with glow and lift (not clipped),
+focus order and Menu are unchanged. Compiled; the tests were not run for this change, by request, and no test names the old label. Before
+and after screenshots are in `.shots/nowplaying-a/` (`before-*`, `after-*`, `option-guide-pill25-*`) beside the three mocks.
+
+**Now Playing panel, Variant A (Chad's pick, 2026-11-10).** The in-player panel is rebuilt on the shared tokens, `DesignTokens.swift`
+being the one place it takes sizes, colors, row height and the selected state from. Layout: the identity column on the left (poster
+when the backend has one, a small channel-colored bar beside "CH n" in white, the title at 44 pt, channel name, "1987 . PG-13", UP NEXT
+in yellow), then two 650 pt columns, AUDIO & CAPTIONS (CC, SUBTITLE LANGUAGE and AUTO SUBTITLES when the program has subtitle tracks,
+AUDIO, AUDIO LANGUAGE with two or more tracks, OPEN IN PLEX on Plex) and PICTURE (RETRO MODE, STREAM QUALITY, RETRY ORIGINAL VIDEO when it
+applies, PLAYBACK INFORMATION, then SLEEP TIMER set apart below). One row style: 76 pt high, label left and value right, ON in cyan and
+OFF in text-2 as words (no switches), a chevron where a row opens a list, a 3 pt cyan outline with glow and a 3% lift on #0B2A3A when
+selected. Four things behave differently, all from the design: (1) AUDIO is one row showing the current track that opens the track list
+(with one track or none it is a plain, unfocusable row), no longer a list of inline rows marked ACTIVE; (2) SLEEP TIMER is one row, OFF or a
+yellow countdown, that opens a short list (OFF, 15 MIN, 30 MIN, 1 HR) with a check on the one in effect and the countdown beside its
+title; choosing a time arms it and closes the list, choosing OFF cancels, and the timer, its grace prompt and its logic are unchanged;
+(3) every list shows its chosen entry with a cyan check instead of the word ACTIVE; (4) a one-line hint under the columns says what the
+selected row does, so row heights never change, and the "takes effect on the next program" note for STREAM QUALITY and the RETRY
+ORIGINAL VIDEO status now live there; the stream quality row shows ORIGINAL and keeps the full wording in its list. Focus order, Menu
+and Back (a list closes first, focus returns to its row), subtitle and audio logic and Analytics are unchanged. Both columns are focus
+sections of equal height, because with one shorter than the other Right from OPEN IN PLEX did nothing (measured in the simulator). STILL
+WATCHING moved to the tokens too. Tests: `DesignTokensTests` (10), `NowPlayingPanelLogicTests` (row order and the hint wording: plain
+words, no dashes, two lines), `NowPlayingPanelFocusTests` (4, including a new one that opens the sleep list, arms 15 MIN, sees the row stop
+saying OFF, and cancels with OFF). Two test-only launch flags show what a demo cannot: `-uiTestTwoAudioTracks` and
+`-uiTestShowOpenInPlex`. Simulator screenshots of each state are in `.shots/nowplaying-a/` beside the three mocks. Not done and not
+measured: a real Apple TV; the AUDIO value shows the track's own name (the mock's "English 5.1" needs the channel layout, which
+`AudioTrackDescriptor` does not carry); the guide grid and the other screens are not on the tokens yet.
+
+**RATE is a full-width row above the tips.** On SUPPORT NOSTALGEX the RATE tile was one of four, so its title wrapped to two lines
+and its instruction took six in a narrow column. RATE is now one full-width row (`SupportRateRow`, the shared row surface and
+selected state): the star on the left, "RATE NOSTALGEX" and "Leave a star rating" on one line, the instruction ("Opens the App
+Store page. Scroll down to the stars to rate.") under them on one line, an open-out arrow on the right. POPCORN, TV DINNER and
+PIZZA NIGHT are a row of three below it. The focus id `rate`, the single RATE path (`AppStoreLink.openRate`) and `RateLinkTests` are
+unchanged; the instruction keeps its `supportTileHint` id. New `SettingsSupportGridTests` walks it with the remote: the pane opens
+on RATE, the tips are below it in one row left to right, Down from RATE reaches a tip, Left and Right move along the tips, and Up from
+each of the three tips reaches RATE. Simulator screenshot: `links-shots/step4-settings-rate-wide.png`.
+
+**SETTINGS on the guide's header is a real button.** It was plain gray text that turned yellow when focused. It is now a pill
+(the row's resting fill and outline, white 29 pt text) with the shared selected state, a 3 pt cyan outline, glow and 3% lift.
+Reached as before: Up out of the top channel row; the id `tunerSettingsButton` and the focus section are unchanged, and the
+wrap tests that go up to it (`ChannelGuideWrapFocusTests`) pass. Simulator screenshots in the scratchpad `links-shots` folder.
+
+**The guide's selected row reads on bright channels.** White titles sat on the playing block of the focused row, which is a
+half-strength channel color laid over the row's own third-strength wash. Computed over the 97 distinct channel colors in
+`channels.json`, 33 of them put white text under 4.5:1 there, the worst 2.46:1 (cyan, yellow, white and the light pinks). The
+block (and the row, for the titles beside it) is now an opaque fill of the same look, darkened toward black only as far as white
+text needs to reach 4.5:1 (`GuideRowContrast`): a dark channel is unchanged, a bright one gets a darker shade of itself, same
+hue. Black or white text per color was the alternative; a darker shade keeps the guide's white text and its channel identity.
+`GuideRowContrastTests` (4) holds white text at 4.5:1 or better on both fills for every channel color, the extremes (white,
+yellow, cyan, black) and a bad hex, that a color that already reads is not changed, and that a bright one is darkened no
+further than needed. The focus outline and glow stay in the channel's color, and the guide's sizes and GUIDE TEXT SIZE are
+untouched. The "now line through titles" item was skipped, as asked.
+
 ## 2026-11-09 (Android: libraries hidden on Jellyfin behind one switch, #224)
 
 **Changed.** Libraries hidden from the Jellyfin home screen now sit behind one switch, as on the web tuner. Android had them the Apple TV's way: each one listed and switched on separately. Chad's issue asked for the web's single switch until he says otherwise, and the switch keeps Android the same as the web and Docker.
@@ -1273,7 +1509,6 @@ and Silkscreen are still in package.json.
 
 **Verified.** See the audit doc, `WEB-VISUAL-AUDIT-2026-11-10.md` in the internal docs, for the before and after numbers.
 
-
 ## 2026-11-10 (Roku: a Jellyfin or Emby forced subtitle track is drawn by the app, #237, first half)
 
 **Why.** Roku shows its captions only while the TV's caption mode is on, so the app switched that setting on to show
@@ -1323,6 +1558,7 @@ of `c21c2a9` plus the scratch aids. The English Opus track is picked, so each ru
 **Open.** Whether the line matches the picture and the speech was not watched or listened to (volume at zero; the
 times are the player's). A stick, and a real film with a long forced track. The timings above are from the builds
 with the scratch log line; the unchanged build was looked at only through the node tree and one screenshot.
+
 ## 2026-11-10 (Roku: audio tracks titled commentary are passed over, #236)
 
 **Why.** A film with a commentary track could air with the commentary: the file marks it default, or it has more
@@ -1441,6 +1677,144 @@ The row's words and states were read from the node tree (port 8080), not a scree
 **Open.** A stick. Not looked at: the row as drawn (no screenshot), a hidden library's title on a channel on screen
 (the counts and the six more channels stand in), the request on the wire, a press while a load runs (ignored, by the
 code), and the app closed before the re-read ends.
+
+## 2026-11-09 (Apple TV 1.0.32 fixes branch: appletv/1.0.32-fixes, off appletv/1.0.32-links)
+
+Simulator and off-device tests only; nothing here has run on an Apple TV. One paragraph per item, newest last.
+
+**Now Playing no longer drifts behind the guide (Trello 6ae56acb).** Plex, Jellyfin and Emby floor a runtime to whole
+minutes and the schedule slot is that floored length, so a file runs 0 to 59 s past its slot. A natural end starts the
+next item at 0 (a seek would skip into the episode), so the player fell further behind the clock at every boundary and
+the headline kept naming the programme still playing while the guide had moved on. Measured in a model that walks a
+simulated clock over the real scheduler (`NaturalEndDriftTests`; files 5 to 55 s past their slot, five channels, six
+hours each): the headline disagreed with the guide in 1,647 of 7,200 samples (22.9%). The fix is the demo tick's idea
+for real libraries: `liveScheduleTick()` runs once a second, and when the loaded item's slot has ended and the file is
+still running (at most 90 s late, else the file's own end is left to act), it starts what the guide now shows, at 0.
+Same model with the tick: 0 of 7,200 mismatched, 24 tick advances. What a viewer loses is the end of the file past its
+slot, 59 s at most (credits, nearly always), which is what live TV does. Not touched: a file that ends before its slot
+still advances on its own and leads the guide by the gap (flooring cannot cause that, only wrong server metadata);
+multi-disc films and demo mode keep their own paths. Unit tests only, no real library.
+
+**Jellyfin and Emby 4K films get the 40 s watchdog (N-035, Trello 6aeab4de).** The watchdog gives a 4K source the server has
+to transcode 40 s before it falls back and everything else 20 s, but it reads the frame size off the item and only the
+Plex loader filled it in, so a slow 4K start on Jellyfin or Emby was given up on at 20 s. The Jellyfin and Emby movie
+and episode scans now read Width and Height off the same media source as the codec and bit depth. Reproduced first:
+`BackendWatchdogDeadlineTests` fails on both backends against the 1.0.32-links source (size nil, deadline 20 s for a
+3840x2160 and a 3840x1606 file) and passes with the change (40 s for both, 20 s for 1080p and 720x480, 15 s direct play).
+Items already in a saved library have no size and keep the 20 s deadline until the next scan of that library; nothing
+else reads the size on these two backends (the soak harness label aside). Not measured against a real 4K Jellyfin or
+Emby start, and the 4 s fail-fast on a server refusal (the other half of the card) is untouched: it needs a uri in
+AVPlayer's error log, which the simulator's -16847 events do not carry.
+
+**Audio tracks titled "commentary" are passed over (I-075, #153, Trello 6aeb8906).** A director's commentary that the file
+marks default, or that shares the viewer's language, could be the track a channel started on. Three pickers now skip a
+track whose title contains "commentary" (any case: "Director's Commentary", "Audio Commentary with ...") whenever another
+audio track exists, and keep it when it is all there is. Jellyfin and Emby (`JellyfinPlaybackResolver.preferredAudioIndex`,
+which now reads `Title` and `DisplayTitle`): the commentary is dropped before the AUDIO LANGUAGE, device language and
+channel-count rules run, which are otherwise unchanged; a file with one real track and a commentary is now pinned to
+the real one. Plex (the selected audio stream the app keeps for its remux and preserve-original URLs): a selected
+commentary gives way to the first other audio track. The player's own track list (`applyAudioTrackSelection`, direct play
+and multi-audio HLS): options are matched on their display name. 11 new unit tests in `AudioTrackSelectionTests`.
+Not proven: no file with a real commentary track was played; whether AVFoundation's display name carries the track name
+for every container is unmeasured, so the player-list rule is a safety net and the server-side picks are the main path.
+Not covered: the hand-built HLS fallback stream on Jellyfin and Emby (no PlaybackInfo, so no track list to read) still
+takes the server's default track.
+
+**Plex sign-in code is waited for as long as plex.tv keeps it (N-007, Trello 6ad92eca).** The app polled 150 times at 2 s
+and gave up at five minutes; plex.tv keeps a code for 15 minutes, so someone slow at plex.tv/link could approve a code
+the TV had already dropped. Measured against plex.tv on 2026-11-09: a new code comes back with `expiresIn: 900` and
+`expiresAt` 15 minutes after `createdAt`; asking for a code that is gone or expired answers 404 with error 1020, "Code
+not found or expired". The app now reads `expiresIn` off the reply and waits that long by the clock (a fixed 300 s if the
+reply has none, never more than 1,800 s), and stops at once if plex.tv answers 404. The wording on the picker is
+unchanged. Tests in `PINRequestRetryTests` decode the recorded reply and bound the lifetime; the poll loop itself has no
+unit test (it needs plex.tv), so the 15 minute wait and the 404 stop were not run end to end. The web tuner and the Roku
+app still stop at 150 polls (`web-tuner.html`, `plex-tuner.html`, `roku/source/plex/PlexApi.brs`).
+
+**A killed first setup keeps the sections it finished (I-076, #146, Trello 6aeb9f3f).** A large library (one section can
+be 105,000 movies) that stalls or crashes during first setup used to start over from section 1. Now each section's items
+are written to `library_scan_progress/` as soon as that section has been read in full (Plex, Jellyfin and Emby), and the
+next foreground load takes finished sections from there and asks the server only for the rest. The library snapshot is
+not involved: its format (3) is unchanged, nothing writes it from a partial scan, and a kept section is never read back as
+a library. A section is kept only if its fetch returned without an error and without a cancel (a cancelled fetch hands
+back the pages it had; that is not the section); a section lost for good, or never reached, has no entry. Each section is
+a directory of 10k-item files plus a `done.json` written last, atomically, so a write killed at any point leaves a
+directory with no marker that is ignored and swept. A kept section is reused only if it was written by this build and this
+scan-request version, is under an hour old (six hours when Plex's `updatedAt` and `contentChangedAt` for the section are
+the same as when it was saved; a changed counter drops it), and every file decodes to the saved count; the NO RUNTIME
+count is kept with it. Foreground loads only: a background refresh has a guide on screen and always reads everything. The
+whole directory is removed by Disconnect, START OVER and RESCAN (they call `LibrarySnapshotStore.clear()`), and after a
+complete scan once its snapshot has committed (a snapshot save that fails or is killed leaves the sections; a scan that
+lost a section leaves them too, for the next launch). A write still running when Disconnect lands cannot commit. Tests:
+`LibraryScanProgressTests` (11: store, kill mid-write, damage, age and counters, build and version, clearing, snapshot
+untouched) and `LibraryScanResumeTests` (4: Plex, Jellyfin and Emby against a loopback server, the scan stopped inside
+section 3, a second run asks for section 3 only and returns exactly the library a scan from nothing returns, same
+order and same NO RUNTIME count; a lost section not kept; through `AppState.loadLibrary`, resume, then clear; a
+background refresh reads every section). With resume switched off, three of those fail. Measured on the Mac simulator for
+one 105,000-item section: 81 MB on disk, 0.8 s to write (off the main thread), 0.9 s to read back; not measured on an
+Apple TV, whose slower CPU and disk will make both longer. Upgrading: a user with a snapshot sees nothing; the directory
+appears only during a first-time scan, and files from another build are ignored and deleted, so an update never merges
+old and new reads. The protocol `MediaBackend` gained `loadLibrary(excludedSectionKeys:checkpoint:progress:)` with a
+default that ignores the checkpoint, so test doubles are unchanged. Not done: letting a background refresh or an
+interrupted RESCAN use kept sections, and Jellyfin and Emby have no change counter so they rely on the hour limit.
+
+**Swift music title cleanup now matches the shared golden (N-034, follow-up).** The web fix landed on main with
+`scripts/music-title-golden.json` (37 clean cases, 8 parse cases) as the contract for all three apps. The Swift fix above was
+written before it and used a slightly different word list (it also took "lyric" and "clip" out of a bracket and did not take
+"uhd"). `MusicTitleParser.clean` now has the golden's nine steps exactly, and `MusicTitleGoldenTests` reads the same file: all
+37 clean and 8 parse cases pass, with the 18 `MusicTitleSuffixTests` cases. The Roku golden-file test is still the Roku
+agent's.
+
+**Playback Information says Remux or Transcode when Plex said so (I-059).** The PLAYBACK row showed "Server stream" for
+anything the server rewrote or re-encoded. The Plex `decision` call the app already makes before `start.m3u8` lists each
+stream as copy or transcode; `PlexAPIService.serverStream(fromDecision:)` reads those (the same `Stream` elements
+`decisionPreservesOriginalVideo` reads) and the row now says Remux (video and audio copied), Transcode (audio), Transcode
+(video) or Transcode (video and audio). It is shown only when the answer is known: the decision was accepted (code 1xxx),
+exactly one video and one audio stream say copy or transcode (a track the server did not choose is ignored, any other word
+or count is not an answer), and the player is ready; otherwise the row stays "Server stream". A retry of the same stream
+keeps its answer, a different stream (capped, or the hand-built fallback that makes no decision call the app reads) does
+not inherit it. No new request and no new parser. Jellyfin and Emby are unchanged: their PlaybackInfo parse keeps the
+direct-stream and transcode flags and the URL but not the per-stream copy or convert verdict, so nothing there is known.
+Tests: 7 new in `PlaybackInformationTests` (88 passed with the neighbouring playback suites). Not verified: the replies in
+the tests are built from the elements the app's existing parser reads, not captured from a live server for this change, and
+nothing was played; whether Plex lists an unchosen audio track with a decision other than copy or transcode is assumed
+safe because any such track is simply not counted.
+
+**Review fixes for the kept sections (I-076, second commit).** The reviewer found two ways a kept section could be wrong.
+(1) A TV section missing a show could be kept as whole: the Plex per-show crawl and the Jellyfin and Emby episode fetch
+catch a failing show and return nothing, so the section came back short and was reused for up to an hour (six on Plex).
+Each backend now counts those failures, and also a page list that stops before the server's own total, in
+`incompleteReads`; a section is kept only if that counter did not move while it was read. `testASectionWithAShowThatFailedIsNotKept`
+(one show's episodes 404, all three backends) and `testASectionThatEndedShortOfTheServersTotalIsNotKept` (40 of 100) each
+have a healthy control that is kept. (2) The write epoch was read when a section finished, so a section that finished
+after Disconnect but before the cancelled scan noticed (up to 2 s) survived, and on Plex the key has no account, so
+another account on the same server could reuse it. A checkpoint now takes the epoch once, when its load starts, and a
+`clearAll()` after that drops every later write from it, without recreating the directory
+(`testAClearAfterTheLoadStartedDropsEveryLaterWriteFromThatCheckpoint`). With both fixes taken out, those three tests fail.
+Known and not changed: the files live in Library/Caches, so tvOS can purge them, which is a discard and not corruption; there
+is no cap on directories nobody reads again (the next completed scan or any clear removes them); memory rises by up to one
+section while it is queued to write, and that has not been measured on an Apple TV. Run the big-library harness once on a
+device before the next release.
+
+**Music video titles no longer end in "( Music )" or "( )" (N-034, Trello 6aeaadc1).** Reproduced in Swift first
+(`MusicTitleSuffixTests` failed on the 1.0.32-links source): `MusicTitleParser.clean` strips the words "official" and
+"video" but left the bracket, so "Song (Official Music Video)" became "Song ( Music )" and "Song (Official Video)" became
+"Song ( )". That text is what MusicBrainz and Deezer are searched with and what Jellyfin and Emby show as the title. A
+bracket made only of noise words (official, music, video, audio, lyric(s), HD, HQ, 4K, MV, visualizer, clip, remaster(ed))
+now goes whole, and brackets the word strip empties or pads are tidied, so "Song (Live Video)" reads "Song (Live)".
+A bracket that says anything else ("(Live at Wembley)", "(Remix)", "(Radio Edit)") is untouched. 18 cases in
+`MusicMetadataTests.swift`. Library items already saved keep their old title until the next scan of that library. Not
+done here: `scripts/nostalgex-music-brainz.js` `cleanTitle` and the Roku port have the same bug and the same fix
+(one regex ahead of the word strip), so the web tuner, the Docker image and the Roku app still produce "Song ( Music )".
+Separate and older: the word strip also removes "video" and "official" outside brackets, so a title such as "Video Killed
+the Radio Star" loses its first word before search; not changed.
+
+**CI keeps the test result bundle when the tvOS job fails (N-037 step 1, Trello 6aeb81ad).** The tvOS job now writes
+its result bundle to a known path (`-resultBundlePath`) and uploads it as the artifact `NostalgexTests-xcresult` when the
+job fails (`if: failure()`, `actions/upload-artifact@v7`, 14 days), so the Plex discovery timelines the two timing tests
+attach are readable from a red run. A green run uploads nothing. The flag was run locally with the same command shape and
+produced a bundle; the upload itself has not run, because that needs a CI run on GitHub. Steps 2 and 3 of the card wait
+for that: (2) remove the skip in `PlexDiscoveryDeadLocalHarnessTests` for one CI run, let it fail, download the artifact,
+read the attached timeline and fix the real cause; (3) then delete `TEST_RUNNER_NOSTALGEX_SKIP_TIMING` from `ci.yml`.
 
 ## 2026-11-09 (Roku: OPEN ON LAST CHANNEL, on by default, #230)
 
@@ -7561,6 +7935,18 @@ unchanged.
 **Half-done.** The real trigger is still unknown. Trello card (P1, Bug, Ready): https://trello.com/c/nAsb4O8f.
 
 **Next.** Watch for the console line naming the branch and the error the next time this is reported; that is the fastest path to the actual cause.
+
+## 2026-10-27 (Apple TV: the last playback failure goes with the sign-in)
+
+**Shipped.** Nothing. Branch `fix/clear-playback-failures`, held for the next Apple TV bug-fix bundle.
+
+**Why.** Found while fixing the same thing on Roku. Settings shows "Last playback failure" under RESCAN LIBRARY, read from `PlaybackDiagnostics`. Its `clear()` was never called, so a failure from the old library kept showing after a sign-out or a switch to another server, and misled support reads of a screenshot.
+
+**Changed.** `AppState.clearCredentials()`, which Disconnect calls, clears it. `setSelectedServers` clears it when the new server list shares no server with a non-empty old one: same machine identifier, or same host and port, since a pre-multi-server install keyed its server by URL. Adding or removing one of several servers keeps it, and so does the first sign-in (Disconnect already cleared).
+
+**Measured.** NostalgexTests: 884 run, 14 skipped, 0 failures. Four new in `PlaybackFailureClearingTests`; with the fix reverted, the sign-out and switch tests fail and the two keep tests pass.
+
+**Cross-product.** Web tuner and Docker: n/a, they keep no failure line. Roku: fixed separately on its own branch.
 
 ## 2026-10-27 (Roku: the loading note after the TV clears the saved library no longer gives a time)
 

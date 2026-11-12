@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Nostalgex
 
 /// The App Store link RATE opens, the DEBUG switch that picks one for a hardware test, the
@@ -22,6 +23,21 @@ final class RateLinkTests: XCTestCase {
         // land on the same page as (a), focus on the download button. The page is what ships.
         XCTAssertEqual(AppStoreLink.productPage.absoluteString, "itms-apps://apps.apple.com/app/id6762563534")
         XCTAssertEqual(AppStoreLink.RateLinkVariant.shipped, .productPage)
+    }
+
+    /// The rating banner and the Settings tile both go through `AppStoreLink.openRate`, so
+    /// one test of it covers both: it hands the system the product page and nothing else.
+    func testRateOpensTheProductPageForBannerAndSettingsAlike() {
+        XCTAssertEqual(AppStoreLink.activeVariant, .shipped, "a test run has no variant launch argument")
+        var opened: [URL] = []
+        let action = OpenURLAction { url in
+            opened.append(url)
+            return .handled
+        }
+        AppStoreLink.openRate(using: action) { _, _, _ in }
+        AppStoreLink.openRate(using: action) { _, _, _ in }
+        XCTAssertEqual(opened.map(\.absoluteString),
+                       Array(repeating: "itms-apps://apps.apple.com/app/id6762563534", count: 2))
     }
 
     func testTheLaunchArgumentPicksAVariantByLetterOrPosition() {
@@ -71,7 +87,8 @@ final class RateLinkTests: XCTestCase {
         XCTAssertEqual(RatingNudgePolicy.autoDismissSeconds(hintShown: true), 12)
         XCTAssertEqual(RatingNudgePolicy.autoDismissSeconds,
                        RatingNudgePolicy.autoDismissSeconds(hintShown: RatingNudgePolicy.showsScrollHint))
-        XCTAssertEqual(RatingNudgePolicy.scrollHint, "Then scroll down to the stars")
+        XCTAssertEqual(RatingNudgePolicy.scrollHint, "Opens the App Store page. Scroll down to the stars to rate.")
+        XCTAssertFalse(RatingNudgePolicy.scrollHint.contains("\u{2014}"), "no em dash")
     }
 
     func testTheThresholdsAreUnchanged() {

@@ -23,7 +23,7 @@ final class PlaybackInformationTests: XCTestCase {
         XCTAssertNil(value("delivered", in: info))
         XCTAssertNil(value("bitrate", in: info))
         XCTAssertEqual(info.rows().map(\.id), ["backend", "delivery", "quality", "presentation", "source", "reason"])
-        XCTAssertTrue(info.evidenceNote.contains("copy or convert"))
+        XCTAssertTrue(info.evidenceNote.contains("stays Server stream"), "the note says when the row can be more specific")
     }
 
     func testDirectPlayRequiresAReadyAttempt() {
@@ -109,6 +109,101 @@ final class PlaybackInformationTests: XCTestCase {
             XCTAssertFalse(strings.contains(forbidden))
             XCTAssertFalse(String(reflecting: info).contains(forbidden), "the model must not merely hide raw values")
         }
+    }
+
+    // MARK: - I-059: Remux or Transcode, only when the server said
+
+    /// A decision reply in the shape Plex sends for an HLS start: the container is rewritten
+    /// (Part), and each stream says whether it is copied or transcoded. The subtitle stream and
+    /// an audio track nobody chose are present and must not change the answer.
+    private func decision(video: String, audio: String, extra: String = "") -> Data {
+        Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <MediaContainer size="1" generalDecisionCode="1000" transcodeDecisionCode="1001" transcodeDecisionText="Direct play not allowed">
+          <Video type="movie" title="Heat">
+            <Media container="mkv">
+              <Part container="mpegts" decision="transcode">
+                <Stream streamType="1" codec="h264" decision="\(video)" location="direct"/>
+                <Stream streamType="2" codec="ac3" decision="\(audio)" channels="6" selected="1"/>
+                <Stream streamType="3" codec="srt" decision="ignore"/>
+                \(extra)
+              </Part>
+            </Media>
+          </Video>
+        </MediaContainer>
+        """.utf8)
+    }
+
+    func testTheDecisionNamesRemuxAndTheThreeTranscodes() {
+        let cases: [(String, String, PlaybackInformation.ServerStream)] = [
+            ("copy", "copy", .remux), ("copy", "transcode", .transcodeAudio),
+            ("transcode", "copy", .transcodeVideo), ("transcode", "transcode", .transcodeVideoAndAudio),
+        ]
+        for (v, a, want) in cases {
+            XCTAssertEqual(PlexAPIService.serverStream(fromDecision: decision(video: v, audio: a)), want, "\(v)/\(a)")
+        }
+        XCTAssertEqual(PlaybackInformation.ServerStream.allLabels,
+                       ["Remux", "Transcode (audio)", "Transcode (video)", "Transcode (video and audio)"])
+    }
+
+    func testAnAudioTrackTheServerDidNotChooseDoesNotChangeTheAnswer() {
+        let other = #"<Stream streamType="2" codec="aac" channels="2"/><Stream streamType="2" codec="dts" decision="ignore"/>"#
+        XCTAssertEqual(PlexAPIService.serverStream(fromDecision: decision(video: "copy", audio: "copy", extra: other)), .remux)
+    }
+
+    func testAnythingUncertainIsNoAnswer() {
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: decision(video: "copy", audio: "directplay")), "an unknown word")
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: decision(video: "burn", audio: "copy")))
+        let second = #"<Stream streamType="2" codec="eac3" decision="transcode"/>"#
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: decision(video: "copy", audio: "copy", extra: second)), "two audio tracks both decided")
+        let secondVideo = #"<Stream streamType="1" codec="hevc" decision="copy"/>"#
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: decision(video: "copy", audio: "copy", extra: secondVideo)))
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: Data()))
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: Data("<html>502 Bad Gateway</html>".utf8)))
+        XCTAssertNil(PlexAPIService.serverStream(fromDecision: Data("<MediaContainer><Stream streamType=\"1\" decision=\"copy\"".utf8)), "cut off")
+    }
+
+    func testTheRowSaysRemuxOrTranscodeOnlyOnceTheServerSaidAndTheStreamIsReady() {
+        var info = information()
+        let attempt = info.beginAttempt(generation: 1, delivery: .serverStream, serverStream: .remux)
+        XCTAssertEqual(value("delivery", in: info), "Loading", "not before the player is ready")
+        XCTAssertTrue(info.markReady(generation: 1, attemptID: attempt))
+        XCTAssertEqual(value("delivery", in: info), "Remux")
+
+        var transcode = information()
+        let t = transcode.beginAttempt(generation: 1, delivery: .serverStream, serverStream: .transcodeVideo)
+        transcode.markReady(generation: 1, attemptID: t)
+        XCTAssertEqual(value("delivery", in: transcode), "Transcode (video)")
+    }
+
+    func testWithoutAnAnswerTheRowStaysAsItWas() {
+        var info = information()
+        let attempt = info.beginAttempt(generation: 1, delivery: .serverStream)
+        info.markReady(generation: 1, attemptID: attempt)
+        XCTAssertEqual(value("delivery", in: info), "Server stream")
+        // Direct play never carries one, even if one is passed.
+        var direct = information()
+        let d = direct.beginAttempt(generation: 1, delivery: .directPlay, serverStream: .remux)
+        direct.markReady(generation: 1, attemptID: d)
+        XCTAssertEqual(value("delivery", in: direct), "Direct Play")
+        XCTAssertNil(direct.serverStream)
+    }
+
+    func testANewAttemptDoesNotInheritTheLastStreamsAnswer() {
+        var info = information()
+        let first = info.beginAttempt(generation: 1, delivery: .serverStream, serverStream: .remux)
+        info.markReady(generation: 1, attemptID: first)
+        let capped = info.beginAttempt(generation: 1, delivery: .serverStream, reason: .startupNoPicture)
+        info.markReady(generation: 1, attemptID: capped)
+        XCTAssertEqual(value("delivery", in: info), "Server stream", "a different stream, and the server has not said what it does to it")
+    }
+
+    func testTheFallbackAndAcceptedAnswersFromTheDecisionCallCarryTheKind() {
+        let accepted = PlexAPIService.TranscodeDecision(code: "1001", text: "ok", serverStream: .transcodeAudio)
+        let resolution = PlaybackResolution(url: URL(string: "http://example.test/start.m3u8")!, playSessionId: "s",
+                                            isDirectPlay: false, serverStream: accepted.serverStream)
+        XCTAssertEqual(resolution.serverStream, .transcodeAudio)
+        XCTAssertNil(PlexAPIService.TranscodeDecision.unknown.serverStream)
     }
 }
 

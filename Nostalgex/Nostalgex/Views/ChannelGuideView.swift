@@ -69,9 +69,15 @@ struct ChannelGuideView: View {
         return GuideReturnFocus.highlighted(focused: focusedChannelID, holdingLive: true, liveRow: liveRow)
     }
 
-    private let channelColumnWidth: CGFloat = 220
-    private let rowHeight: CGFloat = 80
-    private let headerHeight: CGFloat = 60
+    // The grid's sizes follow from the type (tokens, 2026-11-10). A row is the shared row height (76), which holds
+    // a 29 pt line with the 3 pt outline and its 2 pt inset. The header holds a 25 pt line (32.6 tall; a 29 pt LARGE line is 37.8) with 12 pt
+    // above and below. The channel column holds the live bolt (29), a three-digit number box (54), the gap (8) and
+    // 15 characters of name at 29 pt (261, the length 90% of the channels fit), plus its margins.
+    private let channelColumnWidth: CGFloat = 340
+    // The guide's own row (Chad 2026-11-10: the grid read too big). Not the shared NXLayout.rowHeight (76), which
+    // the Now Playing panel keeps. 64 holds a 29 pt LARGE line inside the 3 pt outline and 2 pt inset.
+    private let rowHeight: CGFloat = GuideTextMetrics.rowHeight
+    private let headerHeight: CGFloat = 58
     // 24-hour horizon, 30-min slots, 4 visible at a time → max scroll offset = 44.
     private let maxSlotOffset: Int = 44
 
@@ -99,7 +105,7 @@ struct ChannelGuideView: View {
 
                     // Divider under header
                     Rectangle()
-                        .fill(Color.white.opacity(0.25))
+                        .fill(Color.nxRestingOutline)
                         .frame(height: 1)
 
                     // Channel rows
@@ -108,8 +114,8 @@ struct ChannelGuideView: View {
                             VStack(spacing: 0) {
                                 if appState.channels.isEmpty {
                                     Text("NO CHANNELS AVAILABLE")
-                                        .font(.custom("DMMono-Medium", size: 20))
-                                        .foregroundStyle(.white.opacity(0.3))
+                                        .font(NXFont.captionMedium)
+                                        .foregroundStyle(Color.nxText2)
                                         .frame(maxWidth: .infinity, minHeight: 200)
                                         .focusable()
                                 }
@@ -127,7 +133,7 @@ struct ChannelGuideView: View {
                                     .buttonStyle(NoHighlightButtonStyle())
                                     .focused($focusedChannelID, equals: Self.seasonalRowID)
                                     .accessibilityIdentifier("seasonalInviteRow")
-                                    .accessibilityLabel("Turn on the \(offer.name) package")
+                                    .accessibilityLabel("Turn on the \(offer.name) bundle")
                                     .id(Self.seasonalRowID)
                                 }
                                 ForEach(Array(appState.channels.enumerated()), id: \.element.id) { index, channel in
@@ -615,7 +621,7 @@ struct ChannelGuideView: View {
             .disabled(!stripeMode)
             .accessibilityIdentifier("guideStripe")
             .accessibilityLabel(stripeAccessibilityLabel)
-            .accessibilityHint("Up and Down change package. Select opens the package list. Right returns to the channels.")
+            .accessibilityHint("Up and Down change bundle. Select opens the bundle list. Right returns to the channels.")
             .accessibilityHidden(!stripeMode)
             stripeSentinel(Self.stripeDownSentinelID)
         }
@@ -633,9 +639,9 @@ struct ChannelGuideView: View {
     private var stripeAccessibilityLabel: String {
         let groups = stripeGroups
         guard let index = stripeGroupIndex, groups.indices.contains(index), let name = groups[index].name else {
-            return "Package stripe"
+            return "Bundle stripe"
         }
-        return "Package \(name)"
+        return "Bundle \(name)"
     }
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
@@ -708,14 +714,14 @@ struct ChannelGuideView: View {
         return HStack(spacing: 0) {
             Text("CHANNEL")
                 .font(.custom("DMMono-Medium", size: text.channelHeading))
-                .foregroundStyle(Color.white.opacity(0.7))
+                .foregroundStyle(Color.nxText2)
                 .frame(width: channelColumnWidth, alignment: .leading)
                 .padding(.leading, 12)
 
             ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
                 Text(label)
                     .font(.custom("DMMono-Medium", size: text.timeLabel))
-                    .foregroundStyle(Color.white.opacity(0.95))
+                    .foregroundStyle(Color.nxText)
                     .frame(width: programsWidth / 4, alignment: .leading)
                     .padding(.leading, 14)
                     .overlay(alignment: .leading) {
@@ -726,7 +732,7 @@ struct ChannelGuideView: View {
             }
         }
         .frame(height: headerHeight)
-        .background(Color(red: 0.04, green: 0.04, blue: 0.08))
+        .background(Color.nxPanel)
     }
 }
 
@@ -748,6 +754,11 @@ private struct EPGRow: View {
     // 2-hour visible window
     private let visibleDuration: TimeInterval = 7200
 
+    /// The fills behind a focused row's text, from the channel's own color.
+    private var focusedFills: GuideRowContrast.Fills {
+        GuideRowContrast.fills(forHex: channel.color.snapshotHexString)
+    }
+
     /// GUIDE TEXT SIZE. NORMAL is the sizes this row always drew.
     private var text: GuideTextMetrics { appState.guideTextSize.metrics }
     /// Background for alternating rows
@@ -756,7 +767,9 @@ private struct EPGRow: View {
             // The focused row must read from the couch at a glance. A 15% tint of the
             // channel colour disappeared on a bright TV; a third-strength fill plus the
             // outline and glow below does not.
-            return channel.color.opacity(0.32)
+            // Darkened only as far as white text needs (GuideRowContrast), so a bright channel's
+            // titles read at 4.5:1 or better.
+            return focusedFills.row.color
         }
         return isEvenRow
             ? Color.white.opacity(0.03)
@@ -803,7 +816,7 @@ private struct EPGRow: View {
         // slot at the left (31.5 pt, 29.5 on the live and focused row); the stripe fills it, so nothing moves.
         .overlay(alignment: .topLeading) {
             if let stripe {
-                GuideStripeCell(cell: stripe, height: rowHeight + 1, background: Color(red: 0.05, green: 0.05, blue: 0.12))
+                GuideStripeCell(cell: stripe, height: rowHeight + 1, background: Color.nxPanel)
             }
         }
     }
@@ -824,13 +837,13 @@ private struct EPGRow: View {
 
             Text(String(format: "%d", channel.number))
                 .font(.custom("DMMono-Medium", size: text.number))
-                .foregroundStyle(isFocused ? Color.white : channel.color)
+                .foregroundStyle(Color.nxText)
                 .frame(width: text.numberWidth, alignment: .trailing)
                 .padding(.trailing, 8)
 
             Text(channel.name.uppercased())
                 .font(.custom("DMMono-Medium", size: text.name))
-                .foregroundStyle(isFocused ? Color.white : channel.color.opacity(0.95))
+                .foregroundStyle(Color.nxText)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -889,12 +902,14 @@ private struct EPGRow: View {
 
                             Text(entryTitle(entry))
                                 .font(.custom("DMMono-Medium", size: text.title))
+                                // White is for live only (Chad 2026-11-10): every other title is the dim colour, past
+                                // and upcoming alike (4.5:1 or better on the guide's washes, see NXColor.textDim). The
+                                // focused row stays white, because its fill is calibrated for white at 4.5:1
+                                // (GuideRowContrast).
                                 .foregroundStyle(
                                     entry.isNowPlaying || isFocused
-                                        ? Color.white
-                                        : isPast
-                                            ? Color.white.opacity(0.5)
-                                            : Color.white.opacity(0.85)
+                                        ? Color.nxText
+                                        : Color.nxTextDim
                                 )
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -906,7 +921,7 @@ private struct EPGRow: View {
                         .clipped()
                         .background(
                             entry.isNowPlaying
-                                ? channel.color.opacity(isFocused ? 0.55 : 0.25)
+                                ? (isFocused ? focusedFills.nowPlaying.color : channel.color.opacity(0.25))
                                 : isPast
                                     ? Color.white.opacity(0.02)
                                     : Color.clear
@@ -933,7 +948,7 @@ private struct EPGRow: View {
 
             Text("BROADCASTS RESUME AT 9 PM")
                 .font(.custom("DMMono-Medium", size: text.placeholder))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(Color.nxText2)
                 .lineLimit(1)
                 .padding(.leading, 14)
 
@@ -968,61 +983,63 @@ private struct BundleJumpSidebar: View {
     /// -1 is the pinned Settings row. Package rows use their list index.
     @FocusState private var focusedIndex: Int?
     private let settingsFocus = -1
-    /// Matches the guide's own row height and focus treatment so the sidebar reads as
-    /// part of the same grid rather than a separate widget.
+    /// Same footing as the guide grid (Chad 2026-11-10): row text, heading and row height come from
+    /// `GuideTextMetrics`, colours and the selected state from the design tokens (`nxRowSurface`: 3 pt cyan
+    /// outline, glow, 3% lift). The left bar keeps each package's own colour.
     private static let width: CGFloat = 380
-    private static let rowHeight: CGFloat = 72
+    private static let rowHeight = GuideTextMetrics.packageRowHeight
+    private static let rowText = GuideTextMetrics.packageRowText
+    private static let rowRadius = NXLayout.rowRadius
+
+    private var rowFont: Font { .custom("DMMono-Medium", size: Self.rowText) }
+
+    /// One row's label: the colour bar, an optional icon, the name. The bar is clipped to the row's corners
+    /// before the shared surface draws its fill, outline and glow around it.
+    private func rowLabel<Content: View>(isFocused: Bool, accent: Color, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 14) {
+            Rectangle()
+                .fill(isFocused ? accent : accent.opacity(0.4))
+                .frame(width: isFocused ? 8 : 4)
+            content()
+            Spacer()
+        }
+        .padding(.trailing, 16)
+        .frame(height: Self.rowHeight)
+        .clipShape(RoundedRectangle(cornerRadius: Self.rowRadius, style: .continuous))
+        .nxRowSurface(isSelected: isFocused)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                Text("PACKAGES")
-                    .font(.custom("DMMono-Medium", size: 22))
-                    .foregroundStyle(.white.opacity(0.6))
+                Text("BUNDLES")
+                    .font(.custom("DMMono-Medium", size: GuideTextMetrics.packageHeading))
+                    .foregroundStyle(Color.nxText2)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 18)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 2) {
+                        VStack(spacing: 6) {
                             // Inside the list, not above it: tvOS won't move focus out
                             // of a ScrollView, so Settings has to be a row. It sits
                             // first; the sidebar still opens on the first package,
                             // and Up from there lands here.
                             let settingsFocused = focusedIndex == settingsFocus
-                            let settingsAccent = Color(hex: "#FFE500")
                             Button(action: onOpenSettings) {
-                                HStack(spacing: 14) {
-                                    Rectangle()
-                                        .fill(settingsFocused ? settingsAccent : settingsAccent.opacity(0.4))
-                                        .frame(width: settingsFocused ? 8 : 4)
-
+                                rowLabel(isFocused: settingsFocused, accent: Color.nxCyan) {
                                     Image(systemName: "gearshape.fill")
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(settingsFocused ? .white : .white.opacity(0.75))
+                                        .font(.system(size: Self.rowText, weight: .semibold))
+                                        .foregroundStyle(settingsFocused ? Color.nxText : Color.nxText2)
                                         .frame(width: 26)
 
                                     Text("SETTINGS")
-                                        .font(.custom("DMMono-Medium", size: 24))
-                                        .foregroundStyle(settingsFocused ? .white : .white.opacity(0.75))
+                                        .font(rowFont)
+                                        .foregroundStyle(settingsFocused ? Color.nxText : Color.nxText2)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.8)
-
-                                    Spacer()
                                 }
-                                .padding(.trailing, 16)
-                                .frame(height: Self.rowHeight)
-                                .background(settingsFocused ? settingsAccent.opacity(0.32) : .clear)
-                                .overlay {
-                                    if settingsFocused {
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .strokeBorder(settingsAccent, lineWidth: 3)
-                                            .padding(2)
-                                            .shadow(color: settingsAccent.opacity(0.7), radius: 14)
-                                    }
-                                }
-                                .zIndex(settingsFocused ? 1 : 0)
                             }
                             .buttonStyle(NoHighlightButtonStyle())
                             .focused($focusedIndex, equals: settingsFocus)
@@ -1032,8 +1049,8 @@ private struct BundleJumpSidebar: View {
                             Rectangle()
                                 .fill(Color.white.opacity(0.1))
                                 .frame(height: 1)
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 6)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 3)
 
                             ForEach(Array(targets.enumerated()), id: \.element.bundleID) { index, target in
                                 let isFocused = focusedIndex == index
@@ -1041,37 +1058,22 @@ private struct BundleJumpSidebar: View {
                                 Button {
                                     onSelect(target.firstChannelID)
                                 } label: {
-                                    HStack(spacing: 14) {
-                                        Rectangle()
-                                            .fill(isFocused ? target.channelColor : target.channelColor.opacity(0.4))
-                                            .frame(width: isFocused ? 8 : 4)
-
+                                    rowLabel(isFocused: isFocused, accent: target.channelColor) {
                                         Text(target.bundleName)
-                                            .font(.custom("DMMono-Medium", size: 24))
-                                            .foregroundStyle(isFocused ? .white : .white.opacity(0.75))
+                                            .font(rowFont)
+                                            .foregroundStyle(isFocused ? Color.nxText : Color.nxText2)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.8)
-
-                                        Spacer()
                                     }
-                                    .padding(.trailing, 16)
-                                    .frame(height: Self.rowHeight)
-                                    .background(isFocused ? target.channelColor.opacity(0.32) : .clear)
-                                    .overlay {
-                                        if isFocused {
-                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .strokeBorder(target.channelColor, lineWidth: 3)
-                                                .padding(2)
-                                                .shadow(color: target.channelColor.opacity(0.7), radius: 14)
-                                        }
-                                    }
-                                    .zIndex(isFocused ? 1 : 0)
                                 }
                                 .buttonStyle(NoHighlightButtonStyle())
                                 .focused($focusedIndex, equals: index)
                                 .id(index)
                             }
                         }
+                        // Room for the focused row's lift and outline inside the scroll view's clip.
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                     }
                     .onChange(of: focusedIndex) { _, newIndex in
                         if let idx = newIndex, idx >= 0 {
@@ -1083,7 +1085,7 @@ private struct BundleJumpSidebar: View {
                 }
             }
             .frame(width: Self.width)
-            .background(Color(red: 0.03, green: 0.03, blue: 0.08).opacity(0.95))
+            .background(Color.nxPanel)
 
             // Divider
             Rectangle()
@@ -1152,18 +1154,17 @@ struct SeasonalInviteRow: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(headline)
-                .font(.custom("DMMono-Medium", size: 22))
-                .foregroundStyle(isFocused ? .black : accent)
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(isFocused ? Color.black : Color.nxText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
 
-            // One call to action, not two. "ADD THE SCREAM PACKAGE" next to "PRESS SELECT"
+            // One call to action, not two. "ADD THE SCREAM BUNDLE" next to "PRESS SELECT"
             // said the same thing twice.
-            Text("PRESS TO ADD THE \(bundle.name) PACKAGE")
-                .font(.custom("DMMono-Medium", size: 14))
-                .foregroundStyle(isFocused ? .black.opacity(0.65) : .black)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
+            Text("PRESS TO ADD THE \(bundle.name) BUNDLE")
+                .font(NXFont.captionMedium)
+                .foregroundStyle(Color.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background(
                     Capsule().fill(isFocused ? Color.black.opacity(0.18) : accent)
                 )

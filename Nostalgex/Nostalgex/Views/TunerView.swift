@@ -239,10 +239,12 @@ private struct NavBar: View {
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             // Logo
+            // The wordmark is about 7.5 times as wide as it is tall (the old bolt logo was 2 to 1), so the
+            // same 80 pt height would be 600 pt wide. 36 pt tall is 272 wide.
             Image("NostalgexLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 80)
+                .frame(height: 36)
                 .padding(.leading, 40)
 
             Spacer()
@@ -270,13 +272,16 @@ private struct NavItem: View {
         Button {
             action?()
         } label: {
+            // A real button: the pill every selectable thing is (resting fill and outline), with the
+            // shared selected state when it has focus (3 pt cyan outline, glow, 3% lift).
             Text(label)
-                .font(.custom("DMMono-Medium", size: 24))
-                .foregroundStyle(
-                    isFocused ? Color(hex: "#FFE500") : .white.opacity(0.5)
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .font(NXFont.bodyMedium)
+                .foregroundStyle(Color.nxText)
+                // 29 pt, the press floor, with the padding cut to a header control's: 22 across, 6 up and down.
+                .padding(.horizontal, 22)
+                .padding(.vertical, 6)
+                .nxRowSurface(isSelected: isFocused, cornerRadius: 40)
+                .contentShape(Capsule())
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($isFocused)

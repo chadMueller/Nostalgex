@@ -312,11 +312,11 @@ final class GuideStripesTests: XCTestCase {
     }
 
     /// The stripe takes the slot at the left of the rows and nothing else. The slot is what is left of the
-    /// header's width (the 232 pt channel heading plus four 439 pt time columns, 1988 pt on a 1920 pt screen)
+    /// header's width (the channel heading plus four time columns and their lead-ins, 1988 pt on a 1920 pt screen whatever the column's width)
     /// once the row's content is centred in it. The live and the focused row have the wider accent bar, so
     /// they leave the least: 29.5 pt.
     func testTheStripeFitsTheSlotOnEveryRow() {
-        let screen: CGFloat = 1920, channelColumn: CGFloat = 220
+        let screen: CGFloat = 1920, channelColumn: CGFloat = 340
         let programs = screen - channelColumn
         let headerWidth = channelColumn + 12 + 4 * (programs / 4 + 14)
         for accent: CGFloat in [4, 8] {

@@ -18,7 +18,7 @@ enum ChannelsPage: String, Hashable {
 
     var title: String {
         switch self {
-        case .packages: return "CHANNEL PACKAGES"
+        case .packages: return "CHANNEL BUNDLES"
         case .franchises: return "FRANCHISES"
         case .collections: return "MY COLLECTIONS"
         case .missing: return "MISSING CHANNELS"
@@ -141,8 +141,8 @@ private struct ChannelsPackagesPage: View {
     var body: some View {
         let missingCount = ChannelsMissingPage.groups(appState: appState).reduce(0) { $0 + $1.channels.count }
 
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionHeader(title: ChannelsPage.packages.title, subtitle: "Each package adds a set of channels")
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsSectionHeader(title: ChannelsPage.packages.title, subtitle: "Each bundle adds a set of channels")
 
             VStack(spacing: 4) {
                 ForEach(Self.rows(appState: appState)) { bundle in
@@ -183,7 +183,7 @@ private struct ChannelsPackagesPage: View {
         // an invitation, never a warning.
         let subtitle: String? = {
             if building { return "Finding \(total) channel\(total == 1 ? "" : "s") in your library" }
-            if bundle.enabled && available == 0 { return "Not enough content to build this package" }
+            if bundle.enabled && available == 0 { return "Not enough content to build this bundle" }
             if bundle.activeMonths != nil, !inSeason { return bundle.spotlightLabel(now: Date()) }
             return bundle.description
         }()
@@ -250,14 +250,14 @@ private struct ChannelsMissingPage: View {
     var body: some View {
         let groups = Self.groups(appState: appState)
 
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsSectionHeader(
                 title: ChannelsPage.missing.title,
                 subtitle: "A channel goes on air once your library has enough titles that fit it"
             )
 
             if groups.isEmpty {
-                Text("Every channel in your packages is on air.")
+                Text("Every channel in your bundles is on air.")
                     .font(.custom("DMMono-Regular", size: 20))
                     .foregroundStyle(.white.opacity(0.7))
                     .focusable(true)
@@ -377,7 +377,7 @@ private struct ChannelsFranchisesPage: View {
             .sorted { $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending }
 
         // No page heading: the FRANCHISES switch heads the page.
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(spacing: 4) {
                 masterRow
 
@@ -541,7 +541,7 @@ private struct ChannelsCollectionsPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsSectionHeader(
                 title: ChannelsPage.collections.title,
                 subtitle: "Turn your server's collections into channels"
@@ -652,8 +652,8 @@ private struct ChannelsCollectionsPage: View {
                         .foregroundStyle(Color.white.opacity(canTap ? 0.42 : 0.22))
                 }
             }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 22)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

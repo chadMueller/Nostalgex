@@ -17,7 +17,7 @@ struct SettingsServersView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SettingsSubheader(text: "SERVERS")
 
             // One row per reachable server. Toggle to include/exclude its library;
@@ -100,7 +100,7 @@ struct SettingsServersView: View {
             }
             .settingsRow("rescan", focus: focus)
             .accessibilityLabel("Rescan library")
-            .padding(.top, 8)
+            .padding(.top, 6)
 
             // Off by default and per-TV. Turning it on takes the lineup and settings iCloud
             // already holds (another TV's), and pushes this TV's only for what iCloud lacks.

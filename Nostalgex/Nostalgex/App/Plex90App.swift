@@ -847,7 +847,7 @@ struct EmptyChannelsView: View {
                         .font(.custom("DMMono-Medium", size: 28))
                         .foregroundStyle(.white.opacity(0.6))
 
-                    Text("Your library didn't have enough content to fill any channels.\nOpen Settings to see which packages your library supports.")
+                    Text("Your library didn't have enough content to fill any channels.\nOpen Settings to see which bundles your library supports.")
                         .font(.custom("DMMono-Regular", size: 18))
                         .foregroundStyle(.white.opacity(0.3))
                         .multilineTextAlignment(.center)

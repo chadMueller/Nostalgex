@@ -170,7 +170,43 @@ extension AppState {
     /// Re-filter all channels using enriched TMDB data. Called after enrichment completes.
     /// Rebuilds from the full config so channels that were initially dropped (pool < minItems)
     /// can come back with enriched data.
+    ///
+    /// Three pieces, so the slow one can run off the main actor (`refilterChannelsWithEnrichmentOffMain`)
+    /// with the same inputs and the same code: prepare (main), `buildEnrichedStaticPools` (pure), apply (main).
     func refilterChannelsWithEnrichment() {
+        let input = prepareEnrichedRefilter()
+        let validStatic = Self.buildEnrichedStaticPools(input)
+        applyEnrichedStaticPools(validStatic, configCount: input.configCount)
+    }
+
+    /// What the refilter reads, taken on the main actor, plus the stamp that says whether it is still current.
+    struct EnrichedRefilterInput: @unchecked Sendable {
+        let cached: [FilterCache]
+        /// The config channels whose pools are built, in config order.
+        let templates: [Channel]
+        let memberships: ChannelMemberships
+        let exclusiveRules: [ExclusiveRule]
+        let configCount: Int
+        let stamp: RefilterStamp
+    }
+
+    /// What a result computed off the main actor depends on. If any of it moved while the pools were being
+    /// built, the result is discarded and the pass runs again.
+    struct RefilterStamp: Equatable {
+        let itemCount: Int
+        let enrichmentCount: Int
+        let enabledBundleIDs: Set<String>
+        let configChannelCount: Int
+        let librarySignature: String?
+    }
+
+    func currentRefilterStamp() -> RefilterStamp {
+        RefilterStamp(itemCount: allItems.count, enrichmentCount: enrichmentService.cache.count,
+                      enabledBundleIDs: enabledBundleIDs, configChannelCount: channelConfigChannels.count,
+                      librarySignature: librarySignature)
+    }
+
+    func prepareEnrichedRefilter() -> EnrichedRefilterInput {
         print("[Plex90] ENRICHMENT: Re-filtering channels (\(enrichmentService.cache.count) TMDB, \(musicEnrichmentService.cache.count) music)")
         allItems = musicEnrichmentService.itemsWithDisplayMetadata(allItems)
 
@@ -179,18 +215,32 @@ extension AppState {
         // enrichment data. Re-using a pre-enrichment cache here would silently
         // keep returning empty-enrichment results.
         let cached = makeFilterCache(allItems)
-
         let poolIDs = staticChannelIDsForPoolBuild(buildAllConfigChannels: false)
+        return EnrichedRefilterInput(
+            cached: cached,
+            templates: channelConfigChannels.filter { poolIDs.contains($0.id) },
+            memberships: channelMemberships,
+            exclusiveRules: exclusiveRules,
+            configCount: channelConfigChannels.count,
+            stamp: currentRefilterStamp())
+    }
+
+    /// The pure, slow part: every enabled static channel's pool from its rules. Same loop, same order and same
+    /// sort as the main-actor version always had.
+    nonisolated static func buildEnrichedStaticPools(_ input: EnrichedRefilterInput) -> [Channel] {
         var validStatic: [Channel] = []
-        for var ch in channelConfigChannels where poolIDs.contains(ch.id) {
-            ch.itemPool = Self.filterItems(cached, rules: ch.rules, forChannelID: ch.id, category: ch.category,
-                                          memberships: channelMemberships, exclusiveRules: exclusiveRules)
+        for var ch in input.templates {
+            ch.itemPool = Self.filterItems(input.cached, rules: ch.rules, forChannelID: ch.id, category: ch.category,
+                                          memberships: input.memberships, exclusiveRules: input.exclusiveRules)
             if ch.itemPool.count >= ch.minItems {
                 validStatic.append(ch)
             }
         }
         validStatic.sort { $0.number < $1.number }
+        return validStatic
+    }
 
+    func applyEnrichedStaticPools(_ validStatic: [Channel], configCount: Int) {
         let dynamicChannels = allChannels.filter { $0.rules == nil }
         allChannels = (validStatic + dynamicChannels).sorted { $0.number < $1.number }
         // The stock pools were just rebuilt from their rules alone.
@@ -198,9 +248,26 @@ extension AppState {
         applyBundleFilter()
 
         let newCount = validStatic.count
-        let configCount = channelConfigChannels.count
         print("[Plex90] ENRICHMENT: \(newCount)/\(configCount) enabled-bundle channels have enough content after enrichment")
         printChannelAudit()
+    }
+
+    /// `refilterChannelsWithEnrichment` with the filter pass off the main actor: the launch after a snapshot restore
+    /// held the main actor for 9 to 14 s on a Mac (the remote and the picture stalled about 40 s on an Apple TV).
+    /// The result is applied in one step on the main actor, and only if nothing it depends on moved meanwhile;
+    /// otherwise it is thrown away and the pass runs again (three tries). Returns whether a result was applied.
+    @discardableResult
+    func refilterChannelsWithEnrichmentOffMain() async -> Bool {
+        for _ in 0..<3 {
+            let session = librarySessionGeneration
+            let input = prepareEnrichedRefilter()
+            let pools = await Task.detached(priority: .userInitiated) { Self.buildEnrichedStaticPools(input) }.value
+            guard !Task.isCancelled, session == librarySessionGeneration, !isLoading else { return false }
+            guard input.stamp == currentRefilterStamp() else { continue }
+            applyEnrichedStaticPools(pools, configCount: input.configCount)
+            return true
+        }
+        return false
     }
 
     // MARK: - Seasonal invitations

@@ -78,4 +78,38 @@ final class ServerUnreachableMessageTests: XCTestCase {
         let plist = try XCTUnwrap(NSDictionary(contentsOf: url))
         return try XCTUnwrap(plist["NSAppTransportSecurity"] as? [String: Any])
     }
+
+    // MARK: - How long a code is waited for (N-007)
+
+    /// The reply plex.tv sent for a new code on 2026-11-09 (code and client id left out):
+    /// 900 s, 15 minutes after createdAt.
+    func testTheRecordedReplyCarriesFifteenMinutes() throws {
+        let json = #"{"id":804507600,"code":"ABCD","product":"Nostalgex","trusted":false,"qr":"https://plex.tv/api/v2/pins/qr/ABCD","expiresIn":900,"createdAt":"2026-11-10T01:21:05Z","expiresAt":"2026-11-10T01:36:05Z","authToken":null,"newRegistration":null}"#
+        let grant = try PlexAPIService.decodePINGrant(Data(json.utf8))
+        XCTAssertEqual(grant, PlexAPIService.PINGrant(id: 804507600, code: "ABCD", expiresIn: 900))
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: grant.expiresIn), 900, "the app waits what plex.tv keeps, not 5 minutes")
+    }
+
+    func testAReplyWithoutExpiresInKeepsTheOldFiveMinutes() throws {
+        let grant = try PlexAPIService.decodePINGrant(Data(#"{"id":1,"code":"WXYZ"}"#.utf8))
+        XCTAssertNil(grant.expiresIn)
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: grant.expiresIn), 300)
+    }
+
+    func testOddSpellingsOfExpiresInStillSignInAndNeverFailTheDecode() throws {
+        for (json, want) in [(#"{"id":1,"code":"A","expiresIn":1800.0}"#, 1800), (#"{"id":1,"code":"A","expiresIn":"600"}"#, 600)] {
+            XCTAssertEqual(try PlexAPIService.decodePINGrant(Data(json.utf8)).expiresIn, want, json)
+        }
+        let junk = try PlexAPIService.decodePINGrant(Data(#"{"id":1,"code":"A","expiresIn":"soon"}"#.utf8))
+        XCTAssertNil(junk.expiresIn, "an unreadable value is dropped, the code itself still works")
+    }
+
+    func testLifetimeIsBoundedBothWays() {
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: nil), 300)
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: 0), 300)
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: -5), 300)
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: 120), 120, "a short code is not stretched past what plex.tv keeps")
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: 900), 900)
+        XCTAssertEqual(AppState.plexPINLifetime(expiresIn: 86_400), 1800, "a bad value cannot wait for a day")
+    }
 }

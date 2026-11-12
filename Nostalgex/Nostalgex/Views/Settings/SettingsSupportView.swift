@@ -16,14 +16,14 @@ struct SettingsSupportView: View {
     static let firstRowID = "rate"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             if showTips {
                 supportGrid
             } else {
                 // RATE alone keeps the full-width row it always had.
                 SettingsToggleRow(
                     title: "RATE NOSTALGEX",
-                    subtitle: appState.hasTappedRate ? "Thanks for rating. Rate again anytime" : "Opens the App Store on your Apple TV",
+                    subtitle: appState.hasTappedRate ? "Thanks for rating. \(RatingNudgePolicy.scrollHint)" : RatingNudgePolicy.scrollHint,
                     isOn: true,
                     isFocused: isFocused("rate"),
                     showToggle: false
@@ -62,35 +62,33 @@ struct SettingsSupportView: View {
     private func rateTapped() {
         Analytics.track(.rateTapped)
         appState.recordRatingTapped()
-        let variant = AppStoreLink.activeVariant
-        let url = variant.url
-        openURL(url) { accepted in
+        AppStoreLink.openRate(using: openURL) { variant, url, accepted in
             print("[Plex90] Settings: RATE opened variant=\(variant.rawValue) \(url.absoluteString) accepted=\(accepted)")
             Analytics.track(.rateOpened(accepted: accepted, variant: variant.rawValue))
         }
     }
 
-    /// RATE plus the three tips as one row of four equal tiles.
+    /// RATE as a full-width row, then the three tips as a row of three equal tiles.
     @ViewBuilder
     private var supportGrid: some View {
         Text("Tips help keep Nostalgex maintained.")
-            .font(.custom("DMMono-Regular", size: 20))
-            .foregroundStyle(.white.opacity(0.7))
+            .font(NXFont.captionRegular)
+            .foregroundStyle(Color.nxText2)
             .fixedSize(horizontal: false, vertical: true)
 
-        HStack(spacing: 24) {
-            SupportTile(
-                art: PixelIcons.star,
-                title: "RATE NOSTALGEX",
-                caption: appState.hasTappedRate ? "Thanks for rating" : "Leave a star rating",
-                hint: RatingNudgePolicy.showsScrollHint ? RatingNudgePolicy.scrollHint : nil,
-                isFocused: isFocused("rate")
-            ) {
-                rateTapped()
-            }
-            .settingsRow("rate", focus: focus)
-            .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
+        SupportRateRow(
+            art: PixelIcons.star,
+            title: "RATE NOSTALGEX",
+            caption: appState.hasTappedRate ? "Thanks for rating" : "Leave a star rating",
+            hint: RatingNudgePolicy.showsScrollHint ? RatingNudgePolicy.scrollHint : nil,
+            isFocused: isFocused("rate")
+        ) {
+            rateTapped()
+        }
+        .settingsRow("rate", focus: focus)
+        .accessibilityHint("Opens Nostalgex in the App Store to leave a star rating")
 
+        HStack(spacing: 20) {
             ForEach(tipJar.products, id: \.id) { product in
                 if let tip = TipProduct(rawValue: product.id) {
                     SupportTile(
@@ -111,9 +109,9 @@ struct SettingsSupportView: View {
 
         if let line = tipJar.statusLine {
             Text(line)
-                .font(.custom("DMMono-Regular", size: 20))
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.leading, 24)
+                .font(NXFont.captionRegular)
+                .foregroundStyle(Color.nxText2)
+                .padding(.leading, 20)
         }
     }
 }
