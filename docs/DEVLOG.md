@@ -29,6 +29,30 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: the info panel follows the guide through time, #275)
+
+**Why.** Right and Left step the guide's window 30 minutes at a time, but the panel at the top left kept showing what is on now:
+a programme two hours ahead said nothing about itself. The Apple TV (1.0.31, `GuideTimeCursor`, I-089) and the web tuner
+show the programme at the window's left edge.
+
+**Changed.** `renderInfo` (`GuideView.brs`) asks `NxGuidePreviewTime` (`source/guide/GuideTimeCursor.brs`) for the cursor: the window's
+current half hour plus `slotOffset` half hours, or nothing when the window is at its start or the cursor is not later than now.
+With a cursor it shows `NxGuideBlockCovering` the focused channel's blocks at that time (title, episode, description, year, rating,
+UP NEXT after it), with the programme's time range ("11:33 AM to 1:30 PM") where the progress bar and clock were; a gap shows the
+tag alone. Without one it is what is on now, as before. Right and Left redraw the panel at once, and so does a row change. Nothing
+is looked up: the schedule carries it all, so it works offline.
+
+**Tested off the TV.** `GuideTimeCursorTests`, 15 cases (suite `guide-time-cursor`): the Apple TV's `GuideTimeCursorTests` case for case
+on epoch seconds (offset 0 is live, each step 30 minutes, a cursor not later than now is live, the programme covering a time with a
+start belonging to the next one, past the last, a gap, empty), plus unordered blocks and the time-range text.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) on the real library, through the node tree: live "59:11 / 1:57:00" on "Blended";
+Right once "11:33 AM to 1:30 PM" (still Blended, which covers 1:00 PM); Right twice "1:30 PM to 3:17 PM" on "The Terminator"; Down a row
+with the window moved shows that row's programme at the left edge ("1:59 PM to 2:35 PM"); Left three times is back to the live
+progress on the new row. Not seen by eye.
+
+**Not done.** The Apple TV's UP NEXT badge wording is #266's; here UP NEXT is the line the panel already draws.
+
 ## 2026-11-12 (Roku: GUIDE TIMEOUT, a guide left alone goes full screen, #274)
 
 **Why.** A guide left on a Roku keeps the logo, header and grid lines still on screen for hours, which can burn into an OLED.

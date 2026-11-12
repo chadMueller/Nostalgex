@@ -634,8 +634,16 @@ sub renderInfo()
     if m.channels = invalid or m.channels.Count() = 0 then return
     ch = m.channels[m.focus]
     t = nowSec()
-    b = blockAt(ch, t)
-    if m.focus = m.tuned and m.playing <> invalid then b = m.playing
+    ' Moved later than now, the panel shows the programme at the window's left
+    ' edge (#275, the Apple TV's GuideTimeCursor); a gap there shows nothing
+    ' scheduled, and at the start it is what is on now.
+    cursor = NxGuidePreviewTime(m.slotOffset, (t \ 1800) * 1800, t)
+    if cursor <> invalid then
+        b = NxGuideBlockCovering(ch.blocks, cursor)
+    else
+        b = blockAt(ch, t)
+        if m.focus = m.tuned and m.playing <> invalid then b = m.playing
+    end if
     color = colorOf(ch.color, "FF")
     num = ch.number.ToStr()
     if ch.number < 10 then num = "0" + num
@@ -735,25 +743,35 @@ sub renderInfo()
     end if
     x = m.badgesWidth
     clock = m.top.FindNode("clock")
-    dur& = b.endSec - b.startSec
-    pos& = t - b.startSec
-    clock.text = hms(pos&) + " / " + hms(dur&)
-    cw = clock.boundingRect().width
-    clock.translation = [1100 - cw, 5]
     track = m.top.FindNode("progressTrack")
-    barW = 1100 - cw - 10 - x
-    if barW < 0 then barW = 0
-    track.translation = [x, 15]
-    track.width = barW
     fill = m.top.FindNode("progressFill")
-    fill.translation = [x, 15]
-    ' Past the slot while the file finishes, the bar stays full.
-    if pos& > dur& then
-        fill.width = barW
-    else if dur& > 0 then
-        fill.width = barW * pos& / dur&
+    if cursor <> invalid then
+        ' A programme ahead has no progress: its time range takes the bar's place.
+        clock.text = NxGuideTimeRange(localTimeLabel(b.startSec), localTimeLabel(b.endSec))
+        clock.translation = [x, 5]
+        track.visible = false
+        fill.visible = false
     else
-        fill.width = 0
+        track.visible = true
+        fill.visible = true
+        dur& = b.endSec - b.startSec
+        pos& = t - b.startSec
+        clock.text = hms(pos&) + " / " + hms(dur&)
+        cw = clock.boundingRect().width
+        clock.translation = [1100 - cw, 5]
+        barW = 1100 - cw - 10 - x
+        if barW < 0 then barW = 0
+        track.translation = [x, 15]
+        track.width = barW
+        fill.translation = [x, 15]
+        ' Past the slot while the file finishes, the bar stays full.
+        if pos& > dur& then
+            fill.width = barW
+        else if dur& > 0 then
+            fill.width = barW * pos& / dur&
+        else
+            fill.width = 0
+        end if
     end if
 
     y = y + 34 + 20
@@ -2647,11 +2665,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "right" and m.slotOffset < 44 then
         m.slotOffset = m.slotOffset + 1
         renderGrid()
+        renderInfo()
         return true
     end if
     if key = "left" and m.slotOffset > 0 then
         m.slotOffset = m.slotOffset - 1
         renderGrid()
+        renderInfo()
         return true
     end if
     if key = "left" then
