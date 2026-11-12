@@ -29,6 +29,35 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-11 (Roku: an airing that runs past midnight is no longer cut off at 12:00 AM, #297)
+
+**Why.** A Discord report said a movie stops at midnight every night. Run through the Roku's own schedule code in the
+off-device interpreter: the packing loop is `t < dayEnd`, so the day's last airing ends where the file does, and on a
+60-movie channel it crossed midnight on 30 of 30 days (average 66.6 min, longest 137 min), on a 400-episode channel
+29 of 30 (average 16.7 min). The next day's first airing starts at 12:00 AM, so the two overlap (the overlap #296
+saw on two channels). From midnight the guide reads the new day only, so the airing playing is not in it and the
+rebuild `onGuide` runs on the 30 s timer retuned the channel to the new day's first airing. The guide changes only
+at local midnight, in all six zones tried and on the two New York DST days.
+
+**Changed.** `NxKeepPlayingPastMidnight` (`source/guide/Advance.brs`): `onGuide` leaves the airing alone while its slot
+runs and it began before today's local midnight. When it ends, `NxAdvancePick` takes the airing now on from its
+beginning, and that one began more than 240 s ago (a minute under the overrun cap, over the 59 s a tail runs over on
+its own), so its slot would end the file that far in; it now airs from now for its own length. That is a copy, the
+schedule keeps its own, and the copy carries the slot's start in `slotStartSec`: a guide rebuilt while it airs (the
+6-hour library refresh, a package change, a rescan) finds the schedule's block and `NxSameAiring` takes it for the same
+airing, where comparing start times alone retuned the channel and rejoined the title at the clock, ahead of the viewer.
+The Apple TV and the web tuner do not retune on a schedule rebuild, so nothing changes there.
+
+**Tested off the TV.** `tests/AdvanceTests.brs`, 29 new cases (54 in all). In a copy with the function returning false
+and the shift removed, six fail (kept 15 s after, kept an hour after, New York's own midnight, the two shifted
+slots, a copy of a slot that began before midnight). With the copy not carrying `slotStartSec`, four fail (the slot's start, the rebuild finding the same airing,
+both ways). With the shift at the full cap instead of 240 s, the 241 s case fails.
+
+**Not done.** The overlap itself stays: the packing is the same in the JS engine and the Swift scheduler, and changing it is
+an engine change on all three with the schedule goldens. A stick check at midnight. `NxKeepPlayingPastMidnight` and
+`NxSameAiring` (the comparison by `slotStartSec`) are tested; the `GuideView.onGuide` path that calls them is not, as no
+test runs the component. The Up Next line reads the copy's end, which is cosmetic.
+
 ## 2026-11-12 (publish Nostalgex on Roku)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgex-on-roku`.

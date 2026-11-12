@@ -288,14 +288,16 @@ sub onGuide()
     renderGrid()
     renderInfo()
     now = blockAt(m.channels[m.tuned], nowSec())
-    same = now <> invalid and m.playing <> invalid
-    if same then same = now.ratingKey = m.playing.ratingKey and now.startSec = m.playing.startSec
+    same = NxSameAiring(now, m.playing)
     ' An airing still running past its slot finishes first.
     if not same and m.playing <> invalid then
         t = nowSec()
         if t >= m.playing.endSec and not NxAiringEnded(m.playing, t, m.video.state) then same = true
         ' So does a deep-linked item, which no channel airs.
         if m.playing.linked = true then same = true
+        ' And one that began before today's midnight and still runs: the new
+        ' day's guide doesn't hold it (#297).
+        if NxKeepPlayingPastMidnight(m.playing, t) then same = true
         ' And a programme playing when the WATERSHED gate opened or closed (the
         ' switch, 9 PM, midnight): it finishes, then the card or the next
         ' programme, as on the Apple TV and the web tuner.
