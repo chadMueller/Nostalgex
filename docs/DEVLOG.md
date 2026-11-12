@@ -3,6 +3,35 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Web tuner: LARGE guide text follows the Apple TV 1.0.32 sizes)
+
+**Why.** The Apple TV's LARGE guide text changed in 1.0.32: everything goes to body (29), where it used to be a mix of
+sizes. The web tuner's LARGE multipliers were the 1.0.31 ratios, so on a 1.0.32 tree five checks in
+`scripts/guide-text-smoke.mjs` failed. Until the Apple TV 1.0.32 sizes were on main that smoke skipped its
+Swift-against-Roku pairs (the Roku has had the 1.0.32 sizes since #296); they run again now that
+`GuideTextSize.swift` writes its sizes as `NXType` constants, and all ten pass.
+
+**Changed.**
+- `plex-tuner.html`: the LARGE multipliers are the Apple TV's LARGE over NORMAL: titles, channel numbers and names
+  29/22 (1.3182, were 1.3, 1.2 and 1.1111), times and the CHANNEL heading 29/25 (1.16, were 1.3 and 1.2222). The phone's
+  time labels still grow by 1.05, the page's one deliberate exception. NORMAL is untouched, so the guide draws
+  exactly what it did before. Row height, header height and the channel column keep their size, so a name gives up
+  characters to the ellipsis as on the Apple TV.
+- `scripts/guide-text-browser-smoke.mjs`: reads its ratios the same way the node smoke does, resolving `NXType`
+  constants from `DesignTokens.swift`. It read only numbers and got NaN from the 1.0.32 file.
+
+**Tested.** On the Apple TV 1.0.32 merge tree (main plus `appletv/1.0.32-rc2` and the 1.0.33 queue item):
+`npm run test:guide-text` passes 24 checks with the Swift-against-Roku pairs live and no skip line; `npm test` passes.
+`npm run test:guide-text:browser` (needs Playwright) passes 107 checks at phone, tablet, desktop and 960x540 at DPR 2:
+every LARGE size is the new ratio, nothing else moves, no time label spills a slot, nothing leaves the screen, and the
+choice is saved and survives a reload. I looked at the LARGE guide at 960x540 and on a phone.
+
+**Not fixed.** The same browser smoke has two failures on the phone, "header fits the screen and lines up with the
+rows", in NORMAL and in LARGE. They fail the same way on a clean `origin/main`, so they are not from this change; the
+time columns' alignment with the rows on a phone is the check that fails. Not looked into further.
+
+**Not verified.** Firefox, WebKit and a real TV browser (Chromium only).
+
 ## 2026-11-11 (Apple TV 1.0.33 queue: the Watershed placeholder reads on a pale focused row)
 
 **State.** Branch `appletv/1.0.33-focus-contrast`, cut from `appletv/1.0.32-rc2` (`4a4a1c19`). Merged into main on top of the 1.0.32 merge, not in a build and not tagged (it ships with the next Apple TV build, 1.0.33). 1.0.32 (56) is untouched.

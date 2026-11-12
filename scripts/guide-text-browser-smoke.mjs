@@ -37,10 +37,21 @@ if (shots) mkdirSync(shots, { recursive: true });
 
 // The Apple TV's ratios, read from its source, so this cannot drift from GuideTextSize.swift.
 const swift = readFileSync(join(repo, "Nostalgex/Nostalgex/Models/GuideTextSize.swift"), "utf8");
+// A Swift size is a number, or an NXType.<name> constant (Views/Design/DesignTokens.swift, from the Apple TV 1.0.32).
+const nxType = (() => {
+  try {
+    const tokens = readFileSync(join(repo, "Nostalgex/Nostalgex/Views/Design/DesignTokens.swift"), "utf8");
+    const body = /enum NXType \{([^}]*)\}/.exec(tokens);
+    return body ? Object.fromEntries([...body[1].matchAll(/static let (\w+): CGFloat = ([\d.]+)/g)].map((x) => [x[1], Number(x[2])])) : {};
+  } catch { return {}; }
+})();
 const metrics = (name) => {
   const block = new RegExp(`static let ${name} = GuideTextMetrics\\(([^)]*)\\)`).exec(swift);
   if (!block) throw new Error(`GuideTextSize.swift has no ${name} metrics`);
-  return Object.fromEntries([...block[1].matchAll(/(\w+):\s*([\d.]+)/g)].map((m) => [m[1], Number(m[2])]));
+  return Object.fromEntries([...block[1].matchAll(/(\w+):\s*(?:NXType\.(\w+)|([\d.]+))/g)].map((m) => {
+    if (m[2] !== undefined && nxType[m[2]] === undefined) throw new Error(`GuideTextSize.swift ${name}: NXType.${m[2]} is not in DesignTokens.swift`);
+    return [m[1], m[2] !== undefined ? nxType[m[2]] : Number(m[3])];
+  }));
 };
 const normal = metrics("normal");
 const large = metrics("large");
