@@ -11,7 +11,9 @@
 ' The cues of an SRT text, in time order: [{ startMs, endMs, text }]. A cue
 ' is its timing line ("00:01:02,500 --> 00:01:04,000", a full stop for the
 ' comma too, anything after the end time ignored) and the lines under it up
-' to a blank one; the counter line above is not needed. Markup is dropped
+' to a blank one; the counter line above is not needed. With no blank line
+' before the next cue, a last line of digits alone just before its timing
+' line is that cue's counter and is dropped. Markup is dropped
 ' (<i>, <font ...>, {\an8}), lines are joined with a line feed, and a cue
 ' with no text left or that ends before it starts is left out. A byte order
 ' mark and CR LF line ends are taken as they come.
@@ -22,6 +24,11 @@ function NxSrtParse(text as Dynamic) as Object
     markup = CreateObject("roRegex", "<[^>]*>|\{\\[^}]*\}", "")
     lines = text.Replace(Chr(13), "").Split(Chr(10))
     cue = invalid
+    ' Whether the line before was one of the cue's, kept: an all-digit one
+    ' just before a timing line is the next cue's counter, when the file has
+    ' no blank line between the two.
+    kept = false
+    digits = CreateObject("roRegex", "^\d+$", "")
     for each raw in lines
         line = raw
         ' The byte order mark, as three bytes or as one character.
@@ -31,14 +38,20 @@ function NxSrtParse(text as Dynamic) as Object
         end if
         t = timing.Match(line)
         if t.Count() = 9 then
+            if kept and digits.IsMatch(cue.lines.Peek()) then cue.lines.Pop()
+            kept = false
             NxSrtKeep(cues, cue)
             cue = { startMs: NxSrtMs(t[1], t[2], t[3], t[4]), endMs: NxSrtMs(t[5], t[6], t[7], t[8]), lines: [] }
         else if line.Trim() = "" then
+            kept = false
             NxSrtKeep(cues, cue)
             cue = invalid
         else if cue <> invalid then
             cleaned = markup.ReplaceAll(line, "").Trim()
-            if cleaned <> "" then cue.lines.Push(cleaned)
+            kept = cleaned <> ""
+            if kept then cue.lines.Push(cleaned)
+        else
+            kept = false
         end if
     end for
     NxSrtKeep(cues, cue)

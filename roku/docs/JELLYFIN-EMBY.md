@@ -433,16 +433,16 @@ server stream asked for `-map 0:2`, the Spanish track, and direct play
 selected track 3 (`spa`). Main without the change, same settings, took the
 Estonian `0:1` and track 2.
 
-**Forced subtitles come as a sidecar (issue #63).** A film's forced track
-in SUBTITLE LANGUAGE (the lines it always shows, such as dialogue in
-another language) is shown whatever SUBTITLES says, as on the Apple TV. The
-scan keeps a file's forced text tracks (`NxMbForcedSubs`); at tune the
-content carries the first in SUBTITLE LANGUAGE as the server's SRT
+**Forced subtitles (issue #63).** A film's forced track in SUBTITLE
+LANGUAGE (the lines it always shows, such as dialogue in another language)
+is shown whatever SUBTITLES says, as on the Apple TV. The scan keeps a
+file's forced text tracks (`NxMbForcedSubs`); at tune the first in SUBTITLE
+LANGUAGE is the server's SRT
 (`/Videos/{id}/{source}/Subtitles/{index}/0/Stream.srt`, which both servers
-answer without a token), and `applySubtitles` selects it when no full
-track is showing, over the guide too, as a burned-in line would be. With
-SUBTITLES on, a full track in the language comes first, as
-`pickLegibleOption`.
+answer without a token), shown when no full track is, over the guide too,
+as a burned-in line would be. With SUBTITLES on, a full track in the
+language comes first, as `pickLegibleOption`. Until #237 the content carried
+it as a sidecar and `applySubtitles` selected it.
 
 **Since #237 the app draws the forced track itself** and the player is given
 no forced sidecar, so the TV's caption setting is never changed for one.
@@ -490,13 +490,13 @@ against the test Emby, 2026-10-26:
   file. On the test Emby 297 items have an English forced track, 28 of them
   only as an image; those play without it.
 
-**With SUBTITLES on ALWAYS, a server stream's full track is a sidecar too
+**With SUBTITLES on ALWAYS, a server stream's full track is a sidecar
 (issue #120).** A server stream's playlist lists no subtitles: on Emby 4.10
 the app's request for *Wuthering Heights* (28 SRT tracks) gives 0 renditions,
 and still 0 with `SubtitleStreamIndex=2&SubtitleMethod=Hls`. Jellyfin 12.2
 lists them with that query (37 for *28 Years Later*), but each address
 carries the token as `ApiKey` in the URL, which the port keeps out of URLs.
-So the full track comes the way the forced one does: the scan keeps a
+So the full track comes the way the forced one did until #237: the scan keeps a
 file's other text tracks, the first per language (`NxMbFullSubs`), and on a
 server stream with ALWAYS the one in SUBTITLE LANGUAGE (`NxMbFullSub`) goes
 beside the stream as the server's SRT (`NxMbSubtitleSidecars`), which
@@ -508,7 +508,8 @@ picked. Only on ALWAYS, so a server makes the file only for a viewer who
 reads it; the warm-up asks for it too, for airings this TV won't play as
 stored (`NxMbDirectPlays`, STREAM QUALITY's ceiling included, so a file
 LOW sends to the server is warmed too). Measured on a TCL 55R617 (Roku OS 15.3.4)
-against the test Emby, 2026-10-28, with silent lab clips:
+against the test Emby, 2026-10-28, with silent lab clips, before #237, when
+the forced track was a sidecar too:
 
 - *Lab Forced Opus* (English forced and full tracks; a Portuguese AAC and
   an English Opus track, so with AUDIO LANGUAGE English a server stream),
