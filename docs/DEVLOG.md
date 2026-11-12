@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: ABOUT lists the project's links as readable addresses, #282)
+
+**Why.** The Roku's ABOUT held the version line and one GitHub row. The Apple TV's ABOUT (1.0.32, `AboutLinks.swift`) lists
+Discord, the website, the web tuner, Roku and GitHub as addresses to read, since a TV opens none of them.
+
+**Changed.** `source/guide/AboutLinks.brs` is the one list (`NxAboutLinks`), in the Apple TV's order with its titles,
+lines and addresses, shown without `https://`; `SettingsView` builds one `aboutLink` row per entry under LINKS in place of
+the single `github` row, drawn as the version line is (focusable, OK does nothing). `SettingsRail` puts the `aboutLink` kind
+on the ABOUT tab. An address now changes in one place.
+
+**Tested off the TV.** `SettingsRailTests`, 10 more cases (102): the five links in order with their titles and addresses,
+no scheme, each line a sentence, the Roku line carrying the channel code, a lookup by id and an unknown id, the kind's tab
+and focus. `tests/run.sh`'s settings-rail suite passes.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) in the Settings tour (test data): ABOUT shows the VERSION row, the LINKS heading and
+the five lines with their addresses (discord.gg/FgnZcr5bDT, nostalgex.app, nostalgex.app/web-tuner,
+my.roku.com/account/add/NOSTALGEX, github.com/chadMueller/Nostalgex), read from the node tree.
+
+**Not done.** The Apple TV's text is copied by hand; nothing re-checks it when `AboutLinks.swift` changes. Not seen by eye.
+
 ## 2026-11-12 (README: Roku in the "Pick your way to watch" table)
 
 **Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
