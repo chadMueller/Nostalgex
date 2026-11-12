@@ -34,4 +34,18 @@ class ServerTokensTest {
         assertEquals(listOf("ta", "tb", null, null), filled.map { it.serverToken })
         assertEquals(items.map { it.copy(serverToken = null) }, filled.map { it.copy(serverToken = null) })
     }
+
+    /**
+     * A kept section saved before the server moved: claimed on resume, saved in the library,
+     * and read back on the next launch, each item still finds the server's token.
+     */
+    @Test fun aKeptSectionFollowsAServerThatMoved() {
+        val kept = listOf(MediaItem(ratingKey = "1", serverUrl = "http://old:32400"), MediaItem(ratingKey = "2"))
+        val claimed = ServerTokens.claim(kept, "http://new:32400", "tn")
+        assertEquals(listOf("http://new:32400", "http://new:32400"), claimed.map { it.serverUrl })
+        assertEquals(listOf("tn", "tn"), claimed.map { it.serverToken })
+        val saved = json.decodeFromString<List<MediaItem>>(json.encodeToString(claimed))
+        assertEquals(listOf(null, null), saved.map { it.serverToken })
+        assertEquals(listOf("tn", "tn"), ServerTokens.fill(saved, mapOf("http://new:32400" to "tn")).map { it.serverToken })
+    }
 }

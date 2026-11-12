@@ -14,6 +14,7 @@ import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
+import com.muellhaus.nostalgex.engine.ServerTokens
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.NaturalEnd
@@ -522,7 +523,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             if (!ScanResume.reusable(k, System.currentTimeMillis() / 1000, BuildConfig.VERSION_CODE, stamp, stampRequired)) return null
             Log.i(TAG, "RESUME section $key: ${k.items.size} items kept from a scan that didn't finish, ${System.currentTimeMillis() / 1000 - k.savedAtSec} s ago")
             // Kept sections hold no token (MediaItem.serverToken): every item in one is this server's.
-            return k.items.map { it.copy(serverToken = server.token) }
+            return ServerTokens.claim(k.items, server.url, server.token)
         }
 
         override fun done(key: String, stamp: String?, items: List<MediaItem>) =

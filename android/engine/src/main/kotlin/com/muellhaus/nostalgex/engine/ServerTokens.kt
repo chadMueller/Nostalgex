@@ -8,4 +8,12 @@ package com.muellhaus.nostalgex.engine
 object ServerTokens {
     fun fill(items: List<MediaItem>, tokenByUrl: Map<String, String>): List<MediaItem> =
         items.map { it.copy(serverToken = it.serverUrl?.let(tokenByUrl::get)) }
+
+    /**
+     * A kept scan section's items (#288), all from one server: they take its address and token
+     * as they are now. The address too, so a server that moved between the killed scan and the
+     * resume still matches in `fill` when the saved library is next read.
+     */
+    fun claim(items: List<MediaItem>, url: String, token: String): List<MediaItem> =
+        items.map { it.copy(serverUrl = url, serverToken = token) }
 }
