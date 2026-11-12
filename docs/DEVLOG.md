@@ -18,8 +18,16 @@ forced one. A Jellyfin or Emby forced track is still drawn by the app (`startFor
 **Not changed.** `NxMbSubtitleSidecars` keeps its `drawForced` parameter and the forced sidecar it builds without it,
 as `MediaBrowserTests` checks both; no caller uses that path.
 
-**Tests.** No test reaches `applySubtitles` (it reads the player node). Subtitle suite: 105 cases, 0 failed; forced
+**Tests.** No test reaches `applySubtitles`. Subtitle suite: 105 cases, 0 failed; forced
 subtitle cases 17, srt cases 39, full subtitle cases 27, all passed. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Seen** on the 43S45 (OS 16.0.4), a test-data build of `39277eb`'s `roku/` tree (built before a rebase onto main that moved only
+this file), signed in to the lab Emby as `nxlab`, the TV's captions
+On (as found), *Lab Forced Opus* item-linked as a server stream. SUBTITLES on FOREIGN AUDIO: the player listed no
+subtitle track, the app drew the forced line 12 s in, and the caption mode read On 13, 18 and 33 s after the line appeared. On ALWAYS:
+the player listed the full English sidecar and selected it (`subtitles true (tracks 1)`); read once, 30 s in, the drawn
+line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
+to FOREIGN AUDIO afterwards.
 
 ## 2026-11-12 (publish Nostalgex on Roku)
 
