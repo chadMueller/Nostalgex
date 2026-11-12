@@ -7,7 +7,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
 
-**Unverified.** The Roku icon is the generic lucide TV icon, not a Roku badge, so the column looks like the web tuner's.
+**Changed (later the same day).** The Roku button uses the Roku logo (Simple Icons, in Roku purple), the same way the Docker column uses the Docker logo. It is the logo, not an official Roku store badge.
 
 ## 2026-11-12 (Apple TV: no empty headings on SERVERS & ACCOUNTS, ON or OFF in words beside the switches, #232 items 5 and 6)
 
