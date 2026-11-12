@@ -2210,51 +2210,59 @@ sub openSidebar()
 end sub
 
 sub renderSidebar()
+    ' The bundle list on the Apple TV 1.0.32's footing (#264, issue #262's
+    ' tokens): a 380 px panel in the panel colour, a 25 px text-2 heading, rows
+    ' 64 px high with 22 px names that do not follow GUIDE TEXT SIZE, a bundle's
+    ' colour only in the row's left bar, and the selected row in the
+    ' selected-row fill with the cyan outline and glow.
+    tk = NxTokens()
+    rowH = tk.compactRow.height
     side = m.top.FindNode("sidebar")
     side.RemoveChildrenIndex(side.GetChildCount(), 0)
-    side.AppendChild(newRect(0, 0, 380, 525, "0x080814F2"))
+    side.AppendChild(newRect(0, 0, 380, 525, tk.color.panel))
     side.AppendChild(newRect(380, 0, 1, 525, "0xFFFFFF1A"))
-    side.AppendChild(newLabel("PACKAGES", "DMMono-Medium", 22, "0xFFFFFF99", 24, 18, 0))
+    side.AppendChild(newLabel("PACKAGES", tk.font.label, tk.compactSize.body, tk.color.text2, 24, 16, 0))
     first = m.sideFocus - 4
     if first < 0 then first = 0
-    y = 64
+    y = 62
     outline = invalid
     for i = first to m.sideTargets.Count() - 1
-        if y > 525 - 72 then exit for
+        if y > 525 - rowH then exit for
         t = m.sideTargets[i]
         focused = i = m.sideFocus
         color = colorOf(t.color, "FF")
         accentW = 4
         if focused then
             accentW = 8
-            side.AppendChild(newRect(0, y, 380, 72, colorOf(t.color, "52")))
-            side.AppendChild(newRect(0, y, 8, 72, color))
-            ' The grid's outline and glow, drawn over the rows below.
+            side.AppendChild(newRect(0, y, 380, rowH, tk.color.selectedRow))
+            side.AppendChild(newRect(0, y, 8, rowH, color))
+            ' The outline and glow in cyan, drawn over the rows below.
             outline = CreateObject("roSGNode", "Poster")
             outline.uri = "pkg:/images/look/focus.9.png"
             outline.translation = [-16, y - 16]
             outline.width = 412
-            outline.height = 104
-            outline.blendColor = color
+            outline.height = rowH + 32
+            outline.blendColor = tk.color.cyan
         else
-            side.AppendChild(newRect(0, y, 4, 72, colorOf(t.color, "66")))
+            side.AppendChild(newRect(0, y, 380, rowH, tk.color.row))
+            side.AppendChild(newRect(0, y, 4, rowH, colorOf(t.color, "FF")))
         end if
-        tc = "0xFFFFFFBF"
-        if focused then tc = "0xFFFFFFFF"
+        tc = tk.color.text2
+        if focused then tc = tk.color.text
         x = accentW + 14
         if t.channel < 0 then
             ' SETTINGS: a gear in a 26 px frame, then the name.
             gear = CreateObject("roSGNode", "Poster")
             gear.uri = "pkg:/images/look/gear.png"
-            gear.translation = [x + 2, y + 25]
+            gear.translation = [x + 2, y + (rowH - 22) \ 2]
             gear.width = 22
             gear.height = 22
             gear.blendColor = tc
             side.AppendChild(gear)
             x = x + 26 + 14
         end if
-        side.AppendChild(newLabel(t.name, "DMMono-Medium", 24, tc, x, y + 20, 360 - x))
-        y = y + 74
+        side.AppendChild(newLabel(t.name, tk.font.label, tk.guideRow, tc, x, y + (rowH - 29) \ 2, 360 - x))
+        y = y + rowH + 4
         if i = 0 then
             side.AppendChild(newRect(16, y + 1, 348, 1, "0xFFFFFF1A"))
             y = y + 10

@@ -29,6 +29,26 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: the bundle list on the Apple TV 1.0.32's footing, #264)
+
+**Why.** The guide's BUNDLES sidebar had its own look: a 22 px heading in white at 60%, rows 72 high filled with the bundle's
+colour at 32%, names in white at 75%. The Apple TV 1.0.32's list is a 380 px panel in the panel colour with a 25 px text-2
+heading, 64 px rows with 22 px names, the row fill `#141B33`, the bundle's colour only in a left bar, and the selected row in
+`#0B2A3A` with a cyan outline and glow.
+
+**Changed.** `renderSidebar` (`GuideView.brs`) draws from `NxTokens()`: the panel colour, a 25 px text-2 heading, rows 64 high
+4 px apart with the `row` fill and a 4 px bar in the bundle's colour, names 22 px (the guide row size, so they do not follow GUIDE
+TEXT SIZE) in text-2, and for the selected row the `selectedRow` fill, an 8 px bar and the guide's focus outline and glow
+(`focus.9.png`) in cyan, the name in white. The bundle colour no longer tints a row or the outline. SETTINGS, the first row, is
+drawn the same way. Scrolling is unchanged: the selected row stays in view.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) on the real library, through the node tree after Left on the guide: the heading
+is `#B9C3DE`, SETTINGS, NOSTALGEX (selected, white), KIDZ ZONE, PRIME TIME, MARQUEE and ADVENTURELAND are 68 px apart and none
+is cut short. Six rows show, not the issue's about seven: the 4 px between rows and the 10 px divider under SETTINGS use the
+difference. Not seen by eye.
+
+**Not done.** No 3% lift (the guide's focus has none either), no corner radius (a plain rectangle).
+
 ## 2026-11-12 (Roku: Settings one step smaller, on the Apple TV 1.0.32's compact scale, #265)
 
 **Why.** The Roku's Settings had its own sizes (rail 470 wide with 76 px tabs, page title 34, section headings 28, hints and
