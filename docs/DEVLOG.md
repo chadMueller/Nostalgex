@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Apple TV: the guide's "now" line no longer cuts through titles, #232 item 1)
+
+**Why.** The cyan "now" line was one rectangle laid over the whole guide, so it ran through the middle of program
+titles ("Rep|licant Trial", "Channel Pha|ntom"). It was also placed from the header's left edge, not each row's, so it
+sat about 36 pt left of where the rows' own blocks put the current time.
+
+**Changed.** `ChannelGuideView` no longer draws the guide-wide line, and `nowFractionInWindow` is gone with it. Each
+`EPGRow` draws its own piece behind its program blocks (`EPGRow.nowLine`), placed from the row's program area with the
+same 2-hour window the blocks use. It stops short of the title band, a gap of 1.5x the GUIDE TEXT SIZE title size
+(capped at the row height less 16 pt), so it never crosses a letter. Drawing it behind the text at full height was
+tried first: the line still showed between the strokes ("Pa|trol").
+
+**Left as is.** The time bar has no marker now. The header's labels sit about 25 pt left of the rows' program areas,
+so a marker placed from the header would not line up with the rows below it. The live and focused rows' program areas
+start a few points right of the other rows (the package-stripe slot is narrower there), so their pieces of the line
+are a few points right too; each piece is correct for its own row.
+
+**Tests.** `NostalgexTests` and `npm test` pass. Checked by eye in demo mode on the Apple TV 4K (3rd generation)
+simulator at NORMAL text size. Not checked at the larger GUIDE TEXT SIZE settings or on a real Apple TV.
+
 ## 2026-11-11 (Android: follow-ups from the #151 review)
 
 #151 is in main as `dd720f17` (squash). These are the two code follow-ups from Chad's review, on branch `android/follow-ups`.

@@ -345,16 +345,8 @@ struct ChannelGuideView: View {
                     }
                 }
 
-                // "Now" time indicator line
-                let nowFraction = nowFractionInWindow(visibleStart: visibleStart)
-                if nowFraction >= 0 && nowFraction <= 1 {
-                    let nowX = channelColumnWidth + (nowFraction * (geo.size.width - channelColumnWidth))
-                    Rectangle()
-                        .fill(Color("BrandCyan"))
-                        .frame(width: 2)
-                        .offset(x: nowX)
-                        .allowsHitTesting(false)
-                }
+                // No guide-wide "now" line here: drawn over the whole grid it cut through the titles
+                // ("Rep|licant Trial"). Each row draws its own behind its titles (EPGRow.nowLine).
             }
             .onMoveCommand { direction in
                 switch direction {
@@ -684,15 +676,6 @@ struct ChannelGuideView: View {
         }
     }
 
-    // MARK: - Now indicator
-
-    private func nowFractionInWindow(visibleStart: Date) -> CGFloat {
-        let now = Date()
-        let visibleDuration: TimeInterval = 7200 // 2 hours
-        let elapsed = now.timeIntervalSince(visibleStart)
-        return CGFloat(elapsed / visibleDuration)
-    }
-
     // MARK: - Grid header
 
     private func timeSlotLabels(from visibleStart: Date) -> [String] {
@@ -919,7 +902,25 @@ private struct EPGRow: View {
             Spacer(minLength: 0)
         }
         .frame(width: programsWidth, alignment: .leading)
+        .background(alignment: .leading) { nowLine(at: now) }
         .clipped()
+    }
+
+    /// The row's piece of the "now" line, placed from the row's own program area so it lines up with this row's
+    /// blocks. It stops short of the title band: drawn through it, even behind the text, it split words
+    /// ("Pa|trol"). The gap scales with GUIDE TEXT SIZE.
+    @ViewBuilder
+    private func nowLine(at now: Date) -> some View {
+        let fraction = CGFloat(now.timeIntervalSince(visibleWindowStart) / visibleDuration)
+        if fraction >= 0 && fraction <= 1 {
+            let gap = min(text.title * 1.5, rowHeight - 16)
+            VStack(spacing: gap) {
+                Rectangle().fill(Color("BrandCyan"))
+                Rectangle().fill(Color("BrandCyan"))
+            }
+            .frame(width: 2, height: rowHeight)
+            .offset(x: fraction * programsWidth)
+        }
     }
 
     /// Stands in for a row with no schedule because Watershed emptied it, rather than
