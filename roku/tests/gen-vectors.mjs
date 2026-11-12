@@ -37,6 +37,7 @@ import { playbackInfoVectors } from "./gen-playback-info.mjs";
 import { coverageVectors } from "./gen-coverage.mjs";
 import { musicTitleVectors } from "./gen-music-title.mjs";
 import { requirementsVectors } from "./gen-requirements.mjs";
+import { guideTimeoutVectors } from "./gen-guide-timeout.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = resolve(process.env.NOSTALGEX_DIR || join(here, "..", ".."));
@@ -289,6 +290,11 @@ const files = [
     generatedBy: "tests/gen-vectors.mjs (tests/gen-requirements.mjs)",
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-channel-requirements.js needsLine" },
     ...requirementsVectors(upstream),
+  }],
+  [join(here, "vectors", "guide-timeout.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-guide-timeout.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-guide-timeout.js parse, next, label, seconds, isDue" },
+    ...guideTimeoutVectors(upstream),
   }],
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
   // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs,

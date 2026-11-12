@@ -47,6 +47,9 @@ sub init()
     m.slotOffset = 0
     m.playing = invalid
     m.fullscreen = false
+    ' GUIDE TIMEOUT (#274): the last remote press, and the chosen time.
+    m.lastActivity = nowSec()
+    m.guideTimeout = NxGuideTimeoutRead()
     m.fonts = {}
     ' Packages switched on in Settings whose build hasn't answered: { id: true }.
     m.building = {}
@@ -808,7 +811,34 @@ sub onTick()
     linked = m.playing <> invalid and m.playing.linked = true
     if NxAiringEnded(m.playing, t, m.video.state) and not m.stopped and not linked then advance(false)
     warmSubtitles(t)
+    if guideTimeoutDue(t) then
+        print "guide: left alone for "; guideTimeoutSeconds(); " s; the channel goes full screen (GUIDE TIMEOUT)"
+        setFullscreen(true)
+    end if
 end sub
+
+' The time GUIDE TIMEOUT waits, in seconds (0 for OFF). A dev build reads
+' nx_guide_timeout_seconds from the manifest instead of 5 or 15 minutes, so a
+' stick can show it fire (the Apple TV's -uiTestGuideTimeoutSeconds).
+function guideTimeoutSeconds() as Integer
+    s = NxGuideTimeoutSeconds(m.guideTimeout)
+    info = CreateObject("roAppInfo")
+    if s > 0 and info.IsDev() then
+        test = Val(NxToStr(info.GetValue("nx_guide_timeout_seconds")))
+        if test > 0 then s = Int(test)
+    end if
+    return s
+end function
+
+' Whether the guide has been left alone long enough, and is the screen in front
+' with a channel playing: not Settings, a dialog, the sleep prompt, the loading
+' screen or an empty guide.
+function guideTimeoutDue(t as LongInteger) as Boolean
+    if m.channels = invalid or m.channels.Count() = 0 then return false
+    front = not m.fullscreen and m.settings = invalid and m.promptOpen <> true and m.graceEnd = invalid and m.leaving <> true
+    playing = m.playing <> invalid and m.stopped <> true and m.video.state = "playing"
+    return NxGuideShouldGoFullscreen(guideTimeoutSeconds(), m.lastActivity, t, front, playing)
+end function
 
 ' Every 5 minutes, the subtitle files of airings on now or within the hour,
 ' forced ones and with SUBTITLES on ALWAYS full ones, asked of their
@@ -1509,6 +1539,7 @@ sub setFullscreen(on as Boolean)
         closeNowPlaying()
     end if
     m.fullscreen = on
+    m.lastActivity = nowSec()
     m.top.FindNode("panel").visible = not on
     m.top.FindNode("grid").visible = not on
     m.top.FindNode("videoBg").visible = not on
@@ -2432,6 +2463,8 @@ sub onSettingsResult()
     renderBuildNotice()
     m.top.RemoveChild(m.settings)
     m.settings = invalid
+    m.lastActivity = nowSec()
+    m.guideTimeout = NxGuideTimeoutRead()
     m.video.mute = false
     linkWaiting = m.linkAfterSettings = true
     m.linkAfterSettings = false
@@ -2524,6 +2557,7 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press or m.channels = invalid then return false
+    m.lastActivity = nowSec()
     ' Leaving once the stream's stop answers: Back again leaves at once, and
     ' nothing else acts meanwhile.
     if m.leaving = true then return key <> "back"

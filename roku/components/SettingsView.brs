@@ -220,7 +220,7 @@ end sub
 ' Kinds:
 '   header, subheader, info: text only, never focused
 '   support: the QR card, never focused
-'   server, rescan, signOut, retro, guideText (GUIDE TEXT SIZE), quality
+'   server, rescan, signOut, retro, guideText (GUIDE TEXT SIZE), guideTimeout, quality
 '   (STREAM QUALITY), qualityChoice, subtitles, language (SUBTITLE or AUDIO
 '   LANGUAGE), languageChoice, reportNowPlaying, reportMarkWatched, bundle,
 '   franchiseAll, franchise, franchiseCollection, collectionsToggle,
@@ -241,6 +241,7 @@ sub buildRows()
 
     add({ kind: "retro" })
     add({ kind: "guideText" })
+    add({ kind: "guideTimeout" })
     pushQuality()
     add({ kind: "subtitles" })
     ' SUBTITLE LANGUAGE only while subtitles can show, as upstream's.
@@ -1067,6 +1068,13 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "LARGE"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "guideTimeout" then
+        ' The Apple TV's GUIDE TIMEOUT (#274): OFF, 5 MIN, 15 MIN; OK moves to the next.
+        label = "GUIDE TIMEOUT"
+        detail = "Go fullscreen when the guide is left alone, to protect OLED screens"
+        state = NxGuideTimeoutLabel(NxGuideTimeoutRead())
+        stateColor = m.t2
+        if state <> "OFF" then stateColor = m.accent + "FF"
     else if row.kind = "quality" then
         label = "STREAM QUALITY"
         detail = "Lower this when your connection is slow or shared"
@@ -1442,6 +1450,10 @@ sub pressRow()
     else if row.kind = "guideText" then
         NxSaveGuideTextLarge(not NxGuideTextLarge())
         print "settings: guide text size "; NxGuideTextLarge()
+        render()
+    else if row.kind = "guideTimeout" then
+        NxSaveGuideTimeout(NxGuideTimeoutNext(NxGuideTimeoutRead()))
+        print "settings: guide timeout "; NxGuideTimeoutRead()
         render()
     else if row.kind = "subtitles" then
         cycleSubtitleMode()

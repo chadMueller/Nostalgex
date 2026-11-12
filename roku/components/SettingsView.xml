@@ -54,6 +54,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/ChannelsMissing.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SettingsRail.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/AboutLinks.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeout.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />

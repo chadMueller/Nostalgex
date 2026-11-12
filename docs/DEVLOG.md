@@ -29,6 +29,32 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: GUIDE TIMEOUT, a guide left alone goes full screen, #274)
+
+**Why.** A guide left on a Roku keeps the logo, header and grid lines still on screen for hours, which can burn into an OLED.
+The Apple TV (`GuideTimeout.swift`, from t3chnaztea's #234) and the web tuner send a guide left alone to full screen, where only
+moving video is on screen.
+
+**Changed.** A GUIDE TIMEOUT row in PLAYBACK & PICTURE, after GUIDE TEXT SIZE: OFF, 5 MIN, 15 MIN, OK moves to the next, 5 MIN until
+chosen, saved per TV in the registry (`player` / `guideTimeout`) and sent nowhere. `source/guide/GuideTimeout.brs` holds the rule
+(`NxGuideTimeoutParse`, `Next`, `Label`, `Seconds`, `NxGuideShouldGoFullscreen`); `GuideView` remembers the last remote press
+(`m.lastActivity`, set on every key, on coming back from full screen and from Settings) and its one-second tick calls
+`setFullscreen(true)` once the time is up, the same as the play key. Only with the guide in front and a channel playing: not while Settings,
+a dialog or the sleep prompt is up, a stream is being left, the guide is empty, or a full screen is already on. A dev build reads
+`nx_guide_timeout_seconds` from the manifest in place of 5 or 15 minutes, so a stick can show it fire.
+
+**Tested off the TV.** `GuideTimeoutTests`, 44 cases (suite `guide-timeout`): the stored values (null, off, 5m, 15m, "", 10m, OFF,
+5M, x) parse, move on, label and count seconds as the web module does (`tests/gen-guide-timeout.mjs` writes its answers), 40
+pairs of (value, last press, now) are due as it says (including the 299 s and 300 s edges), and the Roku's hand-over holds back when
+the guide is not in front, nothing is playing, the time is OFF or a key was just pressed.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4): in the Settings tour (test data) the row reads 5 MIN, OK gives 15 MIN, OFF, 5 MIN.
+On the real library in a build with the manifest set to 20 s: a guide left alone went full screen 13 s after the last of my
+presses (about 20 s after the last remote press) and the console said so; after Back to the guide, a Right and a Left every 8 s for
+50 s kept it up.
+
+**Not done.** OFF on a stick (the rule is held off the TV: 0 seconds never fires). Nothing is sent; nothing is synced.
+
 ## 2026-11-12 (Roku: the focused bundle on CHANNEL BUNDLES lists its channels, #277)
 
 **Why.** A viewer could not see what a bundle held before switching it on: the page showed its name, a description and a count.
