@@ -28,6 +28,176 @@ Emby only: Jellyfin wasn't run.
 **Open.** The forced-sidecar branch in `applySubtitles` can't run since #237: both callers of `NxMbSubtitleSidecars`
 pass `drawForced`, and Plex never sets `forcedSub`. Left in here; it comes out as its own change (Chad, #298).
 
+## 2026-11-11 (Roku: franchise collections while FRANCHISES is off, #273)
+
+**Why.** With FRANCHISES off, a franchise collection on the FRANCHISES page still read ON and could be focused and
+switched, though its channel doesn't air: the switch gates every franchise channel, collections included. The Apple
+TV fixed it with `FranchisesPageGate` (#273, filed by Chad for tydude001).
+
+**Changed.** While FRANCHISES is off, the page lists the franchise collections under "None of these are on the air
+while FRANCHISES is off.", faded to 0.45, reading OFF, with no channel number, and marked `gated`: focus skips them
+(`focusable`, `NxSettingsFirstFocusable`, and `refreshRows` won't put focus back on one) and OK does nothing on one.
+Each keeps its saved switch. The rules are `NxFranchisesOffNote`, `NxFranchiseCollectionReadsOn` and
+`NxFranchiseCollectionSelectable` in `SettingsChannels.brs`. The channel number is the Roku's own (the Apple TV's
+row shows none); a gated row hides it, since a collection built while FRANCHISES is off gets one and doesn't air.
+The FRANCHISES value on the Channels list already read OFF while the switch is off (`NxChannelsLinkValue`).
+
+**Tests.** Nine cases in `SettingsChannelsTests`: reads ON in all four combinations, selectable, the line, no dash,
+and that `NxSettingsFirstFocusable` skips gated rows (with main's `SettingsRail.brs` that case gets 2, a gated row).
+The existing "page: switch off, the collections stay listed" still holds.
+
+**Seen** on the 43S45 (OS 16.0.4), a test-data build of `1ecada5` signed in to the lab Emby as `nxlab`, through the
+guide to Settings › CHANNELS & BUNDLES › FRANCHISES. Two lab collections made for it, *Lab Saga Collection* (3 clips)
+and *Lab Trilogy Collection* (4), both filed as franchises. With FRANCHISES on: Saga switched on and read ON.
+FRANCHISES off: the line, both rows faded and OFF, and three Down presses left the screen byte for byte as it was,
+focus on the switch. On again: Saga ON, Trilogy OFF. Off, out of Settings and back: the Channels list read FRANCHISES
+OFF, the guide rebuilt with the same two channels (Saga's channel built but not aired), the page showed both rows
+gated, and on again Saga read ON. That round showed Saga's CH 310 on its gated row, so a gated row now hides it
+(`db76012`, seen gated without it).
+
+## 2026-11-11 (Web tuner: the launch-time channel refilter no longer freezes the page, #294)
+
+**Why.** When the enrichment cache comes back, `refilterChannelsWithEnrichment()` ran the shared channel filter over
+every title for every rules channel in one synchronous pass, so the page answered nothing until it ended. The Apple
+TV had the same freeze; on the 1.0.32 branch (not yet on main) it is moved off the main thread. A browser has no
+thread that shares the page's data (a Web Worker would copy all 10,700 titles each way), so this runs the same filter
+in slices and gives the page back between them.
+
+**Measured before, on origin/main.** A 10,700-title stub Plex, a stub enrichment service holding a row for every
+title, headless Chromium, no CPU throttling, the tuner started cold and then restarted with the cache filled:
+- All 14 bundles on: one task of 4.8 to 4.9 s cold and 4.8 to 5.0 s on the restarted launch, 40 channels changed.
+- Default bundle only: one task of 1.8 s cold and 0.56 to 0.58 s on the restarted launch.
+- CPU slowed 4 times, as a rough Google TV: one task of 21 to 22 s with all bundles on.
+
+**Changed.**
+- `scripts/nostalgex-sliced-filter.js` (new): the channel filter over a library a block of 128 titles at a time,
+  giving the page back whenever a 12 ms slice is used up. `filterPool` is per title, so joining the blocks gives the
+  rows the whole-array call gives, in the same order; the clock (`nowSec`) is read once and passed to every block.
+  The file the Apple TV mirrors (`nostalgex-channel-filter.cjs`) is untouched.
+- `plex-tuner.html`: `refilterChannelsWithEnrichment()` is async and runs in two steps. Step one filters every
+  channel in slices and writes nothing, so the guide keeps the pools it has. Step two writes the pools that moved
+  together, then rebuilds their schedules in the same order as before (each schedule is packed against the whole
+  lineup, so every pool is in before the first is built), giving the page back between schedules.
+- What stops it. A newer refilter, a new library (`libraryExtrasGeneration`) or a sign-out stops step one, and stops
+  step two the next time it gives the page back, so a library the account has left is not worked on and its
+  franchises are not put back. A newer refilter alone does not stop step two once it has begun: a channel with a new
+  pool and an old schedule would stay that way, because the newer one would find its pool already right.
+- The library's array being replaced by a copy of itself while it runs is not a stop. MusicBrainz display metadata
+  replaces `allItemsCache` after tune-in (`itemsWithDisplayMetadata`), which is the same library, so the refilter runs
+  again on the new array, three tries at most (as the Apple TV's off-main refilter does) and says so in the console if
+  it gives up. Without this, a restarted launch with a full cache and the music bundle on lost the pools made from
+  enrichment for the session whenever MusicBrainz finished while the refilter was working. A first version of this
+  change had that bug; review found it.
+- The yield is a message to itself, not `scheduler.yield()`. With `scheduler.yield()` the pass answered input and
+  drew frames but ran no timer at all until it was done (0 timer beats in 22 s on the slowed CPU), and the player's
+  retries and the guide's clock are timers. With a message, timers run through it.
+
+**Measured after, same harness, against a fresh run of origin/main (c2d585dc).**
+- Which title is on which channel did not change. All 142 channels hold the same titles, in the same order, with the
+  same on and off, as origin/main, for default bundles and for all 14, cold and restarted; the guide's lineup and the
+  count of enriched titles are the same. Two runs of origin/main agree with each other byte for byte, so the
+  comparison is not noise. In the page, the new filter and the old one-pass filter return the same rows (members,
+  order and how each got in) on all 142 channels.
+- No long task over 50 ms inside the refilter at normal speed, all bundles or default. The page waited at most 44 to
+  63 ms for a 4 ms timer while it ran in my runs and 153 ms in the reviewer's, so read it as about 150 ms at most;
+  it moves with load. Before, the page waited 4.8 s.
+- With the CPU slowed 4 times, in an earlier run: no wait over 133 ms between timers and no long task over 121 ms,
+  against one 21 to 22 s task. The tasks that remain inside the refilter are the franchise pass after the schedules,
+  about 110 ms there.
+- It takes longer in total, because the page now does its own work between slices: 6.4 to 6.6 s against 4.8 s with all
+  bundles on at normal speed, 34 to 35 s against 21 to 22 s at 4 times slower, and 0.64 s against 0.56 s for the
+  default restarted launch. In Node the sliced pass costs the same as one pass (4.7 s against 4.8 to 5.1 s for all
+  142 channels), so the difference is the page being alive, not the slicing.
+
+**Tested (all run).**
+- `npm run test:sliced-filter` (in `npm test`, 22 checks): sliced against whole-library `filterPool` on all 142 rules
+  channels, Plex and Emby, block sizes 1 to 100,000, a give-back after every block, plus the clock, the slice
+  budget, cancellation and two negative controls (blocks joined in the wrong order or short by one are not equal).
+- `npm run test:refilter:browser` (28 checks, needs Playwright; `OUT=` writes the fingerprint of one tree and
+  `COMPARE=` checks another against it), passed with default bundles and with all 14 against a fresh origin/main.
+  It also interrupts the refilter: two overlapping calls; the array replaced by a copy of itself (it runs again and
+  writes the same members from the new array's rows); replaced on every try (it gives up after three and writes
+  nothing); a new library during step one; and a real `signOut()` fired after step two's first give-back (it builds no
+  more schedules, runs no franchise pass and puts no franchises back). Run against the previous commit of this
+  branch, the retry cases and the step-two sign-out case fail (that commit built 4 more schedules and put all 40
+  franchises back after the sign-out), so they do test what they say.
+- `npm test`, both builds and `test:tuner-version:builds` pass. The library-coverage, franchise-channels and
+  cache-restore-crash browser smokes pass. The library-refresh browser smoke failed once with a closed-page error
+  under heavy machine load and passed 3 of 3 on rerun; it runs with no enrichment configured, so the refilter does
+  not run in it.
+
+**Not verified.**
+- MusicBrainz itself: the music bundle case replaces the array the way `itemsWithDisplayMetadata` does, in a stub; it
+  was not run against the real MusicBrainz service or with a real music-video library.
+- Firefox, WebKit and real TV browsers: only Chromium, with the CPU slowed to stand in for a TV. The yield by message
+  and the timer behaviour were not checked elsewhere.
+- Schedules were not fingerprinted: pools (members, order, on and off) and the guide's lineup were compared, not the
+  schedules built from them.
+- The step-two sign-out and library-change handling had no test until this change.
+
+**Not changed.** Which titles land on which channel, the rule thresholds, the engine and its goldens, the Apple TV,
+Roku. Two things the harness showed that are not new: with all 14 bundles, 8 pools keep an older `poolVia` label
+when enrichment leaves their members alone (the refilter keeps a pool whose members did not change; members and
+order always match a fresh filter), and the first library build after a scan is its own 0.8 s task at normal speed,
+which this does not touch.
+
+**Half-done.** Branch `web/launch-refilter-yield`, committed, not pushed. It needs a review of the retry and
+sign-out changes before it goes to main (a push to main deploys the hosted tuner; the Docker image takes it at the
+next `tuner-v` tag). The first library build's 0.8 s task and the franchise pass's 110 ms at 4 times slower would be
+the next two to slice.
+
+## 2026-11-11 (Web tuner: the start screen says what the Apple TV and the Roku say, and the hosted page says its https limit up front, #254)
+
+**Why.** #254 asked that someone opening the web tuner with no saved login understands in one screen what it does and
+what they need, with no dead ends. Most of that was already in place since 1.0.17: the start screen fits one screen at
+1280x800, 960x540 and on a phone, the steps after connecting use the Apple TV's words, a saved login skips the start
+screen, and no channels ends on NO CHANNELS FOUND with an OPEN SETTINGS button. Three things were left, and all three
+were decided in favour of matching the other apps.
+
+**Changed.**
+- `web-tuner.html`: the headline and the one sentence are the Apple TV's and the Roku's, word for word: CONNECT YOUR
+  SERVER, and "Nostalgex builds a retro channel guide from your own library. Connect Plex, Jellyfin, or Emby to get
+  started." They replaced two web-only lines.
+- `web-tuner.html`: one quiet line under the three choices on the hosted page: "On this page Jellyfin and Emby need
+  an https address. To use any address, run the tuner yourself." The last words link to the self-host page. The line,
+  its inline styling and the script line that removes it on an http page are all inside `selfhost:strip` blocks, so the
+  Docker image carries no trace of it in markup, script or CSS (it can reach any address, so the line would be untrue
+  there). The styling is inline on purpose: a rule in the shared stylesheet would have shipped in Docker.
+- No hint on the first guide. The Apple TV and the Roku have none; the guide has clickable UP and DOWN buttons and
+  Settings has a KEYBOARD page.
+
+**Not changed, on purpose.** A plain-http address typed on the hosted page is still tried: the browser blocks the
+request and the page then says why and how to get round it, in the words it already had. An earlier note on #254 said
+it is refused before the attempt; it is not. A first version of this change did refuse it up front, and was dropped:
+it would have removed the chance of reaching a home-network http server through Chrome's per-site "Insecure content:
+Allow" setting, which only works if the attempt is made.
+
+**Tested.**
+- `npm run test:first-run` (in `npm test`, 22 checks): the web headline and sentence equal the ones read from the
+  Apple TV's `SettingsView.swift` and the Roku's `SignInFlow.brs`; the line is in the hosted build and gone from the
+  self-host build; no stylesheet has a rule for it; no em dashes; negative controls (a changed word, the old words, the
+  line outside its strip block).
+- `npm run test:first-run:builds` (33 checks, a new CI step after both builds): `dist/` carries the line; none of the
+  44 pages, scripts and stylesheets in `dist-selfhost/` has any trace of it. With a rule for the line planted in the
+  built Docker stylesheet the check fails, so it does look at the CSS.
+- `npm run test:first-run:browser` (103 checks, needs Playwright): at 1280x800, 960x540 at DPR 2 and 390x844, hosted
+  (served from an https address) and over http: the words, the three choices, nothing scrolls at the two wide sizes,
+  nothing runs off the side on the phone, the line there on the hosted page inside the screen and absent over http;
+  two plain-http addresses given the existing refusal, by keyboard and by mouse; start to a guide on Jellyfin and on
+  Emby by keyboard alone and by mouse alone; a saved login skipping the start screen. Run against `dist-selfhost/` the
+  same file passes (94 checks) with no https line at any size. Run against a checkout of origin/main it fails 30 of
+  103 checks, all of them the old words and the missing line, so the checks do look at the change.
+- `npm test` and both builds pass.
+
+**Not verified.** Plex's own sign-in (plex.tv is outside the harness; the run checks that CONNECT TO PLEX answers),
+Firefox, WebKit and real TV browsers (Chromium only; 960x540 at DPR 2 stands in for a TV browser), and a real home
+network server reached through Chrome's "Insecure content: Allow".
+
+**Not changed.** The Apple TV, the Roku, the engine. The https line is web-only by design.
+
+**Half-done.** Branch `web/first-run-start-screen`, committed, not pushed. It needs a review before it goes to main (a
+push to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).
+
 ## 2026-11-11 (Roku: #228's review follow-ups, #227)
 
 **Why.** Chad's merge note on #228 (tydude001): time `pushMissing`, which runs on every Settings visit and parses

@@ -300,6 +300,11 @@ jobs:
       - name: Tuner version in both builds
         run: npm run test:tuner-version:builds
 
+      # The start screen says what the Apple TV and the Roku say, and the hosted page's line about the https
+      # limit is in dist/ and not in the Docker build.
+      - name: Start screen words in both builds
+        run: npm run test:first-run:builds
+
       # A site-only edit (styles.css, app.js, index.html, site-chrome, public/) must not
       # change one byte the tuner ships, hosted or Docker.
       - name: Tuner untouched by site-only edits
