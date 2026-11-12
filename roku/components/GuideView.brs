@@ -401,6 +401,15 @@ function leadRows() as Integer
 end function
 
 sub renderGrid()
+    ' Not drawn while the grid is hidden behind full screen (every tune, tick
+    ' and guide change would rebuild every visible row for nothing: about 100 ms
+    ' each, and a 30 s tick that stalled keys). It is drawn once when the guide
+    ' comes back (setFullscreen).
+    if m.fullscreen = true then
+        m.gridStale = true
+        return
+    end if
+    m.gridStale = false
     t = nowSec()
     wStart& = windowStart()
     wEnd& = wStart& + m.windowSec
@@ -1718,6 +1727,7 @@ sub setFullscreen(on as Boolean)
     positionHaze()
     positionCard()
     applySubtitles()
+    if not on and m.gridStale = true and m.channels <> invalid then renderGrid()
 end sub
 
 ' ── RETRO MODE ──────────────────────────────────────────────────────────────

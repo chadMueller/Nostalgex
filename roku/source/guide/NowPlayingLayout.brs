@@ -8,18 +8,24 @@
 ' more than one audio track. OPEN IN PLEX is left out, as the Roku can't
 ' open another app on an item.
 
-' captionsHeader, captions, subtitleLanguage, autoSubtitles, audioHeader,
-' audioTracks, audioLanguage.
+' header (AUDIO & CAPTIONS), captions, subtitleLanguage, autoSubtitles, audio
+' (one row: the current track, opening the track list; a plain row with one
+' track or none), audioLanguage.
 function NxPanelProgramRows(hasSubtitleTracks as Boolean, audioTrackCount as Integer) as Object
-    rows = ["captionsHeader", "captions"]
+    rows = ["header", "captions"]
     if hasSubtitleTracks then
         rows.Push("subtitleLanguage")
         rows.Push("autoSubtitles")
     end if
-    rows.Push("audioHeader")
-    rows.Push("audioTracks")
+    rows.Push("audio")
     if audioTrackCount > 1 then rows.Push("audioLanguage")
     return rows
+end function
+
+' The audio row opens a track list only when there is a choice to make
+' (upstream's audioRowOpensList).
+function NxAudioRowOpensList(trackCount as Integer) as Boolean
+    return trackCount > 1
 end function
 
 ' The badge after the next programme's title on the Now Playing panel (#266,
@@ -60,6 +66,7 @@ function NxPanelHint(id as Dynamic) as String
     if id = "cc" then return "Subtitles on or off for every program."
     if id = "pick:subsLanguage" then return "Choose which subtitle track to prefer when multiple are available."
     if id = "auto" then return "Turns subtitles on when the audio is in another language."
+    if id = "pick:audioTracks" then return "Pick the audio track for this program."
     if id = "pick:audioLanguage" then return "Choose which audio track to prefer when multiple are available."
     if id = "retro" then return "CRT scanlines, vignette, flicker, 4:3 aspect ratio."
     if id = "pick:streamQuality" then return "Takes effect on the next program."

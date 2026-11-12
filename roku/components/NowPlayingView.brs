@@ -109,8 +109,8 @@ function columns() as Object
     prog = []
     ' In upstream's order (NxPanelProgramRows).
     for each kind in NxPanelProgramRows(s.hasSubs = true, tracks.Count())
-        if kind = "captionsHeader" then
-            prog.Push({ kind: "hdr", label: "CAPTIONS" })
+        if kind = "header" then
+            prog.Push({ kind: "hdr", label: "AUDIO & CAPTIONS" })
         else if kind = "captions" then
             cc = "NONE"
             if s.hasSubs then
@@ -125,19 +125,19 @@ function columns() as Object
             v = "OFF"
             if s.autoOn then v = "ON"
             prog.Push({ kind: "row", label: "AUTO SUBTITLES", value: v, active: s.autoOn, id: "auto" })
-        else if kind = "audioHeader" then
-            prog.Push({ kind: "hdr", label: "AUDIO" })
-        else if kind = "audioTracks" then
-            if tracks.Count() <= 1 then
+        else if kind = "audio" then
+            ' One row: the current track, opening the list; with one track or
+            ' none a plain row the focus skips (upstream's audioRow).
+            if NxAudioRowOpensList(tracks.Count()) then
+                cur = NxToStr(tracks[0].name)
+                for each t in tracks
+                    if t.active = true then cur = NxToStr(t.name)
+                end for
+                prog.Push({ kind: "row", label: "AUDIO", value: cur, id: "pick:audioTracks" })
+            else
                 name = "SINGLE TRACK"
                 if tracks.Count() = 1 then name = tracks[0].name
                 prog.Push({ kind: "row", label: name, value: "", disabled: true })
-            else
-                for i = 0 to tracks.Count() - 1
-                    v = ""
-                    if tracks[i].active then v = "ACTIVE"
-                    prog.Push({ kind: "row", label: tracks[i].name, value: v, active: tracks[i].active, id: "audio:" + i.ToStr() })
-                end for
             end if
         else if kind = "audioLanguage" then
             prog.Push({ kind: "row", label: "AUDIO LANGUAGE", value: NxToStr(s.audioLabel), id: "pick:audioLanguage" })
@@ -282,6 +282,17 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
     labelColor = tk.color.text
     if e.disabled = true then labelColor = tk.color.text2
     valueW = 0
+    if e.check = true then
+        ' The track in use: a cyan check at the right, as upstream's .check.
+        tick = CreateObject("roSGNode", "Poster")
+        tick.uri = "pkg:/images/look/step_check.png"
+        tick.translation = [right - 22, y + (h - 22) \ 2]
+        tick.width = 22
+        tick.height = 22
+        tick.blendColor = tk.color.cyan
+        g.AppendChild(tick)
+        right = right - 34
+    end if
     if NxToStr(e.value) <> "" then
         valueColor = tk.color.text2
         if focused then valueColor = tk.color.text
@@ -307,13 +318,16 @@ function renderList(g as Object, s as Object) as Integer
     pm = NxPanelMetrics()
     x = m.colX[0]
     wide = 2 * pm.colW + pm.colGap
-    if m.picker = "streamQuality" or m.picker = "sleep" then
+    if m.picker = "streamQuality" or m.picker = "sleep" or m.picker = "audioTracks" then
         items = singleItems(s)
         title = "STREAM QUALITY"
         note = "Lower this when your connection is slow or shared. Takes effect on the next program."
         if m.picker = "sleep" then
             title = "SLEEP TIMER"
             note = "Back returns to the panel. Pick OFF to cancel a running timer."
+        else if m.picker = "audioTracks" then
+            title = "AUDIO"
+            note = NxPanelHint("pick:audioTracks")
         end if
         y = pm.safeY + drawHeader(g, x, pm.safeY, title, wide)
         y = y + noteLine(g, note, x, y, wide)
@@ -380,6 +394,13 @@ function singleItems(s as Object) as Object
         end for
         return out
     end if
+    if m.picker = "audioTracks" then
+        tracks = NxList(s.audio)
+        for i = 0 to tracks.Count() - 1
+            out.Push({ label: NxToStr(tracks[i].name), value: "", active: tracks[i].active = true, check: tracks[i].active = true, track: i })
+        end for
+        return out
+    end if
     levels = NxList(s.qualities)
     for i = 0 to levels.Count() - 1
         on = levels[i].id = NxToStr(s.quality)
@@ -395,7 +416,7 @@ sub openLanguages(key as String)
     m.picker = key
     s = m.top.state
     m.pickIdx = 0
-    if key = "streamQuality" or key = "sleep" then
+    if key = "streamQuality" or key = "sleep" or key = "audioTracks" then
         items = singleItems(s)
         for i = 0 to items.Count() - 1
             if items[i].active = true then m.pickIdx = i
@@ -442,6 +463,8 @@ sub qualityKey(key as String)
         if items.Count() > 0 then
             if m.picker = "sleep" then
                 m.top.action = "sleep:" + items[i].minutes.ToStr()
+            else if m.picker = "audioTracks" then
+                m.top.action = "audio:" + items[i].track.ToStr()
             else
                 m.top.action = "streamQuality:" + items[i].qid
             end if
@@ -607,7 +630,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return true
     end if
-    if m.picker = "streamQuality" or m.picker = "sleep" then
+    if m.picker = "streamQuality" or m.picker = "sleep" or m.picker = "audioTracks" then
         qualityKey(key)
         return true
     end if

@@ -28,11 +28,11 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "countdown negative", NxSleepCountdown(-4), "0:00")
 
     ' programRows (#118), OPEN IN PLEX left out on the Roku.
-    NxCheck(r, "rows: no subtitles, one audio track", NxPanelProgramRows(false, 1).Join(","), "captionsHeader,captions,audioHeader,audioTracks")
-    NxCheck(r, "rows: no subtitles, no audio keeps cc", NxPanelProgramRows(false, 0).Join(","), "captionsHeader,captions,audioHeader,audioTracks")
-    NxCheck(r, "rows: subtitles add their preferences", NxPanelProgramRows(true, 1).Join(","), "captionsHeader,captions,subtitleLanguage,autoSubtitles,audioHeader,audioTracks")
-    NxCheck(r, "rows: two audio tracks add audio language", NxPanelProgramRows(false, 2).Join(","), "captionsHeader,captions,audioHeader,audioTracks,audioLanguage")
-    NxCheck(r, "rows: everything, in order", NxPanelProgramRows(true, 3).Join(","), "captionsHeader,captions,subtitleLanguage,autoSubtitles,audioHeader,audioTracks,audioLanguage")
+    NxCheck(r, "rows: no subtitles, one audio track", NxPanelProgramRows(false, 1).Join(","), "header,captions,audio")
+    NxCheck(r, "rows: no subtitles, no audio keeps cc", NxPanelProgramRows(false, 0).Join(","), "header,captions,audio")
+    NxCheck(r, "rows: subtitles add their preferences", NxPanelProgramRows(true, 1).Join(","), "header,captions,subtitleLanguage,autoSubtitles,audio")
+    NxCheck(r, "rows: two audio tracks add audio language", NxPanelProgramRows(false, 2).Join(","), "header,captions,audio,audioLanguage")
+    NxCheck(r, "rows: everything, in order", NxPanelProgramRows(true, 3).Join(","), "header,captions,subtitleLanguage,autoSubtitles,audio,audioLanguage")
 
     ' ── The Now Playing panel's UP NEXT badge (#266, Variant A) ──
     NxCheck(r, "up next: 84 minutes", NxUpNextBadge(84 * 60), "UP NEXT IN 84 MIN")
@@ -54,6 +54,10 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "metrics: the two columns are 908 wide", (2 * pm.colW + pm.colGap).ToStr(), "908")
 
     ' ── The hint line under the controls (NowPlayingPanelHints) ──
+    NxCheck(r, "audio row: no track is a plain row", NxToStr(NxAudioRowOpensList(0)), "false")
+    NxCheck(r, "audio row: one track is a plain row", NxToStr(NxAudioRowOpensList(1)), "false")
+    NxCheck(r, "audio row: a choice opens the list", NxToStr(NxAudioRowOpensList(2)), "true")
+    NxCheck(r, "hint: audio", NxPanelHint("pick:audioTracks"), "Pick the audio track for this program.")
     NxCheck(r, "hint: cc", NxPanelHint("cc"), "Subtitles on or off for every program.")
     NxCheck(r, "hint: retro", NxPanelHint("retro"), "CRT scanlines, vignette, flicker, 4:3 aspect ratio.")
     NxCheck(r, "hint: stream quality", NxPanelHint("pick:streamQuality"), "Takes effect on the next program.")

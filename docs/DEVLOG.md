@@ -47,6 +47,20 @@ and RETRY ORIGINAL VIDEO are not on the Roku.
 **Tests.** `sleep-timer` suite 54 checks (was 23): the metrics, the hints, and the key map, including that Up never
 closes the panel from inside a list and that Down closes the strip; the strip rule fails when it is broken.
 
+## 2026-11-12 (Roku: the Now Playing panel's AUDIO row, and no grid render behind full screen, #266)
+
+**Why.** Chad's parity list for the Now Playing panel and the lag follow-up: the 30 s tick in `onTick` rebuilt every
+visible guide row even in full screen, where the grid is hidden (a 946 ms stall on v4, about 100 ms since the
+stripes fix).
+
+**Changed.** The program column is the Apple TV's `NowPlayingPanelLayout.programRows`: one AUDIO & CAPTIONS header, CC,
+the subtitle preferences, then one AUDIO row showing the current track and opening the track list when there is a
+choice (a plain row with one track or none), then AUDIO LANGUAGE. The list is the Apple TV's `audioTrackOptions`:
+the tracks as rows, the one in use with a cyan check, the hint line "Pick the audio track for this program.".
+`renderGrid` does nothing while full screen is up and says so (`m.gridStale`); leaving full screen draws it once.
+
+**Tests.** `sleep-timer` suite 58 checks: the row list in the Apple TV's order, when the audio row opens its list, the hint.
+
 ## 2026-11-12 (Roku: the guide's stripes are worked out when the guide changes, not on every key, #276)
 
 **Why.** Chad on 1.0.13 candidate v4 (build 4a11edafd769): "the guide is ultra laggy". Measured on the stick with a
