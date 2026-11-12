@@ -73,6 +73,37 @@ sub outline(g as Object, x as Float, y as Float, w as Float, h as Float, t as Fl
     g.AppendChild(newRect(x + w - t, y, t, h, color))
 end sub
 
+' A rounded capsule of one colour (images/look/capsule.9.png).
+function newCapsule(x as Float, y as Float, w as Float, h as Float, color as String) as Object
+    p = CreateObject("roSGNode", "Poster")
+    p.uri = "pkg:/images/look/capsule.9.png"
+    p.translation = [x, y]
+    p.width = w
+    p.height = h
+    p.blendColor = color
+    return p
+end function
+
+' A dashed outline, 10 on and 6 off.
+sub dashes(g as Object, x as Float, y as Float, w as Float, h as Float, t as Float, color as String)
+    d = 0
+    while d < w
+        n = 10
+        if d + n > w then n = w - d
+        g.AppendChild(newRect(x + d, y, n, t, color))
+        g.AppendChild(newRect(x + d, y + h - t, n, t, color))
+        d = d + 16
+    end while
+    d = 0
+    while d < h
+        n = 10
+        if d + n > h then n = h - d
+        g.AppendChild(newRect(x, y + d, t, n, color))
+        g.AppendChild(newRect(x + w - t, y + d, t, n, color))
+        d = d + 16
+    end while
+end sub
+
 function tint(color as String, alpha as String) as String
     return Left(color, 8) + alpha
 end function
@@ -265,7 +296,8 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
         m.focusRects.Push([x, y, w, h])
         if NxToStr(e.note) <> "" then m.hint = e.note
     else if e.disabled = true and e.id = invalid then
-        outline(g, x, y, w, h, tk.row.outline, tk.color.restingOutline)
+        ' A row that only informs: no fill, a dashed outline (upstream's isStatic).
+        dashes(g, x, y, w, h, tk.row.outline, tk.color.restingOutline)
     else
         g.AppendChild(newRect(x, y, w, h, tk.color.row))
         outline(g, x, y, w, h, tk.row.outline, tk.color.restingOutline)
@@ -608,8 +640,9 @@ function renderInfo(s as Object) as Integer
         g.AppendChild(nextLbl)
         tw = nextLbl.boundingRect().width
         if tw < w - chipW - 16 then chipX = x + tw + 14
-        g.AppendChild(newRect(chipX, y, chipW, 36, tk.color.selectedRow))
-        outline(g, chipX, y, chipW, 36, 2, tk.color.cyan)
+        ' A capsule: the cyan one, the selected-row fill 2 px inside it.
+        g.AppendChild(newCapsule(chipX, y, chipW, 36, tk.color.cyan))
+        g.AppendChild(newCapsule(chipX + 2, y + 2, chipW - 4, 32, tk.color.selectedRow))
         chip = newLabel(badgeText, tk.font.label, pm.text, tk.color.cyan, chipX, y + 5, chipW)
         chip.horizAlign = "center"
         g.AppendChild(chip)

@@ -47,8 +47,10 @@ sub init()
     m.slotOffset = 0
     m.playing = invalid
     m.fullscreen = false
-    ' Bundle stripes (#276): a 20 px column at the guide's left edge.
-    m.stripeW = 20
+    ' Bundle stripes (#276): a 28 px column at the guide's left edge.
+    ' The Apple TV's GuideStripes.stripeWidth (28); the focused stripe lifts to 38.
+    m.stripeW = 28
+    m.stripeLift = 38
     m.stripeStale = false
     m.stripeGroups = []
     m.stripeRowGroup = []
@@ -638,10 +640,15 @@ sub drawStripeNames(rows as Object, lead as Integer)
             if focused then hex = NxStripeFocusedHex(hex)
             fg = "0xFFFFFFFF"
             if NxStripeNameIsBlack(hex) then fg = "0x000000FF"
+            if focused then
+                ' The focused stripe lifts out of its slot over the row's edge, brighter
+                ' (GuideStripeOverlay's liftWidth), under its name.
+                rows.AppendChild(newRect(0, vt, m.stripeLift, vb - vt + 1, colorOf(hex, "FF")))
+            end if
             len = vb - vt - 10
-            lbl = newLabel(UCase(g.name), tk.font.label, 15, fg, 0, 0, len)
+            lbl = newLabel(UCase(g.name), tk.font.label, 25, fg, 0, 0, len)
             lbl.horizAlign = "center"
-            lbl.height = 20
+            lbl.height = 30
             lbl.rotation = 1.5708
             lbl.translation = [0, vb - 5]
             rows.AppendChild(lbl)
@@ -650,7 +657,7 @@ sub drawStripeNames(rows as Object, lead as Integer)
             outline = CreateObject("roSGNode", "Poster")
             outline.uri = "pkg:/images/look/focus.9.png"
             outline.translation = [-16, vt - 16]
-            outline.width = m.stripeW + 32
+            outline.width = m.stripeLift + 32
             outline.height = vb - vt + 32
             outline.blendColor = tk.color.cyan
             rows.AppendChild(outline)
