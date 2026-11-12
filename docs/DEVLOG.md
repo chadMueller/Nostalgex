@@ -27,8 +27,8 @@ placeholder at 4.5:1 on its band, `text2` kept where `text2` reads (91) and brig
 **Seen** on the 55R617 (OS 16.0.4), a test-data build signed in to the lab Emby as `nxlab`, with one change for the
 check: `nxlab`'s only channel, VHS VAULT, held and drawn in CRITERION's #F5E6C8 (the lab library airs none of the six
 pale channels, and VHS VAULT's own rules keep WATERSHED off it). The placeholder's node is #C4CDE3, on a band the
-screenshot reads as grey 85 to 87 (#585757 worked out): 4.52:1, where `text2` reads 4.09. The same build with the
-placeholder left at `text2` draws #B9C3DE.
+screenshot reads as grey 85 to 87 (#585757 worked out): 4.52:1, where `text2` reads 4.09. Rebuilt with the
+placeholder left at `text2`, it draws #B9C3DE.
 
 ## 2026-11-11 (Roku: no current audio track is the first listed, #283's review follow-ups, #246)
 
