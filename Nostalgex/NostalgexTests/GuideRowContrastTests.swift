@@ -63,4 +63,50 @@ final class GuideRowContrastTests: XCTestCase {
         let f = GuideRowContrast.fills(forHex: "nonsense")
         XCTAssertGreaterThanOrEqual(NXRGB.contrast(NXColor.text, f.row), 4.5)
     }
+    // MARK: - The Watershed placeholder on a focused row
+
+    /// Text-2 on a pale channel's focused wash was 4.3 to 4.7:1, and the placeholder's 2% lift took it to
+    /// 4.1 to 4.4. It is brightened on those, only as far as 4.5:1 needs, and never touched elsewhere.
+    func testThePlaceholderReadsOnEveryChannelsFocusedRow() throws {
+        let hexes = Set(try shippedColors())
+        XCTAssertGreaterThanOrEqual(hexes.count, 90)
+        var worst = 100.0, changed = 0
+        for hex in hexes {
+            let surface = GuideRowContrast.placeholderSurface(for: GuideRowContrast.rgb(fromHex: hex))
+            let text = GuideRowContrast.placeholderText(forHex: hex)
+            let ratio = NXRGB.contrast(text, surface)
+            worst = min(worst, ratio)
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "placeholder on \(hex): \(String(format: "%.2f", ratio)):1")
+            if text != NXColor.text2 {
+                changed += 1
+                XCTAssertLessThan(NXRGB.contrast(NXColor.text2, surface), 4.5, "\(hex) was changed though text-2 read")
+                XCTAssertLessThan(ratio, 4.6, "\(hex) brightened further than needed")
+                XCTAssertNotEqual(text, NXColor.text, "\(hex) went all the way to white")
+            }
+        }
+        print("[GuideRowContrast] placeholder: \(hexes.count) colors, worst \(worst), \(changed) brightened")
+    }
+
+    func testThePalePlaceholderNumbers() {
+        for hex in ["#F5E6C8", "#E5E5E5", "#FFE81F", "#FFE500", "#F7DC6F", "#FFD700"] {
+            let surface = GuideRowContrast.placeholderSurface(for: GuideRowContrast.rgb(fromHex: hex))
+            let before = NXRGB.contrast(NXColor.text2, surface)
+            let after = NXRGB.contrast(GuideRowContrast.placeholderText(forHex: hex), surface)
+            XCTAssertLessThan(before, 4.5, "\(hex) is one of the colors that did not read")
+            XCTAssertGreaterThanOrEqual(after, 4.5, hex)
+            print("[GuideRowContrast] \(hex) placeholder \(String(format: "%.2f", before)) -> \(String(format: "%.2f", after))")
+        }
+    }
+
+    func testTextTwoIsKeptWhereItAlreadyReads() {
+        let violet = GuideRowContrast.placeholderText(forHex: "#7C3AED")
+        XCTAssertEqual(violet, NXColor.text2)
+        let surface = NXColor.panel
+        XCTAssertEqual(GuideRowContrast.secondaryText(on: surface), NXColor.text2)
+        // On black text-2 reads anyway; on a surface it cannot reach, the answer is white-ward and bounded.
+        let bright = NXRGB(0x808080)
+        let t = GuideRowContrast.secondaryText(on: bright)
+        XCTAssertGreaterThanOrEqual(NXRGB.contrast(NXColor.text, bright), 3.5)
+        XCTAssertLessThanOrEqual(t.r, 1.0)
+    }
 }
