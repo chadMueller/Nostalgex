@@ -3,7 +3,7 @@
     {
       "version": "1.0.32",
       "date": "NOV 2026",
-      "released": false,
+      "released": true,
       "title": "A new look with smaller text, UP NEXT with the minutes left, and bundles by name",
       "bullets": [
         "The NOSTALGEX wordmark with the TV for the O replaces the old lightning bolt in the app icon, on the Top Shelf, at startup and in the guide's top left corner. It is the same logo as this site, Roku and the web tuner.",
@@ -30,7 +30,7 @@
     {
       "version": "1.0.31",
       "date": "NOV 2026",
-      "released": false,
+      "released": true,
       "title": "Bundle stripes in the guide, a channel list for every bundle, and Open on last channel on by default",
       "bullets": [
         "The guide has a coloured stripe down its left edge for each bundle, with the bundle name on it. Press Left from the programs to move onto the stripe, Up and Down to jump from bundle to bundle, Right to go back to the programs, and Select to open the bundle list. Pressing Left twice opens the bundle list too.",
@@ -46,7 +46,7 @@
     {
       "version": "1.0.30",
       "date": "NOV 2026",
-      "released": false,
+      "released": true,
       "title": "One title per channel at a time, library counts in Settings, and better Emby, Jellyfin and big-library handling",
       "bullets": [
         "A title no longer airs on two channels at the same time. The guide is now put together across all your channels at once.",

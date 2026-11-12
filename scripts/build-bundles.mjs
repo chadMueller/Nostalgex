@@ -572,9 +572,9 @@ export function hubMeta() {
   };
 }
 
-// The hub has no content file, so its hero is named here. It uses the lineup
-// screenshot the home page already ships, which is app UI rather than a frame
-// from somebody's film.
+// The hub has no content file, so its hero is named here. It uses the bundles
+// screen from the Apple TV set the home page ships, which is app UI rather than a
+// frame from somebody's film.
 //
 // Measured on first use, not at import. The self-host build imports this module
 // from vite.config.js but never renders the site, and its Docker context carries
@@ -585,9 +585,9 @@ function hubImageRef() {
   if (!hubImage) {
     hubImage = resolveImage(
       {
-        image: "/screens/lineup-1280.webp",
+        image: "/screens/atv-05-1280.webp",
         image_alt:
-          "The Nostalgex channel guide on Apple TV, showing bundles of live channels built from a Plex library",
+          "The Nostalgex Settings screen on Apple TV, listing the channel bundles with how many channels each adds and a switch for each",
       },
       { file: "scripts/build-bundles.mjs (hub)", rootDir: ROOT },
     );
