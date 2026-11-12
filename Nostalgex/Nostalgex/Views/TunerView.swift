@@ -242,7 +242,7 @@ private struct NavBar: View {
             Image("NostalgexLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 80)
+                .frame(height: 40)
                 .padding(.leading, 40)
 
             Spacer()

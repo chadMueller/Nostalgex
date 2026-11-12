@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Apple TV: the TV wordmark in place of the lightning-bolt logo, #226)
+
+**Why.** The Apple TV app still drew the lightning-bolt logo that `logo/README.md` retired. The web tuner and the Roku
+already show the NOSTALGEX wordmark with a TV for the O.
+
+**Changed.** `Assets.xcassets/NostalgexLogo.imageset/nostalgex.svg` is now `logo/nostalgex-white.svg` (byte-identical
+to the web tuner's `tuner/logo/nostalgex-white.svg`), so all nine places that draw `NostalgexLogo` change at once. The
+wordmark is about 7.6:1 against the bolt's 2.1:1, so the places sized by width (400 to 540 pt) now draw it 53 to 71 pt
+tall. The tuner header was sized by height, 80 pt, which would have made the wordmark 605 pt wide; it is 40 pt now
+(about 300 pt wide).
+
+**Left as is.** The README screenshot (`docs/images/nostalgex-guide.png`) still shows the bolt. It needs retaking from
+a real library. The app icon and Top Shelf images were not touched.
+
+**Tests.** `NostalgexTests` and `npm test` pass. Checked by eye in demo mode on the Apple TV 4K (3rd generation)
+simulator: the connect screen and the tuner header. The loading, library-picker and error screens were not looked at.
+
 ## 2026-11-11 (Roku: WATERSHED's placeholder at 4.5:1 on a focused guide row, #301)
 
 **Why.** #263 left `text2` on a focused row's placeholder band (the past tint over the row's fill) under 4.5:1 for six
