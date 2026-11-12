@@ -987,7 +987,6 @@ sub startTune(idx as Integer)
     ' The Jellyfin/Emby pick on a direct play; on every other stream, AUDIO
     ' LANGUAGE among the tracks the player lists (issue #62).
     m.tuneAudio = stream.audioTrack
-    m.tuneForced = stream.forcedSub = true
     startForcedSub(stream.forcedUrl)
     if m.tuneAudio = invalid then m.tuneAudio = { language: NxAudioPreferredLanguage(), byLanguage: true }
     m.deadlineTimer.duration = NxPictureDeadline(m.attempt.rung, b.videoWidth, b.videoHeight)
@@ -1640,27 +1639,21 @@ end sub
 ' Upstream's applySubtitleSelection: shown in fullscreen only, never over the
 ' guide; always when SUBTITLES is ALWAYS, and with FOREIGN AUDIO only when no
 ' audio track is in AUDIO LANGUAGE and the subtitles are in SUBTITLE
-' LANGUAGE. Otherwise a forced sidecar the player lists (Description "Forced",
-' a /Subtitles/ address), over the guide too; since #237 no stream carries
-' one: a Jellyfin or Emby forced track is drawn by the app (startForcedSub),
-' and Plex sends the track the Plex account has selected. Roku doesn't list
-' a forced track inside the file. On a server stream with ALWAYS the full
-' track is a sidecar (NxMbFullSub), and is picked here as the file's own
-' would be.
+' LANGUAGE. A forced track isn't one the player lists: a Jellyfin or Emby
+' forced track is drawn by the app (startForcedSub, #237), Plex sends the
+' track the Plex account has selected, and Roku doesn't list a forced track
+' inside the file. So no track here is taken for a forced one. On a server
+' stream with ALWAYS the full track is a sidecar (NxMbFullSub), and is
+' picked here as the file's own would be.
 sub applySubtitles()
     tracks = NxList(m.video.availableSubtitleTracks)
     tags = []
     forced = []
-    sidecar = invalid
-    m.hasSubs = false
     for each t in tracks
         tags.Push(NxSubComparableTag(t.Language))
-        ' The player keeps a sidecar's Description and puts its own prefix
-        ' on the TrackName ("<dev_3_0>http://…").
-        isForced = m.tuneForced = true and NxToStr(t.Description) = "Forced" and Instr(1, NxToStr(t.TrackName), "/Subtitles/") > 0
-        forced.Push(isForced)
-        if isForced then sidecar = t else m.hasSubs = true
+        forced.Push(false)
     end for
+    m.hasSubs = tracks.Count() > 0
     show = false
     if m.fullscreen and m.hasSubs then
         want = NxSubPreferredLanguage()
@@ -1679,11 +1672,6 @@ sub applySubtitles()
             end if
         end if
         if show then m.video.subtitleTrack = tracks[idx].TrackName
-    end if
-    if not show and sidecar <> invalid then
-        m.video.subtitleTrack = sidecar.TrackName
-        print "player: forced subtitles ("; NxToStr(sidecar.Language); ")"
-        show = true
     end if
     ' The drawn forced line gives way to the player's own subtitles.
     m.playerSubsShown = show

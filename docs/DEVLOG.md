@@ -3,6 +3,32 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: applySubtitles no longer looks for a forced sidecar, #237)
+
+**Why.** The 2026-11-11 #272 follow-ups entry left this open, and Chad's #298 merge note left it for its own change
+(tydude001). Since #237 the player is never handed a forced sidecar: both callers of `NxMbSubtitleSidecars` pass
+`drawForced`, and Plex never sets `forcedSub`. So the branch in `applySubtitles` that picked a listed track with
+Description "Forced" and a `/Subtitles/` address could not run.
+
+**Changed.** `applySubtitles` takes no listed track for a forced one: every track goes to `NxSubPickIndex` as not
+forced, and `m.hasSubs` is whether the player lists any track. The fallback that selected a forced sidecar when no
+full track was shown is gone, and with it `m.tuneForced`, which only it read. The header says why no listed track is a
+forced one. A Jellyfin or Emby forced track is still drawn by the app (`startForcedSub`), as before.
+
+**Not changed.** `NxMbSubtitleSidecars` keeps its `drawForced` parameter and the forced sidecar it builds without it,
+as `MediaBrowserTests` checks both; no caller uses that path.
+
+**Tests.** No test reaches `applySubtitles`. Subtitle suite: 105 cases, 0 failed; forced
+subtitle cases 17, srt cases 39, full subtitle cases 27, all passed. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Seen** on the 43S45 (OS 16.0.4), a test-data build of `39277eb`'s `roku/` tree (built before a rebase onto main that moved only
+this file), signed in to the lab Emby as `nxlab`, the TV's captions
+On (as found), *Lab Forced Opus* item-linked as a server stream. SUBTITLES on FOREIGN AUDIO: the player listed no
+subtitle track, the app drew the forced line 12 s in, and the caption mode read On 13, 18 and 33 s after the line appeared. On ALWAYS:
+the player listed the full English sidecar and selected it (`subtitles true (tracks 1)`); read once, 30 s in, the drawn
+line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
+to FOREIGN AUDIO afterwards.
+
 ## 2026-11-12 (Roku: ABOUT lists the project's links as readable addresses, #282)
 
 **Why.** The Roku's ABOUT held the version line and one GitHub row. The Apple TV's ABOUT (1.0.32, `AboutLinks.swift`) lists
