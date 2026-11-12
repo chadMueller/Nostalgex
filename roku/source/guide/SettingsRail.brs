@@ -83,12 +83,13 @@ function NxSettingsRowFocusable(kind as String) as Boolean
 end function
 
 ' The row focus lands on when a tab is entered (each view's firstRowID): the
-' first one that takes focus, or -1 when none does (SUPPORT NOSTALGEX), when
+' first one that takes focus (a row marked `gated`, a franchise collection
+' while FRANCHISES is off, never does), or -1 when none does (SUPPORT NOSTALGEX), when
 ' focus stays on the rail.
 function NxSettingsFirstFocusable(rows as Dynamic) as Integer
     i = 0
     for each row in NxList(rows)
-        if NxSettingsRowFocusable(NxToStr(row.kind)) then return i
+        if NxSettingsRowFocusable(NxToStr(row.kind)) and row.gated <> true then return i
         i = i + 1
     end for
     return -1

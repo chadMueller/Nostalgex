@@ -108,7 +108,8 @@ sub refreshRows(unused = invalid as Dynamic)
     m.focus = NxSettingsFirstFocusable(m.rows)
     if keep <> "" then
         for i = 0 to rowCount() - 1
-            if rowKey(m.rows[i]) = keep then
+            ' Not onto a row that can't take focus now (a gated one, #273).
+            if rowKey(m.rows[i]) = keep and focusable(m.rows[i]) then
                 m.focus = i
                 exit for
             end if
@@ -411,8 +412,9 @@ end sub
 ' The FRANCHISES section (ChannelsFranchisesPage): the package's switch, then
 ' while it is on the over-capacity note and ADD ALL / REMOVE ALL, then the one
 ' A to Z list. The franchise collections stay listed while the switch is off,
-' as on the Apple TV, where the switch gates their channels (CH 310-399) and
-' each one keeps its own choice for when it is on again.
+' as on the Apple TV, where the switch gates their channels (CH 310-399): under
+' NxFranchisesOffNote, faded, OFF and out of focus's way (`gated`), each keeping
+' its own choice for when it is on again (#273, FranchisesPageGate).
 sub pushFranchises(at as Integer)
     id = m.top.bundles[at].id
     on = NxHasValue(m.enabled, id)
@@ -427,12 +429,14 @@ sub pushFranchises(at as Integer)
         full = franchisesFullNote()
         if full <> "" then add({ kind: "info", text: full }, "channels")
         add({ kind: "franchiseAll" })
+    else
+        add({ kind: "info", text: NxFranchisesOffNote() }, "channels")
     end if
     for each e in entries
         if e.kind = "franchise" then
             add({ kind: "franchise", franchise: e.franchise })
         else
-            add({ kind: "franchiseCollection", collection: e.collection })
+            add({ kind: "franchiseCollection", collection: e.collection, gated: not NxFranchiseCollectionSelectable(on) })
         end if
     end for
 end sub
@@ -477,7 +481,7 @@ sub foldLanguage()
 end sub
 
 function focusable(row as Object) as Boolean
-    return NxSettingsRowFocusable(row.kind)
+    return NxSettingsRowFocusable(row.kind) and row.gated <> true
 end function
 
 ' The next row focus can land on from i, going d (1 or -1); i if none.
@@ -776,6 +780,8 @@ function serversOnCount() as Integer
 end function
 
 sub drawRow(page as Object, i as Integer, row as Object, y as Float)
+    ' A gated row (#273) is drawn whole, then faded to 0.45, as the Apple TV's.
+    firstNode = page.GetChildCount()
     focused = (i = m.focus) and m.where = "rows"
     accent = m.accent
     extra = []
@@ -873,10 +879,13 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         ' Among the franchises, a collection says so, as the Apple TV's
         ' COLLECTION tag does.
         if row.kind = "franchiseCollection" then detail = detail + " · COLLECTION"
-        if cr.channelNumber <> invalid then detail = detail + " · CH " + cr.channelNumber.ToStr()
+        ' No channel number on a row that doesn't air (#273: a gated one).
+        if cr.channelNumber <> invalid and row.gated <> true then detail = detail + " · CH " + cr.channelNumber.ToStr()
         state = "OFF"
         stateColor = "0xFFFFFF59"
-        if collectionOn(cr) then
+        readsOn = collectionOn(cr)
+        if row.kind = "franchiseCollection" then readsOn = NxFranchiseCollectionReadsOn(readsOn, row.gated <> true)
+        if readsOn then
             state = "ON"
             stateColor = m.accent + "FF"
         else if cr.warned = true then
@@ -1092,6 +1101,11 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     ' The amber count sits left of the state, as the Apple TV's sits left of
     ' the switch.
     if badge <> invalid then drawBadge(page, badge, y, m.rowW - 60 - stateWidth)
+    if row.gated = true then
+        for k = firstNode to page.GetChildCount() - 1
+            page.GetChild(k).opacity = 0.45
+        end for
+    end if
 end sub
 
 ' Upstream's AlertCountBadge: an amber capsule, at least a 34 px circle, with
@@ -1284,6 +1298,8 @@ sub pressRow()
         m.franchisesChanged = true
         render()
     else if row.kind = "collection" or row.kind = "franchiseCollection" then
+        ' A franchise collection can't be switched while FRANCHISES is off (#273).
+        if row.gated = true then return
         ' toggleCollection: switch one on and it airs from CH 310 (a franchise) or 400.
         id = row.collection.id
         if m.collectionKeys.DoesExist(id) then m.collectionKeys.Delete(id) else m.collectionKeys[id] = true

@@ -1635,11 +1635,13 @@ end sub
 ' Upstream's applySubtitleSelection: shown in fullscreen only, never over the
 ' guide; always when SUBTITLES is ALWAYS, and with FOREIGN AUDIO only when no
 ' audio track is in AUDIO LANGUAGE and the subtitles are in SUBTITLE
-' LANGUAGE. Otherwise the forced track in SUBTITLE LANGUAGE, when the stream
-' carries one as a sidecar (NxMbForcedSub), over the guide too, as upstream
-' burns it in. Roku doesn't list a forced track inside the file. On a server
-' stream with ALWAYS the full track is a sidecar as well (NxMbFullSub), and
-' is picked here as the file's own would be.
+' LANGUAGE. Otherwise a forced sidecar the player lists (Description "Forced",
+' a /Subtitles/ address), over the guide too; since #237 no stream carries
+' one: a Jellyfin or Emby forced track is drawn by the app (startForcedSub),
+' and Plex sends the track the Plex account has selected. Roku doesn't list
+' a forced track inside the file. On a server stream with ALWAYS the full
+' track is a sidecar (NxMbFullSub), and is picked here as the file's own
+' would be.
 sub applySubtitles()
     tracks = NxList(m.video.availableSubtitleTracks)
     tags = []

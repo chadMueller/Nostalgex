@@ -291,9 +291,9 @@ function NxMbFullSub(b as Object, lang as String) as Dynamic
 end function
 
 ' The subtitle tracks a stream carries as the server's SRT, for
-' content.SubtitleTracks: the forced track in `lang` (NxMbForcedSub), set
-' before play, as the Apple TV burns it in (forcedSubtitleToBurn), which Emby
-' refuses (docs/JELLYFIN-EMBY.md); and on a server stream (`direct` false)
+' content.SubtitleTracks: the forced track in `lang` (NxMbForcedSub) unless
+' `drawForced`, which both callers pass since #237, the app drawing it
+' instead (NxMbForcedSubUrl); and on a server stream (`direct` false)
 ' with `always` (SUBTITLES on ALWAYS), the full track in `lang`
 ' (NxMbFullSub), as the playlist lists none (Emby 4.10, even asked with
 ' SubtitleMethod=Hls), and applySubtitles picks it. A direct play lists the

@@ -59,6 +59,19 @@ function NxRunSettingsChannelsTests(configPath as String) as Integer
     NxCheck(r, "page: switch off, the collections stay listed", NxPageNames(NxFranchisePageEntries(franchises, collections, false)), "alien Nation|Batman Collection")
     NxCheck(r, "page: nothing at all", NxPageNames(NxFranchisePageEntries([], [], true)), "")
 
+    ' ── FranchisesPageGate (#273): the collections while FRANCHISES is off ──
+    NxCheck(r, "gate: on and switched on reads ON", NxFranchiseCollectionReadsOn(true, true).ToStr(), "true")
+    NxCheck(r, "gate: on and switched off reads OFF", NxFranchiseCollectionReadsOn(false, true).ToStr(), "false")
+    NxCheck(r, "gate: FRANCHISES off, switched on still reads OFF", NxFranchiseCollectionReadsOn(true, false).ToStr(), "false")
+    NxCheck(r, "gate: FRANCHISES off, switched off reads OFF", NxFranchiseCollectionReadsOn(false, false).ToStr(), "false")
+    NxCheck(r, "gate: selectable only while FRANCHISES is on", NxFranchiseCollectionSelectable(true).ToStr() + "|" + NxFranchiseCollectionSelectable(false).ToStr(), "true|false")
+    NxCheck(r, "gate: the Apple TV's line", NxFranchisesOffNote(), "None of these are on the air while FRANCHISES is off.")
+    NxCheck(r, "gate: the line has no em or en dash", (Instr(1, NxFranchisesOffNote(), Chr(8212)) = 0 and Instr(1, NxFranchisesOffNote(), Chr(8211)) = 0).ToStr(), "true")
+    gatedRows = [{ kind: "header" }, { kind: "info" }, { kind: "franchiseCollection", gated: true }, { kind: "franchiseCollection", gated: true }]
+    NxCheck(r, "gate: no gated row takes focus first", NxSettingsFirstFocusable(gatedRows).ToStr(), "-1")
+    gatedRows.Unshift({ kind: "bundle" })
+    NxCheck(r, "gate: the FRANCHISES switch does", NxSettingsFirstFocusable(gatedRows).ToStr(), "0")
+
     ' ── ChannelsHomePage: the link rows and their values ────────────────────
     NxCheck(r, "links: the three pages, in the list's order", NxPageIds(NxChannelsPages()), "packages|franchises|collections")
     NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL PACKAGES|FRANCHISES|MY COLLECTIONS")

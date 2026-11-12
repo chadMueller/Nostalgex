@@ -96,6 +96,25 @@ function NxFranchisePageEntries(franchises as Dynamic, collectionRows as Dynamic
     return sorted
 end function
 
+' FranchisesPageGate (#273): the FRANCHISES switch gates every franchise
+' channel, the franchise collections included, so while it is off none of them
+' airs. The page keeps them listed, faded and out of focus's way, under this
+' line, and none reads ON; each keeps its own saved switch for when FRANCHISES
+' is on again.
+function NxFranchisesOffNote() as String
+    return "None of these are on the air while FRANCHISES is off."
+end function
+
+' A franchise collection reads ON only when it is switched on and FRANCHISES is.
+function NxFranchiseCollectionReadsOn(collectionOn as Boolean, franchisesOn as Boolean) as Boolean
+    return franchisesOn and collectionOn
+end function
+
+' A franchise collection can be focused and switched only while FRANCHISES is on.
+function NxFranchiseCollectionSelectable(franchisesOn as Boolean) as Boolean
+    return franchisesOn
+end function
+
 ' The one note under the franchise switch when the shared block (CH 310-399) is
 ' full: the found franchises and the franchise collections past it together.
 function NxFranchiseBlockNote(overFound as Dynamic, overCollections as Dynamic, capacity as Dynamic) as String
