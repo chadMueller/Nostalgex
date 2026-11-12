@@ -7,8 +7,11 @@
 ' channel colour in channels.json the focused row's fill (NxGuideFocusFill,
 ' the Apple TV's 32% wash, never darkened) and its live cell
 ' (NxGuideFocusLiveFill, 55% over that, darkened no further than white
-' needs) reading 4.5:1 with white titles. The colour helpers it rests on
-' (NxTokOver, NxTokOverAt, NxTokDarkenFor) are checked first.
+' needs) reading 4.5:1 with white titles, and WATERSHED's placeholder on
+' that row (NxGuideFocusHeldText, #301) reading 4.5:1 on its band: text2
+' where text2 does, brightened no further than needed where it doesn't. The
+' colour helpers it rests on (NxTokOver, NxTokOverAt, NxTokDarkenFor,
+' NxTokLightenFor) are checked first.
 ' Returns the failure count.
 
 function NxRunGuideLookTests(channelsPath as String) as Integer
@@ -26,6 +29,11 @@ function NxRunGuideLookTests(channelsPath as String) as Integer
     w = NxTokDarkenFor("#FFFFFF", "0xFFFFFFFF", 4.5)
     NxCheck(r, "darken: white goes grey, just past 4.5:1", NxToStr(NxTokContrast("0xFFFFFFFF", w) >= 4.5 and NxTokContrast("0xFFFFFFFF", w) < 4.6), "true")
     NxCheck(r, "darken: not a colour", NxToStr(NxTokDarkenFor("#FFF", "0xFFFFFFFF", 4.5) = invalid), "true")
+    NxCheck(r, "lighten: text that already reads is only made opaque", NxToStr(NxTokLightenFor("#B9C3DE", "0x0D0D1FFF", 4.5)), "0xB9C3DEFF")
+    lit = NxTokLightenFor("#808080", "0x404040FF", 4.5)
+    NxCheck(r, "lighten: grey goes lighter, just past 4.5:1", NxToStr(NxTokContrast(lit, "0x404040FF") >= 4.5 and NxTokContrast(lit, "0x404040FF") < 4.6), "true")
+    NxCheck(r, "lighten: a ratio white can't reach ends at white", NxToStr(NxTokLightenFor("#808080", "0xC0C0C0FF", 4.5)), "0xFFFFFFFF")
+    NxCheck(r, "lighten: not a colour", NxToStr(NxTokLightenFor("#FFF", "0x000000FF", 4.5) = invalid), "true")
 
     ' The shape: 64 px rows, a 58 px header, a 340 px column and four 395 px
     ' half hours filling the 1920 px row.
@@ -75,6 +83,10 @@ function NxRunGuideLookTests(channelsPath as String) as Integer
     over = []
     kept = 0
     darkened = 0
+    heldShort = []
+    heldOver = []
+    heldKept = 0
+    heldLifted = []
     for each h in colours
         wash = NxTokOverAt(h, tc.panel, 0.32)
         fill = NxGuideFocusFill(h)
@@ -91,16 +103,31 @@ function NxRunGuideLookTests(channelsPath as String) as Integer
             darkened = darkened + 1
             if liveRatio <> invalid and liveRatio >= 4.6 then over.Push(h + " " + NxTokRatio(tc.text, live))
         end if
+        ' The placeholder on the focused row's band, the past tint over the fill.
+        band = NxTokOver(NxGuideColors().past, fill)
+        held = NxGuideFocusHeldText(h)
+        heldRatio = NxTokContrast(held, band)
+        if heldRatio = invalid or heldRatio < 4.5 then heldShort.Push(h)
+        if NxTokContrast(tc.text2, band) >= 4.5 then
+            if held = tc.text2 then heldKept = heldKept + 1 else heldOver.Push(h + " changed")
+        else
+            heldLifted.Push(h + " " + NxTokRatio(held, band))
+            if heldRatio <> invalid and heldRatio >= 4.6 then heldOver.Push(h + " " + NxTokRatio(held, band))
+        end if
     end for
     NxCheck(r, "focus: every colour's wash reads 4.5:1 with white", short.Join(","), "")
     NxCheck(r, "focus: no colour's wash is darkened", changed.Join(","), "")
     NxCheck(r, "live: every colour's cell reads 4.5:1 with white", liveShort.Join(","), "")
     NxCheck(r, "live: darkened no further than needed", over.Join(","), "")
     NxCheck(r, "live: every colour kept or darkened", NxToStr(kept + darkened), NxToStr(colours.Count()))
+    NxCheck(r, "held: every colour's focused placeholder reads 4.5:1 on its band", heldShort.Join(","), "")
+    NxCheck(r, "held: text2 kept where it reads, brightened no further than needed", heldOver.Join(","), "")
+    NxCheck(r, "held: every colour kept or brightened", NxToStr(heldKept + heldLifted.Count()), NxToStr(colours.Count()))
+    NxCheck(r, "held: not a colour is white's, as colorOf", NxGuideFocusHeldText("nope"), NxGuideFocusHeldText("#FFFFFF"))
     NxCheck(r, "focus: a colour with no # reads the same", NxGuideFocusFill("FFE500"), NxGuideFocusFill("#FFE500"))
     NxCheck(r, "focus: not a colour is white's wash, as colorOf", NxGuideFocusFill("nope"), NxGuideFocusFill("#FFFFFF"))
     NxCheck(r, "live: not a colour is white's, as colorOf", NxGuideFocusLiveFill("nope"), NxGuideFocusLiveFill("#FFFFFF"))
 
-    print "guide look cases: "; r.pass; " passed, "; r.fail; " failed ("; colours.Count(); " colours, live cells "; kept; " kept, "; darkened; " darkened)"
+    print "guide look cases: "; r.pass; " passed, "; r.fail; " failed ("; colours.Count(); " colours, live cells "; kept; " kept, "; darkened; " darkened; placeholder "; heldKept; " kept, brightened "; heldLifted.Join(", "); ")"
     return r.fail
 end function

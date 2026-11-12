@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Roku: WATERSHED's placeholder at 4.5:1 on a focused guide row, #301)
+
+**Why.** #263 left `text2` on a focused row's placeholder band (the past tint over the row's fill) under 4.5:1 for six
+pale channel colours, #F5E6C8, #E5E5E5, #FFE81F, #FFE500, #F7DC6F and #FFD700: 4.09 to 4.47:1. The Apple TV had the
+same gap, and its fix is on the branch for its next build (#301, for tydude001).
+
+**Changed.** On the focused row only, the placeholder (BROADCASTS RESUME AT 9 PM) is `NxGuideFocusHeldText`: `text2`
+where it reads 4.5:1 on that band, and otherwise white laid over `text2` at the smallest share that reaches 4.5:1
+(`NxTokLightenFor`), as #301 describes the Apple TV's `GuideRowContrast.secondaryText(on:)`. Unfocused rows are
+unchanged.
+
+**Not the Apple TV's code.** Its Swift isn't on main, so this follows #301's description. Roku colours are 8 bits a
+channel, so the six end at the first step toward white that reaches 4.5:1, 4.50 to 4.53:1 rather than 4.50 each:
+#FFE500 and #E5E5E5 4.50, #F7DC6F 4.51, #FFD700 and #F5E6C8 4.52, #FFE81F 4.53. The step before each reads under 4.5.
+
+**Tests.** `GuideLookTests`, 36 cases (28 before): `NxTokLightenFor` (text that already reads, a grey just past
+4.5:1, white when white can't reach it, not a colour), and for all 97 colours in `channels.json` the focused
+placeholder at 4.5:1 on its band, `text2` kept where `text2` reads (91) and brightened to under 4.6:1 where it doesn't
+(6), plus a not-a-colour case. With `NxGuideFocusHeldText` returning `text2`, the 4.5:1 case fails on the six, at
+#301's 4.09 to 4.47:1. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Seen** on the 55R617 (OS 16.0.4), a test-data build signed in to the lab Emby as `nxlab`, with one change for the
+check: `nxlab`'s only channel, VHS VAULT, held and drawn in CRITERION's #F5E6C8 (the lab library airs none of the six
+pale channels, and VHS VAULT's own rules keep WATERSHED off it). The placeholder's node is #C4CDE3, on a band the
+screenshot reads as grey 85 to 87 (#585757 worked out): 4.52:1, where `text2` reads 4.09. Rebuilt with the
+placeholder left at `text2`, it draws #B9C3DE.
+
 ## 2026-11-11 (Roku: no current audio track is the first listed, #283's review follow-ups, #246)
 
 **Why.** Chad's merge note on #283 (tydude001): a player that reports no current audio track (the 43S45's `was ` on a
