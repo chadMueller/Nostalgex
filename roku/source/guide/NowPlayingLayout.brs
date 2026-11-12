@@ -21,3 +21,16 @@ function NxPanelProgramRows(hasSubtitleTracks as Boolean, audioTrackCount as Int
     if audioTrackCount > 1 then rows.Push("audioLanguage")
     return rows
 end function
+
+' The badge after the next programme's title on the Now Playing panel (#266,
+' Variant A): "UP NEXT IN 84 MIN". Minutes only, never hours (120 MIN), whole
+' minutes rounded down so it never promises sooner than it is; under a minute
+' (or already due) it reads LESS THAN 1 MIN. `secondsAway` is the next
+' programme's start less now.
+function NxUpNextBadge(secondsAway as Dynamic) as String
+    n = 0
+    if NxIsNumber(secondsAway) then n = Int(secondsAway / 60)
+    if n < 1 then return "UP NEXT IN LESS THAN 1 MIN"
+    return "UP NEXT IN " + n.ToStr() + " MIN"
+end function
+

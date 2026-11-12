@@ -29,6 +29,30 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: the Now Playing panel's info zone as the Apple TV's Variant A, #266)
+
+**Why.** The Roku's panel put the poster, the channel line, the title, the year, the rating and a plain "UP NEXT: title" line in one
+block. The Apple TV 1.0.32 rebuilt it so the information reads first and the next programme sits on one line under it.
+
+**Changed (the info zone; the control columns are as they were).** The poster is 120 by 180 (was 150 by 225) with the info beside it; with no
+poster the info takes its place. The info is only the channel line, a channel-coloured bar (8 by 24) beside "CH n" in white (VT323 28) and the
+channel name in capitals (22, text-2), then the programme's title (29, white, up to 3 lines): no description, genre, year or rating. UP NEXT is one
+line under it: the next programme's title (22, white) and straight after it a cyan chip, UP NEXT IN 84 MIN, on the selected-row fill with a 2 px cyan
+outline. A long title is cut with an ellipsis and the chip stays whole. `NxUpNextBadge` (`source/guide/NowPlayingLayout.brs`) words it: minutes only,
+never hours (120 MIN), whole minutes rounded down, LESS THAN 1 MIN under a minute. The guide sends the panel the seconds to the next start and
+re-sends the state every 15 seconds while it is open, so the badge follows the clock. Sizes and colours from `NxTokens()`.
+
+**Tested off the TV.** 9 more cases in the sleep-timer suite (30), which holds the panel's rules: 84 MIN, 120 MIN, rounded down (84 min 59 s is 84),
+exactly a minute, 61 s, 59 s, due, already started and no number.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4) on the real library, through the node tree, Play then Down on a playing channel: the poster
+node is 120 by 180 at (48, 40); "CH 1" white, REWATCHABLES MOVIES in `#B9C3DE`, "The Terminator" 29 white on the info column from x 192, then
+"F1: The Movie" and the cyan chip "UP NEXT IN 80 MIN" beside it; Back, Back returns to the guide. Not seen by eye, not at 720p.
+
+**Not done.** The controls' own layout from the issue (two 440 columns of 64 px rows with a hint line under them), the cyan selected-row outline
+on them, and the Up-closes-the-panel key rule; the Down, Up and Back keys are unchanged. At 720p the OS scales the canvas by 2/3 and there is
+no separate layout.
+
 ## 2026-11-12 (Roku: bundle stripes in the guide, with a way to move along them, #276)
 
 **Why.** The guide had a BUNDLES list to jump to a bundle, but nothing in the grid said which bundle a row belonged to; a row's

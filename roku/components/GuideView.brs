@@ -962,7 +962,7 @@ end function
 
 sub onTick()
     checkSleep()
-    if m.np <> invalid and (m.sleepEnd <> invalid or m.np.infoOpen = true) then m.np.state = npState()
+    if m.np <> invalid and (m.sleepEnd <> invalid or m.np.infoOpen = true or nowSec() mod 15 = 0) then m.np.state = npState()
     renderInfo()
     if m.fullscreen then updateOsdTime()
     t = nowSec()
@@ -2083,7 +2083,7 @@ function npState() as Object
     b = m.playing
     st = {
         number: ch.number, name: ch.name, color: colorOf(ch.color, "FF"),
-        nowLine: "", rating: "", upNext: "", poster: invalid,
+        nowLine: "", title: "", rating: "", upNext: "", upNextIn: 0, poster: invalid,
         hasSubs: m.hasSubs, ccOn: m.subs.always, autoOn: m.subs.foreign,
         audio: [], retro: NxRetroMode(), sleepMinutes: 0, sleepLeft: -1, info: [],
         subsLanguage: NxSavedLanguage("subsLanguage"), audioLanguage: NxSavedLanguage("audioLanguage"),
@@ -2098,8 +2098,13 @@ function npState() as Object
         if not NxTruthy(b.music) and b.year <> "" then st.nowLine = b.title + "  " + b.year
         st.rating = NxToStr(b.contentRating)
         st.poster = NxPosterRef(b, NxSignedInKind())
+        st.title = musicLine(b)
         nxt = blockAfter(ch, b)
-        if nxt <> invalid then st.upNext = musicLine(nxt)
+        if nxt <> invalid then
+            st.upNext = musicLine(nxt)
+            ' Seconds to its start as an Integer (nowSec is a LongInteger).
+            st.upNextIn = (nxt.startSec - nowSec()).ToStr().ToInt()
+        end if
     end if
     ' PLAYBACK INFORMATION, upstream's rows (source/guide/PlaybackInfo.brs).
     if b <> invalid and m.pi <> invalid then

@@ -479,29 +479,46 @@ sub onPosterFile()
 end sub
 
 sub renderInfo(s as Object)
+    ' The Apple TV's Variant A (#266, #262's tokens): the poster 120 by 180 with
+    ' the info beside it, which is only the channel line and the programme's
+    ' title, then UP NEXT as one line under it: the next title and, straight
+    ' after it, a cyan badge saying how many minutes away it is.
+    tk = NxTokens()
     g = m.top.FindNode("info")
     g.RemoveChildrenIndex(g.GetChildCount(), 0)
     showPoster(s.poster)
     x = 48
-    if NxToStr(m.posterPath) <> "" then x = 48 + 150 + 24
+    if NxToStr(m.posterPath) <> "" then x = 48 + 120 + 24
+    w = m.colX[0] - 40 - x
     y = 40
-    g.AppendChild(newRect(x, y, 48, 4, s.color))
-    y = y + 12
-    g.AppendChild(newLabel("CH " + NxToStr(s.number), "DMMono-Medium", 23, s.color, x, y, 0))
-    y = y + 36
-    g.AppendChild(newLabel(NxToStr(s.name), "DMMono-Medium", 30, "0xFFFFFFFF", x, y, 640))
-    y = y + 46
-    now = newLabel(NxToStr(s.nowLine), "DMMono-Regular", 25, "0xFFFFFFE6", x, y, 0)
-    now.width = 640
-    now.wrap = true
-    now.maxLines = 2
-    g.AppendChild(now)
-    y = y + now.boundingRect().height + 8
-    if NxToStr(s.rating) <> "" then
-        g.AppendChild(newLabel(UCase(s.rating), "DMMono-Regular", 18, "0xFFFFFFB3", x, y, 0))
-        y = y + 30
+    ' The channel's colour bar beside CH n (VT323 28, white) and the name in capitals (22, text-2).
+    g.AppendChild(newRect(x, y + 4, 8, 24, s.color))
+    tag = newLabel("CH " + NxToStr(s.number), tk.font.tag, 28, tk.color.text, x + 18, y, 0)
+    g.AppendChild(tag)
+    nameX = x + 18 + tag.boundingRect().width + 14
+    g.AppendChild(newLabel(UCase(NxToStr(s.name)), tk.font.label, 22, tk.color.text2, nameX, y + 3, x + w - nameX))
+    y = y + 44
+    title = newLabel(NxToStr(s.title), tk.font.label, 29, tk.color.text, x, y, w)
+    title.wrap = true
+    title.maxLines = 3
+    g.AppendChild(title)
+    y = y + title.boundingRect().height + 16
+    if NxToStr(s.upNext) <> "" then
+        badgeText = NxUpNextBadge(s.upNextIn)
+        adv = Len(badgeText) * 13.2
+        chipW = adv + 28
+        chipX = x + w - chipW
+        ' The title takes what the badge leaves and is cut with an ellipsis; the badge is always whole.
+        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, 22, tk.color.text, x, y + 5, w - chipW - 16)
+        g.AppendChild(nextLbl)
+        tw = nextLbl.boundingRect().width
+        if tw < w - chipW - 16 then chipX = x + tw + 14
+        g.AppendChild(newRect(chipX, y, chipW, 36, tk.color.selectedRow))
+        outline(g, chipX, y, chipW, 36, 2, tk.color.cyan)
+        chip = newLabel(badgeText, tk.font.label, 22, tk.color.cyan, chipX, y + 5, chipW)
+        chip.horizAlign = "center"
+        g.AppendChild(chip)
     end if
-    if NxToStr(s.upNext) <> "" then g.AppendChild(newLabel("UP NEXT: " + s.upNext, "DMMono-Regular", 18, "0xFFFFFFB3", x, y + 4, 640))
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean

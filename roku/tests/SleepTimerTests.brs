@@ -34,6 +34,17 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "rows: two audio tracks add audio language", NxPanelProgramRows(false, 2).Join(","), "captionsHeader,captions,audioHeader,audioTracks,audioLanguage")
     NxCheck(r, "rows: everything, in order", NxPanelProgramRows(true, 3).Join(","), "captionsHeader,captions,subtitleLanguage,autoSubtitles,audioHeader,audioTracks,audioLanguage")
 
+    ' ── The Now Playing panel's UP NEXT badge (#266, Variant A) ──
+    NxCheck(r, "up next: 84 minutes", NxUpNextBadge(84 * 60), "UP NEXT IN 84 MIN")
+    NxCheck(r, "up next: minutes only, never hours", NxUpNextBadge(120 * 60), "UP NEXT IN 120 MIN")
+    NxCheck(r, "up next: whole minutes rounded down", NxUpNextBadge(84 * 60 + 59), "UP NEXT IN 84 MIN")
+    NxCheck(r, "up next: just over a minute is one", NxUpNextBadge(61), "UP NEXT IN 1 MIN")
+    NxCheck(r, "up next: exactly a minute", NxUpNextBadge(60), "UP NEXT IN 1 MIN")
+    NxCheck(r, "up next: under a minute", NxUpNextBadge(59), "UP NEXT IN LESS THAN 1 MIN")
+    NxCheck(r, "up next: due now", NxUpNextBadge(0), "UP NEXT IN LESS THAN 1 MIN")
+    NxCheck(r, "up next: already started", NxUpNextBadge(-30), "UP NEXT IN LESS THAN 1 MIN")
+    NxCheck(r, "up next: no number", NxUpNextBadge(invalid), "UP NEXT IN LESS THAN 1 MIN")
+
     print "sleep timer cases (upstream SleepTimerLogic, NowPlayingPanelLayout): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
