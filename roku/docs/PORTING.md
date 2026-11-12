@@ -265,7 +265,9 @@ lists, under each package's name, the channels of every package that is on,
 built and not building that aren't on air, each as a card: its colour and name,
 "Needs n matching titles. You have m.", and its rules as `plainLanguageRequirements`
 words them (the same fields, order and text; the Swift tests' cases are ported
-one for one). With none missing it says "Every channel in your packages is on
+one for one, and since #280 every channel's lines are held to
+`scripts/channel-requirements-golden.json`, with the amber line held to the web module's
+`needsLine`, so a change to a channel's rules turns the suite red until the Roku follows). With none missing it says "Every channel in your packages is on
 air." Differences:
 
 - **When the count is made.** The Apple TV filters the library for the page's

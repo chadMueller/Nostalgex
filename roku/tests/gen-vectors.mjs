@@ -36,6 +36,7 @@ import { watchVectors } from "./gen-watch.mjs";
 import { playbackInfoVectors } from "./gen-playback-info.mjs";
 import { coverageVectors } from "./gen-coverage.mjs";
 import { musicTitleVectors } from "./gen-music-title.mjs";
+import { requirementsVectors } from "./gen-requirements.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const upstream = resolve(process.env.NOSTALGEX_DIR || join(here, "..", ".."));
@@ -284,13 +285,18 @@ const files = [
     upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-music-brainz.js cleanTitle, parseTitle" },
     ...musicTitleVectors(upstream),
   }],
+  [join(here, "vectors", "channel-needs.json"), {
+    generatedBy: "tests/gen-vectors.mjs (tests/gen-requirements.mjs)",
+    upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-channel-requirements.js needsLine" },
+    ...requirementsVectors(upstream),
+  }],
   // Upstream's own golden files, copied byte for byte: FranchiseTests.brs,
   // FilterGoldenTests.brs, RatingGoldenTests.brs, SeasonalTests.brs,
   // ScheduleDSTGoldenTests.brs, ScheduleParityGoldenTests.brs, ReportTests.brs
   // (watch-cleanup-golden.json), StreamQualityTests.brs, Utf8RepairTests.brs,
-  // WatershedGoldenTests.brs, MediaBrowserTests.brs (jellyfin-library-golden.json) and
-  // MusicTitleGoldenTests.brs read them.
-  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json"].map((g) =>
+  // WatershedGoldenTests.brs, MediaBrowserTests.brs (jellyfin-library-golden.json),
+  // MusicTitleGoldenTests.brs and ChannelsMissingTests.brs (channel-requirements-golden.json) read them.
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;

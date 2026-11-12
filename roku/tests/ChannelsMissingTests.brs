@@ -3,10 +3,13 @@
 ' NostalgexTests/ChannelEmptyExplainerTests.swift, one for one, with the
 ' same rules and the same expected lines; the rest cover which channels the
 ' page lists, the card's amber line and the wrapping. The last cases read
-' every channel in data/channels.json.
+' every channel in data/channels.json, then hold the plain-words lines of all of
+' them to scripts/channel-requirements-golden.json and the amber line to the web
+' module's answers (tests/gen-requirements.mjs), so a change to a channel's rules
+' turns this red until the Roku follows (#280).
 ' Returns the failure count.
 
-function NxRunChannelsMissingTests(configPath as String) as Integer
+function NxRunChannelsMissingTests(configPath as String, goldenPath as String, needsPath as String) as Integer
     r = { pass: 0, fail: 0 }
 
     ' ── plainLanguageRequirements (ChannelEmptyExplainerTests) ──────────────
@@ -129,6 +132,53 @@ function NxRunChannelsMissingTests(configPath as String) as Integer
         total = total + NxList(b.channelIDs).Count()
     end for
     NxCheck(r, "channels.json: with nothing on air every package channel is listed", NxMissingCount(groups).ToStr(), total.ToStr())
+
+    ' ── Held to the shared golden file (#280) ───────────────────────────────
+    golden = ParseJson(ReadAsciiFile(goldenPath))
+    NxCheck(r, "golden: the file reads", NxToStr(type(golden) = "roAssociativeArray" and type(golden.channels) = "roAssociativeArray"), "true")
+    if type(golden) = "roAssociativeArray" and type(golden.channels) = "roAssociativeArray" then
+        checked = 0
+        differ = []
+        missing = []
+        for each def in NxList(config.channels)
+            id = NxToStr(def.id)
+            want = golden.channels[id]
+            if type(want) <> "roArray" then
+                missing.Push(id)
+            else
+                checked = checked + 1
+                got = NxMissingJoin(NxPlainRequirements(def.rules), "|")
+                if got <> NxMissingJoin(want, "|") then differ.Push(id)
+            end if
+        end for
+        extra = []
+        known = {}
+        for each def in NxList(config.channels)
+            known[NxToStr(def.id)] = true
+        end for
+        for each id in golden.channels
+            if not known.DoesExist(id) then extra.Push(id)
+        end for
+        NxCheck(r, "golden: every channel in channels.json is in the file", NxMissingJoin(missing, ","), "")
+        NxCheck(r, "golden: every channel in the file is in channels.json", NxMissingJoin(extra, ","), "")
+        NxCheck(r, "golden: the lines match for every channel", NxMissingJoin(differ, ","), "")
+        print "channels-missing golden: "; checked; " channels checked, "; differ.Count(); " differ, "; missing.Count(); " missing, "; extra.Count(); " extra"
+    end if
+    needs = ParseJson(ReadAsciiFile(needsPath))
+    NxCheck(r, "needs: the vectors read", NxToStr(type(needs) = "roAssociativeArray" and type(needs.needs) = "roArray"), "true")
+    if type(needs) = "roAssociativeArray" and type(needs.needs) = "roArray" then
+        wrong = []
+        for each c in needs.needs
+            count = c.matched
+            if count = invalid then count = "counting"
+            got = NxMissingNeedsLine(c.minItems, count)
+            if got <> c.line then wrong.Push(NxToStr(c.minItems) + "/" + NxToStr(c.matched) + ": " + got)
+        end for
+        NxCheck(r, "needs: the amber line matches the web module for every pair", NxMissingJoin(wrong, " | "), "")
+        NxCheck(r, "needs: unset minItems reads as 50, as the guide build does", NxMissingNeedsLine(invalid, 3), "Needs 50 matching titles. You have 3.")
+        NxCheck(r, "needs: a library the count won't run for stops at what the channel needs", NxMissingNeedsLine(15, "none"), "Needs 15 matching titles.")
+        print "channels-missing needs: "; needs.needs.Count(); " pairs"
+    end if
 
     print "channels-missing tests: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail

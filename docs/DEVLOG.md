@@ -23,6 +23,24 @@ my.roku.com/account/add/NOSTALGEX, github.com/chadMueller/Nostalgex), read from 
 
 **Not done.** The Apple TV's text is copied by hand; nothing re-checks it when `AboutLinks.swift` changes. Not seen by eye.
 
+## 2026-11-12 (Roku: WHY ARE SOME CHANNELS MISSING? is held to the shared channel-requirements golden file, #280)
+
+**Why.** The Roku's plain-language lines were checked once against a transcription of the Apple TV's
+`plainLanguageRequirements` (all 142 channels matched), and nothing re-checked them when `channels.json` changed. The web
+tuner now has the same words as shared code and a shared file, `scripts/channel-requirements-golden.json`.
+
+**Changed (tests only).** `tests/gen-vectors.mjs` copies the golden file byte for byte and writes `tests/vectors/channel-needs.json`
+from the web module's `needsLine` (`tests/gen-requirements.mjs`, 6 minimums by 5 counts); the generator also fails before any
+BrightScript runs if the module and the golden file disagree on a channel. `ChannelsMissingTests` compares
+`NxPlainRequirements` for every channel in `channels.json` with the file, both ways (a channel missing from the file, or in it
+and not in `channels.json`), and `NxMissingNeedsLine` for every pair. No app code changed.
+
+**Tested off the TV.** The channels-missing suite: 70 cases, 142 of 142 channels match, 30 pairs match. With the Roku's "Rated: "
+changed to "Rating: " in a throwaway copy, 28 channels differ and the suite fails. Roku-only on purpose: the "none" state
+(a library over the coverage limit, or a saved guide with no library) has no web counterpart.
+
+**Not done.** On a stick: the same suite runs in `deploy.sh --test`, not run here.
+
 ## 2026-11-12 (README: Roku in the "Pick your way to watch" table)
 
 **Changed.** The table in `README.md` gets a Roku channel column (second, after the Apple TV app), and "Get it" is now the first row, so the buttons sit at the top. "All three are free" reads "All four". The Roku button goes to nostalgex.app/roku, which has the Add button for the Channel Store. The Roku app is on the Roku Channel Store since 1.0.12.
