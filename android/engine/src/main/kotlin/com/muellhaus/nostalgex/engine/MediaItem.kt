@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex.engine
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * One programme as the loaders build it: the web tuner's item shape (plex-tuner.html
@@ -39,6 +40,12 @@ data class MediaItem(
     /** The file's bitrate in kbps (Plex `Media.bitrate`), for the remote direct-play ceiling. */
     val bitrate: Int? = null,
     val serverUrl: String? = null,
+    /**
+     * The server's token, for playback. Never saved: `library.json` and the kept scan sections
+     * would otherwise hold it once per item. Filled back in from the signed-in server with the
+     * item's address when a saved copy is read (ServerTokens.fill).
+     */
+    @Transient
     val serverToken: String? = null,
     /** Plex artwork path (`thumb`), for the Now Playing poster. */
     val thumb: String? = null,

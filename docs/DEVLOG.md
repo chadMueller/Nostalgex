@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-11 (Android: follow-ups from the #151 review)
+
+#151 is in main as `dd720f17` (squash). These are the two code follow-ups from Chad's review, on branch `android/follow-ups`.
+
+**Changed.**
+- The info panel's channel line reads `CH 03 - NAME` with a hyphen. The Apple TV's `InfoPanelView.swift` still has an em dash there (`\u{2014}`), so the two differ until it changes too.
+- `MediaItem.serverToken` is no longer saved. It was written once per item into `library.json` and the kept scan sections (#288). It is `@Transient` now, `ServerTokens.fill` puts it back from the signed-in server with the item's address when `library.json` is read, and a kept section's items take their own server's address and token (`ServerTokens.claim`), so a server that moved between a killed scan and the resume still matches the next time the library is read. `LibraryStore.FORMAT` is 8, so a copy saved by an older build is never used again; it stays on disk, tokens included, until the first full read after the update completes and overwrites it. Playback code is unchanged: it still reads `item.serverToken`.
+  - Measured on a Google TV emulator (API 34) against the Docker Jellyfin lab: after a full read, `library.json` had 5 items with their addresses, 0 `serverToken` keys and 0 copies of the token. Relaunched from it, the fill gave all 5 items the token (a throwaway log line, not committed), and the first channel direct-played in 1268 ms.
+  - `ServerTokensTest`: the token is never written, an old copy's token isn't read back, each item gets its own server's token, or none when no signed-in server has its address, and a kept section saved before its server moved still gets the token after a save and a read. 355 engine tests pass, and so do `:app:lintRelease` and `:app:assembleDebug`.
+  - Measured on a SHIELD (Android 11), the real install updated in place to a release build of this branch, signed in to a real Plex server that answers 401 to a request without a token. The first launch didn't use the saved format 7 copy: it read the server in full and saved format 8. Relaunched from that copy, the first channel direct-played (4K HEVC, E-AC-3) in 1910 ms, and tuning 40 channels by link started 20 programmes, all direct play, with no failure; the other 20 channel ids have no channel in that lineup.
+
+**Half-done.**
+- No programme in those 20 went through the Plex server stream, so `/decision`, the audio pick and stopping a transcode were not exercised with a filled-in token. They read the same `item.serverToken` direct play does. The kept-section path (a first setup killed part way) wasn't exercised on a device.
+
+**Next.**
+- Chad's TV pass before the next Play upload: the SHIELD now runs this branch, so a server-stream title on Plex is the one check left.
+
 ## 2026-11-11 (Roku: WATERSHED's placeholder at 4.5:1 on a focused guide row, #301)
 
 **Why.** #263 left `text2` on a focused row's placeholder band (the past tint over the row's fill) under 4.5:1 for six

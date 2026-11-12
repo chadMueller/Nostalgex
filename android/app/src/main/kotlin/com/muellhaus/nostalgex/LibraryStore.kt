@@ -3,6 +3,7 @@ package com.muellhaus.nostalgex
 import android.content.Context
 import com.muellhaus.nostalgex.engine.MediaItem
 import com.muellhaus.nostalgex.engine.ServerCollection
+import com.muellhaus.nostalgex.engine.ServerTokens
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -34,7 +35,7 @@ class LibraryStore(context: Context) {
         val saved = file.inputStream().buffered().use { json.decodeFromStream<Saved>(it) }
         // A saved library with no items is never used: it can only say NO CHANNELS FOUND, and a
         // full load is the way back from that (#198).
-        Library(saved.items, saved.collections).takeIf { saved.format == FORMAT && saved.servers == key(servers) && saved.items.isNotEmpty() }
+        Library(ServerTokens.fill(saved.items, servers.associate { it.url to it.token }), saved.collections).takeIf { saved.format == FORMAT && saved.servers == key(servers) && saved.items.isNotEmpty() }
     }.getOrNull()
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
@@ -53,6 +54,6 @@ class LibraryStore(context: Context) {
 
     companion object {
         /** Bump when MediaItem or what the scan fills in changes, so an old copy is read again. */
-        private const val FORMAT = 7 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size; 7: audio tracks keep their own title (#286)
+        private const val FORMAT = 8 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size; 7: audio tracks keep their own title (#286); 8: items no longer carry the server token
     }
 }
