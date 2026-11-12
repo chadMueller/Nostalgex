@@ -29,6 +29,30 @@ the player listed the full English sidecar and selected it (`subtitles true (tra
 line's group was hidden while holding the clip's second line. Read from the console and the node tree; a dev screenshot doesn't capture the video plane. SUBTITLES set back
 to FOREIGN AUDIO afterwards.
 
+## 2026-11-12 (Roku: Settings one step smaller, on the Apple TV 1.0.32's compact scale, #265)
+
+**Why.** The Roku's Settings had its own sizes (rail 470 wide with 76 px tabs, page title 34, section headings 28, hints and
+notes in 20 px white at 70%, state words in 24 px) and its own greys. The Apple TV 1.0.32 moved Settings to 25 px row text,
+29 px headings, a 420 px rail with 64 px rows, hints in `#B9C3DE`, and the selected-row fill with a cyan outline and glow.
+
+**Changed.** `SettingsView.brs` reads `NxTokens()` (#262, #295) instead of its own numbers: rail 420 wide and the pane at 480
+(rows 1,360 wide), the SETTINGS tag 31 px VT323 in text-2, tab labels 25 px (white when selected, text-2 otherwise), the page
+title and section headings 29 px, hints, notes, the page line and the MISSING CHANNELS cards 25 px in text-2, row names
+25 px medium and state words 25 px regular (ON cyan, OFF and the rest text-2, a faded row at 0.7 opacity). The selected row, and
+the focused tab, take the `selectedRow` fill with the cyan outline and glow the guide's focus uses (`focus.9.png`); resting rows
+the `row` fill. A value that is a line of its own (ABOUT's version and addresses) sits on the name's line, so it clears the
+long hint under it. Hints stay in VT323 (at 25 px): the Roku's own face for them, narrower than DM Mono, so the longest still end
+before the value column. The cards' lines are 32 px apart (was 26), the RESCAN row's extra lines 28. The row heights are
+otherwise as they were. Paddings follow the text, not the Apple TV's numbers.
+
+**Seen** on a Streaming Stick Plus (OS 15.3.4), through the node tree: in the Settings tour (test data) every tab and the
+CHANNEL BUNDLES, FRANCHISES and MY COLLECTIONS pages, and on the real library through the guide to Settings, SUPPORT to ABOUT and
+the same three pages: no Settings label is cut short (`isTextEllipsized`) and none overlaps another in its ink. Not seen by eye;
+not set to 720p (the OS scales the 1080 canvas by 2/3, and there is no separate layout).
+
+**Not done.** The 3 px outline is the 9-patch's, not a measured 3 px; no 3% lift (the guide's focus has none either).
+The toggle track from the issue does not apply: the Roku shows ON and OFF as words.
+
 ## 2026-11-12 (Roku: ABOUT lists the project's links as readable addresses, #282)
 
 **Why.** The Roku's ABOUT held the version line and one GitHub row. The Apple TV's ABOUT (1.0.32, `AboutLinks.swift`) lists

@@ -297,7 +297,7 @@ draws them.
 
 - **The rail** (`SettingsRailView`): SETTINGS at the top, SUPPORT NOSTALGEX pinned
   above a divider, then PLAYBACK & PICTURE, CHANNELS & BUNDLES, SERVERS & ACCOUNTS
-  and ABOUT, at its sizes (470 wide, rows 76 high). A row's bar is 4 wide, 6 on
+  and ABOUT, at its sizes (420 wide, rows 64 high, since #265; 25 px text, 29 px headings, the tag 31). A row's bar is 4 wide, 6 on
   the selected tab, 8 on the focused one; the focused row has a 22% tint and a
   3 px border, and the selected one keeps a 6% white fill while focus is in the
   rows. NOSTALGEX PRO and the DISCORD and RATE rows are off there

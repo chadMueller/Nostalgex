@@ -72,8 +72,8 @@
   <script type="text/brightscript" uri="pkg:/components/SettingsView.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0B1CFF" />
-    <!-- The rail (0 to 470) and the pane's content, 80 in from its edge. -->
+    <!-- The rail (0 to 420) and the pane's content, 60 in from its edge. -->
     <Group id="rail" />
-    <Group id="pane" translation="[550,0]" />
+    <Group id="pane" translation="[480,0]" />
   </children>
 </component>

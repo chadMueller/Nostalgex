@@ -3,11 +3,17 @@
 sub init()
     ' Settings' cyan, the Apple TV's BrandCyan, for the rail and the rows.
     m.accent = "0x00D4FF"
-    ' The rail down the left (SettingsRailView: 470 wide, rows 76 high), and
-    ' the pane beside it: the hero pinned at the top, the rows under a divider.
-    m.railW = 470
-    m.paneX = 550
-    m.rowW = 1290
+    ' The rail down the left (SettingsRailView, one step down the Apple TV's
+    ' scale, #265: 420 wide, rows 64 high), and the pane beside it: the hero
+    ' pinned at the top, the rows under a divider. The sizes and colours are
+    ' the tokens' (source/ui/Tokens.brs): text 25, headings 29, the tag 31.
+    tk = NxTokens()
+    m.tk = tk
+    m.t2 = tk.color.text2
+    m.sz = tk.compactSize
+    m.railW = 420
+    m.paneX = 480
+    m.rowW = 1360
     ' The rows' window in the pane, under the hero and its divider.
     m.listTop = 224
     m.listH = 776
@@ -366,7 +372,7 @@ sub pushMissing()
         logMissingTime(clock, parsedMs)
         return
     end if
-    cols = Int((m.rowW - 40) / advanceOf("DMMono-Regular", 20))
+    cols = Int((m.rowW - 40) / advanceOf("DMMono-Regular", 25))
     for each g in groups
         add({ kind: "subheader", text: NxToStr(g.bundle.name) }, "channels")
         for each def in g.channels
@@ -504,15 +510,15 @@ function rowHeight(row as Object) as Integer
     if row.kind = "subheader" or row.kind = "info" then return 44
     if row.kind = "support" then return 184
     ' ChannelRequirementCard: 14 px above and below, the name, the amber
-    ' line(s) and the rules, 26 px a line, and 6 px between cards.
-    if row.kind = "missingCard" then return 14 + 34 + 26 * (row.needsLines + row.bullets.Count()) + 14 + 6
+    ' line(s) and the rules, 32 px a line (25 px text), and 6 px between cards.
+    if row.kind = "missingCard" then return 14 + 36 + 32 * (row.needsLines + row.bullets.Count()) + 14 + 6
     if row.kind = "missingNone" then return 60
     ' Two lines under its detail, and a third when the library line (#207)
     ' and a playback failure are both there.
     if row.kind = "rescan" then
         n = NxRescanLines(NxLibraryHeld(), "", NxLastPlaybackVerdict(), 0).Count() - 1
         if n < 2 then n = 2
-        return 74 + 26 * n
+        return 74 + 28 * n
     end if
     ' Upstream's subtitle in two lines.
     if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" or row.kind = "includeHidden" then return 100
@@ -656,15 +662,16 @@ sub renderRail()
     rail.RemoveChildrenIndex(rail.GetChildCount(), 0)
     rail.AppendChild(newRect(0, 0, m.railW, 1080, "0x080814F2"))
     rail.AppendChild(newRect(m.railW, 0, 1, 1080, "0xFFFFFF1A"))
-    rail.AppendChild(newLabel("SETTINGS", "VT323-Regular", 44, "0xFFFFFF99", 40, 70))
+    rail.AppendChild(newLabel("SETTINGS", m.tk.font.tag, m.sz.tag, m.t2, 36, 72))
     y = 138
+    rowH = m.tk.compactRow.height
     for i = 0 to m.tabs.Count() - 1
         t = m.tabs[i]
         drawTab(rail, i, t, y)
-        y = y + 80
+        y = y + rowH + m.tk.compactRow.gap
         if t.pinned then
-            rail.AppendChild(newRect(48, y + 14, m.railW - 96, 1, "0xFFFFFF1A"))
-            y = y + 33
+            rail.AppendChild(newRect(48, y + 10, m.railW - 96, 1, "0xFFFFFF1A"))
+            y = y + 27
         end if
     end for
 end sub
@@ -673,27 +680,36 @@ sub drawTab(rail as Object, i as Integer, t as Object, y as Float)
     selected = (i = m.tabIndex)
     focused = selected and m.where = "rail"
     w = m.railW - 40
+    h = m.tk.compactRow.height
     if focused then
-        rail.AppendChild(newRect(20, y, w, 76, m.accent + "38"))
+        ' The selected-row fill with the cyan outline and glow (images/look/focus.9.png).
+        rail.AppendChild(newRect(20, y, w, h, m.tk.color.selectedRow))
+        rail.AppendChild(focusOutline(20, y, w, h, m.accent))
     else if selected then
-        rail.AppendChild(newRect(20, y, w, 76, "0xFFFFFF0F"))
+        rail.AppendChild(newRect(20, y, w, h, "0xFFFFFF0F"))
     end if
     barW = 4
     if selected then barW = 6
     if focused then barW = 8
     barColor = m.accent + "4D"
     if selected then barColor = m.accent + "FF"
-    rail.AppendChild(newRect(20, y, barW, 76, barColor))
-    if focused then
-        rail.AppendChild(newRect(20, y, w, 3, m.accent + "FF"))
-        rail.AppendChild(newRect(20, y + 73, w, 3, m.accent + "FF"))
-        rail.AppendChild(newRect(20, y, 3, 76, m.accent + "FF"))
-        rail.AppendChild(newRect(20 + w - 3, y, 3, 76, m.accent + "FF"))
-    end if
-    tc = "0xFFFFFFB3"
-    if selected then tc = "0xFFFFFFFF"
-    rail.AppendChild(newLabel(t.title, "DMMono-Medium", 24, tc, 20 + barW + 18, y + 22))
+    rail.AppendChild(newRect(20, y, barW, h, barColor))
+    tc = m.t2
+    if selected then tc = m.tk.color.text
+    rail.AppendChild(newLabel(t.title, m.tk.font.label, m.sz.body, tc, 20 + barW + 18, y + 15))
 end sub
+
+' The selected row's outline and glow, drawn over its fill: the 9-patch the
+' guide's focus uses, 16 px of glow all round, in `color` ("0xRRGGBB").
+function focusOutline(x as Float, y as Float, w as Float, h as Float, color as String) as Object
+    outline = CreateObject("roSGNode", "Poster")
+    outline.uri = "pkg:/images/look/focus.9.png"
+    outline.translation = [x - 16, y - 16]
+    outline.width = w + 32
+    outline.height = h + 32
+    outline.blendColor = color + "FF"
+    return outline
+end function
 
 ' The pane (SettingsContainerView's detailPane): the tab's 96 px icon, title
 ' and line pinned at the top, a divider, then only the rows scroll under it.
@@ -707,8 +723,8 @@ sub renderPane()
     icon.width = 96
     icon.height = 96
     page.AppendChild(icon)
-    page.AppendChild(newLabel(t.title, "DMMono-Medium", 34, "0xFFFFFFFF", 124, 72))
-    page.AppendChild(newLabel(t.line, "DMMono-Regular", 20, "0xFFFFFFB3", 124, 119))
+    page.AppendChild(newLabel(t.title, m.tk.font.label, m.sz.heading, m.tk.color.text, 124, 70))
+    page.AppendChild(newLabel(t.line, m.tk.font.text, m.sz.body, m.t2, 124, 114))
     page.AppendChild(newRect(0, 176, m.rowW, 1, "0xFFFFFF0F"))
 
     ' Where each row sits in the whole list, then a scroll that keeps the
@@ -745,10 +761,10 @@ sub renderPane()
             if row.kind = "header" then
                 ' A thin divider between sections, as settingsDivider.
                 if i > 0 then page.AppendChild(newRect(0, y + 8, m.rowW, 1, "0xFFFFFF0F"))
-                page.AppendChild(newLabel(row.title, "DMMono-Medium", 28, "0xFFFFFFCC", 0, y + 28))
-                if row.subtitle <> "" then page.AppendChild(newLabel(row.subtitle, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 68))
+                page.AppendChild(newLabel(row.title, m.tk.font.label, m.sz.heading, m.tk.color.text, 0, y + 26))
+                if row.subtitle <> "" then page.AppendChild(newLabel(row.subtitle, m.tk.font.text, m.sz.body, m.t2, 0, y + 68))
             else if row.kind = "subheader" or row.kind = "info" then
-                page.AppendChild(newLabel(row.text, "DMMono-Regular", 20, "0xFFFFFFB3", 0, y + 8))
+                page.AppendChild(newLabel(row.text, m.tk.font.text, m.sz.body, m.t2, 0, y + 6))
             else if row.kind = "support" then
                 ' A QR code to the site, drawn as the sign-in's (NxQrDraw):
                 ' the one thing a remote can't open, a phone camera can.
@@ -756,8 +772,8 @@ sub renderPane()
                 qr.translation = [30, y + 8]
                 NxQrDraw(qr, NxQrMatrix(m.supportUrl), 160)
                 page.AppendChild(qr)
-                page.AppendChild(newLabel("NOSTALGEX.APP", "DMMono-Medium", 24, "0xFFFFFFBF", 220, y + 58))
-                page.AppendChild(newLabel("Scan with a phone camera to open it", "VT323-Regular", 24, "0xFFFFFF80", 220, y + 88))
+                page.AppendChild(newLabel("NOSTALGEX.APP", m.tk.font.label, m.sz.body, m.tk.color.text, 220, y + 58))
+                page.AppendChild(newLabel("Scan with a phone camera to open it", m.tk.font.tag, m.sz.body, m.t2, 220, y + 90))
                 page.AppendChild(newRect(0, y, 4, 176, m.accent + "66"))
             else if row.kind = "missingCard" then
                 drawMissingCard(page, i, row, y)
@@ -765,7 +781,7 @@ sub renderPane()
                 ' Read-only but focusable, as the Apple TV's, so focus has
                 ' somewhere to be on the page.
                 if i = m.focus and m.where = "rows" then page.AppendChild(newRect(0, y, m.rowW, 54, "0xFFFFFF12"))
-                page.AppendChild(newLabel("Every channel in your packages is on air.", "DMMono-Regular", 20, "0xFFFFFFB3", 20, y + 14))
+                page.AppendChild(newLabel("Every channel in your packages is on air.", m.tk.font.text, m.sz.body, m.t2, 20, y + 10))
             else
                 drawRow(page, i, row, y)
             end if
@@ -804,7 +820,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         else
             state = NxChannelsLinkValue(row.page, linkCounts()) + "  >"
         end if
-        stateColor = "0xFFFFFF99"
+        stateColor = m.t2
         if focused then stateColor = m.accent + "FF"
     else if row.kind = "bundle" then
         b = m.top.bundles[row.index]
@@ -833,7 +849,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             end if
         end if
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if on then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -861,7 +877,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         detail = f.countLabel
         if f.channelNumber <> invalid then detail = detail + " · CH " + f.channelNumber.ToStr()
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if franchiseOn(f) then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -884,7 +900,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         ' No channel number on a row that doesn't air (#273: a gated one).
         if cr.channelNumber <> invalid and row.gated <> true then detail = detail + " · CH " + cr.channelNumber.ToStr()
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         readsOn = collectionOn(cr)
         if row.kind = "franchiseCollection" then readsOn = NxFranchiseCollectionReadsOn(readsOn, row.gated <> true)
         if readsOn then
@@ -902,7 +918,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         detail = "Shared with you"
         if NxTruthy(s.owned) then detail = "Your server"
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if m.serversOn[row.index] then
             state = "INCLUDED"
             stateColor = m.accent + "FF"
@@ -944,7 +960,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             extra = ["Independent of Now Playing. Off by default."]
         end if
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if isOn then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -953,7 +969,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "RETRO MODE"
         detail = "CRT scanlines, vignette, flicker, 4:3 aspect ratio"
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if NxRetroMode() then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -964,7 +980,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         detail = "Jellyfin lets you hide a library from your home screen."
         extra = ["Off keeps those out of your channels."]
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if NxIncludeHidden(NxHiddenLibrariesRegistry()) then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -975,7 +991,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "OPEN ON LAST CHANNEL"
         detail = "Start on the channel you were last watching"
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if NxLastChannelOn(NxLastChannelRegistry()) then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -984,7 +1000,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "WATERSHED"
         detail = "18 and R-rated titles wait until 9 PM"
         state = "OFF"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if NxWatershedOn() then
             state = "ON"
             stateColor = m.accent + "FF"
@@ -994,7 +1010,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "GUIDE TEXT SIZE"
         detail = "Bigger program titles and channel names in the guide"
         state = "NORMAL"
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if NxGuideTextLarge() then
             state = "LARGE"
             stateColor = m.accent + "FF"
@@ -1016,7 +1032,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "SUBTITLES"
         detail = subtitleModeExplanation()
         state = subtitleModeLabel()
-        stateColor = "0xFFFFFF59"
+        stateColor = m.t2
         if state <> "OFF" then stateColor = m.accent + "FF"
     else if row.kind = "language" then
         ' Upstream's SUBTITLE LANGUAGE and AUDIO LANGUAGE rows.
@@ -1041,7 +1057,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         label = "VERSION"
         detail = "The build number tells two submissions of one version apart"
         state = NxVersionValue()
-        stateColor = "0xFFFFFFFF"
+        stateColor = m.tk.color.text
         stateW = 760
     else if row.kind = "aboutLink" then
         ' The Apple TV's ABOUT > LINKS (AboutLinks.swift): an address to read, not a link.
@@ -1054,7 +1070,7 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             detail = link.subtitle
             state = link.address
         end if
-        stateColor = "0xFFFFFFFF"
+        stateColor = m.tk.color.text
         stateW = 760
     else
         kindName = NxKindName(NxSignedInKind())
@@ -1065,46 +1081,50 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             detail = "Up, Down or BACK cancels"
         end if
         state = ""
-        stateColor = "0xFFFFFFFF"
+        stateColor = m.tk.color.text
         accent = "0xFF6B6B"
     end if
     h = rowHeight(row) - 2
-    if focused then page.AppendChild(newRect(indent, y, m.rowW - indent, h, accent + "52"))
     if focused then
+        ' The selected row: its fill, the cyan outline and glow (a row with its
+        ' own accent, SIGN OUT's red, keeps it), and the accent bar.
+        page.AppendChild(newRect(indent, y, m.rowW - indent, h, m.tk.color.selectedRow))
+        page.AppendChild(focusOutline(indent, y, m.rowW - indent, h, accent))
         page.AppendChild(newRect(indent, y, 8, h, accent + "FF"))
     else
+        page.AppendChild(newRect(indent, y, m.rowW - indent, h, m.tk.color.row))
         page.AppendChild(newRect(indent, y, 4, h, accent + "66"))
     end if
-    nameColor = "0xFFFFFFBF"
-    detailColor = "0xFFFFFF80"
-    if faded then
-        ' Seven tenths of each, as upstream's 0.7 opacity.
-        nameColor = "0xFFFFFF86"
-        detailColor = "0xFFFFFF5A"
-    end if
-    if focused then nameColor = "0xFFFFFFFF"
+    ' Text is white or text-2 and nothing else; a faded row is the whole row
+    ' at seven tenths, as upstream's 0.7 opacity.
+    nameColor = m.tk.color.text
+    detailColor = m.t2
     ' A row with no detail line (a language in the list) centres its name.
     nameY = y + 10
-    if detail = "" then nameY = y + 22
-    page.AppendChild(newLabel(label, "DMMono-Medium", 24, nameColor, indent + 30, nameY))
-    page.AppendChild(newLabel(detail, "VT323-Regular", 24, detailColor, indent + 30, y + 40))
+    if detail = "" then nameY = y + 20
+    page.AppendChild(newLabel(label, m.tk.font.label, m.sz.body, nameColor, indent + 30, nameY))
+    page.AppendChild(newLabel(detail, m.tk.font.tag, m.sz.body, detailColor, indent + 30, y + 40))
     if row.kind = "rescan" or extra.Count() > 0 then
         ' Its other lines, each cut to the row's width.
         ly = y + 66
         for each text in extra
-            lbl = newLabel(text, "VT323-Regular", 24, "0xFFFFFF80", indent + 30, ly)
+            lbl = newLabel(text, m.tk.font.tag, m.sz.body, m.t2, indent + 30, ly)
             lbl.width = m.rowW - 80
             page.AppendChild(lbl)
-            ly = ly + 26
+            ly = ly + 28
         end for
     end if
     stateWidth = 0
     if state <> "" then
-        stateLabel = newLabel(state, "DMMono-Medium", 24, stateColor, m.rowW - 40 - stateW, y + 22)
+        ' A value that is a line of its own (ABOUT's version and addresses) sits
+        ' on the name's line, clear of the long hint under it.
+        stateY = y + 20
+        if stateW > 380 then stateY = nameY
+        stateLabel = newLabel(state, m.tk.font.text, m.sz.body, stateColor, m.rowW - 40 - stateW, stateY)
         stateLabel.width = stateW
         stateLabel.horizAlign = "right"
         page.AppendChild(stateLabel)
-        stateWidth = Len(state) * advanceOf("DMMono-Medium", 24)
+        stateWidth = Len(state) * advanceOf(m.tk.font.text, m.sz.body)
     end if
     ' The amber count sits left of the state, as the Apple TV's sits left of
     ' the switch.
@@ -1112,6 +1132,10 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     if row.gated = true then
         for k = firstNode to page.GetChildCount() - 1
             page.GetChild(k).opacity = 0.45
+        end for
+    else if faded then
+        for k = firstNode to page.GetChildCount() - 1
+            page.GetChild(k).opacity = 0.7
         end for
     end if
 end sub
@@ -1237,18 +1261,18 @@ sub drawMissingCard(page as Object, i as Integer, row as Object, y as Float)
     color = NxToStr(def.colorHex)
     if Left(color, 1) = "#" and Len(color) = 7 then color = "0x" + Mid(color, 2) + "FF" else color = "0xFFFFFFFF"
     page.AppendChild(newRect(20, y + 18, 4, 22, color))
-    page.AppendChild(newLabel(UCase(NxToStr(def.name)), "DMMono-Medium", 22, "0xFFFFFFFF", 34, y + 14))
-    ly = y + 14 + 34
+    page.AppendChild(newLabel(UCase(NxToStr(def.name)), m.tk.font.label, m.sz.body, m.tk.color.text, 34, y + 12))
+    ly = y + 14 + 36
     count = NxMissingCountOf(m.top.matchCounts, def.id)
     for each line in NxWrapText(NxMissingNeedsLine(def.minItems, count), row.cols)
-        page.AppendChild(newLabel(line, "DMMono-Regular", 20, "0xFFB020FF", 20, ly))
-        ly = ly + 26
+        page.AppendChild(newLabel(line, m.tk.font.text, m.sz.body, m.tk.color.amber, 20, ly))
+        ly = ly + 32
     end for
     ' The longest amber line was measured: a shorter one leaves its space.
-    ly = y + 14 + 34 + 26 * row.needsLines
+    ly = y + 14 + 36 + 32 * row.needsLines
     for each line in row.bullets
-        page.AppendChild(newLabel(line, "DMMono-Regular", 20, "0xFFFFFFA6", 20, ly))
-        ly = ly + 26
+        page.AppendChild(newLabel(line, m.tk.font.text, m.sz.body, m.t2, 20, ly))
+        ly = ly + 32
     end for
 end sub
 
