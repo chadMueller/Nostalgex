@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: applySubtitles no longer looks for a forced sidecar, #237)
+
+**Why.** The 2026-11-11 #272 follow-ups entry left this open, and Chad's #298 merge note left it for its own change
+(tydude001). Since #237 the player is never handed a forced sidecar: both callers of `NxMbSubtitleSidecars` pass
+`drawForced`, and Plex never sets `forcedSub`. So the branch in `applySubtitles` that picked a listed track with
+Description "Forced" and a `/Subtitles/` address could not run.
+
+**Changed.** `applySubtitles` takes no listed track for a forced one: every track goes to `NxSubPickIndex` as not
+forced, and `m.hasSubs` is whether the player lists any track. The fallback that selected a forced sidecar when no
+full track was shown is gone, and with it `m.tuneForced`, which only it read. The header says why no listed track is a
+forced one. A Jellyfin or Emby forced track is still drawn by the app (`startForcedSub`), as before.
+
+**Not changed.** `NxMbSubtitleSidecars` keeps its `drawForced` parameter and the forced sidecar it builds without it,
+as `MediaBrowserTests` checks both; no caller uses that path.
+
+**Tests.** No test reaches `applySubtitles` (it reads the player node). Subtitle suite: 105 cases, 0 failed; forced
+subtitle cases 17, srt cases 39, full subtitle cases 27, all passed. `tests/run.sh` ends in ALL TESTS PASSED.
+
 ## 2026-11-12 (publish Nostalgex on Roku)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgex-on-roku`.
