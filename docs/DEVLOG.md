@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (publish Nostalgex on Roku)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/nostalgex-on-roku`.
+
+**Why.** Today's post: Nostalgex is on the Roku Channel Store. The copy was already approved (`draft: false`, date 2026-11-12); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged (`announcementPost` stays null).
+
+**Changed.**
+- `content/blog/nostalgex-on-roku.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/nostalgex-on-roku/cover.jpg` is 1200x630. Hero `header.webp` is 1920x1080. Inline stills `roku-sign-in.webp` 1280x720 and `roku-flip-strip.webp` 1920x1080. Images stay on R2; none committed.
+- `content/roku.json` and `roku.html` were not touched.
+- `npm run blog:render` wrote fifteen live posts into `public/sitemap.xml`, including `/blog/nostalgex-on-roku` with lastmod 2026-11-12. `/blog` lastmod is 2026-11-12. `npm run build` emitted the post to `dist/blog/nostalgex-on-roku.html` with width/height on all four images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 365 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-11-12 (Site: Apple TV 1.0.32 is live, new branding on the site)
 
 **Why.** Apple TV 1.0.32 went live on the App Store on 2026-11-11. The site speaks only about the App Store version, and the
