@@ -18,7 +18,10 @@ struct SettingsServersView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SettingsSubheader(text: "SERVERS")
+            // A heading with nothing under it (demo mode has no server and no library) is left out.
+            if !appState.serversForSettings.isEmpty {
+                SettingsSubheader(text: "SERVERS")
+            }
 
             // One row per reachable server. Toggle to include/exclude its library;
             // the last remaining server can't be turned off.
@@ -32,7 +35,9 @@ struct SettingsServersView: View {
                     isOn: isIncluded,
                     isFocused: isFocused("server_\(server.machineIdentifier)"),
                     // No toggle when it's the only server, it can't be removed.
-                    showToggle: !isLast
+                    showToggle: !isLast,
+                    // The detail already says INCLUDED or OFF.
+                    showStateText: false
                 ) {
                     guard !isLast, !appState.isLoading, !appState.isBackgroundRefreshing else { return }
                     appState.toggleServer(server)
@@ -40,7 +45,9 @@ struct SettingsServersView: View {
                 .settingsRow("server_\(server.machineIdentifier)", focus: focus)
             }
 
-            SettingsSubheader(text: "LIBRARIES")
+            if !appState.librarySectionsForSettings.isEmpty {
+                SettingsSubheader(text: "LIBRARIES")
+            }
 
             // One row per library section on every connected server (I-054). Toggle to
             // include/exclude it from the scan; the last remaining section can't be
@@ -58,7 +65,8 @@ struct SettingsServersView: View {
                     isOn: isOn,
                     isFocused: isFocused("section_\(section.id)"),
                     // No toggle when it's the only section left on, it can't be removed.
-                    showToggle: !isLast
+                    showToggle: !isLast,
+                    showStateText: false
                 ) {
                     guard !isLast, !appState.isLoading, !appState.isBackgroundRefreshing else { return }
                     appState.toggleLibrarySection(section)

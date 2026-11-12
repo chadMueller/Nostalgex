@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Apple TV: no empty headings on SERVERS & ACCOUNTS, ON or OFF in words beside the switches, #232 items 5 and 6)
+
+**State.** Branch `appletv/232-readability` off main `776c54ae`. Not in a build yet; it goes in the next Apple TV build (1.0.33). The guide is not touched.
+
+**Why.** #232 asked for two small things. In demo mode SERVERS and LIBRARIES had a heading and nothing under it. And the Settings switches were only a pill, where the Now Playing panel and the FRANCHISES row already say ON or OFF in words.
+
+**Changed.**
+- `SettingsServersView`: the SERVERS and LIBRARIES headings are drawn only when there is a server or a library to list. `firstRowID` already fell back to RESCAN LIBRARY, so focus lands there.
+- `SettingsToggleRow`: ON (cyan) or OFF (the second text grey, 4.5:1 or better) in 25 pt DM Mono sits beside the switch, in a fixed 52 pt slot so the switches still line up down the pane. It is hidden from VoiceOver; the row's own "On" or "Off" value is unchanged. `showStateText: false` for the server and library rows, whose detail already says INCLUDED or OFF.
+- The pill stays: it is the 1.0.32 size (44 x 26), a design decision, and the text is added beside it.
+
+**Left as is.** The rows with a link and a value (FRANCHISES and the others) and the Now Playing rows already read ON or OFF. Item 6 of the issue also noted that SETTINGS on the main screen looked like plain text: since 1.0.32 it is a pill button.
+
+**Tests.** Full `NostalgexTests`, serial on the one visible Simulator: 1,374 passed, 32 skipped, and one test, `PlaybackFailureRunTests.testOneBadProgrammeStillSkipsAndThePlayingCarriesOn`, crashed with a terminate signal when the Simulator was shut down under it; the class passes alone (8 of 8). The Settings UI tests that open these rows (OPEN ON LAST CHANNEL, the RESCAN row, package channels, the channels drill-down) ran through the visible Simulator, parallel off: 6 of 6 passed. Simulator only; not looked at on a TV.
+
 ## 2026-11-11 (Roku: an airing that runs past midnight is no longer cut off at 12:00 AM, #297)
 
 **Why.** A Discord report said a movie stops at midnight every night. Run through the Roku's own schedule code in the
