@@ -251,14 +251,28 @@ end function
 ' Which of the player's availableAudioTracks plays the pick (NxMbAudioPick)
 ' on a direct play: its Track, or invalid to leave the player's own choice.
 ' By position when the player lists as many tracks as the file has, as a
-' Roku TV did, in the file's order. Once one listed fewer (a file the scan
+' Roku TV did, in the file's order, and the place holds neither a commentary
+' nor a track in another language than the pick's (#153: a player may list
+' them in another order). Once one listed fewer (a file the scan
 ' said had more; why wasn't found), and then a position may name another
 ' track: the first listed in the pick's language instead, compared as the
 ' subtitle code compares.
 function NxAudioTrackToSelect(listed as Object, want as Dynamic) as Dynamic
     if want = invalid or not NxIsNumber(want.position) then return invalid
-    if listed.Count() = want.count then return listed[want.position].Track
     tag = NxSubComparableTag(want.language)
+    if listed.Count() = want.count then
+        ' The place the file has the track at, unless the player lists the tracks in
+        ' another order: the place then holds a commentary, or a track in another
+        ' language (#153), and the pick's language below finds the film's own.
+        at = listed[want.position]
+        usable = true
+        if type(at) = "roAssociativeArray" then
+            if NxIsCommentaryTitle(at.Name) and NxListedSkipCommentary(listed).Count() < listed.Count() then usable = false
+            atTag = NxSubComparableTag(at.Language)
+            if usable and tag <> invalid and atTag <> invalid and atTag <> tag then usable = false
+        end if
+        if usable then return at.Track
+    end if
     if tag = invalid then return invalid
     ' Never a track named a commentary while another track is listed (#236).
     for each t in NxListedSkipCommentary(listed)

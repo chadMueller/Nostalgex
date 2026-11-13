@@ -458,6 +458,20 @@ function NxRunAudioPickTests() as Integer
     NxCheck(r, "the language not listed: the player's choice", NxToStr(NxAudioTrackToSelect(short, { position: 0, language: "fre", count: 3 }) = invalid), "true")
     NxCheck(r, "no language on a short list: the player's choice", NxToStr(NxAudioTrackToSelect(short, { position: 0, language: invalid, count: 3 }) = invalid), "true")
     NxCheck(r, "no pick", NxToStr(NxAudioTrackToSelect(roku, invalid) = invalid), "true")
+    ' #153 (Emby film plays its commentary), the cases a player's list can still get wrong. The player lists
+    ' as many tracks as the file has but in another order, a commentary first: a position then names the
+    ' commentary, or a track in another language.
+    cmFirst = [{ Track: "2", Language: "eng", Name: "Commentary - English - AAC - Stereo" }, { Track: "1", Language: "eng", Name: "English - AC3 - 5.1" }]
+    NxCheck(r, "153: the film's place holds a commentary in the list: the film's own track", NxToStr(NxAudioTrackToSelect(cmFirst, { position: 0, language: "eng", count: 2 })), "1")
+    swapped = [{ Track: "2", Language: "por", Name: "Portuguese" }, { Track: "1", Language: "eng", Name: "English" }]
+    NxCheck(r, "153: listed in another order: the pick's language, not the place", NxToStr(NxAudioTrackToSelect(swapped, { position: 0, language: "eng", count: 2 })), "1")
+    NxCheck(r, "153: listed in the file's order: by place as before", NxToStr(NxAudioTrackToSelect(roku, { position: 1, language: "eng", count: 2 })), "3")
+    NxCheck(r, "153: a place with no language to check keeps the place", NxToStr(NxAudioTrackToSelect([{ Track: "5" }, { Track: "6" }], { position: 1, language: "eng", count: 2 })), "6")
+    ' The film's track carries no language tag beside an English commentary: the film track.
+    untagged = NxMbTrack(1, invalid, 6, "ac3", true)
+    comEn = NxMbCommentary(2, "eng", 2, false)
+    NxCheck(r, "153: an untagged film track beside a tagged commentary", NxToStr(NxMbChosenAudioIndex([untagged, comEn], ["en"])), "1")
+    NxCheck(r, "153: an untagged film track beside a commentary with more channels", NxToStr(NxMbChosenAudioIndex([untagged, NxMbCommentary(2, "eng", 8, false)], ["en"])), "1")
     ' Issue #236, as PR #245 settled it: a track titled a commentary is
     ' dropped from the pool while the file has any other audio track, before
     ' any language or default step. A file of commentaries alone picks among them.

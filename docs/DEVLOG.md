@@ -15,6 +15,21 @@ reads a channel. Five checks hold the pure part. Not reproduced on the stick: an
 off every package in the real Settings, or a lab sign-in in a test-data space, neither done while the WATERSHED test
 holds the stick.
 
+## 2026-11-12 (Roku: a direct play's audio track by place, not when the player lists them in another order, #153)
+
+**Why.** #153: an Emby film plays its commentary. #236 skips named commentaries in the pick, and the cases checked
+here (an untagged film track beside a tagged commentary, a commentary with more channels) already pick the film.
+What could still reach a commentary is the player's own list: `NxAudioTrackToSelect` took `listed[position]` whenever
+the player listed as many tracks as the file has, and a player may list them in another order.
+
+**Changed.** The place is kept only when it holds neither a track named a commentary (while another is listed) nor
+a track whose language is not the pick's; otherwise the pick's language finds the first listed track that is not a
+commentary, as it already did for a short list. Two checks failed before: a commentary listed first, and a list in
+another order. Four more hold the cases that already passed (the file's own order, a place with no language to
+check, an untagged film track beside a commentary, one with more channels).
+
+**Not covered.** A commentary whose title and display title do not say "commentary" (the scan marks by name only).
+
 ## 2026-11-12 (Roku: WATERSHED's 9 PM crossing held by a test, #190)
 
 **Why.** The 9 PM check (#190) on 1.0.13 candidate v6 saw the placeholder still up at 21:03. The scheduling path
