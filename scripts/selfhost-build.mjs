@@ -98,11 +98,13 @@ const FONT_SHEETS = [
     out: 'vendor/fonts/tuner.css',
     css: [
       { file: '@fontsource/vt323/400.css' },
+      { file: '@fontsource/press-start-2p/400.css' },
     ],
   },
 ]
 const FONT_LICENSES = [
   '@fontsource/vt323/LICENSE',
+  '@fontsource/press-start-2p/LICENSE',
 ]
 
 const GOOGLE_FONTS_LINK = /<link href="https:\/\/fonts\.googleapis\.com\/css2\?([^"]*)" rel="stylesheet">/g

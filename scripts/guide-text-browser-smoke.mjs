@@ -137,9 +137,9 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
-// A desktop viewport draws a program title in DM Mono Medium at 22 pt.
-// On a desktop window the guide's row text is 22 pt and one point is 1/1080 of the window's height (the Apple TV's proportions).
-const DESKTOP_NORMAL = 22 * viewports.desktop.viewport.height / 1080;
+// A desktop viewport draws a program title in VT323 at 22 pt times the page's one guide variable (--guide-scale), a point being 1/1080 of the height.
+const GUIDE_SCALE = Number(/--guide-scale:\s*([\d.]+)/.exec(readFileSync(join(repo, "plex-tuner.html"), "utf8"))[1]);
+const DESKTOP_NORMAL = 22 * GUIDE_SCALE * viewports.desktop.viewport.height / 1080;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */
@@ -276,15 +276,18 @@ for (const stored of ["", "normal", "LARGE", "huge", "1"]) try {
   const { page, errors } = await launch("desktop", { stored });
   const s = await read(page);
   check(`stored ${JSON.stringify(stored)} reads as NORMAL`, !s.large && near(s.program, DESKTOP_NORMAL), `${s.large} ${s.program}`);
-  check(`stored ${JSON.stringify(stored)}: guide, info panel and rail are all DM Mono`, await page.evaluate(() => {
+  const faces = await page.evaluate(() => {
     const bad = [];
-    for (const root of ["#guide-grid", "#info-panel", "#v-toolbar"]) for (const el of document.querySelectorAll(`${root} *`)) {
+    const want = { "#guide-grid": ["VT323", "Press Start 2P"], "#info-panel": ["VT323", "Press Start 2P"], "#v-toolbar": ["DM Mono"] };
+    for (const [root, faces] of Object.entries(want)) for (const el of document.querySelectorAll(`${root} *`)) {
       if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
-      if (el.id === "info-channel-tag" || el.closest("#info-channel-tag")) continue;   // the Apple TV draws the CH tag in VT323
-      if (!getComputedStyle(el).fontFamily.includes("DM Mono")) bad.push(`${root} ${el.className}: ${getComputedStyle(el).fontFamily}`);
+      if (el.closest(".grid-footer")) continue;   // the UP and DOWN page buttons are controls, drawn like the rail's
+      const fam = getComputedStyle(el).fontFamily;
+      if (!faces.some((f) => fam.includes(f))) bad.push(`${root} ${el.className}: ${fam}`);
     }
     return bad.length === 0 ? true : bad.slice(0, 3).join(" | ");
-  }) === true);
+  });
+  check(`stored ${JSON.stringify(stored)}: the guide and the info window are in the 8-bit faces (VT323, Press Start 2P) and the rail is DM Mono`, faces === true, String(faces));
   check(`stored ${JSON.stringify(stored)}: no page errors`, errors.length === 0, errors.join(" | "));
   await page.context().close();
 } catch (err) {

@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-13 (web tuner: the 8-bit guide and now-playing window are back)
+
+**Why.** Testing 1.0.20, Chad put it next to 1.0.16 and asked for the old look: the guide was too big (he had asked for bigger, then it went too far) and the 8-bit arcade type was gone. The pull toward Apple TV type had flattened the one place that was supposed to feel like a 90s guide channel. The rest of the page stays Apple TV style.
+
+**Changed.**
+- Fonts. Press Start 2P is back for the CH line, the badges and the CHANNEL heading; VT323 for the title, episode title, description, times and the guide text. The page's Google Fonts request had named VT323 only, and the Docker build vendored VT323 only, so Press Start 2P is now in both: the link, `FONT_SHEETS` and the font licences in `scripts/selfhost-build.mjs`. `scripts/arcade-fonts-check.mjs` (in `npm test`, and `--builds` in CI) checks the request, the CSP, and that every font file the Docker sheet names is in the output.
+- Now-playing window. A "CH 05 - 90S SITCOMS" line in the channel's colour runs across the top, above the poster and text. The poster stays on the left. Title first, then the episode title, then year, content rating and star rating (no runtime), then a two-line description, the progress bar with elapsed and total time, and one plain dim line: "Up next in 44 min: Title". No pill, no styled label. Phone and TV-browser layouts behave as before.
+- Guide size. One variable, `--guide-scale` (0.74), scales the Apple TV point for the guide: a row of about 4.4% of the window height and text of about 1.5% (it was 5.9% and 2.0%). The window uses the 1.0.16 sizes, listed as `--info-*` variables in the same place. GUIDE TEXT SIZE LARGE and PAGE SIZE LARGE still work, and the page-size, guide-text and web-layout smokes assert the new numbers.
+
+**Kept.** The AUDIO & SUBS menu, the restored sidebar, the first-run screen and the 1.0.19 and 1.0.20 fixes.
+
+**Half-done.** Checked in headless Chromium only (desktop sizes, 960x540 at DPR 2, phone). Not looked at on a real TV browser. 1.0.16's 2.0% text is a little easier to read at 1440x900 than 1.5%; the size is one number to nudge.
+
+**Next.** Reviewer pass, then Chad looks at it.
+
 ## 2026-11-13 (Apple TV: a TV episode's Now Playing poster is its season's or its series', not a frame from the episode, #312)
 
 **State.** Branch `appletv/312-episode-poster` off main `896aeab5`. Not in a build yet; it goes in the next Apple TV build (1.0.33). Plex only.

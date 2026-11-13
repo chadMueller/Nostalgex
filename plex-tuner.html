@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" href="./tuner/logo/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="tuner/fonts.css">
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" integrity="sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
 <script src="scripts/nostalgex-channel-filter.cjs"></script>
@@ -71,6 +71,20 @@
        38px row to 50, the 32px header to 42, the 160px channel column to 200 and the text with it
        (18 to 23.4, 20 to 26). GUIDE TEXT SIZE multiplies on top, so its ratios hold. Phones and
        tablets under 1025px keep their own sizes (the media block below sets the old values). */
+    /* HOW BIG THINGS ARE on a desktop window, all in this one block. Numbers are px at a 1080 high window and grow and shrink with the
+       window's height (1/1080 of it per unit), so a 900 high window draws them at 83%.
+       --guide-scale: the whole guide (rows, text, times, channel column). 1 is the Apple TV's size (a 64 pt row is 5.93% of the window height,
+         the 22 pt row text 2.04%); 0.74 is a row of 4.4% and text of 1.5%. GUIDE TEXT SIZE LARGE multiplies the text on top.
+       --info-*: the now-playing window, at the old (1.0.16) sizes: the title, the episode title, the synopsis / year / time (--info-text),
+         the up next line, the channel line (Press Start 2P) and the badges (Press Start 2P). --info-poster is the poster's width. */
+    --guide-scale: 0.74;
+    --info-title: 42;
+    --info-episode: 28;
+    --info-text: 22;
+    --info-next: 20;
+    --info-ch: 12;
+    --info-badge: 8;
+    --info-poster: 100;
     --gs: 1.3;
     /* The Apple TV took the guide's row text from 29 to 22 pt (x0.76) and its rows from 76 to 64 pt (x0.84) on
        2026-11-10. Times and the CHANNEL heading stay where they were. --gr is the row text's share of --gs. */
@@ -114,10 +128,12 @@
      included, keeps the 0.5 px point above, and so does a TV browser (720 high or less, 0.5 px is 960x540, and it has the zoom steps
      below); phones and tablets (under 1025 wide) have their own sizes. */
   @media (min-width: 1025px) and (min-height: 721px) {
-    .guide-grid, .info-panel { --pt: calc(100vh / 1080); }
+    .info-panel { --pt: calc(100vh / 1080); }
+    .guide-grid { --pt: calc(100vh / 1080 * var(--guide-scale)); }
     /* PAGE SIZE LARGE zooms the page by 1.3333 (html.nx-large below), which scales every authored length, 100vh included, so the
        point is divided by it: the guide and the window keep the Apple TV's proportions (and fit) at any page size. */
-    html.nx-large .guide-grid, html.nx-large .info-panel { --pt: calc(100vh / 1080 / 1.3333); }
+    html.nx-large .info-panel { --pt: calc(100vh / 1080 / 1.3333); }
+    html.nx-large .guide-grid { --pt: calc(100vh / 1080 * var(--guide-scale) / 1.3333); }
     .guide-grid {
       --g-row: calc(64 * var(--pt));
       --g-head: calc(58 * var(--pt));
@@ -281,13 +297,24 @@
     border-right: 1px solid rgba(255,255,255,0.08);
     overflow: hidden;
   }
-  /* The Apple TV's Now Playing panel in points (1 pt = 0.5 CSS px, --pt): all panel text 22 pt, the title 29 pt white up to 3 lines,
-     the CH tag in VT323 at 28 pt with a bar 8 by 24 pt, the poster 120 by 180 pt. */
-  .info-main { display: flex; align-items: flex-start; gap: calc(24 * var(--pt)); min-width: 0; margin-bottom: calc(18 * var(--pt)); }
-  .info-text { flex: 1 1 auto; min-width: 0; }
+  /* The now-playing window in the 8-bit faces of the old design: Press Start 2P for the channel line, the badges and the guide's
+     CHANNEL heading, VT323 for the rest. Sizes are in points of the window height (--pt, 1/1080 of it: 1 pt is 1 px at 1080). */
+  .info-panel { position: relative; }
+  .info-channel-tag {
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(10px, calc(var(--info-ch) * var(--pt)));
+    letter-spacing: max(2px, calc(3 * var(--pt)));
+    line-height: 1.4;
+    margin-bottom: calc(16 * var(--pt));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .info-main { display: flex; align-items: flex-start; gap: calc(22 * var(--pt)); min-width: 0; }
+  .info-text { flex: 1 1 auto; min-width: 0; font-family: 'VT323', monospace; }
   .info-poster {
     flex: 0 0 auto;
-    width: calc(120 * var(--pt));
+    width: calc(var(--info-poster) * var(--pt));
     aspect-ratio: 2 / 3;
     object-fit: cover;
     border-radius: calc(10 * var(--pt));
@@ -295,88 +322,63 @@
     background: #101024;
   }
   .info-poster[hidden] { display: none; }
-  .info-channel-tag {
-    display: flex;
-    align-items: center;
-    gap: calc(14 * var(--pt));
-    font-family: 'VT323', monospace;
-    font-size: calc(28 * var(--pt));
-    letter-spacing: 0.08em;
+  .info-title {
+    font-size: max(28px, calc(var(--info-title) * var(--pt)));
     color: #fff;
-    margin-bottom: calc(14 * var(--pt));
+    line-height: 1.05;
+    margin-bottom: calc(6 * var(--pt));
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .info-ch-bar { flex: 0 0 auto; width: calc(8 * var(--pt)); height: calc(24 * var(--pt)); border-radius: 1px; }
-  /* The synopsis and the year, rating and runtime: the web tuner's own now-playing window, as before 1.0.17. */
+  .info-episode-title {
+    font-size: max(18px, calc(var(--info-episode) * var(--pt)));
+    color: rgba(255,255,255,0.5);
+    line-height: 1.1;
+    margin-bottom: calc(10 * var(--pt));
+  }
   .info-meta-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: calc(12 * var(--pt));
-    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
-    color: rgba(255,255,255,0.6);
-    letter-spacing: 0.04em;
+    font-size: max(16px, calc(var(--info-text) * var(--pt)));
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
     margin-bottom: calc(10 * var(--pt));
   }
   .info-meta-row:empty { display: none; }
   .info-meta-badge {
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: calc(2 * var(--pt)) calc(8 * var(--pt));
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(8px, calc(var(--info-badge) * var(--pt)));
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: calc(3 * var(--pt)) calc(6 * var(--pt));
     border-radius: 3px;
+    letter-spacing: 1px;
   }
   .info-rating { color: var(--yellow); }
   .info-description {
-    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
-    color: rgba(255,255,255,0.55);
-    line-height: 1.4;
-    margin-bottom: calc(12 * var(--pt));
+    font-size: max(16px, calc(var(--info-text) * var(--pt)));
+    color: rgba(255,255,255,0.45);
+    line-height: 1.3;
+    margin-bottom: calc(14 * var(--pt));
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
   .info-description:empty { display: none; }
-  .info-channel-name {
-    font-size: calc(22 * var(--pt));
-    color: rgba(255,255,255,0.7);
-    letter-spacing: 0.06em;
-    margin-bottom: calc(12 * var(--pt));
-    overflow-wrap: anywhere;
-  }
-  .info-channel-name:empty { display: none; }
-  .info-hint {
-    margin-top: calc(10 * var(--pt));
-    min-height: 2.8em;
-    font-size: calc(20 * var(--pt));
-    line-height: 1.4;
-    color: rgba(255,255,255,0.7);
-  }
-  .info-title {
-    font-size: calc(29 * var(--pt));
-    color: #fff;
-    line-height: 1.15;
-    margin-bottom: calc(8 * var(--pt));
-    font-weight: 500;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .info-episode-title {
-    font-size: calc(22 * var(--pt));
-    color: rgba(255,255,255,0.7);
-    margin-bottom: calc(12 * var(--pt));
-    font-weight: 400;
-  }
-  /* A short window: the panel still holds the poster and the details, with less description. */
   .info-progress-wrap {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: calc(16 * var(--pt));
     max-width: 100%;
+    margin-top: calc(18 * var(--pt));
   }
   .info-progress-bar {
     flex: 1;
-    height: 4px;
+    height: max(3px, calc(4 * var(--pt)));
     background: rgba(255,255,255,0.12);
     border-radius: 2px;
     overflow: hidden;
@@ -387,36 +389,31 @@
     transition: width 1s linear;
   }
   .info-time {
-    font-family: 'DM Mono', monospace;
-    font-size: calc(22 * var(--pt));
-    color: rgba(255,255,255,0.7);
+    font-family: 'VT323', monospace;
+    font-size: max(16px, calc(var(--info-text) * var(--pt)));
+    color: rgba(255,255,255,0.4);
     white-space: nowrap;
   }
-  /* UP NEXT: one line under the info, not a card. The next title, then a cyan badge straight after it; a long title is cut with an
-     ellipsis and the badge always stays. No background, border or padding on the line itself. */
+  /* UP NEXT: one plain, dim line, "Up next in 44 min: the title". No label, badge or capsule; a long title is cut with an ellipsis. */
   .info-upnext {
-    margin-top: calc(18 * var(--pt));
-    display: flex;
-    align-items: center;
-    gap: calc(12 * var(--pt));
-    font-size: calc(22 * var(--pt));
-    color: #fff;
-    letter-spacing: 0.04em;
+    margin-top: calc(14 * var(--pt));
+    font-family: 'VT323', monospace;
+    font-size: max(16px, calc(var(--info-next) * var(--pt)));
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     min-width: 0;
   }
-  .info-upnext-title { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .info-upnext-chip {
-    flex: 0 0 auto;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    font-size: calc(22 * var(--pt));
-    letter-spacing: 0.06em;
-    color: var(--cyan);
-    background: #0B2A3A;
-    border: max(1px, calc(1.5 * var(--pt))) solid var(--cyan);
-    border-radius: 999px;
-    padding: calc(2 * var(--pt)) calc(10 * var(--pt));
-    white-space: nowrap;
+  .info-hint {
+    position: absolute;
+    left: 40px; right: 40px; bottom: 6px;
+    font-family: 'VT323', monospace;
+    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
+    line-height: 1.2;
+    color: rgba(255,255,255,0.5);
+    pointer-events: none;
   }
 
   /* Unmute button */
@@ -1641,8 +1638,8 @@
   .grid-channel-col {
     width: var(--g-col);
     flex-shrink: 0;
-    font-family: 'DM Mono', monospace;
-    font-size: calc(25 * var(--pt) * var(--gt-head));
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(8px, calc(14 * var(--pt) * var(--gt-head)));
     color: var(--yellow);
     letter-spacing: 0.08em;
     padding: 0 12px;
@@ -1654,7 +1651,7 @@
   }
   .grid-time-slot {
     flex: 1;
-    font-family: 'DM Mono', monospace;
+    font-family: 'VT323', monospace;
     font-weight: 500;
     /* The Apple TV's guide: times 25 pt on a 58 pt header (0.39 of it), in DM Mono Medium. */
     font-size: calc(25 * var(--pt) * var(--gt-time));
@@ -1731,7 +1728,7 @@
     overflow: hidden;
   }
   .grid-ch-num {
-    font-family: 'DM Mono', monospace;
+    font-family: 'VT323', monospace;
     font-weight: 500;
     /* Row text is 22 pt on a 64 pt row (0.34 of it); the floor is the Apple TV's 11 on-screen pixels. */
     font-size: calc(22 * var(--pt) * var(--gt-num));
@@ -1739,7 +1736,7 @@
     min-width: calc(2.2 * 22 * var(--pt) * var(--gt-num));
   }
   .grid-ch-name {
-    font-family: 'DM Mono', monospace;
+    font-family: 'VT323', monospace;
     font-weight: 500;
     font-size: calc(22 * var(--pt) * var(--gt-name));
     letter-spacing: 0.02em;
@@ -1760,7 +1757,7 @@
     display: flex;
     align-items: center;
     padding: 0 8px;
-    font-family: 'DM Mono', monospace;
+    font-family: 'VT323', monospace;
     font-weight: 500;
     font-size: calc(22 * var(--pt) * var(--gt-title));
     color: #80879A;   /* DIM: every title but the live one and the focused row, 4.83:1 on the lightest row */
@@ -1801,8 +1798,8 @@
     justify-content: center;
     padding: 0 16px;
     gap: 10px;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
+    font-family: 'VT323', monospace;
+    font-weight: 400;
     font-size: calc(22 * var(--pt));
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -1819,8 +1816,8 @@
     0%,100% { opacity: 1; } 50% { opacity: 0.4; }
   }
   .grid-promo-eyebrow {
-    font-family: 'DM Mono', monospace;
-    font-size: var(--nx-fs);
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(8px, calc(10 * var(--pt)));
     letter-spacing: 0.06em;
     opacity: 0.6;
     flex-shrink: 0;
@@ -2823,9 +2820,6 @@
     /* No room for prose next to a 16:9 video on a phone. The title, the meta
        row and the progress are what a glance needs. */
     .info-poster, .info-hint, .info-description { display: none; }
-    .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
-    .info-ch-bar { width: 6px; height: 16px; }
-    .info-channel-tag { gap: 8px; }
     .guide-grid { flex: 1 1 auto; min-height: 0; }
   }
 
@@ -3049,9 +3043,6 @@
     }
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
     .info-poster, .info-hint, .info-description { display: none; }
-    .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
-    .info-ch-bar { width: 6px; height: 16px; }
-    .info-channel-tag { gap: 8px; }
     .info-time { font-family: 'DM Mono', monospace; font-size: var(--nx-fs); }
     .info-upnext { display: none; }
 
@@ -3651,7 +3642,7 @@
   .grid-stripe-label {
     position: absolute; left: 0; width: var(--g-stripe); display: flex; align-items: center; justify-content: flex-start;
     writing-mode: vertical-rl; transform: rotate(180deg);
-    font-family: 'DM Mono', monospace; font-weight: 500; font-size: max(12px, var(--nx-fs)); letter-spacing: 0.08em;
+    font-family: 'VT323', monospace; font-weight: 400; font-size: max(14px, calc(var(--nx-fs) * 1.2)); letter-spacing: 0.08em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 0; box-sizing: border-box;
   }
   .grid-stripe-label.focused { width: calc(var(--g-stripe) + 8px); outline: 3px solid var(--cyan); outline-offset: -1px; box-shadow: 0 0 14px rgba(0,196,255,0.9); border-radius: 8px; }
@@ -3778,17 +3769,17 @@
 
     <!-- INFO PANEL (visible in side layout) -->
     <div class="info-panel" id="info-panel">
-      <!-- The now-playing window: the poster (Plex) on the left; beside it CH and the channel's colour bar, the title, the year, rating
-           and runtime, the synopsis and the channel name. Then the progress and UP NEXT IN n MIN with the next title. -->
+      <!-- The now-playing window, as the web tuner had it before 1.0.17 (8-bit faces): the channel line across the top, then the
+           poster (Plex) with the title, the episode title, the year, rating and stars and the synopsis, then across the window the progress
+           with the elapsed and total time, and one plain line for what is on next. -->
+      <div class="info-channel-tag" id="info-channel-tag"></div>
       <div class="info-main">
         <img class="info-poster" id="info-poster" alt="" hidden>
         <div class="info-text">
-          <div class="info-channel-tag" id="info-channel-tag"></div>
           <div class="info-title" id="info-title"></div>
           <div class="info-episode-title" id="info-episode-title"></div>
-          <div class="info-description" id="info-description"></div>
           <div class="info-meta-row" id="info-meta-row"></div>
-          <div class="info-channel-name" id="info-channel-name"></div>
+          <div class="info-description" id="info-description"></div>
         </div>
       </div>
       <div class="info-progress-wrap">
@@ -3798,7 +3789,7 @@
         <div class="info-time" id="info-time"></div>
       </div>
       <div class="info-upnext" id="info-upnext"></div>
-      <!-- One fixed two-line slot, so nothing jumps: says what the focused control on the rail does. -->
+      <!-- Says what the focused control on the rail does; it sits over the foot of the window and takes no room. -->
       <div class="info-hint" id="info-hint" aria-live="polite"></div>
     </div>
 
@@ -7111,16 +7102,14 @@
       ? 'STARTS ' + new Date(preview.entry.startSec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
       : `${now.position || '0:00'} / ${now.total || ''}`;
 
-    // Up next
-    // The card: a cyan chip with the time until it starts ("UP NEXT IN 12 MIN"), then the next title. While the guide is
-    // moved later the clock says nothing about the programme shown, so the chip is plain.
+    // Up next: one plain line, "Up next in 44 min: the title" (minutes first, then the title). While the guide is moved later the
+    // clock says nothing about the programme shown, so it is just "Up next: the title".
     const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
-    document.getElementById('info-upnext').innerHTML = next
-      ? `<span class="info-upnext-title">${escapeHtml(itemGuideTitle(next))}</span><span class="info-upnext-chip">${escapeHtml(upNextSeconds === null ? 'UP NEXT' : NostalgexUpNext.label(upNextSeconds))}</span>`
-      : '';
+    const upNextLead = upNextSeconds === null ? 'Up next' : (t => t.charAt(0) + t.slice(1).toLowerCase())(NostalgexUpNext.label(upNextSeconds));
+    document.getElementById('info-upnext').textContent = next ? `${upNextLead}: ${itemGuideTitle(next)}` : '';
   }
 
-  // The year, the content rating, the star rating and the runtime (and a music video's genre), as the window showed them before 1.0.17.
+  // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
   function setInfoMeta(item, MB) {
     const metaEl = document.getElementById('info-meta-row');
     if (!metaEl) return;
@@ -7129,16 +7118,15 @@
     if (item && item.year) add('span', 'info-meta-badge', item.year);
     if (item && item.contentRating) add('span', 'info-meta-badge', item.contentRating);
     if (item && item.rating) add('span', 'info-rating', `\u2605 ${Number(item.rating).toFixed(1)}`);
-    if (item && item.duration) add('span', '', formatDuration(item.duration));
     if (item && MB) { const g = MB.musicGenreDisplay(item); if (g) add('span', 'info-meta-badge', g); }
   }
 
-  // The channel's colour is a small bar beside the number, never the number itself; the channel's name sits under the title.
+  // The channel line across the top of the window: "CH 05 - 90S SITCOMS", in the channel's colour.
   function setInfoChannelTag(ch) {
     const tag = document.getElementById('info-channel-tag');
-    if (tag) tag.innerHTML = `<span class="info-ch-bar" style="background:${escapeHtml(String(ch.color || '#fff'))}"></span><span>CH ${String(chNum(ch)).padStart(2, '0')}</span>`;
-    const nameEl = document.getElementById('info-channel-name');
-    if (nameEl) nameEl.textContent = String(ch.name || '').toUpperCase();
+    if (!tag) return;
+    tag.textContent = `CH ${String(chNum(ch)).padStart(2, '0')} - ${String(ch.name || '').toUpperCase()}`;
+    tag.style.color = String(ch.color || '#fff');
   }
 
   // The poster, Plex only, as on the Apple TV (its thumbnail URL carries the token). Hidden when there is none or it fails.

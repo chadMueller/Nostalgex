@@ -12,6 +12,7 @@
  *     on its 1080 canvas a row is 64 pt, row text 22 pt and the time labels 25 pt, so as a share of the window height 5.93%,
  *     2.04% and 2.31%. The test asserts the computed sizes at 1440x900 and 1920x1080 are within a tenth of that share.
  *
+ * GUIDE_SCALE=0.9 re-draws the screenshots with another --guide-scale (the checks assume the page's own).
  * Every run prints MEASURE lines with the numbers; run it on another tree to compare:
  *   TUNER_ROOT=/path/to/tuner-v1.0.16 node scripts/web-layout-browser-smoke.mjs   (its checks will fail where it differs)
  * SHOTS=/dir saves a screenshot per size.
@@ -32,17 +33,23 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 // ── The Apple TV's guide, from its source: row 64 pt, row text 22 pt, time labels 25 pt (NXType.caption) on a 1080 canvas ──
 const CANVAS = 1080;
 const APPLE = { row: 64 / CANVAS, text: 22 / CANVAS, time: 25 / CANVAS };
+// ── What the guide is asked to be on a desktop window: modest, between the too-small 1.0.19 and the Apple TV's own size. A row of about 4.4% of
+//    the window height and programme text of about 1.5% (the time labels follow at 1.7%). The page has one variable for it, --guide-scale. ──
+const TARGET = { row: 0.044, text: 0.015, time: 0.017 };
+const GUIDE_SCALE = Number((/--guide-scale:\s*([\d.]+)/.exec(readFileSync(join(root, "plex-tuner.html"), "utf8")) || [])[1] || 1); // older pages (TUNER_ROOT) have no variable
 
 // ── A Plex-shaped stub: 400 films, each with a synopsis, a year, a content rating, a star rating and a runtime ──
 const GENRES = ["Action", "Comedy", "Drama", "Thriller", "Horror", "Romance", "Science Fiction", "Adventure", "Animation", "Family", "Crime", "Mystery"];
 const CERTS = ["G", "PG", "PG-13", "R"];
 const N = 400;
+// A 1x1 PNG: the poster the stub serves, stretched by the page to the poster box.
+const POSTER = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
 const media = (i) => [{ container: "mp4", videoResolution: "720", bitrate: 2000, videoCodec: "h264", audioCodec: "aac", Part: [{ key: `/library/parts/${i}/file.mp4` }] }];
 const film = (i) => ({
   ratingKey: String(1000 + i), title: `Family Day ${i}`, summary: `A long synopsis for film ${i}. A family spends one ordinary day together and nothing goes to plan, which is the whole point of it.`,
   year: 1980 + (i % 30), duration: (84 + (i % 40)) * 60000, type: "movie", addedAt: 1600000000 + i, contentRating: CERTS[i % CERTS.length],
   rating: 6 + (i % 30) / 10, Genre: [{ tag: GENRES[i % GENRES.length] }, { tag: GENRES[(i * 5 + 1) % GENRES.length] }, { tag: "Family" }],
-  Guid: [{ id: `tmdb://${5000 + i}` }], Media: media(i),
+  Guid: [{ id: `tmdb://${5000 + i}` }], Media: media(i), thumb: `/library/metadata/${1000 + i}/thumb/1`,
 });
 const plex = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -51,6 +58,7 @@ const plex = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   res.setHeader("Content-Type", "application/json");
   if (url.pathname === "/identity") return res.end(JSON.stringify({ MediaContainer: { machineIdentifier: "lab-plex", version: "1.43.4" } }));
+  if (url.pathname === "/photo/:/transcode") { res.setHeader("Content-Type", "image/png"); return res.end(POSTER); }
   if (url.pathname === "/library/sections") return res.end(JSON.stringify({ MediaContainer: { Directory: [{ key: "1", title: "Movies", type: "movie" }] } }));
   if (url.pathname === "/library/sections/1/all") {
     const start = Number(url.searchParams.get("X-Plex-Container-Start") || 0);
@@ -62,7 +70,23 @@ const plex = http.createServer((req, res) => {
   res.end(JSON.stringify({ MediaContainer: { size: 0, Metadata: [] } }));
 });
 const types = { ".html": "text/html", ".js": "text/javascript", ".cjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".woff2": "font/woff2" };
+// The page asks Google Fonts for VT323, Press Start 2P and Silkscreen (the self-host build vendors them). Headless has no internet, so the
+// same fontsource files the self-host build copies answer that request, and the faces really render.
+const FONT_PKGS = ["vt323", "press-start-2p", "silkscreen"];
+const NODE_MODULES = fileURLToPath(new URL("../node_modules/", import.meta.url));
+let fontCss = "";
+for (const pkg of FONT_PKGS) for (const w of ["400", "700"]) {
+  const f = join(NODE_MODULES, "@fontsource", pkg, `${w}.css`);
+  if (existsSync(f)) fontCss += readFileSync(f, "utf8").replace(/url\(\.\/files\/([^)]+)\)/g, (m, name) => `url(__FONTS__/${pkg}/${name})`) + "\n";
+}
 const files = http.createServer((req, res) => {
+  const fm = /^\/__fonts\/([a-z0-9-]+)\/([^/?]+)$/.exec(req.url.split("?")[0]);
+  if (fm) {
+    const f = join(NODE_MODULES, "@fontsource", fm[1], "files", fm[2]);
+    if (!existsSync(f)) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { "Content-Type": "font/woff2", "Access-Control-Allow-Origin": "*" });
+    return res.end(readFileSync(f));
+  }
   const p = normalize(join(root, decodeURIComponent(req.url.split("?")[0])));
   if (!p.startsWith(root) || !existsSync(p) || statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
   let body = readFileSync(p);
@@ -75,6 +99,7 @@ await new Promise((r) => files.listen(0, "127.0.0.1", r));
 const api = `http://127.0.0.1:${plex.address().port}`;
 const base = `http://127.0.0.1:${files.address().port}`;
 
+const fontRequests = [];
 let passed = 0;
 const failures = [];
 const check = (label, ok, detail = "") => { if (ok) passed += 1; else failures.push(`${label}${detail ? `: ${detail}` : ""}`); };
@@ -83,7 +108,8 @@ const browser = await chromium.launch({ headless: true });
 
 async function measure(width, height, ctxOpts = {}, tag = "", large = false) {
   const ctx = await browser.newContext({ viewport: { width, height }, ...ctxOpts });
-  await ctx.route((u) => !/^(127\.0\.0\.1|localhost)$/.test(u.hostname), (route) => route.abort());
+  await ctx.route(/fonts\.googleapis\.com\/css2/, (route) => { fontRequests.push(decodeURIComponent(route.request().url()).replace(/\+/g, " ")); return route.fulfill({ contentType: "text/css", headers: { "access-control-allow-origin": "*" }, body: fontCss.replaceAll("__FONTS__", `${base}/__fonts`) }); });
+  await ctx.route((u) => !/^(127\.0\.0\.1|localhost|fonts\.googleapis\.com)$/.test(u.hostname), (route) => route.abort());
   await ctx.addInitScript(([url, pageSize]) => {
     if (location.pathname.endsWith("plex-tuner.html") && !sessionStorage.getItem("nx-seeded")) {
       sessionStorage.setItem("nx-seeded", "1");
@@ -107,6 +133,7 @@ async function measure(width, height, ctxOpts = {}, tag = "", large = false) {
     if (typeof updateInfoPanel === "function") updateInfoPanel();
   });
   await page.waitForTimeout(1200);
+  if (process.env.GUIDE_SCALE) { await page.addStyleTag({ content: `:root { --guide-scale: ${process.env.GUIDE_SCALE} !important; }` }); await page.waitForTimeout(400); }
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/guide-${width}x${height}${tag}.png` });
   const m = await page.evaluate(() => {
     const px = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : null);
@@ -129,6 +156,21 @@ async function measure(width, height, ctxOpts = {}, tag = "", large = false) {
       slot: px(document.querySelector(".grid-time-slot")), head: px(document.querySelector(".grid-channel-col")),
       infoTitle: px(document.getElementById("info-title")), infoDesc: px(desc),
       panelH: panelBox ? panelBox.height : null, scrollV: document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight,
+      fonts: (() => {
+        const fam = (el) => (el ? getComputedStyle(el).fontFamily : null);
+        return { tag: fam(document.getElementById("info-channel-tag")), title: fam(document.getElementById("info-title")), badge: fam(document.querySelector(".info-meta-badge")), time: fam(document.getElementById("info-time")),
+          upnext: fam(document.getElementById("info-upnext")), program: fam(document.querySelector(".grid-program")), slot: fam(document.querySelector(".grid-time-slot")), head: fam(document.querySelector(".grid-channel-col")),
+          vt323: document.fonts.check('16px "VT323"'), pressStart: document.fonts.check('16px "Press Start 2P"') };
+      })(),
+      layout: (() => {
+        const top = (el) => (el ? el.getBoundingClientRect().top : null), bottom = (el) => (el ? el.getBoundingClientRect().bottom : null);
+        const tag = document.getElementById("info-channel-tag"), poster = document.getElementById("info-poster"), text = document.querySelector(".info-text");
+        const up = document.getElementById("info-upnext"), cs = up ? getComputedStyle(up) : null;
+        return { tagText: tag ? tag.textContent : null, tagColor: tag ? getComputedStyle(tag).color : null, tagBottom: bottom(tag), mainTop: poster && !poster.hidden ? top(poster) : top(text),
+          tops: ["info-title", "info-meta-row", "info-description"].map((id) => top(document.getElementById(id))).concat([top(document.querySelector(".info-progress-wrap")), top(up)]),
+          upnext: up ? up.textContent : null, upnextChildren: up ? up.children.length : null, upnextRadius: cs ? cs.borderTopLeftRadius : null, upnextBg: cs ? cs.backgroundColor : null, upnextBorder: cs ? cs.borderTopWidth : null,
+          time: (document.getElementById("info-time") || {}).textContent, hasChannelName: !!document.getElementById("info-channel-name") };
+      })(),
       panel: (() => {
         const p = document.getElementById("info-panel"); if (!p) return null;
         const pr = p.getBoundingClientRect(), up = document.getElementById("info-upnext"), pg = document.querySelector(".info-progress-wrap");
@@ -177,7 +219,7 @@ for (const [w, h] of [...SIZES, ...SPILL_ONLY]) {
   results[`${w}x${h}`] = m;
   if (SPILL_ONLY.some(([a, b]) => a === w && b === h)) continue;
   const pct = (v) => (v == null ? "n/a" : `${(100 * v / m.vh).toFixed(2)}%`);
-  console.log(`MEASURE ${w}x${h}: row ${m.rowH && m.rowH.toFixed(1)} px (${pct(m.rowH)} of the height; Apple TV ${(100 * APPLE.row).toFixed(2)}%), number ${m.num} px (${pct(m.num)}), name ${m.name} px (${pct(m.name)}), programme ${m.program} px (${pct(m.program)}), time ${m.slot} px (${pct(m.slot)}; Apple TV ${(100 * APPLE.time).toFixed(2)}%), heading ${m.head} px; row text Apple TV ${(100 * APPLE.text).toFixed(2)}%`);
+  console.log(`MEASURE ${w}x${h}: row ${m.rowH && m.rowH.toFixed(1)} px (${pct(m.rowH)} of the height; Apple TV ${(100 * APPLE.row).toFixed(2)}%, asked for ${(100 * TARGET.row).toFixed(1)}%), number ${m.num} px (${pct(m.num)}), name ${m.name} px (${pct(m.name)}), programme ${m.program} px (${pct(m.program)}), time ${m.slot} px (${pct(m.slot)}; Apple TV ${(100 * APPLE.time).toFixed(2)}%), heading ${m.head} px; row text Apple TV ${(100 * APPLE.text).toFixed(2)}%`);
   console.log(`MEASURE ${w}x${h}: window: title ${JSON.stringify(m.title)}, description ${m.description ? "yes (" + m.description.length + " chars)" : "NO"}, meta ${JSON.stringify(m.meta)}, poster ${m.posterShown}, up next ${m.upnext ? "yes" : "no"}; sidebar ${m.side.length} controls: ${m.side.map((b) => b.label + (b.spill ? " (SPILLS)" : "")).join(" | ")}`);
 }
 
@@ -192,7 +234,19 @@ for (const [w, h] of SIZES) {
   check(`${key}: the menu lists captions, subtitle language, auto subtitles, audio and audio language`, m.menu.open && m.menu.rows.length === 5 && /CAPTIONS/.test(m.menu.rows[0]) && /SUBTITLE LANGUAGE/.test(m.menu.rows[1]) && /AUTO SUBTITLES/.test(m.menu.rows[2]) && /^AUDIO\b/.test(m.menu.rows[3]) && /AUDIO LANGUAGE/.test(m.menu.rows[4]), JSON.stringify(m.menu));
   check(`${key}: the now-playing window shows the programme's description`, !!m.description && /synopsis/.test(m.description), JSON.stringify(m.description));
   const parts = m.metaParts;
-  check(`${key}: and its year, content rating, star rating and runtime`, parts.some((x) => /^(19|20)\d\d$/.test(x)) && parts.some((x) => /^(G|PG|PG-13|R)$/.test(x)) && parts.some((x) => /^\u2605 \d\.\d$/.test(x)) && parts.some((x) => /^(\d+h \d+m|\d+h|\d+m)$/.test(x)), JSON.stringify(parts));
+  check(`${key}: and its year, content rating and star rating, and no runtime`, parts.length === 3 && /^(19|20)\d\d$/.test(parts[0]) && /^(G|PG|PG-13|R)$/.test(parts[1]) && /^\u2605 \d\.\d$/.test(parts[2]), JSON.stringify(parts));
+  const L = m.layout;
+  check(`${key}: the channel line is across the top, above the poster and text, in the form "CH 05 - 90S SITCOMS"`, /^CH \d\d - [A-Z0-9 &'.-]+$/.test(L.tagText || "") && L.tagBottom <= L.mainTop + 1 && !L.hasChannelName, JSON.stringify({ t: L.tagText, bottom: L.tagBottom, mainTop: L.mainTop }));
+  check(`${key}: the poster is shown (the stub has artwork), on the left under the channel line`, m.posterShown, String(m.posterShown));
+  check(`${key}: the channel line is in the channel's colour, not white`, !!L.tagColor && L.tagColor !== "rgb(255, 255, 255)", L.tagColor);
+  check(`${key}: top to bottom: title, meta, description, progress, up next`, L.tops.every((t, i) => t != null && (i === 0 || t > L.tops[i - 1])), JSON.stringify(L.tops));
+  check(`${key}: the progress line has the elapsed and total time`, /\d+:\d\d \/ \d+:\d\d/.test(L.time || ""), L.time);
+  check(`${key}: UP NEXT is one plain line "Up next in 44 min: the title": no pill, capsule, border or background`, /^Up next in (\d+|less than 1) min: .+/.test(L.upnext || "") && L.upnextChildren === 0 && L.upnextRadius === "0px" && L.upnextBorder === "0px" && L.upnextBg === "rgba(0, 0, 0, 0)", JSON.stringify(L));
+  const F = m.fonts;
+  check(`${key}: the 8-bit faces are loaded (VT323 and Press Start 2P)`, F.vt323 && F.pressStart, JSON.stringify({ vt: F.vt323, ps: F.pressStart }));
+  const has = (fam, name) => !!fam && fam.includes(name);
+  check(`${key}: window: Press Start 2P for the channel line and the badges; VT323 for the title, time and up next`, has(F.tag, "Press Start 2P") && has(F.badge, "Press Start 2P") && has(F.title, "VT323") && has(F.time, "VT323") && has(F.upnext, "VT323"), JSON.stringify(F));
+  check(`${key}: guide: Press Start 2P for the CHANNEL heading; VT323 for programme titles and times`, has(F.head, "Press Start 2P") && has(F.program, "VT323") && has(F.slot, "VT323"), JSON.stringify(F));
   check(`${key}: and its title, progress and UP NEXT`, !!m.title && !!m.time && !!m.upnext);
   const labels = m.side.map((b) => b.label.replace(/\s*\[.*?\]/g, "").trim().toUpperCase());
   // Before 1.0.17 the sidebar held: sound, full screen, retro, sleep, info, quality, settings and the links.
@@ -202,14 +256,17 @@ for (const [w, h] of SIZES) {
   check(`${key}: no sidebar label spills out of its button`, m.side.every((b) => !b.spill), m.side.filter((b) => b.spill).map((b) => b.label).join(", "));
   check(`${key}: no page errors`, m.errors.length === 0, m.errors.join(" | "));
 }
-// The guide at the Apple TV's proportions at the two common desktop sizes (a tenth of the share either way).
+// The guide at the size asked for (a row of about 4.4% of the window height, programme text about 1.5%, times 1.7%), at the two common desktop
+// sizes, within 8%; and the page's one variable is what sets it (the Apple TV's share times --guide-scale).
 for (const [w, h] of [[1440, 900], [1920, 1080]]) {
   const key = `${w}x${h}`, m = results[key];
   const share = (v) => v / m.vh;
-  const near = (v, want) => v != null && Math.abs(share(v) - want) <= want * 0.1;
-  check(`${key}: guide rows are the Apple TV's share of the window (${(100 * APPLE.row).toFixed(2)}%)`, near(m.rowH, APPLE.row), `${(100 * share(m.rowH)).toFixed(2)}%`);
-  check(`${key}: channel number, name and programme title are the Apple TV's row text share (${(100 * APPLE.text).toFixed(2)}%)`, near(m.num, APPLE.text) && near(m.name, APPLE.text) && near(m.program, APPLE.text), `${(100 * share(m.num)).toFixed(2)} / ${(100 * share(m.name)).toFixed(2)} / ${(100 * share(m.program)).toFixed(2)}%`);
-  check(`${key}: time labels are the Apple TV's share (${(100 * APPLE.time).toFixed(2)}%)`, near(m.slot, APPLE.time), `${(100 * share(m.slot)).toFixed(2)}%`);
+  const near = (v, want) => v != null && Math.abs(share(v) - want) <= want * 0.08;
+  check(`${key}: guide rows are about ${(100 * TARGET.row).toFixed(1)}% of the window height`, near(m.rowH, TARGET.row), `${(100 * share(m.rowH)).toFixed(2)}%`);
+  check(`${key}: channel number, name and programme title are about ${(100 * TARGET.text).toFixed(1)}% of the height`, near(m.num, TARGET.text) && near(m.name, TARGET.text) && near(m.program, TARGET.text), `${(100 * share(m.num)).toFixed(2)} / ${(100 * share(m.name)).toFixed(2)} / ${(100 * share(m.program)).toFixed(2)}%`);
+  check(`${key}: time labels are about ${(100 * TARGET.time).toFixed(1)}% of the height`, near(m.slot, TARGET.time), `${(100 * share(m.slot)).toFixed(2)}%`);
+  const exact = (v, apple) => Math.abs(share(v) - apple * GUIDE_SCALE) < 0.0015;
+  check(`${key}: and that is the Apple TV's size times --guide-scale (${GUIDE_SCALE})`, exact(m.rowH, APPLE.row) && exact(m.program, APPLE.text) && exact(m.slot, APPLE.time), `${(100 * share(m.rowH)).toFixed(2)} / ${(100 * share(m.program)).toFixed(2)} / ${(100 * share(m.slot)).toFixed(2)}%`);
 }
 
 // The new button's label and value fit inside it, with tracks present, at every size (the tablet has no rail, so it is only held to it if it shows).
@@ -245,6 +302,10 @@ if (process.env.EXTRA) {
     console.log(`MEASURE ${w}x${h}${tag}: description ${m.description ? "yes" : "NO"}, meta ${JSON.stringify(m.metaParts)}, row ${m.rowH && m.rowH.toFixed(1)} px, programme ${m.program} px, time ${m.slot} px, sidebar ${m.side.length} controls, with tracks: button ${JSON.stringify(m.withTracks.btn)}, rail ${m.withTracks.scroll}/${m.withTracks.client}`);
   }
 }
+if (fontRequests.length) {
+  check("the page asks Google Fonts for VT323 and Press Start 2P", fontRequests.every((q) => q.includes("family=VT323") && q.includes("family=Press Start 2P")), fontRequests[0]);
+}
+
 await browser.close();
 plex.close();
 files.close();

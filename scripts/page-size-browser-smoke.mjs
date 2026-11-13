@@ -107,9 +107,9 @@ try {
   check("1920x1080 with a mouse: AUTO is on", await large(page));
   const m = await page.evaluate(() => { const row = document.querySelector(".grid-row[data-channel-id]"); const body = document.getElementById("grid-body"); const z = parseFloat(getComputedStyle(document.documentElement).zoom); const panel = document.getElementById("info-panel"); return { z, rows: body.getBoundingClientRect().height / row.getBoundingClientRect().height, docW: document.documentElement.scrollWidth, vw: innerWidth, panelScroll: panel.scrollHeight, panelClient: panel.clientHeight }; });
   check("the page is scaled by a third", Math.abs(m.z - 1.3333) < 0.01, String(m.z));
-  // A row is 64 pt, and in the guide one point is 1/1080 of the window height with the page zoom divided out: 64 px on screen at 1080
-  // under the third as well, so the guide shows the same 7 to 8 rows as without it (the Apple TV's proportion, not a third bigger).
-  check("the guide keeps its rows (64 pt each, 64 px on screen at 1080: 7 to 8 rows here)", m.rows >= 6.8 && m.rows <= 8.2, String(m.rows));
+  // A row is 64 pt times --guide-scale (0.74): 47 px on screen at 1080 with the page zoom divided out, so under the third the guide shows the
+  // same 10 to 11 rows as without it (the guide's own proportion, not a third bigger).
+  check("the guide keeps its rows (64 pt x the guide scale, 47 px on screen at 1080: 9.5 to 11.5 rows here)", m.rows >= 9.5 && m.rows <= 11.5, String(m.rows));
   check("the info window holds everything under the third (scrollHeight <= clientHeight)", m.panelScroll <= m.panelClient + 1, `${m.panelScroll} vs ${m.panelClient}`);
   check("nothing leaves the screen", m.docW <= m.vw + 1, `${m.docW} vs ${m.vw}`);
   await page.evaluate(() => showConfig());
