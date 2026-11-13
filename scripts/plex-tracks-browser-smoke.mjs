@@ -152,15 +152,16 @@ try {
   await page.waitForTimeout(900);
   l = await play("Two Tracks Test");
   check("AUDIO LANGUAGE French on that film goes to a server stream for the French track (35)", starts(l).some((x) => x.includes("audioStreamID=35")), l.join(" | "));
-  // The rail's program rows (#248): only what the playing file can choose.
-  const rows = async (title) => { await play(title); await page.evaluate(() => renderTrackRows()); return page.evaluate(() => [...document.querySelectorAll("#v-toolbar .track-row")].filter((e) => !e.hidden).map((e) => e.dataset.track)); };
+  // The program rows (#248), now behind the one AUDIO & SUBS button: only what the playing file can choose.
+  const rows = async (title) => { await play(title); await page.evaluate(() => renderTrackRows()); return page.evaluate(() => Object.entries(trackMenuState.show).filter(([, v]) => v).map(([k]) => k)); };
   check("two audio tracks and a subtitle track: all five rows", JSON.stringify(await rows("Pick Test")) === JSON.stringify(["cc", "sublang", "autosubs", "audio", "audiolang"]));
   check("one audio track and a subtitle file: the subtitle rows only", JSON.stringify(await rows("Sidecar Test")) === JSON.stringify(["cc", "sublang", "autosubs"]));
   check("two audio tracks and no subtitles: the audio rows only", JSON.stringify(await rows("Two Tracks Test")) === JSON.stringify(["audio", "audiolang"]));
   await page.evaluate(() => setAudioLanguage("__system__"));
   await rows("Pick Test");
   log.length = 0;
-  await page.locator("#tb-audio").click();
+  await page.locator("#tb-tracks").click();
+  await page.locator("#track-rows .sleep-row", { has: page.locator(".sleep-row-label", { hasText: /^AUDIO$/ }) }).click();
   const listed = await page.evaluate(() => [...document.querySelectorAll("#track-rows .sleep-row")].map((r) => r.textContent));
   check("AUDIO opens the file's three tracks", listed.length === 3, JSON.stringify(listed));
   await page.locator("#track-rows .sleep-row").nth(2).click();

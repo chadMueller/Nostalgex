@@ -263,11 +263,12 @@ for (const backend of ["jellyfin", "emby"]) try {
   await playItem(page, "Multi Film 0");
   body = lastBody("mm0");
   check(`${tag}: AUDIO LANGUAGE English asks for the English track (AudioStreamIndex 2), not the file's French default`, body && body.AudioStreamIndex === 2, JSON.stringify(body && body.AudioStreamIndex));
-  // The rail's AUDIO row (#248) lists the file's tracks; choosing German plays it for this program.
+  // The AUDIO & SUBS menu (#248) lists the file's tracks; choosing German plays it for this program.
   await page.evaluate(() => renderTrackRows());
-  const railRows = await page.evaluate(() => [...document.querySelectorAll("#v-toolbar .track-row")].filter((e) => !e.hidden).map((e) => e.dataset.track));
-  check(`${tag}: the rail shows AUDIO and AUDIO LANGUAGE for a film with three audio tracks, and the subtitle rows`, JSON.stringify(railRows) === JSON.stringify(["cc", "sublang", "autosubs", "audio", "audiolang"]), JSON.stringify(railRows));
-  await page.locator("#tb-audio").click();
+  const railRows = await page.evaluate(() => Object.entries(trackMenuState.show).filter(([, v]) => v).map(([k]) => k));
+  check(`${tag}: the AUDIO & SUBS menu lists AUDIO and AUDIO LANGUAGE for a film with three audio tracks, and the subtitle rows`, JSON.stringify(railRows) === JSON.stringify(["cc", "sublang", "autosubs", "audio", "audiolang"]), JSON.stringify(railRows));
+  await page.locator("#tb-tracks").click();
+  await page.locator("#track-rows .sleep-row", { has: page.locator(".sleep-row-label", { hasText: /^AUDIO$/ }) }).click();
   check(`${tag}: AUDIO lists the three tracks`, (await page.locator("#track-rows .sleep-row").count()) === 3);
   await page.locator("#track-rows .sleep-row").nth(2).click();
   await page.waitForTimeout(800);

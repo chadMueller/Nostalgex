@@ -43,6 +43,64 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Next.** None for this post.
 
+## 2026-11-12 (Web tuner: the now-playing window has its synopsis and details back, the rail its old controls, and the guide reads at the Apple TV's size)
+
+**Why.** Seen on the hosted tuner (1.0.19): the window above the guide showed only a poster, the channel, the title, a
+progress bar and UP NEXT, where before it also had the synopsis, the year, the rating and the runtime; the rail beside it
+carried CAPTIONS, SUB LANGUAGE, AUTO SUBS, AUDIO and AUDIO LANG as extra buttons, one with its label running out of the
+button; and the guide's text was small next to the Apple TV's and the Roku's.
+
+**What changed it, found by diffing `tuner-v1.0.16` against main.** All of it is 1.0.17's Apple TV parity work:
+- The Now Playing panel (#261) replaced the window's `info-description` and `info-meta-row` with the Apple TV's
+  poster, channel and title, and nothing else. The Apple TV has a full-screen overlay for the rest; the web has none.
+- The program rows (#248) put five track buttons in the rail, each shown only when the playing file had that choice.
+- `--pt`, one Apple TV point, was set to 0.5 CSS px on every desktop window. That is right for a TV browser at 960x540
+  and wrong for a desktop: it halved the guide. NORMAL text went from 18 px in 1.0.16 to 11 px, rows from 38 px to 32.
+  The LARGE multipliers (29/22 and 29/25) were not involved: NORMAL is 1.0 whatever LARGE is.
+
+**Measured** (headless Chromium, the same 400-film stub library, a programme tuned; as a share of the window height).
+The Apple TV's guide on its 1080 canvas is a 64 pt row (5.93%), 22 pt row text (2.04%) and 25 pt times (2.31%).
+
+| window | 1.0.16 row / text / time | 1.0.19 row / text / time | now |
+|---|---|---|---|
+| 1280x800 | 38 px 4.75% / 18 px 2.25% / 20 px 2.50% | 32 px 4.00% / 11 px 1.38% / 12.5 px 1.56% | 47.4 px 5.93% / 16.3 px 2.04% / 18.5 px 2.31% |
+| 1440x900 | 38 px 4.22% / 18 px 2.00% / 20 px 2.22% | 32 px 3.56% / 11 px 1.22% / 12.5 px 1.39% | 53.3 px 5.93% / 18.3 px 2.04% / 20.8 px 2.31% |
+| 1920x1080 | 38 px 3.52% / 18 px 1.67% / 20 px 1.85% | 32 px 2.96% / 11 px 1.02% / 12.5 px 1.16% | 64 px 5.93% / 22 px 2.04% / 25 px 2.31% |
+
+**Changed.**
+- `plex-tuner.html`: the window has the synopsis (three lines) and a meta row (year, content rating, star rating, runtime,
+  and a music video's genre) again, filled the way 1.0.16 filled them; the poster, progress bar and UP NEXT stay.
+- The rail is the 1.0.16 rail: sound, full screen, retro, sleep, info, quality, settings and the links. Captions,
+  subtitle language, auto subtitles, audio and audio language are behind one AUDIO & SUBS button, which shows only when
+  the playing file has a choice and opens the existing track dialog as a list of those rows. Settings has the same
+  choices and the phone's drawer lists them. On a window where that button would push the links off the bottom of the
+  rail, the APPLE TV promo gives up its row until a file without tracks plays; in the TV-browser layout the button
+  shares SETTINGS' row.
+- One Apple TV point is 1/1080 of the window height in the guide and the now-playing window, on desktop windows (1025
+  wide and 721 high and up). The rail, dialogs, TV browsers (the zoom steps, 720 high and under) and phones and tablets
+  keep their sizes. The guide's channel column is 220 pt, with the old 200 px as its floor.
+- `scripts/plex-tracks-browser-smoke.mjs`, `scripts/jellyfin-audio-streams-browser-smoke.mjs`: open AUDIO from the
+  menu. `scripts/guide-text-browser-smoke.mjs`, `scripts/page-size-browser-smoke.mjs`: their fixed desktop sizes (11 px,
+  11 to 12 rows) are now the new ones.
+
+**Tested.** `npm run test:web-layout:browser` (new, 33 checks, needs Playwright) at 1280x800, 1440x900 and 1920x1080: the
+window shows the description, year, content rating, star rating and runtime, title, progress and UP NEXT; the rail
+holds only the old controls and no label spills; with subtitle and audio tracks it gets one AUDIO & SUBS button and
+stays unclipped with Instagram wholly on screen; the menu lists the five rows; the guide's row, text and time sizes
+are the Apple TV's share of the window to within a tenth, at 1440x900 and 1920x1080. Run on `tuner-v1.0.16` and on
+1.0.19 it prints the table above. `npm test`, both builds and the version check pass; the guide-text, page-size,
+program-row-layout, watershed, first-run, plex-tracks and jellyfin-audio-streams browser smokes pass. I looked at the
+screens at 1440x900, 960x540 at DPR 2 and on a phone.
+
+**Not fixed.** `npm run test:guide-text:browser` has two failures on the phone ("header fits the screen and lines up
+with the rows", NORMAL and LARGE). They fail the same way on a clean checkout of the base commit; not looked into.
+
+**Not verified.** Firefox, WebKit and a real TV browser (Chromium only); a real file with subtitle and audio tracks (the
+tracks are put on the playing item by the test); the TV-browser and phone views are looked at, not asserted on.
+
+**Half-done.** Branch `web/restore-info-panel`, committed, not pushed. It needs a review before it goes to main (a push
+to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag, planned as `tuner-v1.0.20`).
+
 ## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
 
 **Why.** Trello "Roku: check two older bugs": the app crashed when Up was pressed with an empty guide. #93 (tydude001,

@@ -107,7 +107,8 @@ try {
   check("1920x1080 with a mouse: AUTO is on", await large(page));
   const m = await page.evaluate(() => { const row = document.querySelector(".grid-row[data-channel-id]"); const body = document.getElementById("grid-body"); const z = parseFloat(getComputedStyle(document.documentElement).zoom); return { z, rows: body.getBoundingClientRect().height / row.getBoundingClientRect().height, docW: document.documentElement.scrollWidth, vw: innerWidth }; });
   check("the page is scaled by a third", Math.abs(m.z - 1.3333) < 0.01, String(m.z));
-  check("the guide keeps its rows (64 pt each, 32 px authored: about 11 to 12 here)", m.rows >= 10 && m.rows <= 13.5, String(m.rows));
+  // A row is 64 pt, and on a desktop window one point is 1/1080 of the height: 64 px authored at 1080, 85 px on screen under the third. That shows about 5 to 6.
+  check("the guide keeps its rows (64 pt each, 64 px authored at 1080, about 5 to 6 here)", m.rows >= 4.5 && m.rows <= 7.5, String(m.rows));
   check("nothing leaves the screen", m.docW <= m.vw + 1, `${m.docW} vs ${m.vw}`);
   await page.evaluate(() => showConfig());
   await page.waitForTimeout(400);

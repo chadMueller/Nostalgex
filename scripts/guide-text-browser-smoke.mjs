@@ -137,8 +137,9 @@ async function launch(name, { stored } = {}) {
   await page.waitForTimeout(1500);
   return { ctx, page, errors };
 }
-// A desktop viewport draws a program title in DM Mono Medium at 22 pt, and a point is 0.5 CSS px there.
-const DESKTOP_NORMAL = 22 * 0.5;
+// A desktop viewport draws a program title in DM Mono Medium at 22 pt.
+// On a desktop window the guide's row text is 22 pt and one point is 1/1080 of the window's height (the Apple TV's proportions).
+const DESKTOP_NORMAL = 22 * viewports.desktop.viewport.height / 1080;
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
 /** Everything the checks read about the guide, in one snapshot. */

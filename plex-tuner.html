@@ -109,6 +109,18 @@
     --ch7: #9B59B6;
     --ch8: #FF2244;
   }
+  /* A desktop window: in the guide and the now-playing window one Apple TV point is 1/1080 of the window's height, so they sit at the
+     Apple TV's proportions (a 64 pt row is 5.9% of the height, the 22 pt row text 2%). Everything else, the rail and the dialogs
+     included, keeps the 0.5 px point above, and so does a TV browser (720 high or less, 0.5 px is 960x540, and it has the zoom steps
+     below); phones and tablets (under 1025 wide) have their own sizes. */
+  @media (min-width: 1025px) and (min-height: 721px) {
+    .guide-grid, .info-panel { --pt: calc(100vh / 1080); }
+    .guide-grid {
+      --g-row: calc(64 * var(--pt));
+      --g-head: calc(58 * var(--pt));
+      --g-col: max(200px, calc(220 * var(--pt)));
+    }
+  }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -290,6 +302,35 @@
     margin-bottom: calc(14 * var(--pt));
   }
   .info-ch-bar { flex: 0 0 auto; width: calc(8 * var(--pt)); height: calc(24 * var(--pt)); border-radius: 1px; }
+  /* The synopsis and the year, rating and runtime: the web tuner's own now-playing window, as before 1.0.17. */
+  .info-meta-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: calc(12 * var(--pt));
+    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.04em;
+    margin-bottom: calc(10 * var(--pt));
+  }
+  .info-meta-row:empty { display: none; }
+  .info-meta-badge {
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: calc(2 * var(--pt)) calc(8 * var(--pt));
+    border-radius: 3px;
+  }
+  .info-rating { color: var(--yellow); }
+  .info-description {
+    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
+    color: rgba(255,255,255,0.55);
+    line-height: 1.4;
+    margin-bottom: calc(12 * var(--pt));
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  .info-description:empty { display: none; }
   .info-channel-name {
     font-size: calc(22 * var(--pt));
     color: rgba(255,255,255,0.7);
@@ -808,7 +849,7 @@
      ran into QUALITY. A row has the whole rail to itself, so the pairs are just rows now. The
      rail is --nx-rail wide, which grows with the text floor. */
   .v-btn-pair { display: contents; }
-  .track-row[hidden] { display: none !important; }
+  .track-row[hidden], #tb-tracks[hidden], .v-btn--appletv[hidden] { display: none !important; }
 
   /* ══════════════════════════════════════
      TOUCH TOP BAR (phones and tablets)
@@ -2621,6 +2662,8 @@
     /* Seven cells make an odd count, so SETTINGS takes the whole last row, and the coffee box and
        Instagram each take a row of their own. */
     .v-btn-pair:last-of-type .v-btn:last-child { grid-column: 1 / -1; }
+    /* With the AUDIO & SUBS button there are eight cells, an even count: SETTINGS and it share the last row. */
+    .v-toolbar.has-tracks .v-btn-pair:last-of-type .v-btn:last-child { grid-column: auto; }
     .v-toolbar .v-coffee { grid-column: 1 / -1; margin-top: 0; min-height: 48px; padding: 6px 8px; gap: 10px; }
     .v-toolbar .v-social { grid-column: 1 / -1; margin-top: 0; min-height: 48px; }
     /* Everything else a cursor has to hit: 48 authored is 32 screen px. */
@@ -3731,14 +3774,16 @@
 
     <!-- INFO PANEL (visible in side layout) -->
     <div class="info-panel" id="info-panel">
-      <!-- The Apple TV's Now Playing details (NowPlayingPanel.infoZone): the poster (Plex) on the left; beside it CH and the
-           channel's colour bar, the title and the channel name. Then UP NEXT IN n MIN and the next title. Nothing else. -->
+      <!-- The now-playing window: the poster (Plex) on the left; beside it CH and the channel's colour bar, the title, the year, rating
+           and runtime, the synopsis and the channel name. Then the progress and UP NEXT IN n MIN with the next title. -->
       <div class="info-main">
         <img class="info-poster" id="info-poster" alt="" hidden>
         <div class="info-text">
           <div class="info-channel-tag" id="info-channel-tag"></div>
           <div class="info-title" id="info-title"></div>
           <div class="info-episode-title" id="info-episode-title"></div>
+          <div class="info-meta-row" id="info-meta-row"></div>
+          <div class="info-description" id="info-description"></div>
           <div class="info-channel-name" id="info-channel-name"></div>
         </div>
       </div>
@@ -3798,29 +3843,20 @@
           <span class="v-btn-short">QUALITY</span>
           <span class="v-btn-value" id="tb-quality-val">AUTO</span>
         </button>
-        <!-- The Apple TV's program rows. Each shows only when the playing file has something to choose (subtitle tracks, or more
-             than one audio track); renderTrackRows() sets them. -->
-        <button class="v-btn track-row" type="button" id="tb-cc" data-track="cc" hidden onclick="toggleSubtitles(); renderTrackRows()">
-          <span class="v-btn-label">CAPTIONS [C]</span><span class="v-btn-short">CAPTIONS</span><span class="v-btn-value" id="tb-cc-val">OFF</span>
-        </button>
-        <button class="v-btn track-row" type="button" id="tb-sublang" data-track="sublang" hidden onclick="openTrackDialog('sublang')" aria-haspopup="dialog">
-          <span class="v-btn-label">SUB LANGUAGE</span><span class="v-btn-short">SUB LANGUAGE</span><span class="v-btn-value" id="tb-sublang-val">AUTO</span>
-        </button>
-        <button class="v-btn track-row" type="button" id="tb-autosubs" data-track="autosubs" hidden onclick="toggleAutoSubsForeignAudio(); renderTrackRows()">
-          <span class="v-btn-label">AUTO SUBS</span><span class="v-btn-short">AUTO SUBS</span><span class="v-btn-value" id="tb-autosubs-val">ON</span>
-        </button>
-        <button class="v-btn track-row" type="button" id="tb-audio" data-track="audio" hidden onclick="openTrackDialog('audio')" aria-haspopup="dialog">
-          <span class="v-btn-label">AUDIO</span><span class="v-btn-short">AUDIO</span><span class="v-btn-value" id="tb-audio-val">AUTO</span>
-        </button>
-        <button class="v-btn track-row" type="button" id="tb-audiolang" data-track="audiolang" hidden onclick="openTrackDialog('audiolang')" aria-haspopup="dialog">
-          <span class="v-btn-label">AUDIO LANG</span><span class="v-btn-short">AUDIO LANG</span><span class="v-btn-value" id="tb-audiolang-val">AUTO</span>
-        </button>
         <button class="v-btn" type="button" onclick="showConfig()">
           <span class="v-btn-label">SETTINGS</span>
           <span class="v-btn-short">SETTINGS</span>
           <span class="v-btn-value v-key">[H]</span>
         </button>
       </div>
+      <!-- Captions, subtitle and audio language, auto subtitles and the audio track live in one menu, opened from this one button. It
+           shows only when the playing file has something to choose (subtitle tracks, or more than one audio track); renderTrackRows()
+           sets it. Settings has the same choices, and the phone's drawer lists them. -->
+      <button class="v-btn" type="button" id="tb-tracks" hidden onclick="openTrackDialog('menu')" aria-haspopup="dialog">
+        <span class="v-btn-label">AUDIO &amp; SUBS</span>
+        <span class="v-btn-short">AUDIO &amp; SUBS</span>
+        <span class="v-btn-value" id="tb-tracks-val">CC OFF</span>
+      </button>
       <a class="v-btn v-btn--appletv" href="https://apps.apple.com/app/nostalgex/id6762563534" target="_blank" rel="noopener noreferrer" aria-label="Download Nostalgex on Apple TV">
         <span class="v-btn-label">APPLE TV</span>
         <span class="v-btn-short">APPLE TV</span>
@@ -5157,6 +5193,8 @@
     setInfoPoster(null);
     text('info-title', WATERSHED_GUIDE_LABEL);
     text('info-episode-title', '');
+    text('info-description', '');
+    setInfoMeta(null, null);
     width('info-progress', '0%');
     text('info-time', '');
     text('info-upnext', '');
@@ -7058,6 +7096,8 @@
     const MB = globalThis.NostalgexMusicBrainz;
     const isMusic = MB && MB.isMusicVideoItem(shown);
     document.getElementById('info-title').textContent = shown.title;
+    document.getElementById('info-description').textContent = shown.summary || '';
+    setInfoMeta(shown, isMusic ? MB : null);
     document.getElementById('info-episode-title').textContent = isMusic
       ? (shown.artist || '')
       : (shown.episodeTitle || '');
@@ -7074,6 +7114,19 @@
     document.getElementById('info-upnext').innerHTML = next
       ? `<span class="info-upnext-title">${escapeHtml(itemGuideTitle(next))}</span><span class="info-upnext-chip">${escapeHtml(upNextSeconds === null ? 'UP NEXT' : NostalgexUpNext.label(upNextSeconds))}</span>`
       : '';
+  }
+
+  // The year, the content rating, the star rating and the runtime (and a music video's genre), as the window showed them before 1.0.17.
+  function setInfoMeta(item, MB) {
+    const metaEl = document.getElementById('info-meta-row');
+    if (!metaEl) return;
+    metaEl.innerHTML = '';
+    const add = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; el.textContent = text; metaEl.appendChild(el); };
+    if (item && item.year) add('span', 'info-meta-badge', item.year);
+    if (item && item.contentRating) add('span', 'info-meta-badge', item.contentRating);
+    if (item && item.rating) add('span', 'info-rating', `\u2605 ${Number(item.rating).toFixed(1)}`);
+    if (item && item.duration) add('span', '', formatDuration(item.duration));
+    if (item && MB) { const g = MB.musicGenreDisplay(item); if (g) add('span', 'info-meta-badge', g); }
   }
 
   // The channel's colour is a small bar beside the number, never the number itself; the channel's name sits under the title.
@@ -7926,12 +7979,26 @@
     const item = currentPlayingItem;
     return item && Array.isArray(item.audioStreams) && item.audioStreams.length > 1 ? pickAudioStream(item.audioStreams, item) : null;
   }
+  // The one menu behind AUDIO & SUBS: the rows the playing file has something to choose for, each with its value.
+  let trackMenuState = { show: {}, values: {} };
+  const TRACK_MENU_ROWS = [['cc', 'CAPTIONS'], ['sublang', 'SUBTITLE LANGUAGE'], ['autosubs', 'AUTO SUBTITLES'], ['audio', 'AUDIO'], ['audiolang', 'AUDIO LANGUAGE']];
   function renderTrackRows() {
     const item = currentPlayingItem;
     const audio = item && Array.isArray(item.audioStreams) ? item.audioStreams : [];
     const subs = item && Array.isArray(item.subtitles) ? item.subtitles : [];
     const show = { cc: subs.length > 0, sublang: subs.length > 0, autosubs: subs.length > 0, audio: audio.length > 1, audiolang: audio.length > 1 };
     for (const el of document.querySelectorAll('.track-row')) el.hidden = !show[el.dataset.track];
+    const tracksBtn = document.getElementById('tb-tracks');
+    if (tracksBtn) tracksBtn.hidden = !Object.values(show).some(Boolean);
+    // The rail is exactly full on a 900 high window: when this one button would push the links off the bottom, the APPLE TV
+    // promo gives its row up until a file without tracks plays.
+    const appleBtn = document.querySelector('#v-toolbar .v-btn--appletv');
+    const rail = document.getElementById('v-toolbar');
+    if (rail && tracksBtn) rail.classList.toggle('has-tracks', !tracksBtn.hidden);
+    if (appleBtn && rail) {
+      appleBtn.hidden = false;
+      if (tracksBtn && !tracksBtn.hidden && rail.scrollHeight > rail.clientHeight + 1) appleBtn.hidden = true;
+    }
     const cur = currentAudioStream();
     const values = {
       cc: subtitlesEnabled ? 'ON' : 'OFF',
@@ -7943,9 +8010,20 @@
     for (const [k, v] of Object.entries(values)) {
       for (const id of [`tb-${k}-val`, `dw-${k}-val`]) { const el = document.getElementById(id); if (el) el.textContent = v; }
     }
+    trackMenuState = { show, values };
+    const tracksVal = document.getElementById('tb-tracks-val');
+    if (tracksVal) tracksVal.textContent = show.cc ? `CC ${values.cc}` : 'AUDIO';
+  }
+  function trackMenuChoose(key) {
+    if (key === 'cc') { toggleSubtitles(); renderTrackRows(); }
+    else if (key === 'autosubs') { toggleAutoSubsForeignAudio(); renderTrackRows(); }
+    else openTrackDialog(key);
   }
   function trackDialogOptions(kind) {
     const item = currentPlayingItem;
+    if (kind === 'menu') {
+      return { title: 'AUDIO & SUBTITLES', current: '', options: TRACK_MENU_ROWS.filter(([k]) => trackMenuState.show[k]).map(([k, label]) => ({ value: k, label, detail: trackMenuState.values[k] || '' })) };
+    }
     if (kind === 'audio') {
       const cur = currentAudioStream();
       return { title: 'AUDIO', current: cur ? String(cur.index) : '', options: ((item && item.audioStreams) || []).map(a => ({
@@ -7976,7 +8054,10 @@
       const label = document.createElement('span'); label.className = 'sleep-row-label'; label.textContent = o.label;
       const value = document.createElement('span'); value.className = 'sleep-row-value'; value.textContent = active ? 'ACTIVE' : (o.detail || '');
       b.append(label, value);
-      b.addEventListener('click', () => { chooseTrack(kind, o.value); closeTrackDialog(); });
+      b.addEventListener('click', () => {
+        if (kind === 'menu') { closeTrackDialog(); trackMenuChoose(o.value); return; }
+        chooseTrack(kind, o.value); closeTrackDialog();
+      });
       rows.appendChild(b);
     }
     document.getElementById('track-scrim').hidden = false;
