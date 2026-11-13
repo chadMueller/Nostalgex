@@ -36,6 +36,20 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Next.** Review and merge. `PARITY.md` keeps the "Support link in the app" row; it now matches the Apple TV's list.
 
+## 2026-11-13 (Android: README and layout wording, the Gradle wrapper checksum)
+
+**Why.** `android/README.md` still said there is no store listing and "installs over `adb`" (the app is on the Play internal testing track), called the channel bundles "packages" (every other surface says bundle), and `docs/REPOSITORY-LAYOUT.md` called the app an early spike. The Gradle wrapper did not pin its distribution.
+
+**Changed.**
+- `android/README.md`: "package" is "bundle" throughout (12 places; the app's own words are CHANNEL BUNDLES), and the opening line says there is no public store listing and that it installs over `adb` or through the Play internal testing track for invited testers.
+- `docs/REPOSITORY-LAYOUT.md`: the `android/` row says the same instead of "an early spike".
+- `android/gradle/wrapper/gradle-wrapper.properties`: `distributionSha256Sum` is the SHA-256 of `gradle-9.8.2-bin.zip`, `21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607`. Checked three ways: the zip downloaded and hashed here, services.gradle.org's `.sha256` file, and gradle.org/release-checksums. The wrapper accepted it on a fresh Gradle home, and with the first eight digits changed it stopped with "Verification of Gradle distribution failed".
+- No code change.
+
+**Half-done.** The `PARITY.md` Android column is an internal doc and is refreshed separately.
+
+**Next.** Review and merge.
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.

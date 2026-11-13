@@ -1,8 +1,9 @@
 # Nostalgex for Android TV
 
 A native Android TV app (Kotlin, Compose for TV, Media3 ExoPlayer), built for
-the NVIDIA SHIELD first, for Plex, Jellyfin and Emby. There is no store
-listing; it installs over `adb`.
+the NVIDIA SHIELD first, for Plex, Jellyfin and Emby. There is no public store
+listing. It installs over `adb`, or through the Play internal testing track for
+invited testers.
 
 ## What it does today
 
@@ -26,7 +27,7 @@ listing; it installs over `adb`.
   last scan is a day old.
 - Builds the channels from the root's `channels.json` and
   `channels-memberships.json` (symlinked into `app/src/main/assets/`), with
-  the package you had on, or the packages with content if that one fills
+  the bundle you had on, or the bundles with content if that one fills
   nothing.
 - Airs the Apple TV's schedule: the same programme at the same minute.
 - Plays through ExoPlayer: the file as stored (direct play) first, the
@@ -60,20 +61,20 @@ listing; it installs over `adb`.
   rows and blocks never move.
 - RETRO MODE's look: scanlines, flicker, vignette and the tracking line over
   the picture, and tuning snow when a start takes longer than 0.75 s.
-- Settings (SETTINGS above the guide, or the top of the package sidebar that
+- Settings (SETTINGS above the guide, or the top of the bundle sidebar that
   Left opens at the guide's first half hour), as the Apple TV's rail: PLAYBACK &
-  PICTURE, CHANNELS & BUNDLES (CHANNEL PACKAGES with an amber count of channels
+  PICTURE, CHANNELS & BUNDLES (CHANNEL BUNDLES with an amber count of channels
   still short of content, MISSING CHANNELS with each one's rules in plain words
   and how many titles match, FRANCHISES, MY COLLECTIONS and WATERSHED), SERVERS &
   ACCOUNTS (servers,
   libraries, RESCAN LIBRARY, DISCONNECT) and ABOUT. Up and Down on the rail swap
   the pane; Right or OK goes into the rows; Left comes back to the category;
-  Back steps out one level at a time. The sidebar jumps to a package's first
+  Back steps out one level at a time. The sidebar jumps to a bundle's first
   channel, in guide order.
 - Franchises and server collections, as on the Apple TV 1.0.29. The FRANCHISES
-  page: the package switch, ADD ALL / REMOVE ALL, and one A to Z list of the
+  page: the bundle switch, ADD ALL / REMOVE ALL, and one A to Z list of the
   classics (CH 300-306), the film series found in the library and the server's
-  franchise collections (COLLECTION). While the package is on, a classic also
+  franchise collections (COLLECTION). While the bundle is on, a classic also
   carries the shows the dictionary puts on it (The Mandalorian on STAR WARS),
   and a server collection that is a franchise already on offer folds away. MY
   COLLECTIONS lists the other collections, saying when one is mostly on another
@@ -117,9 +118,9 @@ listing; it installs over `adb`.
   back when its session ends (`scripts/nostalgex-watch-state.js`).
 - The seasonal invite: while SCREAM (October) or TIS THE SEASON (from a week
   before US Thanksgiving to December 31) is in season and switched off, a row
-  above channel one offers it. YES, TURN IT ON adds the package; NOT THIS YEAR
+  above channel one offers it. YES, TURN IT ON adds the bundle; NOT THIS YEAR
   is quiet until the season ends; DON'T ASK AGAIN is for good. A seasonal
-  package is never switched on any other way (`scripts/season-golden.json`).
+  bundle is never switched on any other way (`scripts/season-golden.json`).
 - demo mode, under EMBY on the first screen: the Apple TV's five sample
   channels with no account or server, every channel playing Apple's public
   sample stream at the clock's place in the programme. Not saved: the next
@@ -172,8 +173,8 @@ Different on purpose, because the Apple TV's version has no counterpart here:
   fMP4 with HEVC (AVPlayer shows HEVC only from fMP4). It offers no direct play
   back: this app decides that by trying the file, and asks the server only
   once it has decided not to.
-- In demo mode a package switch in Settings does nothing and saves nothing:
-  the demo channels belong to no package. The Apple TV's switch is not guarded
+- In demo mode a bundle switch in Settings does nothing and saves nothing:
+  the demo channels belong to no bundle. The Apple TV's switch is not guarded
   there (not checked on an Apple TV).
 - The wordmark in the nav bar, as the Roku port uses at the maintainer's
   request; the Apple TV still shows its earlier logo.
@@ -207,7 +208,7 @@ Different in the detail:
 (`DailyManifest.kt`, from `scripts/nostalgex-daily-manifest.js`), the channel
 filter and Watershed (`ChannelFilter.kt`, from
 `scripts/nostalgex-channel-filter.cjs`), stream quality (`StreamQuality.kt`),
-seasonal packages (`Season.kt`), the Jellyfin and Emby library scan
+seasonal bundles (`Season.kt`), the Jellyfin and Emby library scan
 (`MediaBrowserLibrary.kt`, from `plex-tuner.html`'s
 `fetchJellyfinLibraryFromServer`), TMDB and OMDb enrichment
 (`EnrichmentService.kt`, from `scripts/nostalgex-enrichment.js`), and
@@ -227,7 +228,7 @@ never on two channels at once (`ScheduleLineupTest` holds the properties of
 `scripts/nostalgex-schedule-lineup-smoke.mjs`), and `scripts/filter-golden.json` case for case against the
 shipped `channels.json`; `scripts/stream-quality-golden.json`,
 `scripts/season-golden.json` and `scripts/watershed-golden.json` hold the
-quality table, the package seasons and Watershed's hold to the same answers.
+quality table, the bundle seasons and Watershed's hold to the same answers.
 The scan is compared item for item with the web
 tuner's, run by `engine/scripts/gen-mediabrowser-vectors.mjs` over the Roku
 port's fixture server (`roku/tests/fixtures/mediabrowser-server.json`).
