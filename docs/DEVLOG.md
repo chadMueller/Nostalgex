@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-13 (publish Jellyfin and Emby live TV on Roku)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-emby-live-tv-roku`.
+
+**Why.** Today's post: live TV for Jellyfin without a tuner, on Roku (Emby too). The copy was already approved (`draft: false`, date 2026-11-13); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/jellyfin-emby-live-tv-roku.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/jellyfin-emby-live-tv-roku/cover.jpg` is 1200x630. Hero `header.webp` is 1280x720. Inline stills `roku-sign-in.webp` and `roku-channel-packages.webp` are 1280x720. Images stay on R2; none committed.
+- `content/roku.json` and `roku.html` were not touched.
+- `npm run blog:render` wrote sixteen live posts into `public/sitemap.xml`, including `/blog/jellyfin-emby-live-tv-roku` with lastmod 2026-11-13. `/blog` lastmod is 2026-11-13. `npm run build` emitted the post to `dist/blog/jellyfin-emby-live-tv-roku.html` with width/height on all four images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 372 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
 
 **Why.** Trello "Roku: check two older bugs": the app crashed when Up was pressed with an empty guide. #93 (tydude001,
