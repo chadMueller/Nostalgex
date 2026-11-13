@@ -42,7 +42,7 @@ An app for Roku TVs and players. Connect one or more servers, then flip channels
 
 <a id="web-tuner-web-tunerhtml--plex-tunerhtml"></a>
 <a id="web-tuner"></a>
-## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.19`
+## <a href="https://www.nostalgex.app/web-tuner"><img src="https://unpkg.com/lucide-static@1.58.0/icons/monitor-play.svg" alt="Web tuner" height="28" align="center"></a> Web tuner `1.0.20`
 
 Nothing to install. Works on computers and phones.
 
@@ -50,7 +50,7 @@ Nothing to install. Works on computers and phones.
 
 <a id="run-it-on-your-server"></a>
 <a id="docker-container"></a>
-## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.19`
+## <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo" height="28" align="center"> Docker container `1.0.20`
 
 The same web tuner, packaged as a Docker container that runs on a computer at home, so it can reach servers the website can't. Most Plex users don't need it.
 
@@ -62,7 +62,7 @@ docker run -d --name nostalgex -p 8080:8080 --restart unless-stopped ghcr.io/cha
 
 Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker container guide](https://www.nostalgex.app/self-host).
 
-**Latest: `tuner-v1.0.19`.** Two fixes to how it starts. The page no longer freezes for several seconds at launch on a big library while channels are matched, and the first screen says what Nostalgex is and what you need, in the same words as the Apple TV and Roku apps. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.19). Already running it? `docker compose pull && docker compose up -d`.
+**Latest: `tuner-v1.0.20`.** The now-playing window has its description, year, rating and runtime back, the sidebar is back to the controls it had (captions, subtitle language and audio live behind one AUDIO & SUBS button), and the guide text is sized like the Apple TV's on a desktop window. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.20). Already running it? `docker compose pull && docker compose up -d`.
 
 <a id="whats-new-in-1032"></a>
 ## What's new in 1.0.32
