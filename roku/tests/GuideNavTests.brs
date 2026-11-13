@@ -81,6 +81,15 @@ function NxRunGuideNavTests() as Integer
     NxCheck(r, "jump list: FRANCHISES without a classic", NxGnJumpNames(NxGuideJumpTargets(bundles, on, invalid, noClassic)), "NOSTALGEX@0,FRANCHISES@1")
     NxCheck(r, "jump list: a package off, or nothing shown", NxGnJumpNames(NxGuideJumpTargets(bundles, ["decades"], jumps, guide)), "OTHER COLLECTIONS@7")
 
+    ' An empty guide takes every vertical key without a step to take (#93), on to SETTINGS: Up and Down answer -1
+    ' whatever the focus was left at (Back from SETTINGS on the empty guide left it at -1), and the stripe and
+    ' bundle list have nothing to walk.
+    NxCheck(r, "empty guide: Up", NxGuideStep(0, 0, "up").ToStr(), "-1")
+    NxCheck(r, "empty guide: Up from a focus left at -1", NxGuideStep(-1, 0, "up").ToStr(), "-1")
+    NxCheck(r, "empty guide: Down", NxGuideStep(0, 0, "down").ToStr(), "-1")
+    NxCheck(r, "empty guide: Down from a focus left at -1", NxGuideStep(-1, 0, "down").ToStr(), "-1")
+    NxCheck(r, "empty guide: no jump list", NxGnJumpNames(NxGuideJumpTargets(bundles, on, jumps, [])), "")
+
     print "guide nav cases (upstream ChannelGuideView wrap): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

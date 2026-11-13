@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
+
+**Why.** Trello "Roku: check two older bugs": the app crashed when Up was pressed with an empty guide. #93 (tydude001,
+2026-10-25, in 1.0.10 and 1.0.12) made the empty guide take every key; this checks it still does after today's guide
+work (the stripes, the grid skip in full screen).
+
+**Found.** Up goes `NxGuideStep` (-1 with no channel), then `setNav("settings")`, `keepFocusVisible`, `renderGrid` and
+`renderInfo`, all of which skip an empty list; `refreshStripes` and `drawStripeNames` have no group to walk. No path
+reads a channel. Five checks hold the pure part. Not reproduced on the stick: an empty guide there means switching
+off every package in the real Settings, or a lab sign-in in a test-data space, neither done while the WATERSHED test
+holds the stick.
+
 ## 2026-11-12 (Roku: WATERSHED's 9 PM crossing held by a test, #190)
 
 **Why.** The 9 PM check (#190) on 1.0.13 candidate v6 saw the placeholder still up at 21:03. The scheduling path
