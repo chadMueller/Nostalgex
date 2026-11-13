@@ -1,47 +1,71 @@
 ---
-title: "ErsatzTV and Tunarr Alternatives for Apple TV: Live Channels From Your Library, No Server Needed"
-seo_title: "ErsatzTV & Tunarr Alternatives for Apple TV"
-description: "ErsatzTV is in maintenance mode and Tunarr needs a server. Here's how the alternatives compare, and when a free Apple TV app is honestly all you need."
+title: "Tunarr vs ErsatzTV in 2026: Which One to Run, and When You Don't Need Either"
+seo_title: "Tunarr vs ErsatzTV: Which One to Run in 2026"
+description: "Tunarr vs ErsatzTV, compared plainly: setup, scheduling, players and where each project stands now. Plus when a free app on your TV is all you need."
 cover: "https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/tunarr-ersatztv-alternative-apple-tv/cover.jpg"
 cover_alt: "Full screen movie playing on the Classic Fam Jams channel in the Nostalgex Apple TV app, no server needed"
-excerpt: "I love what Tunarr and ErsatzTV do. But if your channels only ever play on one Apple TV, you might not need a server tool at all. Here's how I'd decide."
+excerpt: "Tunarr vs ErsatzTV, compared honestly: who each one is for, where the projects stand in 2026, and when a free app on your TV is all you need."
 author: "Chad Mueller"
 slug: tunarr-ersatztv-alternative-apple-tv
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-11-13
 ---
 
-# ErsatzTV and Tunarr Alternatives for Apple TV: Live Channels From Your Library, No Server Needed
+# Tunarr vs ErsatzTV in 2026: Which One to Run, and When You Don't Need Either
 
-> The main ErsatzTV alternative is Tunarr, which builds custom channels on your server and works with Plex, Jellyfin, Emby and any IPTV player. If you only watch on an Apple TV, you may not need a server at all. Nostalgex is a free, open source Apple TV app that turns your Plex or Jellyfin library into 130+ live channels with a retro guide, automatically.
+> Tunarr and ErsatzTV both turn your Plex, Jellyfin or Emby library into custom live channels on a server, then share them as a fake HDHomeRun tuner or an M3U playlist. Tunarr is the easier place to start for most people, with a web editor for time slots and filler and frequent releases. ErsatzTV is the pick if you want its scheduling tools or already run it. If you only watch on Apple TV or Roku and don't want to program channels, a free app like Nostalgex builds them for you instead.
 
-I should say up front that I built Nostalgex, so take my opinions here with the right amount of salt. I also spent a long time running the server tools before I wrote a line of it, and I still think they're great. This post is my honest attempt to help you figure out which kind of tool you actually need, because a lot of people asking for an "ErsatzTV alternative" this year really just want to flip channels on the couch.
+I should say up front that I built Nostalgex, so take my opinions here with the right amount of salt. I also spent a long time running the server tools before I wrote a line of it, and I still think they're great. If you're comparing Tunarr and ErsatzTV, the table below is the useful part. If you really just want to flip channels on the couch, keep reading, because you might not need either one.
+
+## Tunarr vs ErsatzTV: what's the difference?
+
+Both are free, open source channel servers. You install them next to Plex, Jellyfin or Emby, you build the lineup, and they pretend to be live TV. The difference is how they feel to run, and where each project is in 2026.
+
+| | Tunarr | ErsatzTV |
+|---|---|---|
+| Install | Docker, Unraid, or standalone binaries for Linux, Windows and macOS. Binaries need your own FFmpeg. | Docker, Unraid, or binaries for Windows, macOS and Linux |
+| How you build schedules | Web editor for lineups, time slots, random slots, filler, shuffles and marathons | Web UI for custom channels and scheduling |
+| Outputs | HDHomeRun tuner, M3U, XMLTV, HLS | M3U, XMLTV, HLS, MPEG-TS (HDHomeRun-compatible) |
+| Media servers | Plex, Jellyfin, Emby and local files | Plex, Jellyfin, Emby and more |
+| Streaming engine | Tunarr's FFmpeg pipeline, plus ErsatzTV Next as an optional experimental backend | ErsatzTV Next is the default as of v26.12.0 |
+| Release pace | Frequent. Latest is v2026.11.2 (November 9, 2026) | Regular releases every 1 to 2 weeks. Latest is v26.12.0 (November 6, 2026) |
+| License | zlib, open source | zlib, open source |
+
+**Pick Tunarr if** you're starting fresh and you want a web editor for time slots, filler and shuffles. Releases come often, it talks to Plex, Jellyfin and Emby, and it hands channels out as a fake HDHomeRun tuner or an M3U playlist. [v2026.11.2](https://tunarr.com/blog/2026.11.2/) (November 9) added stream selection profiles and a rebuilt Channels page. That's the one I'd install on a new box.
+
+**Pick ErsatzTV if** you already run it, you want its scheduling tools, or you care about things it has always done well, like music video channels. The original app is still labeled Legacy, and it is actively released: [v26.12.0](https://github.com/ErsatzTV/legacy/releases) on November 6 moved every channel onto the ErsatzTV Next streaming engine. If your family already knows those channel numbers, staying is a reasonable choice.
 
 ## What are the best ErsatzTV alternatives?
 
-Here's the short version, checked October 2026. The rest of the post explains each one.
+Here's every option at a glance, checked November 2026. The rest of the post explains each one.
 
 | Tool | Where you watch | Runs on your server | You program the schedule | Shares channels as M3U or tuner | Cost |
 |---|---|---|---|---|---|
 | Tunarr | Plex, Jellyfin, Emby or any IPTV player | Yes (Docker or standalone binaries) | Yes | Yes | Free, open source |
-| ErsatzTV Legacy | Plex, Jellyfin, Emby or any IPTV player | Yes | Yes | Yes | Free, open source |
+| ErsatzTV | Plex, Jellyfin, Emby or any IPTV player | Yes | Yes | Yes | Free, open source |
 | dizqueTV | Plex, Jellyfin, Emby or any IPTV player | Yes | Yes | Yes | Free, open source |
 | JellyStream | Jellyfin or any IPTV player | Yes | You set genre rules, it fills the schedule | Yes | Free, open source |
 | Live Channels plugin | Any Jellyfin app | Inside Jellyfin | Yes | Through Jellyfin Live TV | Free, open source |
 | NostalgiaTV | Android TV, Android and Amazon devices | Optional Docker server | Prebuilt channels plus custom ones | Yes, with its server | Free, with a paid Pro upgrade |
-| Nostalgex | Apple TV, Roku and a web browser | No | No, it builds every channel | No | Free, open source |
+| Nostalgex | Apple TV, Roku Channel Store, a web browser or a Docker container | No | No, it builds every channel | No | Free, open source |
 
 If you want to dig into any of them, start with the [Tunarr README](https://github.com/chrisbenincasa/tunarr/), [JellyStream](https://github.com/oarko/jellystream), the [Live Channels plugin](https://github.com/JPKribs/jellyfin-plugin-livechannels) and [NostalgiaTV on Google Play](https://play.google.com/store/apps/details?id=com.nostalgiatv). NostalgiaTV is a separate app from a different developer, and a good one if your house runs on Android TV or Fire TV.
 
-## What happened to ErsatzTV, and is it still safe to use?
+## Is ErsatzTV still maintained?
 
-ErsatzTV had a rough 2026 if you were a fan. The project was archived in February, which set off threads like [this one on r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1rdy2v0/ersatztv_is_now_archived/) where people asked what to switch to before their families noticed. In April the original app came back as ErsatzTV Legacy, which [gets security fixes but no new features](https://www.reddit.com/r/ErsatzTV/comments/1sp4jql/unarchiving_ersatztv_legacy/). The new project, [ErsatzTV Next](https://github.com/ErsatzTV/next), is a streaming engine built with the Tunarr developer, and it [deliberately doesn't do scheduling at all](https://www.reddit.com/r/ErsatzTV/comments/1sngryj/what_is_next_for_ersatztv/).
+Yes. It had a messy stretch in 2026, which is why people still ask. The project was archived in February, and that set off threads like [this one on r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1rdy2v0/ersatztv_is_now_archived/) where folks wondered what to switch to before their families noticed. In April the original app came back as ErsatzTV Legacy.
 
-So is it safe? If your Legacy install works today, there's no fire. Keep it updated and keep using it. I just wouldn't start a brand new setup on it unless you need something it handles especially well, like [music video channels](https://github.com/ErsatzTV/legacy).
+The Legacy name stuck. The app itself is actively released, with new builds about every week or two. [v26.12.0](https://github.com/ErsatzTV/legacy/releases) landed November 6, 2026, and Legacy now defaults to the ErsatzTV Next streaming engine.
+
+[ErsatzTV Next](https://github.com/ErsatzTV/next) is that engine, a rewrite that transcodes and streams. Library management, scheduling and playout are not its job. As of v0.2.5 (also November 6), it is the default streaming engine inside ErsatzTV, and it can run on its own. Docs live at [ersatztv.org/next-docs](https://ersatztv.org/next-docs/).
+
+So is it safe? If your install works today, keep it updated and keep using it. I wouldn't start a brand new setup on it unless you need something it handles especially well, like [music video channels](https://github.com/ErsatzTV/legacy). For a fresh install where you want to program channels, Tunarr is the easier on-ramp.
 
 ## Is Tunarr still the best pick for most people?
 
 For people who want to program real channels, yes. [Tunarr](https://tunarr.com/) is the successor to dizqueTV, it's actively developed, and it connects to Plex, Jellyfin, Emby and local files. You build channels with time slots, filler, shuffles and marathons, then it hands them out as a fake HDHomeRun tuner or as M3U playlists that any IPTV player can open.
+
+The current release is [v2026.11.2](https://tunarr.com/blog/2026.11.2/) (November 9, 2026): stream selection profiles so a channel can pick the right audio and subtitles, and a rebuilt Channels page with bulk actions. Tunarr 2026.11.0 also added [ErsatzTV Next as an optional streaming backend](https://tunarr.com/configure/ffmpeg/ersatztv-next), marked experimental, one channel at a time if you want to try it. They're not enemies. Tunarr still runs the schedule. Next can transcode the stream.
 
 One correction to something I see a lot: Tunarr isn't Docker only. Its install page lists standalone binaries for Linux, Windows and macOS alongside the Docker image. You do have to bring your own FFmpeg with the binaries ([Tunarr install docs](https://tunarr.com/getting-started/installation/)).
 
@@ -57,31 +81,31 @@ This is the question I wish someone had asked me earlier. A channel server makes
 
 ![Nostalgex guide on Apple TV airing Urban Legend on the Nostalgex Horror channel straight from a home library](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/tunarr-ersatztv-alternative-apple-tv/nostalgex-horror-guide.webp)
 
-If every bit of your channel surfing happens on one or two Apple TVs, a server is a lot of plumbing for that job. The guide and the schedule can live in the app on the TV, and the app can just ask your media server for the file when it's time to play it. That's how every channel surfing app on Apple TV works, including mine.
+If every bit of your channel surfing happens on one or two TVs, a server is a lot of plumbing for that job. The guide and the schedule can live in the app on the TV, and the app can just ask your media server for the file when it's time to play it. That's how every channel surfing app on Apple TV works, including mine.
 
 There's a comment in [an r/selfhosted thread](https://www.reddit.com/r/selfhosted/comments/1ryr6p0/analoq_my_take_on_a_free_plex_live_tv_app_for/) that stuck with me. Someone said they'd used ErsatzTV for years, got tired of streaming hiccups, and noted that Apple TV options had been "so limited." That's who this kind of app is for.
 
 ## How does Nostalgex compare to Tunarr and ErsatzTV?
 
-Here's what you give up with [Nostalgex](/), plainly:
+Here's what you give up with [Nostalgex](/?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh), plainly:
 
 ![Nostalgex channel flip bar over a playing movie, showing what is on the next channels](https://pub-98e43e3b886d48018eab8387d373ddb4.r2.dev/site/blog/tunarr-ersatztv-alternative-apple-tv/channel-flip-bar.webp)
 
 * **No handmade schedules.** You don't build channels or time slots. Nostalgex builds every channel and schedule from your library on its own. If you want Seinfeld at 7 and a movie at 9 every night, that's a Tunarr job.
 * **No tuner or M3U output.** Nothing gets shared out to Plex Live TV, Kodi or other players.
 * **No recording.**
-* **TV apps plus the web.** The Apple TV app (tvOS 18 or later), the [Roku Channel Store app](/roku), and the [web tuner](/web-tuner) in a browser. There is no Fire TV version.
+* **Apple TV, Roku and the web.** The Apple TV app, the [Roku Channel Store app](/roku?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh) (add it with code NOSTALGEX), the [web tuner](/web-tuner?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh) in a browser, and a [Docker container](/self-host?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh) for Jellyfin or Emby servers that don't have https. There is no Fire TV version. Android TV is on the list.
 
 XDA Developers [tried Nostalgex with a Jellyfin server](https://www.xda-developers.com/this-jellyfin-plugin-made-my-media-library-feel-like-old-school-cable-tv/) in October and landed in the same place: much easier than Tunarr or ErsatzTV, with less control over individual channels. That's a fair summary.
 
 And here's what you get:
 
-* **Nothing installed on your server.** No container, no service, no FFmpeg build. The app talks to Plex or Jellyfin directly, and it plays the file as is when the Apple TV can handle it.
-* **130+ channels in 14 bundles, already airing.** Saturday morning cartoons, 90s sitcoms, decades, franchises, seasonal stuff. You connect your server and they fill themselves from what you own. This month there's a free SCREAM bundle you can turn on with one button. It adds a set of horror channels, from SCREAM KIDS for the little ones to FRIGHT NIGHT and NOSTALGEX HORROR, and you can keep it on after October.
-* **It's free in the same way Tunarr is free.** MIT licensed, [code on GitHub](https://github.com/chadMueller/Nostalgex), no account. It needs nothing paid either: no Plex Pass, no subscription.
-* **Plex, Jellyfin and Emby.** Nostalgex now works with all three, and the Apple TV app can connect to more than one server at once.
+* **Nothing installed on your server for the TV apps.** No channel server, no FFmpeg build. The app talks to Plex, Jellyfin or Emby directly, and it plays the file as is when the TV can handle it. The Docker container is only for running the web tuner on your own network.
+* **130+ channels in 14 bundles, already airing.** Saturday morning cartoons, 90s sitcoms, decades, franchises, seasonal stuff. You connect your server and they fill themselves from what you own.
+* **It's free in the same way Tunarr is free.** MIT licensed, [code on GitHub](https://github.com/chadMueller/Nostalgex?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh), no account. It needs nothing paid either: no Plex Pass, no subscription.
+* **Plex, Jellyfin and Emby.** Nostalgex works with all three, and the Apple TV app can connect to more than one server at once.
 
-If you're on Plex, here's [how Nostalgex works with Plex](/plex). On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin).
+If you're on Plex, here's [how Nostalgex works with Plex](/plex?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh), or the longer walkthrough on [making Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh). On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh) or my post on [getting a TV guide for your own Jellyfin library](/blog/jellyfin-tv-guide-own-library?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh). On Emby, here's [Nostalgex for Emby](/emby?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh).
 
 ## Is there a good dizqueTV alternative?
 
@@ -92,22 +116,32 @@ dizqueTV started this whole category for a lot of Plex people, me included. It's
 My honest version:
 
 * You want channels on lots of different devices, or you enjoy programming them: **Tunarr**.
-* You already run ErsatzTV Legacy and it works: **keep it**, keep it updated.
-* You want music video channels: **ErsatzTV Legacy** handles those well.
+* You already run ErsatzTV and it works: **keep it**, keep it updated.
+* You want music video channels: **ErsatzTV** handles those well.
 * Your house runs on Android TV or Fire TV and you want prebuilt channels: **NostalgiaTV**.
-* You only watch on Apple TV and want to flip channels tonight without running anything new: **[Nostalgex](https://apps.apple.com/app/nostalgex/id6762563534)**, or try the [web tuner](/web-tuner) first if your server has an https address.
+* You watch on Apple TV or Roku and want to flip channels tonight without programming anything: **[Nostalgex](https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&ct=blog_tunarr_vs_ersatztv&mt=8)**. On Roku, search the Channel Store or add it with code NOSTALGEX ([more on the Roku app](/blog/nostalgex-on-roku?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh)). If your Jellyfin or Emby server is on plain http, run the web tuner in a [Docker container](/self-host?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh) instead of the hosted tuner.
 
 You can also run both. Nothing stops you from keeping Tunarr for the bedroom Roku and using Nostalgex in the living room.
 
+Comparing Apple TV apps instead? I lined them up in [the best channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps?utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh).
+
 ## FAQ
+
+### Is Tunarr better than ErsatzTV?
+
+For most people starting fresh, Tunarr is the easier pick: a web editor for building channels, frequent releases, and Plex, Jellyfin and Emby support. ErsatzTV is a strong choice if you want its scheduling tools or already run it. Both are free and open source.
+
+### Can Tunarr and ErsatzTV work together?
+
+Yes, in one way. Tunarr can use ErsatzTV Next as an experimental streaming backend for a channel, while Tunarr still handles the schedule.
 
 ### What's the best ErsatzTV alternative?
 
-For most people it's Tunarr, which does the same job on your server and is actively developed. If you only watch on Apple TV and don't want to run a server, an app like Nostalgex builds the channels for you.
+For most people it's Tunarr, which does the same job on your server and is actively developed. If you only watch on Apple TV or Roku and don't want to run a server, an app like Nostalgex builds the channels for you.
 
 ### Is ErsatzTV dead?
 
-Not exactly. ErsatzTV Legacy still gets security fixes but no new features, and ErsatzTV Next is a streaming engine that leaves scheduling to other tools. Existing installs keep working. New setups are better off on Tunarr or an app.
+No. ErsatzTV (still labeled Legacy) is actively released. v26.12.0 on November 6, 2026 moved every channel onto the ErsatzTV Next streaming engine. Next is a streaming engine that leaves scheduling to ErsatzTV or other tools. Existing installs keep working.
 
 ### Does Tunarr work on Apple TV?
 
@@ -115,20 +149,14 @@ Yes, through another app. You either add Tunarr as a tuner in Plex Live TV and w
 
 ### Do I need Docker or a server to use Nostalgex?
 
-No. Nothing gets installed on your server. You install the Apple TV app, sign in to Plex or Jellyfin, and the channels build themselves.
+No. Nothing gets installed on your server for the Apple TV or Roku apps. You install the app, sign in to Plex, Jellyfin or Emby, and the channels build themselves. A Docker container is optional, and only if you want the web tuner on a Jellyfin or Emby server that doesn't have https.
 
 ### Can Nostalgex share its channels as an M3U playlist or HDHomeRun tuner?
 
-No. The channels live inside the Apple TV app and the web tuner. If you need channels in other players, that's what Tunarr is for.
+No. The channels live inside the Apple TV app, the Roku app and the web tuner. If you need channels in other players, that's what Tunarr is for.
 
 <!--
-Build notes: build-blog.mjs ignores author, updated and excerpt today. Article JSON-LD author is the Organization and dateModified equals datePublished until the build reads these fields.
-Intended schema: FAQPage from the FAQ H3s. Article "about": {"@id": "https://www.nostalgex.app/#app"} (needs the @id added to the homepage SoftwareApplication). No separate SoftwareApplication block.
-Images to add (none exist yet): cover alt "Nostalgex channel guide on Apple TV showing live channels built from a Jellyfin library". Inline next to the table: "Side by side of a Tunarr channel editor and the Nostalgex guide" only if Chad has his own Tunarr screenshot, otherwise the guide alone.
-ADD LINKS BACK (this post publishes Oct 12; these targets are not live yet):
-1. Oct 14, once /blog/jellyfin-tv-guide-own-library is live: in "How does Nostalgex compare to Tunarr and ErsatzTV?", change "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin)." to "On Jellyfin, start with [Nostalgex for Jellyfin](/jellyfin) or my post on [getting a TV guide for your own Jellyfin library](/blog/jellyfin-tv-guide-own-library)."
-2. Oct 16, once /blog/make-plex-feel-like-cable-tv is live: in the same paragraph, after the Plex sentence, add: "For the full Plex walkthrough, here's [how to make Plex feel like cable TV](/blog/make-plex-feel-like-cable-tv)."
-3. Oct 19, once /blog/apple-tv-channel-surfing-apps is live: at the end of "Which one should I pick?", add: "Comparing Apple TV apps instead? I lined them up in [the best channel surfing apps for Apple TV](/blog/apple-tv-channel-surfing-apps)."
-4. Oct 21, once /blog/plex-virtual-channels-own-movies is live: optional, not in the review map. Skip unless Chad wants it.
-Publish day check: NostalgiaTV Pro pricing (one time or subscription) before quoting any price.
+Build notes: build-blog.mjs reads seo_title, author and updated. excerpt is unused.
+FAQPage comes from the FAQ H3s. Article "about" is the homepage SoftwareApplication.
+No new images in this refresh.
 -->

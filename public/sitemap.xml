@@ -14,24 +14,6 @@
 <!-- SELFHOST:START (auto-generated) -->
   <url><loc>https://www.nostalgex.app/self-host</loc><lastmod>2026-10-15</lastmod></url>
 <!-- SELFHOST:END (auto-generated) -->
-<!-- BLOG:START (generated) -->
-  <url><loc>https://www.nostalgex.app/blog</loc><lastmod>2026-11-12</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/nostalgex-on-roku</loc><lastmod>2026-11-12</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to</loc><lastmod>2026-10-30</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/nostalgiatv-alternative-apple-tv</loc><lastmod>2026-10-30</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/plex-to-jellyfin-emby-cable-guide</loc><lastmod>2026-10-29</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/make-plex-feel-like-cable-tv</loc><lastmod>2026-10-27</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/plex-virtual-channels-own-movies</loc><lastmod>2026-10-26</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/franchise-channels-your-collections</loc><lastmod>2026-10-23</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/plex-apple-tv-app-sit-back-alternative</loc><lastmod>2026-10-22</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/plex-remote-streaming-changes-explained</loc><lastmod>2026-10-21</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/apple-tv-channel-surfing-apps</loc><lastmod>2026-10-20</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/jellyfin-tv-guide-own-library</loc><lastmod>2026-10-19</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/nostalgex-1-0-26-franchise-channels</loc><lastmod>2026-10-16</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/tunarr-ersatztv-alternative-apple-tv</loc><lastmod>2026-10-13</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/best-90s-buddy-cop-movies-channel</loc><lastmod>2026-10-09</lastmod></url>
-  <url><loc>https://www.nostalgex.app/blog/90s-slasher-movies-halloween-marathon</loc><lastmod>2026-10-08</lastmod></url>
-  <!-- BLOG:END (generated) -->
 <!-- CHANNELS:START (generated) -->
   <url><loc>https://www.nostalgex.app/channels</loc><lastmod>2026-11-04</lastmod></url>
   <url><loc>https://www.nostalgex.app/channels/nostalgex</loc><lastmod>2026-10-29</lastmod></url>
@@ -49,4 +31,22 @@
   <url><loc>https://www.nostalgex.app/channels/franchises</loc><lastmod>2026-10-31</lastmod></url>
   <url><loc>https://www.nostalgex.app/channels/high-rotation</loc><lastmod>2026-10-31</lastmod></url>
   <!-- CHANNELS:END (generated) -->
+<!-- BLOG:START (generated) -->
+  <url><loc>https://www.nostalgex.app/blog</loc><lastmod>2026-11-13</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/nostalgex-on-roku</loc><lastmod>2026-11-12</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/docker-web-tuner-1-0-1-how-to</loc><lastmod>2026-10-30</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/nostalgiatv-alternative-apple-tv</loc><lastmod>2026-10-30</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/plex-to-jellyfin-emby-cable-guide</loc><lastmod>2026-10-29</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/make-plex-feel-like-cable-tv</loc><lastmod>2026-10-27</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/plex-virtual-channels-own-movies</loc><lastmod>2026-10-26</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/franchise-channels-your-collections</loc><lastmod>2026-10-23</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/plex-apple-tv-app-sit-back-alternative</loc><lastmod>2026-10-22</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/plex-remote-streaming-changes-explained</loc><lastmod>2026-10-21</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/apple-tv-channel-surfing-apps</loc><lastmod>2026-10-20</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/jellyfin-tv-guide-own-library</loc><lastmod>2026-10-19</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/nostalgex-1-0-26-franchise-channels</loc><lastmod>2026-10-16</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/tunarr-ersatztv-alternative-apple-tv</loc><lastmod>2026-11-13</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/best-90s-buddy-cop-movies-channel</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://www.nostalgex.app/blog/90s-slasher-movies-halloween-marathon</loc><lastmod>2026-10-08</lastmod></url>
+  <!-- BLOG:END (generated) -->
 </urlset>

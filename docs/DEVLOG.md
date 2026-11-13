@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-13 (blog: refresh Tunarr vs ErsatzTV)
+
+**Why.** The live post has spoken to "ErsatzTV and Tunarr alternatives for Apple TV" since Oct 13. People searching "tunarr vs ersatztv" get a snippet that does not match. Same slug, same URL: a refresh, not a second post.
+
+**Changed.**
+- `content/blog/tunarr-ersatztv-alternative-apple-tv.md`: new title, seo_title and description aimed at the vs query. New answer box. New first H2 with a Tunarr vs ErsatzTV table (install, schedules, outputs, servers, streaming engine, release pace, license) and short Pick Tunarr / Pick ErsatzTV paragraphs. ErsatzTV section retitled "Is ErsatzTV still maintained?" because the October copy said Legacy only got security fixes; as of Nov 13 it is actively released (v26.12.0 on Nov 6, Next v0.2.5, Legacy now defaults to the Next engine). Tunarr section names v2026.11.2 (Nov 9: stream selection profiles, rebuilt Channels page) and the experimental ErsatzTV Next backend, one channel at a time. Main table introduced as "every option at a glance"; the ErsatzTV Legacy row is now ErsatzTV; the Nostalgex row names Apple TV, Roku Channel Store, a web browser or a Docker container. Stale October SCREAM-bundle sentences removed. Emby added wherever it had said Plex or Jellyfin. Roku bullet names the Channel Store, code NOSTALGEX, the web tuner and the Docker container for Jellyfin or Emby without https. Apple TV version numbers removed. Android TV is named as on the list, no date. FAQ gains "Is Tunarr better than ErsatzTV?" and "Can Tunarr and ErsatzTV work together?" at the top. Internal links to the live Jellyfin guide, Apple TV channel-surfing and Roku posts. Nostalgex links carry `utm_source=blog&utm_medium=internal&utm_campaign=tunarr_vs_ersatztv_refresh`. App Store link is the tracked `ct=blog_tunarr_vs_ersatztv` URL. `updated: 2026-11-13`; `date` stays 2026-10-13. `scripts/build-blog.mjs` already reads `updated` for JSON-LD dateModified and sitemap lastmod, so the field is kept and build code was not changed. Existing R2 images kept; none added.
+- `npm run blog:render` set `/blog/tunarr-ersatztv-alternative-apple-tv` lastmod to 2026-11-13 and `/blog` lastmod to 2026-11-13. The blog sitemap block moved below the channels block, which is how the script re-inserts it.
+
+**Half-done.** Not opened in a browser against the production URL. Facts were rechecked on Tunarr's and ErsatzTV's own docs and release pages on Nov 13, not against a running install of either.
+
+**Next.** Parent reviews the diff, then squash-merges. Do not merge from this branch. Other pages that still link here with the old title (the Jellyfin guide post) can wait; the URL is unchanged.
+
 ## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
 
 **Why.** Trello "Roku: check two older bugs": the app crashed when Up was pressed with an empty guide. #93 (tydude001,
