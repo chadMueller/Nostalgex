@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-12 (Roku: WATERSHED's 9 PM crossing held by a test, #190)
+
+**Why.** The 9 PM check (#190) on 1.0.13 candidate v6 saw the placeholder still up at 21:03. The scheduling path
+(`MainScene` 30 s timer, `LibraryTask.keepScheduling`, `NxScheduleHourKey`) is identical to the v2 midnight build, so
+this holds what the code does across the hour before anything else is guessed.
+
+**Changed.** Four checks in the `watershed-gate` suite: with the switch on, the re-check key moves from 20:59:30 to
+21:00:30, and a held channel goes from held with no titles to open with titles, so the guide changes and the library
+task would publish it. Test only; no app code.
+
+**Seen.** On the stick, a build with the scheduler's clock shifted 35 minutes and a held channel tuned released it at
+the shifted 21:00: the check fired, "schedules changed" printed, the player was playing a minute later. Why the real
+21:00 did not is still open.
+
 ## 2026-11-12 (Roku: tests/run.sh counts free memory on macOS too, #168 follow-up)
 
 **Why.** Chad's #168 review note: on macOS the worker cap read the whole RAM, so his 24 GB Mac with 14 threads still

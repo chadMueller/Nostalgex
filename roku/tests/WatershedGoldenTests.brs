@@ -65,6 +65,34 @@ function NxRunWatershedGateTests() as Integer
     NxCheck(r, "switch cleared", FormatJson(NxWatershedSet()), "false")
     GetGlobalAA().Delete("nxWatershed")
     NxCheck(r, "switch unset is off", FormatJson(NxWatershedSet()), "false")
+
+    ' ── The 9 PM crossing with a held channel tuned (#190): the re-check key moves at 21:00 and the held
+    ' channel's schedule goes from empty to titles, as the library task's re-check sees it. ──
+    g = GetGlobalAA()
+    g.nxTzOffsets = invalid
+    g.nxTzOffsetSec = 0
+    NxClearManifests()
+    held = []
+    for i = 1 to 4
+        held.Push({ ratingKey: "wr" + i.ToStr(), title: "Held " + i.ToStr(), duration: 5400, contentRating: "R", type: "movie", year: "1999" })
+    end for
+    lineup = [{ id: 31, number: 31, name: "VAULT", colorHex: "#00AAFF", pool: held }]
+    dayStart& = NxLocalDay(1780000000).dayStartSec
+    before& = dayStart& + 20 * 3600 + 59 * 60 + 30
+    after& = dayStart& + 21 * 3600 + 30
+    NxSetWatershed(true)
+    NxSetLineup(lineup)
+    last = NxScheduleHourKey(before&, NxWatershedSet())
+    nowKey = NxScheduleHourKey(after&, NxWatershedSet())
+    NxCheck(r, "9 PM: the re-check key moves with WATERSHED on", FormatJson(nowKey <> last), "true")
+    a = NxScheduleGuide(lineup, before&)
+    NxCheck(r, "9 PM: before, the channel is held and has no titles", FormatJson(a[0].held) + " " + a[0].blocks.Count().ToStr(), "true 0")
+    b = NxScheduleGuide(lineup, after&)
+    NxCheck(r, "9 PM: after, it is open with titles", FormatJson(b[0].held) + " " + FormatJson(b[0].blocks.Count() > 0), "false true")
+    NxCheck(r, "9 PM: so the guide changes and the library task would publish it", FormatJson(FormatJson(a) <> FormatJson(b)), "true")
+    NxSetWatershed(false)
+    g.nxTzOffsetSec = invalid
+    NxClearManifests()
     print "watershed gate cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
