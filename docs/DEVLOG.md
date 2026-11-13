@@ -23,6 +23,19 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Tests.** Full `NostalgexTests`, serial on the one visible Simulator: all passed, none failed. New: `PlexPosterChainTests` (10): the order season, series, frame; a season without art skipping to the series; an old snapshot's episode keeping its frame; a movie staying its own poster even with keys set; the empty cases; the series path not asked twice; the field surviving a round trip; a snapshot without the field decoding; the Plex payload's season fields decoding and being optional; `withPartKey` keeping the key.
 
+## 2026-11-13 (Android: ABOUT > LINKS, as the Apple TV 1.0.32)
+
+**Why.** The Apple TV's 1.0.32 ABOUT lists five links (`AboutLinks.swift`: DISCORD, WEBSITE, WEB TUNER, ROKU, GITHUB). Android's ABOUT listed only GITHUB.
+
+**Changed.**
+- `engine/AboutLinks.kt` is the Apple TV's `AboutLinks.swift` field for field: the id (also the Settings row id, `about_<id>`), title, subtitle and address of each link, in the same order and with the same words. `ui/Settings.kt` draws `AboutLinks.all` in place of the one GITHUB row, in the existing Settings row style. An address is a line to read and open on a phone or computer; no row opens anything. No text size changed.
+- `AboutLinksTest`: the order, the addresses, plain-text addresses and unique row ids.
+- Seen on the Android TV emulator (API 36, 1920 x 1080, demo mode): five rows under LINKS, reachable with the D-pad, the pane scrolls to GITHUB. The Apple TV reference shots (`reference-appletv-1.0.32`) have no ABOUT page, so the row style was compared with Android's own Settings rows.
+
+**Half-done.** Not on a Google TV. The ROKU row's channel code and address are the Apple TV's.
+
+**Next.** Review and merge. `PARITY.md` keeps the "Support link in the app" row; it now matches the Apple TV's list.
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.

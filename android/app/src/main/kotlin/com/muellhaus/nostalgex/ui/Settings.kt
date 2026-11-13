@@ -1,5 +1,6 @@
 package com.muellhaus.nostalgex.ui
 
+import com.muellhaus.nostalgex.engine.AboutLinks
 import com.muellhaus.nostalgex.engine.DesignTokens
 import android.text.format.DateUtils
 import android.view.KeyEvent as AndroidKeyEvent
@@ -739,15 +740,19 @@ private fun AboutRows(model: AppModel) {
             modifier = Modifier.paneRow(model, "about_version"),
         ) {}
         Box(Modifier.padding(top = u(24))) { SectionHeader("LINKS", null) }
-        ToggleRow(
-            title = "GITHUB",
-            subtitle = "Source code and issues. Open it on a phone or computer.",
-            detail = "github.com/chadMueller/Nostalgex",
-            prominentDetail = true,
-            on = true,
-            showToggle = false,
-            modifier = Modifier.paneRow(model, "about_github"),
-        ) {}
+        // AboutLinks.all, as the Apple TV's SettingsAboutView: a line to read and open on a phone or
+        // computer, not a button that opens anything.
+        for (link in AboutLinks.all) {
+            ToggleRow(
+                title = link.title,
+                subtitle = link.subtitle,
+                detail = link.address,
+                prominentDetail = true,
+                on = true,
+                showToggle = false,
+                modifier = Modifier.paneRow(model, link.rowId),
+            ) {}
+        }
     }
 }
 
