@@ -179,18 +179,17 @@ struct NowPlayingPanel: View {
             // header support) with what is playing beside it, left-aligned to the poster's right edge. Without a
             // poster the details sit where the poster would be, no empty hole.
             HStack(alignment: .top, spacing: 18) {
-                if let poster = appState.posterURL(for: item) {
-                    AsyncImage(url: poster) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
+                let posters = appState.posterURLs(for: item)
+                if !posters.isEmpty {
+                    let size = CGSize(width: NowPlayingLayout.posterWidth, height: NowPlayingLayout.posterHeight)
+                    // Season poster, then series poster, then the episode's frame (#312).
+                    FallbackPosterImage(urls: posters, size: size, cornerRadius: 10) {
                         Color.nxRow
+                    } onAllFailed: {
+                        Color.nxRow
+                            .frame(width: size.width, height: size.height)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .frame(width: NowPlayingLayout.posterWidth, height: NowPlayingLayout.posterHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
-                    )
                 }
 
                 VStack(alignment: .leading, spacing: 10) {

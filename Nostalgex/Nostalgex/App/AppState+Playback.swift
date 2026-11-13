@@ -100,16 +100,20 @@ extension AppState {
         UIApplication.shared.open(url, options: [:], completionHandler: completion)
     }
 
-    /// Poster for the panel header. Plex-only: its server-side thumbnail transcode puts
-    /// the token in the URL, which is what lets plain AsyncImage load it.
-    func posterURL(for item: PlexMediaItem) -> URL? {
-        guard backendKind == .plex, !isDemoMode else { return nil }
+    /// The poster URLs to try, best first (`PlexPosterChain`): a TV episode's season poster, then its series poster,
+    /// then its own frame; a movie's poster. Empty off Plex and in demo mode.
+    func posterURLs(for item: PlexMediaItem) -> [URL] {
+        guard backendKind == .plex, !isDemoMode else { return [] }
+        let service: PlexAPIService?
         if let sid = item.serverID,
            let server = selectedServers.first(where: { $0.machineIdentifier == sid }),
-           let service = apiForServer(server) as? PlexAPIService {
-            return service.thumbnailURL(for: item, width: 300)
+           let found = apiForServer(server) as? PlexAPIService {
+            service = found
+        } else {
+            service = api as? PlexAPIService
         }
-        return (api as? PlexAPIService)?.thumbnailURL(for: item, width: 300)
+        guard let service else { return [] }
+        return PlexPosterChain.paths(for: item).compactMap { service.thumbnailURL(path: $0, width: 300) }
     }
 
     // MARK: - Subtitles (fullscreen + media selection)

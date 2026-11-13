@@ -79,7 +79,7 @@ struct PlayerView: View {
                             credentialFingerprint: appState.scheduleCredentialFingerprint
                         ),
                         // The same poster, from the same place, as the Now Playing panel's.
-                        posterURL: appState.posterURL(for: item)
+                        posterURLs: appState.posterURLs(for: item)
                     )
                     .transition(.opacity)
                 }
@@ -422,7 +422,7 @@ private struct ChannelOSD: View {
     let item: PlexMediaItem
     let schedule: ChannelSchedule?
     /// nil when there is no poster (not Plex, demo mode): the text is drawn alone, exactly as before.
-    var posterURL: URL? = nil
+    var posterURLs: [URL] = []
 
     /// The poster is the Now Playing panel's size, 120 x 180 (`NowPlayingLayout`); it is about as tall as the
     /// text block beside it.
@@ -434,25 +434,13 @@ private struct ChannelOSD: View {
 
             HStack(alignment: .bottom) {
                 HStack(alignment: .center, spacing: 20) {
-                    if let posterURL {
-                        // Text is on screen at once; the poster fills in when it loads and leaves no hole if it never does.
-                        AsyncImage(url: posterURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                                    .frame(width: posterSize.width, height: posterSize.height)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .strokeBorder(Color.nxRestingOutline, lineWidth: 2)
-                                    )
-                            case .empty:
-                                Color.nxRow
-                                    .frame(width: posterSize.width, height: posterSize.height)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            default:
-                                EmptyView()
-                            }
+                    if !posterURLs.isEmpty {
+                        // Text is on screen at once; the poster fills in when it loads and leaves no hole if none of the
+                        // addresses (season poster, series poster, the episode's frame) ever does.
+                        FallbackPosterImage(urls: posterURLs, size: posterSize, cornerRadius: 8) {
+                            Color.nxRow
+                        } onAllFailed: {
+                            EmptyView()
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {

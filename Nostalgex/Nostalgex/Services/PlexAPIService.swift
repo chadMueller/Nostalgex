@@ -546,7 +546,9 @@ struct PlexAPIService: MediaBackend {
             audioChannelCount: media?.audioStream?.channels,
             doviCompatibilityID: media?.videoStream?.DOVIBLCompatID,
             audioStreamID: media?.audioStream?.id,
-            hasHDR10ColorMetadata: media?.videoStream?.hasHDR10ColorMetadata
+            hasHDR10ColorMetadata: media?.videoStream?.hasHDR10ColorMetadata,
+            // Only when the season has art of its own, so the poster never asks for one that is not there.
+            parentRatingKey: ep.parentThumb == nil ? nil : ep.parentRatingKey
         )
     }
 
@@ -1338,8 +1340,13 @@ struct PlexAPIService: MediaBackend {
 
     /// Returns an image URL for Plex server-side thumbnail transcoding
     func thumbnailURL(for item: PlexMediaItem, width: Int = 400) -> URL? {
-        guard let thumb = item.thumb,
-              var components = URLComponents(string: "\(serverURL)/photo/:/transcode") else { return nil }
+        guard let thumb = item.thumb else { return nil }
+        return thumbnailURL(path: thumb, width: width)
+    }
+
+    /// The same transcode for any library image path (`/library/metadata/<id>/thumb`).
+    func thumbnailURL(path thumb: String, width: Int = 400) -> URL? {
+        guard var components = URLComponents(string: "\(serverURL)/photo/:/transcode") else { return nil }
         components.queryItems = [
             .init(name: "url", value: thumb),
             .init(name: "width", value: "\(width)"),
@@ -1908,6 +1915,9 @@ struct PlexRawItem: Decodable {
     /// their show's metadata (genres, studio, GUIDs) — none of which rides along on
     /// the episode itself.
     let grandparentRatingKey: String?
+    /// The episode's season: its id and its poster path. Only the id is kept, and only when there is a poster.
+    let parentRatingKey: String?
+    let parentThumb: String?
 
     struct Tagged: Decodable { let tag: String }
     struct GuidTag: Decodable { let id: String }

@@ -85,6 +85,10 @@ struct PlexMediaItem: Identifiable, Hashable {
     var doviCompatibilityID: Int? = nil
     var audioStreamID: Int? = nil
     var hasHDR10ColorMetadata: Bool? = nil
+    /// Episodes only: the id of the episode's season (Plex `parentRatingKey`), kept only when that season has a
+    /// poster of its own. The Now Playing poster asks for it first (`PlexPosterChain`). Optional so older snapshots
+    /// still decode; nil until the next full library scan, and then the poster falls to the series.
+    var parentRatingKey: String? = nil
 }
 
 extension PlexMediaItem {
@@ -114,7 +118,8 @@ extension PlexMediaItem {
             audioChannelCount: part == nil ? audioChannelCount : part?.audioChannelCount,
             doviCompatibilityID: part == nil ? doviCompatibilityID : part?.doviCompatibilityID,
             audioStreamID: part == nil ? audioStreamID : part?.audioStreamID,
-            hasHDR10ColorMetadata: part == nil ? hasHDR10ColorMetadata : part?.hasHDR10ColorMetadata
+            hasHDR10ColorMetadata: part == nil ? hasHDR10ColorMetadata : part?.hasHDR10ColorMetadata,
+            parentRatingKey: parentRatingKey
         )
     }
 
@@ -150,7 +155,7 @@ extension PlexMediaItem: Codable {
         case viewCount, addedAt, studio, tmdbID, imdbID, librarySource, serverID
         case additionalPartKeys
         case videoBitDepth, doviProfile, videoWidth, videoHeight, mediaIndex, partIndex, playbackParts, exactDurationSeconds
-        case showKey
+        case showKey, parentRatingKey
     }
 
     init(from decoder: Decoder) throws {
@@ -199,6 +204,7 @@ extension PlexMediaItem: Codable {
         playbackParts = try c.decodeIfPresent([PlexPartPlaybackInfo].self, forKey: .playbackParts)
         exactDurationSeconds = try c.decodeIfPresent(Double.self, forKey: .exactDurationSeconds)
         showKey = try c.decodeIfPresent(String.self, forKey: .showKey)
+        parentRatingKey = try c.decodeIfPresent(String.self, forKey: .parentRatingKey)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -247,5 +253,6 @@ extension PlexMediaItem: Codable {
         try c.encodeIfPresent(playbackParts, forKey: .playbackParts)
         try c.encodeIfPresent(exactDurationSeconds, forKey: .exactDurationSeconds)
         try c.encodeIfPresent(showKey, forKey: .showKey)
+        try c.encodeIfPresent(parentRatingKey, forKey: .parentRatingKey)
     }
 }

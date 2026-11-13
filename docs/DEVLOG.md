@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-13 (Apple TV: a TV episode's Now Playing poster is its season's or its series', not a frame from the episode, #312)
+
+**State.** Branch `appletv/312-episode-poster` off main `896aeab5`. Not in a build yet; it goes in the next Apple TV build (1.0.33). Plex only.
+
+**Why.** Discussion #312 (CalebMcDonald): since the poster was added to the Now Playing panel and the full-screen overlay, movies show their poster and episodes show the episode's own `thumb`, a frame the server grabs from the episode. That frame is landscape, arbitrary, and says nothing about which show is on; the 120 x 180 slot also crops it to a slice.
+
+**Changed.**
+- `PlexPosterChain.paths(for:)` gives the images to try, best first. An episode: its season's poster (`/library/metadata/<parentRatingKey>/thumb`), then its series' (`/library/metadata/<showKey>/thumb`), then its own `thumb`. Anything else: its own `thumb`. No extra request is made to find them: both keys come from the episode payload the library load already reads.
+- `PlexRawItem` decodes `parentRatingKey` and `parentThumb`; `PlexMediaItem` stores `parentRatingKey`, and only when the season has a poster of its own, so the poster never asks for a season picture that is not there. The field is optional and the snapshot decoder uses `decodeIfPresent`, so a snapshot written before it still loads. Such an episode (no `parentRatingKey`, and `showKey` only from the 1.0.2x scans) shows the series poster where it has `showKey` and its own frame where it does not, until the next full rescan fills the keys in.
+- `FallbackPosterImage` tries the addresses in turn: when one fails to load it moves to the next, and only when all fail does the panel show its grey placeholder (the overlay shows nothing, as before). It restarts at the first address for a new item.
+- The panel (`NowPlayingPanel`) and the full-screen overlay (`PlayerView`) use it; `AppState.posterURLs(for:)` replaces `posterURL(for:)`.
+
+**Not done.**
+- Jellyfin and Emby show no Now Playing poster at all today (the poster is Plex only because only Plex's thumbnail URL carries the token). Showing one means putting an API key in an image URL, which is a separate decision, so nothing changed there. Their series poster would come from `showKey` (`SeriesId`); a season poster needs the season id, which is not stored.
+- The system Now Playing artwork (`NowPlayingInfoService`) and the Top Shelf still use the episode's own `thumb`. Changing the system artwork is not a one-liner (it goes through each backend's `thumbnailURL(for:)`), so it is left.
+- No Settings toggle: the poster in that slot is the design, and a toggle would be a setting for a case nobody asked for.
+- Not looked at on a real library or a TV: demo mode shows no poster, so the check is the unit tests below.
+
+**Tests.** Full `NostalgexTests`, serial on the one visible Simulator: all passed, none failed. New: `PlexPosterChainTests` (10): the order season, series, frame; a season without art skipping to the series; an old snapshot's episode keeping its frame; a movie staying its own poster even with keys set; the empty cases; the series path not asked twice; the field surviving a round trip; a snapshot without the field decoding; the Plex payload's season fields decoding and being optional; `withPartKey` keeping the key.
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.
