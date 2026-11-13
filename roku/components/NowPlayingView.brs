@@ -8,8 +8,8 @@
 ' LANGUAGE open in place of the columns; Back closes them, then the panel.
 '
 ' Laid out as the Apple TV 1.0.32's (#266): the panel colour at 96% fading out
-' at the foot, two columns 440 wide with 64 px rows and the hint line under
-' them (NxPanelMetrics, NxPanelHint). Up on the first row of a column closes
+' at the foot, two columns 440 wide with 64 px rows (NxPanelMetrics); no hint line
+' under them (Chad, 2026-11-12). Up on the first row of a column closes
 ' it, as Down opened it (NxOverlayKey). Left out, for what the Roku has: OPEN
 ' IN PLEX. Rounded corners are square.
 
@@ -30,7 +30,6 @@ sub init()
     ' upstream's languageColumn: the same two columns.
     m.langW = pm.colW
     m.focusRects = []
-    m.hint = ""
 end sub
 
 function fontOf(name as String, size as Integer) as Object
@@ -208,7 +207,6 @@ sub render()
     g = m.top.FindNode("controls")
     g.RemoveChildrenIndex(g.GetChildCount(), 0)
     m.focusRects = []
-    m.hint = ""
     bottom = 0
     if m.infoOpen then
         bottom = renderInformation(g, s)
@@ -226,20 +224,12 @@ sub render()
                     y = y + drawHeader(g, m.colX[c], y, e.label, m.colW)
                 else
                     focused = c = m.col and f.Count() > 0 and f[m.idx[c]] = i
-                    if focused then m.hint = NxPanelHint(e.id)
                     y = y + drawRow(g, m.colX[c], y, e, focused, m.colW) + pm.rowGap
                 end if
             end for
             if y > bottom then bottom = y
         end for
     end if
-    ' The hint line under the controls: a fixed two-line slot, so the panel
-    ' never changes height as the focus moves.
-    hint = newLabel(m.hint, m.tk.font.text, pm.text, m.tk.color.text2, m.colX[0], bottom + 8, 2 * pm.colW + pm.colGap)
-    hint.wrap = true
-    hint.maxLines = 2
-    g.AppendChild(hint)
-    bottom = bottom + 8 + pm.hintH
     ' The focused row's glow goes over its neighbours.
     for each r in m.focusRects
         g.AppendChild(focusGlow(r[0], r[1], r[2], r[3]))
@@ -294,7 +284,6 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
         g.AppendChild(newRect(x, y, w, h, tk.color.selectedRow))
         outline(g, x, y, w, h, tk.row.selectedOutline, tk.color.cyan)
         m.focusRects.Push([x, y, w, h])
-        if NxToStr(e.note) <> "" then m.hint = e.note
     else if e.disabled = true and e.id = invalid then
         ' A row that only informs: no fill, a dashed outline (upstream's isStatic).
         dashes(g, x, y, w, h, tk.row.outline, tk.color.restingOutline)
@@ -409,7 +398,7 @@ function noteLine(g as Object, text as String, x as Float, y as Float, w as Floa
 end function
 
 ' The rows of a one-column list: STREAM QUALITY's levels with their detail
-' (the hint line while a row is under the cursor), or SLEEP TIMER's OFF and
+' (their detail is not shown now the hint line is gone), or SLEEP TIMER's OFF and
 ' the minutes on offer, the running one with its countdown.
 function singleItems(s as Object) as Object
     out = []
@@ -606,9 +595,9 @@ end sub
 
 function renderInfo(s as Object) as Integer
     ' The Apple TV's Variant A (#266, #262's tokens): the poster 120 by 180 with
-    ' the info beside it, which is only the channel line and the programme's
-    ' title, then UP NEXT as one line under it: the next title and, straight
-    ' after it, a cyan badge saying how many minutes away it is.
+    ' the channel line and the programme's title beside it. UP NEXT is Chad's
+    ' own call for the Roku: one line under the poster, the next title and,
+    ' straight after it, a cyan capsule with the minutes away.
     tk = m.tk
     pm = NxPanelMetrics()
     g = m.top.FindNode("info")
@@ -629,18 +618,25 @@ function renderInfo(s as Object) as Integer
     title.wrap = true
     title.maxLines = 3
     g.AppendChild(title)
-    y = y + title.boundingRect().height + 16
+    y = y + title.boundingRect().height
+    ' UP NEXT under the poster, left-aligned with it (Chad's call, 2026-11-12):
+    ' the next title and, straight after it, the cyan capsule with the minutes.
+    top = y + 12
+    if NxToStr(m.posterPath) <> "" and top < pm.safeY + pm.posterH + 12 then top = pm.safeY + pm.posterH + 12
+    y = top
     if NxToStr(s.upNext) <> "" then
+        ux = pm.safeX
+        uw = m.colX[0] - pm.zoneGap - ux
         badgeText = NxUpNextBadge(s.upNextIn)
-        adv = Len(badgeText) * 13.2
-        chipW = adv + 28
-        chipX = x + w - chipW
-        ' The title takes what the badge leaves and is cut with an ellipsis; the badge is always whole.
-        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, x, y + 5, w - chipW - 16)
+        chipW = Len(badgeText) * 13.2 + 28
+        ' The title takes what the capsule leaves and is cut with an ellipsis; the capsule is always whole.
+        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, ux, y + 5, uw - chipW - 14)
         g.AppendChild(nextLbl)
-        tw = nextLbl.boundingRect().width
-        if tw < w - chipW - 16 then chipX = x + tw + 14
-        ' A capsule: the cyan one, the selected-row fill 2 px inside it.
+        ' The label is as wide as the room it may take, so its text's own width is
+        ' counted (DM Mono at 22 is 13.2 px a character), not its box.
+        textW = Len(NxToStr(s.upNext)) * 13.2
+        if textW > uw - chipW - 14 then textW = uw - chipW - 14
+        chipX = ux + textW + 14
         g.AppendChild(newCapsule(chipX, y, chipW, 36, tk.color.cyan))
         g.AppendChild(newCapsule(chipX + 2, y + 2, chipW - 4, 32, tk.color.selectedRow))
         chip = newLabel(badgeText, tk.font.label, pm.text, tk.color.cyan, chipX, y + 5, chipW)

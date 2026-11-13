@@ -446,7 +446,12 @@ sub renderGrid()
     ' invite, as its zIndex puts it.
     if m.nav = "grid" and m.focus >= 0 and m.focus < m.channels.Count() then
         y = m.scrollY + (m.focus + lead) * m.rowPitch
-        rows.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
+        ' The row's own box starts at its left edge, right of the stripe: the
+        ' glow is cut at the stripe slot so the bundle name stays whole.
+        cut = CreateObject("roSGNode", "Group")
+        cut.clippingRect = [m.stripeW, -4000, 4000, 8000]
+        cut.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
+        rows.AppendChild(cut)
     end if
     if lead > 0 and m.scrollY > -m.rowPitch then rows.AppendChild(renderInvite(m.scrollY))
     drawStripeNames(rows, lead)

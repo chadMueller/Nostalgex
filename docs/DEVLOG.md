@@ -47,6 +47,22 @@ and RETRY ORIGINAL VIDEO are not on the Roku.
 **Tests.** `sleep-timer` suite 54 checks (was 23): the metrics, the hints, and the key map, including that Up never
 closes the panel from inside a list and that Down closes the strip; the strip rule fails when it is broken.
 
+## 2026-11-12 (Roku: Chad's v5 notes: the focus box off the stripe, no hint line, UP NEXT under the poster, #266 #276)
+
+**Why.** Chad on v5, with photos: the focused guide row's cyan box and glow covered the bundle stripe and its name; the
+Now Playing hint line floated over the video ("not sure we even need this description text"); and UP NEXT should
+go below the poster, not beside it with the capsule at the far right.
+
+**Changed.** The guide row's focus outline sits in a group clipped at the stripe slot (`m.stripeW`), so the box starts
+at the row's own left edge and the stripe stays whole unless it is itself focused. The Now Playing panel has no hint
+line (and the panel height no longer counts one); the lists keep their one-line note under the title. UP NEXT is one
+line under the poster, left-aligned with it: the next title, then the cyan capsule straight after the text (its own width
+counted, not the label box's). The CH line and the title stay beside the poster. This is Chad's call for the Roku and
+differs from the Apple TV's Variant A, where UP NEXT sits beside the poster.
+
+**Checked.** The dashed one-track row and CC: both at x 922, 440 wide, from the node tree; the photo's offset is the
+dashes against a solid line. Stick screenshots of the three.
+
 ## 2026-11-12 (Roku: the Now Playing panel's AUDIO row, and no grid render behind full screen, #266)
 
 **Why.** Chad's parity list for the Now Playing panel and the lag follow-up: the 30 s tick in `onTick` rebuilt every
