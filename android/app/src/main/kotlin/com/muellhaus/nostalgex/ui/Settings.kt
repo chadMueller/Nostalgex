@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex.ui
 
 import com.muellhaus.nostalgex.engine.AboutLinks
 import com.muellhaus.nostalgex.engine.DesignTokens
+import com.muellhaus.nostalgex.engine.FranchisesPageGate
 import android.text.format.DateUtils
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
@@ -515,8 +516,9 @@ private fun otherCollections(model: AppModel) =
 
 /** What the Channels list shows for FRANCHISES: everything on that is on air. */
 private fun franchiseOnCount(model: AppModel): Int {
-    val rows = if (Lineup.FRANCHISES_BUNDLE in model.enabledBundles) model.lineup?.franchises?.rows?.count { it.enabled } ?: 0 else 0
-    return rows + franchiseCollections(model).count { it.enabled }
+    val on = Lineup.FRANCHISES_BUNDLE in model.enabledBundles
+    val rows = if (on) model.lineup?.franchises?.rows?.count { it.enabled } ?: 0 else 0
+    return FranchisesPageGate.onCount(on, rows, franchiseCollections(model).count { it.enabled })
 }
 
 /** "N% already on CH X" or "Exists: CH X": a collection mostly on another channel (duplicateWarning). */
@@ -554,6 +556,13 @@ private fun FranchisesPage(model: AppModel) {
             )
         }
         if (entries.isNotEmpty()) {
+            // Off: the collections stay listed but none airs, so one line says why (FranchisesPageGate).
+            if (!on) {
+                Text(
+                    FranchisesPageGate.OFF_NOTE,
+                    style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), modifier = Modifier.padding(bottom = u(8)),
+                )
+            }
             // Only when the franchise block (CH 310-399) is full. Found franchises and franchise collections share it.
             val over = if (on) (f?.overCapFound ?: 0) + (f?.overCapFranchises ?: 0) else 0
             if (over > 0) CapNote("Up to 90 franchise channels fit in the guide. $over more are on but not shown.")
@@ -583,9 +592,15 @@ private fun FranchisesPage(model: AppModel) {
                     ) { model.toggleFranchiseRow(row) }
                 } else if (c != null) {
                     val warning = collectionWarning(c)
+                    // Off: listed, but greyed out and never focused, so it can't be switched (the Apple TV's
+                    // .disabled and .opacity(0.45)). Its own choice is kept for when FRANCHISES is on again.
+                    val selectable = FranchisesPageGate.collectionSelectable(on)
                     ToggleRow(
                         title = c.title, subtitle = warning ?: Collections.memberSummary(c), detail = "COLLECTION",
-                        on = c.enabled, modifier = Modifier.paneRow(model, e.key).alpha(if (warning != null && !c.enabled) 0.7f else 1f),
+                        on = FranchisesPageGate.collectionReadsOn(c.enabled, on),
+                        selectable = selectable,
+                        modifier = (if (selectable) Modifier.paneRow(model, e.key) else Modifier)
+                            .alpha(if (!selectable) 0.45f else if (warning != null && !c.enabled) 0.7f else 1f),
                     ) { model.toggleCollection(c.id) }
                 }
             }
@@ -822,6 +837,8 @@ private fun ToggleRow(
     showToggle: Boolean = true,
     /** How many lines the subtitle may take (subtitleLineLimit); RESCAN LIBRARY takes every one. */
     subtitleLines: Int = 3,
+    /** False for a row that only informs while it is off: not focusable, so it cannot be pressed. */
+    selectable: Boolean = true,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -830,12 +847,12 @@ private fun ToggleRow(
         modifier
             .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
-            .focusable()
+            .focusable(enabled = selectable)
             .onKeyEvent { e ->
                 when (e.key.nativeKeyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> {
                         // On release, so the press that opened Settings can't also choose here.
-                        if (e.type == KeyEventType.KeyUp) onClick()
+                        if (e.type == KeyEventType.KeyUp && selectable) onClick()
                         true
                     }
                     else -> false

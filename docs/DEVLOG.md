@@ -48,6 +48,22 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Half-done.** The `PARITY.md` Android column is an internal doc and is refreshed separately.
 
+## 2026-11-13 (Android: franchise collections grey out while FRANCHISES is off)
+
+**Why.** The Apple TV 1.0.31 gates the FRANCHISES page: the switch gates every franchise channel, the server's franchise collections included, so while it is off no collection airs, and the page must not say otherwise (`FranchisesPageGate`, N-032). The Android page had no gate. Its 1.0.31 "guide opens on the playing channel" fix was checked too.
+
+**Measured before any change** (Android TV emulator, API 36, 1920 x 1080; a stand-in Plex server with one collection, "Stub Batman Collection", three films, classed as a franchise by `CollectionClassifier`):
+- FRANCHISES off: the collection row was listed at full strength, took focus, and one press switched it to ON. The Channels list then read "FRANCHISES 1 ON". No franchise channel (CH 310 and up) was in the guide, so the page and the list said ON for something not on the air.
+- Guide opens on the playing channel: after tuning CH 14 and relaunching, the guide opened on CH 14 with the row in the same place at 3 s, 8 s and 16 s (no jump), and after full screen and BACK the focus was still on CH 14. This passes, so no change.
+
+**Changed.**
+- `engine/FranchisesPageGate.kt` is the Apple TV's `FranchisesPageGate`: the note "None of these are on the air while FRANCHISES is off.", a collection reads ON only when FRANCHISES is on and the collection's own switch is on, a collection can be pressed only while FRANCHISES is on, and the Channels list count is 0 while it is off.
+- `ui/Settings.kt`: off, the collections stay listed under that line, at 45% strength, not focusable (the Apple TV's `.disabled` and `.opacity(0.45)`), reading OFF; their own choices are kept, so turning FRANCHISES on brings back what was set. The count beside FRANCHISES on the Channels list uses the gate. `ToggleRow` gets a `selectable` switch for this. The line uses the page's existing hint style; no text got bigger.
+- `FranchisesPageGateTest`: the five rules above.
+- After the change, same emulator and stand-in: the note shows, the collection is greyed and OFF, Down from the FRANCHISES switch does not land on it, the Channels list reads OFF, and with FRANCHISES on the classics and ADD ALL / REMOVE ALL appear as before and the collection channel (CH 310) is in the guide.
+
+**Half-done.** Not on a Google TV. The collection channel was read only on the stand-in server.
+
 **Next.** Review and merge.
 
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
