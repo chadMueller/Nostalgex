@@ -64,13 +64,8 @@
     /* The rail is a list of rows, label left and value right. FULLSCREEN with its [F] is the
        widest: 13 characters of DM Mono at 0.6em, the tracking, the gap and the padding. */
     --nx-rail: calc(var(--nx-fs) * 9 + 56px);
-    /* The guide, scaled together (Chad, 2026-11-10: "a little bit bigger", about 9 to 10 rows at
-       1920x1080 where there were 12 to 14). The Apple TV guide is 80pt rows, a 60pt header, a 220pt
-       channel column and 20/18pt text on a 1080p grid, so text is a quarter of the row; VT323 is a
-       short face, so the web keeps its text at about half the row. One factor, 1.3, takes the old
-       38px row to 50, the 32px header to 42, the 160px channel column to 200 and the text with it
-       (18 to 23.4, 20 to 26). GUIDE TEXT SIZE multiplies on top, so its ratios hold. Phones and
-       tablets under 1025px keep their own sizes (the media block below sets the old values). */
+    /* The guide's sizes come from the Apple TV's points (--pt) times --guide-scale, set below and in the desktop media block. Phones and
+       tablets under 1025px keep their own sizes (that media block sets them). GUIDE TEXT SIZE multiplies the text on top, so its ratios hold. */
     /* HOW BIG THINGS ARE on a desktop window, all in this one block. Numbers are px at a 1080 high window and grow and shrink with the
        window's height (1/1080 of it per unit), so a 900 high window draws them at 83%.
        --guide-scale: the whole guide (rows, text, times, channel column). 1 is the Apple TV's size (a 64 pt row is 5.93% of the window height,
@@ -337,6 +332,11 @@
     color: rgba(255,255,255,0.5);
     line-height: 1.1;
     margin-bottom: calc(10 * var(--pt));
+    /* A very long episode string stops at two lines instead of pushing the window's lines down. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .info-meta-row {
     display: flex;

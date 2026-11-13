@@ -9,12 +9,13 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.**
 - Fonts. Press Start 2P is back for the CH line, the badges and the CHANNEL heading; VT323 for the title, episode title, description, times and the guide text. The page's Google Fonts request had named VT323 only, and the Docker build vendored VT323 only, so Press Start 2P is now in both: the link, `FONT_SHEETS` and the font licences in `scripts/selfhost-build.mjs`. `scripts/arcade-fonts-check.mjs` (in `npm test`, and `--builds` in CI) checks the request, the CSP, and that every font file the Docker sheet names is in the output.
-- Now-playing window. A "CH 05 - 90S SITCOMS" line in the channel's colour runs across the top, above the poster and text. The poster stays on the left. Title first, then the episode title, then year, content rating and star rating (no runtime), then a two-line description, the progress bar with elapsed and total time, and one plain dim line: "Up next in 44 min: Title". No pill, no styled label. Phone and TV-browser layouts behave as before.
+- Now-playing window. A "CH 05 - 90S SITCOMS" line in the channel's colour runs across the top, above the poster and text. The poster stays on the left. Title first, then the episode title (stopped at two lines), then year, content rating and star rating (no runtime), then a two-line description, the progress bar with elapsed and total time, and one plain dim line: "Up next in 44 min: Title". No pill, no styled label. The web's up next wording differs from the Apple TV's on purpose.
+- Phones and the TV browser keep their layouts, with these text changes. The vertical group stripe label down the guide's left edge is VT323 at 1.2x on every viewport, the badges are Press Start 2P at 8px on phones too, and the phone CH line carries the channel name.
 - Guide size. One variable, `--guide-scale` (0.74), scales the Apple TV point for the guide: a row of about 4.4% of the window height and text of about 1.5% (it was 5.9% and 2.0%). The window uses the 1.0.16 sizes, listed as `--info-*` variables in the same place. GUIDE TEXT SIZE LARGE and PAGE SIZE LARGE still work, and the page-size, guide-text and web-layout smokes assert the new numbers.
 
 **Kept.** The AUDIO & SUBS menu, the restored sidebar, the first-run screen and the 1.0.19 and 1.0.20 fixes.
 
-**Half-done.** Checked in headless Chromium only (desktop sizes, 960x540 at DPR 2, phone). Not looked at on a real TV browser. 1.0.16's 2.0% text is a little easier to read at 1440x900 than 1.5%; the size is one number to nudge.
+**Half-done.** Branch `web/arcade-look`. Checked in headless Chromium only (desktop sizes, 960x540 at DPR 2, phone). Not looked at on a real TV browser. 1.0.16's 2.0% text is a little easier to read at 1440x900 than 1.5%; the size is one number to nudge.
 
 **Next.** Reviewer pass, then Chad looks at it.
 

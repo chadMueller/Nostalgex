@@ -169,6 +169,7 @@ async function measure(width, height, ctxOpts = {}, tag = "", large = false) {
         return { tagText: tag ? tag.textContent : null, tagColor: tag ? getComputedStyle(tag).color : null, tagBottom: bottom(tag), mainTop: poster && !poster.hidden ? top(poster) : top(text),
           tops: ["info-title", "info-meta-row", "info-description"].map((id) => top(document.getElementById(id))).concat([top(document.querySelector(".info-progress-wrap")), top(up)]),
           upnext: up ? up.textContent : null, upnextChildren: up ? up.children.length : null, upnextRadius: cs ? cs.borderTopLeftRadius : null, upnextBg: cs ? cs.backgroundColor : null, upnextBorder: cs ? cs.borderTopWidth : null,
+          episodeClamp: (() => { const e = document.getElementById("info-episode-title"); return e ? getComputedStyle(e).webkitLineClamp + "/" + getComputedStyle(e).overflow : null; })(),
           time: (document.getElementById("info-time") || {}).textContent, hasChannelName: !!document.getElementById("info-channel-name") };
       })(),
       panel: (() => {
@@ -242,6 +243,7 @@ for (const [w, h] of SIZES) {
   check(`${key}: top to bottom: title, meta, description, progress, up next`, L.tops.every((t, i) => t != null && (i === 0 || t > L.tops[i - 1])), JSON.stringify(L.tops));
   check(`${key}: the progress line has the elapsed and total time`, /\d+:\d\d \/ \d+:\d\d/.test(L.time || ""), L.time);
   check(`${key}: UP NEXT is one plain line "Up next in 44 min: the title": no pill, capsule, border or background`, /^Up next in (\d+|less than 1) min: .+/.test(L.upnext || "") && L.upnextChildren === 0 && L.upnextRadius === "0px" && L.upnextBorder === "0px" && L.upnextBg === "rgba(0, 0, 0, 0)", JSON.stringify(L));
+  check(`${key}: a very long episode string stops at two lines (the title and the description are clamped too)`, L.episodeClamp === "2/hidden", L.episodeClamp);
   const F = m.fonts;
   check(`${key}: the 8-bit faces are loaded (VT323 and Press Start 2P)`, F.vt323 && F.pressStart, JSON.stringify({ vt: F.vt323, ps: F.pressStart }));
   const has = (fam, name) => !!fam && fam.includes(name);
