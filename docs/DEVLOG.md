@@ -66,6 +66,21 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Next.** Review and merge.
 
+## 2026-11-13 (Android: STOP WAITING, scan resume and the Plex code wait seen on a device)
+
+**Why.** The Android dev log said the kept-section path (a first setup killed part way, #288) and the Plex code wait (#284) had never run on a device, and STOP WAITING across two servers (#285) had only unit tests. Nothing in the app changed here; this records what was measured.
+
+**How.** Android TV emulator (API 36, 1920 x 1080), debug build of main `896aeab5`. The app was pointed at stand-in Plex servers (a small Python server: sections, a library, change stamps; the second library of the first server sends one byte every 10 s so the 60 s read timeout never trips and no item arrives). #284 used the real plex.tv.
+
+**Measured.**
+- #284: the sign-in code screen logged "PLEX CODE waits 900 s (plex.tv says 900)". The same code was still on screen, still polling, 5 minutes 30 seconds later. The old wait gave up at 5 minutes.
+- #285: servers A (two libraries, the second trickling) and B. The first library of A read at once (40 items, kept to disk); after about 80 s the loading screen offered STOP WAITING; pressed, the log read "STALL viewer stopped waiting on Stub A after 82 s quiet; 40 items kept from what was read" and the guide built from those 40 items. Server B was never asked for a library (no `/library/sections` request in its log).
+- #288: with A's second library trickling, the app was force-stopped after its first library was kept (`files/scan-sections/mA__1.json`, 14,790 bytes). On the next launch, with A answering normally: "RESUME section 1: 40 items kept from a scan that didn't finish, 15 s ago", the library read in 301 ms, A was asked only for `/library/sections/2/all`, B for its one library, and the guide held A's kept items, A's second library and B's items (120 in all). `scan-sections` was empty afterwards.
+
+**Half-done.** Emulator and stand-in servers, not a Google TV or a real library. The kept-section path was exercised for Plex; Jellyfin and Emby sections were not. A scan killed by the system (not `force-stop`) was not tried.
+
+**Next.** Nothing needed in the app from these runs.
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.
