@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
+
+**Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.
+
+**Changed.**
+- Merged `origin/main` into `cursor/tunarr-ersatztv-blog-refresh-8056`. Kept #313's DEVLOG entry and the `/blog/jellyfin-emby-live-tv-roku` sitemap URL. Kept this branch's Tunarr vs ErsatzTV DEVLOG entry and the 2026-11-13 lastmod on `/blog/tunarr-ersatztv-alternative-apple-tv`.
+- `npm run blog:render` rewrote the generated blog sitemap block so both posts are present. Blog post wording was not changed.
+
+**Half-done.** Same as the refresh entry below: not opened against the production URL.
+
+**Next.** CI, then parent reviews. Do not merge from this branch.
+
 ## 2026-11-13 (blog: refresh Tunarr vs ErsatzTV)
 
 **Why.** The live post has spoken to "ErsatzTV and Tunarr alternatives for Apple TV" since Oct 13. People searching "tunarr vs ersatztv" get a snippet that does not match. Same slug, same URL: a refresh, not a second post.
@@ -14,6 +26,22 @@ Commits carry the detail of *what*; this carries the *why*.
 **Half-done.** Not opened in a browser against the production URL. Facts were rechecked on Tunarr's and ErsatzTV's own docs and release pages on Nov 13, not against a running install of either.
 
 **Next.** Parent reviews the diff, then squash-merges. Do not merge from this branch. Other pages that still link here with the old title (the Jellyfin guide post) can wait; the URL is unchanged.
+
+## 2026-11-13 (publish Jellyfin and Emby live TV on Roku)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-emby-live-tv-roku`.
+
+**Why.** Today's post: live TV for Jellyfin without a tuner, on Roku (Emby too). The copy was already approved (`draft: false`, date 2026-11-13); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/jellyfin-emby-live-tv-roku.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/jellyfin-emby-live-tv-roku/cover.jpg` is 1200x630. Hero `header.webp` is 1280x720. Inline stills `roku-sign-in.webp` and `roku-channel-packages.webp` are 1280x720. Images stay on R2; none committed.
+- `content/roku.json` and `roku.html` were not touched.
+- `npm run blog:render` wrote sixteen live posts into `public/sitemap.xml`, including `/blog/jellyfin-emby-live-tv-roku` with lastmod 2026-11-13. `/blog` lastmod is 2026-11-13. `npm run build` emitted the post to `dist/blog/jellyfin-emby-live-tv-roku.html` with width/height on all four images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 372 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
 
 ## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
 
