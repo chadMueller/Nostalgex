@@ -68,38 +68,58 @@ The Apple TV's guide on its 1080 canvas is a 64 pt row (5.93%), 22 pt row text (
 | 1920x1080 | 38 px 3.52% / 18 px 1.67% / 20 px 1.85% | 32 px 2.96% / 11 px 1.02% / 12.5 px 1.16% | 64 px 5.93% / 22 px 2.04% / 25 px 2.31% |
 
 **Changed.**
-- `plex-tuner.html`: the window has the synopsis (three lines) and a meta row (year, content rating, star rating, runtime,
-  and a music video's genre) again, filled the way 1.0.16 filled them; the poster, progress bar and UP NEXT stay.
+- `plex-tuner.html`: the window has the synopsis (two lines, as in 1.0.16) and, below it, a meta row (year, content rating,
+  star rating, runtime, and a music video's genre) again, filled the way 1.0.16 filled them; the poster, progress bar and
+  UP NEXT stay. The synopsis is hidden on phones and other touch layouts, as 1.0.16 hid it. The meta badges are DM Mono,
+  not 1.0.16's Press Start 2P: the page stopped loading that font with the Apple TV font work and only DM Mono and VT323
+  ship now, so using it again would mean adding a font to both builds.
 - The rail is the 1.0.16 rail: sound, full screen, retro, sleep, info, quality, settings and the links. Captions,
   subtitle language, auto subtitles, audio and audio language are behind one AUDIO & SUBS button, which shows only when
-  the playing file has a choice and opens the existing track dialog as a list of those rows. Settings has the same
-  choices and the phone's drawer lists them. On a window where that button would push the links off the bottom of the
-  rail, the APPLE TV promo gives up its row until a file without tracks plays; in the TV-browser layout the button
-  shares SETTINGS' row.
+  the playing file has a choice and opens the existing track dialog as a list of those rows (its value is the captions'
+  state, ON or OFF). Settings has the same choices and the phone's drawer lists them. On a window where that button
+  would push the links off the bottom of the rail, the APPLE TV promo gives up its row until a file without tracks
+  plays; in the TV-browser layout the button shares SETTINGS' row.
 - One Apple TV point is 1/1080 of the window height in the guide and the now-playing window, on desktop windows (1025
   wide and 721 high and up). The rail, dialogs, TV browsers (the zoom steps, 720 high and under) and phones and tablets
-  keep their sizes. The guide's channel column is 220 pt, with the old 200 px as its floor.
+  keep their sizes. PAGE SIZE LARGE zooms the page by a third, which scales every authored length, so under it the
+  point is divided by the zoom: the guide and the window keep the Apple TV's proportions instead of growing a third past
+  them (that setting no longer enlarges them; GUIDE TEXT SIZE LARGE, the Apple TV's own LARGE, still does). The guide's
+  channel column is 220 pt with the old 200 px as its floor.
+- The window's top and bottom padding are 56 px and 24 px (were 72 and 32): 44 px clears the corner logo, and the extra
+  height is what let the window hold its text under PAGE SIZE LARGE, where authored pixels are a third bigger on screen.
+  The row hint's text is 20 pt and the gaps above the hint and the poster block are a little smaller.
 - `scripts/plex-tracks-browser-smoke.mjs`, `scripts/jellyfin-audio-streams-browser-smoke.mjs`: open AUDIO from the
-  menu. `scripts/guide-text-browser-smoke.mjs`, `scripts/page-size-browser-smoke.mjs`: their fixed desktop sizes (11 px,
-  11 to 12 rows) are now the new ones.
+  menu. `scripts/guide-text-browser-smoke.mjs`: its desktop size is the new one. `scripts/page-size-browser-smoke.mjs`:
+  a tight row bound again (7 to 8 rows at 1080 under the third) and a check that the info window holds everything.
 
-**Tested.** `npm run test:web-layout:browser` (new, 33 checks, needs Playwright) at 1280x800, 1440x900 and 1920x1080: the
-window shows the description, year, content rating, star rating and runtime, title, progress and UP NEXT; the rail
-holds only the old controls and no label spills; with subtitle and audio tracks it gets one AUDIO & SUBS button and
-stays unclipped with Instagram wholly on screen; the menu lists the five rows; the guide's row, text and time sizes
-are the Apple TV's share of the window to within a tenth, at 1440x900 and 1920x1080. Run on `tuner-v1.0.16` and on
-1.0.19 it prints the table above. `npm test`, both builds and the version check pass; the guide-text, page-size,
-program-row-layout, watershed, first-run, plex-tracks and jellyfin-audio-streams browser smokes pass. I looked at the
-screens at 1440x900, 960x540 at DPR 2 and on a phone.
+**Review found, fixed here.** The first version of this change had the AUDIO & SUBS value ("CC OFF") spilling 13 to 19 px
+out of its button at every desktop size, and under PAGE SIZE LARGE the window overflowed (549 px of content in 405 at
+1920x1080, UP NEXT outside it) because the zoom was not divided out of the point and the padding did not shrink; it also
+overflowed by 12 to 28 px at NORMAL. The new checks fail on that commit and pass on this one.
+
+**Tested.** `npm run test:web-layout:browser` (new, 57 checks, needs Playwright):
+- at 1280x800, 1440x900 and 1920x1080 the window shows the description, year, content rating, star rating and runtime,
+  title, progress and UP NEXT, and at 1440x900 and 1920x1080 it holds everything (scrollHeight not over clientHeight);
+- the rail holds only the old controls with no label spilling;
+- with subtitle and audio tracks it gets one AUDIO & SUBS button and stays unclipped with Instagram wholly on screen, and
+  the button's label and value sit inside it (no spill, no overlap) at 1280x800, 1440x900, 1920x1080, 1366x768, 1280x720
+  and 1024x768; the menu lists the five rows;
+- the guide's row, text and time sizes are the Apple TV's share of the window to within a tenth, at 1440x900 and 1920x1080;
+- under PAGE SIZE LARGE at 1920x1080 and 1440x900 the page is zoomed a third, the window holds everything (405/405 and
+  338/338), the guide shows the same 7.5 rows as at NORMAL, and the description and meta are still there.
+Run on `tuner-v1.0.16` and on 1.0.19 it prints the table above. `npm test`, both builds and the version check pass; the
+guide-text, page-size, program-row-layout, watershed, first-run, plex-tracks and jellyfin-audio-streams browser smokes
+pass. I looked at the screens at 1440x900, 960x540 at DPR 2 and on a phone.
 
 **Not fixed.** `npm run test:guide-text:browser` has two failures on the phone ("header fits the screen and lines up
 with the rows", NORMAL and LARGE). They fail the same way on a clean checkout of the base commit; not looked into.
 
 **Not verified.** Firefox, WebKit and a real TV browser (Chromium only); a real file with subtitle and audio tracks (the
-tracks are put on the playing item by the test); the TV-browser and phone views are looked at, not asserted on.
+tracks are put on the playing item by the test); the window at 1366x768 and 1280x720 (the button's fit is measured
+there, the window is not); the TV-browser and phone views are looked at, not asserted on.
 
 **Half-done.** Branch `web/restore-info-panel`, committed, not pushed. It needs a review before it goes to main (a push
-to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag, planned as `tuner-v1.0.20`).
+to main deploys the hosted tuner; the Docker image takes it at the next `tuner-v` tag).
 
 ## 2026-11-12 (Roku: Up on an empty guide, checked, #93)
 

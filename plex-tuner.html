@@ -115,6 +115,9 @@
      below); phones and tablets (under 1025 wide) have their own sizes. */
   @media (min-width: 1025px) and (min-height: 721px) {
     .guide-grid, .info-panel { --pt: calc(100vh / 1080); }
+    /* PAGE SIZE LARGE zooms the page by 1.3333 (html.nx-large below), which scales every authored length, 100vh included, so the
+       point is divided by it: the guide and the window keep the Apple TV's proportions (and fit) at any page size. */
+    html.nx-large .guide-grid, html.nx-large .info-panel { --pt: calc(100vh / 1080 / 1.3333); }
     .guide-grid {
       --g-row: calc(64 * var(--pt));
       --g-head: calc(58 * var(--pt));
@@ -270,8 +273,9 @@
     width: 35%;
     flex-shrink: 0;
     /* The corner logo (fixed, 170px wide, about 24px tall, 20px from the top) is not drawn over
-       the text: the panel starts below it. */
-    padding: 72px 40px 32px;
+       the text: the panel starts below it (44px clears it; 56px is that and a margin, so the window holds its text under
+       PAGE SIZE LARGE as well, where these authored pixels are a third bigger on screen). */
+    padding: 56px 40px 24px;
     justify-content: safe center;
     background: linear-gradient(135deg, #0a0a1a 0%, #0d0d20 100%);
     border-right: 1px solid rgba(255,255,255,0.08);
@@ -279,7 +283,7 @@
   }
   /* The Apple TV's Now Playing panel in points (1 pt = 0.5 CSS px, --pt): all panel text 22 pt, the title 29 pt white up to 3 lines,
      the CH tag in VT323 at 28 pt with a bar 8 by 24 pt, the poster 120 by 180 pt. */
-  .info-main { display: flex; align-items: flex-start; gap: calc(24 * var(--pt)); min-width: 0; margin-bottom: calc(24 * var(--pt)); }
+  .info-main { display: flex; align-items: flex-start; gap: calc(24 * var(--pt)); min-width: 0; margin-bottom: calc(18 * var(--pt)); }
   .info-text { flex: 1 1 auto; min-width: 0; }
   .info-poster {
     flex: 0 0 auto;
@@ -327,7 +331,7 @@
     margin-bottom: calc(12 * var(--pt));
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
   .info-description:empty { display: none; }
@@ -340,9 +344,9 @@
   }
   .info-channel-name:empty { display: none; }
   .info-hint {
-    margin-top: calc(14 * var(--pt));
+    margin-top: calc(10 * var(--pt));
     min-height: 2.8em;
-    font-size: calc(22 * var(--pt));
+    font-size: calc(20 * var(--pt));
     line-height: 1.4;
     color: rgba(255,255,255,0.7);
   }
@@ -2818,7 +2822,7 @@
     }
     /* No room for prose next to a 16:9 video on a phone. The title, the meta
        row and the progress are what a glance needs. */
-    .info-poster, .info-hint { display: none; }
+    .info-poster, .info-hint, .info-description { display: none; }
     .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
     .info-ch-bar { width: 6px; height: 16px; }
     .info-channel-tag { gap: 8px; }
@@ -3044,7 +3048,7 @@
       font-weight: 500;
     }
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
-    .info-poster, .info-hint { display: none; }
+    .info-poster, .info-hint, .info-description { display: none; }
     .info-channel-name { font-size: var(--nx-fs); margin-bottom: 4px; }
     .info-ch-bar { width: 6px; height: 16px; }
     .info-channel-tag { gap: 8px; }
@@ -3782,8 +3786,8 @@
           <div class="info-channel-tag" id="info-channel-tag"></div>
           <div class="info-title" id="info-title"></div>
           <div class="info-episode-title" id="info-episode-title"></div>
-          <div class="info-meta-row" id="info-meta-row"></div>
           <div class="info-description" id="info-description"></div>
+          <div class="info-meta-row" id="info-meta-row"></div>
           <div class="info-channel-name" id="info-channel-name"></div>
         </div>
       </div>
@@ -3855,7 +3859,7 @@
       <button class="v-btn" type="button" id="tb-tracks" hidden onclick="openTrackDialog('menu')" aria-haspopup="dialog">
         <span class="v-btn-label">AUDIO &amp; SUBS</span>
         <span class="v-btn-short">AUDIO &amp; SUBS</span>
-        <span class="v-btn-value" id="tb-tracks-val">CC OFF</span>
+        <span class="v-btn-value" id="tb-tracks-val"></span>
       </button>
       <a class="v-btn v-btn--appletv" href="https://apps.apple.com/app/nostalgex/id6762563534" target="_blank" rel="noopener noreferrer" aria-label="Download Nostalgex on Apple TV">
         <span class="v-btn-label">APPLE TV</span>
@@ -8012,7 +8016,7 @@
     }
     trackMenuState = { show, values };
     const tracksVal = document.getElementById('tb-tracks-val');
-    if (tracksVal) tracksVal.textContent = show.cc ? `CC ${values.cc}` : 'AUDIO';
+    if (tracksVal) tracksVal.textContent = show.cc ? values.cc : '';
   }
   function trackMenuChoose(key) {
     if (key === 'cc') { toggleSubtitles(); renderTrackRows(); }

@@ -81,15 +81,16 @@ const check = (label, ok, detail = "") => { if (ok) passed += 1; else failures.p
 
 const browser = await chromium.launch({ headless: true });
 
-async function measure(width, height, ctxOpts = {}, tag = "") {
+async function measure(width, height, ctxOpts = {}, tag = "", large = false) {
   const ctx = await browser.newContext({ viewport: { width, height }, ...ctxOpts });
   await ctx.route((u) => !/^(127\.0\.0\.1|localhost)$/.test(u.hostname), (route) => route.abort());
-  await ctx.addInitScript(([url]) => {
+  await ctx.addInitScript(([url, pageSize]) => {
     if (location.pathname.endsWith("plex-tuner.html") && !sessionStorage.getItem("nx-seeded")) {
       sessionStorage.setItem("nx-seeded", "1");
       localStorage.setItem("plex90_saved_auth", JSON.stringify({ token: "t", serverUrl: url, serverName: "lab", backend: "plex", userToken: "t" }));
+      if (pageSize) localStorage.setItem("nostalgex_page_size", pageSize);
     }
-  }, [api]);
+  }, [api, large ? "large" : null]);
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 160)));
@@ -128,6 +129,13 @@ async function measure(width, height, ctxOpts = {}, tag = "") {
       slot: px(document.querySelector(".grid-time-slot")), head: px(document.querySelector(".grid-channel-col")),
       infoTitle: px(document.getElementById("info-title")), infoDesc: px(desc),
       panelH: panelBox ? panelBox.height : null, scrollV: document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight,
+      panel: (() => {
+        const p = document.getElementById("info-panel"); if (!p) return null;
+        const pr = p.getBoundingClientRect(), up = document.getElementById("info-upnext"), pg = document.querySelector(".info-progress-wrap");
+        const inside = (el) => !el || el.getBoundingClientRect().bottom <= pr.bottom + 1;
+        return { scroll: p.scrollHeight, client: p.clientHeight, upnextInside: inside(up), progressInside: inside(pg), zoom: parseFloat(getComputedStyle(document.documentElement).zoom) || 1 };
+      })(),
+      rows: (() => { const row = document.querySelector(".grid-row:not(.grid-row--promo)"), body = document.getElementById("grid-body"); return row && body ? body.getBoundingClientRect().height / row.getBoundingClientRect().height : null; })(),
     };
   });
   // A file with subtitle and audio tracks: the one AUDIO & SUBS button shows, the rail still holds everything, and its menu lists the rows.
@@ -141,7 +149,16 @@ async function measure(width, height, ctxOpts = {}, tag = "") {
     const last = [...tb.querySelectorAll("a.v-btn, a.v-coffee, .v-btn, .v-coffee")].filter(visible).pop();
     const area = document.getElementById("video-area").getBoundingClientRect();
     const railRows = [...tb.querySelectorAll(".track-row")].filter(visible).length;
-    return { btn: visible(btn) ? btn.textContent.replace(/\s+/g, " ").trim() : null, railTrackRows: railRows, scroll: tb.scrollHeight, client: tb.clientHeight, clipped: tb.scrollHeight > tb.clientHeight + 1, lastBottom: last ? last.getBoundingClientRect().bottom : null, areaBottom: area.bottom, insta: visible(document.querySelector(".v-toolbar a[href*='instagram']")), instaBottom: (document.querySelector(".v-toolbar a[href*='instagram']") || { getBoundingClientRect: () => ({ bottom: 9999 }) }).getBoundingClientRect().bottom };
+    const spill = (() => {
+      if (!visible(btn)) return null;
+      const br = btn.getBoundingClientRect();
+      const parts = [...btn.querySelectorAll(".v-btn-label,.v-btn-short,.v-btn-value")].filter(visible).map((e) => ({ cls: e.className, t: e.textContent.trim(), r: e.getBoundingClientRect() }));
+      const out = parts.filter((x) => x.r.right > br.right + 0.5 || x.r.left < br.left - 0.5).map((x) => `${x.t} by ${Math.max(x.r.right - br.right, br.left - x.r.left).toFixed(1)} px`);
+      const label = parts.find((x) => /v-btn-(label|short)/.test(x.cls)), value = parts.find((x) => /v-btn-value/.test(x.cls));
+      if (label && value && value.t && label.r.right > value.r.left + 0.5 && Math.abs(label.r.top - value.r.top) < 4) out.push(`label and value overlap by ${(label.r.right - value.r.left).toFixed(1)} px`);
+      return out;
+    })();
+    return { spill, btn: visible(btn) ? btn.textContent.replace(/\s+/g, " ").trim() : null, railTrackRows: railRows, scroll: tb.scrollHeight, client: tb.clientHeight, clipped: tb.scrollHeight > tb.clientHeight + 1, lastBottom: last ? last.getBoundingClientRect().bottom : null, areaBottom: area.bottom, insta: visible(document.querySelector(".v-toolbar a[href*='instagram']")), instaBottom: (document.querySelector(".v-toolbar a[href*='instagram']") || { getBoundingClientRect: () => ({ bottom: 9999 }) }).getBoundingClientRect().bottom };
   });
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/guide-with-tracks-${width}x${height}${tag}.png` });
   const menu = await page.evaluate(() => { document.getElementById("tb-tracks").click(); const d = document.getElementById("track-dialog"); return { open: !d.hidden, title: document.getElementById("track-dialog-title").textContent, rows: [...document.querySelectorAll("#track-rows .sleep-row")].map((r) => r.querySelector(".sleep-row-label").textContent.trim()) }; });
@@ -151,10 +168,14 @@ async function measure(width, height, ctxOpts = {}, tag = "") {
 }
 
 const SIZES = [[1280, 800], [1440, 900], [1920, 1080]];
+// The same window with tracks, at the other common sizes too, for the new button's spill (1280x720 is a TV step, 1024x768 a tablet).
+const SPILL_ONLY = [[1366, 768], [1280, 720], [1024, 768]];
 const results = {};
-for (const [w, h] of SIZES) {
+const largeResults = {};
+for (const [w, h] of [...SIZES, ...SPILL_ONLY]) {
   const m = await measure(w, h);
   results[`${w}x${h}`] = m;
+  if (SPILL_ONLY.some(([a, b]) => a === w && b === h)) continue;
   const pct = (v) => (v == null ? "n/a" : `${(100 * v / m.vh).toFixed(2)}%`);
   console.log(`MEASURE ${w}x${h}: row ${m.rowH && m.rowH.toFixed(1)} px (${pct(m.rowH)} of the height; Apple TV ${(100 * APPLE.row).toFixed(2)}%), number ${m.num} px (${pct(m.num)}), name ${m.name} px (${pct(m.name)}), programme ${m.program} px (${pct(m.program)}), time ${m.slot} px (${pct(m.slot)}; Apple TV ${(100 * APPLE.time).toFixed(2)}%), heading ${m.head} px; row text Apple TV ${(100 * APPLE.text).toFixed(2)}%`);
   console.log(`MEASURE ${w}x${h}: window: title ${JSON.stringify(m.title)}, description ${m.description ? "yes (" + m.description.length + " chars)" : "NO"}, meta ${JSON.stringify(m.meta)}, poster ${m.posterShown}, up next ${m.upnext ? "yes" : "no"}; sidebar ${m.side.length} controls: ${m.side.map((b) => b.label + (b.spill ? " (SPILLS)" : "")).join(" | ")}`);
@@ -175,9 +196,9 @@ for (const [w, h] of SIZES) {
   check(`${key}: and its title, progress and UP NEXT`, !!m.title && !!m.time && !!m.upnext);
   const labels = m.side.map((b) => b.label.replace(/\s*\[.*?\]/g, "").trim().toUpperCase());
   // Before 1.0.17 the sidebar held: sound, full screen, retro, sleep, info, quality, settings and the links.
-  const OLD = ["SOUND", "FULLSCREEN", "FULL SCREEN", "RETRO", "SLEEP", "INFO", "QUALITY", "SETTINGS", "APPLE TV", "BUY ME A COFFEE", "INSTAGRAM", "PLAYBACK"];
+  const OLD = ["SOUND", "FULLSCREEN", "FULL SCREEN", "RETRO", "SLEEP", "INFO", "QUALITY", "SETTINGS", "APPLE TV", "BUY ME A COFFEE", "INSTAGRAM"];
   const extra = labels.filter((l) => !OLD.some((o) => l === o || l.startsWith(o)));
-  check(`${key}: the sidebar holds only the controls it held before 1.0.17 (and one playback menu button)`, extra.length === 0 && m.side.length <= 12, JSON.stringify({ extra, n: m.side.length }));
+  check(`${key}: the sidebar holds only the controls it held before 1.0.17 (the AUDIO & SUBS button is checked with tracks, below)`, extra.length === 0 && m.side.length <= 12, JSON.stringify({ extra, n: m.side.length }));
   check(`${key}: no sidebar label spills out of its button`, m.side.every((b) => !b.spill), m.side.filter((b) => b.spill).map((b) => b.label).join(", "));
   check(`${key}: no page errors`, m.errors.length === 0, m.errors.join(" | "));
 }
@@ -189,6 +210,32 @@ for (const [w, h] of [[1440, 900], [1920, 1080]]) {
   check(`${key}: guide rows are the Apple TV's share of the window (${(100 * APPLE.row).toFixed(2)}%)`, near(m.rowH, APPLE.row), `${(100 * share(m.rowH)).toFixed(2)}%`);
   check(`${key}: channel number, name and programme title are the Apple TV's row text share (${(100 * APPLE.text).toFixed(2)}%)`, near(m.num, APPLE.text) && near(m.name, APPLE.text) && near(m.program, APPLE.text), `${(100 * share(m.num)).toFixed(2)} / ${(100 * share(m.name)).toFixed(2)} / ${(100 * share(m.program)).toFixed(2)}%`);
   check(`${key}: time labels are the Apple TV's share (${(100 * APPLE.time).toFixed(2)}%)`, near(m.slot, APPLE.time), `${(100 * share(m.slot)).toFixed(2)}%`);
+}
+
+// The new button's label and value fit inside it, with tracks present, at every size (the tablet has no rail, so it is only held to it if it shows).
+for (const key of Object.keys(results)) {
+  const m = results[key];
+  const tablet = key === "1024x768";
+  const shown = !!m.withTracks.btn;
+  check(`${key}: AUDIO & SUBS shows with tracks${tablet ? " (or the tablet has no rail)" : ""}`, shown || tablet, JSON.stringify(m.withTracks));
+  if (shown) {
+    check(`${key}: AUDIO & SUBS label and value fit inside the button (no spill, no overlap)`, m.withTracks.spill && m.withTracks.spill.length === 0, JSON.stringify(m.withTracks.spill));
+    console.log(`MEASURE ${key}: AUDIO & SUBS ${JSON.stringify(m.withTracks.btn)} spill ${JSON.stringify(m.withTracks.spill)}`);
+  }
+}
+
+// PAGE SIZE LARGE (the page zoomed by 1.3333): the window above the guide still holds everything, and the guide keeps the Apple TV's proportions.
+for (const [w, h] of [[1920, 1080], [1440, 900]]) {
+  const key = `${w}x${h}`, N = results[key];
+  const L = await measure(w, h, {}, "-large", true);
+  largeResults[key] = L;
+  console.log(`MEASURE ${key} PAGE SIZE LARGE: zoom ${L.panel && L.panel.zoom}, window ${L.panel && L.panel.scroll}/${L.panel && L.panel.client} (scroll/client), UP NEXT inside ${L.panel && L.panel.upnextInside}, progress inside ${L.panel && L.panel.progressInside}, rows in view ${L.rows && L.rows.toFixed(2)} (NORMAL ${N.rows && N.rows.toFixed(2)}), programme ${L.program} px (NORMAL ${N.program} px)`);
+  check(`${key}: PAGE SIZE LARGE is on (the page is zoomed by a third)`, !!L.panel && Math.abs(L.panel.zoom - 1.3333) < 0.01, String(L.panel && L.panel.zoom));
+  check(`${key}: NORMAL: the info window holds everything (scrollHeight <= clientHeight)`, !!N.panel && N.panel.scroll <= N.panel.client + 1 && N.panel.upnextInside && N.panel.progressInside, JSON.stringify(N.panel));
+  check(`${key}: PAGE SIZE LARGE: the info window holds everything (scrollHeight <= clientHeight), progress and UP NEXT inside it`, !!L.panel && L.panel.scroll <= L.panel.client + 1 && L.panel.upnextInside && L.panel.progressInside, JSON.stringify(L.panel));
+  check(`${key}: PAGE SIZE LARGE: the guide keeps the Apple TV's row proportion (as many rows in view as NORMAL, within one)`, L.rows != null && N.rows != null && Math.abs(L.rows - N.rows) <= 1, `${L.rows} vs ${N.rows}`);
+  check(`${key}: PAGE SIZE LARGE: the description, year and rating are still in the window`, !!L.description && L.metaParts.length >= 3, JSON.stringify({ d: !!L.description, m: L.metaParts }));
+  check(`${key}: PAGE SIZE LARGE: no page errors`, L.errors.length === 0, L.errors.join(" | "));
 }
 
 // The TV-browser and phone sizes keep their own layouts: shown for a look (EXTRA=1), not asserted on.
