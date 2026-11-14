@@ -982,7 +982,19 @@ function musicLine(b as Object) as String
     return NxToStr(b.title)
 end function
 
+' The tick is back after a gap (the OS stopped the app, see NxTickGapDue):
+' the schedule re-check runs now, not in 30 s, so a viewer coming back sees
+' the gate as it is (#190).
+sub catchUpSchedule(t as LongInteger)
+    if not NxTickGapDue(m.lastTickAt, t) then return
+    print "guide: back after "; (t - m.lastTickAt); " s without a tick; checking the schedule at once"
+    m.lastTickAt = t
+    m.top.reschedule = true
+end sub
+
 sub onTick()
+    catchUpSchedule(nowSec())
+    m.lastTickAt = nowSec()
     checkSleep()
     if m.np <> invalid and (m.sleepEnd <> invalid or m.np.infoOpen = true or nowSec() mod 15 = 0) then m.np.state = npState()
     renderInfo()
@@ -2750,6 +2762,7 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press or m.channels = invalid then return false
     m.lastActivity = nowSec()
+    catchUpSchedule(m.lastActivity)
     ' Leaving once the stream's stop answers: Back again leaves at once, and
     ' nothing else acts meanwhile.
     if m.leaving = true then return key <> "back"

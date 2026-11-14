@@ -43,6 +43,24 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Next.** None for this post.
 
+## 2026-11-13 (Roku: the schedule re-check catches up when the app wakes, #190)
+
+**Why.** WATERSHED's 9 PM opening did not happen on the stick on 2026-11-12 and 2026-11-13. Measured: with no video
+playing and no key for about ten minutes (a held channel after its film), the stick stopped running the app: the
+30 s re-check, the console and the memory figure all went quiet (the last ask logged 9 min 51 s after the video
+stopped, then 18 minutes of nothing), so the hour that came meanwhile was never seen. Last night's exit at 01:44 was
+the stick rebooting for an update (uptime 67,522 s at 20:30, OS now 16.0.4). The re-check path itself is the v2
+code and fired correctly whenever the app was running (midnight re-pack at 00:00:03, and a shifted-clock run).
+
+**Changed.** `NxTickGapDue` (source/guide/GuideTimeout.brs, a script `GuideView` includes): the one-second tick, or a key, arriving more than
+90 s after the last tick asks for the re-check at once (`catchUpSchedule` in `GuideView`, which sets the guide's
+`reschedule` field as Settings does). A viewer coming back to the stick sees the gate as it is.
+
+**Not changed, not provable here.** An unattended stick still does not re-pack at 9 PM: the OS stops the app, and
+the guide changes when someone presses a key or the app is next woken.
+
+**Tests.** `watershed-gate` suite 26 checks, nine for the gap rule including a gap across 9 PM.
+
 ## 2026-11-12 (Web tuner: the now-playing window has its synopsis and details back, the rail its old controls, and the guide reads at the Apple TV's size)
 
 **Why.** Seen on the hosted tuner (1.0.19): the window above the guide showed only a poster, the channel, the title, a

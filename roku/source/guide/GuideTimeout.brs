@@ -65,3 +65,15 @@ sub NxSaveGuideTimeout(value as String)
     reg.Write("guideTimeout", NxGuideTimeoutParse(value))
     reg.Flush()
 end sub
+
+' Whether the guide's one-second tick has been away for more than `limit`
+' seconds as `now` is read: the Roku stops running an app that has shown no
+' video and met no key for about ten minutes (measured 2026-11-13: its timers
+' and console go quiet), so the 30 s schedule re-check never runs, and an
+' hour that came meanwhile (WATERSHED's 9 PM) was not seen. The first key or
+' tick after the gap asks for the re-check at once (#190). `lastTick` is
+' invalid before the first tick.
+function NxTickGapDue(lastTick as Dynamic, now as LongInteger, limit = 90 as Integer) as Boolean
+    if lastTick = invalid then return false
+    return now - lastTick > limit
+end function

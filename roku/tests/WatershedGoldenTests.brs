@@ -93,6 +93,24 @@ function NxRunWatershedGateTests() as Integer
     NxSetWatershed(false)
     g.nxTzOffsetSec = invalid
     NxClearManifests()
+
+    ' ── The catch-up after the OS stopped the app (#190): a tick or key after more than 90 s asks for the
+    ' schedule re-check at once. ──
+    NxCheck(r, "tick gap: no tick yet", FormatJson(NxTickGapDue(invalid, 5000)), "false")
+    NxCheck(r, "tick gap: the next second", FormatJson(NxTickGapDue(5000, 5001)), "false")
+    NxCheck(r, "tick gap: 30 s, a re-check's own interval", FormatJson(NxTickGapDue(5000, 5030)), "false")
+    NxCheck(r, "tick gap: exactly 90 s is not a gap", FormatJson(NxTickGapDue(5000, 5090)), "false")
+    NxCheck(r, "tick gap: 91 s is", FormatJson(NxTickGapDue(5000, 5091)), "true")
+    NxCheck(r, "tick gap: ten minutes asleep", FormatJson(NxTickGapDue(5000, 5600)), "true")
+    NxCheck(r, "tick gap: a shorter limit", FormatJson(NxTickGapDue(5000, 5011, 10)), "true")
+    ' The gap crossing 9 PM: the key's hour is not the guide's, so the re-check the gap asks for re-packs.
+    gz = GetGlobalAA()
+    gz.nxTzOffsets = invalid
+    gz.nxTzOffsetSec = 0
+    nine& = NxLocalDay(1780000000).dayStartSec + 21 * 3600
+    NxCheck(r, "tick gap: asleep across 9 PM, the re-check key has moved", FormatJson(NxScheduleHourKey(nine& + 30, true) <> NxScheduleHourKey(nine& - 600, true) and NxTickGapDue(nine& - 600, nine& + 30)), "true")
+    NxCheck(r, "tick gap: not asleep across it, the 30 s ask sees the key move itself", FormatJson(NxTickGapDue(nine& - 5, nine& + 5)), "false")
+    gz.nxTzOffsetSec = invalid
     print "watershed gate cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function
