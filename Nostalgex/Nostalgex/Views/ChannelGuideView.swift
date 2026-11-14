@@ -992,7 +992,7 @@ private struct BundleJumpSidebar: View {
     /// outline, glow, 3% lift). The left bar keeps each package's own colour.
     private static let width: CGFloat = 380
     private static let rowHeight = GuideTextMetrics.packageRowHeight
-    private static let rowText = GuideTextMetrics.packageRowText
+    private static var rowText: CGFloat { GuideTextSize.current.metrics.packageRowText }
     private static let rowRadius = NXLayout.rowRadius
 
     private var rowFont: Font { .custom("DMMono-Medium", size: Self.rowText) }
@@ -1017,7 +1017,7 @@ private struct BundleJumpSidebar: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 Text("BUNDLES")
-                    .font(.custom("DMMono-Medium", size: GuideTextMetrics.packageHeading))
+                    .font(.custom("DMMono-Medium", size: GuideTextSize.current.metrics.packageHeading))
                     .foregroundStyle(Color.nxText2)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 18)

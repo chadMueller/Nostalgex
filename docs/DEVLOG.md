@@ -3,6 +3,38 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Apple TV: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT, LARGER)
+
+**State.** Branch `appletv/guide-text-three-steps` off main `f76c021f`. Not merged, not in a build, not pushed. The smoke script `scripts/guide-text-smoke.mjs` fails 10 checks on purpose until Roku and the web tuner take the new numbers (below), so this must not reach main without them.
+
+**Why.** Chad, on 1.0.32: the guide type "feels overly too big", then: add a smaller size to the setting we already have, make the pulled-back sizes the default, and keep the larger one. It supersedes `appletv/guide-text-smaller` (`225ec8d8`), whose numbers are the DEFAULT step here.
+
+**Changed.**
+- `GuideTextSize` is `small`, `normal`, `large`. The labels are SMALLER, DEFAULT and LARGER. The raw values are the contract with stored prefs, iCloud sync and the other platforms: "large" is the old LARGE and "normal" is still the middle step (only the label says DEFAULT). "small" is new. Anything unknown, empty or missing reads as "normal". Roku and the web tuner only know normal and large, so they read "small" as normal, which is the safe fall back.
+- The Settings row (PLAYBACK & PICTURE) cycles SMALLER, DEFAULT, LARGER and round again (`GuideTextSize.next`); its value and accessibility value are the label. Checked on the Simulator: DEFAULT, then LARGER, SMALLER, DEFAULT.
+- The bundle list and the Now Playing panel follow the step. They used to be fixed at 22 pt whatever the setting; they now read the saved step when they draw (`GuideTextSize.current`, which `AppState.guideTextSize` writes the moment the row changes). Their DEFAULT text is 20 pt (the smaller branch's change reached the panel through `packageRowText`), and LARGER keeps the 22 pt they always had at LARGE.
+- Row height (64), the 58 pt header and the 340 pt channel column are the same at every step.
+
+| Token | SMALLER | DEFAULT | LARGER (today's LARGE) |
+|---|---|---|---|
+| program title, channel number, channel name | 17 | 20 | 29 |
+| times, CHANNEL heading, placeholder | 19 | 22 | 29 |
+| channel number box | 31 | 36 | 54 |
+| bundle list rows, BUNDLES heading | 17, 19 | 20, 22 | 22, 25 |
+| Now Playing text | 17 | 20 | 22 |
+| Now Playing item title, CH tag | 25, 24 | 29, 28 | 29, 28 |
+
+**Why 17 and 19.** The first cut of SMALLER was 18 and 20 (the same 2 pt step DEFAULT took), and on the Simulator it read as a nudge, so it went one point further: 85% and 86% of DEFAULT. One point is 1/1080 of the screen height, so 17 pt is 1.6% of it, a 12 px capital in DM Mono Medium. The strokes stay crisp in the 4K shots, but this is the floor: not judged on a TV from a couch, only on the Simulator. If it looks too small on the TV, 18 and 20 is a one-line change in `GuideTextMetrics.small`.
+
+**What Roku and the web must change** (the smoke script lists the failing checks):
+- Roku `GuideText.brs`: NORMAL becomes the DEFAULT numbers (title, number, name 20; time, heading 22) and a third step SMALLER (17 and 19) saved as "small"; LARGE stays 29 and keeps the raw value "large". The label of the middle step reads DEFAULT.
+- Web `plex-tuner.html`: the `--gt-*` multipliers of LARGE become 1.45 (title, number, name) and 1.3182 (time, heading) over the new DEFAULT; a SMALLER class takes 0.85 and 0.8636; the web's own GUIDE TEXT SIZE reads the same three raw values.
+- Android: its NORMAL and LARGE take the same two moves, and the new "small".
+
+**Tests.** `GuideTextSizeTests` (round trip for all three, unknown falls back, the cycle, the labels and raw values, every metric for every step, the floors, each step at least as big as the one below, three digits fit the box, lines fit the row and header, time labels fit their slot) and the iCloud sync test. One focused class run each, serial on the one Simulator: both pass. The smoke script: 15 checks pass, 10 fail on the Roku and web pairs by design. Screenshots of all three steps (guide, focused row, Now Playing, bundle list, the Settings row cycle) are in `projects/nostalgex-internal/docs/roku-shots/appletv-textsize-2026-11-13/` (`steps-*`, with `steps-compare-*` stacking the three). Demo mode on the Simulator only; no Apple TV used.
+
+**Not done.** `content/changelog.json` still describes the setting as NORMAL and LARGE; the site agent rewrites it when this is cut into a build. No device pass of SMALLER from a couch.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

@@ -7,20 +7,21 @@ import SwiftUI
 // DM Mono is declared here, once, so NowPlayingPanel.swift keeps to the "no literal font sizes" rule.
 
 enum NowPlayingType {
-    /// Row labels and values, the channel line, the UP NEXT chip and title, the hint line, list entries.
-    static let text: CGFloat = GuideTextMetrics.packageRowText
-    /// The item title.
-    static let title: CGFloat = 29
-    /// The CH tag in VT323. 31 read as large as the 22 pt text beside it; 28 is one step down.
-    static let tag: CGFloat = 28
+    /// Row labels and values, the channel line, the UP NEXT chip and title, the hint line, list entries. Follows
+    /// GUIDE TEXT SIZE (20 pt at DEFAULT, 17 SMALLER, 22 LARGER), read when the panel draws.
+    static var text: CGFloat { GuideTextSize.current.metrics.panelText }
+    /// The item title (29, 25 at SMALLER).
+    static var title: CGFloat { GuideTextSize.current.metrics.panelTitle }
+    /// The CH tag in VT323. 31 read as large as the 22 pt text beside it; 28 is one step down (24 at SMALLER).
+    static var tag: CGFloat { GuideTextSize.current.metrics.panelTag }
 }
 
 enum NowPlayingFont {
-    static let textMedium = Font.custom("DMMono-Medium", size: NowPlayingType.text)
-    static let textRegular = Font.custom("DMMono-Regular", size: NowPlayingType.text)
-    static let title = Font.custom("DMMono-Medium", size: NowPlayingType.title)
-    static let tag = Font.custom("VT323-Regular", size: NowPlayingType.tag)
-    static let icon = Font.system(size: NowPlayingType.text, weight: .semibold)
+    static var textMedium: Font { .custom("DMMono-Medium", size: NowPlayingType.text) }
+    static var textRegular: Font { .custom("DMMono-Regular", size: NowPlayingType.text) }
+    static var title: Font { .custom("DMMono-Medium", size: NowPlayingType.title) }
+    static var tag: Font { .custom("VT323-Regular", size: NowPlayingType.tag) }
+    static var icon: Font { .system(size: NowPlayingType.text, weight: .semibold) }
 }
 
 enum NowPlayingLayout {

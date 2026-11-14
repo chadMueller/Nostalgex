@@ -5,7 +5,7 @@
  * There is no shared golden file for this setting (it is sizes, not schedule logic), so this
  * reads the three sources and holds them together:
  *
- *   Nostalgex/Nostalgex/Models/GuideTextSize.swift    GuideTextMetrics.normal and .large
+ *   Nostalgex/Nostalgex/Models/GuideTextSize.swift    GuideTextMetrics.small, .normal (labelled DEFAULT) and .large (LARGER)
  *   roku/source/guide/GuideText.brs                   NxGuideTextSizes(false) and (true): its text, time and numW
  *                                                             locals, and the keys the returned record builds from them
  *   plex-tuner.html                                   the --gt-* multipliers on .guide-grid
@@ -14,6 +14,10 @@
  * guide must be the Swift LARGE size over its NORMAL size. NORMAL must be 1 everywhere, so the
  * guide draws exactly what it drew before the setting existed, and no guide rule may carry a
  * raw font size that would escape the multiplier. The storage key is the Apple TV's.
+ *
+ * The Apple TV has three steps (SMALLER "small", DEFAULT "normal", LARGER "large"); Roku and the page still have two
+ * (normal and large) and read "small" as normal, which is the safe degrade. Until they take the Apple TV's DEFAULT
+ * sizes and a SMALLER step, the Swift against Roku pairs and the page's LARGE multipliers below fail on purpose.
  *
  * The page's one deliberate exception, the time labels on a phone, is named below.
  *
@@ -133,12 +137,17 @@ for (const rule of html.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
 // min-width on a number box would be missed, so the list above stays empty.
 check("every guide font size and number box goes through a --gt- multiplier", raw.filter((r) => r.includes("font-size") || r.includes(".grid-ch-num")).length === 0, raw.join(" | "));
 
-// The key and what counts as LARGE.
+// The key and what counts as each step.
 const key = /static let storageKey = "([^"]+)"/.exec(swift)[1];
 check(`the page saves under the Apple TV's key (${key})`, html.includes(`const GUIDE_TEXT_KEY = '${key}'`));
-check("only exactly 'large' is LARGE, like GuideTextSize.init(stored:) and NxGuideTextFrom",
+// Apple TV: three steps; "large" keeps the old LARGE's raw value, "small" is new, anything unknown is DEFAULT ("normal").
+check("Apple TV: raw values small, normal, large (the middle step is labelled DEFAULT), unknown reads as normal",
+  /case small\s+case normal\s+case large/.test(swift)
+  && /stored\.flatMap\(GuideTextSize\.init\(rawValue:\)\) \?\? \.normal/.test(swift)
+  && /case \.small: return "SMALLER"[\s\S]*case \.normal: return "DEFAULT"[\s\S]*case \.large: return "LARGER"/.test(swift));
+// Roku and the page know two steps: only exactly "large" is LARGE, so the Apple TV's "small" degrades to their normal.
+check("the page and Roku read only exactly 'large' as LARGE, so the Apple TV's 'small' degrades to normal",
   html.includes("localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'")
-  && /stored == GuideTextSize\.large\.rawValue \? \.large : \.normal/.test(swift)
   && /return saved = "large"/.test(roku));
 
 if (failures.length) {

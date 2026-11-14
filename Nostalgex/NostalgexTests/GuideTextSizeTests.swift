@@ -2,9 +2,10 @@ import XCTest
 import UIKit
 @testable import Nostalgex
 
-/// GUIDE TEXT SIZE: NORMAL is the guide as it always was, LARGE matches Roku's sizes,
-/// the choice survives a relaunch, and every LARGE line still fits the fixed row,
-/// header and number box, measured with the bundled DM Mono rather than estimated.
+/// GUIDE TEXT SIZE: three steps, SMALLER, DEFAULT and LARGER (the old LARGE, raw value
+/// "large" unchanged). The choice survives a relaunch, an unknown saved value is DEFAULT, and every
+/// line at every step still fits the fixed row, header and number box, measured with the bundled
+/// DM Mono rather than estimated.
 @MainActor
 final class GuideTextSizeTests: XCTestCase {
 
@@ -34,16 +35,36 @@ final class GuideTextSizeTests: XCTestCase {
 
     // MARK: Saved value
 
-    func testNothingSavedOrAnythingButLargeIsNormal() {
+    func testNothingSavedOrAnythingUnknownIsDefault() {
         XCTAssertEqual(GuideTextSize(stored: nil), .normal)
         XCTAssertEqual(GuideTextSize(stored: ""), .normal)
         XCTAssertEqual(GuideTextSize(stored: "normal"), .normal)
         XCTAssertEqual(GuideTextSize(stored: "huge"), .normal)
         XCTAssertEqual(GuideTextSize(stored: "LARGE"), .normal)
+        XCTAssertEqual(GuideTextSize(stored: "SMALL"), .normal)
+        XCTAssertEqual(GuideTextSize(stored: "smaller"), .normal)
         XCTAssertEqual(GuideTextSize(stored: "large"), .large)
+        XCTAssertEqual(GuideTextSize(stored: "small"), .small)
     }
 
-    func testFreshInstallIsNormal() {
+    /// The raw values are the contract with iCloud sync, stored prefs and the other platforms: "large" is the old
+    /// LARGE, "small" is new, and a platform that only knows normal and large reads "small" as normal.
+    func testRawValuesAndLabels() {
+        XCTAssertEqual(GuideTextSize.allCases, [.small, .normal, .large])
+        XCTAssertEqual(GuideTextSize.small.rawValue, "small")
+        XCTAssertEqual(GuideTextSize.normal.rawValue, "normal")
+        XCTAssertEqual(GuideTextSize.large.rawValue, "large")
+        XCTAssertEqual(GuideTextSize.allCases.map(\.label), ["SMALLER", "DEFAULT", "LARGER"])
+    }
+
+    /// What select does on the Settings row.
+    func testTheRowCyclesSmallerDefaultLargerAndRoundAgain() {
+        XCTAssertEqual(GuideTextSize.small.next, .normal)
+        XCTAssertEqual(GuideTextSize.normal.next, .large)
+        XCTAssertEqual(GuideTextSize.large.next, .small)
+    }
+
+    func testFreshInstallIsDefault() {
         UserDefaults.standard.removeObject(forKey: GuideTextSize.storageKey)
         XCTAssertEqual(makeState().guideTextSize, .normal)
     }
@@ -54,6 +75,11 @@ final class GuideTextSizeTests: XCTestCase {
         XCTAssertEqual(UserDefaults.standard.string(forKey: GuideTextSize.storageKey), "large")
         XCTAssertEqual(makeState().guideTextSize, .large, "a new AppState did not read LARGE back")
 
+        first.guideTextSize = .small
+        XCTAssertEqual(UserDefaults.standard.string(forKey: GuideTextSize.storageKey), "small")
+        XCTAssertEqual(makeState().guideTextSize, .small, "a new AppState did not read SMALLER back")
+        XCTAssertEqual(GuideTextSize.current, .small, "the bundle list and Now Playing read the saved step")
+
         first.guideTextSize = .normal
         XCTAssertEqual(UserDefaults.standard.string(forKey: GuideTextSize.storageKey), "normal")
         XCTAssertEqual(makeState().guideTextSize, .normal)
@@ -62,25 +88,52 @@ final class GuideTextSizeTests: XCTestCase {
     func testIsASyncedStringPreference() {
         XCTAssertTrue(PreferenceSync.syncedKeys.contains(GuideTextSize.storageKey))
         XCTAssertEqual(PreferenceSyncMerge.normalized("large", for: GuideTextSize.storageKey) as? String, "large")
+        XCTAssertEqual(PreferenceSyncMerge.normalized("small", for: GuideTextSize.storageKey) as? String, "small")
     }
 
     // MARK: Metrics
 
-    /// NORMAL row text is 22 pt (Chad 2026-11-10, an exception to the 25 pt floor for the guide's rows only); times,
-    /// heading and placeholder stay at the 25 pt floor.
+    /// DEFAULT row text is 20 pt and times, heading and placeholder 22 pt (Chad 2026-11-13, pulled back about 10% from
+    /// 22 and 25; an exception to the 25 pt floor for the guide only). The bundle list and Now Playing follow.
     func testNormalSizes() {
         let n = GuideTextSize.normal.metrics
-        XCTAssertEqual(n.title, 22)
-        XCTAssertEqual(n.timeLabel, NXType.caption)
-        XCTAssertEqual(n.channelHeading, NXType.caption)
-        XCTAssertEqual(n.number, 22)
-        XCTAssertEqual(n.numberWidth, 40)
-        XCTAssertEqual(n.name, 22)
-        XCTAssertEqual(n.placeholder, NXType.caption)
+        XCTAssertEqual(n.title, 20)
+        XCTAssertEqual(n.timeLabel, 22)
+        XCTAssertEqual(n.channelHeading, 22)
+        XCTAssertEqual(n.number, 20)
+        XCTAssertEqual(n.numberWidth, 36)
+        XCTAssertEqual(n.name, 20)
+        XCTAssertEqual(n.placeholder, 22)
+        XCTAssertEqual(n.packageRowText, 20)
+        XCTAssertEqual(n.packageHeading, 22)
+        XCTAssertEqual(n.panelText, 20)
+        XCTAssertEqual(n.panelTitle, NXType.body)
+        XCTAssertEqual(n.panelTag, 28)
     }
 
-    /// LARGE is one step up the same scale: body everywhere. (It no longer matches Roku's GuideText.brs LARGE.)
-    func testLargeIsOneStepUpTheScale() {
+    /// SMALLER is a visible step down from DEFAULT: 85% and 86% of it, 17 and 19 pt.
+    func testSmallIsAVisibleStepDownFromDefault() {
+        let s = GuideTextSize.small.metrics
+        XCTAssertEqual(s.title, 17)
+        XCTAssertEqual(s.timeLabel, 19)
+        XCTAssertEqual(s.channelHeading, 19)
+        XCTAssertEqual(s.number, 17)
+        XCTAssertEqual(s.numberWidth, 31)
+        XCTAssertEqual(s.name, 17)
+        XCTAssertEqual(s.placeholder, 19)
+        XCTAssertEqual(s.packageRowText, 17)
+        XCTAssertEqual(s.packageHeading, 19)
+        XCTAssertEqual(s.panelText, 17)
+        XCTAssertEqual(s.panelTitle, 25)
+        XCTAssertEqual(s.panelTag, 24)
+        let d = GuideTextSize.normal.metrics
+        XCTAssertLessThanOrEqual(s.title / d.title, 0.86, "SMALLER must not be a nudge")
+        XCTAssertLessThanOrEqual(s.timeLabel / d.timeLabel, 0.87)
+    }
+
+    /// LARGER is what LARGE always was: body everywhere in the grid (it no longer matches Roku's GuideText.brs
+    /// LARGE); the bundle list and Now Playing stay at 22 pt, as they were at LARGE.
+    func testLargerIsTodaysLarge() {
         let l = GuideTextSize.large.metrics
         XCTAssertEqual(l.title, NXType.body)
         XCTAssertEqual(l.timeLabel, NXType.body)
@@ -89,15 +142,37 @@ final class GuideTextSizeTests: XCTestCase {
         XCTAssertEqual(l.numberWidth, 54)
         XCTAssertEqual(l.name, NXType.body)
         XCTAssertEqual(l.placeholder, NXType.body)
+        XCTAssertEqual(l.packageRowText, 22)
+        XCTAssertEqual(l.packageHeading, NXType.caption)
+        XCTAssertEqual(l.panelText, 22)
+        XCTAssertEqual(l.panelTitle, NXType.body)
+        XCTAssertEqual(l.panelTag, 28)
     }
 
-    /// Header text and the placeholder are never below the 25 pt floor, and row text never below 22, at either size.
+    /// The guide's own floors, below the app's 25 pt one: row text and the bundle list and panel text never below
+    /// 17, header text, the placeholder and the BUNDLES heading never below 19, at every step.
     func testNoGuideTextIsBelowTheFloor() {
         for size in GuideTextSize.allCases {
             let m = size.metrics
-            for s in [m.title, m.number, m.name] { XCTAssertGreaterThanOrEqual(s, 22, "\(size) \(s) pt") }
-            for s in [m.timeLabel, m.channelHeading, m.placeholder] {
-                XCTAssertGreaterThanOrEqual(s, NXType.floor, "\(size) \(s) pt")
+            for s in [m.title, m.number, m.name, m.packageRowText, m.panelText] {
+                XCTAssertGreaterThanOrEqual(s, 17, "\(size) \(s) pt")
+            }
+            for s in [m.timeLabel, m.channelHeading, m.placeholder, m.packageHeading] {
+                XCTAssertGreaterThanOrEqual(s, 19, "\(size) \(s) pt")
+            }
+        }
+    }
+
+    /// The steps only ever grow: SMALLER < DEFAULT < LARGER on every size.
+    func testEachStepIsAtLeastAsBigAsTheOneBelow() {
+        let order = GuideTextSize.allCases.map(\.metrics)
+        for (a, b) in zip(order, order.dropFirst()) {
+            for (lo, hi) in [(a.title, b.title), (a.timeLabel, b.timeLabel), (a.channelHeading, b.channelHeading),
+                             (a.number, b.number), (a.numberWidth, b.numberWidth), (a.name, b.name),
+                             (a.placeholder, b.placeholder), (a.packageRowText, b.packageRowText),
+                             (a.packageHeading, b.packageHeading), (a.panelText, b.panelText),
+                             (a.panelTitle, b.panelTitle), (a.panelTag, b.panelTag)] {
+                XCTAssertLessThanOrEqual(lo, hi)
             }
         }
     }
@@ -105,6 +180,11 @@ final class GuideTextSizeTests: XCTestCase {
     func testLargeIsBiggerEverywhere() {
         let n = GuideTextSize.normal.metrics
         let l = GuideTextSize.large.metrics
+        let sm = GuideTextSize.small.metrics
+        for (big, small) in [(n.title, sm.title), (n.timeLabel, sm.timeLabel), (n.number, sm.number),
+                             (n.numberWidth, sm.numberWidth), (n.name, sm.name), (n.placeholder, sm.placeholder)] {
+            XCTAssertGreaterThan(big, small)
+        }
         for (big, small) in [(l.title, n.title), (l.timeLabel, n.timeLabel), (l.channelHeading, n.channelHeading),
                              (l.number, n.number), (l.numberWidth, n.numberWidth), (l.name, n.name),
                              (l.placeholder, n.placeholder)] {
@@ -122,7 +202,7 @@ final class GuideTextSizeTests: XCTestCase {
         (text as NSString).size(withAttributes: [.font: try font(size)]).width
     }
 
-    /// Every three-digit number is drawn inside its right-aligned box, at both sizes.
+    /// Every three-digit number is drawn inside its right-aligned box, at every step.
     func testThreeDigitChannelNumbersFitTheirBox() throws {
         for size in GuideTextSize.allCases {
             let m = size.metrics
