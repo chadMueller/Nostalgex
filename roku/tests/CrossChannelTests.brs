@@ -62,8 +62,6 @@ function NxRunCrossChannelTests() as Integer
     NxCheck(r, "pick: all busy, the one that overlaps least", NxPickCandidate([a, b, c], 0, allBusy, 1, invalid, false).ToStr(), "1")
     NxCheck(r, "pick: a tie takes the earlier", NxPickCandidate([a, a], 0, allBusy, 1, invalid, false).ToStr(), "0")
     NxCheck(r, "pick: the first part's slot on elsewhere, the second does not jump ahead", NxPickCandidate([p1, p2, o], 0, NxBusyOn("1"), 1, invalid, true).ToStr(), "2")
-    NxCheck(r, "pick: how long it runs from t decides (a 30 min day end)", NxPickCandidate([a, b], 0, NxBusyAt("a", 2000, 3000), 1, invalid, true, 0, 1800).ToStr(), "0")
-    NxCheck(r, "pick: the first starts part way in", NxPickCandidate([a, b], 0, NxBusyAt("a", 3000, 3600), 1, invalid, true, 1800, 0).ToStr(), "0")
     longQueue = []
     for i = 0 to 9
         longQueue.Push(NxCrossItem("x" + i.ToStr(), 60))
@@ -74,9 +72,9 @@ function NxRunCrossChannelTests() as Integer
     end for
     gatedBusy = NxOccupancy()
     NxOccupancyAdd(gatedBusy, 9, "a", 0, 3600, true)
-    NxCheck(r, "pick: a gated channel gives way to an ungated one", NxPickCandidate([a, b, c], 0, NxBusyUngated("a"), 1, invalid, true, 0, 0, true).ToStr(), "1")
-    NxCheck(r, "pick: a gated channel never gives way to another gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, 0, 0, true).ToStr(), "0")
-    NxCheck(r, "pick: an ungated channel gives way to a gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, 0, 0, false).ToStr(), "1")
+    NxCheck(r, "pick: a gated channel gives way to an ungated one", NxPickCandidate([a, b, c], 0, NxBusyUngated("a"), 1, invalid, true, true).ToStr(), "1")
+    NxCheck(r, "pick: a gated channel never gives way to another gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, true).ToStr(), "0")
+    NxCheck(r, "pick: an ungated channel gives way to a gated one", NxPickCandidate([a, b, c], 0, gatedBusy, 1, invalid, true, false).ToStr(), "1")
     NxCheck(r, "pick: looks at the first 8 only", NxPickCandidate(longQueue, 0, longBusy, 1, invalid, true).ToStr(), "-1")
 
     ' ── The channel order ───────────────────────────────────────────────────

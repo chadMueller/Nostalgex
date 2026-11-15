@@ -173,6 +173,15 @@ function NxMbMinutes(ticks as Dynamic) as Integer
     return NxFloorDouble(ticks / 600000000#)
 end function
 
+' RunTimeTicks (100 ns) in seconds with the fraction kept, or invalid when
+' there is none: the schedule's slot is this rounded up (NxSlotSeconds, #315),
+' where `duration` is floored to minutes.
+function NxMbRuntimeSec(ticks as Dynamic) as Dynamic
+    if not NxTruthy(ticks) or not NxIsNumber(ticks) then return invalid
+    if ticks <= 0 then return invalid
+    return ticks / 10000000#
+end function
+
 ' The first stream of a type in a source's MediaStreams, or invalid.
 function NxMbStream(source as Object, streamType as String) as Dynamic
     for each s in NxList(source.MediaStreams)
@@ -445,6 +454,7 @@ function NxMbMovieItem(jf as Object, isMusicVideoSection as Boolean, musicGenre 
         year: NxOr(jf.ProductionYear, ""),
         contentRating: NxOr(jf.OfficialRating, ""),
         duration: durationMin,
+        runtimeSec: NxMbRuntimeSec(jf.RunTimeTicks),
         ratingKey: jf.Id,
         partKey: mi.msid,
         container: mi.container,
@@ -492,6 +502,7 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         originallyAvailableAt: NxMbAirDate(ep, show),
         contentRating: NxOr(show.OfficialRating, NxOr(ep.OfficialRating, "")),
         duration: durationMin,
+        runtimeSec: NxMbRuntimeSec(ep.RunTimeTicks),
         ratingKey: ep.Id,
         partKey: mi.msid,
         container: mi.container,

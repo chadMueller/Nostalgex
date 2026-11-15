@@ -81,9 +81,15 @@ function NxRunLineupTests(vectorsPath as String) as Integer
         end for
         if nextStart& > 0 and nextStart& - c.dayStartSec <= 25 * 3600 then
             NxClearManifests()
+            ' Tomorrow starts at the next midnight, or when the programme running over it ends (#315).
+            blocks = NxScheduleGuide([{ id: 7, pool: small }], c.atSec)[0].blocks
+            tomorrowStart& = nextStart&
+            for each b in blocks
+                if b.startSec < nextStart& and b.endSec > tomorrowStart& then tomorrowStart& = b.endSec
+            end for
             starts = 0
-            for each b in NxScheduleGuide([{ id: 7, pool: small }], c.atSec)[0].blocks
-                if b.startSec = nextStart& then starts = starts + 1
+            for each b in blocks
+                if b.startSec = tomorrowStart& then starts = starts + 1
             end for
             NxCheck(r, name + " tomorrow from the next midnight", starts.ToStr(), "1")
         end if

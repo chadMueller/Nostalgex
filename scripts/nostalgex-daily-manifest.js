@@ -408,6 +408,24 @@
   }
 
   /**
+   * How long the schedule gives a programme, in seconds: the file's real runtime rounded up to
+   * a whole second, so the slot and the file end together and nothing is cut at a boundary
+   * (#315). The servers floor a runtime to whole minutes (`duration`), which left a file 0 to
+   * 59 s past its slot. An item with no real runtime (`exactDurationSeconds`: a snapshot read
+   * before one was kept) or one that disagrees with `duration` by a minute or more (a bad
+   * value) gets `duration` minutes, as every build up to 1.0.32 did. Mirrors
+   * PlexMediaItem.slotSeconds.
+   */
+  function slotSeconds(item) {
+    const minutes = (item.duration || 0) * 60;
+    const exact = item.exactDurationSeconds;
+    if (typeof exact === 'number' && Number.isFinite(exact) && exact >= 1 && Math.abs(exact - minutes) < 61) {
+      return Math.ceil(exact);
+    }
+    return minutes;
+  }
+
+  /**
    * Which of the first LOOKAHEAD programmes in `queue` airs at `t`: the first one no other
    * channel has on during its slot; failing that, -1 when `mustFit` (the caller has
    * something else to try), else the one that overlaps least (the earliest of those).
@@ -433,7 +451,7 @@
     return best >= 0 ? best : 0;
   }
 
-  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy, gated) {
+  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy, gated, runsOverUntil) {
     // As long as the local day, so a 25-hour day has no empty last hour and a 23-hour day
     // doesn't run an hour into tomorrow. Same end as DailyManifestScheduler.blocks passes in.
     const dayEndSec = dayStartSec + localDayLengthSec(dayStartSec);
@@ -462,7 +480,9 @@
       unplayedOrdered.push(unplayedOrdered.shift());
     }
     const blocks = [];
-    let t = dayStartSec;
+    // The day starts when the programme running over midnight from yesterday ends: it plays to its own end (#315),
+    // so nothing of today's may be on air under it. Undefined, or before midnight, is the start of the day.
+    let t = Math.max(dayStartSec, runsOverUntil || dayStartSec);
 
     // In the channel's order, except that a programme another channel has on in the same
     // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
@@ -470,10 +490,10 @@
     // waiting fits, the day goes on with the filler loop below, which holds the whole pool.
     const queue = unplayedOrdered.filter((item) => (item.duration || 0) > 0);
     while (queue.length && t < dayEndSec) {
-      const j = pickCandidate(queue, t, (i) => queue[i].duration * 60, occupancy, channelId, null, true, gated);
+      const j = pickCandidate(queue, t, (i) => slotSeconds(queue[i]), occupancy, channelId, null, true, gated);
       if (j < 0) break;
       const item = queue.splice(j, 1)[0];
-      const dur = item.duration * 60;
+      const dur = slotSeconds(item);
       blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur });
       t += dur;
     }
@@ -486,12 +506,10 @@
 
       let elapsed = 0;
       let cycleIndex = 0;
-      let offsetInItem = offsetSec;
       for (let i = 0; i < orderedFull.length; i++) {
         const d = (orderedFull[i].duration || 0) * 60;
         if (elapsed + d > offsetSec) {
           cycleIndex = i;
-          offsetInItem = offsetSec - elapsed;
           break;
         }
         elapsed += d;
@@ -502,25 +520,21 @@
         const lastPlayed = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
         if (lastPlayed && orderedFull[cycleIndex].ratingKey === lastPlayed) {
           cycleIndex = (cycleIndex + 1) % orderedFull.length;
-          offsetInItem = 0;
         }
       }
 
       // The loop as a queue from the cycle's start: what airs goes to the back, so with
-      // nothing on elsewhere this is the cycle in order. The first programme starts part
-      // way in (offsetInItem) only if it airs first; one picked ahead of it starts at 0.
+      // nothing on elsewhere this is the cycle in order. Every programme airs whole, from its
+      // start to its own end, including the one that runs past midnight and the first of the
+      // day (#315): the day's cut and a part-way start were cut files short.
       const loop = orderedFull.slice(cycleIndex).concat(orderedFull.slice(0, cycleIndex))
         .filter((item) => (item.duration || 0) > 0);
-      let first = true;
       while (t < dayEndSec && loop.length) {
-        const remainingDay = dayEndSec - t;
-        const playFor = (i) => Math.min(loop[i].duration * 60 - (first && i === 0 ? offsetInItem : 0), remainingDay);
         const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
-        const j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated);
-        const playSec = playFor(j);
+        const j = pickCandidate(loop, t, (i) => slotSeconds(loop[i]), occupancy, channelId, lastKey, false, gated);
+        const playSec = slotSeconds(loop[j]);
         const item = loop.splice(j, 1)[0];
         loop.push(item);
-        first = false;
         blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec });
         t += playSec;
       }
@@ -558,7 +572,7 @@
       const prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey);
       const packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, new Set(prev.map((b) => b.ratingKey)),
                              Boolean(extra.channel.isPremiereChannel), prev.length ? prev[prev.length - 1].ratingKey : null,
-                             occupancyMemo.occupancy, isGated(extra.channel));
+                             occupancyMemo.occupancy, isGated(extra.channel), runsOverUntil(prev));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: extra.channel.id, dayKey,
         poolFingerprint: poolFingerprint(extra.pool), blocks: packed });
       return new Map([[extra.channel.id, packed]]);
@@ -593,7 +607,7 @@
       const aired = new Set(prev.map((b) => b.ratingKey));
       const last = prev.length ? prev[prev.length - 1].ratingKey : null;
       const packed = packDay(pool, dayStartSec, dayNumber, channel.id, aired,
-                             Boolean(channel.isPremiereChannel), last, occupancy, isGated(channel));
+                             Boolean(channel.isPremiereChannel), last, occupancy, isGated(channel), runsOverUntil(prev));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: channel.id, dayKey, poolFingerprint: fp, blocks: packed });
       packedBy.set(channel.id, packed);
       if (entry !== extra) {
@@ -605,6 +619,13 @@
     // memo goes stale the moment one of them is packed again (lineupGeneration).
     occupancyMemo = { key: memoKey, generation: lineupGeneration, occupancy };
     return packedBy;
+  }
+
+  /** When yesterday's last programme ends (it may run past midnight), or undefined with none stored (#315). */
+  function runsOverUntil(prev) {
+    let end;
+    for (const b of prev) if (end === undefined || b.endSec > end) end = b.endSec;
+    return end;
   }
 
   // The lineup's day as packLineupDay last saw it, for channels off the guide only.
@@ -732,6 +753,14 @@
     const result = [];
     let cursor = startOfLocalDayMs(fromSec * 1000);
     const endDay = startOfLocalDayMs(toSec * 1000);
+    // The programme running over midnight from yesterday is on air until it ends, and today's day starts after it
+    // (packDay's runsOverUntil): without it the guide would show today's first programme under a file that is still
+    // playing its last minutes. Yesterday's stored day only; one that was never packed has no such programme (#315).
+    const yesterday = storedBlocks(serverKey, channel.id, previousLocalDayKey(fromSec * 1000)).filter((b) => b.endSec > fromSec);
+    if (yesterday.length) {
+      const validPool = pool.filter((i) => i && (i.duration || 0) > 0);
+      for (const b of resolveBlocks(yesterday, validPool)) if (b.endSec > fromSec && b.startSec < toSec) result.push(b);
+    }
     while (cursor <= endDay) {
       for (const b of getManifestBlocks(channel, pool, cursor + 3600000, serverKey)) {
         if (b.endSec > fromSec && b.startSec < toSec) result.push(b);
@@ -792,7 +821,7 @@
   function liveElapsedSeconds(schedule, nowSec) {
     const np = schedule && schedule.nowPlaying;
     if (!np) return null;
-    const total = Math.max(1, (np.item.duration || 0) * 60);
+    const total = Math.max(1, slotSeconds(np.item));
     return Math.max(0, Math.min(total, Math.trunc(nowSec - np.startSec)));
   }
 
@@ -900,6 +929,7 @@
   }
 
   const api = {
+    slotSeconds,
     getManifestBlocks,
     setLineup,
     blocksInRange,

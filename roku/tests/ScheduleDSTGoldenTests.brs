@@ -39,17 +39,41 @@ function NxRunScheduleDSTGoldenTests(goldenPath as String, zonesPath as String) 
                 NxCheck(r, "days " + name + " at " + t.ToStr(), got, want)
             end for
 
+            ' A 25-hour day has no empty last hour, and a 23-hour day is covered to its end. The last programme plays
+            ' to its own end, so it may run past midnight by less than its own length (#315); the programme before it
+            ' ends before midnight, and no block is cut short.
             NxClearManifests()
             blocks = NxManifestBlocks({ id: 201 }, small, d.at[2])
-            got = "empty"
-            if blocks.Count() > 0 then
-                holes = 0
-                for k = 1 to blocks.Count() - 1
+            lastEnd& = 0
+            holes = 0
+            cut = 0
+            for k = 0 to blocks.Count() - 1
+                if k > 0 then
                     if blocks[k].startSec <> blocks[k - 1].endSec then holes = holes + 1
-                end for
-                got = blocks[0].startSec.ToStr() + "-" + blocks.Peek().endSec.ToStr() + ", " + holes.ToStr() + " holes or overlaps"
+                end if
+                if blocks[k].endSec - blocks[k].startSec <> NxSlotSeconds(blocks[k].item) then cut = cut + 1
+            end for
+            starts = "empty"
+            covered = "no"
+            overrun = "no"
+            beforeLast = "no"
+            if blocks.Count() > 0 then
+                starts = blocks[0].startSec.ToStr()
+                lastEnd& = blocks.Peek().endSec
+                if lastEnd& >= d.nextStart then covered = "yes"
+                if lastEnd& - d.nextStart < NxSlotSeconds(blocks.Peek().item) then overrun = "yes"
+                if blocks.Count() = 1 then
+                    beforeLast = "yes"
+                else if blocks[blocks.Count() - 2].endSec < d.nextStart then
+                    beforeLast = "yes"
+                end if
             end if
-            NxCheck(r, "fill " + name, got, d.start.ToStr() + "-" + d.nextStart.ToStr() + ", 0 holes or overlaps")
+            NxCheck(r, "fill " + name + " starts", starts, d.start.ToStr())
+            NxCheck(r, "fill " + name + " covered", covered, "yes")
+            NxCheck(r, "fill " + name + " runs less than a programme past midnight", overrun, "yes")
+            NxCheck(r, "fill " + name + " only the last runs over", beforeLast, "yes")
+            NxCheck(r, "fill " + name + " no block cut short", cut.ToStr(), "0")
+            NxCheck(r, "fill " + name + " holes or overlaps", holes.ToStr(), "0")
         end if
     end for
 

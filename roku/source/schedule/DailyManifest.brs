@@ -116,6 +116,28 @@ function NxDuration(item as Object) as Integer
     return d
 end function
 
+' How long the schedule gives a programme, in seconds: the file's real runtime
+' (`runtimeSec`, kept by the loaders) rounded up to a whole second, so the slot
+' and the file end together and nothing is cut at a boundary (#315). The
+' servers floor a runtime to whole minutes (`duration`), which left a file 0 to
+' 59 s past its slot. An item with no real runtime (a saved library read before
+' one was kept) or one that disagrees with `duration` by a minute or more (a bad
+' value) gets `duration` minutes, as every build up to 1.0.32 did. Mirrors
+' PlexMediaItem.slotSeconds.
+function NxSlotSeconds(item as Object) as Integer
+    minutes = NxDuration(item) * 60
+    exact = item.runtimeSec
+    if NxIsNumber(exact) then
+        e# = exact
+        if e# >= 1 and Abs(e# - minutes) < 61 then
+            whole% = Int(e#)
+            if whole% < e# then whole% = whole% + 1
+            return whole%
+        end if
+    end if
+    return minutes
+end function
+
 ' ── Interleave: shows in shuffled groups, at most two episodes in a row ─────
 
 function NxInterleaveByShow(items as Object, seed as Integer, dayNumber as Integer) as Object
@@ -417,14 +439,13 @@ end function
 ' Which of the first NxLookahead() programmes in `queue` airs at t: the first
 ' one no other channel has on during its slot; failing that, -1 when mustFit
 ' (the caller has something else to try), else the one that overlaps least (the
-' earliest of those). How long candidate i runs from t is its length, less
-' firstOffsetSec for the first, and at most capSec when that is above 0 (the
-' day's end). avoidKey (the title that just played here) is passed over while
+' earliest of those). How long candidate i runs from t is its slot
+' (NxSlotSeconds), whole, even past the day's end (#315). avoidKey (the title that just played here) is passed over while
 ' there is anything else, and a later part of a story never goes ahead of an
 ' earlier one waiting before it. With no occupancy, or nothing on elsewhere,
 ' this is always 0: the channel's own order. Mirrors
 ' DailyManifestScheduler.pickCandidate.
-function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, firstOffsetSec = 0 as Integer, capSec = 0 as Integer, skipGated = false as Boolean) as Integer
+function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, skipGated = false as Boolean) as Integer
     n = queue.Count()
     if n > NxLookahead() then n = NxLookahead()
     best = -1
@@ -441,10 +462,7 @@ function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, ch
         if not skip then
             ov = 0
             if occupancy <> invalid then
-                play = NxDuration(item) * 60
-                if i = 0 then play = play - firstOffsetSec
-                if capSec > 0 and play > capSec then play = capSec
-                ov = NxOccupancyOverlap(occupancy, item.ratingKey, t, t + play, channelId, skipGated)
+                ov = NxOccupancyOverlap(occupancy, item.ratingKey, t, t + NxSlotSeconds(item), channelId, skipGated)
             end if
             if ov = 0 then return i
             if best < 0 or ov < bestOverlap then
@@ -470,7 +488,7 @@ end function
 ' every pick is the first, as before. gated: a channel whose pool changes with
 ' the hour packs with the others' days in view but not other gated ones'.
 ' Mirrors DailyManifestScheduler.packDay.
-function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic, gated = false as Boolean) as Object
+function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic, gated = false as Boolean, runsOverUntil = invalid as Dynamic) as Object
     totalPoolSec = 0&
     for each item in pool
         totalPoolSec = totalPoolSec + NxDuration(item) * 60
@@ -493,7 +511,13 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
     end if
 
     blocks = []
+    ' The day starts when the programme running over midnight from yesterday
+    ' ends: it plays to its own end (#315), so nothing of today's may be on air
+    ' under it. invalid, or before midnight, is the start of the day.
     t = dayStartSec
+    if NxIsNumber(runsOverUntil) then
+        if runsOverUntil > t then t = runsOverUntil
+    end if
     ' In the channel's order, except that a programme another channel has on
     ' in the same slot waits for a later one (NxPickCandidate). It stays in
     ' the queue, so it still airs today if the day has room, and counts as
@@ -504,11 +528,11 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         if NxDuration(item) > 0 then queue.Push(item)
     end for
     while queue.Count() > 0 and t < dayEndSec
-        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true, 0, 0, gated)
+        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true, gated)
         if j < 0 then exit while
         item = queue[j]
         queue.Delete(j)
-        dur = NxDuration(item) * 60
+        dur = NxSlotSeconds(item)
         blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur })
         t = t + dur
     end while
@@ -523,12 +547,10 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
 
         elapsed = 0&
         cycleIndex = 0
-        offsetInItem = offsetSec
         for i = 0 to orderedFull.Count() - 1
             d = NxDuration(orderedFull[i]) * 60
             if elapsed + d > offsetSec then
                 cycleIndex = i
-                offsetInItem = offsetSec - elapsed
                 exit for
             end if
             elapsed = elapsed + d
@@ -541,15 +563,15 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
             if lastPlayed <> invalid then
                 if orderedFull[cycleIndex].ratingKey = lastPlayed then
                     cycleIndex = (cycleIndex + 1) mod orderedFull.Count()
-                    offsetInItem = 0
                 end if
             end if
         end if
 
         ' The loop as a queue from the cycle's start: what airs goes to the
-        ' back, so with nothing on elsewhere this is the cycle in order. The
-        ' first programme starts part way in (offsetInItem) only if it airs
-        ' first; one picked ahead of it starts at 0.
+        ' back, so with nothing on elsewhere this is the cycle in order. Every
+        ' programme airs whole, from its start to its own end, including the one
+        ' that runs past midnight and the first of the day (#315): the day's cut
+        ' and a part-way start were cut files short.
         cycle = []
         for i = cycleIndex to orderedFull.Count() - 1
             if NxDuration(orderedFull[i]) > 0 then cycle.Push(orderedFull[i])
@@ -557,21 +579,14 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         for i = 0 to cycleIndex - 1
             if NxDuration(orderedFull[i]) > 0 then cycle.Push(orderedFull[i])
         end for
-        first = true
         while t < dayEndSec and cycle.Count() > 0
-            remainingDay% = dayEndSec - t
-            offFirst% = 0
-            if first then offFirst% = offsetInItem
             lastKey = yesterdayLastRatingKey
             if blocks.Count() > 0 then lastKey = blocks.Peek().ratingKey
-            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, offFirst%, remainingDay%, gated)
+            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, gated)
             item = cycle[j]
-            playSec = NxDuration(item) * 60
-            if j = 0 and first then playSec = playSec - offFirst%
-            if playSec > remainingDay% then playSec = remainingDay%
+            playSec = NxSlotSeconds(item)
             cycle.Delete(j)
             cycle.Push(item)
-            first = false
             blocks.Push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec })
             t = t + playSec
         end while

@@ -32,11 +32,12 @@ end function
 ' 7: and forcedSubs, a file's forced text subtitle tracks (NxMbForcedSubs).
 ' 8: a Jellyfin or Emby item's bitrate is in kbps, not bits per second (NxMbBitrateKbps).
 ' 9: and fullSubs, a file's other text subtitle tracks, one per language (NxMbFullSubs).
+' 10: and runtimeSec, the file's real runtime in seconds, which a programme's slot is (NxSlotSeconds, #315).
 ' Plex items gained bitrate (STREAM QUALITY's remote ceiling) with no bump:
 ' one saved before has none, which direct plays as it did, until its server
 ' is next scanned, as a save over a day old always is (NxSnapshotFresh).
 function NxSnapshotFormat() as Integer
-    return 9
+    return 10
 end function
 
 ' Items per chunk file: about 1 MB of JSON, so a read or write never holds

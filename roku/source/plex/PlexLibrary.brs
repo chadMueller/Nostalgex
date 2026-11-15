@@ -314,6 +314,7 @@ function NxPlexEpisodeItem(ep as Object, show as Object, showGenres as Object, s
         originallyAvailableAt: NxOr(ep.originallyAvailableAt, NxOr(show.originallyAvailableAt, invalid)),
         contentRating: NxOr(show.contentRating, NxOr(ep.contentRating, "")),
         duration: durationMin,
+        runtimeSec: NxPlexRuntimeSec(ep.duration),
         ratingKey: ep.ratingKey,
         partKey: partKey,
         container: container,
@@ -400,6 +401,7 @@ function NxPlexMovieItem(item as Object, section as Object, isMusicVideoSection 
         year: NxOr(item.year, ""),
         contentRating: NxOr(item.contentRating, ""),
         duration: durationMin,
+        runtimeSec: NxPlexRuntimeSec(item.duration),
         ratingKey: item.ratingKey,
         partKey: partKey,
         container: container,
@@ -432,6 +434,15 @@ function NxPlexMinutes(ms as Dynamic) as Integer
     if not NxTruthy(ms) or not NxIsNumber(ms) then return 0
     if ms <= 0 then return 0
     return NxFloorDouble(ms / 60000#)
+end function
+
+' A runtime in whole milliseconds as Plex gives it, in seconds with the
+' milliseconds kept, or invalid when there is none: the schedule's slot is this
+' rounded up (NxSlotSeconds, #315), where `duration` is floored to minutes.
+function NxPlexRuntimeSec(ms as Dynamic) as Dynamic
+    if not NxTruthy(ms) or not NxIsNumber(ms) then return invalid
+    if ms <= 0 then return invalid
+    return ms / 1000#
 end function
 
 function NxTags(list as Dynamic) as Object

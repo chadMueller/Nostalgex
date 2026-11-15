@@ -75,7 +75,10 @@ function NxChannelSchedule(blocks as Object, t as LongInteger, window = invalid 
     entries = []
     nowIdx = -1
     for each b in blocks
-        if b.endSec > window.fromSec and b.startSec < window.toSec and b.startSec >= window.daysFrom and b.startSec < window.daysTo then
+        ' A block belongs to the day it starts in, except the programme running over midnight from
+        ' yesterday, which is on air until it ends (NxRunOverBlocks, #315): it starts before the
+        ' first day and still ends after the window's start.
+        if b.endSec > window.fromSec and b.startSec < window.toSec and b.startSec < window.daysTo then
             if nowIdx < 0 and b.startSec <= t and b.endSec > t then nowIdx = entries.Count()
             entries.Push(b)
         end if
@@ -187,6 +190,15 @@ function NxFindConflict(channels as Object, idx as Integer, ratingKey as Dynamic
     return -1
 end function
 
+' How far behind the guide the player may fall at a natural end before the
+' next programme joins where the clock is: 10 s, from the Apple TV's sweep of
+' the catch-up (TailLossMeasureTests): about 11 s of a file's opening skipped
+' every fifth programme, and the headline behind the guide 2.7% of the time
+' (60 s: 10.8%; never: 31.6% and growing).
+function NxNaturalEndCatchUpSec() as Integer
+    return 10
+end function
+
 ' What channel idx plays when the programme prevKey was playing ends at t,
 ' and from where (advanceToNextItem): what is on now, if the schedule has
 ' moved off prevKey, else the one after it. Never the title another channel
@@ -219,6 +231,16 @@ function NxAdvancePick(channels as Object, idx as Integer, prevKey as Dynamic, t
     if pick = invalid then return invalid
     seek& = 0
     if moved and not natural then seek& = s.elapsed
+    ' A file plays to its own end (#315), so the next one starts at 0 as the
+    ' guide says. The next file takes a second or two to load, which the clock
+    ' keeps counting, so the player falls behind the guide a little at every
+    ' boundary: once the guide is NxNaturalEndCatchUpSec() or more into the
+    ' programme this starts, the player joins it where the clock is instead (its
+    ' opening seconds go, never the end of anything). Mirrors
+    ' AppState.naturalEndCatchUpSeconds.
+    if moved and natural and nowB <> invalid then
+        if s.elapsed >= NxNaturalEndCatchUpSec() then seek& = s.elapsed
+    end if
     if NxFindConflict(channels, idx, pick.ratingKey, t) >= 0 then
         k = NxToStr(pick.ratingKey)
         for i = 0 to s.entries.Count() - 1

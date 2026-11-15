@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Roku: a file plays to its end, the Apple TV's play-to-end schedule, 315)
+
+**State.** Branch `roku/315-play-to-end`. Not merged, not in a build, not pushed. A separate branch from the 1.0.13 line on purpose; the candidate v10 takes it with the rest.
+
+**Why.** Chad: "the file should play till the end always." The Apple TV's `appletv/315-play-to-end` (golden `scripts/schedule-parity-golden.json` at `b282b946`) gives each programme its real runtime as its slot, so a 4:11 video plays 4:11 and the next one starts as it ends, not at the rounded-up minute. The Roku followed the old rounding (whole minutes), so a file ended before its slot or was cut by the next.
+
+**Changed (a port of the Swift, nothing improved).**
+- `NxSlotSeconds` (`source/schedule/DailyManifest.brs`): the slot is the real runtime in seconds rounded up, and the minutes the engine always had when the runtime is absent or differs from them by 61 s or more. The loaders keep it: `runtimeSec` on Plex items (`NxPlexRuntimeSec`) and on Jellyfin and Emby items (`NxMbRuntimeSec`, ticks over 10,000,000); the saved library format is 10.
+- `NxPackDay`: the day starts after a programme that ran over midnight (`runsOverUntil`), the filler loop plays whole programmes (no clip at midnight, no cycle cap), and the guide window includes yesterday's run-over block (`NxRunOverBlocks`, `NxChannelSchedule`).
+- `NxNaturalEndCatchUpSec` is 10: a programme that ended on its own and the next one is already 10 s or more in, the player seeks to where the schedule is (the Apple TV's `naturalEndCatchUpSeconds`). The filler cycle offset and the promotion offset stay in minutes, as in Swift.
+- `scripts/nostalgex-daily-manifest.js` (the JS engine) takes the same rules so the vectors the Roku tests read are generated from it; the golden file is the Apple TV's.
+
+**Checks.** The golden's cases (with the exact-seconds field) pass in `ScheduleParityGoldenTests`; the DST, lineup, cross-channel and advance suites and the new `ScheduleTests` cases pass. The web tuner's smoke against the same golden fails until its loaders pass exact seconds (the web agent's half; this branch carries the JS hunk, which overlaps theirs).
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.

@@ -28,10 +28,17 @@ function NxScheduleGuide(ordered as Object, nowSec as LongInteger, todayOnly = f
     ws = NxWatershedSet()
     out = []
     for each ch in ordered
-        today = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, day.hour, ws), nowSec, NxPoolMemo(ch, day.hour, ws))
+        todayPool = NxTimeFilteredPool(ch, ch.pool, day.hour, ws)
+        todayMemo = NxPoolMemo(ch, day.hour, ws)
+        today = NxManifestBlocks(ch, todayPool, nowSec, todayMemo)
+        ' What runs over midnight from yesterday is on air until it ends (#315).
+        runover = NxRunOverBlocks(ch, todayPool, nowSec, todayMemo)
         tomorrow = []
         if not todayOnly then tomorrow = NxManifestBlocks(ch, NxTimeFilteredPool(ch, ch.pool, tomorrowHour, ws), tomorrowAt&, NxPoolMemo(ch, tomorrowHour, ws))
         blocks = []
+        for each b in runover
+            blocks.Push(NxGuideBlock(b))
+        end for
         for each b in today
             blocks.Push(NxGuideBlock(b))
         end for
@@ -104,7 +111,7 @@ function NxGuideBlock(b as Object) as Object
         summary: NxToStr(it.summary), year: NxToStr(it.year), partKey: it.partKey,
         container: it.container, videoCodec: it.videoCodec, audioCodec: it.audioCodec,
         videoProfile: it.videoProfile, audioChannels: it.audioChannels, bitrate: it.bitrate,
-        audioTracks: it.audioTracks, forcedSubs: it.forcedSubs, fullSubs: it.fullSubs, duration: it.duration,
+        audioTracks: it.audioTracks, forcedSubs: it.forcedSubs, fullSubs: it.fullSubs, duration: it.duration, runtimeSec: it.runtimeSec,
         videoWidth: it.videoWidth, videoHeight: it.videoHeight,
         serverIndex: it.serverIndex, contentRating: NxToStr(it.contentRating), rating: 0,
         type: NxToStr(it.type)

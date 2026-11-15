@@ -40,7 +40,7 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
         NxCheck(r, "requests", gotRequests.Join(" | "), NxList(v.requests).Join(" | "))
         NxCheck(r, "item count", gotItems.Count().ToStr(), NxList(v.items).Count().ToStr())
         ' Port-only fields: none reaches the filter or schedule.
-        extras = { serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
+        extras = { runtimeSec: true, serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
         n = NxMinInt(gotItems.Count(), NxList(v.items).Count())
         several = 0
         for i = 0 to n - 1

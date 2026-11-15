@@ -21,8 +21,12 @@ function NxRunAdvanceTests() as Integer
 
     ' NxAdvancePick, the Apple TV's next pick. Channel 5 airs a, b, c.
     chans = [{ id: 5, blocks: blocks }]
-    ' a ran 25 s over: b airs now, and starts from its beginning.
-    NxCheck(r, "ran over, what airs now", NxAdvancePickLine(chans, 0, "a", 1685&, true), "b@0")
+    ' a ran 25 s over: b airs now, and the guide is 25 s into it, past the 10 s catch-up (#315), so
+    ' the player joins b where the clock is.
+    NxCheck(r, "ran over, what airs now", NxAdvancePickLine(chans, 0, "a", 1685&, true), "b@25")
+    NxCheck(r, "ran over by 9 s, b from its beginning", NxAdvancePickLine(chans, 0, "a", 1669&, true), "b@0")
+    NxCheck(r, "ran over by 10 s, b where the clock is", NxAdvancePickLine(chans, 0, "a", 1670&, true), "b@10")
+    NxCheck(r, "the catch-up is 10 s", NxToStr(NxNaturalEndCatchUpSec()), "10")
     ' b ended 20 s early: the schedule hasn't moved, so the one after it.
     NxCheck(r, "ended early, the one after", NxAdvancePickLine(chans, 0, "b", 2300&, true), "c@0")
     NxCheck(r, "ended on time", NxAdvancePickLine(chans, 0, "a", 1660&, true), "b@0")
@@ -92,17 +96,18 @@ function NxRunAdvanceTests() as Integer
     NxCheck(r, "midnight: UTC midnight is 7 PM in New York, not kept", NxKeepPlayingPastMidnight(started, mid& + 15&).ToStr(), "false")
     NxCheck(r, "midnight: New York's own midnight, kept", NxKeepPlayingPastMidnight({ ratingKey: "t", startSec: mid& + 5& * 3600& - 600&, endSec: mid& + 5& * 3600& + 3600& }, mid& + 5& * 3600& + 15&).ToStr(), "true")
     g.nxTzOffsetSec = 0
-    ' The tail ends on its own at 01:05. The new day's first airing has been on
-    ' 65 min, so it airs from now for its own length, not from 00:00.
+    ' A schedule that still starts the new day at 00:00 under a tail (a saved guide from before #315): the
+    ' tail ends on its own at 01:05, the new day's first airing has been on 65 min, so the player joins it
+    ' where the clock is (the catch-up, never a restart at 0 under a guide that moved on).
     tonight = [{ id: 5, blocks: [first, second] }]
-    NxCheck(r, "midnight: after the tail, f from its start", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, true), "f@0")
-    NxCheck(r, "midnight: f airs from now for its 95 min", NxAdvanceBlockLine(tonight, 0, "t", mid& + 3900&, true), (mid& + 3900&).ToStr() + "-" + (mid& + 3900& + 5700&).ToStr())
+    NxCheck(r, "midnight: after the tail, f where the clock is", NxAdvancePickLine(tonight, 0, "t", mid& + 3900&, true), "f@3900")
+    NxCheck(r, "midnight: f keeps the schedule's own slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 3900&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
     NxCheck(r, "midnight: the schedule's own f is not changed", first.startSec.ToStr() + "-" + first.endSec.ToStr(), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
     ' The shift starts a minute under the overrun cap (240 s): a tail runs up to
     ' 59 s over on its own and keeps the next slot.
     NxCheck(r, "midnight: 59 s in (a tail's own overrun), f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 59&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
     NxCheck(r, "midnight: 240 s in, f keeps its slot", NxAdvanceBlockLine(tonight, 0, "t", mid& + 240&, true), mid&.ToStr() + "-" + (mid& + 5700&).ToStr())
-    NxCheck(r, "midnight: 241 s in, f airs from now", NxAdvanceBlockLine(tonight, 0, "t", mid& + 241&, true), (mid& + 241&).ToStr() + "-" + (mid& + 241& + 5700&).ToStr())
+    NxCheck(r, "midnight: 241 s in, f joins where the clock is", NxAdvancePickLine(tonight, 0, "t", mid& + 241&, true), "f@241")
     ' The copy keeps the slot's start, so a guide rebuilt while it airs finds
     ' the schedule's f and takes it for the same airing, not a new one to retune to.
     p = NxAdvancePick(tonight, 0, "t", mid& + 3900&, true)
