@@ -10972,7 +10972,7 @@
   }
   function stopWaitingForScan() { if (scanWatch) scanWatch.watch.stopWaiting(); }
   /** The signal the scan's requests carry, or undefined when nothing is watching. */
-  function scanSignal() { return scanWatch ? scanWatch.controller.signal : undefined; }
+  function scanSignal() { return scanWatch ? scanWatch.controller.signal : (readAbort ? readAbort.signal : undefined); }
   function scanIsAbandoned() { return !!(scanWatch && scanWatch.watch.abandoned); }
   /** A server answered something: the scan is moving, however slowly. */
   function noteScanAnswer() { if (scanWatch) scanWatch.answers++; }
@@ -11311,7 +11311,7 @@
   }
 
   async function repopulateChannelsFromLibrary(allItems, options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
     const buildAll = options.buildAllChannels ?? LL.isFirstLibraryLoad();
     const poolIDs = LL.staticChannelIDsForPoolBuild({
       buildAll,
@@ -11345,6 +11345,7 @@
       }
     }
 
+    if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
     applyBundleFilter();
     CHANNELS.forEach(ch => {
       if (ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)) {
@@ -11369,7 +11370,7 @@
     return MB.itemsWithDisplayMetadata(allItems);
   }
 
-  function startDeferredMusicEnrichmentIfNeeded(allItems) {
+  function startDeferredMusicEnrichmentIfNeeded(allItems, options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
     const MB = globalThis.NostalgexMusicBrainz;
     if (!MB || !LL.isMusicBundleEnabled(enabledBundleIDs)) return;
@@ -11380,6 +11381,9 @@
     console.log(`[Nostalgex] Deferring MusicBrainz for ${mvCount} music videos until after tune-in`);
     MB.loadDiskCache();
     MB.enrichMusicVideos([...allItems], () => {}).then(() => {
+      // The read that started this was overtaken while the lookups ran (a sign-out, a server change, a newer read): the library and the
+      // channel on screen are not its any more, and it must not retune them.
+      if (options.isCurrent && !options.isCurrent()) return;
       allItemsCache = MB.itemsWithDisplayMetadata(allItemsCache);
       allChannelsUnfiltered.forEach(ch => {
         if (!ch.itemPool?.length) return;
@@ -11407,7 +11411,7 @@
       let working = applyMusicCacheToLibrary(allItems);
       await repopulateChannelsFromLibrary(working, options);
       if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
-      if (!options.background) startDeferredMusicEnrichmentIfNeeded(working);
+      if (!options.background) startDeferredMusicEnrichmentIfNeeded(working, options);
       // Not awaited: the guide is built and tuned before any of this lands.
       startLibraryExtras(working);
       return working;
@@ -11886,10 +11890,29 @@
   // and a read that no longer holds it stops before it saves the library or builds the guide (`options.isCurrent`, checked where the library is
   // saved and where the channels are built) and ends without a word, whatever it was in the middle of.
   let libraryLoadGen = 0;
+  let readAbort = null;   // the running read's own controller: a background read has no scan watch, and still has to stop asking its server
   function supersededLoad() { const e = new Error('library load superseded'); e.nxSuperseded = true; return e; }
+  /**
+   * The loader a read writes its progress to. A read that is no longer current (a sign-out, a server change or a newer read moved the
+   * number on) writes to a scratch object and moves nothing on screen, so the count the new read's block shows is never the old read's.
+   */
+  function loadUIFor(options) {
+    const real = globalThis.NostalgexLibraryLoad;
+    if (!options || !options.isCurrent) return real;
+    const MOVES_THE_SCREEN = new Set(['setPhase', 'pulsePhase', 'show', 'hide', 'refreshStepRail', 'render']);
+    return new Proxy(real, {
+      get(target, key) {
+        if (key === 'state') return options.isCurrent() ? target.state : {};
+        const value = target[key];
+        if (typeof value !== 'function' || !MOVES_THE_SCREEN.has(key)) return value;
+        return (...args) => (options.isCurrent() ? value.apply(target, args) : (key === 'pulsePhase' ? Promise.resolve() : undefined));
+      },
+    });
+  }
   function supersedeLibraryLoads() {
     libraryLoadGen++;
-    if (scanWatch) scanWatch.controller.abort();   // a foreground read stops asking its server
+    if (readAbort) readAbort.abort();             // any read, background included, stops asking its server
+    if (scanWatch) scanWatch.controller.abort();
     const LL = globalThis.NostalgexLibraryLoad;
     if (LL) { LL.hide(); LL.abort(); }
   }
@@ -11897,6 +11920,8 @@
     const LL = globalThis.NostalgexLibraryLoad;
     const gen = ++libraryLoadGen;
     const isCurrent = () => gen === libraryLoadGen;
+    if (readAbort) readAbort.abort();   // the read this one replaces
+    readAbort = new AbortController();
     const opts = { ...options, isCurrent };
     LL.begin({ cause: options.cause, background: options.background === true });
     let done = false;
@@ -11920,7 +11945,7 @@
     try { return await fetchJellyfinLibraryScan(options); } finally { endScanWatch(); }
   }
   async function fetchJellyfinLibraryScan(options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
@@ -12767,7 +12792,7 @@
   }
 
   async function fetchPlexLibraryFromServer(options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());

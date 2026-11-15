@@ -14,7 +14,10 @@
  *   5. A read cut short (a library that failed) or one that failed says nothing.
  *   6. A sign-out during an in-guide load, and a server change during one: the old read saves nothing, builds nothing and says nothing.
  *      Negative control: the same page with the guard taken out saves the old library after the sign-out.
- *   7. The words, as pure functions: OF only with a total, TITLE for one, no em dash.
+ *   7. An old read is stopped and quiet: a sign-out aborts a BACKGROUND read's requests too (the server sees them close); a read that is no
+ *      longer current writes nothing to the shared progress counters (the new read's block keeps its own count); and the deferred music-genre
+ *      callback of an overtaken read does not retune the current channel. Negative controls: no background abort, no counter guard, no guard.
+ *   8. The words, as pure functions: OF only with a total, TITLE for one, no em dash.
  * Negative control for the words: the loader with the pattern's titles taken out.
  *
  * SHOTS=/dir saves 1920x1080 screenshots of each state.
@@ -43,7 +46,8 @@ const LIBS = {
   movies: { id: "libM", name: "Movies", items: Array.from({ length: 450 }, (_, i) => film(i)) },
   classics: { id: "libC", name: "Classics", items: Array.from({ length: 450 }, (_, i) => film(1000 + i)) },
 };
-let plan = { libs: ["movies"], gate: null, viewsFail: false, failLib: null };   // gate: a promise the pages after the first wait for
+let plan = { libs: ["movies"], gate: null, viewsFail: false, failLib: null };
+let heldClosed = 0;   // held page requests the page gave up on (aborted) while the server was still holding them   // gate: a promise the pages after the first wait for
 const sockets = new Set();
 const jellyfin = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -62,7 +66,7 @@ const jellyfin = http.createServer(async (req, res) => {
     if (plan.failLib === lib.id) { res.writeHead(500); return res.end(); }
     const start = Number(url.searchParams.get("StartIndex") || 0);
     const limit = Number(url.searchParams.get("Limit") || 200);
-    if (plan.gate && start >= 200) await plan.gate.promise;
+    if (plan.gate && start >= 200) { req.on("close", () => { if (!res.writableEnded) heldClosed += 1; }); await plan.gate.promise; }
     return json({ Items: lib.items.slice(start, start + limit), TotalRecordCount: lib.items.length });
   }
   json({ Items: [], TotalRecordCount: 0 });
@@ -80,6 +84,13 @@ const files = http.createServer((req, res) => {
   if (p.endsWith("plex-tuner.html")) body = body.toString().replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/hls\.js[^>]*><\/script>/, "<script>window.Hls = { isSupported: () => false };</script>");
   if (oldLoader && p.endsWith("nostalgex-library-load.js")) {
     body = body.toString().replace("const loadTitle = (afterSwitch) => (afterSwitch ? TITLE_CHANGING : TITLE_LOADING);", "const loadTitle = () => 'SCANNING YOUR LIBRARY';");
+  }
+  if (p.endsWith("plex-tuner.html") && /[?&](noabort|noproxy)/.test(req.url)) {
+    let t = body.toString(); const before = t;
+    if (req.url.includes("noabort")) t = t.replace("scanWatch ? scanWatch.controller.signal : (readAbort ? readAbort.signal : undefined)", "scanWatch ? scanWatch.controller.signal : undefined");
+    if (req.url.includes("noproxy")) t = t.replace("if (!options || !options.isCurrent) return real;", "return real;");
+    if (t === before) { res.writeHead(500); return res.end("variant not found"); }
+    body = t;
   }
   if (noGuard && p.endsWith("plex-tuner.html")) {
     const before = body.toString();
@@ -298,11 +309,11 @@ check("sign-out: nothing is built or tuned (the library and channel are as the s
 check("sign-out: no error screen and nothing said (no GUIDE READY, nothing loading)", afterSignOut.error !== "block" && !s.notice.shown && !s.guide.shown && afterSignOut.mode === "none", JSON.stringify([afterSignOut, s.notice]));
 await a.ctx.close();
 
-// ---- 6c. Negative control: the same sign-out with the guard taken out ----
+// ---- 6c. Negative control: the same sign-out with the guard (and the abort) taken out ----
 noGuard = true;
 plan = { libs: ["movies"], gate: makeGate() };
 const ng = await open();
-await ng.page.goto(`${base}/plex-tuner.html`);
+await ng.page.goto(`${base}/plex-tuner.html?noabort`);   // and without the abort, which would stop the read before it could save
 await waitFor(ng.page, () => typeof NostalgexLibraryLoad !== "undefined" && appState === "player" && allItemsCache.length > 0, 30000).catch(() => {});
 plan.gate.release();
 await waitFor(ng.page, () => appState === "player" && allItemsCache.length === 450, 30000);
@@ -316,6 +327,127 @@ await sleep(800);
 const negSaved = await cacheCount(ng.page);
 check("negative control: without the guard the old read saves its library after the sign-out", negSaved > 0, String(negSaved));
 await ng.ctx.close();
+noGuard = false;
+
+
+// ---- 6d. An old read is stopped and quiet ----
+const openAt = async (query = "", vp = HD) => {
+  const x = await open(vp);
+  await x.page.goto(`${base}/plex-tuner.html${query}`);
+  await waitFor(x.page, () => typeof appState !== "undefined" && appState === "player" && allItemsCache.length === 450, 40000);
+  await sleep(500);
+  return x;
+};
+// A background read is stopped by a sign-out: its held requests are closed by the page.
+plan = { libs: ["movies"], gate: null };
+let o = await openAt();
+plan.gate = makeGate();
+heldClosed = 0;
+await o.page.evaluate(() => { window.__bg = fetchLibraryFromServer({ background: true, buildAllChannels: true }).catch(() => {}); });
+await waitFor(o.page, () => NostalgexLibraryLoad.state.scanItemsFound >= 200, 15000);
+await sleep(300);
+await o.page.evaluate(() => signOut());
+await sleep(800);
+check("old read: a sign-out aborts a BACKGROUND read's held requests (the server saw them close before the gate opened)", heldClosed >= 1, String(heldClosed));
+plan.gate.release();
+await o.page.evaluate(() => window.__bg);
+await o.ctx.close();
+// ...and without the background abort they stay open (negative control).
+o = await openAt("?noabort");
+plan.gate = makeGate();
+heldClosed = 0;
+await o.page.evaluate(() => { window.__bg = fetchLibraryFromServer({ background: true, buildAllChannels: true }).catch(() => {}); });
+await waitFor(o.page, () => NostalgexLibraryLoad.state.scanItemsFound >= 200, 15000);
+await sleep(300);
+await o.page.evaluate(() => signOut());
+await sleep(800);
+check("negative control: without the background abort the held requests stay open", heldClosed === 0, String(heldClosed));
+plan.gate.release();
+await o.page.evaluate(() => window.__bg);
+await o.ctx.close();
+
+// The progress counters belong to the read on screen. The old read is let run on (?noabort), so its pages DO arrive after the new read has begun.
+for (const [query, label, wantQuiet] of [["?noabort", "an overtaken read leaves the new read's count alone", true], ["?noabort&noproxy", "negative control: without the counter guard the old read moves the new read's count", false]]) {
+  plan = { libs: ["movies"], gate: null };
+  o = await openAt(query);
+  plan.gate = makeGate();
+  const gateOld = plan.gate;
+  await o.page.evaluate(() => { window.__old = fetchLibraryFromServer({ background: true, buildAllChannels: true }).catch(() => {}); });
+  await waitFor(o.page, () => NostalgexLibraryLoad.state.scanItemsFound >= 200, 15000);
+  plan = { libs: ["movies"], gate: makeGate() };   // the new read: held after its first page, so its count is 200
+  await o.page.evaluate(() => { supersedeLibraryLoads(); window.__new = fetchLibraryFromServer({ cause: "switch" }).catch(() => {}); });
+  await waitFor(o.page, () => NostalgexLibraryLoad.state.scanItemsFound >= 200, 15000);
+  await sleep(300);
+  await openGuide(o.page);
+  gateOld.release();   // the old read's second and third pages arrive now
+  await sleep(1200);
+  const shown = await o.page.evaluate(() => ({ count: NostalgexLibraryLoad.state.scanItemsFound, read: document.getElementById("guide-loading-read").textContent }));
+  check(`old read: ${label}`, wantQuiet ? shown.count === 200 && shown.read === "READ 200 TITLES" : shown.count > 200, JSON.stringify(shown));
+  plan.gate.release();
+  await o.page.evaluate(() => window.__new);
+  await o.ctx.close();
+}
+// The loader a read writes to, on its own: an overtaken read moves nothing.
+o = await openAt();
+const proxied = await o.page.evaluate(() => {
+  const L = NostalgexLibraryLoad; L.state.scanItemsFound = 321; L.setPhase("scanningLibrary", "REAL");
+  let current = false;
+  const ui = loadUIFor({ isCurrent: () => current });
+  ui.state.scanItemsFound = 999; ui.state.scanLibrary = "OLD"; ui.setPhase("scanningLibrary", "OLD"); ui.show();
+  const quiet = { count: L.state.scanItemsFound, detail: L.state.detail, shown: getComputedStyle(document.getElementById("loading-library")).display };
+  current = true;
+  ui.state.scanItemsFound = 555;
+  return { quiet, live: L.state.scanItemsFound, pure: typeof ui.isFirstLibraryLoad === "function" && ui.READY_MS === 4000 };
+});
+check("old read: the loader an overtaken read gets writes nothing and shows nothing", proxied.quiet.count === 321 && proxied.quiet.detail === "REAL" && proxied.quiet.shown === "none", JSON.stringify(proxied));
+check("old read: the same loader writes through while the read is current, and keeps its pure helpers", proxied.live === 555 && proxied.pure, JSON.stringify(proxied));
+await o.ctx.close();
+
+// The deferred music-genre callback does not retune the channel of a read that was overtaken.
+for (const [query, label, wantRetune, overtake] of [["", "a current read's music lookup retunes the channel (positive control)", true, false], ["", "an overtaken read's music lookup does not retune the channel", false, true], ["", "a read overtaken by a newer read: its music lookup does not retune either", false, "newer"]]) {
+  plan = { libs: ["movies"], gate: null };
+  o = await openAt(query);
+  const r = await o.page.evaluate(async ([overtakeHow]) => {
+    window.__sw = 0;
+    const real = switchChannel;
+    window.switchChannel = (...a) => { window.__sw += 1; return real(...a); };
+    NostalgexMusicBrainz.enrichMusicVideos = () => new Promise((res) => { window.__mb = res; });
+    NostalgexMusicBrainz.isMusicVideoItem = () => true;
+    NostalgexLibraryLoad.isMusicBundleEnabled = () => true;
+    await fetchLibraryFromServer({ cause: "switch" });   // a foreground read starts the lookup
+    await new Promise((res) => setTimeout(res, 300));
+    window.__sw = 0;
+    const channel = currentChannel;
+    if (overtakeHow === "newer") { NostalgexMusicBrainz.enrichMusicVideos = () => new Promise(() => {}); await fetchLibraryFromServer({ cause: "switch" }); window.__sw = 0; }
+    else if (overtakeHow) supersedeLibraryLoads();   // a server change
+    window.__mb();
+    await new Promise((res) => setTimeout(res, 600));
+    return { retunes: window.__sw, channel };
+  }, [overtake]);
+  check(`music lookup: ${label}`, wantRetune ? r.retunes >= 1 : r.retunes === 0, JSON.stringify(r));
+  await o.ctx.close();
+}
+// Negative control: without the read-number guard the overtaken read's lookup retunes.
+noGuard = true;
+plan = { libs: ["movies"], gate: null };
+o = await openAt();
+const unguarded = await o.page.evaluate(async () => {
+  window.__sw = 0;
+  const real = switchChannel;
+  window.switchChannel = (...a) => { window.__sw += 1; return real(...a); };
+  NostalgexMusicBrainz.enrichMusicVideos = () => new Promise((res) => { window.__mb = res; });
+  NostalgexMusicBrainz.isMusicVideoItem = () => true;
+  NostalgexLibraryLoad.isMusicBundleEnabled = () => true;
+  await fetchLibraryFromServer({ cause: "switch" });
+  await new Promise((res) => setTimeout(res, 300));
+  window.__sw = 0;
+  supersedeLibraryLoads();
+  window.__mb();
+  await new Promise((res) => setTimeout(res, 600));
+  return window.__sw;
+});
+check("negative control: without the read-number guard an overtaken read's music lookup retunes the channel", unguarded >= 1, String(unguarded));
+await o.ctx.close();
 noGuard = false;
 
 // ---- 7. The top bar on a phone and on a TV browser ----
