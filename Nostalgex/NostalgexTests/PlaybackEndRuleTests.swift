@@ -77,6 +77,56 @@ final class PlaybackEndRuleTests: XCTestCase {
         XCTAssertTrue(PlaybackEndRule.isInEndWindow(playhead: 1260.39 - 15, baseOffset: 0, runtime: 1260.39))
     }
 
+    /// Plex or Jellyfin: the playlist is as long as the file. A stall 10 s from the end is a
+    /// real one (a Wi-Fi hiccup); it keeps waiting, recovers, and plays the rest.
+    func testAStallNearTheEndOnAnHonestPlaylistKeepsWaitingAndRecovers() {
+        let runtime = 1260.39, playlist = 1260.4
+        var watch = PlaybackEndWatch()
+        var wall = 0.0
+        for p in stride(from: 1240.0, through: 1250.39, by: 1.0) {
+            XCTAssertNil(watch.observe(playhead: p, wall: wall, rate: 1, playlistDuration: playlist, baseOffset: 0, runtime: runtime)); wall += 1
+        }
+        for _ in 0..<30 {   // 30 s still at 10 s left, the player waiting
+            XCTAssertNil(watch.observe(playhead: 1250.39, wall: wall, rate: 1, playlistDuration: playlist, baseOffset: 0, runtime: runtime),
+                         "an honest playlist's stall cut the last 10 s")
+            wall += 1
+        }
+        for p in stride(from: 1251.39, through: 1260.0, by: 1.0) {   // it recovers and plays to the end
+            XCTAssertNil(watch.observe(playhead: p, wall: wall, rate: 1, playlistDuration: playlist, baseOffset: 0, runtime: runtime)); wall += 1
+        }
+        XCTAssertFalse(PlaybackEndRule.stillPlayheadIsTheEnd(playhead: 1250.39, playlistDuration: playlist, baseOffset: 0, runtime: runtime),
+                       "the starvation monitor must keep its job on an honest playlist")
+        // Failures in the window still end it, overrun or not.
+        XCTAssertTrue(PlaybackEndRule.isInEndWindow(playhead: 1250.39, baseOffset: 0, runtime: runtime))
+    }
+
+    func testEveryMeasuredEmbyEndOverrunsItsFileSoTheStallIsTheEnd() {
+        for m in Self.measured {
+            XCTAssertTrue(PlaybackEndRule.playlistOverruns(playhead: m.lastFrame, playlistDuration: m.playlist, baseOffset: 0, runtime: m.runtime), m.name)
+            XCTAssertTrue(PlaybackEndRule.stillPlayheadIsTheEnd(playhead: m.lastFrame, playlistDuration: m.playlist, baseOffset: 0, runtime: m.runtime), m.name)
+        }
+        // Under a second of difference is not an overrun.
+        XCTAssertFalse(PlaybackEndRule.playlistOverruns(playhead: 80, playlistDuration: 90.9, baseOffset: 0, runtime: 90.03))
+        XCTAssertTrue(PlaybackEndRule.playlistOverruns(playhead: 80, playlistDuration: 91.03, baseOffset: 0, runtime: 90.03))
+        XCTAssertFalse(PlaybackEndRule.playlistOverruns(playhead: 80, playlistDuration: nil, baseOffset: 0, runtime: 90.03), "no playlist length, no overrun")
+    }
+
+    /// A runtime shorter than the version that plays (an extended cut under the theatrical
+    /// runtime) must not hold the window open for the rest of the film.
+    func testTheWindowClosesFifteenSecondsPastTheRealEnd() {
+        let runtime = 5400.0   // the server says 90 minutes, the file is the 100 minute cut
+        XCTAssertTrue(PlaybackEndRule.isInEndWindow(playhead: 5415, baseOffset: 0, runtime: runtime))
+        XCTAssertFalse(PlaybackEndRule.isInEndWindow(playhead: 5415.5, baseOffset: 0, runtime: runtime))
+        XCTAssertFalse(PlaybackEndRule.isInEndWindow(playhead: 5700, baseOffset: 0, runtime: runtime), "a failure 5 minutes past the runtime still retries")
+        var watch = PlaybackEndWatch()
+        var wall = 0.0
+        for p in stride(from: 5680.0, through: 5700, by: 1.0) { _ = watch.observe(playhead: p, wall: wall, rate: 1, playlistDuration: 6000, baseOffset: 0, runtime: runtime); wall += 1 }
+        for _ in 0..<30 {
+            XCTAssertNil(watch.observe(playhead: 5700, wall: wall, rate: 1, playlistDuration: 6000, baseOffset: 0, runtime: runtime),
+                         "a stall 5 minutes past a short runtime ended the film"); wall += 1
+        }
+    }
+
     func testAHealthyStreamPlayingThroughTheWindowIsNotEnded() {
         var watch = PlaybackEndWatch()
         for (i, p) in stride(from: 1240.0, through: 1260.0, by: 1.0).enumerated() {
@@ -133,6 +183,6 @@ final class PlaybackEndRuleTests: XCTestCase {
                       "the startup watchdog retries a programme that has simply reached its end")
         let starvation = try XCTUnwrap(source.range(of: "private func installStarvationMonitor"))
         let monitorBody = source[starvation.lowerBound...].prefix(4000)
-        XCTAssertTrue(monitorBody.contains("PlaybackEndRule.isInEndWindow("), "the starvation monitor does not stand down in the end window")
+        XCTAssertTrue(monitorBody.contains("PlaybackEndRule.stillPlayheadIsTheEnd("), "the starvation monitor does not stand down where a still playhead is the end")
     }
 }
