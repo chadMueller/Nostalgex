@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Android: the Now Playing panel's sleep row, the top bar, OPEN IN PLEX, the rating banner, preferences backup)
+
+**State.** Branch `android/guide-stripes`, local commits. Not pushed, not in a build.
+
+**Why.** Chad: "all apple tv features should be in parity in roku and android", and #271, #321, #322 and the settings sync row in PARITY.
+
+**Changed.**
+- **#271:** SLEEP TIMER is one row (OFF, or the countdown in yellow while one runs) with a chevron that opens the list; rows that open a list show a chevron; the right column's order is the Apple TV's (STREAM QUALITY, PLAYBACK INFORMATION, SLEEP TIMER). The top bar is the Apple TV's: a 36 pt wordmark and SETTINGS as the pill (29 pt, the shared row surface and selected state). The poster beside the info was already in the code (`InfoZone`, `AppModel.poster`); seen here for the first time against a stand-in server with art.
+- **#321:** OPEN IN PLEX at the foot of the panel's left column: Plex only, never in demo mode, only when something on the TV handles a `plex://` link (a `<queries>` entry), and `plex://preplay/?metadataKey=...&server=...` as the Apple TV. The machine id comes from the item's server address (Android items do not carry `serverID`). Not tried against the real Plex app: the emulator has none, so the row was seen with a temporary debug-only handler for `plex://`, removed afterwards, and the launch was read from the activity log.
+- **#322:** `RatingNudgePolicy` in the engine (three viewing sessions of ten minutes, once a version, never on a first launch, after a playback failure or after a connection error, 8 s auto dismiss), the counters under the Apple TV's keys, the banner at the foot of the guide (RATE takes focus, retried at 0, 0.35 and 0.9 s as the Apple TV does, Up, Back, NOT NOW or the timeout dismiss it) and a RATE NOSTALGEX row in ABOUT that says THANKS once pressed. RATE opens the Play listing (`market://`, then the web address). It covers the last rows of the guide while it is up; the Apple TV gives the guide the height instead.
+- **Settings sync:** `SyncedPreferences` (the Apple TV's `PreferenceSync.syncedKeys`, 13 of its 14: the legacy report-playback key has no Android counterpart), `SettingsBackup` and two backup rules files. The main preferences file holds the Plex token, server addresses and media-browser sign-in, so it is never backed up: the rules include one file only, `nostalgex_backup.xml`, a mirror of the 13 settings written when the app stops, and brought back before anything else on a launch with no preferences of its own. `allowBackup` is true only so the rules apply; naming an include excludes everything else.
+
+**Checked.** 429 engine tests (`RatingNudgePolicyTest`, `SyncedPreferencesTest` added), `:app:assembleDebug` and `:app:lintRelease` pass. Seen on the emulator against two stand-in Plex servers (one with art): `android/emulator-2026-11-14/` in nostalgex-internal. The banner was seen with the playback-failure flag ignored in a throwaway evidence build (the stand-in cannot play files, and a failure rightly suppresses the banner); that edit is not in the commit. The mirror file was read on the emulator: only settings, no token or address. The emulator's backup manager is disabled, so a real backup and restore is untried.
+
+**Not built, and why.** #320 (ORIGINAL, RETRY ORIGINAL VIDEO): the Apple TV's is a Plex mechanism of its own (the original-video preference, the server decision handshake and a compatibility retry, `PlexAPIService` and `AppState+Playback`), not a row; without a real Plex to run it against it is not safe to ship. #319 (music video genre lookups): the Apple TV calls MusicBrainz and Deezer from the device and neither host is on `nostalgex.app/privacy`, and music video channels are parked on all platforms (Trello N-016). The tip jar waits on Chad's payments profile and the trader declaration.
+
 ## 2026-11-14 (Android: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT and LARGER)
 
 **State.** Branch `android/guide-stripes`, local commit. Not pushed, not in a build.
