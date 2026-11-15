@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer: the same single file for both the cloud backup and a device-to-device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="nostalgex_backup.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="nostalgex_backup.xml" />
+    </device-transfer>
+</data-extraction-rules>

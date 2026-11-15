@@ -19,6 +19,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // First, before anything writes the main preferences: on a TV just restored from a backup, bring the settings back.
+        SettingsBackup.restoreIfFresh(applicationContext)
         model = AppModel(applicationContext)
         setContent {
             // ScreenAwakePolicy: a load the viewer is sitting in front of keeps the TV awake, so a
@@ -67,6 +69,8 @@ class MainActivity : ComponentActivity() {
         // its watch state back (PlaybackTracker.onBackground); coming back tunes in again.
         model.watchReporter.stop()
         model.playback.stop()
+        // Keep the backup's settings file current, so whenever Android backs up it carries today's choices.
+        SettingsBackup.mirror(applicationContext)
         // The daily refresh waits too: nobody is watching the guide it would rebuild.
         model.stopDailyRefresh()
     }
