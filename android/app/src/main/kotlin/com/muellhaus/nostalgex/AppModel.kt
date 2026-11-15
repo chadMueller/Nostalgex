@@ -14,6 +14,9 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.BackgroundPass
+import com.muellhaus.nostalgex.engine.LibraryRefresh
+import com.muellhaus.nostalgex.engine.RefreshEffects
+import com.muellhaus.nostalgex.engine.RefreshRead
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.ServerTokens
@@ -674,8 +677,21 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     // Music video genres from MusicBrainz and Deezer (#319), resolved in the background and kept on the TV.
     private val music by lazy { newMusicEnrichment(context, versionName) }
-    /** Ends with the library it started on: signOut, a server or backend switch and every library load call `invalidate()`. */
+    /** Ends with the library it started on: signOut, a server or backend switch and every library load call [endBackgroundWork]. */
     private val musicPass = BackgroundPass(scope)
+
+    /** The refresh behind the guide (LibraryRefresh), ended the same way. */
+    private val refreshPass = BackgroundPass(scope)
+
+    /**
+     * The library is about to change (signed out, another server or backend, a new load): the music lookups and the refresh stop, and
+     * nothing either has read but not yet written is kept. Called first, before the new state is set.
+     */
+    private fun endBackgroundWork() {
+        musicPass.invalidate()
+        refreshPass.invalidate()
+        refreshing = false
+    }
     private suspend fun musicApplied(items: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.Default) { music.first.apply(items) }
     val enrichmentOn: Boolean get() = enrichment != null
 
@@ -775,7 +791,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     delay(PlexPinWait.POLL_MS)
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
-                        musicPass.invalidate()
+                        endBackgroundWork()
                         mbServer = null
                         screen = Screen.Loading("FINDING YOUR SERVERS")
                         // Every reachable server, shared ones too, as the Apple TV finds them: with
@@ -877,7 +893,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun signOut() {
-        musicPass.invalidate()
+        endBackgroundWork()
         closeSettings()
         stopDailyRefresh()
         playback.stop()
@@ -1034,7 +1050,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private fun finishSignIn(server: MediaBrowserServer) {
-        musicPass.invalidate()
+        endBackgroundWork()
         forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.serverId, server.url)))
         prefs.signOut()
         libraryStore.clear()
@@ -1458,7 +1474,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     private var loadJob: Job? = null
 
     private fun loadLibrary() {
-        musicPass.invalidate()
+        endBackgroundWork()
         loadingLibrary = true
         loadJob = scope.launch {
             // Set until the load ends any way the process lives to see (LaunchGuard).
@@ -1547,7 +1563,9 @@ class AppModel(private val context: Context) : Playback.Listener {
                     }
                     step(LoadPhase.FINISHING)
                     prefs.initialLoadComplete = true
-                    show(built)
+                    // The first full load has no refresh behind it: the music lookups start now, as the Apple TV's do after the
+                    // first load (startDeferredMusicEnrichmentIfNeeded).
+                    if (show(built)) startMusicEnrichment()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -1704,70 +1722,65 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     /** `alwaysSave` saves what it read even when nothing changed, for a library store that was just cleared. */
     private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>, alwaysSave: Boolean = false) {
-        val library = musicPass.generation
-        scope.launch {
+        // Ends with the library it began on (LibraryRefresh): signOut, a server or backend switch and every library load stop it.
+        refreshPass.start { current ->
             refreshing = true
             try {
-                val t0 = SystemClock.elapsedRealtime()
-                val scanned = scan(servers, foreground = false) { _, _ -> }
-                // An abandoned refresh is a subset of what is on screen: keep the guide (isLibraryStale).
-                if (scanned.abandoned) {
-                    Log.i(TAG, "REFRESH abandoned mid-scan; keeping the loaded lineup")
-                    markLoaded(abandoned = true)
-                    return@launch
+                var skipped = 0
+                val effects = object : RefreshEffects {
+                    override val savedItems get() = saved
+                    override val heldCollections get() = serverCollections
+                    override val currentItems get() = libraryItems
+                    override suspend fun scan(): RefreshRead {
+                        val t0 = SystemClock.elapsedRealtime()
+                        val scanned = scan(servers, foreground = false) { _, _ -> }
+                        skipped = scanned.skippedNoRuntime
+                        return RefreshRead(scanned.items, scanned.abandoned, SystemClock.elapsedRealtime() - t0)
+                    }
+                    override suspend fun markLoaded(abandoned: Boolean) = this@AppModel.markLoaded(abandoned)
+                    override suspend fun readComplete(read: RefreshRead) {
+                        // A whole library read: the kept sections have done their job (#288).
+                        sectionStore.clear()
+                        skippedNoRuntime = skipped
+                        libraryUpdatedMs = System.currentTimeMillis()
+                    }
+                    override suspend fun readCollections() = this@AppModel.readCollections(servers)
+                    override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {
+                        scannedItems = items
+                        serverCollections = collections
+                        withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
+                    }
+                    override suspend fun enrich(items: List<MediaItem>) = this@AppModel.enrich(items, remote = true)
+                    override fun note(line: String) { Log.i(TAG, line) }
+                    override suspend fun adopt(enriched: List<MediaItem>) {
+                        libraryItems = enriched
+                        val fresh = buildLineup(enriched, "refreshed")
+                        if (fresh.channels.isEmpty() || !current()) return
+                        // From NO CHANNELS FOUND, a rescan that finds channels brings the guide up, as a
+                        // package switch does (#198).
+                        if (screen == Screen.NoChannels) {
+                            closeSettings()
+                            show(fresh)
+                            return
+                        }
+                        // What is on keeps playing; the channel now airs from its new pool from the next programme.
+                        val id = channel?.id
+                        lineup = fresh
+                        channel = fresh.channels.firstOrNull { it.id == id } ?: channel
+                        scheduleTick++
+                    }
                 }
-                val items = scanned.items
-                markLoaded(abandoned = false)
-                // A whole library read: the kept sections have done their job (#288).
-                sectionStore.clear()
-                skippedNoRuntime = scanned.skippedNoRuntime
-                val took = SystemClock.elapsedRealtime() - t0
-                libraryUpdatedMs = System.currentTimeMillis()
-                val collections = readCollections(servers)
-                // Members in a new order (a smart collection after a play) are saved, so the next
-                // build follows the server's order, but don't rebuild the guide: the stored day
-                // stays put either way.
-                val collectionsChanged = !Collections.sameMembers(collections, serverCollections)
-                val reordered = !collectionsChanged && collections != serverCollections
-                val scanChanged = items != saved || collections != serverCollections
-                if (scanChanged || alwaysSave) {
-                    scannedItems = items
-                    serverCollections = collections
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
-                }
-                val enriched = enrich(items, remote = true)
-                if (enriched == libraryItems && !collectionsChanged) {
-                    Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged" +
-                        if (reordered) " (collection members in a new order, saved)" else "")
-                    return@launch
-                }
-                libraryItems = enriched
-                Log.i(TAG, "REFRESH ${items.size} items read in $took ms; " +
-                    (when {
-                    items != saved -> "library changed (was ${saved.size})"
-                    collectionsChanged -> "collections changed"
-                    else -> "enrichment changed"
-                }) + ", rebuilding")
-                val fresh = buildLineup(enriched, "refreshed")
-                if (fresh.channels.isEmpty()) return@launch
-                // From NO CHANNELS FOUND, a rescan that finds channels brings the guide up, as a
-                // package switch does (#198).
-                if (screen == Screen.NoChannels) {
-                    closeSettings()
-                    show(fresh)
-                    return@launch
-                }
-                // What is on keeps playing; the channel now airs from its new pool from the next programme.
-                val id = channel?.id
-                lineup = fresh
-                channel = fresh.channels.firstOrNull { it.id == id } ?: channel
-                scheduleTick++
+                LibraryRefresh(current, effects, alwaysSave).run()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Background refresh failed; keeping the saved library", e)
             } finally {
-                refreshing = false
-                // Not for a library that was signed out of or loaded again while this refresh ran.
-                if (musicPass.isCurrent(library)) startMusicEnrichment()
+                // A refresh that was ended (endBackgroundWork) left `refreshing` alone: a newer one may own it.
+                if (current()) {
+                    refreshing = false
+                    startMusicEnrichment()
+                }
             }
         }
     }
