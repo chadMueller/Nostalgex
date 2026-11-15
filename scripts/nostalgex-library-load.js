@@ -305,6 +305,10 @@
   }
   const updatingLine = (read) => (Number(read) > 0 ? `UPDATING LIBRARY: ${formatCount(read)} ${titlesWord(Number(read))} READ` : 'UPDATING LIBRARY');
   const readyLine = (n) => `GUIDE READY: ${formatCount(n)} ${titlesWord(Number(n))}`;
+  // The short forms for a narrow top bar (a TV browser's 960 px, a phone): the same facts in fewer letters, tried in turn.
+  const updatingShort = (read) => (Number(read) > 0 ? `UPDATING: ${formatCount(read)}` : 'UPDATING');
+  const readyShort = (n) => `READY: ${formatCount(n)} ${titlesWord(Number(n))}`;
+  const readyTiny = (n) => `READY: ${formatCount(n)}`;
 
   // cause: 'load' (a first load or a refresh), 'switch' (a server or library switch), 'rescan' (RESCAN LIBRARY).
   const session = { active: false, cause: 'load', background: false, cutShort: false, ready: null, readyTimer: null, hasGuide: () => false };
@@ -340,9 +344,9 @@
     }
 
     // The top bar: UPDATING LIBRARY behind a guide that stays up, GUIDE READY when a read ends whole.
-    let text = '', kind = '';
-    if (mode === 'header') { text = updatingLine(state.scanItemsFound); kind = 'updating'; }
-    else if (mode === 'none' && session.ready) { text = readyLine(session.ready.titles); kind = 'ready'; }
+    let text = '', short = '', tiny = '', kind = '';
+    if (mode === 'header') { text = updatingLine(state.scanItemsFound); short = updatingShort(state.scanItemsFound); tiny = short; kind = 'updating'; }
+    else if (mode === 'none' && session.ready) { text = readyLine(session.ready.titles); short = readyShort(session.ready.titles); tiny = readyTiny(session.ready.titles); kind = 'ready'; }
     // The top bar of a phone shows when the page says so; the corner one is for everything else.
     const bar = byId('m-topbar');
     const phoneBar = !!bar && getComputedStyle(bar).display !== 'none';
@@ -353,14 +357,16 @@
       el.hidden = !on;
       el.dataset.kind = on ? kind : '';
       setText(el, on ? text : '');
-      // The corner notice takes the room between the wordmark and the rail's SETTINGS, and wraps in it on a narrow screen.
+      // The corner notice takes the room between the wordmark and the rail's SETTINGS. One line always: where the full words do not fit
+      // it says the short form, and where even that does not fit it is cut with an ellipsis.
       if (on && id === 'top-notice') {
         const rail = byId('v-toolbar');
         if (rail && rail.offsetParent !== null) {
           const room = rail.getBoundingClientRect().left - el.getBoundingClientRect().left - 12;
-          if (room > 0) el.style.maxWidth = `${Math.min(420, Math.max(120, room))}px`;
+          if (room > 0) el.style.maxWidth = `${Math.max(120, room)}px`;
         }
       }
+      for (const fewer of [short, tiny]) { if (on && el.scrollWidth > el.clientWidth + 1) setText(el, fewer); }
     }
 
     // Settings covers the guide, so it says the same.
@@ -478,6 +484,9 @@
     libraryLine,
     updatingLine,
     readyLine,
+    updatingShort,
+    readyShort,
+    readyTiny,
     formatCount,
     TITLE_CHANGING,
     TITLE_LOADING,

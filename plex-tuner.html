@@ -723,15 +723,16 @@
     letter-spacing: 0.04em;
     pointer-events: none;
     color: var(--cyan);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .top-notice[hidden], .m-top-notice[hidden] { display: none; }
-  .m-top-notice { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .top-notice[data-kind="ready"], .m-top-notice[data-kind="ready"] { color: var(--yellow); }
   .top-notice {
     position: absolute;
     top: 16px;
     left: 230px;
-    line-height: 1.2;
     max-width: 420px;   /* the page narrows it to the room between the wordmark and the rail (nostalgex-library-load.js) */
     z-index: 45;
   }

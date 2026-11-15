@@ -145,7 +145,8 @@ const read = (page) => page.evaluate(() => {
 // ---- reading the page ----
 const GEO = (page) => page.evaluate(() => {
   const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
-  return { notice: r(document.querySelector("#top-notice:not([hidden])")), mnotice: r(document.querySelector("#m-top-notice:not([hidden])")), logo: r(document.querySelector(".player-logo img")), rail: r(document.getElementById("v-toolbar")), mlogo: r(document.querySelector(".m-topbar-logo")), menu: r(document.getElementById("m-menu-btn")) };
+  const one = (el) => { if (!el) return null; const cs = getComputedStyle(el); return { text: el.textContent, lines: Math.round(el.getBoundingClientRect().height / (parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3)), cut: el.scrollWidth > el.clientWidth + 1 }; };
+  return { text: one(document.querySelector("#top-notice:not([hidden]), #m-top-notice:not([hidden])")), notice: r(document.querySelector("#top-notice:not([hidden])")), mnotice: r(document.querySelector("#m-top-notice:not([hidden])")), logo: r(document.querySelector(".player-logo img")), rail: r(document.getElementById("v-toolbar")), mlogo: r(document.querySelector(".m-topbar-logo")), menu: r(document.getElementById("m-menu-btn")) };
 });
 const hits = (a, b) => a && b && a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 const YELLOW = /rgb\(255, 229, 0\)/;
@@ -233,6 +234,8 @@ await a.page.evaluate(() => { window.__refresh = fetchLibraryFromServer({ backgr
 check("refresh: the first page is read", await waitFor(a.page, () => NostalgexLibraryLoad.state.scanItemsFound >= 200, 15000));
 await sleep(300);
 s = await read(a.page);
+g = await GEO(a.page);
+check("refresh: at 1920 the full words fit on one line", g.text && g.text.lines === 1 && !g.text.cut && g.text.text === "UPDATING LIBRARY: 200 TITLES READ", JSON.stringify(g.text));
 check("refresh: UPDATING LIBRARY: 200 TITLES READ in the top bar, cyan", s.notice.shown && s.notice.text === "UPDATING LIBRARY: 200 TITLES READ" && s.notice.kind === "updating" && CYAN.test(s.notice.color), JSON.stringify(s.notice));
 check("refresh: nothing else: the guide's rows stay, the build screen stays down", !s.guide.shown && !s.guide.rowsHidden && !s.panel.shown, JSON.stringify([s.guide.shown, s.guide.rowsHidden, s.panel.shown]));
 await shot(a.page, "4-updating-library");
@@ -328,13 +331,19 @@ for (const [name, vp] of [["phone 390x844", { viewport: { width: 390, height: 84
   await sleep(300);
   g = await GEO(t.page);
   if (name.startsWith("phone")) {
+    check(`${name}: one line, the short form (UPDATING: 200), not cut`, g.text && g.text.lines === 1 && g.text.text === "UPDATING: 200" && !g.text.cut, JSON.stringify(g.text));
     check(`${name}: the notice is in the phone's top bar, between the wordmark and MENU`, g.mnotice && g.mlogo && g.menu && g.mnotice.l >= g.mlogo.r && g.mnotice.r <= g.menu.l && !g.notice, JSON.stringify(g));
   } else {
+    check(`${name}: one line, the short form (UPDATING: 200), not cut`, g.text && g.text.lines === 1 && g.text.text === "UPDATING: 200" && !g.text.cut, JSON.stringify(g.text));
     check(`${name}: the notice is between the wordmark and the rail`, g.notice && g.logo && g.rail && g.notice.l >= g.logo.r && g.notice.r <= g.rail.l && !hits(g.notice, g.logo) && !hits(g.notice, g.rail), JSON.stringify(g));
   }
   await t.page.screenshot({ path: SHOTS ? join(SHOTS, `7-${name.split(" ")[0]}-updating.png`) : undefined }).catch(() => {});
   plan.gate.release();
   await t.page.evaluate(() => window.__r);
+  await sleep(400);
+  g = await GEO(t.page);
+  check(`${name}: GUIDE READY is READY: 450 here (READY: 450 TITLES does not fit), on one line, not cut`, g.text && g.text.lines === 1 && g.text.text === "READY: 450" && !g.text.cut, JSON.stringify(g.text));
+  await t.page.screenshot({ path: SHOTS ? join(SHOTS, `7-${name.split(" ")[0]}-ready.png`) : undefined }).catch(() => {});
   await t.ctx.close();
 }
 
