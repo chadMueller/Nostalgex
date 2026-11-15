@@ -275,6 +275,39 @@ for (const name of Object.keys(viewports)) {
   await ctx.close();
 }
 
+// A link opens on the channel it names (the counterpart of the Apple TV's Top Shelf link): plex-tuner.html?channel=<number>, and the
+// start screen passes its query on. An unknown number is ignored.
+{
+  const opened = async (path) => {
+    const lctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: "America/New_York" });
+    await lctx.route((u) => !u.hostname.match(/^(127\.0\.0\.1|localhost)$/), (route) => route.abort());
+    await lctx.addInitScript(([url]) => {
+      if ((location.pathname.endsWith("plex-tuner.html") || location.pathname.endsWith("web-tuner.html")) && !sessionStorage.getItem("nx-seeded")) {
+        sessionStorage.setItem("nx-seeded", "1");
+        localStorage.setItem("nostalgex_library_selection_seen", "1");   // a first setup would stop on CHOOSE YOUR LIBRARIES
+        localStorage.setItem("plex90_saved_auth", JSON.stringify({ token: "t", serverUrl: url, serverName: "lab", backend: "jellyfin", jellyfinUserId: "u" }));
+      }
+    }, [api]);
+    const lp = await lctx.newPage();
+    await lp.goto(`${base}/${path}`);
+    await lp.waitForFunction(() => typeof currentChannel !== "undefined" && currentChannel !== null, null, { timeout: 40000 }).catch(() => {});
+    const r = await lp.evaluate(() => { const ch = CHANNELS.find((c) => c.id === currentChannel); return { number: ch ? (ch.number || ch.id) : null, url: location.pathname + location.search, numbers: CHANNELS.filter((c) => c.enabled).map((c) => c.number || c.id) }; });
+    await lctx.close();
+    return r;
+  };
+  const plain = await opened("plex-tuner.html");
+  const nums = plain.numbers;
+  const target = nums[2] ?? nums[1];
+  const linked = await opened(`plex-tuner.html?channel=${target}`);
+  check("a link ?channel=<number> opens on that channel", plain.number === nums[0] && linked.number === target, JSON.stringify({ plain: plain.number, linked: linked.number, target }));
+  const unknown = await opened("plex-tuner.html?channel=9999");
+  check("an unknown channel number is ignored: the visit opens as it always did", unknown.number === plain.number, JSON.stringify(unknown));
+  const junk = await opened("plex-tuner.html?channel=abc");
+  check("a channel that is not a number is ignored", junk.number === plain.number, JSON.stringify(junk));
+  const viaStart = await opened(`web-tuner.html?channel=${target}`);
+  check("the start screen passes the link on to the tuner", /plex-tuner\.html\?channel=/.test(viaStart.url) && viaStart.number === target, JSON.stringify(viaStart));
+}
+
 await browser.close();
 jellyfin.close();
 files.close();

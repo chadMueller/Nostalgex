@@ -142,7 +142,7 @@
         if (saved.userToken) sessionStorage.setItem('plex90_user_token', saved.userToken);
         if (saved.backend) sessionStorage.setItem('plex90_backend', saved.backend);
         if (saved.jellyfinUserId) sessionStorage.setItem('plex90_jellyfin_user_id', saved.jellyfinUserId);
-        window.location.replace('plex-tuner.html');
+        window.location.replace('plex-tuner.html' + window.location.search);
       }
     } catch (e) {}
   })();
@@ -572,7 +572,7 @@
       sessionStorage.removeItem('plex90_server_url');
       sessionStorage.removeItem('plex90_server_name');
       showScreen('done');
-      window.location.href = 'plex-tuner.html';
+      window.location.href = 'plex-tuner.html' + window.location.search;
       return;
     }
 
@@ -602,7 +602,7 @@
       }));
     } catch (e) {}
     showScreen('done');
-    window.location.href = 'plex-tuner.html';
+    window.location.href = 'plex-tuner.html' + window.location.search;
   }
 
   $('connect-btn').addEventListener('click', startPlexAuth);
@@ -898,7 +898,7 @@
       }));
     } catch (e) {}
     showScreen('done');
-    window.location.href = 'plex-tuner.html';
+    window.location.href = 'plex-tuner.html' + window.location.search;
   }
 
   $('connect-jellyfin-btn').addEventListener('click', () => chooseKind('jellyfin'));

@@ -43,6 +43,7 @@
 <script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-up-next.js"></script>
 <script src="scripts/nostalgex-guide-cursor.js"></script>
+<script src="scripts/nostalgex-direct-play.js"></script>
 <script src="scripts/nostalgex-channel-requirements.js"></script>
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
@@ -5175,8 +5176,25 @@
 
   /** The channel a load opens on: the last one watched when the switch is on and it is still
    *  there with the same id and name, else the first enabled channel, as before. */
+  // A link can name the channel to open on: plex-tuner.html?channel=<number>, the number the guide shows (the web's counterpart of the
+  // Apple TV's Top Shelf link). The start screen passes its own query on, so a bookmark to web-tuner.html?channel=12 works too. An unknown
+  // number is ignored, and it applies once, to the first channel a visit opens on.
+  let deepLinkChannelUsed = false;
+  function channelFromLink(enabled) {
+    if (deepLinkChannelUsed || !enabled.length) return null;
+    deepLinkChannelUsed = true;
+    try {
+      const raw = new URLSearchParams(location.search).get('channel');
+      const n = Number(raw);
+      if (raw === null || !Number.isInteger(n) || n < 1) return null;
+      return enabled.find(ch => chNum(ch) === n) || null;
+    } catch (e) { return null; }
+  }
+
   function channelToOpenOn() {
     const enabled = CHANNELS.filter(ch => ch.enabled);
+    const linked = channelFromLink(enabled);
+    if (linked) return linked;
     if (openLastChannelOn()) {
       let saved = null;
       try { saved = NostalgexLastChannel.parse(localStorage.getItem(NostalgexLastChannel.CHANNEL_KEY)); } catch (e) {}
@@ -6844,7 +6862,10 @@
       const subtitleBurned = !!(subtitlePick && !subtitlePick.external);
       request.burnedSubtitleIndex = subtitleBurned ? subtitlePick.index : null;
 
+      // The file's codecs too (#326): an MP4 holding HEVC or AC-3 plays in some browsers and not in others, so a browser that cannot decode
+      // them goes to the server's stream at once instead of failing first. A library saved before codecs were kept has none: the container decides, as before.
       canDirectPlay = !item._forceTranscode && item.partKey && ['mp4', 'webm', 'mov'].includes(item.container)
+        && NostalgexDirectPlay.codecsOK(item, directPlayProbe) !== false
         && !audioNeedsServer && !subtitleBurned
         && NostalgexStreamQuality.directPlayAllowed(effectiveQualityFor(item), item.bitrate);
       beginInfoAttempt();
@@ -7911,6 +7932,9 @@
     const video = document.getElementById('plex-video');
     return !!(video && video.webkitDisplayingFullscreen);
   }
+
+  // What this browser decodes beyond the codecs every one does (scripts/nostalgex-direct-play.js).
+  const directPlayProbe = NostalgexDirectPlay.browserProbe(() => document.createElement('video'));
 
   function toggleFullscreen() {
     const container = document.getElementById('video-container');
