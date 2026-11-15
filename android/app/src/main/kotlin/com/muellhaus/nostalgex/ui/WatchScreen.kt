@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.composed
@@ -645,7 +647,10 @@ private fun InfoUpNext(next: ScheduleEntry) {
     LaunchedEffect(next.id) {
         while (true) { nowS = nowSec(); delay(UpNextLabel.REFRESH_MS) }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(u(14)), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = UpNextLabel.line(next.item.musicDisplayLine, next.startSec - nowS) },
+        horizontalArrangement = Arrangement.spacedBy(u(14)), verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(next.item.musicDisplayLine, style = font(DMMono, 18, Tokens.UpNextTitle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         Text(UpNextLabel.text(next.startSec - nowS), style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3), maxLines = 1, softWrap = false)
     }

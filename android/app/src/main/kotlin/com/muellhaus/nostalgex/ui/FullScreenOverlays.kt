@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -340,9 +342,13 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
     val next = model.lineup?.schedules?.get(ch.id)?.upNext ?: return
     // One plain line, the title first in the highlight colour and then the minutes: "Varsity Blues  UP NEXT IN 24 MIN" (Chad
     // 2026-11-15, across all platforms). No pill, no border. The title ends in an ellipsis before the label ever shrinks.
-    Row(Modifier.padding(top = u(22)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
+    val upNextTitle = if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title
+    Row(
+        Modifier.padding(top = u(22)).semantics(mergeDescendants = true) { contentDescription = UpNextLabel.line(upNextTitle, next.startSec - nowSec) },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14)),
+    ) {
         Text(
-            if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title,
+            upNextTitle,
             style = font(DMMono, LocalGuideText.current.panelText, Tokens.UpNextTitle),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
