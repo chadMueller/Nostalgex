@@ -7,7 +7,8 @@
  *   2. scripts/nostalgex-daily-manifest.js against those vectors, the ones
  *      NostalgexTests/ScheduleDSTGoldenTests.swift also runs, each in its own zone: the day's
  *      start, the next day's start and yesterday's key; a full day of schedule with no empty
- *      last hour and no hour run into tomorrow; and the day after reading the right yesterday.
+ *      last hour and no programme starting after midnight (the last one may run past it, whole);
+ *      and the day after reading the right yesterday.
  *   3. Negative control: the module with the old 86,400 s arithmetic fails exactly the days
  *      that aren't 24 hours long and the days after a short one, and nothing in a zone
  *      without daylight saving.
@@ -47,6 +48,9 @@ function load(source) {
 const pool = (rows) => rows.map(([ratingKey, title, type, duration]) => ({ ratingKey, title, type, duration, addedAt: 0 }));
 const small = { id: 201, name: "SMALL", itemPool: pool(golden.pools.small) };
 const big = { id: 203, name: "BIG", itemPool: pool(golden.pools.big) };
+// Five-minute programmes: a programme that runs past midnight is whole (#315), so the golden pool's long programmes can hide a
+// day that is an hour too long or short. With these the day's end is found to within five minutes.
+const short = { id: 205, name: "SHORT", itemPool: pool(Array.from({ length: 7 }, (_, i) => [`s${i}`, `Short ${i}`, "movie", 5])) };
 const dayOf = (zone, date) => golden.days.find((d) => d.zone === zone && d.date === date);
 
 // The first second of `date` in `zone`: its local midnight, or the first moment after it where
@@ -83,8 +87,19 @@ function behaviourFailures(M) {
     store.clear();
     const blocks = M.getManifestBlocks(small, small.itemPool, d.at[2] * 1000, "dst");
     const contiguous = blocks.every((b, i) => i === 0 || b.startSec === blocks[i - 1].endSec);
-    const ok = blocks.length > 0 && blocks[0].startSec === d.start && blocks.at(-1).endSec === d.nextStart && contiguous;
-    if (!ok) failed.push(`fill ${d.zone} ${d.date}`);
+    // Every programme airs whole (#315), so the day's last block may run past the next midnight, and only it: the one before
+    // it ends before midnight, so no programme starts after it. The last starts before it.
+    const last = blocks.at(-1), before = blocks.at(-2);
+    const ok = blocks.length > 0 && blocks[0].startSec === d.start && last.endSec >= d.nextStart && last.startSec < d.nextStart
+      && (!before || before.endSec < d.nextStart) && contiguous;
+    if (!ok) failed.push(`fill-golden ${d.zone} ${d.date}`);
+    // Short programmes: the day ends within one of them of midnight, so the day's length is what is measured.
+    store.clear();
+    const fine = M.getManifestBlocks(short, short.itemPool, d.at[2] * 1000, "dst");
+    const lastShort = fine.at(-1);
+    const okShort = fine.length > 0 && fine[0].startSec === d.start && lastShort.endSec >= d.nextStart && lastShort.endSec - d.nextStart < 300
+      && fine.every((b, i) => i === 0 || b.startSec === fine[i - 1].endSec);
+    if (!okShort) failed.push(`fill ${d.zone} ${d.date}`);
   }
   for (const y of golden.yesterday) {
     process.env.TZ = y.zone;
@@ -124,7 +139,7 @@ for (const d of golden.days) {
 }
 const now = behaviourFailures(M);
 check("fill and yesterday vectors all pass", now.length === 0, now.join(", "));
-passed += golden.days.length + golden.yesterday.length - now.length - 1;
+passed += 2 * golden.days.length + golden.yesterday.length - now.length - 1;
 
 // 3. Negative control: the old arithmetic.
 const oldSrc = src
@@ -136,7 +151,8 @@ const expected = [
   ...golden.days.filter((d) => d.hours !== 24).map((d) => `fill ${d.zone} ${d.date}`),
   ...golden.yesterday.filter((y) => dayOf(y.zone, y.previous).hours < 24).map((y) => `yesterday ${y.zone} ${y.date}`),
 ].sort();
-const old = behaviourFailures(load(oldSrc)).sort();
+// The golden pool's programmes are long, so what it cannot see of the old arithmetic is not asked of it; the short pool is the control.
+const old = behaviourFailures(load(oldSrc)).filter((f) => !f.startsWith("fill-golden")).sort();
 check("the old arithmetic fails exactly the short and long days and the day after a short one",
   JSON.stringify(old) === JSON.stringify(expected), `failed: ${old.join(", ")}\n    expected: ${expected.join(", ")}`);
 const controls = ["America/Phoenix", "Asia/Kolkata", "UTC"];

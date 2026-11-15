@@ -5855,14 +5855,16 @@
 
   /**
    * AppState.advanceToNextItem's pick. When a programme ends on its own, the next one from
-   * its start: the one after it, or what is on now if the clock has moved past it. After a
+   * its start (or from where the clock is, when the guide is 10 s or more in): the one after it, or what is on now if the clock has moved past it. After a
    * stall or a failure, what is on now from where it is now. Never the title another channel
    * has on at that moment: the one after it, from the start. No schedule: anything in the pool.
+   * One rule on top of the Apple TV's pick (#315, `catchUp`): the next file takes a second or two to load, which the clock
+   * keeps counting, so once the guide is 10 s or more into the programme a natural end starts, it joins where the clock is.
    */
   function nextAfterEnd(channel, endedItem, fromNaturalEnd) {
     const pool = getTimeFilteredPool(channel);
     const pick = NostalgexDailyManifest.advancePick(channel, pool, endedItem ? endedItem.ratingKey : null,
-      Date.now() / 1000, guideLineup(), manifestServerKey(), fromNaturalEnd);
+      Date.now() / 1000, guideLineup(), manifestServerKey(), fromNaturalEnd, true);
     if (pick) return { ...pick.item, offsetSeconds: pick.seekSeconds };
     return pool.length ? { ...pool[Math.floor(Math.random() * pool.length)], offsetSeconds: 0 } : null;
   }
@@ -6004,8 +6006,9 @@
           ch, items, nowMs, manifestServerKey()
         );
 
-        // ProgramRowLayout.segments: a cursor walk, so the row is never wider than the window. An airing
-        // that runs past local midnight overlaps the next day's first one; that one is trimmed at its start.
+        // ProgramRowLayout.segments: a cursor walk, so the row is never wider than the window. Since #315 an airing that
+        // runs past midnight is followed by the next day's first one with no overlap; the trim of an overlapping one at its
+        // start stays as a guard for a day stored before yesterday's was.
         const segs = NostalgexProgramRowLayout.segments(blocks, windowStartSec, windowDuration);
         const PROGRAM_SLIVER = 0.08;   // of the window: 9.6 min, where 16px of padding is more than the block's share on a phone
         for (const seg of segs) {
@@ -6433,7 +6436,8 @@
   function makePlaybackTracker(item, initialOptions = { nowPlaying: nowPlayingReportingEnabled, markWatched }, scope = reportingScope) {
     const WS = window.NostalgexWatchState;
     const queue = WS.sharedQueue;
-    const totalSec = (item.duration || 0) * 60;
+    // The programme's length as the guide has it: the file's runtime, so the 75% watched mark and the reported length agree with the Apple TV (#315).
+    const totalSec = NostalgexDailyManifest.slotSeconds(item);
     const seekOffset = Math.floor(item.offsetSeconds || 0);
     const rk = item.ratingKey;
     const serverUrl = item.serverUrl || plexServerUrl;
@@ -10780,8 +10784,11 @@
   // 24 hours (the Apple TV's scanFieldsVersion). 2: Jellyfin and Emby ratings (#204), no playlists
   // or other non-video items, and the count of titles skipped for no runtime. Without it a
   // library saved before this release would keep a playlist on the guide and every Emby title
-  // unrated until the day was up.
-  const LIBRARY_SCAN_REVISION = 2;
+  // unrated until the day was up. 3: every title also carries its real runtime in seconds
+  // (exactDurationSeconds), which the schedule gives a programme as its slot, so a file plays to its
+  // own end (#315). A library saved before that has none: it still plays (the slot is the floored
+  // minutes) and is read again once behind the guide.
+  const LIBRARY_SCAN_REVISION = 3;
 
   // IndexedDB (scripts/nostalgex-storage.js), not localStorage and not sessionStorage.
   //
@@ -10920,7 +10927,9 @@
 
     allItemsCache = allItems;
     if (!options.skipCacheSave) saveLibraryCache(allItems);
-    if (!options.skipManifestClear) NostalgexDailyManifest.clearManifests(manifestServerKey());
+    // Yesterday's stored day stays: the programme running over midnight is on air from it, and a refresh just after midnight
+    // must not blank it (#315). Today is packed again from the new pool, starting when that programme ends.
+    if (!options.skipManifestClear) NostalgexDailyManifest.clearManifests(manifestServerKey(), { keepDayKey: NostalgexDailyManifest.previousLocalDayKey(Date.now()) });
 
     // Collection and found-franchise channels have no rules; their pool is their members.
     const targets = allChannelsUnfiltered.filter(ch => poolIDs.has(ch.id) && !isRuntimeChannel(ch));
@@ -11746,6 +11755,8 @@
                     })(),
                     contentRating: show.OfficialRating || ep.OfficialRating || '',
                     duration: durationMin,
+                    // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+                    exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromTicks(ep.RunTimeTicks),
                     ratingKey: ep.Id,
                     partKey: mi.msid,
                     container: mi.container,
@@ -11815,6 +11826,8 @@
               year,
               contentRating: jf.OfficialRating || '',
               duration: durationMin,
+              // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+              exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromTicks(jf.RunTimeTicks),
               ratingKey: jf.Id,
               partKey: mi.msid,
               container: mi.container,
@@ -12145,6 +12158,8 @@
                       originallyAvailableAt: ep.originallyAvailableAt || show.originallyAvailableAt || null,
                       contentRating: show.contentRating || ep.contentRating || '',
                       duration: durationMin,
+                      // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+                      exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromPlexMs(ep.duration),
                       ratingKey: ep.ratingKey,
                       partKey: partKey,
                       container: container,
@@ -12244,6 +12259,8 @@
             year: item.year || '',
             contentRating: item.contentRating || '',
             duration: durationMin,
+            // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+            exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromPlexMs(item.duration),
             ratingKey: item.ratingKey,
             partKey: partKey,
             container: container,

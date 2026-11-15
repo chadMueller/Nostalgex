@@ -6,8 +6,10 @@
  *
  *   - no row's programme strip is wider than its window (scrollWidth is its content, overflow or not);
  *   - every programme's left edge is where the engine says it airs, or right after the airing that overlaps it;
- *   - on a night when some channel's airing crosses midnight (the 24-hour window then holds two blocks for the
- *     same minutes), at phone, tablet, desktop and 960x540 (a TV browser: a cursor, clicks only);
+ *   - on the nights when some channel's airing crosses midnight, at phone, tablet, desktop and 960x540 (a TV browser: a cursor,
+ *     clicks only). Since #315 a programme runs to its own end and the next day starts when it ends, so the window tiles across
+ *     midnight with no two blocks for the same minutes; before it, the day was cut and the 24-hour window held two. The layout's
+ *     handling of overlapping blocks is still held by scripts/program-row-layout-smoke.mjs (a stub DOM);
  *   - never in browser full screen.
  *
  * Set SHOTS=/dir to save screenshots. TUNER_ROOT=/path/to/dist (or dist-selfhost) runs the same checks on a build.
@@ -92,7 +94,7 @@ const at = (day, h, m) => new Date(Date.UTC(2026, 10, day, h + 5, m, 0));   // N
 
 async function measure(page) {
   return page.evaluate(() => {
-    const out = { rows: 0, wide: [], late: [], overlapRows: 0, widths: [] };
+    const out = { rows: 0, wide: [], late: [], overlapRows: 0, crossRows: 0, widths: [] };
     const ws = Math.floor(Date.now() / 1800000) * 1800 + guideSlotOffset * 1800;
     for (const row of document.querySelectorAll("#grid-body .grid-row[data-channel-id]")) {
       const ch = CHANNELS.find((c) => String(c.id) === row.dataset.channelId);
@@ -106,6 +108,8 @@ async function measure(page) {
             if (strip.scrollWidth > strip.clientWidth + 1 || total > W + 1) out.wide.push(`${ch.name}: content ${Math.round(total)}px (scroll ${strip.scrollWidth}) in ${Math.round(W)}px (client ${strip.clientWidth})`);
       const blocks = (ch._manifestBlocks || []).filter((b) => b.endSec > ws && b.startSec < ws + 7200).sort((a, b) => a.startSec - b.startSec);
       if (blocks.some((b, i) => i && b.startSec < blocks[i - 1].endSec)) out.overlapRows++;
+      const midnight = new Date(ws * 1000).setHours(24, 0, 0, 0) / 1000;
+      if (blocks.some((b) => b.startSec < midnight && b.endSec > midnight)) out.crossRows++;
       // Where each programme should start: its time, or right after the airing before it.
       let cursor = ws, k = 0;
       const progs = kids.filter((c) => c.classList.contains("grid-program"));
@@ -143,23 +147,26 @@ for (const name of Object.keys(viewports)) {
   await page.waitForFunction(() => localStorage.getItem("nostalgex_completed_initial_load") === "1", null, { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(1500);
 
-  let found = null, windows = 0, wideWindows = 0, lateWindows = 0, worst = "";
+  let found = null, windows = 0, crossWindows = 0, overlapWindows = 0, wideWindows = 0, lateWindows = 0, worst = "";
   for (const day of NIGHTS) {
     for (let mins = 21 * 60; mins < 24 * 60; mins += 15) {
       await page.clock.setFixedTime(at(day, Math.floor(mins / 60), mins % 60));
       const m = await page.evaluate(() => { rebuildAllSchedules(); renderGrid(); return true; }).then(() => measure(page));
-      if (m.overlapRows) {
-        windows++;
-        if (m.wide.length) { wideWindows++; worst = worst || m.wide[0]; }
-        if (m.late.length) { lateWindows++; worst = worst || m.late[0]; }
+      windows++;
+      if (m.crossRows) {
+        crossWindows++;
         if (!found) found = { day, mins, m };
       }
+      if (m.overlapRows) overlapWindows++;
+      if (m.wide.length) { wideWindows++; worst = worst || m.wide[0]; }
+      if (m.late.length) { lateWindows++; worst = worst || m.late[0]; }
     }
-    if (found && windows >= 8) break;
+    if (found && crossWindows >= 8) break;
   }
-  console.log(`${name}: ${windows} windows with an overlapping channel${found ? ` (first Nov ${found.day} ${Math.floor(found.mins / 60)}:${String(found.mins % 60).padStart(2, "0")}, ${found.m.rows} rows)` : ""};`
-    + ` rows wider than the window in ${wideWindows}, programmes off their time in ${lateWindows}${worst ? `; e.g. ${worst}` : ""}`);
-  check(`${name}: some night has an airing across midnight`, windows > 0);
+  console.log(`${name}: ${crossWindows} of ${windows} windows with an airing across midnight${found ? ` (first Nov ${found.day} ${Math.floor(found.mins / 60)}:${String(found.mins % 60).padStart(2, "0")}, ${found.m.rows} rows)` : ""};`
+    + ` windows with two airings for the same minutes ${overlapWindows}, rows wider than the window in ${wideWindows}, programmes off their time in ${lateWindows}${worst ? `; e.g. ${worst}` : ""}`);
+  check(`${name}: some night has an airing across midnight`, crossWindows > 0);
+  check(`${name}: and no row holds two airings for the same minutes (the day starts when yesterday's last programme ends)`, overlapWindows === 0);
   check(`${name}: no row is wider than its window`, wideWindows === 0, worst);
   check(`${name}: every programme starts where it airs`, lateWindows === 0, worst);
   check(`${name}: no page error`, errors.length === 0, errors.join(" | "));

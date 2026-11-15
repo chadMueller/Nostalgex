@@ -47,13 +47,16 @@
   // day stored by an older tuner is packed again rather than aired the old way until midnight.
   // 3: the lineup's days are packed together, so one title is never on two channels at once.
   // A day stored by an older tuner is packed again once, from what aired the day before.
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
 
   /**
    * How far down its running order a channel looks for a programme no other channel has on
    * in the same slot. Mirrors DailyManifestScheduler.lookahead.
    */
   const LOOKAHEAD = 8;
+
+  /** How far behind the guide the player may fall at a natural end before the next programme joins where the clock is. As AppState.naturalEndCatchUpSeconds. */
+  const NATURAL_END_CATCH_UP_SECONDS = 10;
   const MASK64 = 0xFFFFFFFFFFFFFFFFn;
 
   /** Mirrors `splitmix64` in SchedulePoolOrdering.swift. */
@@ -318,13 +321,32 @@
     return Math.floor(startOfLocalDayMs(dateMs) / 86400000);
   }
 
+  /**
+   * How long the schedule gives a programme, in seconds: the file's real runtime rounded up to a whole second, so the slot and the
+   * file end together and nothing is cut at a boundary (#315). The servers floor a runtime to whole minutes (`duration`), which
+   * left a file 0 to 59 s past its slot. An item with no real runtime (a library saved before one was kept), or one that
+   * disagrees with `duration` by a minute or more (a bad value), gets `duration` minutes, as every build before did. Mirrors
+   * PlexMediaItem.slotSeconds. `exactDurationSeconds` is the Plex duration in ms / 1000, or Jellyfin and Emby RunTimeTicks / 1e7.
+   */
+  function slotSeconds(item) {
+    const minutes = ((item && item.duration) || 0) * 60;
+    const exact = item ? item.exactDurationSeconds : undefined;
+    if (typeof exact === 'number' && Number.isFinite(exact) && exact >= 1 && Math.abs(exact - minutes) < 61) {
+      return Math.ceil(exact);
+    }
+    return minutes;
+  }
+
+  // The keys of the pool, and how many of its items carry a usable runtime: a day packed while a library had no runtimes
+  // (a saved one, before the rescan behind the guide) is packed again once they arrive, not kept until midnight.
   function poolFingerprint(pool) {
     const keys = pool.map(i => i.ratingKey).sort().join(',');
     let h = 0;
     for (let i = 0; i < keys.length; i++) {
       h = ((h << 5) - h + keys.charCodeAt(i)) | 0;
     }
-    return String(h);
+    const withRuntime = pool.reduce((n, i) => n + (slotSeconds(i) !== (i.duration || 0) * 60 || Number.isFinite(i.exactDurationSeconds) ? 1 : 0), 0);
+    return `${h}r${withRuntime}`;
   }
 
   function storageKey(serverKey, channelId, dayKey) {
@@ -433,7 +455,7 @@
     return best >= 0 ? best : 0;
   }
 
-  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy, gated) {
+  function packDay(pool, dayStartSec, dayNumber, channelId, yesterdayAired, isPremiereChannel, yesterdayLastRatingKey, occupancy, gated, runsOverUntilSec) {
     // As long as the local day, so a 25-hour day has no empty last hour and a 23-hour day
     // doesn't run an hour into tomorrow. Same end as DailyManifestScheduler.blocks passes in.
     const dayEndSec = dayStartSec + localDayLengthSec(dayStartSec);
@@ -462,7 +484,9 @@
       unplayedOrdered.push(unplayedOrdered.shift());
     }
     const blocks = [];
-    let t = dayStartSec;
+    // The day starts when the programme running over midnight from yesterday ends: it plays to its own end (#315), so nothing of
+    // today's may be on air under it. Missing, or before midnight, is the start of the day. Mirrors packDay's runsOverUntil.
+    let t = Math.max(dayStartSec, runsOverUntilSec || dayStartSec);
 
     // In the channel's order, except that a programme another channel has on in the same
     // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
@@ -470,10 +494,10 @@
     // waiting fits, the day goes on with the filler loop below, which holds the whole pool.
     const queue = unplayedOrdered.filter((item) => (item.duration || 0) > 0);
     while (queue.length && t < dayEndSec) {
-      const j = pickCandidate(queue, t, (i) => queue[i].duration * 60, occupancy, channelId, null, true, gated);
+      const j = pickCandidate(queue, t, (i) => slotSeconds(queue[i]), occupancy, channelId, null, true, gated);
       if (j < 0) break;
       const item = queue.splice(j, 1)[0];
-      const dur = item.duration * 60;
+      const dur = slotSeconds(item);
       blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + dur });
       t += dur;
     }
@@ -484,14 +508,13 @@
       const goldenShift = Math.floor(totalPoolSec * 0.6180339887);
       const offsetSec = (dayNumber * goldenShift) % totalPoolSec;
 
+      // The cycle's start is found in minutes, as before (and as the Apple TV does): it only picks where the loop begins.
       let elapsed = 0;
       let cycleIndex = 0;
-      let offsetInItem = offsetSec;
       for (let i = 0; i < orderedFull.length; i++) {
         const d = (orderedFull[i].duration || 0) * 60;
         if (elapsed + d > offsetSec) {
           cycleIndex = i;
-          offsetInItem = offsetSec - elapsed;
           break;
         }
         elapsed += d;
@@ -502,25 +525,22 @@
         const lastPlayed = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
         if (lastPlayed && orderedFull[cycleIndex].ratingKey === lastPlayed) {
           cycleIndex = (cycleIndex + 1) % orderedFull.length;
-          offsetInItem = 0;
         }
       }
 
       // The loop as a queue from the cycle's start: what airs goes to the back, so with
-      // nothing on elsewhere this is the cycle in order. The first programme starts part
-      // way in (offsetInItem) only if it airs first; one picked ahead of it starts at 0.
+      // nothing on elsewhere this is the cycle in order. Every programme airs whole, from its start to its own end,
+      // including the one that runs past midnight and the first of the day (#315): the day's cut and a part-way start
+      // were cut files short.
       const loop = orderedFull.slice(cycleIndex).concat(orderedFull.slice(0, cycleIndex))
         .filter((item) => (item.duration || 0) > 0);
-      let first = true;
       while (t < dayEndSec && loop.length) {
-        const remainingDay = dayEndSec - t;
-        const playFor = (i) => Math.min(loop[i].duration * 60 - (first && i === 0 ? offsetInItem : 0), remainingDay);
+        const playFor = (i) => slotSeconds(loop[i]);
         const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
         const j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated);
         const playSec = playFor(j);
         const item = loop.splice(j, 1)[0];
         loop.push(item);
-        first = false;
         blocks.push({ ratingKey: item.ratingKey, startSec: t, endSec: t + playSec });
         t += playSec;
       }
@@ -558,7 +578,7 @@
       const prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey);
       const packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, new Set(prev.map((b) => b.ratingKey)),
                              Boolean(extra.channel.isPremiereChannel), prev.length ? prev[prev.length - 1].ratingKey : null,
-                             occupancyMemo.occupancy, isGated(extra.channel));
+                             occupancyMemo.occupancy, isGated(extra.channel), lastEnd(prev));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: extra.channel.id, dayKey,
         poolFingerprint: poolFingerprint(extra.pool), blocks: packed });
       return new Map([[extra.channel.id, packed]]);
@@ -593,7 +613,7 @@
       const aired = new Set(prev.map((b) => b.ratingKey));
       const last = prev.length ? prev[prev.length - 1].ratingKey : null;
       const packed = packDay(pool, dayStartSec, dayNumber, channel.id, aired,
-                             Boolean(channel.isPremiereChannel), last, occupancy, isGated(channel));
+                             Boolean(channel.isPremiereChannel), last, occupancy, isGated(channel), lastEnd(prev));
       saveManifest(serverKey, { schemaVersion: SCHEMA_VERSION, channelId: channel.id, dayKey, poolFingerprint: fp, blocks: packed });
       packedBy.set(channel.id, packed);
       if (entry !== extra) {
@@ -605,6 +625,13 @@
     // memo goes stale the moment one of them is packed again (lineupGeneration).
     occupancyMemo = { key: memoKey, generation: lineupGeneration, occupancy };
     return packedBy;
+  }
+
+  /** When the last of a stored day's blocks ends (the programme that runs over midnight ends here), or 0 for a day with none. */
+  function lastEnd(blocks) {
+    let end = 0;
+    for (const b of blocks) if (b.endSec > end) end = b.endSec;
+    return end;
   }
 
   // The lineup's day as packLineupDay last saw it, for channels off the guide only.
@@ -713,6 +740,18 @@
     return n > 0 ? Math.floor(n / 600000000) : 0;
   }
 
+  /** The Plex duration (ms) in seconds, the file's real runtime for the slot (#315), or undefined with none. As PlexAPIService keeps it. */
+  function exactSecondsFromPlexMs(ms) {
+    const n = Number(ms) || 0;
+    return n > 0 ? n / 1000 : undefined;
+  }
+
+  /** The Jellyfin or Emby RunTimeTicks (100 ns) in seconds, as JellyfinAPIService.seconds(fromTicks:), or undefined with none. */
+  function exactSecondsFromTicks(ticks) {
+    const n = Number(ticks) || 0;
+    return n > 0 ? n / 10000000 : undefined;
+  }
+
   /**
    * Unix seconds from a Jellyfin or Emby DateCreated, as JellyfinAPIService.unixSeconds(fromISO:).
    * 0 when it doesn't parse: an unreadable date reads as "not recent", never "added now".
@@ -730,6 +769,13 @@
    */
   function blocksInRange(channel, pool, fromSec, toSec, serverKey) {
     const result = [];
+    // The programme running over midnight from yesterday is on air until it ends, and today's day starts after it (packDay's
+    // runsOverUntil): without it the guide would show today's first programme under a file that is still playing its last
+    // minutes. Yesterday's stored day only; one that was never packed has no such programme. Mirrors blocksInRange.
+    const overRows = storedBlocks(serverKey, channel.id, previousLocalDayKey(fromSec * 1000)).filter((b) => b.endSec > fromSec);
+    if (overRows.length) {
+      for (const b of resolveBlocks(overRows, pool)) if (b.endSec > fromSec && b.startSec < toSec) result.push(b);
+    }
     let cursor = startOfLocalDayMs(fromSec * 1000);
     const endDay = startOfLocalDayMs(toSec * 1000);
     while (cursor <= endDay) {
@@ -792,7 +838,7 @@
   function liveElapsedSeconds(schedule, nowSec) {
     const np = schedule && schedule.nowPlaying;
     if (!np) return null;
-    const total = Math.max(1, (np.item.duration || 0) * 60);
+    const total = Math.max(1, slotSeconds(np.item));
     return Math.max(0, Math.min(total, Math.trunc(nowSec - np.startSec)));
   }
 
@@ -866,8 +912,14 @@
    * next one; never the title another channel has on right now (skip one entry); from 0 on
    * a natural end. Returns { item, seekSeconds }, or null where the Apple TV would pick at
    * random (no schedule).
+   *
+   * `catchUp` (the page passes true; the parity golden does not, because the Apple TV's schedule builder has no player): at a
+   * natural end that finds the guide NATURAL_END_CATCH_UP_SECONDS or more into the programme it is about to start, the next
+   * programme joins where the clock is instead of at 0 (#315). The next file takes a second or two to load, which the clock
+   * keeps counting, so without it the player falls further behind the guide at every boundary. Its opening seconds go, never
+   * the end of anything. Mirrors AppState.advanceToNextItem.
    */
-  function advancePick(channel, pool, prevRatingKey, nowSec, channels, serverKey, fromNaturalEnd = true) {
+  function advancePick(channel, pool, prevRatingKey, nowSec, channels, serverKey, fromNaturalEnd = true, catchUp = false) {
     const schedule = buildSchedule(channel, pool, nowSec, serverKey);
     if (!schedule) return null;
     const moved = (schedule.nowPlaying ? schedule.nowPlaying.item.ratingKey : null) !== (prevRatingKey ?? null);
@@ -875,6 +927,10 @@
       ? (schedule.nowPlaying ? schedule.nowPlaying.item : null)
       : ((schedule.upNext && schedule.upNext.item) || (schedule.nowPlaying ? schedule.nowPlaying.item : null));
     let seekSeconds = moved && pick && !fromNaturalEnd ? schedule.elapsedSeconds : 0;
+    if (catchUp && fromNaturalEnd && moved && pick && schedule.nowPlaying && pick.ratingKey === schedule.nowPlaying.item.ratingKey
+        && schedule.elapsedSeconds >= NATURAL_END_CATCH_UP_SECONDS) {
+      seekSeconds = schedule.elapsedSeconds;
+    }
     if (pick && findConflict(pick, channel.id, channels, nowSec, serverKey) != null) {
       const idx = schedule.entries.findIndex((e) => e.item.ratingKey === pick.ratingKey);
       if (idx >= 0 && idx + 1 < schedule.entries.length) {
@@ -885,13 +941,18 @@
     return pick ? { item: pick, seekSeconds } : null;
   }
 
-  function clearManifests(serverKey) {
+  /**
+   * Forgets the stored days of a server. `keepDayKey` (a refresh of the library passes yesterday's) spares one day: the programme
+   * running over midnight from yesterday is on air from yesterday's stored day, and a refresh in that window must not blank it
+   * (#315). Everything else, today included, is packed again from the new pool.
+   */
+  function clearManifests(serverKey, { keepDayKey } = {}) {
     try {
       const prefix = `${MANIFEST_PREFIX}${serverKey}_`;
       const toRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(prefix)) toRemove.push(key);
+        if (key && key.startsWith(prefix) && !(keepDayKey && key.endsWith(`_${keepDayKey}`))) toRemove.push(key);
       }
       toRemove.forEach(k => localStorage.removeItem(k));
       occupancyMemo = null;
@@ -910,8 +971,11 @@
     resolveConflicts,
     findConflict,
     advancePick,
+    NATURAL_END_CATCH_UP_SECONDS,
     minutesFromPlexMs,
     minutesFromTicks,
+    exactSecondsFromPlexMs,
+    exactSecondsFromTicks,
     unixSecondsFromISO,
     clearManifests,
     interleaveByShow,
@@ -919,6 +983,7 @@
     premiereOffset,
     groupSequelParts,
     packDay,
+    slotSeconds,
     localDayNumber,
     localDayKey,
     startOfLocalDayMs,

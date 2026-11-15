@@ -42,14 +42,14 @@ export function makeItem(M, spec) {
     const minutes = M.minutesFromPlexMs(raw.duration);
     if (minutes <= 0) return [key, null];
     const title = kind === "episode" ? (show.title ?? "") : raw.title;
-    return [key, { ratingKey: key, title, type: kind, duration: minutes, addedAt: raw.addedAt || 0 }];
+    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromPlexMs(raw.duration), addedAt: raw.addedAt || 0 }];
   }
   if (backend === "jellyfin" || backend === "emby") {
     const key = raw.Id;
     const minutes = M.minutesFromTicks(raw.RunTimeTicks);
     if (minutes <= 0) return [key, null];
     const title = kind === "episode" ? (show.Name ?? raw.SeriesName ?? "") : (raw.Name ?? "");
-    return [key, { ratingKey: key, title, type: kind, duration: minutes, addedAt: M.unixSecondsFromISO(raw.DateCreated) }];
+    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromTicks(raw.RunTimeTicks), addedAt: M.unixSecondsFromISO(raw.DateCreated) }];
   }
   throw new Error(`unknown item ${backend} ${kind}`);
 }
