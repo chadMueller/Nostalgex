@@ -83,6 +83,7 @@ import com.muellhaus.nostalgex.R
 import com.muellhaus.nostalgex.engine.DailyManifest
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import com.muellhaus.nostalgex.engine.GuideCursor
 import com.muellhaus.nostalgex.engine.GuideStripes
 import com.muellhaus.nostalgex.engine.GuideTextMetrics
 import com.muellhaus.nostalgex.engine.InfoPanelLayout
@@ -439,6 +440,8 @@ private fun Tuner(
     onInvite: (ChannelConfig.Bundle) -> Unit,
 ) {
     var previewId by remember { mutableStateOf<Int?>(null) }
+    // Where the guide's programme cursor is, as one instant in the focused programme (null: the live one); the info panel follows it.
+    var cursor by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().height(u(videoHeight))) {
             Column(
@@ -456,7 +459,10 @@ private fun Tuner(
                 val ch = lineup?.channels?.firstOrNull { it.id == previewId } ?: model.channel
                 val schedule = ch?.let { lineup?.schedules?.get(it.id) }
                 if (ch != null && schedule != null) {
-                    InfoPanel(ch, schedule, playingItem = if (ch.id == model.channel?.id) model.item else null)
+                    // A programme that is not the live one, focused in the guide: the panel shows it (I-089), with its time range.
+                    val focusedEntry = GuideCursor.focusedEntry(schedule.entries, cursor, nowSec())
+                    val preview = focusedEntry?.takeIf { GuideCursor.isPreview(it, nowSec()) }
+                    InfoPanel(ch, schedule, playingItem = if (ch.id == model.channel?.id) model.item else null, preview = preview)
                 }
             }
             NavBar(panelWidth, onSettings = model::openSettings)
@@ -466,6 +472,7 @@ private fun Tuner(
             focusTarget = focusTarget,
             focusRequest = focusRequest,
             onFocused = { previewId = it; onFocused(it) },
+            onCursor = { cursor = it },
             onFocusTarget = onFocusTarget,
             sidebarOpen = sidebarOpen,
             onSidebar = onSidebar,
@@ -522,7 +529,7 @@ private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
 // ── The info panel (InfoPanelView.swift) ─────────────────────────────────
 
 @Composable
-private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaItem?) {
+private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaItem?, preview: ScheduleEntry? = null) {
     // The Apple TV's InfoPanelView at 106e8dda: gaps of 10 and 6, the order held in InfoPanelLayout.
     val color = hex(ch.def.colorHex)
     val now = ticking()
@@ -538,10 +545,12 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
             maxLines = 1,
             modifier = Modifier.padding(bottom = sectionGap),
         )
-        val np = schedule.nowPlaying ?: return@Column
-        // The item the player has, when this is the channel on: the schedule can run a few seconds apart.
-        val item = playingItem ?: np.item
-        val next = schedule.upNext
+        val np = schedule.nowPlaying
+        if (np == null && preview == null) return@Column
+        // The item the player has, when this is the channel on: the schedule can run a few seconds apart. A programme
+        // the guide's cursor is on, not the live one, is shown as it is on the schedule, with its time range (I-089).
+        val item = preview?.item ?: playingItem ?: np!!.item
+        val next = if (preview != null) GuideCursor.next(schedule.entries, preview) else schedule.upNext
         val episodeLine = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
         val genres = item.musicGenreDisplay
         val sections = InfoPanelLayout.sections(
@@ -583,7 +592,14 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            InfoPanelSection.PROGRESS -> {
+            InfoPanelSection.PROGRESS -> if (preview != null) {
+                // When it is on, where the progress bar is.
+                Text(
+                    "${time(preview.startSec)} - ${time(preview.endSec)}",
+                    style = font(VT323, 24, color),
+                    modifier = Modifier.padding(bottom = sectionGap),
+                )
+            } else {
                 // The progress bar and time follow the wall clock (schedule.livePlayback).
                 val total = maxOf(1L, item.slotSeconds.toLong())
                 val elapsed = DailyManifest.liveElapsedSeconds(schedule, now) ?: schedule.elapsedSeconds
@@ -624,6 +640,7 @@ private fun Guide(
     focusTarget: Int,
     focusRequest: Int,
     onFocused: (Int?) -> Unit,
+    onCursor: (Long?) -> Unit,
     onFocusTarget: (Int) -> Unit,
     sidebarOpen: Boolean,
     onSidebar: (Boolean) -> Unit,
@@ -653,6 +670,17 @@ private fun Guide(
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, channels.indexOfFirst { it.id == focusTarget } + lead - 2))
     val visibleStart = lineup.windowStartSec + slotOffset * 1800L
     val now = ticking()
+    // The programme cursor: Left and Right move programme by programme, Up and Down keep the column (GuideCursor).
+    var cursorSec by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(cursorSec) { onCursor(cursorSec) }
+    // Asked to focus a row from outside (Back to the playing channel, the bundle list): back to the live programme.
+    LaunchedEffect(focusRequest) { cursorSec = null; slotOffset = 0 }
+    fun rowEntries(): List<ScheduleEntry> = rowFocus?.let { lineup.schedules[it]?.entries } ?: emptyList()
+    fun focusedEntry(): ScheduleEntry? = GuideCursor.focusedEntry(rowEntries(), cursorSec, nowSec())
+    fun moveCursorTo(entry: ScheduleEntry) {
+        cursorSec = GuideCursor.referenceTime(entry, lineup.windowStartSec)
+        slotOffset = GuideCursor.slotOffsetFor(entry, slotOffset, lineup.windowStartSec, VISIBLE_SECONDS, MAX_SLOT_OFFSET)
+    }
 
     fun canEnterStripe(): Boolean {
         val id = rowFocus ?: return false
@@ -719,10 +747,20 @@ private fun Guide(
                     }
                 }
                 when (e.key.nativeKeyCode) {
-                    // Left and Right move the window by a half hour (ChannelGuideView's onMoveCommand);
-                    // Left at the first half hour goes to the bundle stripe, or opens the bundle list when there is none.
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) { if (slotOffset > 0) slotOffset-- else if (canEnterStripe()) enterStripe() else onSidebar(true) }; true }
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down && slotOffset < MAX_SLOT_OFFSET) slotOffset++; true }
+                    // Left and Right go to the previous or next programme on the row, whatever its length, and the grid
+                    // moves in time to keep it in view. Left on the row's first programme goes to the bundle stripe,
+                    // or opens the bundle list when there is none.
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (down) {
+                            val prev = focusedEntry()?.let { GuideCursor.previous(rowEntries(), it) }
+                            if (prev != null) moveCursorTo(prev) else if (canEnterStripe()) enterStripe() else onSidebar(true)
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (down) focusedEntry()?.let { cur -> GuideCursor.next(rowEntries(), cur)?.let(::moveCursorTo) }
+                        true
+                    }
                     // Down off the last channel wraps to the first; Up off the first does not.
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (channels.size > 1 && rowFocus == channels.last().id) {
@@ -762,6 +800,7 @@ private fun Guide(
                         requestFocus = ch.id == focusTarget,
                         focusRequest = focusRequest,
                         stripe = stripeCells.getOrNull(index),
+                        cursorStart = if (ch.id == rowFocus && !stripeMode) GuideCursor.focusedEntry(lineup.schedules[ch.id]?.entries.orEmpty(), cursorSec, now)?.startSec else null,
                         onFocused = {
                             rowFocus = ch.id
                             stripeMode = false
@@ -851,6 +890,8 @@ private fun EpgRow(
     requestFocus: Boolean,
     focusRequest: Int,
     stripe: GuideStripes.RowCell?,
+    /** The start of the programme the cursor is on, when this is the focused row: that cell is highlighted. */
+    cursorStart: Long?,
     onFocused: () -> Unit,
     onSelect: () -> Unit,
 ) {
@@ -920,7 +961,7 @@ private fun EpgRow(
                     )
                 }
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.15f)))
-                ProgramBlocks(schedule, watershedHold, color, focused, programsWidth, visibleStart, now)
+                ProgramBlocks(schedule, watershedHold, color, focused, cursorStart, programsWidth, visibleStart, now)
             }
             if (focused) {
                 // The shared focus outline: 3 pt cyan, not the channel colour (#268).
@@ -982,7 +1023,7 @@ private fun entryTitle(e: ScheduleEntry): String =
     if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
 
 @Composable
-private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, programsWidth: Float, visibleStart: Long, now: Double) {
+private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, cursorStart: Long?, programsWidth: Float, visibleStart: Long, now: Double) {
     Row(Modifier.width(u(programsWidth)).fillMaxHeight().clipToBounds()) {
         if (schedule == null) {
             // ChannelGuideView's watershedRowPlaceholder.
@@ -999,10 +1040,15 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                 is Segment.Block -> {
                     val e = segment.entry
                     val isPast = e.endSec < now && !e.isNowPlaying
+                    // The cursor's programme is a cell of its own: lifted off the row, filled and ringed in cyan, so the
+                    // viewer always sees which programme Left and Right have reached.
+                    val isCursor = cursorStart != null && e.startSec == cursorStart
+                    val cursorShape = RoundedCornerShape(u(6))
                     Row(
                         Modifier
                             .width(width)
                             .fillMaxHeight()
+                            .then(if (isCursor) Modifier.padding(horizontal = u(3), vertical = u(5)).clip(cursorShape).background(Tokens.SelectedRow).border(u(3), Tokens.Cyan, cursorShape) else Modifier)
                             .background(
                                 when {
                                     // Kept at 25% when focused: white titles stay at 4.5:1 on a bright channel colour.
@@ -1020,7 +1066,7 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                                 DMMonoMedium, LocalGuideText.current.title,
                                 // White for the live programme and the focused row; every other title,
                                 // past or upcoming, textDim (#268).
-                                if (e.isNowPlaying || focused) Tokens.Text else Tokens.TextDim,
+                                if (e.isNowPlaying || focused || isCursor) Tokens.Text else Tokens.TextDim,
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

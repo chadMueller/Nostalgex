@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Android: Left and Right go programme by programme, the cursor's cell is highlighted, the panel previews it; the stripe ring)
+
+**State.** Branch `android/guide-stripes`, local commits. Not pushed. For release 8.
+
+**Why.** Chad on release 7: "the right - left cursor ... should jump to the next title not the next 30 minutes and we should have a highlight or someway of seeing where the cursor is at. i also want to see the new meta window." And, from his photo, the focus ring covered the bundle stripe.
+
+**Not what the Apple TV does.** On main `106e8dda` the Apple TV's Left and Right still move the guide's window 30 minutes at a time with focus on the whole row (`GuideTimeCursor`: "30 minutes at a time, with focus staying on the row"), and it has no highlight on a programme cell. So the first two changes below are Android going beyond the Apple TV on Chad's word, and Apple TV parity is now behind Android on them. The panel preview (I-089) is the Apple TV's.
+
+**Changed.**
+- **`GuideCursor`** (engine, 14 tests): the cursor is one instant inside the focused programme. Left and Right go to the previous or next programme on the row, whatever its length (over a gap too), and the window moves in time only when the programme would be out of view (its own half hour to the left edge). Up and Down keep the instant, so the new row's focused programme is whatever covers it: the same column of the grid. Left on a row's first programme goes to the bundle stripe, or the bundle list, as before. Asked to focus a row from outside (Back to the playing channel, the bundle list) the cursor returns to the live programme and the window to now.
+- **The cursor's cell**: lifted off the row, filled with the selected-row fill and ringed in 3 pt cyan, with its title in white, inside the row's own ring.
+- **Info panel preview**: with the cursor on a programme that is not the live one the panel shows it as scheduled, with its time range where the progress bar was and the programme after it as UP NEXT. The Apple TV's panel has no poster, so there is none here.
+- **Stripe ring** (separate commit): the row's ring, glow, selected fill and lift start to the right of the stripe, which keeps its own column and is drawn last, so it runs unbroken through the focused row; with focus on the stripe it gets its own lifted ring.
+
+**Seen** on the Android TV emulator against two stand-in Plex servers: `android/emulator-2026-11-15/` in nostalgex-internal (the live cell, Right, Right again with the window following, Down keeping the column, Left). The stripe ring against the Apple TV: `android/emulator-2026-11-14/compare-14` and `compare-15`.
+
+**Half-done.** Not tried on the real TV. The timer-driven change of the live programme while the cursor sits on it is not specially handled: when a previewed programme goes live the panel shows it as live.
+
 ## 2026-11-14 (Android: the Now Playing panel's sleep row, the top bar, OPEN IN PLEX, the rating banner, preferences backup)
 
 **State.** Branch `android/guide-stripes`, local commits. Not pushed, not in a build.
