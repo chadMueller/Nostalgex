@@ -504,10 +504,9 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         duration: durationMin,
         exactDurationSeconds: NxMbRuntimeSec(ep.RunTimeTicks),
         ratingKey: ep.Id,
-        ' The episode's series and season (SeriesId, SeasonId), whose Primary images
-        ' are its poster before its own frame (#312), as the Plex items keep
-        ' showKey and parentRatingKey.
-        showKey: NxToStr(NxOr(ep.SeriesId, show.Id)),
+        ' The episode's season (SeasonId), whose Primary image is its poster
+        ' before the series' (#312), as the Plex items keep parentRatingKey;
+        ' showKey, below, is the series'.
         parentRatingKey: NxMbSeasonKey(ep),
         partKey: mi.msid,
         container: mi.container,
@@ -524,7 +523,7 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         userRating: 0,
         type: "episode",
         ' The series id, which a collection of shows lists in place of its
-        ' episodes.
+        ' episodes, and whose Primary image is the poster after the season's.
         showKey: NxToStr(show.Id),
         thumb: invalid,
         art: invalid,
