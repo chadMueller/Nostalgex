@@ -329,22 +329,24 @@ final class NaturalEndDriftTests: XCTestCase {
         state.allChannels = lu; state.channels = lu
         let midnight = Calendar.current.startOfDay(for: Self.base.addingTimeInterval(86400))
         let justAfter = midnight.addingTimeInterval(1)
-        var checked = 0
+
+        // Pack yesterday and today, and note what is running over midnight on each channel, all before the refresh.
+        var expected: [(channel: Channel, item: String)] = []
         for ch in lu {
             DailyManifestScheduler.invalidateMemo()
             _ = DailyManifestScheduler.blocksInRange(for: ch, from: Self.base, to: midnight.addingTimeInterval(3600), credentialFingerprint: fp)
-            guard let straddler = raw(ch, midnight.addingTimeInterval(-60))?.nowPlaying, straddler.endTime > justAfter else { continue }
-            checked += 1
+            if let straddler = raw(ch, midnight.addingTimeInterval(-60))?.nowPlaying, straddler.endTime > justAfter {
+                expected.append((ch, straddler.item.id))
+            }
         }
-        XCTAssertGreaterThan(checked, 0)
+        XCTAssertGreaterThan(expected.count, 0, "no channel had a programme running over midnight")
 
-        // What the library refresh runs when it finishes.
+        // What the library refresh runs when it finishes. From here on nothing asks for yesterday's day: a query over it
+        // would pack it again and write the file back, healing what this test checks.
         DailyManifestStore.purgeStaleDays(now: justAfter, credentialFingerprint: fp)
-        for ch in lu {
-            guard let before = DailyManifestScheduler.blocksInRange(for: ch, from: Self.base, to: midnight.addingTimeInterval(-1), credentialFingerprint: fp)
-                .last, before.endTime > justAfter else { continue }
+        for (ch, itemID) in expected {
             let guide = try XCTUnwrap(raw(ch, justAfter), "CH \(ch.number): no schedule at 00:00:01 after the refresh")
-            XCTAssertEqual(guide.nowPlaying?.item.id, before.item.id, "CH \(ch.number): the programme running over midnight is not on air")
+            XCTAssertEqual(guide.nowPlaying?.item.id, itemID, "CH \(ch.number): the programme running over midnight is not on air")
             XCTAssertNotNil(guide.upNext, "CH \(ch.number): no Up Next")
         }
         let yesterdayKey = DailyManifestStore.previousLocalDayKey(before: justAfter)

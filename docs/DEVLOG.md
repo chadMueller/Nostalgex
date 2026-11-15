@@ -5,7 +5,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 ## 2026-11-14 (Apple TV: a file plays to its own end, #315)
 
-**State.** Branch `appletv/315-play-to-end` off main `f76c021f`. Not merged, not in a build, not pushed. This is the Swift reference of an engine change: the web tuner's JS engine, the Roku and Android each have a port to make, and the golden vectors move with it (listed under Half-done).
+**State.** Branch `appletv/315-play-to-end` off main `106e8dda`. Not merged, not in a build, not pushed. This is the Swift reference of an engine change: the web tuner's JS engine, the Roku and Android each have a port to make, and the golden vectors move with it (listed under Half-done).
 
 **Why.** Chad: "the file should play till the end always". A tester on 1.0.32 (Plex 4.163, Original quality) saw a 4:11 music video show 4:00 and cut at 4:00. The servers floor a runtime to whole minutes and the schedule slot was that floored length, so a file runs 0 to 59 s past its slot. Until 1.0.31 nothing moved the channel on at the slot's end, and the player fell further behind the clock at every boundary (#293: the headline named the programme still playing while the guide had moved on). 1.0.32 fixed that by cutting the file at its slot end, which is the cut. The fix has to keep both: the file plays through and the guide, Now Playing and Up Next agree with it.
 
