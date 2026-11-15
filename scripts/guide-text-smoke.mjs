@@ -93,13 +93,16 @@ const pairs = [
 // so these pairs would compare two releases. They run on their own the day Swift has the constants, and the
 // page's LARGE multipliers below are then held to the new sizes too.
 const swiftHas1032Sizes = Object.keys(nxType).length > 0;
-if (swiftHas1032Sizes) {
+// The Roku has them once it has the three steps (NxGuideTextSizesFor, roku/guide-text-three-steps). A tree that carries the Apple TV's
+// 1.0.32 sizes without the Roku's (web/round3 does: the Apple TV commit is in it, the Roku's is not) would compare two releases.
+const rokuHas1032Sizes = /NxGuideTextSizesFor/.test(roku);
+if (swiftHas1032Sizes && rokuHas1032Sizes) {
   for (const [part, swiftKey, rokuKey] of pairs) {
     check(`${part}: Swift NORMAL ${sn[swiftKey]} is Roku NORMAL ${rn[rokuKey]}`, sn[swiftKey] === rn[rokuKey]);
     check(`${part}: Swift LARGE ${sl[swiftKey]} is Roku LARGE ${rl[rokuKey]}`, sl[swiftKey] === rl[rokuKey]);
   }
 } else {
-  console.log("guide text: SKIPPED the Swift against Roku size pairs (10 checks): main's Swift is still the Apple TV 1.0.31's sizes and the Roku has the 1.0.32's (#296). They run again once the Apple TV 1.0.32 sizes are on main.");
+  console.log(`guide text: SKIPPED the Swift against Roku size pairs (10 checks): ${swiftHas1032Sizes ? "the Apple TV has its 1.0.32 sizes and the Roku does not yet (#296), so the two would be different releases" : "main's Swift is still the Apple TV 1.0.31's sizes and the Roku has the 1.0.32's (#296)"}. They run once both have the 1.0.32 sizes.`);
 }
 
 // The page's multipliers.
