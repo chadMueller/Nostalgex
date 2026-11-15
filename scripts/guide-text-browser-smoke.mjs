@@ -60,9 +60,12 @@ const ratioSmall = {
   title: small.title / normal.title, time: small.timeLabel / normal.timeLabel,
   head: small.channelHeading / normal.channelHeading, num: small.number / normal.number, name: small.name / normal.name,
 };
+// The page's DEFAULT is the size it has always drawn (the Apple TV's former NORMAL: 22 pt row text, 25 pt times and heading), so
+// LARGER is the Apple TV's LARGE over that, 1.3182 and 1.16: no bigger than LARGE ever was here ("don't make the fonts too big").
+const WEB_DEFAULT_PT = { title: 22, time: 25, head: 25, num: 22, name: 22 };
 const ratio = {
-  title: large.title / normal.title, time: large.timeLabel / normal.timeLabel,
-  head: large.channelHeading / normal.channelHeading, num: large.number / normal.number, name: large.name / normal.name,
+  title: large.title / WEB_DEFAULT_PT.title, time: large.timeLabel / WEB_DEFAULT_PT.time,
+  head: large.channelHeading / WEB_DEFAULT_PT.head, num: large.number / WEB_DEFAULT_PT.num, name: large.name / WEB_DEFAULT_PT.name,
 };
 
 // ── The server: Jellyfin-shaped, 30 films, so the guide has rows ──

@@ -1600,10 +1600,13 @@
 
   /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY): three steps, SMALLER, DEFAULT and LARGER, as on the Apple TV. DEFAULT
      (saved as "normal") is the guide as this page draws it, so each multiplier is 1 and calc(18px * 1) is 18px. The other two
-     scale by the ratios of the Apple TV's GuideTextMetrics over .normal (row text 20 pt, times and heading 22 pt at DEFAULT):
-       LARGER ("large", what LARGE always was there): body (29) everywhere, so titles, channel numbers and names are 29/20 = 1.45
-       and the times and the CHANNEL heading 29/22 = 1.3182;
-       SMALLER ("small"): 17 pt row text and 19 pt times and heading, 17/20 = 0.85 and 19/22 = 0.8636.
+     scale it:
+       LARGER ("large", what LARGE always was): body (29) everywhere. This page's DEFAULT is the size it has always drawn (the
+       Apple TV's former NORMAL, 22 pt row text and 25 pt times; the Apple TV's own DEFAULT has since come down to 20 and 22), so
+       titles, channel numbers and names are 29/22 = 1.3182 and the times and the CHANNEL heading 29/25 = 1.16: LARGER is no
+       bigger than LARGE ever was here (Chad: don't make the fonts too big). The web's absolute scale differs from the Apple TV's
+       by design (--guide-scale), so these are not the Apple TV's 1.45 and 1.3182 over its DEFAULT;
+       SMALLER ("small"): the Apple TV's step, 17 pt row text and 19 pt times and heading over its 20 and 22, 0.85 and 0.8636.
      SMALLER is awaiting Chad's visual pick on the Apple TV (18 and 20 pt, 0.9 and 0.9091, is the fallback): the two numbers in
      the .guide-text-small block below are its one place. Only text changes: rows, header and the channel column keep their size,
      so at LARGER the name gives up characters to the ellipsis. The panel above the grid is not touched.
@@ -1623,11 +1626,11 @@
     --gt-name: 0.85;
   }
   body.guide-text-large .guide-grid {
-    --gt-title: 1.45;
-    --gt-time: 1.3182;
-    --gt-head: 1.3182;
-    --gt-num: 1.45;
-    --gt-name: 1.45;
+    --gt-title: 1.3182;
+    --gt-time: 1.16;
+    --gt-head: 1.16;
+    --gt-num: 1.3182;
+    --gt-name: 1.3182;
   }
   /* A phone has four time columns of 72px (390 wide), and a label wider than its column
      pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)

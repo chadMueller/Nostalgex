@@ -15,8 +15,9 @@
  * guide draws exactly what it drew before the setting existed, and no guide rule may carry a
  * raw font size that would escape the multiplier. The storage key is the Apple TV's.
  *
- * The Apple TV has three steps (SMALLER "small", DEFAULT "normal", LARGER "large") and so has the page, with the Apple TV's
- * ratios (SMALLER 0.85 and 0.8636, LARGER 1.45 and 1.3182 over DEFAULT). Roku follows; until its sizes are the Apple TV's
+ * The Apple TV has three steps (SMALLER "small", DEFAULT "normal", LARGER "large") and so has the page. SMALLER is the Apple TV's
+ * ratio (0.85 and 0.8636); LARGER is no bigger than the page's LARGE always was (1.3182 and 1.16 over the page's own DEFAULT,
+ * which did not come down with the Apple TV's). Roku follows; until its sizes are the Apple TV's
  * DEFAULT ones the Swift against Roku pairs below fail on purpose.
  *
  * The page's one deliberate exception, the time labels on a phone, is named below.
@@ -112,10 +113,16 @@ const normalVars = vars(cssBlock("  .guide-grid {\n    --gt-"));
 const smallVars = vars(cssBlock("  body.guide-text-small .guide-grid {\n    --gt-"));
 const largeVars = vars(cssBlock("  body.guide-text-large .guide-grid {\n    --gt-"));
 
+// The page's DEFAULT is the size it has always drawn: the Apple TV's former NORMAL (22 pt row text, 25 pt times, heading and
+// placeholder), not the Apple TV's current DEFAULT (20 and 22), which has come down. The web's absolute scale differs from the
+// Apple TV's by design, and Chad's rule is that nothing gets larger ("don't make the fonts too big"), so LARGER is Swift LARGE (29)
+// over THAT base: 29/22 = 1.3182 and 29/25 = 1.16, what LARGE has always been here. SMALLER is the Apple TV's own step over its
+// DEFAULT (17/20, 19/22). The Roku pairs above still hold Roku to the Apple TV.
+const WEB_DEFAULT_PT = { title: 22, time: 25, head: 25, num: 22, name: 22 };
 for (const [part, swiftKey] of pairs) {
   check(`${part}: NORMAL multiplier is 1`, normalVars[part] === 1, String(normalVars[part]));
-  const want = sl[swiftKey] / sn[swiftKey];
-  check(`${part}: LARGER multiplier ${largeVars[part]} is Swift LARGE over NORMAL (${want.toFixed(4)})`,
+  const want = sl[swiftKey] / WEB_DEFAULT_PT[part];
+  check(`${part}: LARGER multiplier ${largeVars[part]} is Swift LARGE over the page's DEFAULT size (${want.toFixed(4)}), no bigger than LARGE always was`,
     Math.abs(largeVars[part] - want) < 0.001, String(largeVars[part]));
   const wantSmall = ss[swiftKey] / sn[swiftKey];
   check(`${part}: SMALLER multiplier ${smallVars[part]} is Swift SMALL over NORMAL (${wantSmall.toFixed(4)})`,
