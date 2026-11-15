@@ -81,8 +81,9 @@ class PlexLibrary(private val client: PlexClient) {
                 continue
             }
             try {
-                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, _ ->
-                    progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded))
+                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, total ->
+                    progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded,
+                        sectionTotal = total.takeIf { type != "show" }, sectionDone = loaded.takeIf { type != "show" }))
                 }
                 val isMusicVideoSection = MUSIC_VIDEO_SECTION.containsMatchIn(title.trim())
                 if (type == "show") {

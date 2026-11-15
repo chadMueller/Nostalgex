@@ -44,12 +44,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.composed
 import com.muellhaus.nostalgex.engine.DesignTokens
+import com.muellhaus.nostalgex.engine.HeaderNotice
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -126,7 +129,7 @@ internal fun font(family: FontFamily, size: Number, color: Color, tracking: Numb
 internal fun hex(s: String?): Color =
     runCatching { Color(android.graphics.Color.parseColor(s ?: "#FFE500")) }.getOrDefault(Color(0xFFFFE500))
 
-private val GuideBackground = Color(0.05f, 0.05f, 0.12f)
+internal val GuideBackground = Color(0.05f, 0.05f, 0.12f)
 private val PanelTop = Color(0.04f, 0.04f, 0.10f)
 internal val BrandCyan = Color(0f, 0.831f, 1f)
 private val Yellow = Color(0xFFFFE500)
@@ -201,6 +204,8 @@ fun WatchScreen(model: AppModel) {
             // The OSD shows on entering full screen and on each new programme (PlayerView's onAppear, onChange of currentItem).
             LaunchedEffect(model.tuneCount, model.fullScreen, model.item) { if (model.fullScreen) flashOsd() }
             LaunchedEffect(model.fullScreen) { if (!model.fullScreen) overlay = Overlay.NONE }
+            // A switch's load ended and the new guide is up: focus goes to its live row, as a fresh screen would have (guideLoad).
+            LaunchedEffect(model.guideEpoch) { if (model.guideEpoch > 0) { model.channel?.id?.let { focusTarget = it }; focusRequest++ } }
             LaunchedEffect(overlay) { if (overlay != Overlay.PANEL) picker = null }
 
             // Back closes the strip or the panel first (PlayerView's onExitCommand), then leaves full
@@ -298,12 +303,13 @@ fun WatchScreen(model: AppModel) {
                     // RETRO MODE's CRT look over the picture, then the tuning card on a slow start.
                     if (model.retroMode) CrtOverlay()
                     TuningOverlay(
-                        loading = model.item != null && model.delivery == null && model.failure == null,
+                        // While the library is read, the notice is in the guide's empty area, never over the video.
+                        loading = model.item != null && model.delivery == null && model.failure == null && model.guideLoad == null,
                         retro = model.retroMode,
                         channelNumber = model.channel?.number,
                     )
                     // Smaller in the guide's box than in full screen, as the Apple TV's.
-                    model.failure?.let { FailureCard(it, compact = !model.fullScreen) }
+                    if (model.guideLoad == null) model.failure?.let { FailureCard(it, compact = !model.fullScreen) }
                     if (model.watershedHold) WatershedCard(compact = !model.fullScreen)
                 }
 
@@ -374,7 +380,7 @@ private fun FullScreen(
         val item = model.item
         // Always shown while nothing plays, for 8 s after a flash while something does.
         if (ch != null && item != null && (model.delivery == null || System.currentTimeMillis() < osdUntil)) {
-            ChannelOsd(ch, item, model.lineup?.schedules?.get(ch.id), now)
+            ChannelOsd(model, ch, item, model.lineup?.schedules?.get(ch.id), now)
         }
         when (overlay) {
             Overlay.STRIP -> MiniChannelStrip(model, onSelect = { picked ->
@@ -391,40 +397,66 @@ private fun FullScreen(
 }
 
 @Composable
-private fun ChannelOsd(ch: GuideChannel, item: MediaItem, schedule: Schedule?, now: Double) {
+private fun ChannelOsd(model: AppModel, ch: GuideChannel, item: MediaItem, schedule: Schedule?, now: Double) {
     val color = hex(ch.def.colorHex)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-        Column(
+        // The Apple TV's ChannelOSD: the poster (the Now Playing panel's 120 by 180, the same chain) beside the text block.
+        Row(
             Modifier
                 .background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)))
                 .padding(u(32)),
-            verticalArrangement = Arrangement.spacedBy(u(8)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(u(20)),
         ) {
-            Box(Modifier.size(u(48), u(4)).background(color))
-            Text("CH ${ch.number}", style = font(DMMonoMedium, 20, color))
-            // The title leads and the channel name follows smaller: viewers read this as
-            // "what's playing" (PlayerView's ChannelOSD, 02ac78f).
-            val headline = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.95f))
-            when {
-                item.type == "episode" && item.episodeTitle != null ->
-                    Text("${item.title}  ${item.seTag ?: ""}  \"${item.episodeTitle}\"", style = headline)
-                item.isMusicVideo -> Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
-                    Text(item.title, style = headline)
-                    item.artist?.takeIf { it.isNotEmpty() }?.let { Text(it, style = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.7f))) }
-                    val facts = listOfNotNull(item.year?.toString(), item.musicGenreDisplay)
-                    if (facts.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(u(12))) {
-                        for (f in facts) Text(f, style = font(DMMonoMedium, 32, Color.White.copy(alpha = 0.55f)))
-                    }
-                }
-                else -> Text(item.title + (item.year?.let { "  $it" } ?: ""), style = headline)
-            }
-            Text(ch.name, style = font(DMMono, 24, Color.White.copy(alpha = 0.9f)))
-            val np = schedule?.nowPlaying?.takeIf { it.item.ratingKey == item.ratingKey }
-            val label = if (np != null) {
-                "${formatTime(DailyManifest.liveElapsedSeconds(schedule, now) ?: 0)} / ${formatTime(maxOf(1L, item.slotSeconds.toLong()))}"
-            } else formatTime(item.slotSeconds.toLong())
-            Text(label, style = font(DMMono, 18, Color.Gray))
+            if (model.postersAvailable) OsdPoster(model, item)
+            ChannelOsdText(ch, item, schedule, now, color)
         }
+    }
+}
+
+/**
+ * The full-screen card's poster (ChannelOSD's AsyncImage): the text is on screen at once, an empty frame holds the place while the poster
+ * loads, and when there is none the frame goes and leaves no hole.
+ */
+@Composable
+private fun OsdPoster(model: AppModel, item: MediaItem) {
+    var poster by remember(item.ratingKey) { mutableStateOf<ImageBitmap?>(null) }
+    var settled by remember(item.ratingKey) { mutableStateOf(false) }
+    LaunchedEffect(item.ratingKey) { poster = model.poster(item); settled = true }
+    if (settled && poster == null) return
+    val shape = RoundedCornerShape(u(8))
+    Box(Modifier.size(u(120), u(180)).clip(shape).background(Tokens.Row).then(if (poster != null) Modifier.border(u(2), Tokens.RestingOutline, shape) else Modifier)) {
+        poster?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+    }
+}
+
+@Composable
+private fun ChannelOsdText(ch: GuideChannel, item: MediaItem, schedule: Schedule?, now: Double, color: Color) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(8))) {
+        Box(Modifier.size(u(48), u(4)).background(color))
+        Text("CH ${ch.number}", style = font(DMMonoMedium, 20, color))
+        // The title leads and the channel name follows smaller: viewers read this as
+        // "what's playing" (PlayerView's ChannelOSD, 02ac78f). 29 and 22 as the Apple TV's.
+        val headline = font(DMMonoMedium, 29, Color.White.copy(alpha = 0.95f))
+        when {
+            item.type == "episode" && item.episodeTitle != null ->
+                Text("${item.title}  ${item.seTag ?: ""}  \"${item.episodeTitle}\"", style = headline)
+            item.isMusicVideo -> Column(verticalArrangement = Arrangement.spacedBy(u(4))) {
+                Text(item.title, style = headline)
+                item.artist?.takeIf { it.isNotEmpty() }?.let { Text(it, style = font(DMMonoMedium, 29, Color.White.copy(alpha = 0.7f))) }
+                val facts = listOfNotNull(item.year?.toString(), item.musicGenreDisplay)
+                if (facts.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(u(12))) {
+                    for (f in facts) Text(f, style = font(DMMonoMedium, 29, Color.White.copy(alpha = 0.55f)))
+                }
+            }
+            else -> Text(item.title + (item.year?.let { "  $it" } ?: ""), style = headline)
+        }
+        Text(ch.name, style = font(DMMono, 22, Color.White.copy(alpha = 0.9f)))
+        val np = schedule?.nowPlaying?.takeIf { it.item.ratingKey == item.ratingKey }
+        val label = if (np != null) {
+            "${formatTime(DailyManifest.liveElapsedSeconds(schedule, now) ?: 0)} / ${formatTime(maxOf(1L, item.slotSeconds.toLong()))}"
+        } else formatTime(item.slotSeconds.toLong())
+        Text(label, style = font(DMMono, 18, Color.Gray))
     }
 }
 
@@ -468,7 +500,7 @@ private fun Tuner(
                     InfoPanel(model, ch, schedule, playingItem = if (ch.id == model.channel?.id) model.item else null, preview = preview)
                 }
             }
-            NavBar(panelWidth, onSettings = model::openSettings)
+            NavBar(panelWidth, model.headerNotice, onSettings = model::openSettings)
         }
         Guide(
             model = model,
@@ -486,12 +518,12 @@ private fun Tuner(
 
 /** TunerView's NavBar: the logo, and SETTINGS, which Up from channel one reaches. */
 @Composable
-private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
+private fun NavBar(panelWidth: Float, notice: HeaderNotice?, onSettings: () -> Unit) {
     // The Apple TV's TunerView NavBar: the wordmark 36 tall (about 272 wide, it is 7.5 times as wide as tall), and
     // SETTINGS as the pill every selectable thing is: 29 pt, 22 across and 6 up and down, the shared row surface and
     // selected state (3 pt cyan outline, glow, 3% lift).
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(u(40))
+    val shape = RoundedCornerShape(u(PILL_CORNER))
     Row(
         Modifier.width(u(panelWidth)).height(u(140)).padding(start = u(40), end = u(40), top = u(40)),
         verticalAlignment = Alignment.CenterVertically,
@@ -503,11 +535,22 @@ private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
             alignment = Alignment.CenterStart,
         )
         Spacer(Modifier.weight(1f))
+        // The loading pattern's header line: UPDATING LIBRARY with a count while the library is read again behind the guide, then
+        // GUIDE READY for a few seconds. It reads aloud when it changes.
+        notice?.let {
+            Text(
+                it.line,
+                style = font(DMMonoMedium, DesignTokens.Size.CAPTION, if (it is HeaderNotice.Ready) Tokens.Yellow else Tokens.Text2),
+                maxLines = 1,
+                modifier = Modifier.padding(end = u(24)).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = it.line },
+            )
+        }
         Box(
             Modifier
                 .zIndex(if (focused) 1f else 0f)
                 .graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
-                .then(if (focused) Modifier.cyanGlow() else Modifier)
+                // The pill's glow is the guide cursor's (round 3: radius 18 at 90% and 6 at 100%), kept close to the pill, not the shared row halo.
+                .then(if (focused) Modifier.pillGlow(PILL_CORNER) else Modifier)
                 .onFocusChanged { focused = it.isFocused }
                 .focusable()
                 .onKeyEvent { e ->
@@ -684,7 +727,12 @@ private fun Guide(
     onSidebar: (Boolean) -> Unit,
     onInvite: (ChannelConfig.Bundle) -> Unit,
 ) {
-    val lineup = model.lineup ?: return
+    val lineup = model.lineup
+    if (lineup == null) {
+        // A library is read in front of this guide (a server or library switch): the empty guide says so (GuideLoadBlock).
+        model.guideLoad?.let { GuideLoadBlock(model, it) }
+        return
+    }
     // Read so the rows redraw when the schedules are rebuilt.
     model.scheduleTick
     val channels = lineup.channels
@@ -840,7 +888,6 @@ private fun Guide(
                         now = now,
                         requestFocus = ch.id == focusTarget,
                         focusRequest = focusRequest,
-                        stripe = stripeCells.getOrNull(index),
                         cursorStart = if (ch.id == rowFocus && !stripeMode) GuideCursor.current(lineup.schedules[ch.id]?.entries.orEmpty(), cursorSec, now)?.startSec else null,
                         onFocused = {
                             rowFocus = ch.id
@@ -856,7 +903,7 @@ private fun Guide(
                     )
                 }
             }
-            GuideStripeOverlay(stripeGroups, listState, leading = if (offer != null) LocalGuideText.current.rowHeight.toFloat() else 0f, hasInvite = offer != null, rowPitch = LocalGuideText.current.rowHeight + 1f, focusedGroup = if (stripeMode) stripeGroupIndex else null)
+            GuideStripeOverlay(stripeGroups, listState, leading = if (offer != null) LocalGuideText.current.rowHeight.toFloat() else 0f, hasInvite = offer != null, rowPitch = LocalGuideText.current.rowHeight + 1f, focusedGroup = if (stripeMode) stripeGroupIndex else null, cells = stripeCells, itemsBeforeChannels = lead)
             }
         }
         // The stripe's own focus target, only while the viewer is in the stripe, so it can never be reached by accident.
@@ -931,7 +978,6 @@ private fun EpgRow(
     now: Double,
     requestFocus: Boolean,
     focusRequest: Int,
-    stripe: GuideStripes.RowCell?,
     /** The start of the programme the cursor is on, when this is the focused row: that cell is highlighted. */
     cursorStart: Long?,
     onFocused: () -> Unit,
@@ -946,7 +992,7 @@ private fun EpgRow(
     Column(Modifier.zIndex(if (focused) 1f else 0f)) {
       // The stripe has its own column at the left of the row, and the row's focus (fill, outline, glow and lift) starts
       // to the right of it, as on the Apple TV: the stripe is never inside the focus ring, and runs on unbroken through
-      // the focused row. It is drawn last, so the glow can't wash over it.
+      // the focused row. Its colours are drawn by GuideStripeOverlay, above every row, so no row's glow can wash over them.
       Box(Modifier.fillMaxWidth().height(u(LocalGuideText.current.rowHeight))) {
        Row(Modifier.fillMaxSize()) {
         Spacer(Modifier.width(u(GuideStripes.STRIPE_WIDTH)))
@@ -1008,7 +1054,8 @@ private fun EpgRow(
                     )
                 }
                 Box(Modifier.width(u(1)).fillMaxHeight().background(Color.White.copy(alpha = 0.15f)))
-                ProgramBlocks(schedule, watershedHold, color, focused, cursorStart, programsWidth, visibleStart, now)
+                // The cursor's cell shows only while the row has focus: with focus on SETTINGS no cell stays lit.
+                ProgramBlocks(schedule, watershedHold, color, focused, if (focused) cursorStart else null, programsWidth, visibleStart, now)
             }
             if (focused) {
                 // The shared focus outline: 3 pt cyan, not the channel colour (#268).
@@ -1020,7 +1067,6 @@ private fun EpgRow(
             }
         }
        }
-       GuideStripeCell(stripe, Modifier.align(Alignment.CenterStart))
       }
         Box(Modifier.fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.08f)))
     }
@@ -1508,6 +1554,17 @@ internal fun Modifier.rowGlow(radius: Float, alpha: Float, colour: Color): Modif
 internal fun Modifier.cursorGlow(): Modifier =
     glow(DesignTokens.Cursor.GLOW_OUTER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_OUTER_ALPHA, DesignTokens.Cursor.CORNER.toFloat(), Tokens.Cyan)
         .glow(DesignTokens.Cursor.GLOW_INNER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_INNER_ALPHA, DesignTokens.Cursor.CORNER.toFloat(), Tokens.Cyan)
+
+/** The Settings pill's corner: a capsule at its height. */
+private const val PILL_CORNER = 40f
+
+/**
+ * The Settings pill's focus glow: the guide cursor's two layers (DesignTokens.Cursor, round 3: radius 18 at 90% and radius 6 at
+ * 100%) on the pill's own corners, so it hugs the pill. The shared row halo (radius 30) was far too big for a button this small.
+ */
+internal fun Modifier.pillGlow(corner: Float): Modifier =
+    glow(DesignTokens.Cursor.GLOW_OUTER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_OUTER_ALPHA, corner, Tokens.Cyan)
+        .glow(DesignTokens.Cursor.GLOW_INNER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_INNER_ALPHA, corner, Tokens.Cyan)
 
 private fun Modifier.glow(glowRadius: Float, glowAlpha: Float, corner: Float, colour: Color): Modifier = composed {
     val unit = LocalUnit.current

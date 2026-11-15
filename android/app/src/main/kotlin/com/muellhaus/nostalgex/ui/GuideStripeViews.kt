@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +52,9 @@ internal fun GuideStripeOverlay(
     /** A channel row with its divider, in Apple TV points: it follows the text step. */
     rowPitch: Float,
     focusedGroup: Int?,
+    /** One cell per channel row, and how many list items come before the first channel row (the seasonal invite). */
+    cells: List<GuideStripes.RowCell?>,
+    itemsBeforeChannels: Int,
 ) {
     val unitPx = with(LocalDensity.current) { LocalUnit.current.toPx() }
     val first = listState.firstVisibleItemIndex
@@ -60,6 +64,13 @@ internal fun GuideStripeOverlay(
     val viewport = listState.layoutInfo.viewportSize.height / unitPx
     val labels = GuideStripes.labels(groups, rowPitch, leading, offset, viewport)
     Box(Modifier.width(u(LIFT_WIDTH + 20)).fillMaxHeight().clipToBounds()) {
+        // The stripe's colours, drawn here and not in the rows, so the whole stripe is above the rows and everything they draw: a focused
+        // row's glow and lift, the cursor cell's glow and the live bolt can no longer wash over it (Chad, release 8 on the Google TV).
+        for (info in listState.layoutInfo.visibleItemsInfo) {
+            val index = info.index - itemsBeforeChannels
+            if (index !in cells.indices) continue
+            GuideStripeCell(cells[index], Modifier.offset { IntOffset(0, info.offset) }.height(u(LocalGuideText.current.rowHeight)))
+        }
         if (focusedGroup != null && focusedGroup in groups.indices) {
             val name = groups[focusedGroup].name
             val span = name?.let { GuideStripes.visibleSpan(groups[focusedGroup], rowPitch, leading, offset, viewport) }

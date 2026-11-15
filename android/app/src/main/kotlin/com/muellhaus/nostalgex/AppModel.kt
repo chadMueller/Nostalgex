@@ -14,7 +14,12 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.BackgroundPass
+import com.muellhaus.nostalgex.engine.GuideLoad
+import com.muellhaus.nostalgex.engine.HeaderNotice
 import com.muellhaus.nostalgex.engine.LibraryRefresh
+import com.muellhaus.nostalgex.engine.LoadNotice
+import com.muellhaus.nostalgex.engine.RefreshResult
+import com.muellhaus.nostalgex.engine.readyAfter
 import com.muellhaus.nostalgex.engine.RefreshEffects
 import com.muellhaus.nostalgex.engine.RefreshRead
 import com.muellhaus.nostalgex.engine.DailyRefresh
@@ -691,6 +696,37 @@ class AppModel(private val context: Context) : Playback.Listener {
         musicPass.invalidate()
         refreshPass.invalidate()
         refreshing = false
+        showHeader(null)
+    }
+
+    /**
+     * The loading pattern (Chad, 2026-11-15). A library read in front of a guide that is up (a server or library switch from Settings)
+     * says so in the empty guide area: this is that block's state, null when none is. The full screen is for a load with no guide yet.
+     */
+    var guideLoad: GuideLoad? by mutableStateOf(null)
+        private set
+
+    /** UPDATING LIBRARY while a refresh reads behind the guide, then GUIDE READY for [LoadNotice.READY_MS]: the header's line. */
+    var headerNotice: HeaderNotice? by mutableStateOf(null)
+        private set
+    private var readyJob: Job? = null
+
+    /** Counts the guides brought up after an empty one (a switch's load ends): the screen asks focus to go to the new live row. */
+    var guideEpoch by mutableIntStateOf(0)
+        private set
+
+    private fun showHeader(notice: HeaderNotice?) {
+        readyJob?.cancel()
+        headerNotice = notice
+        if (notice is HeaderNotice.Ready) readyJob = scope.launch {
+            delay(LoadNotice.READY_MS)
+            if (headerNotice === notice) headerNotice = null
+        }
+    }
+
+    /** The library is read and the guide is up: say so, with how many titles it holds. */
+    private fun guideReady() {
+        if (!demoMode) showHeader(HeaderNotice.Ready(libraryItems.size))
     }
     private suspend fun musicApplied(items: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.Default) { music.first.apply(items) }
     val enrichmentOn: Boolean get() = enrichment != null
@@ -905,6 +941,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         libraryStore.clear()
         sectionStore.clear()
         lineup = null
+        guideLoad = null
         showPicker()
     }
 
@@ -1132,7 +1169,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         libraryStore.clear()
         closeSettings()
         playback.stop()
-        loadLibrary()
+        loadLibrary(afterSwitch = true)
     }
 
     private fun refreshSections() {
@@ -1391,7 +1428,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         prefs.servers = if (included) current.filterNot { it.machineIdentifier == server.machineIdentifier } else current + server
         closeSettings()
         playback.stop()
-        loadLibrary()
+        loadLibrary(afterSwitch = true)
     }
 
     /** RESCAN LIBRARY: read every server again behind the guide, as the launch refresh does. */
@@ -1473,8 +1510,11 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     private var loadJob: Job? = null
 
-    private fun loadLibrary() {
+    /** `afterSwitch`: the load follows a server or library switch in Settings, so the empty guide says the guide is changing. */
+    private fun loadLibrary(afterSwitch: Boolean = false) {
         endBackgroundWork()
+        // A guide is up behind this load (a switch from Settings): the read shows in the guide's empty area, not on a full screen.
+        val inGuide = screen == Screen.Watching
         loadingLibrary = true
         loadJob = scope.launch {
             // Set until the load ends any way the process lives to see (LaunchGuard).
@@ -1497,14 +1537,26 @@ class AppModel(private val context: Context) : Playback.Listener {
                 } else {
                     fullLoad = true
                     val firstRun = !prefs.initialLoadComplete
-                    fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
-                        screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
+                    var phaseNow = LoadPhase.PREPARING
+                    if (inGuide) {
+                        // The old guide goes, and the empty guide says why (the loading pattern); the old server's schedules must not show.
+                        lineup = null
+                        guideLoad = GuideLoad(afterSwitch)
                     }
+                    /** What the loading pattern's block says under the count while a step that has no count of its own runs. */
+                    fun inGuideDetail(headline: String, caption: String) = (caption.ifEmpty { headline }).uppercase()
+                    fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
+                        phaseNow = phase
+                        if (inGuide) guideLoad = (guideLoad ?: GuideLoad(afterSwitch)).copy(detail = inGuideDetail(headline, caption))
+                        else screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
+                    }
+                    /** A step's progress lines arriving after the step moved on, or after the load was left, are dropped. */
+                    fun onScreenFor(phase: LoadPhase) = phaseNow == phase && (inGuide && guideLoad != null || (screen as? Screen.LibraryLoad)?.phase == phase)
                     step(LoadPhase.PREPARING, LoadPhase.PREPARING.headline(if (firstRun) "First setup" else "Updating lineup"), LoadPhase.PREPARING.hint.uppercase())
                     step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("Connecting to $backendName"), LoadPhase.SCANNING.hint.uppercase())
                     val scanned = scan(servers) { p, serverName ->
                         // Posted from the scan's threads: one arriving after the scan moved on is dropped.
-                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.SCANNING) return@scan
+                        if (!onScreenFor(LoadPhase.SCANNING)) return@scan
                         // AppState+Library's scan events: the kind of library as the headline, the section under it.
                         val label = when (p.type) {
                             "show" -> "TV shows"
@@ -1515,6 +1567,14 @@ class AppModel(private val context: Context) : Playback.Listener {
                         }
                         val prefix = if (servers.size > 1) "$serverName · " else ""
                         val section = "Section ${p.section + 1}/${maxOf(p.sections, 1)}"
+                        if (inGuide) {
+                            // The block: titles read so far, and the library being read with how far through it when the server said.
+                            guideLoad = (guideLoad ?: GuideLoad(afterSwitch)).copy(
+                                read = p.itemsSoFar,
+                                detail = LoadNotice.scanLine(p, label, serverName.takeIf { servers.size > 1 }),
+                            )
+                            return@scan
+                        }
                         if (p.showsDone != null && p.showsTotal != null) {
                             step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("$label ${p.showsDone}/${p.showsTotal}"),
                                 "$prefix$section · ${p.showsDone}/${p.showsTotal} shows".uppercase(),
@@ -1549,7 +1609,11 @@ class AppModel(private val context: Context) : Playback.Listener {
                         step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
                     }
                     libraryItems = enrich(items, remote = true) { status, done, total ->
-                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.METADATA) return@enrich
+                        if (!onScreenFor(LoadPhase.METADATA)) return@enrich
+                        if (inGuide) {
+                            guideLoad = guideLoad?.copy(detail = if (total > 0 && done >= 0) "METADATA $done/$total" else status.uppercase())
+                            return@enrich
+                        }
                         val current = screen as Screen.LibraryLoad
                         screen = current.copy(
                             detail = status.uppercase(),
@@ -1559,13 +1623,19 @@ class AppModel(private val context: Context) : Playback.Listener {
                     }
                     step(LoadPhase.BUILDING)
                     val built = buildLineup(libraryItems, "read") { done, total ->
-                        if ((screen as? Screen.LibraryLoad)?.phase == LoadPhase.BUILDING) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
+                        if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
                     }
                     step(LoadPhase.FINISHING)
                     prefs.initialLoadComplete = true
                     // The first full load has no refresh behind it: the music lookups start now, as the Apple TV's do after the
                     // first load (startDeferredMusicEnrichmentIfNeeded).
-                    if (show(built)) startMusicEnrichment()
+                    guideLoad = null
+                    if (inGuide) guideEpoch++
+                    if (show(built)) {
+                        // The read is done and the guide is up: say so (the loading pattern's GUIDE READY).
+                        guideReady()
+                        startMusicEnrichment()
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -1577,6 +1647,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 // Reading the saved library proves nothing about whether a full load can finish.
                 launchGuard.loadEnded(resetCount = fullLoad)
                 loadingLibrary = false
+                guideLoad = null
             }
         }
     }
@@ -1725,6 +1796,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         // Ends with the library it began on (LibraryRefresh): signOut, a server or backend switch and every library load stop it.
         refreshPass.start { current ->
             refreshing = true
+            // The guide stays up while the library is read again: the header says so, with a count, and then GUIDE READY.
+            if (!demoMode) showHeader(HeaderNotice.Updating(null))
             try {
                 var skipped = 0
                 val effects = object : RefreshEffects {
@@ -1733,7 +1806,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     override val currentItems get() = libraryItems
                     override suspend fun scan(): RefreshRead {
                         val t0 = SystemClock.elapsedRealtime()
-                        val scanned = scan(servers, foreground = false) { _, _ -> }
+                        val scanned = scan(servers, foreground = false) { p, _ -> if (current() && !demoMode) showHeader(HeaderNotice.Updating(p.itemsSoFar)) }
                         skipped = scanned.skippedNoRuntime
                         return RefreshRead(scanned.items, scanned.abandoned, SystemClock.elapsedRealtime() - t0)
                     }
@@ -1770,11 +1843,14 @@ class AppModel(private val context: Context) : Playback.Listener {
                         scheduleTick++
                     }
                 }
-                LibraryRefresh(current, effects, alwaysSave).run()
+                val result = LibraryRefresh(current, effects, alwaysSave).run()
+                // A refresh replaced by a new load leaves the header to it; one cut short keeps the old guide and says nothing.
+                if (readyAfter(result)) guideReady() else if (result != RefreshResult.STALE) showHeader(null)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Background refresh failed; keeping the saved library", e)
+                if (current()) showHeader(null)
             } finally {
                 // A refresh that was ended (endBackgroundWork) left `refreshing` alone: a newer one may own it.
                 if (current()) {

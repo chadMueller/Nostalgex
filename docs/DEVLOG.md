@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Android release 9: the full-screen poster, the Settings glow, the stripe above the rows, the loading pattern)
+
+**State.** Branch `android/guide-stripes`, for versionCode 9. Chad tested release 8 on the Google TV; this is what he found.
+
+**Changed.**
+- **Full-screen info card poster.** The card at the bottom left (`ChannelOsd`) now has the Now Playing panel's 120 by 180 poster beside the text, as the Apple TV's `ChannelOSD`: 20 apart, corners of 8, a 2 pt resting outline, an empty frame while it loads and no frame at all when there is none. It is `AppModel.poster`, so the chain is the guide panel's (season, series, episode; the film's poster) on Plex, Jellyfin and Emby. The text sizes are the Apple TV's too (title 29, channel name 22; they were 32 and 24).
+- **Settings pill glow.** The pill used the shared row halo (radius 30 at 55%), far too big for a button. It now has the guide cursor's round 3 glow (radius 18 at 90% and radius 6 at 100%, `Modifier.pillGlow`) on the pill's own corners, with the 3 pt cyan ring it already had. Also fixed on the way: the cursor's cell stayed lit on the row you left when focus went to SETTINGS; it now shows only while its row has focus.
+- **The stripe above the rows.** The stripe's colours were drawn inside each row, under the focused row's glow and lift (which has a higher z-order), so they sat under the rows' effects. `GuideStripeOverlay` now draws the colour cells too, from the list's visible items, above every row; the labels and the focused stripe's lift were already there. The rows keep an empty slot of the stripe's width.
+- **The loading pattern** (Chad, all four platforms; wording in `LoadNotice`, tested): after a server or library switch in Settings the guide's empty area holds one centred block: CHANNEL GUIDE IS CHANGING in yellow, `READ n TITLES` in text-2, the library being read under it (`MOVIES: 1,200 OF 3,400`, `TV SHOWS: 12 OF 40`; "OF n" only when the server gave a total: Plex does for a movie library, and a TV library's show count is known; Jellyfin and Emby give none for movies), and a cyan bar that moves. The stalled-scan notice and STOP WAITING are in the block. Nothing about the library load shows over the video: the tuning card and the failure card are held back while the block is up. When the load ends the new guide's live row takes focus (`guideEpoch`). The header (between the wordmark and SETTINGS) says UPDATING LIBRARY: n TITLES READ while a refresh reads behind the guide, then GUIDE READY: n TITLES for 4 s; it says nothing after a refresh cut short, and the first full-screen load ends with GUIDE READY too. `ScanProgress` gained `sectionTotal` and `sectionDone` (Plex's `totalSize`).
+- **Not changed, and a question:** a load that starts with no guide on screen (a first load, or a launch with nothing saved) still uses the full-screen loading screen with its step rail; only a switch behind a guide uses the block, so LOADING YOUR LIBRARY (the title for a first load or rescan) is not shown by anything yet. Moving the first load into the empty guide is one condition (`inGuide` in `loadLibrary`) plus routing the screen, if the Apple TV and Roku do it that way.
+- **WATERSHED:** Chad tested it on the Google TV: with it on, R-rated titles are held back before 9 PM. The hold works.
+
+**Seen** on the Android TV emulator against two stand-in Plex servers (art on): `android/emulator-2026-11-15/r9-*` in nostalgex-internal (the pill, the block with its count, the header's UPDATING and GUIDE READY, the full-screen card with its poster). The Google TV was not reachable (192.168.4.137 and .80 did not answer), so nothing ran on it. Not seen: the same poster chain against a real Jellyfin or Emby; the stripe against its release 8 picture (no before shot; the change is where it is drawn).
+
 ## 2026-11-15 (Android: round 3 values, music genres, posters on every backend, OPEN IN JELLYFIN, the backup switch)
 
 **State.** Branch `android/guide-stripes`, local commits, for release 8. Not pushed.
