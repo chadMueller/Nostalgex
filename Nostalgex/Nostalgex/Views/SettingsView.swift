@@ -33,6 +33,8 @@ struct SettingsView: View {
         case searching
         case several([DiscoveredServer])
         case nothingFound
+        /// Nothing of the kind searched for, but a server of the other kind answered (Jellyfin and Emby).
+        case otherKind(MediaBackendKind, [DiscoveredServer])
     }
     @State private var discovery: Discovery = .idle
 
@@ -165,7 +167,7 @@ struct SettingsView: View {
             switch discovery {
             case .searching:
                 retryWhenSearchEnds = true
-            case .nothingFound:
+            case .nothingFound, .otherKind:
                 retryAfterPrompt = false
                 findServers(kind)
             case .idle, .several:
@@ -215,6 +217,7 @@ struct SettingsView: View {
             switch discovery {
             case .several(let list): return "find-\(kind.rawValue)-several-\(list.count)"
             case .nothingFound: return "find-\(kind.rawValue)-none"
+            case .otherKind(let other, let list): return "find-\(kind.rawValue)-other-\(other.rawValue)-\(list.count)"
             case .idle, .searching: return "find-\(kind.rawValue)"
             }
         case .typeAddress(let kind): return "type-\(kind.rawValue)"
@@ -231,6 +234,7 @@ struct SettingsView: View {
             switch discovery {
             case .several(let list): return list.first.map { "found-\($0.id)" } ?? "find"
             case .nothingFound: return "type"
+            case .otherKind(_, let list): return list.first.map { "switch-\($0.id)" } ?? "type"
             case .idle, .searching: return "find"
             }
         case .typeAddress: return "address"
@@ -308,6 +312,15 @@ struct SettingsView: View {
                 discovery = .idle
                 findServers(kind)
             case .none:
+                // Nothing of this kind: look for the other one before saying nothing answered.
+                if let other = SignInFlow.otherKind(of: kind) {
+                    let others = await SignInFlow.discover(kind: other)
+                    guard token == flowToken, screen == .find(kind) else { return }
+                    if let found = SignInFlow.otherKindFound(searched: kind, other: others) {
+                        discovery = .otherKind(other, found)
+                        return
+                    }
+                }
                 discovery = .nothingFound
             case .single(let server):
                 // One answer: no pick, straight to it.
@@ -467,7 +480,7 @@ struct SettingsView: View {
         let findLabel: String
         switch discovery {
         case .searching: findLabel = LANServerDiscovery.Copy.searching
-        case .nothingFound, .several: findLabel = SignInFlow.Copy.searchAgain
+        case .nothingFound, .several, .otherKind: findLabel = SignInFlow.Copy.searchAgain
         case .idle: findLabel = LANServerDiscovery.Copy.findButton
         }
         let prefix = kind == .jellyfin ? "jellyfin" : "emby"
@@ -498,6 +511,25 @@ struct SettingsView: View {
                     .buttonStyle(OnboardingButtonStyle(role: .secondary))
                     .focused($focusedControl, equals: "found-\(server.id)")
                     .accessibilityIdentifier("\(prefix)DiscoveredServer-\(server.id)")
+                }
+            }
+
+            if case .otherKind(let other, let servers) = discovery {
+                Text(SignInFlow.Copy.foundOtherKind(searched: kind, found: other, names: servers.map(\.name)))
+                    .font(.custom("DMMono-Regular", size: 20))
+                    .foregroundStyle(OnboardingPalette.warning.opacity(0.95))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(prefix)OtherKindFound")
+                ForEach(servers) { server in
+                    // Straight to that server's sign-in, its address filled in, as if it had been found there.
+                    Button(SignInFlow.Copy.switchTo(other, name: server.name)) {
+                        go(to: .find(other))
+                        checkServer(other, address: server.address, label: server.name)
+                    }
+                    .buttonStyle(OnboardingButtonStyle(role: .primary))
+                    .focused($focusedControl, equals: "switch-\(server.id)")
+                    .accessibilityIdentifier("\(prefix)SwitchTo-\(server.id)")
                 }
             }
 
