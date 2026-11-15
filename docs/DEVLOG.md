@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV: a programme cursor in the guide, LARGER rows, the info panel's poster, plain UP NEXT, no help line in Now Playing)
+
+**State.** On branch `appletv/guide-text-three-steps`, now on main `106e8dda`. Not merged, not in a build, not pushed. From Chad's look at the basement TV build.
+
+**Changed.**
+- **The guide's Left and Right move a programme at a time** (`GuideProgramCursor`), not the window by 30 minutes. Focus stays on the row; the cursor is a time on it, and the programme covering that time gets its own cell: the selected fill, a 3 pt cyan ring and a glow, inside the row's focus. Right goes to the next programme whatever its length, over a gap too. Left goes to the previous one as long as it has not ended; from the programme on now it goes on to the bundle stripe (or the bundle list) as before. Up and Down change the row and keep the time, so the cursor lands on that row's programme at the same time. The window moves only when the programme would leave the two-hour view (it starts past the view, or within its last 15 minutes, or before it), to the 30 minute slot its start is in. The info panel follows the cursor: a later programme shows with its time range in place of the progress bar (I-089). Going back to the playing channel (Menu, the end of full screen, selecting a row) puts the cursor on the live programme and the window at its start.
+- **LARGER grows the guide's row with its text:** 76 pt rows and a 66 pt time header (SMALLER and DEFAULT keep 64 and 58), so 29 pt text keeps the room 20 pt has in 64 (about 23 pt above and below), and the 29 pt times keep the 18 pt the 22 pt ones have. The bundle list's rows follow; the number box is unchanged; the Now Playing panel's rows stay 64.
+- **The guide info panel shows the programme's poster** beside the title, badges and description, the channel line above, the progress bar and UP NEXT under both (Variant A, 120 x 180, the same poster chain as the Now Playing panel, #312). On Plex only, where the posters come from; the column is always there on Plex, art or not, so the text never moves. It never had one.
+- **UP NEXT is one plain line, minutes first, in both panels:** "UP NEXT IN 24 MIN" then the title, no pill and no border, as the web tuner since 1.0.21. Under a minute it reads "UP NEXT IN LESS THAN 1 MIN". The guide info panel had no minutes before.
+- **The Now Playing panel has no help line under its rows** (Chad: "it feels so out of place there"), nor under its lists. PLAYBACK INFORMATION keeps its note, which is what that list shows, and RETRY ORIGINAL VIDEO still writes its result there while it has focus.
+
+**Tests.** `GuideProgramCursorTests` (Right over short, long and gap, Left back to live and none from live, another row keeps the time, a cursor behind the clock, when the window moves) and the row and header numbers in `GuideTextSizeTests`; with `GuideTimeCursorTests`, `InfoPanelLayoutTests` and `NowPlayingPanelLogicTests`, 74 pass. UI: `GuideInfoPanelTimeTests` passes; of `GuideStripeFocusTests`, one test fails (the last package's first channel lands 9.5 pt below the top of the list), and it fails the same way on main `106e8dda`, so not from this. A walk on the Simulator in demo mode: Right, Right, Right x2, Down, Left x6, Left. Not on a TV yet.
+
 ## 2026-11-14 (Apple TV: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT, LARGER)
 
 **State.** Branch `appletv/guide-text-three-steps` off main `f76c021f`. Not merged, not in a build, not pushed. The smoke script `scripts/guide-text-smoke.mjs` fails 10 checks on purpose until Roku and the web tuner take the new numbers (below), so this must not reach main without them.
