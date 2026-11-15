@@ -861,9 +861,15 @@ private fun EpgRow(
     val accent = isLive || focused
 
     Column(Modifier.zIndex(if (focused) 1f else 0f)) {
+      // The stripe has its own column at the left of the row, and the row's focus (fill, outline, glow and lift) starts
+      // to the right of it, as on the Apple TV: the stripe is never inside the focus ring, and runs on unbroken through
+      // the focused row. It is drawn last, so the glow can't wash over it.
+      Box(Modifier.fillMaxWidth().height(u(ROW_HEIGHT))) {
+       Row(Modifier.fillMaxSize()) {
+        Spacer(Modifier.width(u(GuideStripes.STRIPE_WIDTH)))
         Box(
             Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 // The shared focus (#267): a 3% lift and a cyan glow behind the row. A guide row is
                 // as wide as the screen, so it grows from its left edge, keeping the number on screen.
                 .graphicsLayer {
@@ -872,7 +878,7 @@ private fun EpgRow(
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
                 }
                 .then(if (focused) Modifier.cyanGlow() else Modifier)
-                .height(u(ROW_HEIGHT))
+                .fillMaxHeight()
                 .focusRequester(requester)
                 .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
                 .focusable()
@@ -890,7 +896,6 @@ private fun EpgRow(
                 .background(if (focused) Tokens.SelectedRow else if (isEvenRow) Color.White.copy(alpha = 0.03f) else Tokens.Guide),
         ) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                GuideStripeCell(stripe)
                 Box(Modifier.width(u(if (accent) 8 else 4)).fillMaxHeight().background(if (accent) color else color.copy(alpha = 0.4f)))
                 Row(
                     Modifier.width(u(CHANNEL_COLUMN - (if (accent) 8 else 4))).padding(start = u(if (isLive) 8 else 6), end = u(4)),
@@ -922,6 +927,9 @@ private fun EpgRow(
                 Box(Modifier.matchParentSize().padding(u(2)).border(u(DesignTokens.Row.SELECTED_OUTLINE), Tokens.Cyan, RoundedCornerShape(u(6))))
             }
         }
+       }
+       GuideStripeCell(stripe, Modifier.align(Alignment.CenterStart))
+      }
         Box(Modifier.fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.08f)))
     }
 }
