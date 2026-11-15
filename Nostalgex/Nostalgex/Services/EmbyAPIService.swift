@@ -455,19 +455,15 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
     /// Emby's collection model matches Jellyfin's: BoxSet items in a virtual folder, so
     /// the same global-list-plus-caller-dedupe approach applies.
     func loadCollections(sectionKey: String) async throws -> [PlexCollection] {
-        let queryItems: [URLQueryItem] = [
-            .init(name: "userId", value: userId),
-            .init(name: "IncludeItemTypes", value: "BoxSet"),
-            .init(name: "Recursive", value: "true"),
-            .init(name: "Fields", value: "ChildCount"),
-            .init(name: "SortBy", value: "SortName"),
-        ]
-        guard let req = request(path: "/Items", queryItems: queryItems) else {
-            throw PlexAPIService.APIError.invalidResponse
+        let items: [JellyfinItem] = try await MediaBrowserPaging.readAll(pageSize: MediaBrowserPaging.collectionPageSize) { start, limit in
+            guard let req = request(path: "/Items", queryItems: MediaBrowserPaging.collectionQuery(userId: userId, start: start, limit: limit)) else {
+                throw PlexAPIService.APIError.invalidResponse
+            }
+            let (data, response) = try await Self.session.data(for: req)
+            let page = try Self.decode(EmbyItemsResponse.self, data: data, response: response)
+            return (page.Items ?? [], page.TotalRecordCount)
         }
-        let (data, response) = try await Self.session.data(for: req)
-        let page = try Self.decode(EmbyItemsResponse.self, data: data, response: response)
-        let boxSets = (page.Items ?? []).map {
+        let boxSets = items.map {
             PlexCollection(
                 ratingKey: $0.Id,
                 title: $0.Name ?? "Untitled",
