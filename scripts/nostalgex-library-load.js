@@ -66,6 +66,9 @@
     scanSectionIndex: 0,
     scanTotalSections: 0,
     scanItemsFound: 0,
+    scanLibrary: '',        // the library being read, as the server names it
+    scanLibraryDone: null,  // how far through it, when the server gave a total (a movie library's titles, a TV library's shows)
+    scanLibraryTotal: null,
     musicEnrichIndex: 0,
     musicEnrichTotal: 0,
   };
@@ -264,6 +267,7 @@
     }
 
     renderStepRail(railEl);
+    renderLoading();
 
     const fraction = progressFraction();
     if (progressWrap && progressBar) {
@@ -275,6 +279,140 @@
         progressWrap.style.display = 'none';
       }
     }
+  }
+
+  // ── The loading pattern, the same on every platform (the wording is android LoadNotice.kt) ──
+  // The very first load, with no guide yet, keeps the full-screen build screen above. A load that happens with the guide on screen
+  // says so in the guide's empty area: a server or library switch is CHANNEL GUIDE IS CHANGING, RESCAN LIBRARY is LOADING YOUR
+  // LIBRARY, each with the count read and the library being read under it, and a cyan bar. A refresh behind a guide that stays up
+  // says UPDATING LIBRARY: n TITLES READ in the top bar, and any read that ends whole says GUIDE READY: n TITLES there in yellow
+  // for 4 seconds. A read that is cut short or fails says nothing. Settings covers the guide, so it carries the same words.
+  const TITLE_CHANGING = 'CHANNEL GUIDE IS CHANGING';
+  const TITLE_LOADING = 'LOADING YOUR LIBRARY';
+  const READY_MS = 4000;
+  const formatCount = (n) => Math.max(0, Math.round(Number(n) || 0)).toLocaleString('en-US');
+  const titlesWord = (n) => (n === 1 ? 'TITLE' : 'TITLES');
+  const loadTitle = (afterSwitch) => (afterSwitch ? TITLE_CHANGING : TITLE_LOADING);
+  /** What has been read, and OF n only when the server gave a total. */
+  function readLine(read, total) {
+    const r = Math.max(0, Math.round(Number(read) || 0));
+    return total > 0 && total >= r ? `READ ${formatCount(r)} OF ${formatCount(total)} ${titlesWord(total)}` : `READ ${formatCount(r)} ${titlesWord(r)}`;
+  }
+  /** The library being read, and how far through it when the server gave a total: MOVIES: 40 OF 40. */
+  function libraryLine(name, done, total) {
+    const label = String(name || '').trim().toUpperCase();
+    return total > 0 && done >= 0 && done <= total ? `${label}: ${formatCount(done)} OF ${formatCount(total)}` : label;
+  }
+  const updatingLine = (read) => (Number(read) > 0 ? `UPDATING LIBRARY: ${formatCount(read)} ${titlesWord(Number(read))} READ` : 'UPDATING LIBRARY');
+  const readyLine = (n) => `GUIDE READY: ${formatCount(n)} ${titlesWord(Number(n))}`;
+
+  // cause: 'load' (a first load or a refresh), 'switch' (a server or library switch), 'rescan' (RESCAN LIBRARY).
+  const session = { active: false, cause: 'load', background: false, cutShort: false, ready: null, readyTimer: null, hasGuide: () => false };
+
+  const blockShows = () => session.active && (session.cause === 'switch' || session.cause === 'rescan');
+  /** Where the loading shows: the full-screen build screen (first load), the guide's empty area, or the top bar. */
+  function loadingMode() {
+    if (!session.active) return 'none';
+    if (blockShows()) return 'guide';
+    return session.background ? 'header' : 'panel';
+  }
+
+  function setText(el, text) { if (el && el.textContent !== text) el.textContent = text; }
+  const byId = (id) => document.getElementById(id);
+
+  function renderLoading() {
+    const mode = loadingMode();
+    const afterSwitch = session.cause === 'switch';
+    const read = readLine(state.scanItemsFound);
+    const lib = state.scanLibrary ? libraryLine(state.scanLibrary, state.scanLibraryDone, state.scanLibraryTotal) : '';
+
+    // The guide's empty area (the guide hides its rows while it says so).
+    const grid = byId('guide-grid');
+    if (grid) grid.classList.toggle('loading-empty', mode === 'guide');
+    const block = byId('guide-loading');
+    if (block) {
+      block.classList.toggle('on', mode === 'guide');
+      if (mode === 'guide') {
+        setText(byId('guide-loading-title'), loadTitle(afterSwitch));
+        setText(byId('guide-loading-read'), state.scanItemsFound > 0 ? read : '');
+        setText(byId('guide-loading-lib'), lib || (state.phase === 'buildingChannels' && state.channelBuildTotal > 0 ? `BUILDING CHANNELS: ${state.channelBuildIndex} OF ${state.channelBuildTotal}` : ''));
+      }
+    }
+
+    // The top bar: UPDATING LIBRARY behind a guide that stays up, GUIDE READY when a read ends whole.
+    let text = '', kind = '';
+    if (mode === 'header') { text = updatingLine(state.scanItemsFound); kind = 'updating'; }
+    else if (mode === 'none' && session.ready) { text = readyLine(session.ready.titles); kind = 'ready'; }
+    // The top bar of a phone shows when the page says so; the corner one is for everything else.
+    const bar = byId('m-topbar');
+    const phoneBar = !!bar && getComputedStyle(bar).display !== 'none';
+    for (const [id, mine] of [['top-notice', !phoneBar], ['m-top-notice', phoneBar]]) {
+      const el = byId(id);
+      if (!el) continue;
+      const on = !!text && mine;
+      el.hidden = !on;
+      el.dataset.kind = on ? kind : '';
+      setText(el, on ? text : '');
+      // The corner notice takes the room between the wordmark and the rail's SETTINGS, and wraps in it on a narrow screen.
+      if (on && id === 'top-notice') {
+        const rail = byId('v-toolbar');
+        if (rail && rail.offsetParent !== null) {
+          const room = rail.getBoundingClientRect().left - el.getBoundingClientRect().left - 12;
+          if (room > 0) el.style.maxWidth = `${Math.min(420, Math.max(120, room))}px`;
+        }
+      }
+    }
+
+    // Settings covers the guide, so it says the same.
+    const cfg = byId('cfg-load-status');
+    if (cfg) {
+      let head = '', rest = '', k = '';
+      if (mode === 'panel' || mode === 'guide') { head = loadTitle(afterSwitch && mode === 'guide'); rest = [state.scanItemsFound > 0 ? read : '', lib].filter(Boolean).join(' · '); k = 'loading'; }
+      else if (mode === 'header') { head = updatingLine(state.scanItemsFound); k = 'loading'; }
+      else if (session.ready) { head = readyLine(session.ready.titles); k = 'ready'; }
+      cfg.hidden = !head;
+      cfg.dataset.kind = k;
+      setText(byId('cfg-load-status-title'), head);
+      setText(byId('cfg-load-status-line'), rest);
+    }
+  }
+
+  function clearReady() {
+    if (session.readyTimer) { clearTimeout(session.readyTimer); session.readyTimer = null; }
+    session.ready = null;
+  }
+
+  /** A library read or rebuild starts. */
+  function begin({ cause = 'load', background = false } = {}) {
+    clearReady();
+    session.active = true;
+    session.cause = cause === 'switch' || cause === 'rescan' ? cause : 'load';
+    session.background = background === true;
+    session.cutShort = false;
+    state.scanItemsFound = 0;
+    state.scanLibrary = '';
+    state.scanLibraryDone = null;
+    state.scanLibraryTotal = null;
+    if (!session.background && !blockShows()) show();
+    renderLoading();
+  }
+
+  /** The read ended: GUIDE READY for about 4 seconds, unless it was cut short. */
+  function finish({ titles = 0 } = {}) {
+    session.active = false;
+    clearReady();
+    if (!session.cutShort) {
+      session.ready = { titles };
+      session.readyTimer = setTimeout(() => { session.readyTimer = null; session.ready = null; renderLoading(); }, READY_MS);
+    }
+    renderLoading();
+  }
+
+  /** The read failed or was dropped: nothing is announced. */
+  function abort() {
+    session.active = false;
+    clearReady();
+    renderLoading();
   }
 
   function setPhase(phase, detail = '') {
@@ -294,6 +432,8 @@
   }
 
   function show() {
+    // A load with the guide on screen says so in the guide's empty area, not on the full-screen build screen.
+    if (blockShows()) { renderLoading(); return; }
     const el = document.getElementById('loading-library');
     if (el) el.style.display = 'flex';
     // The side guide layout pins .video-area to exactly 50% of the screen, and
@@ -311,6 +451,8 @@
     if (el) el.style.display = 'none';
     const screen = document.getElementById('player-screen');
     if (screen) screen.classList.remove('building');
+    // Hidden before it was finished (an error, START OVER, a sign-out): nothing is announced.
+    if (session.active && !session.background && !blockShows()) abort();
   }
 
   global.NostalgexLibraryLoad = {
@@ -326,6 +468,20 @@
     show,
     hide,
     render,
+    session,
+    begin,
+    finish,
+    abort,
+    loadingMode,
+    loadTitle,
+    readLine,
+    libraryLine,
+    updatingLine,
+    readyLine,
+    formatCount,
+    TITLE_CHANGING,
+    TITLE_LOADING,
+    READY_MS,
     headline,
     isMusicBundleEnabled,
     MUSIC_BUNDLE_ID,
