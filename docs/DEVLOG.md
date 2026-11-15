@@ -101,7 +101,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Kept.** The CHOOSE YOUR LIBRARIES step and the Settings rows were not changed. They are now covered for Jellyfin and Emby: the step lists the video libraries (not Playlists or Music) before any title is asked for, a library left off is never asked for items, the last library that is on cannot be switched off, and a Jellyfin library hidden from My Media is listed only with the hidden-libraries switch on.
 
-**Half-done.** Branch `web/library-choice`. Chromium only, against a stub; no real 15,000 or 60,000 title server and no TV browser. The Apple TV 1.0.32 lists a hidden Jellyfin library marked and off until switched on; the web keeps its one switch. The memory per title is the library's own size and was not reduced. `scripts/stop-waiting-browser-smoke.mjs` has three failing checks (the slow-but-working load and the negative control) that fail the same on main.
+**Half-done.** Branch `web/library-choice`. Chromium only, against a stub; no real 15,000 or 60,000 title server and no TV browser. The Apple TV 1.0.32 lists a hidden Jellyfin library marked and off until switched on; the web keeps its one switch. The memory per title is the library's own size and was not reduced. `scripts/stop-waiting-browser-smoke.mjs` is fixed: its slow Jellyfin stub is slower (the read-ahead made the old one finish inside the give-up time) and its negative control uses the last release before STOP WAITING (tuner-v1.0.16), not origin/main, which has had the feature since 1.0.17.
 
 **Next.** Reviewer pass.
 

@@ -15,7 +15,7 @@
  *       library and the pages already read of the second, nothing is saved as the library, and the
  *       load does not count as the first one;
  *     - left alone it ends itself, with the same result.
- *   Jellyfin, slow but working (a page every 1.8 s for longer than the give-up time): the block
+ *   Jellyfin, slow but working (a page every 4 s, three read ahead at a time, for longer than the give-up time): the block
  *     never shows, the whole library loads and is saved.
  *   Jellyfin, nothing ever read: the error line says it stopped waiting; nothing is saved.
  *   Plex, a section whose second page never comes: pressing it keeps the finished section.
@@ -52,7 +52,7 @@ const jfLibs = {
   B: { id: "libB", name: "Classics", items: Array.from({ length: 400 }, (_, i) => film(1000 + i)) },
   C: { id: "libC", name: "Marathon", items: Array.from({ length: 1400 }, (_, i) => film(5000 + i)) },
 };
-let jfPlan = {};   // which library pages stall: { libB: { hangFrom: 200 }, libC: { delayMs: 1800 } }
+let jfPlan = {};   // which library pages stall: { libB: { hangFrom: 200 }, libC: { delayMs: 4000 } }
 const sockets = new Set();
 const track = (srv) => srv.on("connection", (s) => { sockets.add(s); s.on("close", () => sockets.delete(s)); });
 const jellyfin = http.createServer((req, res) => {
@@ -241,7 +241,7 @@ for (const [name, viewport] of [["TV 960x540", TV], ["phone 390x844", PHONE]]) {
 
 // 3. Slow but working: pages keep coming, for longer than the give-up time.
 {
-  jfPlan = { libs: ["C"], libC: { delayMs: 1800 } };
+  jfPlan = { libs: ["C"], libC: { delayMs: 4000 } };
   const { ctx, page, errors } = await open(TV, jfAuth);
   const t0 = Date.now();
   await page.goto(`${base}/plex-tuner.html`);
@@ -288,9 +288,10 @@ for (const [name, viewport] of [["TV 960x540", TV], ["phone 390x844", PHONE]]) {
   await ctx.close();
 }
 
-// 6. Negative control: origin/main's page has no block and is still loading when the new one is done.
+// 6. Negative control: the last release before STOP WAITING (tuner-v1.0.16) has no block and is still loading when the new one is done.
+//    (It was origin/main's page while the feature was new; main has had it since 1.0.17, so the control is pinned to a tag.)
 {
-  const old = execFileSync("git", ["show", "origin/main:plex-tuner.html"], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+  const old = execFileSync("git", ["show", "tuner-v1.0.16:plex-tuner.html"], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
   const { writeFileSync, mkdtempSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const dir = mkdtempSync(join(tmpdir(), "nx-old-"));
