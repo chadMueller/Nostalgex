@@ -614,7 +614,7 @@ function renderInfo(s as Object) as Integer
         ux = pm.safeX
         uw = m.colX[0] - pm.zoneGap - ux
         titleLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, NxUpNextTitleColor(), ux, y, 0)
-        badge = newLabel(NxUpNextBadge(s.upNextIn), tk.font.label, pm.text, tk.color.text2, ux, y, 0)
+        badge = newLabel(NxUpNextBadge(s.upNextIn), tk.font.label, pm.text, NxUpNextLabelColor(), ux, y, 0)
         gap = Int(2 * pm.text * 0.6 + 0.5)
         tw = titleLbl.boundingRect().width
         bw = badge.boundingRect().width

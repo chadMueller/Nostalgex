@@ -10,11 +10,11 @@ function NxRunPosterTests() as Integer
     NxCheck(r, "plex movie: its thumb", ref.path, "/library/metadata/123/thumb/1700000000")
     NxCheck(r, "plex movie: its server", ref.serverIndex.ToStr(), "0")
     ' Every backend has a poster (Chad 2026-11-15, parity unless a tech restriction): Jellyfin and Emby ask for the item's Primary image.
-    NxCheck(r, "jellyfin movie: its Primary image", NxPosterRef(movie, "jellyfin").path, "/Items/123/Images/Primary?maxWidth=300&quality=90")
-    NxCheck(r, "emby movie: the same", FormatJson(NxPosterRef(movie, "emby").paths), "[""/Items/123/Images/Primary?maxWidth=300&quality=90""]")
+    NxCheck(r, "jellyfin movie: its Primary image", NxPosterRef(movie, "jellyfin").path, "/Items/123/Images/Primary?maxWidth=300")
+    NxCheck(r, "emby movie: the same", FormatJson(NxPosterRef(movie, "emby").paths), "[""/Items/123/Images/Primary?maxWidth=300""]")
     NxCheck(r, "an unknown kind has none", FormatJson(NxPosterRef(movie, "kodi")), "null")
     mbEp = { ratingKey: "e1", type: "episode", showKey: "show9", parentRatingKey: "season4", serverIndex: 0 }
-    NxCheck(r, "jellyfin episode: season, series, its own", FormatJson(NxPosterRef(mbEp, "jellyfin").paths), "[""/Items/season4/Images/Primary?maxWidth=300&quality=90"",""/Items/show9/Images/Primary?maxWidth=300&quality=90"",""/Items/e1/Images/Primary?maxWidth=300&quality=90""]")
+    NxCheck(r, "jellyfin episode: season, series, its own", FormatJson(NxPosterRef(mbEp, "jellyfin").paths), "[""/Items/season4/Images/Primary?maxWidth=300"",""/Items/show9/Images/Primary?maxWidth=300"",""/Items/e1/Images/Primary?maxWidth=300""]")
     mbEp.parentRatingKey = invalid
     NxCheck(r, "jellyfin episode with no season id: series then its own", NxPosterRef(mbEp, "jellyfin").paths.Count().ToStr(), "2")
     NxCheck(r, "the ref says its kind", NxPosterRef(mbEp, "emby").kind + NxPosterRef(movie, "plex").kind, "embyplex")

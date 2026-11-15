@@ -131,6 +131,30 @@ def outline(inner, radius, stroke, inset, glow_radius, glow_alpha, margin):
     return nine_patch(glow, margin + inset + radius + stroke)
 
 
+def cursor_outline(inner, radius, stroke, inset, glows, margin):
+    """The guide cursor's cell (the Apple TV's round 3, 2026-11-15): a rounded
+    stroke `inset` into an inner x inner box and a glow of two layers laid under
+    it, `glows` being (radius, alpha) each. The cell clips it to the programme's
+    own area, so the halo stays inside the cell."""
+    s = 4
+    size = inner + 2 * margin
+    line = Image.new("RGBA", (size * s, size * s), (0, 0, 0, 0))
+    o = (margin + inset) * s
+    half = stroke * s / 2
+    ImageDraw.Draw(line).rounded_rectangle(
+        [o + half - s / 2, o + half - s / 2, size * s - o - half + s / 2, size * s - o - half + s / 2],
+        radius=radius * s, outline=(255, 255, 255, 255), width=int(stroke * s))
+    line = line.resize((size, size), Image.LANCZOS)
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    for glow_radius, glow_alpha in glows:
+        g = line.filter(ImageFilter.GaussianBlur(glow_radius / 2))
+        a = g.getchannel("A").point(lambda v, k=glow_alpha: min(255, round(v * k)))
+        g.putalpha(a)
+        out.alpha_composite(g)
+    out.alpha_composite(line)
+    return nine_patch(out, margin + inset + radius + stroke)
+
+
 def badge():
     # Badges: 1 px white stroke, radius 4, no fill; opacity on the Poster.
     s = 4
@@ -311,6 +335,10 @@ save(scanlines(1920, 1080), "scanlines_full.png")
 save(vignette(740, 555), "vignette.png")
 save(vignette(1920, 1080, 0.5), "vignette_full.png")
 save(outline(64, 6, 3, 2, 14, 0.7, 16), "focus.9.png")
+# The row's own focus once a cell has the cursor: 2 pt, shown at 55% (GuideView).
+save(outline(64, 6, 2, 2, 14, 0.7, 16), "focus2.9.png")
+# The cursor's cell: 3 pt ring, inset 2, radius 6, glow radius 18 at 90% and radius 6 at 100%.
+save(cursor_outline(64, 6, 3, 2, [(18, 0.9), (6, 1.0)], 20), "cursor.9.png")
 save(outline(64, 6, 2, 2, 7, 0.3, 16), "seasonal.9.png")
 save(outline(64, 6, 4, 2, 14, 0.7, 16), "seasonal_focus.9.png")
 save(badge(), "badge.9.png")

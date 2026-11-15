@@ -89,15 +89,12 @@ function NxRunGuideTimeCursorTests() as Integer
 
     ' ── The cursor's cell stands out (Chad 2026-11-15: "way more obvious", a glow) ──
     style = NxGuideCursorStyle()
-    NxCheck(r, "style: the cell's fill is brighter than the row's selected fill", NxToStr(NxChannelSum(style.fill) > NxChannelSum(NxTokens().color.selectedRow)), "true")
-    NxCheck(r, "style: the ring is the full cyan", style.ring, NxTokens().color.cyan)
-    NxCheck(r, "style: the glow is stacked more than once, where the row's own is one layer", NxToStr(style.layers > 1), "true")
+    NxCheck(r, "style: the fill is #00D4FF at 30%", style.fill, "0x00D4FF4D")
+    NxCheck(r, "style: the ring is the full cyan, 3 pt, inset 2, radius 6", style.ring + " " + FormatJson([style.ringWidth, style.inset, style.radius]), "0x00D4FFFF [3,2,6]")
+    NxCheck(r, "style: the glow is two layers, radius 18 at 90% and radius 6 at 100%", FormatJson([style.glowRadii, style.glowAlphas]), "[[18,6],[0.9,1]]")
+    NxCheck(r, "style: the row's own focus steps back to 2 pt at 55%", FormatJson([style.rowStroke, style.rowOpacity]), "[2,0.55]")
+    NxCheck(r, "up next: the title is #FFE500 and the Now Playing label #B9C3DE", NxUpNextTitleColor() + " " + NxUpNextLabelColor(), "0xFFE500FF 0xB9C3DEFF")
 
     print "guide time cursor tests: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
-end function
-
-' The red, green and blue of "0xRRGGBBAA" added up, to say which of two fills is brighter.
-function NxChannelSum(hex as String) as Integer
-    return Val(Mid(hex, 3, 2), 16) + Val(Mid(hex, 5, 2), 16) + Val(Mid(hex, 7, 2), 16)
 end function

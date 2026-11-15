@@ -470,25 +470,36 @@ sub renderGrid()
         ' glow is cut at the stripe slot so the bundle name stays whole.
         cut = CreateObject("roSGNode", "Group")
         cut.clippingRect = [m.stripeW, -4000, 4000, 8000]
-        cut.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
-        ' The programme's own highlight inside the row's: a cyan ring and glow
-        ' on the cell (its fill is drawn with the row).
+        ' With a cell under the cursor the row's own focus steps back to a 2 pt
+        ' outline in the channel colour at 55%; with none (a gap) it stays 3 pt at 100%.
         cb = m.cursorBlock
+        style = NxGuideCursorStyle()
+        rowOutline = newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF"))
+        if cb <> invalid and cb.endSec > wStart& and cb.startSec < wEnd& then
+            rowOutline = newOutline("focus2", y, colorOf(m.channels[m.focus].color, "FF"))
+            rowOutline.opacity = style.rowOpacity
+        end if
+        cut.AppendChild(rowOutline)
+        ' The programme's own highlight inside the row's: the ring and its glow
+        ' (cursor.9.png), clipped to the cell so the halo never reaches the channel
+        ' column, the stripe or the rows above and below; its fill is drawn with the row.
         if cb <> invalid and cb.endSec > wStart& and cb.startSec < wEnd& then
             cs& = cb.startSec
             if cs& < wStart& then cs& = wStart&
             ce& = cb.endSec
             if ce& > wEnd& then ce& = wEnd&
-            style = NxGuideCursorStyle()
-            for layer = 1 to style.layers
-                ring = CreateObject("roSGNode", "Poster")
-                ring.uri = "pkg:/images/look/focus.9.png"
-                ring.translation = [m.colX + 1 + (cs& - wStart&) * scale - 16, y - 16]
-                ring.width = (ce& - cs&) * scale + 32
-                ring.height = m.rowH + 32
-                ring.blendColor = style.ring
-                cut.AppendChild(ring)
-            end for
+            cw = (ce& - cs&) * scale
+            cell = CreateObject("roSGNode", "Group")
+            cell.translation = [m.colX + 1 + (cs& - wStart&) * scale, y]
+            cell.clippingRect = [0, 0, cw, m.rowH]
+            ring = CreateObject("roSGNode", "Poster")
+            ring.uri = "pkg:/images/look/cursor.9.png"
+            ring.translation = [-style.margin, -style.margin]
+            ring.width = cw + 2 * style.margin
+            ring.height = m.rowH + 2 * style.margin
+            ring.blendColor = style.ring
+            cell.AppendChild(ring)
+            cut.AppendChild(cell)
         end if
         rows.AppendChild(cut)
     end if
@@ -850,6 +861,8 @@ sub showInfoPoster(ref as Dynamic)
     p = m.top.FindNode("poster")
     back = m.top.FindNode("posterBack")
     back.visible = ref <> invalid
+    ' If every picture fails, an empty frame in the row's colour stays.
+    if m.channels <> invalid and m.focus >= 0 and m.focus < m.channels.Count() then back.color = NxGuideFocusFill(m.channels[m.focus].color)
     if key = NxToStr(m.infoPosterKey) then
         p.visible = ref <> invalid and m.infoPosterShown = true
         return

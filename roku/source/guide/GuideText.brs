@@ -166,13 +166,16 @@ end function
 
 ' The focused programme's cell on the focused row (the programme cursor, Chad
 ' 2026-11-15: "the active state needs to be way more obvious, can we have a
-' glow"): a fill brighter than the row's selected fill, a full-cyan ring, and
-' a glow much stronger than the row's own, made by stacking the glow image
-' (images/look/focus.9.png: a cyan ring with its halo) `layers` times, each
-' laid over the last. The numbers are the Apple TV agent's to give; these are
-' the structure's starting values.
+' glow"), the Apple TV's round 3 values (appletv/guide-text-three-steps
+' 13e6e643): the fill is #00D4FF at 30% over the row; the ring 3 pt #00D4FF,
+' inset 2, corner radius 6; the glow two cyan layers, radius 18 at 90% and
+' radius 6 at 100% (both baked into images/look/cursor.9.png by
+' scripts/look-images.py, since the Roku does not blur), kept inside the
+' programme's own area by clipping to the cell. While a cell has the cursor the
+' row's own focus steps back to a 2 pt outline in the channel colour at 55%;
+' with no cell (a gap) it stays 3 pt at 100%.
 function NxGuideCursorStyle() as Object
-    return { fill: "0x0F4C6AFF", ring: "0x00D4FFFF", layers: 3 }
+    return { fill: "0x00D4FF4D", ring: "0x00D4FFFF", ringWidth: 3, inset: 2, radius: 6, glowRadii: [18, 6], glowAlphas: [0.9, 1.0], rowStroke: 2, rowOpacity: 0.55, margin: 20 }
 end function
 
 function NxGuideLightestTitleBg() as String

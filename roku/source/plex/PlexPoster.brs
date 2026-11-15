@@ -49,7 +49,7 @@ function NxMbPosterPaths(b as Object) as Object
 end function
 
 function NxMbPrimaryPath(id as String) as String
-    return "/Items/" + NxUrlEncode(id) + "/Images/Primary?maxWidth=300&quality=90"
+    return "/Items/" + NxUrlEncode(id) + "/Images/Primary?maxWidth=300"
 end function
 
 ' Which image the poster asks for, in order (#312, the Apple TV's

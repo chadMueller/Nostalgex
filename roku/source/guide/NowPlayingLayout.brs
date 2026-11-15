@@ -42,10 +42,16 @@ end function
 
 
 ' The colour the next programme's title is in on both panels' UP NEXT line
-' (Chad 2026-11-15: "highlight the movie title as a color"). The Apple TV
-' agent gives the value; until then the guide's cyan.
+' (Chad 2026-11-15: "highlight the movie title as a color"): #FFE500, the Apple
+' TV's round 3 value.
 function NxUpNextTitleColor() as String
-    return "0x00D4FFFF"
+    return "0xFFE500FF"
+end function
+
+' The label's colour on the Now Playing panel (the guide's panel has white at
+' 50%): the Apple TV's round 3 values.
+function NxUpNextLabelColor() as String
+    return "0xB9C3DEFF"
 end function
 
 ' The panel's measures, the Apple TV's NowPlayingMetrics.swift and
