@@ -34,6 +34,7 @@
     "test:guide-text:browser": "node scripts/guide-text-browser-smoke.mjs",
     "test:guide-cursor": "node scripts/nostalgex-guide-cursor-smoke.mjs",
     "test:guide-cursor:browser": "node scripts/guide-cursor-browser-smoke.mjs",
+    "test:info-panel-backends:browser": "node scripts/info-panel-backends-browser-smoke.mjs",
     "test:plex-resolve": "node scripts/nostalgex-server-resolve-smoke.mjs",
     "test:plex-resolve:browser": "node scripts/plex-resolve-browser-smoke.mjs",
     "test:schedule": "node scripts/nostalgex-schedule-order-smoke.mjs",

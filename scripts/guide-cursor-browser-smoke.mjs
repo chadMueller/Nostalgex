@@ -144,21 +144,20 @@ for (const name of Object.keys(viewports)) {
   check(`${name}: Right: the range is the programme's start and end`, s.infoTime === `${range(s.cell.start)} - ${range(s.cell.end)}`, `${s.infoTime} vs ${range(s.cell.start)} - ${range(s.cell.end)}`);
   const upMin = Number(/IN (\d+) MIN/.exec(s.infoUp)?.[1] ?? NaN);
   check(`${name}: Right: UP NEXT counts from now to the programme after it`, /^\S.* {2}UP NEXT IN (\d+|LESS THAN 1) MIN$/.test(s.infoUp) && upMin >= Math.floor((s.cell.end - s.now) / 60) - 1, JSON.stringify(s.infoUp));
-  // The highlighted cell is much stronger than the row's own focus: a full-cyan ring, a bright fill and a wide glow.
+  // The highlighted cell has the Apple TV's look (GuideCursorStyle): #00D4FF at 30% over the row, a 3px #00D4FF ring inset 2px, two cyan
+  // glows (18px at 90%, 6px at 100%) clipped to the programme strip; and the row's own focus steps back while a cell has the cursor.
   const look = await page.evaluate(() => {
     const cell = document.querySelector(".grid-row.focused .grid-program--cursor");
-    const rowCs = getComputedStyle(document.querySelector(".grid-row.focused"));
-    const cs = getComputedStyle(cell);
-    const blurs = [...cs.boxShadow.matchAll(/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px(?: (\d+(?:\.\d+)?)px)? ?(?:inset)?/g)];
-    const outer = cs.boxShadow.split(/,(?![^(]*\))/).filter((x) => !/inset/.test(x)).map((x) => Number((/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px/.exec(x) || [])[3] || 0));
-    const rowOuter = rowCs.boxShadow.split(/,(?![^(]*\))/).filter((x) => !/inset/.test(x)).map((x) => Number((/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px/.exec(x) || [])[3] || 0));
-    const ring = /inset 0px 0px 0px 3px/.test(cs.boxShadow) || /rgb\(0, 196, 255\) 0px 0px 0px 3px inset/.test(cs.boxShadow);
-    const rect = cell.getBoundingClientRect();
-    return { shadow: cs.boxShadow, outerBlur: Math.max(0, ...outer), rowBlur: Math.max(0, ...rowOuter), ring, bg: cs.backgroundColor, rowOverflow: getComputedStyle(cell.parentElement).overflow, w: rect.width, h: rect.height };
+    const row = document.querySelector(".grid-row.focused");
+    const cs = getComputedStyle(cell), rs = getComputedStyle(row);
+    return { outline: `${cs.outlineWidth} ${cs.outlineStyle} ${cs.outlineColor} ${cs.outlineOffset}`, shadow: cs.boxShadow, bg: cs.backgroundColor, radius: cs.borderTopLeftRadius,
+      stripOverflow: getComputedStyle(cell.parentElement).overflow, rowHas: row.classList.contains("grid-row--has-cursor"), rowShadow: rs.boxShadow };
   });
-  check(`${name}: the highlighted cell has a full-cyan 3px ring`, look.ring, look.shadow);
-  check(`${name}: and a glow much stronger than the row's (outer blur ${look.outerBlur}px against ${look.rowBlur}px)`, look.outerBlur >= 30 && look.outerBlur >= look.rowBlur * 2, JSON.stringify(look));
-  check(`${name}: the strip lets the glow out, and the fill is opaque`, look.rowOverflow === "visible" && /^(rgb|color)\(/.test(look.bg) && !/\//.test(look.bg), JSON.stringify([look.rowOverflow, look.bg]));
+  check(`${name}: the highlighted cell has a 3px #00D4FF ring inset 2px, radius 6px`, look.outline === "3px solid rgb(0, 212, 255) -5px" && look.radius === "6px", JSON.stringify(look));
+  check(`${name}: two cyan glows, 18px at 90% and 6px at 100%`, /rgba\(0, 212, 255, 0\.9\) 0px 0px 18px 0px/.test(look.shadow) && /rgb\(0, 212, 255\) 0px 0px 6px 0px/.test(look.shadow), look.shadow);
+  check(`${name}: the fill is #00D4FF at 30%`, /rgba\(0, 212, 255, 0\.3\)/.test(look.bg), look.bg);
+  check(`${name}: the glow is clipped to the programme strip`, look.stripOverflow === "hidden", look.stripOverflow);
+  check(`${name}: the row's own focus steps back while a cell has the cursor: 2px outline at 55%, 6px glow at 25%`, look.rowHas && /0px 0px 6px/.test(look.rowShadow) && /0px 0px 0px 2px/.test(look.rowShadow) && !/0px 0px 14px/.test(look.rowShadow), look.rowShadow);
   await shot("c1-right");
   // UP NEXT: the title in the highlight colour, the label after it; a long title is cut, never the label.
   const up = await page.evaluate(() => {
@@ -174,7 +173,7 @@ for (const name of Object.keys(viewports)) {
     return out;
   });
   check(`${name}: UP NEXT: the title and the label are two spans on one line, the title first`, up.kids === 2 && up.titleBeforeLabel, JSON.stringify(up));
-  check(`${name}: UP NEXT: the title is in the highlight colour, the label stays dim`, up.titleColor !== up.labelColor && /^rgb\(25[0-5], 2\d\d, \d+\)$/.test(up.titleColor.replace(/\s+/g, " ")) , JSON.stringify([up.titleColor, up.labelColor, up.accent]));
+  check(`${name}: UP NEXT: the title is #FFE500, the label white at 50%`, up.titleColor === "rgb(255, 229, 0)" && up.labelColor === "rgba(255, 255, 255, 0.5)", JSON.stringify([up.titleColor, up.labelColor, up.accent]));
   check(`${name}: UP NEXT: a long title is cut with an ellipsis before the label is`, up.titleCut && up.labelFull && up.labelInside, JSON.stringify(up));
 
   // Right again and on, the window moves only when the programme would leave the view.

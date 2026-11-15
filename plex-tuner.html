@@ -317,7 +317,9 @@
     border: max(1px, calc(2 * var(--pt))) solid rgba(255,255,255,0.18);
     background: #101024;
   }
-  .info-poster[hidden] { display: none; }
+  /* No picture: an empty frame in the row colour, the same size, so the text beside it never moves. */
+  .info-poster--empty { visibility: visible; background: #101024; }
+  .info-poster:not([src]) { background: #101024; }
   .info-title {
     font-size: max(28px, calc(var(--info-title) * var(--pt)));
     color: #fff;
@@ -398,8 +400,8 @@
   }
   /* UP NEXT: one plain line, the title in a highlight colour and then "UP NEXT IN 44 MIN" in dim text (Chad 2026-11-15, all platforms).
      No badge or capsule. The label keeps its width; a long title is cut with an ellipsis, so the label is never the part that goes.
-     The highlight colour is one variable, --upnext-title-color (the Apple TV's value is still to come; this is the placeholder). */
-  :root { --upnext-title-color: #FFD60A; }
+     The title is the Apple TV's yellow, #FFE500, one variable (--upnext-title-color); the label is white at 50% on the guide's info panel. */
+  :root { --upnext-title-color: #FFE500; }
   .info-upnext {
     display: flex;
     align-items: baseline;
@@ -411,6 +413,7 @@
     letter-spacing: 1px;
     min-width: 0;
   }
+  .info-upnext-label { color: rgba(255,255,255,0.5); }
   .info-upnext-title {
     flex: 0 1 auto;
     min-width: 0;
@@ -423,15 +426,23 @@
     flex: 0 0 auto;
     white-space: nowrap;
   }
-  .info-hint {
-    position: absolute;
-    left: 40px; right: 40px; bottom: 6px;
-    font-family: 'VT323', monospace;
-    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
-    line-height: 1.2;
-    color: rgba(255,255,255,0.5);
-    pointer-events: none;
+  /* OPEN IN PLEX / JELLYFIN / EMBY: the item's page in the server's own web app, in a new tab. A plain link, so a click reaches it
+     on a TV browser too. */
+  .info-open-in {
+    display: inline-block;
+    align-self: flex-start;
+    margin-top: calc(12 * var(--pt));
+    padding: 4px 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(8px, calc(var(--info-badge) * var(--pt)));
+    letter-spacing: 1px;
+    color: var(--cyan);
+    border: 2px solid var(--cyan);
+    text-decoration: none;
+    white-space: nowrap;
   }
+  .info-open-in[hidden] { display: none; }
+  .info-open-in:hover, .info-open-in:focus-visible { background: rgba(0,196,255,0.18); outline: none; }
 
   /* Unmute button */
   .unmute-btn {
@@ -1753,23 +1764,30 @@
     background: color-mix(in srgb, var(--ch) 45%, var(--bg)) !important;
   }
 
-  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js): lifted, in a bright selected fill, with a
-     full-cyan 3px ring and a glow much stronger than the row's own, so it reads from the couch (Chad 2026-11-15: "way more obvious").
-     The live programme's cell on the playing row until the cursor moves. */
+  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js), with the Apple TV's values
+     (GuideCursorStyle): #00D4FF at 30% over the row, a 3px #00D4FF ring inset 2px with a 6px radius, and two cyan glows, 18px at
+     90% and 6px at 100%. The glow is clipped to the programme strip (it keeps overflow: hidden), so it never covers the channel
+     column, the bundle stripe or the rows above and below. The live programme's cell is it on the playing row until the cursor moves.
+     The colours are variables so the Apple TV's values stay one place. */
+  :root { --cursor-cyan: 0, 212, 255; }
   .grid-row.focused .grid-program.grid-program--cursor {
-    background: color-mix(in srgb, var(--cyan) 52%, var(--bg)) !important;
-    box-shadow:
-      inset 0 0 0 3px var(--cyan),
-      inset 0 0 18px rgba(0,196,255,0.55),
-      0 0 14px 3px rgba(0,196,255,0.95),
-      0 0 38px 8px rgba(0,196,255,0.55);
+    background: rgba(var(--cursor-cyan), 0.30) !important;
+    outline: 3px solid rgb(var(--cursor-cyan));
+    outline-offset: -5px;
+    box-shadow: 0 0 18px rgba(var(--cursor-cyan), 0.9), 0 0 6px rgb(var(--cursor-cyan));
     border-radius: 6px;
     color: #fff !important;
     position: relative;
     z-index: 3;
   }
-  /* The glow is drawn outside the cell, so the focused row's strip lets it out (the cell clips its own text). */
-  .grid-row.focused .grid-row-programs { overflow: visible; }
+  /* While a cell has the cursor the row's own focus steps back: a 2px outline in the channel colour at 55% and a 6px glow at 25%
+     (with no cell it stays the 3px, 14px one above). */
+  .grid-row.focused.grid-row--has-cursor {
+    box-shadow:
+      inset 8px 0 0 var(--ch),
+      inset 0 0 0 2px color-mix(in srgb, var(--ch) 55%, transparent),
+      0 0 6px color-mix(in srgb, var(--ch) 25%, transparent);
+  }
 
   /* Channel name column */
   .grid-row-channel {
@@ -2873,7 +2891,7 @@
     }
     /* No room for prose next to a 16:9 video on a phone. The title, the meta
        row and the progress are what a glance needs. */
-    .info-poster, .info-hint, .info-description { display: none; }
+    .info-poster, .info-description { display: none; }
     .guide-grid { flex: 1 1 auto; min-height: 0; }
   }
 
@@ -3096,7 +3114,7 @@
       font-weight: 500;
     }
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
-    .info-poster, .info-hint, .info-description { display: none; }
+    .info-poster, .info-description { display: none; }
     .info-time { font-family: 'DM Mono', monospace; font-size: var(--nx-fs); }
     .info-upnext { display: none; }
 
@@ -3828,7 +3846,7 @@
            with the elapsed and total time, and one plain line for what is on next. -->
       <div class="info-channel-tag" id="info-channel-tag"></div>
       <div class="info-main">
-        <img class="info-poster" id="info-poster" alt="" hidden>
+        <img class="info-poster" id="info-poster" alt="">
         <div class="info-text">
           <div class="info-title" id="info-title"></div>
           <div class="info-episode-title" id="info-episode-title"></div>
@@ -3843,8 +3861,7 @@
         <div class="info-time" id="info-time"></div>
       </div>
       <div class="info-upnext" id="info-upnext"></div>
-      <!-- Says what the focused control on the rail does; it sits over the foot of the window and takes no room. -->
-      <div class="info-hint" id="info-hint" aria-live="polite"></div>
+      <a class="info-open-in" id="info-open-in" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
 
     <!-- VERTICAL TOOLBAR (beside info panel in side layout) -->
@@ -7155,6 +7172,7 @@
 
     setInfoChannelTag(ch);
     setInfoPoster(shown);
+    updateOpenInLink(shown);
     const MB = globalThis.NostalgexMusicBrainz;
     const isMusic = MB && MB.isMusicVideoItem(shown);
     document.getElementById('info-title').textContent = shown.title;
@@ -7208,51 +7226,93 @@
     tag.style.color = String(ch.color || '#fff');
   }
 
-  // The poster, Plex only, as on the Apple TV (its thumbnail URL carries the token). Hidden when there is none or it fails.
-  function infoPosterUrl(item) {
-    if (!item || mediaBackend !== 'plex' || !item.thumb) return '';
-    const server = item.serverUrl || plexServerUrl;
+  // The poster, on every server, as on the Apple TV (Chad 2026-11-15: parity on Plex, Jellyfin and Emby): a TV episode's season
+  // poster, then its series', then the episode's own image; a film's own. The first image that loads wins, and every one failing leaves
+  // an empty frame (the space is always reserved, so the text never moves). The URL carries the sign-in the way the other image
+  // requests do, since an <img> cannot send a header.
+  //   Plex:             /library/metadata/{season}/thumb, then /library/metadata/{show}/thumb, then the item's thumb
+  //   Jellyfin, Emby:   /Items/{SeasonId}/Images/Primary, then {SeriesId}, then {ItemId}, each with ?maxWidth=300
+  function infoPosterUrls(item) {
+    if (!item) return [];
+    const server = String((item.serverUrl || plexServerUrl) || '').replace(/\/+$/, '');
     const token = item.serverToken || plexToken;
-    if (!server || !token) return '';
-    return `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(item.thumb)}&X-Plex-Token=${encodeURIComponent(token)}`;
+    if (!server || !token) return [];
+    const episode = item.type === 'episode';
+    const urls = [];
+    if (mediaBackend === 'plex') {
+      const via = (path) => `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(path)}&X-Plex-Token=${encodeURIComponent(token)}`;
+      if (episode && item.seasonKey) urls.push(via(`/library/metadata/${item.seasonKey}/thumb`));
+      if (episode && item.showKey) urls.push(via(`/library/metadata/${item.showKey}/thumb`));
+      if (item.thumb) urls.push(via(item.thumb));
+    } else {
+      const primary = (id) => `${server}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300&api_key=${encodeURIComponent(token)}`;
+      if (episode && item.seasonKey) urls.push(primary(item.seasonKey));
+      if (episode && item.showKey) urls.push(primary(item.showKey));
+      if (item.ratingKey) urls.push(primary(item.ratingKey));
+    }
+    return urls.filter((u, i) => urls.indexOf(u) === i);
   }
   function setInfoPoster(item) {
     const img = document.getElementById('info-poster');
     if (!img) return;
-    const url = infoPosterUrl(item);
-    if (!url) { img.hidden = true; img.removeAttribute('src'); delete img.dataset.src; return; }
-    img.onerror = () => { img.hidden = true; };
-    if (img.dataset.src !== url) { img.dataset.src = url; img.src = url; }
-    img.hidden = false;
+    const urls = infoPosterUrls(item);
+    const key = urls.join('|');
+    if (img.dataset.key === key) return;   // the same programme: its picture stays
+    img.dataset.key = key;
+    let at = 0;
+    const next = () => {
+      if (at >= urls.length) { img.removeAttribute('src'); img.classList.add('info-poster--empty'); return; }
+      img.classList.remove('info-poster--empty');
+      img.src = urls[at++];
+    };
+    img.onerror = next;
+    next();
   }
 
-  // The hint line under the details: what the control the viewer is on does, in the Apple TV's words where it has them.
-  (function wireRailHints() {
-    const rail = document.getElementById('v-toolbar');
-    const hint = document.getElementById('info-hint');
-    if (!rail || !hint) return;
-    const HINTS = {
-      'SOUND': 'Turn the sound on or off for this channel',
-      'FULLSCREEN': 'Show this channel without the guide',
-      'RETRO': 'CRT scanlines, vignette, flicker, 4:3 aspect ratio',
-      'SLEEP': 'Stop playing after a set time',
-      'INFO': 'How this program is playing, and why',
-      'QUALITY': 'Lower this when your connection is slow or shared',
-      'SETTINGS': 'Bundles, servers, language and the rest',
-      'APPLE TV': 'Nostalgex for Apple TV, from the App Store',
-    };
-    const show = (e) => {
-      const btn = e.target.closest && e.target.closest('.v-btn');
-      const label = btn && btn.querySelector('.v-btn-label');
-      const key = label ? label.textContent.split('[')[0].trim().toUpperCase() : '';
-      hint.textContent = HINTS[key] || '';
-    };
-    const clear = () => { hint.textContent = ''; };
-    rail.addEventListener('focusin', show);
-    rail.addEventListener('mouseover', show);
-    rail.addEventListener('focusout', clear);
-    rail.addEventListener('mouseleave', clear);
-  })();
+  // OPEN IN PLEX / JELLYFIN / EMBY: a link to the item in the server's own web app, in a new tab (Chad 2026-11-15: the same as the
+  // Apple TV's OPEN IN PLEX, on every server). Jellyfin and Emby ask for the server's id, which their public info answers; until it
+  // has, the link is made without it (both web apps open the item on the server they are served from).
+  //   Plex:     https://app.plex.tv/desktop/#!/server/{machineIdentifier}/details?key=/library/metadata/{id}
+  //   Jellyfin: {server}/web/#/details?id={id}&serverId={serverId}
+  //   Emby:     {server}/web/index.html#!/item?id={id}&serverId={serverId}   (Emby's router takes the #! form: checked on 4.10.1.0)
+  let mediaServerId = null;
+  let mediaServerIdAsked = '';
+  function ensureMediaServerId() {
+    if (!isMediaBrowserBackend(mediaBackend) || !plexServerUrl || mediaServerIdAsked === plexServerUrl) return;
+    mediaServerIdAsked = plexServerUrl;
+    fetch(`${plexServerUrl}/System/Info/Public`, { headers: { 'Accept': 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.Id) { mediaServerId = String(d.Id); updateOpenInLink(shownInfoItem); } })
+      .catch(() => { mediaServerIdAsked = ''; });
+  }
+  function openInTarget(item) {
+    if (!item || !item.ratingKey) return null;
+    const id = encodeURIComponent(String(item.ratingKey));
+    if (mediaBackend === 'plex') {
+      const server = selectedServers.find((s) => s.url === item.serverUrl) || selectedServers[0];
+      const machine = server && server.machineIdentifier;
+      if (!machine) return null;
+      return { label: 'OPEN IN PLEX', url: `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(machine)}/details?key=${encodeURIComponent('/library/metadata/' + item.ratingKey)}` };
+    }
+    const server = String(plexServerUrl || '').replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(server)) return null;
+    const sid = mediaServerId ? `&serverId=${encodeURIComponent(mediaServerId)}` : '';
+    if (mediaBackend === 'emby') return { label: 'OPEN IN EMBY', url: `${server}/web/index.html#!/item?id=${id}${sid}` };
+    return { label: 'OPEN IN JELLYFIN', url: `${server}/web/#/details?id=${id}${sid}` };
+  }
+  let shownInfoItem = null;
+  function updateOpenInLink(item) {
+    shownInfoItem = item;
+    const a = document.getElementById('info-open-in');
+    if (!a) return;
+    ensureMediaServerId();
+    const t = openInTarget(item);
+    if (!t) { a.hidden = true; a.removeAttribute('href'); return; }
+    a.textContent = t.label;
+    a.href = t.url;
+    a.hidden = false;
+  }
+
 
   function getEnabledChannels() {
     return CHANNELS.filter(ch => ch.enabled);
@@ -7364,14 +7424,15 @@
   /** Marks the cell the cursor is on, on the focused row only: the programme covering the cursor's time (the live one on null). */
   function applyGuideCursor() {
     for (const el of document.querySelectorAll('.grid-program--cursor')) el.classList.remove('grid-program--cursor');
+    for (const el of document.querySelectorAll('.grid-row--has-cursor')) el.classList.remove('grid-row--has-cursor');
     const entries = focusedGuideEntries();
     if (!entries || !guideVisible || guideStripeMode) return;
     const row = document.querySelector('.grid-row.focused:not(.grid-row--promo)');
     if (!row) return;
     const cur = NostalgexGuideCursor.current(entries, guideCursorTime, Date.now() / 1000);
-    if (!cur) return;
-    const cell = [...row.querySelectorAll('.grid-program')].find((c) => Number(c.dataset.start) === cur.startSec);
+    const cell = cur ? [...row.querySelectorAll('.grid-program')].find((c) => Number(c.dataset.start) === cur.startSec) : null;
     if (cell) cell.classList.add('grid-program--cursor');
+    row.classList.toggle('grid-row--has-cursor', !!cell);
   }
 
   /**
@@ -11902,6 +11963,7 @@
                     // The series id, which a BoxSet of shows lists in place of its
                     // episodes. NostalgexCollections.indexLibrary expands it.
                     showKey: String(show.Id),
+                    seasonKey: (ep.SeasonId || ep.ParentId) ? String(ep.SeasonId || ep.ParentId) : undefined,
                     thumb: null,
                     art: null,
                     viewCount: (ep.UserData && ep.UserData.PlayCount) || 0,
@@ -12305,6 +12367,7 @@
                       // The show's key (episode grandparentRatingKey), which a collection
                       // of shows lists. NostalgexCollections.indexLibrary expands it.
                       showKey: String(show.ratingKey),
+                      seasonKey: ep.parentRatingKey ? String(ep.parentRatingKey) : undefined,
                       thumb: ep.thumb || show.thumb,
                       art: show.art,
                       viewCount: ep.viewCount || 0,
