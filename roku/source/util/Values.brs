@@ -189,6 +189,29 @@ sub NxScanCapSet(titles as Integer, total = 0 as Integer)
     GetGlobalAA().nxScanCapTotal = total
 end sub
 
+' The loading block's numbers (source/guide/LoadState.brs): a scan tells the
+' task node how many titles it has read so far, which library it is in and how
+' far through that library it is (`done` of `total`, only when the server gave
+' a total; -1 and 0 otherwise). `base` is what earlier servers gave, and
+' nxScanServerLabel the server's name when more than one is read.
+sub NxScanBaseSet(titles as Integer, serverLabel = "" as String)
+    GetGlobalAA().nxScanBase = titles
+    GetGlobalAA().nxScanServerLabel = serverLabel
+end sub
+
+function NxScanTitlesRead() as Integer
+    return NxNumberOr0(GetGlobalAA().nxScanTitles)
+end function
+
+sub NxScanReport(progress as Dynamic, read as Integer, name as String, done = -1 as Integer, total = 0 as Integer)
+    if type(progress) <> "roSGNode" then return
+    base = NxNumberOr0(GetGlobalAA().nxScanBase)
+    label = NxToStr(GetGlobalAA().nxScanServerLabel)
+    if label <> "" then name = label + " · " + name
+    GetGlobalAA().nxScanTitles = base + read
+    progress.loadInfo = { titles: base + read, name: name, done: done, total: total }
+end sub
+
 function NxScanCapped() as Integer
     return NxNumberOr0(GetGlobalAA().nxScanCapped)
 end function

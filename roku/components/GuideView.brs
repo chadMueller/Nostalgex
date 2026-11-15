@@ -11,6 +11,19 @@
 
 sub init()
     m.seeded = false
+    ' The loading pattern (source/guide/LoadState.brs).
+    m.changing = false
+    m.switching = false
+    m.loadErr = ""
+    m.waitNote = false
+    m.loadTitles = 0
+    m.loadDone = -1
+    m.loadTotal = 0
+    m.loadName = ""
+    m.readyTitles = 0
+    m.readyUntil = 0
+    m.readyTimer = m.top.FindNode("readyTimer")
+    m.readyTimer.ObserveField("fire", "onReadyDone")
     ' The grid's shape (NxGuideGeometry, #263): a row and the 1 px rule under it
     ' make a row's pitch, and the rows show below the header and its rule.
     geo = NxGuideGeometry()
@@ -80,6 +93,11 @@ sub init()
     applyGuideText()
     styleLabel("hazeText", "DMMono-Medium", 26, "0xFFFFFF6B")
     styleLabel("notice", "DMMono-Regular", 20, "0xFF6B6BFF")
+    styleLabel("loadTitle", "DMMono-Medium", 40, "0xFFE500FF")
+    styleLabel("loadLine", "DMMono-Regular", 24, NxTokens().color.text2)
+    styleLabel("loadLib", "DMMono-Regular", 22, "0xB9C3DEB3")
+    styleLabel("loadNote", "DMMono-Regular", 20, "0x00D4FFFF")
+    styleLabel("headerNote", "DMMono-Medium", 20, "0x00D4FFFF")
     styleLabel("ccToast", "VT323-Regular", 48, "0xFFFFFFFF")
     m.deadlineTimer = newTimer(15, false, "onDeadline")
     m.cardTimer = newTimer(5, false, "onCardDone")
@@ -226,7 +244,16 @@ sub onGuide()
     ' One channel from the cold-boot seed while the library loads (#155):
     ' no packages behind it, so SETTINGS and the sidebar wait for the guide.
     m.seeded = NxTruthy(m.top.guide.seed)
-    if not m.seeded and m.top.FindNode("notice").text = NxSeedWaitNote() then m.top.FindNode("notice").text = ""
+    ' Whatever arrives ends a switch's CHANGING state: channels fill the guide, or
+    ' none came and NO CHANNELS FOUND is the answer.
+    m.changing = false
+    m.loadErr = ""
+    ' The switch is over once a full guide is here, not the one-channel seed.
+    if not m.seeded then
+        m.switching = false
+        m.waitNote = false
+    end if
+    m.top.FindNode("info").visible = true
     ' No channel at all (libraries that build none): the time header and
     ' ChannelGuideView's NO CHANNELS AVAILABLE, and Up still reaches SETTINGS.
     ' Nothing reads a channel while the list is empty (#93).
@@ -236,8 +263,10 @@ sub onGuide()
         m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
         keepFocusVisible()
         renderGrid()
+        renderLoad()
         return
     end if
+    renderLoad()
     refreshOffer()
     refreshSettings()
     ' An empty guide that now has channels starts as a first one: the clock
@@ -2779,10 +2808,135 @@ end sub
 ' On a guide from the cold-boot seed there are no packages, franchises or
 ' collections to show yet: SETTINGS and the sidebar say so and wait.
 function seedWait() as Boolean
-    if not m.seeded then return false
-    m.top.FindNode("notice").text = NxSeedWaitNote()
+    if not (m.seeded or (m.changing and m.loadErr = "")) then return false
+    ' The notice goes in the loading block, never over the video.
+    m.waitNote = true
+    renderLoad()
     return true
 end function
+
+' ── The loading pattern (source/guide/LoadState.brs) ────────────────────────
+
+' A server or library switch: the rows go, the video stops, and the guide area
+' says CHANNEL GUIDE IS CHANGING with how far the new library has been read. The
+' channel that was on is kept by id for when the new guide arrives (resumeId).
+sub enterChanging(unused = invalid as Dynamic)
+    m.top.resumeId = tunedChannelId()
+    m.changing = true
+    m.switching = true
+    m.loadErr = ""
+    m.waitNote = false
+    m.loadTitles = 0
+    m.loadDone = -1
+    m.loadTotal = 0
+    m.loadName = ""
+    m.readyUntil = 0
+    if m.fullscreen = true then setFullscreen(false)
+    closeStrip()
+    if m.sidebarOpen = true then closeSidebar()
+    m.video.control = "stop"
+    m.playing = invalid
+    m.channels = []
+    m.tuned = -1
+    m.focus = 0
+    m.cursor = invalid
+    m.top.FindNode("notice").text = ""
+    m.top.FindNode("info").visible = false
+    ' What the last channel left on screen goes with it: its failure card, its haze.
+    hideCard()
+    hideHaze()
+    m.stripeStale = true
+    setNav("grid")
+    renderGrid()
+    renderLoad()
+end sub
+
+sub onLoadInfo()
+    info = m.top.loadInfo
+    if info = invalid then return
+    m.loadTitles = NxNumberOr0(info.titles)
+    m.loadDone = -1
+    if info.done <> invalid then m.loadDone = NxNumberOr0(info.done)
+    m.loadTotal = NxNumberOr0(info.total)
+    m.loadName = NxToStr(info.name)
+    renderLoad()
+end sub
+
+sub onLoadError()
+    if not m.changing then return
+    m.loadErr = m.top.loadError
+    renderLoad()
+end sub
+
+' A load finished: GUIDE READY: n TITLES in the header for a few seconds.
+sub onReadyTitles()
+    if m.top.readyTitles <= 0 then return
+    m.readyTitles = m.top.readyTitles
+    m.readyUntil = nowSec() + NxReadyShowSec()
+    m.readyTimer.control = "stop"
+    m.readyTimer.duration = NxReadyShowSec()
+    m.readyTimer.control = "start"
+    renderLoad()
+end sub
+
+sub onReadyDone()
+    renderLoad()
+end sub
+
+' Draws whichever of the block and the header's line applies now.
+sub renderLoad()
+    rows = 0
+    if m.channels <> invalid then rows = m.channels.Count()
+    busy = m.top.libraryBusy
+    kind = NxLoadKind(m.changing, m.loadErr <> "", m.seeded = true, busy, rows)
+    block = m.top.FindNode("loadBlock")
+    if kind = "" then
+        block.visible = false
+        m.top.FindNode("loadSlide").control = "stop"
+        m.waitNote = false
+    else
+        titleKind = kind
+        ' The seed's one channel under the block is still the switch's load.
+        if kind = "load" and m.switching then titleKind = "changing"
+        m.top.FindNode("loadTitle").text = NxLoadTitle(titleKind)
+        if kind = "error" then
+            m.top.FindNode("loadLine").text = m.loadErr
+            m.top.FindNode("loadLib").text = ""
+            m.top.FindNode("loadNote").text = "OK  OPEN SETTINGS"
+        else
+            m.top.FindNode("loadLine").text = NxLoadProgressLine(m.loadTitles)
+            libLine = ""
+            if m.loadName <> "" then libLine = NxLoadLibraryLine(m.loadName, m.loadDone, m.loadTotal)
+            m.top.FindNode("loadLib").text = libLine
+            note = ""
+            if m.waitNote then note = NxLoadNote()
+            m.top.FindNode("loadNote").text = note
+        end if
+        ' With the seed's one channel showing, the block sits under its row.
+        y = 59
+        if rows > 0 then y = 59 + 70
+        block.translation = [0, y]
+        m.top.FindNode("loadBg").height = 466 - (y - 59)
+        block.visible = true
+        if kind = "error" then
+            m.top.FindNode("loadSlide").control = "stop"
+            m.top.FindNode("loadInd").visible = false
+        else
+            m.top.FindNode("loadInd").visible = true
+            m.top.FindNode("loadSlide").control = "start"
+        end if
+    end if
+    note = m.top.FindNode("headerNote")
+    text = NxHeaderNote(kind, busy, rows, m.loadTitles, m.readyTitles, m.readyUntil, nowSec())
+    note.text = text
+    note.visible = text <> ""
+    ' GUIDE READY in yellow; UPDATING LIBRARY in text2.
+    if Left(text, 5) = "GUIDE" then
+        note.color = "0xFFE500FF"
+    else
+        note.color = NxTokens().color.text2
+    end if
+end sub
 
 sub openSettings()
     if seedWait() then return
@@ -2883,6 +3037,16 @@ sub onSettingsRescan()
 end sub
 
 sub onLibraryBusy()
+    ' A new load starts counting from nothing, and the last GUIDE READY is over.
+    if not m.top.libraryBusy then m.switching = false
+    if m.top.libraryBusy then
+        m.loadTitles = 0
+        m.loadDone = -1
+        m.loadTotal = 0
+        m.loadName = ""
+        m.readyUntil = 0
+    end if
+    renderLoad()
     if m.settings <> invalid then m.settings.rescanning = m.top.libraryBusy
 end sub
 

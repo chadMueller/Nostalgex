@@ -36,9 +36,19 @@
     <field id="seedEnded" type="boolean" alwaysNotify="true" />
     <!-- The id of the channel tuned, as a string, or "" (resumeId's source). -->
     <function name="tunedChannelId" />
+    <!-- The loading pattern (source/guide/LoadState.brs). loadInfo is what the
+         scan has read so far ({ titles, of, name }); readyTitles is set when a
+         load finished (GUIDE READY: n TITLES); loadError is why a switch could
+         not read the library. enterChanging clears the rows for a server or
+         library switch and shows CHANNEL GUIDE IS CHANGING in their place. -->
+    <field id="loadInfo" type="assocarray" onChange="onLoadInfo" />
+    <field id="readyTitles" type="integer" value="0" alwaysNotify="true" onChange="onReadyTitles" />
+    <field id="loadError" type="string" value="" onChange="onLoadError" />
+    <function name="enterChanging" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/ColdBootSeed.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LoadState.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/StreamQuality.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideNav.brs" />
@@ -98,6 +108,11 @@
       <Label id="hazeText" translation="[1180,261]" width="740" horizAlign="center" />
     </Group>
     <Timer id="infoPosterTimer" repeat="false" duration="0.25" />
+    <Timer id="readyTimer" repeat="false" duration="4" />
+    <!-- The loading block's indicator: a cyan bar sliding back and forth. -->
+    <Animation id="loadSlide" duration="1.4" repeat="true" easeFunction="inOutQuad">
+      <Vector2DFieldInterpolator key="[0.0, 0.5, 1.0]" keyValue="[[0.0, 0.0], [240.0, 0.0], [0.0, 0.0]]" fieldToInterp="loadBar.translation" />
+    </Animation>
     <Animation id="hazeIn" duration="0.35" repeat="false" easeFunction="linear">
       <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="haze.opacity" />
     </Animation>
@@ -110,6 +125,8 @@
       <Poster id="logo" uri="pkg:/images/logo.png" translation="[40,54]" width="363" height="48" />
       <!-- TunerView's nav item: Up from the top row focuses it. -->
       <Label id="navSettings" text="SETTINGS" translation="[924,64]" width="200" horizAlign="right" />
+      <!-- UPDATING LIBRARY and GUIDE READY, in the header beside the logo. -->
+      <Label id="headerNote" text="" translation="[440,66]" width="470" visible="false" />
       <!-- While a package switched on in Settings is still building: its
            channels are on the way (Discussion #8). -->
       <Label id="buildNotice" text="" translation="[40,128]" width="1100" visible="false" />
@@ -144,6 +161,21 @@
       <Rectangle id="headerRule" translation="[0,58]" width="1920" height="1" color="0xFFFFFF40" />
       <Group id="rows" translation="[0,59]" clippingRect="[0,0,1920,466]" />
       <Rectangle id="nowLine" width="2" height="525" color="0x00D4FFFF" />
+      <!-- The empty guide area's one block while the library loads or the
+           guide is changing: title, progress, indicator, and the Settings note. -->
+      <Group id="loadBlock" translation="[0,59]" visible="false">
+        <Rectangle id="loadBg" width="1920" height="466" color="0x0D0D1FFF" />
+        <Label id="loadTitle" text="" translation="[160,110]" width="1600" horizAlign="center" />
+        <Label id="loadLine" text="" translation="[360,166]" width="1200" horizAlign="center" wrap="true" maxLines="3" lineSpacing="4" />
+        <Label id="loadLib" text="" translation="[360,202]" width="1200" horizAlign="center" />
+        <Group id="loadInd" translation="[780,250]">
+          <Rectangle id="loadTrack" width="360" height="4" color="0xFFFFFF14" />
+          <Group id="loadClip" clippingRect="[0,0,360,4]">
+            <Rectangle id="loadBar" width="120" height="4" color="0x00D4FFFF" />
+          </Group>
+        </Group>
+        <Label id="loadNote" text="" translation="[360,276]" width="1200" horizAlign="center" />
+      </Group>
     </Group>
     <Group id="sidebar" translation="[0,555]" visible="false" />
     <!-- Full screen's channel OSD (PlayerView ChannelOSD), bottom left. -->

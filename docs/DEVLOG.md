@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku 1.0.13 v15: the loading pattern, the block in the empty guide and the header's notices)
+
+**State.** Branch `roku/1.0.13-candidate-v13`, v15 on top of v14 `154d3fab`. Chad: "when switching servers in the settings screen - we should show some sort of loader ... there is nice empty state that should display that", "went to click settings and this message appeared but again - why there? just put it in the empty guide state", "i have no way of finding out if the library is finished loading or not?". The same pattern on every platform (Android built it first, `0c5e9e01`, for the words).
+
+**Changed.**
+- **The block in the empty guide area** (`loadBlock` in `GuideView`, words and rules in `source/guide/LoadState.brs`): a yellow title (CHANNEL GUIDE IS CHANGING after a server or library switch, LOADING YOUR LIBRARY otherwise), "READ 4,210 TITLES" in text2, the library being read under it ("MOVIES: 40 OF 40", with OF n only when the server gave a total; the server's name first when more than one is read), the step after the read (collections, metadata, building channels), and a cyan bar that slides. With the cold-boot seed's one channel up, the block sits under its row.
+- **A server or library switch no longer drops the guide.** `MainScene.onGuideAction` used to call `dropGuide()` and put the full-screen loading view up; it now calls `GuideView.enterChanging` (rows, stripes, video, failure card and info panel go) and starts the load behind it. The rebuilt guide opens on the channel that was on (`resumeId` is kept by the guide itself). A failed switch puts the reason in the block, with OK for Settings.
+- **Every still-loading notice is in the block.** SETTINGS opened on a seed guide or during a switch showed a red `STILL LOADING YOUR LIBRARY` over the video; it is now `SETTINGS OPENS WHEN IT FINISHES` in the block (`seedWait`).
+- **The header, between the wordmark and SETTINGS:** `UPDATING LIBRARY: n TITLES READ` while a load runs behind a guide that has rows, then `GUIDE READY: n TITLES` in yellow for 4 s. Nothing after a read that was cut short (STOP WAITING, a stall, a full memory) or failed (`LibraryTask.incomplete`).
+- **The first load, with no guide yet, keeps the full-screen loading screen.**
+- **A load that was ended saves and shows nothing** (`source/util/LoadEpoch.brs`): sign-out, a switch and a newer load end the running one (`releaseLibrary` bumps a count in the registry), and the task compares the count it began under before it saves a server's library, writes the guide or pools cache, hands over a guide or says it is done. Settings stays reachable behind a guide that is loading, so sign-out mid-load was possible; the Android reviewer found the old load saving the old server's library and tuning the viewer back to it.
+- **Scanners report** through `NxScanReport` (Jellyfin and Emby by page and by batch of shows, Plex by section and batch); `LibraryTask` carries `loadInfo`, `titleCount` and `incomplete`.
+
+**Tests.** `tests/LoadStateTests.brs` (the words, the library line, which state shows, the header's line, the epoch). The stick walks are in `docs/roku-shots/v15-2026-11-15/`.
+
 ## 2026-11-15 (Roku 1.0.13 v14: the reviewer's five)
 
 **State.** Branch `roku/1.0.13-candidate-v13` (the same branch, v14 on top of `448b1102`). The reviewer passed v13; these are what it found.

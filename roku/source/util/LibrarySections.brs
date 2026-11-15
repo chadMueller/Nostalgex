@@ -25,7 +25,10 @@ end function
 function NxDeselectedSections(reg as Dynamic) as Object
     out = {}
     if reg = invalid then return out
-    list = ParseJson(reg.Read("deselectedSections"))
+    ' An empty read isn't handed to ParseJson, which logs an error for it.
+    raw = reg.Read("deselectedSections")
+    if raw = "" then return out
+    list = ParseJson(raw)
     if type(list) <> "roArray" then return out
     for each k in list
         if NxIsString(k) and k <> "" then out[k] = true

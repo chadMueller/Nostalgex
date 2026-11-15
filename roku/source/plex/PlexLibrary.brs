@@ -161,6 +161,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
     for each section in sections
         title = NxToStr(section.title)
         sectionStart = out.Count()
+        NxScanReport(progress, out.Count(), title)
         items = NxPlexSectionItems(server, NxToStr(section.key))
         if items = invalid then
             print "plex: skipped a section that failed to load"
@@ -198,6 +199,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         end if
                     end for
                     answers = invalid
+                    NxScanReport(progress, out.Count(), title, NxMinInt(b + batch, items.Count()), items.Count())
                     if progress <> invalid then
                         progress.progress = title + ": " + NxMinInt(b + batch, items.Count()).ToStr() + " of " + items.Count().ToStr() + " shows"
                         progress.bar = NxMinInt(b + batch, items.Count()) / items.Count()
@@ -213,6 +215,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         out.Push(it)
                     end if
                 end for
+                NxScanReport(progress, out.Count(), title, items.Count(), items.Count())
                 if progress <> invalid then
                     progress.progress = title + ": " + items.Count().ToStr() + " items"
                     progress.bar = -1

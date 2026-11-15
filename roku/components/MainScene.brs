@@ -347,6 +347,7 @@ sub startLibrary(useCache = false as Boolean, rebuild = false as Boolean, rescan
     m.library.rebuild = rebuild
     m.library.rescan = rescan
     m.library.ObserveField("refreshed", "onLibraryRefreshed")
+    m.library.ObserveField("loadInfo", "onLoadInfo")
     setLibraryBusy(true)
     m.library.ObserveField("phase", "onLibraryPhase")
     m.library.ObserveField("status", "onLibraryStatus")
@@ -439,7 +440,11 @@ sub onLibraryStatus()
         setLibraryBusy(false)
         ' A seed's channel isn't a guide to keep: the load was a first one,
         ' and its error is what to show.
-        if m.guide <> invalid and not m.seeded then return
+        if m.guide <> invalid and not m.seeded then
+            ' A switch left the guide with no rows: the reason goes in its block.
+            m.guide.loadError = NxLoadErrorText(m.library.message)
+            return
+        end if
         if m.seeded then removeSeedGuide()
         closeLoading()
         m.signedInClock = invalid
@@ -479,6 +484,7 @@ sub onLibraryStatus()
             m.guide.ObserveField("rescanRequest", "onRescanRequest")
             m.guide.ObserveField("seedEnded", "onSeedEnded")
             m.guide.libraryBusy = m.libraryBusy
+            if m.library <> invalid and m.library.loadInfo <> invalid then m.guide.loadInfo = m.library.loadInfo
             if m.library <> invalid and m.library.matchCounts <> invalid then m.guide.matchCounts = m.library.matchCounts
             if m.pendingLink <> invalid then m.guide.deepLink = m.pendingLink
             m.pendingLink = invalid
@@ -597,6 +603,9 @@ end sub
 ' Stops the library task and stops listening to it: a task told to stop can
 ' still report once more, and its handlers read m.library.
 sub releaseLibrary()
+    ' A load still running is over: it saves nothing and shows nothing more
+    ' (source/util/LoadEpoch.brs), whether sign-out, a switch or a new load ends it.
+    NxLoadEpochBump()
     if m.library = invalid then return
     m.library.UnobserveField("bundleBuilt")
     m.library.UnobserveField("matchCounts")
@@ -604,6 +613,7 @@ sub releaseLibrary()
     m.library.UnobserveField("status")
     m.library.UnobserveField("scanning")
     m.library.UnobserveField("refreshed")
+    m.library.UnobserveField("loadInfo")
     stopStallWatch()
     m.library.control = "stop"
     m.library = invalid
@@ -639,6 +649,14 @@ end sub
 sub onLibraryRefreshed()
     NxLoadEnded(NxLaunchGuardRegistry())
     setLibraryBusy(false)
+    ' The load is done: GUIDE READY: n TITLES in the guide's header.
+    ' Not after a read that was cut short or could not finish: that says nothing.
+    if m.guide <> invalid and m.library <> invalid and not m.library.incomplete then m.guide.readyTitles = m.library.titleCount
+end sub
+
+' How far the scan has read, for the loading block in the guide area.
+sub onLoadInfo()
+    if m.guide <> invalid and m.library <> invalid then m.guide.loadInfo = m.library.loadInfo
 end sub
 
 ' Whether a library load is running, for the RESCAN LIBRARY row.
@@ -649,15 +667,19 @@ end sub
 
 sub onGuideAction()
     action = m.guide.action
-    ' The rebuilt guide opens on the same channel, not the top row.
+    if action = "rebuild" then
+        ' The guide stays where it is and says CHANNEL GUIDE IS CHANGING in its
+        ' own empty area, with how far the new library has been read; the
+        ' rebuilt guide opens on the same channel (enterChanging keeps it).
+        m.guide.callFunc("enterChanging", invalid)
+        startLibrary(true, true)
+        return
+    end if
     m.resumeId = m.guide.callFunc("tunedChannelId", invalid)
     dropGuide()
     if action = "signOut" then
         m.resumeId = ""
         signOut()
-    else if action = "rebuild" then
-        m.prompt.text = "Rebuilding your channels…"
-        startLibrary(true, true)
     end if
 end sub
 

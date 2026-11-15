@@ -13,6 +13,8 @@
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/ServerKind.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LoadStall.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LoadEpoch.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LoadState.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LibrarySections.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/HiddenLibraries.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/DailyRefresh.brs" />

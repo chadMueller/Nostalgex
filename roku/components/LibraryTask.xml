@@ -16,6 +16,14 @@
          bar is 0 to 1, or -1 for none; barCaption goes under it. firstRun:
          no library saved yet, so the screen warns that it takes a while. -->
     <field id="phase" type="string" value="" />
+    <!-- The loading block in the guide area (source/guide/LoadState.brs):
+         what the scan has read so far, { titles, of, name }, and how many
+         titles the finished guide holds. -->
+    <field id="loadInfo" type="assocarray" alwaysNotify="true" />
+    <field id="titleCount" type="integer" value="0" />
+    <!-- True when the load was cut short (STOP WAITING, a stall, a full memory)
+         or could not read a server: it says nothing at its end (no GUIDE READY). -->
+    <field id="incomplete" type="boolean" value="false" />
     <field id="bar" type="float" value="-1" />
     <field id="barCaption" type="string" value="" />
     <field id="firstRun" type="boolean" value="false" />
@@ -68,6 +76,8 @@
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LoadEpoch.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LoadState.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LibraryCoverage.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/SavedKey.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/ServerChoice.brs" />

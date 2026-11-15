@@ -615,6 +615,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
             isMusicVideoSection = section = "musicvideo"
             parentId = NxToStr(view.Id)
             libStart = out.Count()
+            NxScanReport(progress, out.Count(), name)
             if section = "show" then
                 series = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, "Series", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Series", 0))), "Series")
                 ' Five shows at a time, as upstream's BATCH_SIZE, kept in
@@ -643,6 +644,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         end for
                     end for
                     answers = invalid
+                    NxScanReport(progress, out.Count(), name, NxMinInt(b + batch, series.Count()), series.Count())
                     if progress <> invalid then
                         done = NxMinInt(b + batch, series.Count())
                         progress.progress = name + ": " + done.ToStr() + " of " + series.Count().ToStr() + " shows"
@@ -679,6 +681,12 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                     seen = seen + rows.Count()
                     total = seen
                     if NxIsNumber(page.TotalRecordCount) then total = page.TotalRecordCount
+                    ' How far through this library, when the server said.
+                    if NxIsNumber(page.TotalRecordCount) then
+                        NxScanReport(progress, out.Count(), name, NxMinInt(seen, total), total)
+                    else
+                        NxScanReport(progress, out.Count(), name)
+                    end if
                     if rows.Count() = 0 or seen >= total then exit while
                     if NxScanMemoryFull(fetcher) then
                         NxMbNoteCut(fetcher, userId, views, viewAt, out, total - seen)
