@@ -45,6 +45,9 @@ sub init()
     m.piAttempt = invalid
     m.stopped = false
     m.slotOffset = 0
+    ' The programme cursor (NxGuideCursorNext and the others, source/guide/GuideTimeCursor.brs):
+    ' a time on the focused row, invalid for the live programme.
+    m.cursor = invalid
     m.playing = invalid
     m.fullscreen = false
     ' Bundle stripes (#276): a 28 px column at the guide's left edge.
@@ -452,6 +455,9 @@ sub renderGrid()
         m.gaveWay = NxGaveWay(m.channels, t)
         m.gaveWayAt = t
     end if
+    ' The programme the cursor is on, on the focused row (the live one at rest).
+    m.cursorBlock = invalid
+    if m.nav = "grid" and m.focus >= 0 and m.focus < m.channels.Count() then m.cursorBlock = NxGuideCursorCurrent(m.channels[m.focus].blocks, m.cursor, t)
     for idx = 0 to m.channels.Count() - 1
         y = m.scrollY + (idx + lead) * m.rowPitch
         if y > -m.rowPitch and y < m.viewHeight then rows.AppendChild(renderRow(idx, y, t, wStart&, wEnd&, scale))
@@ -465,6 +471,22 @@ sub renderGrid()
         cut = CreateObject("roSGNode", "Group")
         cut.clippingRect = [m.stripeW, -4000, 4000, 8000]
         cut.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
+        ' The programme's own highlight inside the row's: a cyan ring and glow
+        ' on the cell (its fill is drawn with the row).
+        cb = m.cursorBlock
+        if cb <> invalid and cb.endSec > wStart& and cb.startSec < wEnd& then
+            cs& = cb.startSec
+            if cs& < wStart& then cs& = wStart&
+            ce& = cb.endSec
+            if ce& > wEnd& then ce& = wEnd&
+            ring = CreateObject("roSGNode", "Poster")
+            ring.uri = "pkg:/images/look/focus.9.png"
+            ring.translation = [m.colX + 1 + (cs& - wStart&) * scale - 16, y - 16]
+            ring.width = (ce& - cs&) * scale + 32
+            ring.height = m.rowH + 32
+            ring.blendColor = NxTokens().color.cyan
+            cut.AppendChild(ring)
+        end if
         rows.AppendChild(cut)
     end if
     if lead > 0 and m.scrollY > -m.rowPitch then rows.AppendChild(renderInvite(m.scrollY))
@@ -542,6 +564,10 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
                 row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
             else if past then
                 row.AppendChild(newRect(x, 0, w, m.rowH, gc.past))
+            end if
+            ' The cursor's programme on the focused row: the selected fill.
+            if focused and m.cursorBlock <> invalid then
+                if b.startSec = m.cursorBlock.startSec and b.ratingKey = m.cursorBlock.ratingKey then row.AppendChild(newRect(x, 0, w, m.rowH, NxTokens().color.selectedRow))
             end if
             row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
             ' The title runs to the block's edge, 15 in from its start: white
@@ -819,9 +845,16 @@ sub renderInfo()
     ' Moved later than now, the panel shows the programme at the window's left
     ' edge (#275, the Apple TV's GuideTimeCursor); a gap there shows nothing
     ' scheduled, and at the start it is what is on now.
-    cursor = NxGuidePreviewTime(m.slotOffset, (t \ 1800) * 1800, t)
+    ' The info panel follows the cursor: on a later programme it shows that
+    ' one (invalid in a gap, which shows the tag alone), with its time range
+    ' where the progress bar is.
+    cursor = m.cursor
     if cursor <> invalid then
-        b = NxGuideBlockCovering(ch.blocks, cursor)
+        c& = cursor
+        if c& <= t then cursor = invalid
+    end if
+    if cursor <> invalid then
+        b = NxGuideCursorCurrent(ch.blocks, cursor, t)
     else
         b = blockAt(ch, t)
         if m.focus = m.tuned and m.playing <> invalid then b = m.playing
@@ -1150,6 +1183,22 @@ end sub
 ' A tune the viewer asked for: the count of failures starts again, and a
 ' channel that stopped trying tries again (ChannelFailureRun.reset in
 ' AppState.selectChannel).
+' The cursor back on the live programme, the window at now.
+sub resetCursor()
+    m.cursor = invalid
+    m.slotOffset = 0
+end sub
+
+' The cursor on a programme of the focused row: where it stands, and the window
+' moves only when the programme would leave the view (NxGuideWindowOffset).
+sub moveCursorTo(b as Object)
+    t = nowSec()
+    m.cursor = NxGuideCursorFor(b, t)
+    m.slotOffset = NxGuideWindowOffset(b, m.slotOffset, (t \ 1800) * 1800, t, 44)
+    renderGrid()
+    renderInfo()
+end sub
+
 sub pressTune(idx as Integer)
     NxFailureReset(m.failRun)
     m.stopped = false
@@ -1804,6 +1853,8 @@ sub setFullscreen(on as Boolean)
         closeNowPlaying()
     end if
     m.fullscreen = on
+    ' Back from full screen has the cursor on the live programme.
+    if not on then resetCursor()
     m.lastActivity = nowSec()
     m.top.FindNode("panel").visible = not on
     m.top.FindNode("grid").visible = not on
@@ -2788,7 +2839,7 @@ sub applyDeepLink()
     if idx < 0 then return
     if m.sidebarOpen = true then closeSidebar()
     m.focus = idx
-    m.slotOffset = 0
+    resetCursor()
     setNav("grid")
     if idx <> m.tuned then pressTune(idx)
     setFullscreen(true)
@@ -2887,7 +2938,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return false
     end if
     if key = "options" then
-        ' Never passed up to MainScene, where it signs out.
+        ' Never passed up to MainScene, where it signs out. On the grid Menu
+        ' puts the cursor back on the live programme (Chad 2026-11-15).
+        if m.nav = "grid" and (m.cursor <> invalid or m.slotOffset > 0) then
+            resetCursor()
+            renderGrid()
+            renderInfo()
+        end if
         return true
     end if
     ' Above the grid: the invite row, then SETTINGS, as ChannelGuideView
@@ -2925,20 +2982,19 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         renderInfo()
         return true
     end if
-    if key = "right" and m.slotOffset < 44 then
-        m.slotOffset = m.slotOffset + 1
-        renderGrid()
-        renderInfo()
-        return true
-    end if
-    if key = "left" and m.slotOffset > 0 then
-        m.slotOffset = m.slotOffset - 1
-        renderGrid()
-        renderInfo()
+    ' Right and Left move the programme cursor a programme at a time, whatever its
+    ' length and over a gap, with focus staying on the row (Chad 2026-11-15, the
+    ' Apple TV's GuideProgramCursor). Left from the programme on now goes to the
+    ' bundle stripe, as it did from the window's start.
+    if key = "right" and m.channels.Count() > 0 then
+        nx = NxGuideCursorNext(m.channels[m.focus].blocks, m.cursor, nowSec())
+        if nx <> invalid then moveCursorTo(nx)
         return true
     end if
     if key = "left" then
-        enterStripe()
+        pv = invalid
+        if m.channels.Count() > 0 then pv = NxGuideCursorPrevious(m.channels[m.focus].blocks, m.cursor, nowSec())
+        if pv <> invalid then moveCursorTo(pv) else enterStripe()
         return true
     end if
     ' With no channel there is nothing to tune or fill the screen with.
@@ -2953,6 +3009,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if m.channels.Count() = 0 and key = "play" then return true
     if key = "OK" then
+        ' Selecting a row puts the cursor back on the live programme.
+        resetCursor()
         ' A channel the sleep timer stopped starts again, and one that
         ' stopped trying tries again.
         if m.focus = m.tuned and m.playing <> invalid and not m.stopped then setFullscreen(true) else viewerTune(m.focus)
@@ -2967,10 +3025,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' stop already out for a channel change counts: leaving now would
         ' cut it off.
         stopping = m.tuneQueue.stopping = true
-        action = NxGuideBack(m.focus, m.tuned, m.slotOffset, stopping or (m.stopUrl <> invalid and m.stopUrl <> ""))
+        offsetNow = m.slotOffset
+        if m.cursor <> invalid and offsetNow = 0 then offsetNow = 1
+        action = NxGuideBack(m.focus, m.tuned, offsetNow, stopping or (m.stopUrl <> invalid and m.stopUrl <> ""))
         if action = "live" then
             m.focus = m.tuned
-            m.slotOffset = 0
+            resetCursor()
             keepFocusVisible()
             renderGrid()
             renderInfo()
