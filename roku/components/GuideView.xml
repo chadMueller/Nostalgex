@@ -77,6 +77,9 @@
     <Rectangle id="screen" width="1920" height="1080" color="0x000000FF" />
     <Rectangle id="videoBg" translation="[1180,0]" width="740" height="555" color="0x05050DFF" />
     <Video id="video" translation="[1180,0]" width="740" height="555" />
+    <!-- WATERSHED hold keep-alive (#190): a 4 px black clip, muted and looping, only while a held channel has
+         nothing airing, so the stick keeps running the app (it stops one that plays no video for ~10 minutes). -->
+    <Video id="keepVideo" translation="[0,0]" width="4" height="4" />
     <!-- A forced subtitle line the app draws itself (#237, drawForcedSub): under
          the CRT overlay, as part of the picture. The dark copy behind is its edge. -->
     <Group id="forcedSub" visible="false">

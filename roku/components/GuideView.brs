@@ -92,6 +92,10 @@ sub init()
     m.reportClock = CreateObject("roTimespan")
 
     m.video = m.top.FindNode("video")
+    m.keepVideo = m.top.FindNode("keepVideo")
+    m.keepVideo.mute = true
+    m.keepVideo.ObserveField("state", "onKeepState")
+    m.keepAlive = false
     m.video.ObserveField("state", "onVideoState")
     m.video.ObserveField("bufferingStatus", "onBuffering")
     m.video.ObserveField("availableSubtitleTracks", "applySubtitles")
@@ -1177,6 +1181,7 @@ sub startTune(idx as Integer)
         if ch.held = true then
             print "player: nothing airs, WATERSHED holds channel "; ch.id
             showCard(NxWatershedCard())
+            startKeepAlive()
         end if
         return
     end if
@@ -1407,8 +1412,41 @@ sub rememberStop()
     reg.Flush()
 end sub
 
+' While WATERSHED holds the tuned channel and nothing plays, the stick would stop
+' running the app after about ten minutes (timers, console and the 9 PM re-check
+' go quiet, measured 2026-11-13), so a muted 4 px black clip plays on its own
+' Video node, looping, until a channel starts or another tune begins (#190).
+sub startKeepAlive()
+    if m.keepAlive then return
+    content = CreateObject("roSGNode", "ContentNode")
+    content.url = "pkg:/videos/hold.mp4"
+    content.streamFormat = "mp4"
+    m.keepVideo.content = content
+    m.keepVideo.mute = true
+    m.keepVideo.control = "play"
+    m.keepAlive = true
+    print "keepalive: playing the hold clip, so the stick keeps the app running"
+end sub
+
+sub stopKeepAlive()
+    if not m.keepAlive then return
+    m.keepAlive = false
+    m.keepVideo.control = "stop"
+    print "keepalive: stopped, a channel is starting"
+end sub
+
+sub onKeepState()
+    state = m.keepVideo.state
+    print "keepalive: clip "; state
+    if m.keepAlive and (state = "finished" or state = "error") then
+        m.keepVideo.control = "stop"
+        m.keepVideo.control = "play"
+    end if
+end sub
+
 sub onVideoState()
     state = m.video.state
+    if state = "buffering" or state = "playing" then stopKeepAlive()
     print "player: "; state
     reportPlayerState(state)
     if state = "playing" then
