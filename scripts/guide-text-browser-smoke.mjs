@@ -253,7 +253,10 @@ for (const name of Object.keys(viewports)) try {
   check(`${name}: LARGE channel number x${ratio.num.toFixed(2)}`, near(L.num, n.num * ratio.num), `${n.num} -> ${L.num}`);
   check(`${name}: LARGE channel name x${ratio.name.toFixed(2)}`, near(L.name, n.name * ratio.name), `${n.name} -> ${L.name}`);
   check(`${name}: LARGE number box grows with the number`, near(L.numMin, n.numMin * ratio.num), `${n.numMin} -> ${L.numMin}`);
-  check(`${name}: LARGE keeps the row, the header and the channel column`, L.rowH === n.rowH && L.headerH === n.headerH && L.channelColW === n.channelColW && L.rowChannelW === n.rowChannelW,
+  // LARGER grows the row and the header with its text, by the Apple TV's proportions (76 over 64 pt rows, 66 over 58 pt headers:
+  // GuideTextMetrics.large.rowHeight and headerHeight); the channel column does not move.
+  const rowGrow = 76 / 64, headGrow = 66 / 58;
+  check(`${name}: LARGE grows the row x${rowGrow.toFixed(4)} and the header x${headGrow.toFixed(4)}, and keeps the channel column`, Math.abs(L.rowH - n.rowH * rowGrow) < 0.6 && Math.abs(L.headerH - n.headerH * headGrow) < 0.6 && L.channelColW === n.channelColW && L.rowChannelW === n.rowChannelW,
     JSON.stringify({ rowH: [n.rowH, L.rowH], headerH: [n.headerH, L.headerH], col: [n.channelColW, L.channelColW], rowCol: [n.rowChannelW, L.rowChannelW] }));
   check(`${name}: LARGE leaves the Now Playing panel alone`, L.infoSize === n.infoSize, `${n.infoSize} -> ${L.infoSize}`);
   check(`${name}: LARGE spills no time label`, L.spills.length === 0, L.spills.join(", "));

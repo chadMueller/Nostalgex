@@ -129,6 +129,20 @@ for (const [part, swiftKey] of pairs) {
     Math.abs(smallVars[part] - wantSmall) < 0.001, String(smallVars[part]));
 }
 
+// The row and the header: the same at DEFAULT and SMALLER, and grown at LARGER by the Apple TV's proportions (rowHeight 76 over 64,
+// headerHeight 66 over 58 in GuideTextMetrics), so the larger text keeps the room around a line.
+const heightOf = (name, key) => Number(new RegExp(`static let ${name} = GuideTextMetrics\\([^)]*${key}: ([\\d.]+)`).exec(swift)?.[1]);
+const rowN = heightOf("normal", "rowHeight"), rowL = heightOf("large", "rowHeight"), rowS = heightOf("small", "rowHeight");
+const headN = heightOf("normal", "headerHeight"), headL = heightOf("large", "headerHeight"), headS = heightOf("small", "headerHeight");
+check("the Apple TV's row is 64 at SMALLER and DEFAULT and 76 at LARGER, the header 58 and 66", rowN === 64 && rowS === 64 && rowL === 76 && headN === 58 && headS === 58 && headL === 66, JSON.stringify({ rowN, rowS, rowL, headN, headS, headL }));
+const rowVars = (block) => Object.fromEntries([...block.matchAll(/--gt-(row|header):\s*([\d.]+)/g)].map((x) => [x[1], Number(x[2])]));
+const rowNormal = rowVars(cssBlock("  .guide-grid {\n    --gt-"));
+const rowLarge = rowVars(cssBlock("  body.guide-text-large .guide-grid {\n    --gt-"));
+const rowSmall = rowVars(cssBlock("  body.guide-text-small .guide-grid {\n    --gt-"));
+check("the page's row and header multipliers are 1 at DEFAULT and SMALLER", rowNormal.row === 1 && rowNormal.header === 1 && rowSmall.row === undefined && rowSmall.header === undefined, JSON.stringify([rowNormal, rowSmall]));
+check(`the page's LARGER row ${rowLarge.row} and header ${rowLarge.header} are the Apple TV's ${(rowL / rowN).toFixed(4)} and ${(headL / headN).toFixed(4)}`,
+  Math.abs(rowLarge.row - rowL / rowN) < 0.001 && Math.abs(rowLarge.header - headL / headN) < 0.001, JSON.stringify(rowLarge));
+
 // The one exception: four time columns on a phone are 72px wide, and a wider label pushes the
 // header off the screen (measured 2026-11-02: 1.07 is the last size that fits at 390 wide).
 const phone = /@media \(max-width: 560px\) \{\s*body\.guide-text-large \.guide-grid \{ --gt-time: ([\d.]+); \}/.exec(html);

@@ -42,6 +42,7 @@
 <script src="scripts/nostalgex-language.js"></script>
 <script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-up-next.js"></script>
+<script src="scripts/nostalgex-guide-cursor.js"></script>
 <script src="scripts/nostalgex-channel-requirements.js"></script>
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
@@ -383,6 +384,7 @@
     border-radius: 2px;
     overflow: hidden;
   }
+  .info-progress-bar.previewing { visibility: hidden; }
   .info-progress-fill {
     height: 100%;
     border-radius: 2px;
@@ -394,14 +396,14 @@
     color: rgba(255,255,255,0.4);
     white-space: nowrap;
   }
-  /* UP NEXT: one plain, dim line, "Up next in 44 min: the title". No label, badge or capsule; a long title is cut with an ellipsis. */
+  /* UP NEXT: one plain, dim line, "UP NEXT IN 44 MIN" and two spaces (kept: white-space: pre) and the title. No badge or capsule; a long title is cut with an ellipsis. */
   .info-upnext {
     margin-top: calc(14 * var(--pt));
     font-family: 'VT323', monospace;
     font-size: max(16px, calc(var(--info-next) * var(--pt)));
     color: rgba(255,255,255,0.4);
     letter-spacing: 1px;
-    white-space: nowrap;
+    white-space: pre;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
@@ -1617,6 +1619,10 @@
     --gt-head: 1;
     --gt-num: 1;
     --gt-name: 1;
+    /* The row and the header: the same at DEFAULT and SMALLER, and grown at LARGER by the Apple TV's proportions (76 over 64 pt rows,
+       66 over 58 pt headers), so the larger text keeps the room around a line that the default text has. */
+    --gt-row: 1;
+    --gt-header: 1;
   }
   body.guide-text-small .guide-grid {
     --gt-title: 0.85;
@@ -1631,6 +1637,8 @@
     --gt-head: 1.16;
     --gt-num: 1.3182;
     --gt-name: 1.3182;
+    --gt-row: 1.1875;
+    --gt-header: 1.1379;
   }
   /* A phone has four time columns of 72px (390 wide), and a label wider than its column
      pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)
@@ -1643,7 +1651,7 @@
   .grid-header {
     display: flex;
     align-items: center;
-    height: var(--g-head);
+    height: calc(var(--g-head) * var(--gt-header));
     flex-shrink: 0;
     background: rgba(0,0,0,0.4);
     border-bottom: 1px solid rgba(255,215,0,0.2);
@@ -1687,7 +1695,7 @@
 
   .grid-row {
     display: flex;
-    height: var(--g-row);
+    height: calc(var(--g-row) * var(--gt-row));
     align-items: stretch;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     cursor: pointer;
@@ -1728,6 +1736,17 @@
      it is 5.19:1 or better on every colour in channels.json (97 of them, the lightest is #f5e6c8). */
   .grid-row.focused .grid-program.now-playing {
     background: color-mix(in srgb, var(--ch) 45%, var(--bg)) !important;
+  }
+
+  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js): lifted, in the selected fill, with a
+     3px cyan ring and a glow, inside the row's own focus. The live programme's cell on the playing row until the cursor moves. */
+  .grid-row.focused .grid-program.grid-program--cursor {
+    background: color-mix(in srgb, var(--cyan) 30%, var(--bg)) !important;
+    box-shadow: inset 0 0 0 3px var(--cyan), 0 0 12px rgba(0,196,255,0.6);
+    border-radius: 6px;
+    color: #fff !important;
+    position: relative;
+    z-index: 2;
   }
 
   /* Channel name column */
@@ -2797,7 +2816,7 @@
        is on screen at once. */
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
-    .grid-row { height: 34px; }
+    .grid-row { height: calc(34px * var(--gt-row)); }
     .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
@@ -2844,7 +2863,7 @@
     .m-topbar-logo { width: 84px; }
     /* A phone screen is all guide now, so the rows can afford to be a little
        tighter: one more channel on screen at 393x852. */
-    .grid-row { height: 32px; }
+    .grid-row { height: calc(32px * var(--gt-row)); }
     /* Four time columns in 256px once the channel column is paid for. */
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 5px; }
   }
@@ -3061,7 +3080,7 @@
 
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
-    .grid-row { height: 30px; }
+    .grid-row { height: calc(30px * var(--gt-row)); }
     .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
@@ -3651,7 +3670,7 @@
   .grid-header { padding-left: var(--g-stripe); position: relative; }
   .grid-stripe-cell { width: var(--g-stripe); flex-shrink: 0; background: var(--stripe, rgba(255,255,255,0.10)); }
   .grid-stripe-cell.starts { box-shadow: inset 0 2px 0 #0a0a2a; }
-  .grid-stripe-overlay { position: absolute; left: 0; top: var(--g-head); bottom: 0; width: calc(var(--g-stripe) + 10px); pointer-events: none; overflow: hidden; z-index: 3; }
+  .grid-stripe-overlay { position: absolute; left: 0; top: calc(var(--g-head) * var(--gt-header)); bottom: 0; width: calc(var(--g-stripe) + 10px); pointer-events: none; overflow: hidden; z-index: 3; }
   .grid-stripe-label {
     position: absolute; left: 0; width: var(--g-stripe); display: flex; align-items: center; justify-content: flex-start;
     writing-mode: vertical-rl; transform: rotate(180deg);
@@ -5246,10 +5265,13 @@
   let guideFocusIndex = 0;
   // The cursor is on a promo row (support, info, the seasonal invite) instead of a channel: its data-promo.
   let guidePromoKey = null;
-  // The guide's time cursor (the Apple TV's slotOffset, I-089): Right and Left move the window later and earlier,
-  // one 30-minute slot a press, up to 44 slots, with the cursor staying on its row.
+  // The guide's window in time (the Apple TV's slotOffset, I-089): how many 30-minute slots it is moved later, up to 44. It moves
+  // only when the programme cursor would leave the view (scripts/nostalgex-guide-cursor.js).
   let guideSlotOffset = 0;
   const GUIDE_MAX_SLOTS = 44;
+  // The programme cursor (the Apple TV's GuideProgramCursor): a time on the focused row, in Unix seconds, or null on the live
+  // programme. Left and Right move it a programme at a time, Up and Down keep it, and the cell it is on is highlighted.
+  let guideCursorTime = null;
   let configFocusIndex = 0;
   let connectFocusIndex = 0;
   let overlayTimeout = null;
@@ -6055,6 +6077,8 @@
           const displayTitle = itemGuideTitle(item);
           prog.textContent = displayTitle;
           prog.title = displayTitle;
+          prog.dataset.start = block.startSec;
+          prog.dataset.end = block.endSec;
           progsCol.appendChild(prog);
         }
       } else if (isWatershedHold(ch)) {
@@ -6085,6 +6109,7 @@
     });
     gridBody.appendChild(fragment);
     addStripeCells(gridBody);
+    applyGuideCursor();
   }
 
   let renderGuideTimer = null;
@@ -7089,15 +7114,17 @@
     const ch = focusedCh && focusedCh.schedule && focusedCh.schedule[0] ? focusedCh : playingCh;
     if (!ch || !ch.schedule[0]) return;
 
+    // A later programme the cursor is on (the Apple TV's previewEntry): shown with its time range where the progress bar is, and
+    // the programme after it as UP NEXT.
     let preview = null;
-    if (guideSlotOffset > 0 && ch._manifestBlocks) {
-      const t = (Math.floor(Date.now() / 1800000) * 1800000 + guideSlotOffset * 1800000) / 1000;
-      const blocks = ch._manifestBlocks;
-      const i = blocks.findIndex(b => b.startSec <= t && t < b.endSec);
-      if (i >= 0 && blocks[i].startSec > Date.now() / 1000) preview = { entry: blocks[i], next: blocks[i + 1] };
+    if (guideCursorTime !== null && ch._manifestBlocks) {
+      const GC = NostalgexGuideCursor;
+      const cur = GC.current(ch._manifestBlocks, guideCursorTime, Date.now() / 1000);
+      if (cur && cur.startSec > Date.now() / 1000) preview = { entry: cur, next: GC.entryAfter(ch._manifestBlocks, cur) };
     }
     const now = preview ? { progress: 0 } : ch.schedule[0];
     const next = preview ? (preview.next ? preview.next.item : null) : ch.schedule[1];
+    const nextStartSec = preview ? (preview.next ? preview.next.startSec : null) : (ch.schedule[1] ? ch.schedule[1].startSec : null);
     // InfoPanelView: the details are what the player is playing (`playingItem`), which can run
     // a little behind the clock after a programme overruns its slot; the progress is the
     // schedule's.
@@ -7115,16 +7142,17 @@
       ? (shown.artist || '')
       : (shown.episodeTitle || '');
     document.getElementById('info-progress').style.width = (now.progress || 0) + '%';
+    // A later programme shows its time range where the progress bar is (the bar has nothing to show yet).
+    document.querySelector('.info-progress-bar').classList.toggle('previewing', !!preview);
     document.getElementById('info-progress').style.background = ch.color;
     document.getElementById('info-time').textContent = preview
-      ? 'STARTS ' + new Date(preview.entry.startSec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      ? [preview.entry.startSec, preview.entry.endSec].map(s => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })).join(' - ')
       : `${now.position || '0:00'} / ${now.total || ''}`;
 
-    // Up next: one plain line, "Up next in 44 min: the title" (minutes first, then the title). While the guide is moved later the
-    // clock says nothing about the programme shown, so it is just "Up next: the title".
-    const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
-    const upNextLead = upNextSeconds === null ? 'Up next' : (t => t.charAt(0) + t.slice(1).toLowerCase())(NostalgexUpNext.label(upNextSeconds));
-    document.getElementById('info-upnext').textContent = next ? `${upNextLead}: ${itemGuideTitle(next)}` : '';
+    // UP NEXT: one plain line, as on the Apple TV: "UP NEXT IN 24 MIN", two spaces, the title. Whole minutes from now to the next
+    // programme's start, rounded down, "UP NEXT IN LESS THAN 1 MIN" under a minute (scripts/nostalgex-up-next.js).
+    const upNextSeconds = nextStartSec !== null ? nextStartSec - Date.now() / 1000 : (now && now.endSec ? now.endSec - Date.now() / 1000 : 0);
+    document.getElementById('info-upnext').textContent = next ? `${NostalgexUpNext.label(upNextSeconds)}  ${itemGuideTitle(next)}` : '';
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -7228,7 +7256,7 @@
     if (guideVisible) return;
     guideVisible = true;
     guidePromoKey = null;
-    guideSlotOffset = 0;
+    resetGuideCursor();
     guideStripeMode = false;
 
     // Pre-select current channel in guide
@@ -7286,12 +7314,64 @@
     updateGuideFocus(wrapped);
   }
 
-  function moveGuideTime(step) {
-    const to = Math.min(Math.max(guideSlotOffset + step, 0), GUIDE_MAX_SLOTS);
-    if (to === guideSlotOffset) return;
-    guideSlotOffset = to;
-    renderGrid();
+  // ── The programme cursor (NostalgexGuideCursor, the Apple TV's GuideProgramCursor) ──
+  /** Back on the live programme, the window at its start: where the guide is on opening and after a tune. */
+  function resetGuideCursor() {
+    guideCursorTime = null;
+    guideSlotOffset = 0;
+  }
+
+  /** The focused channel's blocks, the programmes its row is drawn from. */
+  function focusedGuideEntries() {
+    if (guidePromoKey) return null;
+    const ch = getEnabledChannels()[guideFocusIndex];
+    return ch && ch._manifestBlocks ? ch._manifestBlocks : null;
+  }
+
+  /** Marks the cell the cursor is on, on the focused row only: the programme covering the cursor's time (the live one on null). */
+  function applyGuideCursor() {
+    for (const el of document.querySelectorAll('.grid-program--cursor')) el.classList.remove('grid-program--cursor');
+    const entries = focusedGuideEntries();
+    if (!entries || !guideVisible || guideStripeMode) return;
+    const row = document.querySelector('.grid-row.focused:not(.grid-row--promo)');
+    if (!row) return;
+    const cur = NostalgexGuideCursor.current(entries, guideCursorTime, Date.now() / 1000);
+    if (!cur) return;
+    const cell = [...row.querySelectorAll('.grid-program')].find((c) => Number(c.dataset.start) === cur.startSec);
+    if (cell) cell.classList.add('grid-program--cursor');
+  }
+
+  /**
+   * Left or Right on a row: the cursor to the previous or next programme, and the window along when that programme would leave the
+   * view. False when there is nowhere to go (Left from the live programme, so Left can go on to the stripe).
+   */
+  function moveGuideCursor(forward) {
+    const entries = focusedGuideEntries();
+    if (!entries) return false;
+    const GC = NostalgexGuideCursor;
+    const nowSec = Date.now() / 1000;
+    const target = forward ? GC.next(entries, guideCursorTime, nowSec) : GC.previous(entries, guideCursorTime, nowSec);
+    if (!target) return false;
+    guideCursorTime = GC.cursorFor(target, nowSec);
+    const windowStartSec = Math.floor(nowSec / 1800) * 1800;
+    const offset = GC.windowOffset(target, guideSlotOffset, windowStartSec, nowSec, GUIDE_MAX_SLOTS);
+    if (offset !== guideSlotOffset) {
+      guideSlotOffset = offset;
+      renderGrid();
+    }
     updateGuideFocus();
+    return true;
+  }
+
+  /** The cursor back on the live programme, and the focus on the playing channel's row. */
+  function jumpGuideToLive() {
+    resetGuideCursor();
+    guidePromoKey = null;
+    const enabled = getEnabledChannels();
+    const idx = currentChannel !== null ? enabled.findIndex(c => c.id === currentChannel) : -1;
+    if (idx >= 0) guideFocusIndex = idx;
+    renderGrid();
+    updateGuideFocus(true);
   }
 
   function updateGuideFocus(wrapped = false) {
@@ -7327,8 +7407,9 @@
       // the guide again, seasonal invite included, the way Apple TV centers its rows.
       focusedRow.scrollIntoView({ behavior: 'smooth', block: wrapped ? 'center' : 'nearest' });
     }
-    // The info panel follows the cursor (the Apple TV previews the focused channel, and the programme at the
-    // window's left edge once the cursor is later than now).
+    // The cell the cursor is on follows the row (Up and Down keep the time), and the info panel follows the cursor: the focused
+    // channel, and a later programme with its time range once the cursor is later than now.
+    applyGuideCursor();
     updateInfoPanel();
   }
 
@@ -8303,7 +8384,7 @@
   // nothing; after the sleep timer stopped it, it starts that channel again. Nothing in
   // the background goes through here, so a library refresh never restarts playback.
   function tuneFromGuide(channelId) {
-    guideSlotOffset = 0;
+    resetGuideCursor();
     if (sleepStoppedPlayback && channelId === currentChannel) currentChannel = null;
     switchChannel(channelId, true);
   }
@@ -12781,9 +12862,17 @@
       // Left and Right move the guide's time cursor, as on the Apple TV. Full screen has no guide: there they
       // still change channel (the player branch below).
       if ((key === 'ArrowLeft' || key === 'ArrowRight') && !isVideoFullscreen()) {
-        // Left at the start of the guide goes to the package stripe (or the list, with no packages), as the Apple TV does.
-        if (key === 'ArrowLeft' && guideSlotOffset === 0) { if (guideHasPackages()) enterStripe(); else openPackageList(); e.preventDefault(); return; }
-        moveGuideTime(key === 'ArrowRight' ? 1 : -1);
+        // The cursor goes a programme at a time. Left from the live programme (nowhere to go) goes to the package stripe (or the
+        // list, with no packages), as the Apple TV does.
+        if (moveGuideCursor(key === 'ArrowRight')) { e.preventDefault(); return; }
+        if (key === 'ArrowLeft') { if (guideHasPackages()) enterStripe(); else openPackageList(); }
+        e.preventDefault();
+        return;
+      }
+      // Back (Menu on the Apple TV) puts the cursor back on the live programme of the playing channel; with the cursor already
+      // there it does what it always did.
+      if ((key === 'Escape' || key === 'Backspace') && !isVideoFullscreen() && (guideCursorTime !== null || guideSlotOffset > 0)) {
+        jumpGuideToLive();
         e.preventDefault();
         return;
       }
@@ -12797,7 +12886,9 @@
         if (key === ' ' && appState !== 'guide' && !(guideVisible && appState === 'player')) return;
         const enabled = getEnabledChannels();
         const ch = enabled[guideFocusIndex];
-        // Enter on a row tunes it; Enter on the row that is already playing goes full screen.
+        // Enter on a row tunes it; Enter on the row that is already playing goes full screen. Either way the cursor is back on the live
+        // programme (the Apple TV resets it before both).
+        resetGuideCursor();
         if (ch && ch.id === currentChannel && !sleepStoppedPlayback && !isVideoFullscreen()) toggleFullscreen();
         else if (ch) tuneFromGuide(ch.id);
         e.preventDefault();
