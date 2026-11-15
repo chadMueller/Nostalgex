@@ -123,6 +123,8 @@
         <Label id="summary" width="1100" wrap="true" maxLines="2" lineSpacing="4" />
         <Group id="meta">
           <Group id="badges" />
+        </Group>
+        <Group id="progressRow">
           <Rectangle id="progressTrack" height="4" color="0xFFFFFF14" />
           <Rectangle id="progressFill" height="4" />
           <Label id="clock" />

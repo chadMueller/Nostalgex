@@ -824,7 +824,7 @@ sub renderInfo()
     m.top.FindNode("progressFill").color = color
 
     title = m.top.FindNode("title")
-    names = ["artist", "genres", "subtitle", "rule", "summary", "meta", "upNextLabel", "upNext"]
+    names = ["artist", "genres", "subtitle", "rule", "summary", "meta", "progressRow", "upNextLabel", "upNext"]
     if b = invalid then
         ' The tag alone, as InfoPanelView shows with nothing scheduled.
         title.text = ""
@@ -864,15 +864,15 @@ sub renderInfo()
         subtitle.translation = [0, y]
         y = y + subtitle.boundingRect().height + 10
     end if
+    ' The Apple TV's InfoPanelLayout order (appletv 2026-11-14, "the description
+    ' where the design says"): the rule, the badges (year, rating, star), the
+    ' description, always two lines tall so nothing under it moves from one
+    ' programme to the next, then the progress row and UP NEXT. Sections are
+    ' 10 apart (Spacing.sectionGap).
     m.top.FindNode("rule").translation = [0, y]
-    y = y + 1 + 20
-    summary = m.top.FindNode("summary")
-    summary.text = b.summary
-    summary.translation = [0, y]
-    if b.summary <> "" then y = y + summary.boundingRect().height + 20
+    y = y + 1 + 10
 
-    ' Meta row: year and content rating badges, the star rating, then the
-    ' progress bar, which takes what the time leaves.
+    ' The badges row, which a programme with no year, rating or stars leaves out.
     meta = m.top.FindNode("meta")
     meta.translation = [0, y]
     badges = m.top.FindNode("badges")
@@ -913,14 +913,28 @@ sub renderInfo()
         end if
         m.badgesWidth = x
     end if
-    x = m.badgesWidth
+    meta.visible = m.badgesWidth > 0
+    if meta.visible then y = y + 34 + 10
+
+    ' The description: two lines of room, empty or not (InfoPanelLayout.descriptionLines).
+    summary = m.top.FindNode("summary")
+    summary.text = "A" + Chr(10) + "A"
+    room = summary.boundingRect().height
+    summary.text = b.summary
+    summary.translation = [0, y]
+    y = y + room + 10
+
+    ' The progress row: the bar and the time, or a later programme's time range.
+    row = m.top.FindNode("progressRow")
+    row.translation = [0, y]
     clock = m.top.FindNode("clock")
     track = m.top.FindNode("progressTrack")
     fill = m.top.FindNode("progressFill")
+    t = nowSec()
     if cursor <> invalid then
         ' A programme ahead has no progress: its time range takes the bar's place.
         clock.text = NxGuideTimeRange(localTimeLabel(b.startSec), localTimeLabel(b.endSec))
-        clock.translation = [x, 5]
+        clock.translation = [0, 5]
         track.visible = false
         fill.visible = false
     else
@@ -931,11 +945,11 @@ sub renderInfo()
         clock.text = hms(pos&) + " / " + hms(dur&)
         cw = clock.boundingRect().width
         clock.translation = [1100 - cw, 5]
-        barW = 1100 - cw - 10 - x
+        barW = 1100 - cw - 10
         if barW < 0 then barW = 0
-        track.translation = [x, 15]
+        track.translation = [0, 15]
         track.width = barW
-        fill.translation = [x, 15]
+        fill.translation = [0, 15]
         ' Past the slot while the file finishes, the bar stays full.
         if pos& > dur& then
             fill.width = barW
@@ -946,7 +960,7 @@ sub renderInfo()
         end if
     end if
 
-    y = y + 34 + 20
+    y = y + 34 + 10
     n = blockAfter(ch, b)
     m.top.FindNode("upNextLabel").visible = n <> invalid
     up = m.top.FindNode("upNext")

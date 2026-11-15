@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: the guide's info panel puts the description after the badges, the Apple TV's order)
+
+**State.** Branch `roku/s-info-panel-order` (off `roku/i092-library-picker`). Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV's change of 2026-11-14 (`InfoPanelLayout`, reference main `106e8dda` `InfoPanelView.swift`): the description sat between the rule and the badges and took no room when a programme had none, so everything under it moved from one programme to the next. It now comes after the badges and always holds two lines.
+
+**Changed.** `GuideView.renderInfo` draws, top to bottom: the channel tag, the title, artist and genres (music videos), the episode line, the rule, the badges (year, rating, star; left out when a programme has none), the description (always two lines of room, empty or not, ending in an ellipsis when longer), the progress row (the bar and the time, or a later programme's time range) and UP NEXT. The badges and the progress bar were one row on the Roku; they are two rows now, as on the Apple TV (`progressRow` in `GuideView.xml`). Sections are 10 apart (the Apple TV's `sectionGap`), where the Roku had 20 in places, so the panel's 351 px still holds an episode line.
+
+**Seen on the stick** (stand-in Jellyfin): a film (badges, a two line description, the bar, UP NEXT) and an episode (S01E02 line as well): `roku-shots/info-panel-order-2026-11-15/`. With an episode line, UP NEXT sits on the panel's bottom edge, as tight as the Apple TV's clipped panel is for its longest cases.
+
+**Not tested** off the TV: the panel is SceneGraph drawing, with no logic of its own to hold in the interpreter.
+
 ## 2026-11-15 (Roku: library selection, the Apple TV's per-library picker, I-092)
 
 **State.** Branch `roku/i092-library-picker` (off `roku/i091-scan-memory-guard`). Not merged, not in a build, not pushed.
