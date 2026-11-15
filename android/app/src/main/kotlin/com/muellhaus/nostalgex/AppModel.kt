@@ -16,7 +16,10 @@ import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.BackgroundPass
 import com.muellhaus.nostalgex.engine.GuideLoad
 import com.muellhaus.nostalgex.engine.HeaderNotice
+import com.muellhaus.nostalgex.engine.LibraryLoadCommit
 import com.muellhaus.nostalgex.engine.LibraryRefresh
+import com.muellhaus.nostalgex.engine.LoadCommitEffects
+import com.muellhaus.nostalgex.engine.LoadResult
 import com.muellhaus.nostalgex.engine.LoadNotice
 import com.muellhaus.nostalgex.engine.RefreshResult
 import com.muellhaus.nostalgex.engine.readyAfter
@@ -688,6 +691,9 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** The refresh behind the guide (LibraryRefresh), ended the same way. */
     private val refreshPass = BackgroundPass(scope)
 
+    /** The library load (loadLibrary): ended the same way, so a load the viewer signed out of mid-way saves and shows nothing. */
+    private val loadPass = BackgroundPass(scope)
+
     /**
      * The library is about to change (signed out, another server or backend, a new load): the music lookups and the refresh stop, and
      * nothing either has read but not yet written is kept. Called first, before the new state is set.
@@ -695,7 +701,10 @@ class AppModel(private val context: Context) : Playback.Listener {
     private fun endBackgroundWork() {
         musicPass.invalidate()
         refreshPass.invalidate()
+        loadPass.invalidate()
         refreshing = false
+        loadingLibrary = false
+        guideLoad = null
         showHeader(null)
     }
 
@@ -793,7 +802,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      * finish loading is never the only way forward.
      */
     fun startOver() {
-        loadJob?.cancel()
+        // signOut ends the load (endBackgroundWork), as it does for every other library change.
         launchGuard.loadEnded()
         Log.i(TAG, "START OVER")
         signOut()
@@ -1508,7 +1517,6 @@ class AppModel(private val context: Context) : Playback.Listener {
      * library changed: the Roku port's start-up. With nothing saved, the first read happens
      * in front of a loading screen.
      */
-    private var loadJob: Job? = null
 
     /** `afterSwitch`: the load follows a server or library switch in Settings, so the empty guide says the guide is changing. */
     private fun loadLibrary(afterSwitch: Boolean = false) {
@@ -1516,7 +1524,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         // A guide is up behind this load (a switch from Settings): the read shows in the guide's empty area, not on a full screen.
         val inGuide = screen == Screen.Watching
         loadingLibrary = true
-        loadJob = scope.launch {
+        loadPass.start { current ->
             // Set until the load ends any way the process lives to see (LaunchGuard).
             launchGuard.loadStarted()
             var fullLoad = false
@@ -1524,15 +1532,22 @@ class AppModel(private val context: Context) : Playback.Listener {
                 val servers = selectedServers
                 val t0 = SystemClock.elapsedRealtime()
                 val saved = withContext(Dispatchers.IO) { libraryStore.load(servers) }
+                // Signed out or switched while the saved library was read: nothing of it is held or shown.
+                if (!current()) return@start
                 if (saved != null) {
                     Log.i(TAG, "SAVED LIBRARY ${saved.items.size} items and ${saved.collections.size} collections read in ${SystemClock.elapsedRealtime() - t0} ms")
                     prefs.initialLoadComplete = true
                     scannedItems = saved.items
                     serverCollections = saved.collections
-                    // The local enrichment cache only: the network waits for the refresh behind the guide.
-                    libraryItems = enrich(saved.items, remote = false)
                     libraryUpdatedMs = libraryStore.savedAtMs()
-                    if (!show(buildLineup(libraryItems, "saved"))) return@launch
+                    val effects = object : LoadCommitEffects<Lineup> {
+                        override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {}
+                        // The local enrichment cache only: the network waits for the refresh behind the guide.
+                        override suspend fun enrich(items: List<MediaItem>, remote: Boolean) = this@AppModel.enrich(items, remote).also { libraryItems = it }
+                        override suspend fun build(items: List<MediaItem>) = buildLineup(items, "saved")
+                        override suspend fun show(built: Lineup) = this@AppModel.show(built)
+                    }
+                    if (LibraryLoadCommit(current, effects).runSaved(saved.items) != LoadResult.SHOWN) return@start
                     refreshInBackground(servers, saved.items)
                 } else {
                     fullLoad = true
@@ -1546,12 +1561,14 @@ class AppModel(private val context: Context) : Playback.Listener {
                     /** What the loading pattern's block says under the count while a step that has no count of its own runs. */
                     fun inGuideDetail(headline: String, caption: String) = (caption.ifEmpty { headline }).uppercase()
                     fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
+                        // A load the viewer left (signed out, another server) draws nothing: its steps must not bring a loading screen back.
+                        if (!current()) return
                         phaseNow = phase
                         if (inGuide) guideLoad = (guideLoad ?: GuideLoad(afterSwitch)).copy(detail = inGuideDetail(headline, caption))
                         else screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
                     }
                     /** A step's progress lines arriving after the step moved on, or after the load was left, are dropped. */
-                    fun onScreenFor(phase: LoadPhase) = phaseNow == phase && (inGuide && guideLoad != null || (screen as? Screen.LibraryLoad)?.phase == phase)
+                    fun onScreenFor(phase: LoadPhase) = current() && phaseNow == phase && (inGuide && guideLoad != null || (screen as? Screen.LibraryLoad)?.phase == phase)
                     step(LoadPhase.PREPARING, LoadPhase.PREPARING.headline(if (firstRun) "First setup" else "Updating lineup"), LoadPhase.PREPARING.hint.uppercase())
                     step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("Connecting to $backendName"), LoadPhase.SCANNING.hint.uppercase())
                     val scanned = scan(servers) { p, serverName ->
@@ -1593,46 +1610,59 @@ class AppModel(private val context: Context) : Playback.Listener {
                     step(LoadPhase.COLLECTIONS, LoadPhase.COLLECTIONS.headline(), LoadPhase.COLLECTIONS.hint.uppercase())
                     // Not after an abandoned scan: the server just went quiet, and the viewer has
                     // stopped waiting on it. The next refresh reads them with the rest.
-                    serverCollections = if (scanned.abandoned) {
+                    val collections = if (scanned.abandoned) {
                         Log.i(TAG, "COLLECTIONS skipped: the scan was abandoned")
                         emptyList()
                     } else readCollections(servers)
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
-                    // The whole library is read and saved: the kept sections have done their job (#288).
-                    if (!scanned.abandoned) sectionStore.clear()
-                    scannedItems = items
-                    libraryUpdatedMs = System.currentTimeMillis()
-                    markLoaded(scanned.abandoned)
-                    skippedNoRuntime = scanned.skippedNoRuntime
-                    if (enrichment != null) {
-                        val titles = items.count { it.tmdbID != null }
-                        step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
-                    }
-                    libraryItems = enrich(items, remote = true) { status, done, total ->
-                        if (!onScreenFor(LoadPhase.METADATA)) return@enrich
-                        if (inGuide) {
-                            guideLoad = guideLoad?.copy(detail = if (total > 0 && done >= 0) "METADATA $done/$total" else status.uppercase())
-                            return@enrich
+                    val effects = object : LoadCommitEffects<Lineup> {
+                        override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {
+                            serverCollections = collections
+                            withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
+                            // The whole library is read and saved: the kept sections have done their job (#288).
+                            if (!scanned.abandoned) sectionStore.clear()
+                            scannedItems = items
+                            libraryUpdatedMs = System.currentTimeMillis()
+                            markLoaded(scanned.abandoned)
+                            skippedNoRuntime = scanned.skippedNoRuntime
                         }
-                        val current = screen as Screen.LibraryLoad
-                        screen = current.copy(
-                            detail = status.uppercase(),
-                            progress = if (total > 0 && done >= 0) done.toFloat() / total else null,
-                            caption = if (total > 0 && done >= 0) "Metadata $done/$total" else "",
-                        )
+                        override suspend fun enrich(items: List<MediaItem>, remote: Boolean): List<MediaItem> {
+                            if (enrichment != null) {
+                                val titles = items.count { it.tmdbID != null }
+                                step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
+                            }
+                            libraryItems = this@AppModel.enrich(items, remote = remote) { status, done, total ->
+                                if (!onScreenFor(LoadPhase.METADATA)) return@enrich
+                                if (inGuide) {
+                                    guideLoad = guideLoad?.copy(detail = if (total > 0 && done >= 0) "METADATA $done/$total" else status.uppercase())
+                                    return@enrich
+                                }
+                                val now = screen as Screen.LibraryLoad
+                                screen = now.copy(
+                                    detail = status.uppercase(),
+                                    progress = if (total > 0 && done >= 0) done.toFloat() / total else null,
+                                    caption = if (total > 0 && done >= 0) "Metadata $done/$total" else "",
+                                )
+                            }
+                            return libraryItems
+                        }
+                        override suspend fun build(items: List<MediaItem>): Lineup {
+                            step(LoadPhase.BUILDING)
+                            return buildLineup(items, "read") { done, total ->
+                                if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
+                            }
+                        }
+                        override suspend fun show(built: Lineup): Boolean {
+                            step(LoadPhase.FINISHING)
+                            prefs.initialLoadComplete = true
+                            guideLoad = null
+                            if (inGuide) guideEpoch++
+                            return this@AppModel.show(built)
+                        }
                     }
-                    step(LoadPhase.BUILDING)
-                    val built = buildLineup(libraryItems, "read") { done, total ->
-                        if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
-                    }
-                    step(LoadPhase.FINISHING)
-                    prefs.initialLoadComplete = true
-                    // The first full load has no refresh behind it: the music lookups start now, as the Apple TV's do after the
-                    // first load (startDeferredMusicEnrichmentIfNeeded).
-                    guideLoad = null
-                    if (inGuide) guideEpoch++
-                    if (show(built)) {
-                        // The read is done and the guide is up: say so (the loading pattern's GUIDE READY).
+                    // Asked before the library store is written and before the guide is shown (LibraryLoadCommit).
+                    if (LibraryLoadCommit(current, effects).run(items, collections) == LoadResult.SHOWN) {
+                        // The read is done and the guide is up: say so (the loading pattern's GUIDE READY), and start the music lookups,
+                        // which a first full load has no refresh to start (the Apple TV's startDeferredMusicEnrichmentIfNeeded).
                         guideReady()
                         startMusicEnrichment()
                     }
@@ -1641,13 +1671,19 @@ class AppModel(private val context: Context) : Playback.Listener {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Library load failed", e)
-                nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
-                screen = Screen.Failed(connectionFailure(e))
+                // A load the viewer left (signed out, another server) has no say over the screen.
+                if (current()) {
+                    nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
+                    screen = Screen.Failed(connectionFailure(e))
+                }
             } finally {
                 // Reading the saved library proves nothing about whether a full load can finish.
                 launchGuard.loadEnded(resetCount = fullLoad)
-                loadingLibrary = false
-                guideLoad = null
+                // A load that was ended left these to whoever ended it (endBackgroundWork): a newer load may own them.
+                if (current()) {
+                    loadingLibrary = false
+                    guideLoad = null
+                }
             }
         }
     }
