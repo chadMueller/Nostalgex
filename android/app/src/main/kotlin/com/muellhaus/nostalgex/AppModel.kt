@@ -13,6 +13,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.AudioPick
+import com.muellhaus.nostalgex.engine.BackgroundPass
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.ServerTokens
@@ -673,7 +674,8 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     // Music video genres from MusicBrainz and Deezer (#319), resolved in the background and kept on the TV.
     private val music by lazy { newMusicEnrichment(context, versionName) }
-    private var musicJob: kotlinx.coroutines.Job? = null
+    /** Ends with the library it started on: signOut, a server or backend switch and every library load call `invalidate()`. */
+    private val musicPass = BackgroundPass(scope)
     private suspend fun musicApplied(items: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.Default) { music.first.apply(items) }
     val enrichmentOn: Boolean get() = enrichment != null
 
@@ -773,6 +775,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     delay(PlexPinWait.POLL_MS)
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
+                        musicPass.invalidate()
                         mbServer = null
                         screen = Screen.Loading("FINDING YOUR SERVERS")
                         // Every reachable server, shared ones too, as the Apple TV finds them: with
@@ -874,6 +877,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun signOut() {
+        musicPass.invalidate()
         closeSettings()
         stopDailyRefresh()
         playback.stop()
@@ -1030,6 +1034,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private fun finishSignIn(server: MediaBrowserServer) {
+        musicPass.invalidate()
         forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.serverId, server.url)))
         prefs.signOut()
         libraryStore.clear()
@@ -1453,6 +1458,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     private var loadJob: Job? = null
 
     private fun loadLibrary() {
+        musicPass.invalidate()
         loadingLibrary = true
         loadJob = scope.launch {
             // Set until the load ends any way the process lives to see (LaunchGuard).
@@ -1698,6 +1704,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     /** `alwaysSave` saves what it read even when nothing changed, for a library store that was just cleared. */
     private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>, alwaysSave: Boolean = false) {
+        val library = musicPass.generation
         scope.launch {
             refreshing = true
             try {
@@ -1759,7 +1766,8 @@ class AppModel(private val context: Context) : Playback.Listener {
                 Log.w(TAG, "Background refresh failed; keeping the saved library", e)
             } finally {
                 refreshing = false
-                startMusicEnrichment()
+                // Not for a library that was signed out of or loaded again while this refresh ran.
+                if (musicPass.isCurrent(library)) startMusicEnrichment()
             }
         }
     }
@@ -1790,21 +1798,22 @@ class AppModel(private val context: Context) : Playback.Listener {
      * genre take the videos in. One run at a time; a stopped run keeps what it did (the cache is saved as it grows).
      */
     private fun startMusicEnrichment() {
-        if (demoMode || musicJob?.isActive == true) return
+        if (demoMode || musicPass.running) return
         val items = libraryItems
         if (items.none(MusicEnrichmentService::isMusicVideo)) return
-        musicJob = scope.launch {
+        musicPass.start { current ->
             try {
                 val changed = withContext(Dispatchers.IO) {
-                    music.first.enrich(items, { System.currentTimeMillis() }, { music.second.save(it) }, { isActive })
+                    music.first.enrich(items, { System.currentTimeMillis() }, { music.second.save(it) }, current)
                 }
-                if (!changed) return@launch
+                // The lookups take minutes: the library they read may be gone (signed out, another server, a new load).
+                if (!changed || !current()) return@start
                 val applied = musicApplied(libraryItems)
-                if (applied == libraryItems) return@launch
+                if (applied == libraryItems || !current()) return@start
                 libraryItems = applied
                 Log.i(TAG, "MUSIC genres resolved, rebuilding")
                 val fresh = buildLineup(applied, "music")
-                if (fresh.channels.isEmpty()) return@launch
+                if (fresh.channels.isEmpty() || !current()) return@start
                 val id = channel?.id
                 lineup = fresh
                 channel = fresh.channels.firstOrNull { it.id == id } ?: channel

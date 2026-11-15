@@ -60,7 +60,11 @@ internal class MusicHttp(versionName: String) {
     }
 }
 
-/** The music videos' resolved rows, on the TV (`music_video_enrichments_v2.json`, the Apple TV's file name): no account, no server, only what the two sources said. */
+/**
+ * The music videos' resolved rows, on the TV (`music_video_enrichments_v2.json`, the Apple TV's file name). Only what the two sources
+ * said, no account or token; the keys are `serverUrl#ratingKey` (MusicEnrichmentService.key), so rows from one server never answer for
+ * another. Like the Apple TV's, the file is left alone on Disconnect: it is a cache of public lookups and keeps the next sign-in fast.
+ */
 internal class MusicEnrichmentStore(context: Context) {
     private val file = File(context.filesDir, "music_video_enrichments_v2.json")
     private val json = Json { ignoreUnknownKeys = true }
