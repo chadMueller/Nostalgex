@@ -46,6 +46,7 @@
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
 <script src="scripts/nostalgex-playback-recovery.js"></script>
+<script src="scripts/nostalgex-library-picker.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <style>
@@ -4310,14 +4311,6 @@
         <div id="cfg-library-coverage-wrap" style="display:none; margin: 0 0 4px; padding: 0 4px;">
           <div id="cfg-library-coverage" style="font-size: var(--fs-desc); color: rgba(255,255,255,0.7); letter-spacing: 0.06em; line-height: 1.5;"></div>
         </div>
-      <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
-      <div class="cfg-row" id="cfg-include-hidden-row" hidden>
-        <div>
-          <div class="cfg-row-title">Include libraries hidden on Jellyfin</div>
-          <div class="cfg-row-desc">Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle" id="cfg-include-hidden-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleIncludeHiddenLibraries()" aria-label="Include libraries hidden on Jellyfin" aria-pressed="false">OFF</button>
-      </div>
         <div class="cfg-row" id="cfg-rescan-row">
           <div>
             <div class="cfg-row-title">RESCAN LIBRARY</div>
@@ -5056,51 +5049,6 @@
     if (value) lsSet(NostalgexLastChannel.CHANNEL_KEY, value);
   }
 
-  // ── INCLUDE LIBRARIES HIDDEN ON JELLYFIN ────────────────────────────────────
-  // Jellyfin only. Off unless the viewer turns it on (the default is INCLUDE_HIDDEN_DEFAULT in
-  // scripts/nostalgex-jellyfin-urls.js, point 13 there has why), kept per browser. A library the
-  // viewer hid from the Jellyfin home screen is then asked for and scanned. Switching it reads the
-  // library again once, in the background (the guide, the channel playing and Settings stay as they are).
-  function includeHiddenOn() {
-    return NostalgexJellyfinUrls.includeHiddenLibraries();
-  }
-
-  function updateIncludeHiddenControls() {
-    const row = document.getElementById('cfg-include-hidden-row');
-    const button = document.getElementById('cfg-include-hidden-toggle');
-    if (!row || !button) return;
-    row.hidden = mediaBackend !== 'jellyfin';
-    const on = includeHiddenOn();
-    button.textContent = on ? 'ON' : 'OFF';
-    button.classList.toggle('on', on);
-    button.setAttribute('aria-pressed', String(on));
-  }
-
-  let includeHiddenReading = false;
-  async function toggleIncludeHiddenLibraries() {
-    // A press while the last one is still being read does nothing: two reads at once would race for the library.
-    if (mediaBackend !== 'jellyfin' || includeHiddenReading) return;
-    // lsSet says whether it saved. Nothing is read again if it did not: the scan reads this same
-    // key, so a choice it cannot read would change nothing.
-    if (!lsSet(NostalgexJellyfinUrls.INCLUDE_HIDDEN_KEY, includeHiddenOn() ? '0' : '1')) { updateIncludeHiddenControls(); return; }
-    updateIncludeHiddenControls();
-    // What was saved was read the other way: drop it, so a failed read below is not followed by a
-    // visit that restores a library the switch no longer describes.
-    clearLibraryCache();
-    includeHiddenReading = true;
-    try {
-      // In the background, as the daily refresh reads: the guide stays up, the channel that is playing keeps
-      // playing and Settings stays open. A foreground read ends by tuning the first channel (tuneFirstOrShowEmpty),
-      // which would take a viewer on any other channel off it.
-      await fetchLibraryFromServer({ background: true, buildAllChannels: false });
-    } catch (err) {
-      console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
-    } finally {
-      includeHiddenReading = false;
-      if (typeof refreshLibraryRows === 'function') refreshLibraryRows();
-    }
-  }
-
   /** The channel a load opens on: the last one watched when the switch is on and it is still
    *  there with the same id and name, else the first enabled channel, as before. */
   function channelToOpenOn() {
@@ -5522,7 +5470,6 @@
     updateSyncActivityControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
-    updateIncludeHiddenControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
     const menuBtn = document.getElementById('m-menu-btn');
@@ -9461,25 +9408,29 @@
   // ══════════════════════════════════════
   // LIBRARY SELECTION: CHOOSE YOUR LIBRARIES (first setup) and the LIBRARIES rows in Settings
   // ══════════════════════════════════════
-  // One list of each server's libraries (read without scanning a title), one stored OFF set
-  // (scripts/nostalgex-library-selection.js, key <serverId>::<sectionKey>, nothing off by default) that the
-  // scan loops read. The picker and the Settings rows share both, so they never disagree.
+  // One list of each server's libraries (read without scanning a title), one stored choice
+  // (scripts/nostalgex-library-selection.js, key <serverId>::<sectionKey>, everything on by default except a library
+  // Jellyfin hides from its home screen) that the scan loops read. The picker and the Settings rows share both, so they
+  // never disagree. The rules (which types are listed, what starts on) are scripts/nostalgex-library-picker.js, pinned by
+  // scripts/library-picker-golden.json.
   let knownLibrarySections = [];
+
+  // The second ask of a Jellyfin user's libraries is NostalgexLibraryPicker.fetchHiddenViews: /UserViews with
+  // includeHidden=true, which also lists the ones the user hides from the home screen. Null when it is not asked
+  // (Emby has no such parameter) or it fails: the plain list then stands and nothing is marked hidden (rule 5 there).
 
   async function listLibrarySections() {
     const LSEL = globalThis.NostalgexLibrarySelection;
+    const LP = globalThis.NostalgexLibraryPicker;
     const out = [];
     if (isMediaBrowserBackend(mediaBackend)) {
-      // The same request the scan makes, so the hidden-libraries switch decides what is listed.
-      const url = plexServerUrl + NostalgexJellyfinUrls.userViewsPath(mediaBackend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
-      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() } });
+      // The same two asks the scan makes: the plain list, then the list with the libraries the user hides.
+      const headers = { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() };
+      const res = await fetch(plexServerUrl + NostalgexJellyfinUrls.userViewsPath(mediaBackend, jellyfinUserId, false), { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status} from the library list`);
       const data = await res.json();
-      for (const v of (data.Items || [])) {
-        const type = NostalgexJellyfinUrls.sectionType(v.CollectionType);
-        if (type === 'other') continue;   // Playlists, Music, Photos: never scanned, so never listed
-        out.push({ serverId: LSEL.mediaBrowserServerId(plexServerUrl), serverName: plexServerName || backendDisplayName(), key: v.Id, title: v.Name || 'Library', type });
-      }
+      const all = mediaBackend === 'jellyfin' ? await NostalgexLibraryPicker.fetchHiddenViews(fetch, plexServerUrl + NostalgexJellyfinUrls.userViewsPath('jellyfin', jellyfinUserId, true), { headers }) : null;
+      out.push(...LSEL.mediaBrowserViews(mediaBackend, plexServerUrl, plexServerName || backendDisplayName(), data.Items || [], all).rows);
     } else {
       const servers = selectedServers.length > 0
         ? selectedServers
@@ -9489,10 +9440,7 @@
         try {
           const sections = await NC.fetchPlexPaged(
             (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
-          for (const sec of sections) {
-            if (sec.type === 'photo') continue;
-            out.push({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type });
-          }
+          out.push(...LP.plexListed(LSEL.plexServerId(server), server.name, sections));
         } catch (err) {
           console.warn(`[Nostalgex] Could not list the libraries of ${server.name}:`, err);
         }
@@ -9500,7 +9448,7 @@
     }
     return out;
   }
-  function librarySectionOn(sec) { return !globalThis.NostalgexLibrarySelection.isOff(sec.serverId, sec.key); }
+  function librarySectionOn(sec) { return globalThis.NostalgexLibrarySelection.sectionOn(sec); }
   function librarySectionsMultiServer(list) { return new Set(list.map(x => x.serverId)).size > 1; }
 
   // ---- the setup screen ----
@@ -9527,7 +9475,7 @@
         row.setAttribute('role', 'checkbox'); row.setAttribute('tabindex', '0'); row.setAttribute('aria-checked', on ? 'true' : 'false');
         row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
         row.innerHTML = `<div class="setup-row-main"><div class="setup-row-title">${escapeHtml(sec.title)}</div><div class="setup-row-sub">${escapeHtml(LSEL.subtitle(sec, multi))}</div></div><div class="setup-row-state">${on ? 'INCLUDED' : 'OFF'}</div>`;
-        row.addEventListener('click', () => { if (LSEL.setOff(sec.serverId, sec.key, on)) render(row.dataset.key); });
+        row.addEventListener('click', () => { if (LSEL.setSectionOn(sec, !on)) render(row.dataset.key); });
         list.appendChild(row);
       });
       picker.appendChild(list);
@@ -9598,7 +9546,7 @@
       row.className = 'cfg-row';
       row.setAttribute('role', 'checkbox'); row.tabIndex = 0; row.setAttribute('aria-checked', on ? 'true' : 'false');
       row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
-      row.innerHTML = `<div><div class="cfg-row-title">${escapeHtml(sec.title)}</div><div class="cfg-row-desc">${escapeHtml(last ? LSEL.typeLabel(sec.type, sec.title) + ' · only enabled library' : LSEL.subtitle(sec, multi))}</div></div><div class="cfg-row-state${on ? ' on' : ''}">${on ? 'INCLUDED' : 'OFF'}</div>`;
+      row.innerHTML = `<div><div class="cfg-row-title">${escapeHtml(sec.title)}</div><div class="cfg-row-desc">${escapeHtml(last ? LSEL.subtitle(sec, false) + ' · only enabled library' : LSEL.subtitle(sec, multi))}</div></div><div class="cfg-row-state${on ? ' on' : ''}">${on ? 'INCLUDED' : 'OFF'}</div>`;
       row.addEventListener('click', () => toggleLibrarySection(sec));
       host.appendChild(row);
     });
@@ -9628,7 +9576,7 @@
     const LSEL = globalThis.NostalgexLibrarySelection;
     const wasOn = librarySectionOn(sec);
     if (wasOn && knownLibrarySections.filter(librarySectionOn).length <= 1) return;
-    if (!LSEL.setOff(sec.serverId, sec.key, wasOn)) return;
+    if (!LSEL.setSectionOn(sec, !wasOn)) return;
     clearLibraryCache();
     renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
     rescanLibrary();
@@ -9655,7 +9603,7 @@
         const NC = globalThis.NostalgexCollections;
         const all = await NC.fetchPlexPaged(
           (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server, { timeoutMs: 8000 }), '/library/sections', 'Directory');
-        const sections = all.filter(d => d.type !== 'photo');
+        const sections = all.filter(d => NostalgexLibraryPicker.isPlexVideoType(d.type));
         per.push(NostalgexLibraryRefresh.signature(server.machineIdentifier || server.name || server.url, sections));
       } catch (e) { return null; }
     }
@@ -9840,7 +9788,6 @@
     updateAutoSubsControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
-    updateIncludeHiddenControls();
   }
 
   function hideConfig() {
@@ -10163,10 +10110,11 @@
         selectedServerIndices = new Set([0]);
         confirmMultiServerSelection();
       } else {
-        // Default: exactly one server on, the first one you own (else the first listed). The rest
-        // start OFF and are one press away, so a first setup never scans a friend's server by surprise.
-        const firstOwned = discoveredServers.findIndex(sv => sv.owned);
-        selectedServerIndices = new Set([firstOwned >= 0 ? firstOwned : 0]);
+        // Default, as the Apple TV: every server you own is on, and servers shared with you start OFF and are one press
+        // away, so a first setup never scans a friend's server by surprise. With none of your own, all start on
+        // (scripts/nostalgex-library-picker.js, rule 4; scripts/library-picker-golden.json `serverDefaults`).
+        const startOn = new Set(NostalgexLibraryPicker.defaultServerIds(discoveredServers.map((sv, i) => ({ id: i, owned: !!sv.owned }))));
+        selectedServerIndices = new Set(discoveredServers.map((sv, i) => i).filter(i => startOn.has(i)));
         showServerPicker();
       }
     } catch (err) {
@@ -11273,7 +11221,10 @@
       for (const server of servers) {
         const serverKey = server.machineIdentifier || 'plex';
         try {
-          const list = await CL.fetchPlexCollections(serverKey, (path, win) => plexLibraryFetchForServer(CL.plexWindowPath(path, win), server), progress);
+          // A library the viewer switched off is not read, so its collections are not either.
+          const LSEL = globalThis.NostalgexLibrarySelection;
+          const list = await CL.fetchPlexCollections(serverKey, (path, win) => plexLibraryFetchForServer(CL.plexWindowPath(path, win), server), progress,
+            (sec) => LSEL.sectionOn({ serverId: LSEL.plexServerId(server), key: String(sec.key), hidden: false }));
           found = found.concat(list);
           anyOK = true;
         } catch (err) {
@@ -11495,10 +11446,10 @@
     // From here to the end of the library loop the scan is watched for silence (STOP WAITING).
     if (!background) startScanWatch(LL);
 
-    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). Jellyfin
-    // adds includeHidden=true only when the viewer has switched on INCLUDE LIBRARIES HIDDEN ON JELLYFIN
-    // (point 13 there); off, the request is what it always was.
-    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
+    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). The plain list is the
+    // request it always was; Jellyfin is then asked once more with includeHidden=true (point 13 there), and a library
+    // only that list has is one the user hides from the home screen: listed, marked, and read only once switched on.
+    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, false);
     let viewsRes;
     try {
       viewsRes = await fetch(viewsUrl(mediaBackend), { headers, signal: scanSignal() });
@@ -11525,15 +11476,15 @@
       throw e;
     }
     const viewsData = await viewsRes.json();
-    // A library the viewer switched off is never read. Nothing is off by default.
+    // The libraries that hold videos, each marked hidden or not (scripts/nostalgex-library-picker.js). A library the
+    // viewer switched off is never read, and a hidden one only once the viewer has switched it on. Nothing else is off.
+    const hiddenList = mediaBackend === 'jellyfin' ? await globalThis.NostalgexLibraryPicker.fetchHiddenViews(fetch, plexServerUrl + NostalgexJellyfinUrls.userViewsPath('jellyfin', jellyfinUserId, true), { headers, signal: scanSignal() }) : null;
+    if (hiddenList === null && mediaBackend === 'jellyfin' && scanIsAbandoned()) throw abandonedScanError();
+    if (hiddenList) noteScanAnswer();
     const LSEL = globalThis.NostalgexLibrarySelection;
-    const NJU = globalThis.NostalgexJellyfinUrls;
-    if (LSEL && LSEL.noteListing && NJU) {
-      const sid = LSEL.mediaBrowserServerId(plexServerUrl);
-      LSEL.noteListing(sid, (viewsData.Items || []).map(v => ({ serverId: sid, serverName: plexServerName || 'Server', key: v.Id, title: v.Name || 'Library', type: NJU.sectionType(v.CollectionType) }))
-        .filter(x => x.type !== 'other'));
-    }
-    const views = (viewsData.Items || []).filter(v => !LSEL || !LSEL.isOff(LSEL.mediaBrowserServerId(plexServerUrl), v.Id));
+    const picked = LSEL.mediaBrowserViews(mediaBackend, plexServerUrl, backendDisplayName(), viewsData.Items || [], hiddenList);
+    const chosen = LSEL.state();
+    const views = picked.views.filter((v, i) => globalThis.NostalgexLibraryPicker.isOn(picked.rows[i], chosen));
     LL.state.scanTotalSections = views.length;
     LL.state.scanSectionIndex = 0;
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
@@ -12009,11 +11960,15 @@
     const NC = globalThis.NostalgexCollections;
     const allSections = await NC.fetchPlexPaged(
       (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
-    // A library the viewer switched off (CHOOSE YOUR LIBRARIES, Settings) is never read. Nothing is off by default.
+    // Only movie and show libraries are listed and read: a Music or Photo library gave every row up for having no runtime
+    // (scripts/nostalgex-library-picker.js, rule 1). A library the viewer switched off (CHOOSE YOUR LIBRARIES, Settings)
+    // is never read either. Nothing is off by default.
     const LSEL = globalThis.NostalgexLibrarySelection;
-    if (LSEL && LSEL.noteListing) LSEL.noteListing(LSEL.plexServerId(server), allSections.filter(sec => sec.type !== 'photo')
-      .map(sec => ({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type })));
-    const sections = LSEL ? allSections.filter(sec => !LSEL.isOff(LSEL.plexServerId(server), sec.key)) : allSections;
+    const listedRows = globalThis.NostalgexLibraryPicker.plexListed(LSEL.plexServerId(server), server.name, allSections);
+    LSEL.noteListing(LSEL.plexServerId(server), listedRows);
+    const chosen = LSEL.state();
+    const onKeys = new Set(listedRows.filter(row => globalThis.NostalgexLibraryPicker.isOn(row, chosen)).map(row => row.key));
+    const sections = allSections.filter(sec => onKeys.has(String(sec.key)));
     const serverPrefix = multiServer ? `${server.name} · ` : '';
 
     LL.state.scanTotalSections = sections.length;

@@ -743,15 +743,16 @@
 
   /**
    * Plex. `getJSON(path, window)` fetches one server path and returns parsed JSON; it sends the
-   * window with plexWindowPath (see fetchPlexPaged).
+   * window with plexWindowPath (see fetchPlexPaged). `isSectionOn(section)`, when given, leaves out a library the
+   * viewer switched off (scripts/nostalgex-library-picker.js): a library that is not read has no collections read either.
    * Returns [{ id, title, childKeys, serverKey }].
    */
-  async function fetchPlexCollections(serverKey, getJSON, onProgress) {
+  async function fetchPlexCollections(serverKey, getJSON, onProgress, isSectionOn) {
     const sections = await fetchPlexPaged(getJSON, '/library/sections', 'Directory');
     const list = [];
     const seen = new Set();
     // TV sections too: a Plex collection of shows lives in the TV library.
-    for (const section of sections.filter((s) => s.type === 'movie' || s.type === 'show')) {
+    for (const section of sections.filter((s) => (s.type === 'movie' || s.type === 'show') && (typeof isSectionOn !== 'function' || isSectionOn(s)))) {
       try {
         const found = await fetchPlexPaged(getJSON, `/library/sections/${section.key}/collections`, 'Metadata');
         for (const c of found) {

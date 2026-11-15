@@ -24,6 +24,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tunerPath = process.env.TUNER || path.join(root, "plex-tuner.html");
 const filterPath = process.env.FILTER || path.join(root, "scripts/nostalgex-channel-filter.cjs");
 const urlsPath = process.env.URLS || path.join(root, "scripts/nostalgex-jellyfin-urls.js");
+// Which libraries a scan lists and reads (the page's scan calls it).
+const pickerPath = path.join(root, "scripts/nostalgex-library-picker.js");
+const selectionPath = path.join(root, "scripts/nostalgex-library-selection.js");
 const collectionsPath = path.join(root, "scripts/nostalgex-collections.js");
 const franchiseBuilderPath = path.join(root, "scripts/nostalgex-franchise-builder.js");
 const franchiseLineupPath = path.join(root, "scripts/nostalgex-franchise-lineup.js");
@@ -172,6 +175,8 @@ function page(backend, server) {
     console: { log: (...a) => logs.push(a.join(" ")), warn: () => {}, error: (...a) => logs.push(`ERROR ${a.join(" ")}`) },
     URL, URLSearchParams, Promise, Set, Map, Math, Number, String, JSON, Date, Array, Object, RegExp, Error,
     fetch: server.fetch,
+    // The page's scan reads the library selection: this stub has no storage, so everything is on.
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     mediaBackend: backend,
     plexServerUrl: "http://lab.local:8096",
     jellyfinUserId: "u1",
@@ -199,7 +204,7 @@ function page(backend, server) {
     applyBundleFilter() {}, renderConfig() {}, renderActiveGuide() {}, renderBundleList() {}, buildChannelSchedule() {},
   };
   vm.createContext(ctx);
-  for (const p of [manifestPath, urlsPath, filterPath, collectionsPath, franchiseBuilderPath, franchiseLineupPath]) vm.runInContext(fs.readFileSync(p, "utf8"), ctx, { filename: p });
+  for (const p of [manifestPath, urlsPath, pickerPath, selectionPath, filterPath, collectionsPath, franchiseBuilderPath, franchiseLineupPath]) vm.runInContext(fs.readFileSync(p, "utf8"), ctx, { filename: p });
   vm.runInContext((/const BACKEND_NAMES = \{[^}]*\};/.exec(tuner) || [""])[0].replace("const ", "var "), ctx);
   for (const name of PAGE_FUNCTIONS) vm.runInContext(extractFunction(tuner, name), ctx, { filename: `plex-tuner.html#${name}` });
   ctx.logs = logs;

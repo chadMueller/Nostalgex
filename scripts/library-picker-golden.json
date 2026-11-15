@@ -1,0 +1,1791 @@
+{
+  "version": 1,
+  "_about": [
+    "One rule set for which servers and libraries Nostalgex lists, starts on and reads (N-016 option A, Chad's go 2026-11-15). The contract is the web tuner and Docker's scripts/nostalgex-library-picker.js (rules 1 to 7 in its header) and its storage in scripts/nostalgex-library-selection.js, read by scripts/nostalgex-library-picker-smoke.mjs (npm run test:library-picker). The Apple TV (LibrarySectionRef, LibrarySectionSelectionStore, AppState+Auth), the Roku (PlexLibrary.brs NxPlexSectionRefs, SettingsRail.brs, HiddenLibraries.brs, MediaBrowserLibrary.brs) and Android (PlexLibrary.kt, MediaBrowserLibrary.kt, LibrarySection.kt) are to match it.",
+    "Plain JSON, no code in it, so Swift (Codable), BrightScript (ParseJson) and Kotlin (kotlinx.serialization or org.json) read it the way they read jellyfin-library-golden.json. Ids in expected values are `<serverId>::<sectionKey>` (rule 6); the server id is each platform's own stable string for a server (web: a Plex server's machineIdentifier, or its name when it has none; a Jellyfin or Emby server's address), so it is only ever compared whole.",
+    "A library is on or off. Two saved lists make that: `off` (ids the viewer switched OFF; every library but a hidden one reads it) and `includedHidden` (ids of hidden Jellyfin libraries the viewer switched ON; a hidden library reads only this). Everything starts ON except a hidden Jellyfin library. These are the Apple TV's two sets (nostalgex_deselected_library_sections and nostalgex_included_hidden_library_sections).",
+    "`plexListing`: servers answer /library/sections; `sections` null is a server that did not answer. `listed` is what the picker and Settings show, in order. Only type movie and show are listed and read (a Music or Photo library never is). `label` is the kind shown (Movies, TV Shows, Music Videos); `musicVideo` is the name rule (music video, music, mv, mvs, case ignored) that marks a Plex library's items as music videos for HIGH ROTATION, unchanged. `subtitle` is the line under the name: the kind, with the server name first when the listing spans more than one server, then HIDDEN ON JELLYFIN for a hidden library.",
+    "`mediaBrowserListing`: Jellyfin or Emby views. `shown` is the plain /UserViews (Emby: /Users/{id}/Views) answer, `all` the answer with includeHidden=true (null: not asked, which is every Emby, or the ask failed). A view only in `all` is hidden; a view in `shown` and not in `all` is kept (the union, in the order of `all` then the rest of `shown`); a view whose CollectionType holds no videos is never listed, hidden or not. Hidden libraries start off.",
+    "`serverDefaults`: which Plex servers start on at first setup: the viewer's own (`owned`), or all of them when none is owned, in list order.",
+    "`reads`: given the listed libraries (`hidden` as listed) and the two saved lists, the ids a scan reads, in listed order. Ids saved for a server that did not answer, or for a library the server no longer lists, change nothing.",
+    "`choices`: the saved lists after the viewer switches the named libraries, one after another (a library on goes off, off goes on). Only the touched id moves; every other saved id stays, including ids for a server that did not answer. Lists compare as sets.",
+    "`hiddenSwitchUpgrade`: Android and the web tuner (until now) had ONE switch for all hidden Jellyfin libraries, off by default. On upgrade, with the switch on and the hidden libraries known (`hiddenKnown`: the includeHidden list was answered), each hidden library not in `off` goes into `includedHidden` once and the old switch is cleared (`done`). With the hidden libraries not yet known, nothing changes and the old switch is kept (`done` false). Switch off or never set: nothing to carry, `done` true."
+  ],
+  "plexListing": [
+    {
+      "name": "movie and show libraries are listed",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            },
+            {
+              "key": "2",
+              "title": "TV Shows",
+              "type": "show"
+            },
+            {
+              "key": "3",
+              "title": "Anime",
+              "type": "show"
+            },
+            {
+              "key": "4",
+              "title": "Classics",
+              "type": "movie"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "machine-a::2",
+          "title": "TV Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        },
+        {
+          "id": "machine-a::3",
+          "title": "Anime",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        },
+        {
+          "id": "machine-a::4",
+          "title": "Classics",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        }
+      ]
+    },
+    {
+      "name": "a Music (artist) library and a Photos library are never listed",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            },
+            {
+              "key": "2",
+              "title": "Music",
+              "type": "artist"
+            },
+            {
+              "key": "3",
+              "title": "Photos",
+              "type": "photo"
+            },
+            {
+              "key": "4",
+              "title": "TV Shows",
+              "type": "show"
+            },
+            {
+              "key": "5",
+              "title": "Podcasts",
+              "type": "artist"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "machine-a::4",
+          "title": "TV Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        }
+      ]
+    },
+    {
+      "name": "a music video library (Other Videos is type movie) stays listed, found by its name",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "6",
+              "title": "Music Videos",
+              "type": "movie"
+            },
+            {
+              "key": "7",
+              "title": "Music",
+              "type": "movie"
+            },
+            {
+              "key": "8",
+              "title": "MVs",
+              "type": "movie"
+            },
+            {
+              "key": "9",
+              "title": "Concerts",
+              "type": "movie"
+            },
+            {
+              "key": "10",
+              "title": "music video",
+              "type": "movie"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::6",
+          "title": "Music Videos",
+          "type": "movie",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Music Videos"
+        },
+        {
+          "id": "machine-a::7",
+          "title": "Music",
+          "type": "movie",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Music Videos"
+        },
+        {
+          "id": "machine-a::8",
+          "title": "MVs",
+          "type": "movie",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Music Videos"
+        },
+        {
+          "id": "machine-a::9",
+          "title": "Concerts",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "machine-a::10",
+          "title": "music video",
+          "type": "movie",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Music Videos"
+        }
+      ]
+    },
+    {
+      "name": "a music video library kept as TV shows is listed and still marked by its name",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "11",
+              "title": "Music Videos",
+              "type": "show"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::11",
+          "title": "Music Videos",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        }
+      ]
+    },
+    {
+      "name": "a library typed artist is not listed, whatever its name says",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            },
+            {
+              "key": "12",
+              "title": "Music Videos",
+              "type": "artist"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        }
+      ]
+    },
+    {
+      "name": "your own server and one shared with you: both listed, the server named under each library",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            },
+            {
+              "key": "2",
+              "title": "TV Shows",
+              "type": "show"
+            }
+          ]
+        },
+        {
+          "id": "machine-b",
+          "name": "Garage",
+          "owned": false,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            },
+            {
+              "key": "3",
+              "title": "Music",
+              "type": "artist"
+            }
+          ]
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Den · Movies"
+        },
+        {
+          "id": "machine-a::2",
+          "title": "TV Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Den · TV Shows"
+        },
+        {
+          "id": "machine-b::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Garage · Movies"
+        }
+      ]
+    },
+    {
+      "name": "a server that did not answer lists nothing, and the other is listed on its own",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": [
+            {
+              "key": "1",
+              "title": "Movies",
+              "type": "movie"
+            }
+          ]
+        },
+        {
+          "id": "machine-b",
+          "name": "Garage",
+          "owned": false,
+          "sections": null
+        }
+      ],
+      "listed": [
+        {
+          "id": "machine-a::1",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        }
+      ]
+    },
+    {
+      "name": "a server with no libraries lists nothing",
+      "servers": [
+        {
+          "id": "machine-a",
+          "name": "Den",
+          "owned": true,
+          "sections": []
+        }
+      ],
+      "listed": []
+    }
+  ],
+  "mediaBrowserListing": [
+    {
+      "name": "Jellyfin: movies, TV shows and music videos are listed; every view that holds no videos is not",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "tvshows"
+        },
+        {
+          "Id": "c",
+          "Name": "Clips",
+          "CollectionType": "musicvideos"
+        },
+        {
+          "Id": "x",
+          "Name": "Misc",
+          "CollectionType": null
+        },
+        {
+          "Id": "pl",
+          "Name": "Playlists",
+          "CollectionType": "playlists"
+        },
+        {
+          "Id": "mu",
+          "Name": "Music",
+          "CollectionType": "music"
+        },
+        {
+          "Id": "ph",
+          "Name": "Photos",
+          "CollectionType": "photos"
+        },
+        {
+          "Id": "bk",
+          "Name": "Books",
+          "CollectionType": "books"
+        },
+        {
+          "Id": "hv",
+          "Name": "Home Videos",
+          "CollectionType": "homevideos"
+        },
+        {
+          "Id": "bx",
+          "Name": "Collections",
+          "CollectionType": "boxsets"
+        },
+        {
+          "Id": "tv",
+          "Name": "Live TV",
+          "CollectionType": "livetv"
+        },
+        {
+          "Id": "tr",
+          "Name": "Trailers",
+          "CollectionType": "trailers"
+        },
+        {
+          "Id": "fo",
+          "Name": "Folders",
+          "CollectionType": "folders"
+        },
+        {
+          "Id": "ab",
+          "Name": "Audiobooks",
+          "CollectionType": "audiobooks"
+        }
+      ],
+      "all": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "tvshows"
+        },
+        {
+          "Id": "c",
+          "Name": "Clips",
+          "CollectionType": "musicvideos"
+        },
+        {
+          "Id": "x",
+          "Name": "Misc",
+          "CollectionType": null
+        },
+        {
+          "Id": "pl",
+          "Name": "Playlists",
+          "CollectionType": "playlists"
+        },
+        {
+          "Id": "mu",
+          "Name": "Music",
+          "CollectionType": "music"
+        },
+        {
+          "Id": "ph",
+          "Name": "Photos",
+          "CollectionType": "photos"
+        },
+        {
+          "Id": "bk",
+          "Name": "Books",
+          "CollectionType": "books"
+        },
+        {
+          "Id": "hv",
+          "Name": "Home Videos",
+          "CollectionType": "homevideos"
+        },
+        {
+          "Id": "bx",
+          "Name": "Collections",
+          "CollectionType": "boxsets"
+        },
+        {
+          "Id": "tv",
+          "Name": "Live TV",
+          "CollectionType": "livetv"
+        },
+        {
+          "Id": "tr",
+          "Name": "Trailers",
+          "CollectionType": "trailers"
+        },
+        {
+          "Id": "fo",
+          "Name": "Folders",
+          "CollectionType": "folders"
+        },
+        {
+          "Id": "ab",
+          "Name": "Audiobooks",
+          "CollectionType": "audiobooks"
+        }
+      ],
+      "listed": [
+        {
+          "id": "jelly::m",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "jelly::s",
+          "title": "Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        },
+        {
+          "id": "jelly::c",
+          "title": "Clips",
+          "type": "musicvideo",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Music Videos"
+        },
+        {
+          "id": "jelly::x",
+          "title": "Misc",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        }
+      ]
+    },
+    {
+      "name": "Jellyfin: a collection type in capitals is the same type",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "Movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "TVShows"
+        },
+        {
+          "Id": "p",
+          "Name": "Playlists",
+          "CollectionType": "Playlists"
+        }
+      ],
+      "all": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "Movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "TVShows"
+        },
+        {
+          "Id": "p",
+          "Name": "Playlists",
+          "CollectionType": "Playlists"
+        }
+      ],
+      "listed": [
+        {
+          "id": "jelly::m",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "jelly::s",
+          "title": "Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        }
+      ]
+    },
+    {
+      "name": "Jellyfin: a library hidden from the home screen is listed, marked, and starts off; a hidden Music library is not listed",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        }
+      ],
+      "all": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "h1",
+          "Name": "Hidden Films",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "h2",
+          "Name": "Hidden Shows",
+          "CollectionType": "tvshows"
+        },
+        {
+          "Id": "hm",
+          "Name": "Hidden Music",
+          "CollectionType": "music"
+        }
+      ],
+      "listed": [
+        {
+          "id": "jelly::m",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "jelly::h1",
+          "title": "Hidden Films",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": true,
+          "startsOn": false,
+          "subtitle": "Movies · HIDDEN ON JELLYFIN"
+        },
+        {
+          "id": "jelly::h2",
+          "title": "Hidden Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": true,
+          "startsOn": false,
+          "subtitle": "TV Shows · HIDDEN ON JELLYFIN"
+        }
+      ]
+    },
+    {
+      "name": "Jellyfin: a hidden music video library is listed, marked, and starts off",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [],
+      "all": [
+        {
+          "Id": "c",
+          "Name": "Clips",
+          "CollectionType": "musicvideos"
+        }
+      ],
+      "listed": [
+        {
+          "id": "jelly::c",
+          "title": "Clips",
+          "type": "musicvideo",
+          "label": "Music Videos",
+          "musicVideo": true,
+          "hidden": true,
+          "startsOn": false,
+          "subtitle": "Music Videos · HIDDEN ON JELLYFIN"
+        }
+      ]
+    },
+    {
+      "name": "Jellyfin: when the includeHidden ask fails the plain list stands and nothing is hidden",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "tvshows"
+        }
+      ],
+      "all": null,
+      "listed": [
+        {
+          "id": "jelly::m",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "jelly::s",
+          "title": "Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        }
+      ]
+    },
+    {
+      "name": "Jellyfin: a library only the plain list has is kept (the union, in the second answer's order)",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [
+        {
+          "Id": "a",
+          "Name": "A",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "b",
+          "Name": "B",
+          "CollectionType": "movies"
+        }
+      ],
+      "all": [
+        {
+          "Id": "b",
+          "Name": "B",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "c",
+          "Name": "C",
+          "CollectionType": "movies"
+        }
+      ],
+      "listed": [
+        {
+          "id": "jelly::b",
+          "title": "B",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "jelly::c",
+          "title": "C",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": true,
+          "startsOn": false,
+          "subtitle": "Movies · HIDDEN ON JELLYFIN"
+        },
+        {
+          "id": "jelly::a",
+          "title": "A",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        }
+      ]
+    },
+    {
+      "name": "Emby: one ask, no hidden libraries, the same exclusions",
+      "backend": "emby",
+      "serverId": "emby",
+      "serverName": "Emby",
+      "shown": [
+        {
+          "Id": "m",
+          "Name": "Movies",
+          "CollectionType": "movies"
+        },
+        {
+          "Id": "s",
+          "Name": "Shows",
+          "CollectionType": "tvshows"
+        },
+        {
+          "Id": "pl",
+          "Name": "Playlists",
+          "CollectionType": "playlists"
+        },
+        {
+          "Id": "mu",
+          "Name": "Music",
+          "CollectionType": "music"
+        }
+      ],
+      "all": null,
+      "listed": [
+        {
+          "id": "emby::m",
+          "title": "Movies",
+          "type": "movie",
+          "label": "Movies",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "Movies"
+        },
+        {
+          "id": "emby::s",
+          "title": "Shows",
+          "type": "show",
+          "label": "TV Shows",
+          "musicVideo": false,
+          "hidden": false,
+          "startsOn": true,
+          "subtitle": "TV Shows"
+        }
+      ]
+    },
+    {
+      "name": "a server with nothing to list",
+      "backend": "jellyfin",
+      "serverId": "jelly",
+      "serverName": "Jelly",
+      "shown": [],
+      "all": [],
+      "listed": []
+    }
+  ],
+  "serverDefaults": [
+    {
+      "name": "your own server on, one shared with you off",
+      "servers": [
+        {
+          "id": "own",
+          "owned": true
+        },
+        {
+          "id": "shared",
+          "owned": false
+        }
+      ],
+      "on": [
+        "own"
+      ]
+    },
+    {
+      "name": "two of your own both on, the shared one off",
+      "servers": [
+        {
+          "id": "own1",
+          "owned": true
+        },
+        {
+          "id": "shared",
+          "owned": false
+        },
+        {
+          "id": "own2",
+          "owned": true
+        }
+      ],
+      "on": [
+        "own1",
+        "own2"
+      ]
+    },
+    {
+      "name": "none of your own: every server shared with you is on",
+      "servers": [
+        {
+          "id": "s1",
+          "owned": false
+        },
+        {
+          "id": "s2",
+          "owned": false
+        }
+      ],
+      "on": [
+        "s1",
+        "s2"
+      ]
+    },
+    {
+      "name": "a single server is on, owned",
+      "servers": [
+        {
+          "id": "only",
+          "owned": true
+        }
+      ],
+      "on": [
+        "only"
+      ]
+    },
+    {
+      "name": "a single server is on, shared",
+      "servers": [
+        {
+          "id": "only",
+          "owned": false
+        }
+      ],
+      "on": [
+        "only"
+      ]
+    },
+    {
+      "name": "list order is kept",
+      "servers": [
+        {
+          "id": "s1",
+          "owned": false
+        },
+        {
+          "id": "o1",
+          "owned": true
+        },
+        {
+          "id": "s2",
+          "owned": false
+        },
+        {
+          "id": "o2",
+          "owned": true
+        }
+      ],
+      "on": [
+        "o1",
+        "o2"
+      ]
+    },
+    {
+      "name": "no servers, none on",
+      "servers": [],
+      "on": []
+    }
+  ],
+  "reads": [
+    {
+      "name": "nothing saved: every library is read",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "read": [
+        "machine-a::1",
+        "machine-a::2",
+        "machine-b::1"
+      ]
+    },
+    {
+      "name": "a library the viewer switched off is not read",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-a::2"
+      ],
+      "includedHidden": [],
+      "read": [
+        "machine-a::1",
+        "machine-b::1"
+      ]
+    },
+    {
+      "name": "the same section key on two servers is two libraries",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-b::1"
+      ],
+      "includedHidden": [],
+      "read": [
+        "machine-a::1",
+        "machine-a::2"
+      ]
+    },
+    {
+      "name": "ids saved for a server that did not answer, or a library that is gone, change nothing",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-c::9",
+        "machine-a::99"
+      ],
+      "includedHidden": [
+        "machine-c::1"
+      ],
+      "read": [
+        "machine-a::1",
+        "machine-a::2",
+        "machine-b::1"
+      ]
+    },
+    {
+      "name": "a hidden Jellyfin library is not read until it is switched on",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "read": [
+        "jelly::lib1",
+        "jelly::lib2"
+      ]
+    },
+    {
+      "name": "a hidden library the viewer switched on is read",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [
+        "jelly::hid1"
+      ],
+      "read": [
+        "jelly::lib1",
+        "jelly::hid1",
+        "jelly::lib2"
+      ]
+    },
+    {
+      "name": "a hidden library follows the included list only: a stale off entry does not turn it off",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "jelly::hid1"
+      ],
+      "includedHidden": [
+        "jelly::hid1"
+      ],
+      "read": [
+        "jelly::lib1",
+        "jelly::hid1",
+        "jelly::lib2"
+      ]
+    },
+    {
+      "name": "a hidden library in the off list and not included stays off",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "jelly::hid2"
+      ],
+      "includedHidden": [],
+      "read": [
+        "jelly::lib1",
+        "jelly::lib2"
+      ]
+    },
+    {
+      "name": "an included id on a library that is not hidden changes nothing",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "jelly::lib2"
+      ],
+      "includedHidden": [
+        "jelly::lib2",
+        "jelly::lib1"
+      ],
+      "read": [
+        "jelly::lib1"
+      ]
+    },
+    {
+      "name": "every library off reads nothing",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-a::1",
+        "machine-a::2",
+        "machine-b::1"
+      ],
+      "includedHidden": [],
+      "read": []
+    }
+  ],
+  "choices": [
+    {
+      "name": "switch one library off",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "toggle": [
+        "machine-a::2"
+      ],
+      "offAfter": [
+        "machine-a::2"
+      ],
+      "includedHiddenAfter": []
+    },
+    {
+      "name": "switch it off, then on again",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "toggle": [
+        "machine-a::2",
+        "machine-a::2"
+      ],
+      "offAfter": [],
+      "includedHiddenAfter": []
+    },
+    {
+      "name": "switch a hidden library on: it goes in the included list, not out of the off list",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "toggle": [
+        "jelly::hid1"
+      ],
+      "offAfter": [],
+      "includedHiddenAfter": [
+        "jelly::hid1"
+      ]
+    },
+    {
+      "name": "switch a hidden library on, then off again",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "toggle": [
+        "jelly::hid1",
+        "jelly::hid1"
+      ],
+      "offAfter": [],
+      "includedHiddenAfter": []
+    },
+    {
+      "name": "switching a library that is not hidden touches only the off list",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [
+        "jelly::hid2"
+      ],
+      "toggle": [
+        "jelly::lib1"
+      ],
+      "offAfter": [
+        "jelly::lib1"
+      ],
+      "includedHiddenAfter": [
+        "jelly::hid2"
+      ]
+    },
+    {
+      "name": "a choice on one server leaves a server that did not answer alone",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-c::5",
+        "machine-c::6"
+      ],
+      "includedHidden": [],
+      "toggle": [
+        "machine-a::1"
+      ],
+      "offAfter": [
+        "machine-c::5",
+        "machine-c::6",
+        "machine-a::1"
+      ],
+      "includedHiddenAfter": []
+    },
+    {
+      "name": "ids saved for an address that no longer answers are kept",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "old::lib9"
+      ],
+      "includedHidden": [
+        "old::hid9"
+      ],
+      "toggle": [
+        "jelly::hid1",
+        "jelly::lib2"
+      ],
+      "offAfter": [
+        "old::lib9",
+        "jelly::lib2"
+      ],
+      "includedHiddenAfter": [
+        "old::hid9",
+        "jelly::hid1"
+      ]
+    },
+    {
+      "name": "a library off that the server no longer lists stays saved",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-a::99"
+      ],
+      "includedHidden": [],
+      "toggle": [
+        "machine-b::1"
+      ],
+      "offAfter": [
+        "machine-a::99",
+        "machine-b::1"
+      ],
+      "includedHiddenAfter": []
+    },
+    {
+      "name": "switch off what is on and on what is off, in one go",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "machine-a::1"
+      ],
+      "includedHidden": [],
+      "toggle": [
+        "machine-a::1",
+        "machine-b::1"
+      ],
+      "offAfter": [
+        "machine-b::1"
+      ],
+      "includedHiddenAfter": []
+    }
+  ],
+  "hiddenSwitchUpgrade": [
+    {
+      "name": "switch on: each hidden library not turned off one by one is switched on, once",
+      "switchOn": true,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "jelly::hid2"
+      ],
+      "includedHidden": [],
+      "includedHiddenAfter": [
+        "jelly::hid1"
+      ],
+      "offAfter": [
+        "jelly::hid2"
+      ],
+      "done": true
+    },
+    {
+      "name": "switch on, every hidden library on",
+      "switchOn": true,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "includedHiddenAfter": [
+        "jelly::hid1",
+        "jelly::hid2"
+      ],
+      "offAfter": [],
+      "done": true
+    },
+    {
+      "name": "switch on, a server with no hidden libraries: nothing to carry, switch cleared",
+      "switchOn": true,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "includedHiddenAfter": [],
+      "offAfter": [],
+      "done": true
+    },
+    {
+      "name": "switch on, the includeHidden list not answered yet: nothing changes and the switch is kept for next time",
+      "switchOn": true,
+      "hiddenKnown": false,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "includedHiddenAfter": [],
+      "offAfter": [],
+      "done": false
+    },
+    {
+      "name": "switch off or never set: nothing to carry, hidden libraries stay off",
+      "switchOn": false,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [],
+      "includedHiddenAfter": [],
+      "offAfter": [],
+      "done": true
+    },
+    {
+      "name": "ids already included stay",
+      "switchOn": true,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [],
+      "includedHidden": [
+        "jelly::hid2",
+        "old::h"
+      ],
+      "includedHiddenAfter": [
+        "jelly::hid2",
+        "old::h",
+        "jelly::hid1"
+      ],
+      "offAfter": [],
+      "done": true
+    },
+    {
+      "name": "the off list is never rewritten",
+      "switchOn": true,
+      "hiddenKnown": true,
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        },
+        {
+          "id": "jelly::hid2",
+          "hidden": true
+        },
+        {
+          "id": "jelly::lib2",
+          "hidden": false
+        }
+      ],
+      "off": [
+        "jelly::lib1",
+        "jelly::hid1"
+      ],
+      "includedHidden": [],
+      "includedHiddenAfter": [
+        "jelly::hid2"
+      ],
+      "offAfter": [
+        "jelly::lib1",
+        "jelly::hid1"
+      ],
+      "done": true
+    }
+  ]
+}

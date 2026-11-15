@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (web and Docker: one rule set for picking servers and libraries, N-016 step 1)
+
+**State.** Branch `web/n016-library-rules` off main `2895d0db`. Not merged, not pushed, not in a release. Hosted and Docker are the same page, so both change together when it ships.
+
+**Why.** The platforms each grew their own rules for the same two screens (CHOOSE YOUR LIBRARIES at first setup, and Settings > SERVERS & ACCOUNTS > LIBRARIES): which Plex library types are listed, which servers start on, what happens to a Jellyfin library the user hides from the home screen. Nothing pinned any of it, so each port drifted. Chad's call on 2026-11-15 was to lock the model as it is (option A) and write the rules once.
+
+**Changed.**
+- `scripts/library-picker-golden.json` is the shared test file: Plex, Jellyfin and Emby listings (hidden, music video, photo, music, owned and shared servers), server defaults, which libraries a scan reads, how a choice is saved, and the upgrade from the old single switch. Plain JSON, so Swift, BrightScript and Kotlin can read it as they read `jellyfin-library-golden.json`.
+- `scripts/nostalgex-library-picker.js` holds the rules, with none of the page in it. `scripts/nostalgex-library-selection.js` keeps the saved choices (two lists under the Apple TV's key names). `npm run test:library-picker` runs the rules and the page's own functions (lifted out of `plex-tuner.html`) against the golden file; it is in `npm test`.
+- Plex lists and reads Movies and TV Shows libraries only. A Music or Photos library used to be paged through on every scan and every row dropped for having no runtime; it is not listed or asked for items now. The Plex library fingerprint (the refresh check) and the collection sweep read the same set, and the collection sweep skips a library the viewer switched off, as the Apple TV does.
+- Plex first setup turns on every server the viewer owns (all of them when none is theirs), as the Apple TV does. It was exactly one.
+- Each Jellyfin library the user hides gets its own row, marked HIDDEN ON JELLYFIN, off until switched on. The scan asks `/UserViews?userId=<id>` (the request it always was) and then the same with `includeHidden=true`; a library only the second answer has is hidden. The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch is gone.
+- Saved choices carry over. The off list keeps its key and ids. A viewer who had the old switch ON keeps the same libraries on: the first time the hidden libraries are known, each one not turned off by hand goes into the new included list, then the old value is removed. A saved library list from the old version is not used (Settings asks the server once). Tested in `test:library-picker` and in the browser.
+- `scripts/library-picker-browser-smoke.mjs` replaces `include-hidden-browser-smoke.mjs`: Plex (an owned and a shared stub server) and Jellyfin and Emby stubs, first setup and Settings, with the mouse at 1440x900, 960x540 at DPR 2 and 390x844.
+
+**Checked.** Music video libraries: Plex has no Music Videos library type. "Other Videos" is type `movie`, and the scan only produces items from a movie or show library (an artist library returns artists with no runtime), so a music video library that works today is a movie or show library and stays listed and read, found as music videos by name as before. Not measured against a real Plex server (no real server was loaded); a library typed artist would not have produced items before either.
+
+**Not done.** The Apple TV, Roku and Android are not changed; they are to port to the golden file. The Apple TV opens the library picker only when there is more than one library or a hidden one, and resets the choices at each sign-in; the web keeps its picker for any first setup and keeps choices across sign-ins. Neither is in the golden file.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.
