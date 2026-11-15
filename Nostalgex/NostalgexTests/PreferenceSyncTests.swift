@@ -514,6 +514,10 @@ final class PreferenceSyncAppStateTests: XCTestCase {
                                   changedKeys: [PreferenceSync.guideTextSizeKey])
         XCTAssertEqual(state.guideTextSize, .normal)
         XCTAssertEqual(store.writes.count, writes, "an incoming value was echoed back")
+        store.values[PreferenceSync.guideTextSizeKey] = "small"
+        sync.handleExternalChange(reason: NSUbiquitousKeyValueStoreServerChange,
+                                  changedKeys: [PreferenceSync.guideTextSizeKey])
+        XCTAssertEqual(state.guideTextSize, .small)
     }
 
     func testNeverSyncedPreferencesStayLocal() {

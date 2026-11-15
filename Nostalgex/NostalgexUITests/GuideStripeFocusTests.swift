@@ -104,10 +104,12 @@ final class GuideStripeFocusTests: XCTestCase {
             shot("3-\(name)")
         }
 
-        // Past the last package nothing moves.
-        press(.down, 1.0)
+        // Down on the last package wraps to the first, and Up on the first back to the last, as the channel rows wrap.
+        press(.down, 1.3)
         XCTAssertTrue(stripeIsFocused)
-        XCTAssertEqual(stripeLabel, "Bundle THE REST OF THE DEMO", "no wrap past the last package")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION", "Down on the last package wraps to the first")
+        press(.up, 1.3)
+        XCTAssertEqual(stripeLabel, "Bundle THE REST OF THE DEMO", "Up on the first package wraps to the last")
 
         // Up goes back, package by package.
         press(.up, 1.3)
@@ -129,13 +131,12 @@ final class GuideStripeFocusTests: XCTestCase {
         }
         shot("4-back-on-the-rows")
 
-        // Up from the top of the stripe's first package goes nowhere either.
+        // Up from LATE NIGHT is the first package.
         press(.left, 1.6)
         XCTAssertTrue(stripeIsFocused, "the second Left did not reach the stripe: \(focusText())")
         XCTAssertEqual(stripeLabel, "Bundle LATE NIGHT")
         press(.up, 1.3)
-        press(.up, 1.3)
-        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION", "no wrap before the first package")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION")
         if let top = rowTop(1) { XCTAssertEqual(top, listTop, accuracy: 6, "the first package is at the very top") }
         // Right returns to the first channel of the package the stripe was moved to.
         press(.right, 1.2)

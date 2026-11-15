@@ -377,7 +377,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
             videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
             exactDurationSeconds: JellyfinAPIService.seconds(fromTicks: ep.RunTimeTicks),
-            showKey: show.Id
+            showKey: show.Id,
+            parentRatingKey: ep.SeasonId
         )
     }
 
@@ -723,6 +724,10 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             r.httpBody = try? JSONEncoder().encode(["PlaySessionId": psid])
             _ = try? await Self.session.data(for: r)
         }
+    }
+
+    func posterURLs(for item: PlexMediaItem, width: Int = 300) -> [URL] {
+        JellyfinAPIService.posterURLs(serverURL: serverURL, for: item, width: width)
     }
 
     func thumbnailURL(for item: PlexMediaItem, width: Int = 400) -> URL? {

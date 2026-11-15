@@ -3,6 +3,68 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15, later (Apple TV: UP NEXT title first, a louder cursor, the stripe wraps, ICLOUD on top, posters on Jellyfin and Emby, OPEN IN JELLYFIN, the other server's discovery)
+
+**State.** On branch `appletv/guide-text-three-steps`. Not merged, not in a build, not pushed. From Chad's second and third looks at the basement TV.
+
+**Changed.**
+- **UP NEXT reads title first, in the guide's yellow (#FFE500), then the minutes:** "Varsity Blues  UP NEXT IN 24 MIN", under a minute "UP NEXT IN LESS THAN 1 MIN" (`UpNextLabel.line`). The yellow holds 14.96:1 on the Now Playing panel and about 15:1 on the guide info panel. A long title ends in an ellipsis; the label never shrinks. Both panels.
+- **The guide cursor's cell is louder** (`GuideCursorStyle`): cyan #00D4FF at 30% over the row, a full cyan 3 pt ring, and two cyan glows (18 pt at 90%, 6 pt at 100%), clipped to the row's programme area so it never covers the stripe, the channel column or the rows above and below. While a cell is under the cursor the row's own focus steps back to a 2 pt outline at 55% with a 6 pt glow at 25%. White titles hold 8.5:1 or better on the cell.
+- **The bundle stripe wraps**, as the channel rows do: Down on the last bundle is the first, Up on the first is the last, stepping over runs with no bundle.
+- **SERVERS & ACCOUNTS starts with ICLOUD:** the sync switch moved to the top under its own heading, the same subtitle and behaviour; it is the pane's first focus.
+- **Posters on Jellyfin and Emby, the same chain as Plex:** an episode's season Primary image, then its series', then its own; a film's own (`/Items/{id}/Images/Primary`). The scans keep the episode's `SeasonId`; an episode read before that goes series then itself. The guide info panel's poster space is there on every server now (not in demo mode).
+- **OPEN IN JELLYFIN** on the Now Playing panel's last row, on Jellyfin with Swiftfin installed: Swiftfin's item link, `jellyfin://{serverId}/{userId}/item/{itemId}` (its `DeepLink`, the `jellyfin` scheme since its #2268, in 1.7.0), `jellyfin` listed for `canOpenURL`, "NO JELLYFIN APP" when it fails, as OPEN IN PLEX. No Emby row: Emby's Apple TV app has no item link (on its forum the iOS form opens the app but not the item), and a row that only opens an app is not worth it.
+- **A server search that finds the other kind says so:** Jellyfin and Emby each answer only their own discovery probe, so a Jellyfin search on a network with only Emby used to end in "No server answered". It now searches for the other kind too and says "No Jellyfin server answered. Found an Emby server: NAME. Switch to Emby?", with a SWITCH TO EMBY button per server that goes to its sign-in with the address filled in. The usual message stays when neither answers.
+
+**Still Plex only, for a reason.** OPEN IN PLEX (Plex's app link), ORIGINAL (LOCAL PLEX) in STREAM QUALITY and RETRY ORIGINAL VIDEO (both drive Plex's transcoder decision API, which Jellyfin and Emby do not have). Everything else in the two panels (year, certificate, star rating, description, genres, artist, time range, UP NEXT, poster) comes from the Jellyfin and Emby scans as well.
+
+**Tests.** `UpNextLineTests` (the line, the colour's contrast, white on the cursor cell), `GuideStripesTests` (the wrap), `DiscoveryOtherKindTests` (canned Emby and Jellyfin replies), `MediaBrowserPosterTests` and `OpenInJellyfinLinkTests` (the link against Swiftfin's own pattern), with the panels' and sign-in classes: all pass. Simulator screenshots in demo mode; not seen on Emby or Jellyfin in the Simulator (no server signed in there) and Swiftfin not tried on a TV.
+
+## 2026-11-15 (Apple TV: a programme cursor in the guide, LARGER rows, the info panel's poster, plain UP NEXT, no help line in Now Playing)
+
+**State.** On branch `appletv/guide-text-three-steps`, now on main `106e8dda`. Not merged, not in a build, not pushed. From Chad's look at the basement TV build.
+
+**Changed.**
+- **The guide's Left and Right move a programme at a time** (`GuideProgramCursor`), not the window by 30 minutes. Focus stays on the row; the cursor is a time on it, and the programme covering that time gets its own cell: the selected fill, a 3 pt cyan ring and a glow, inside the row's focus. Right goes to the next programme whatever its length, over a gap too. Left goes to the previous one as long as it has not ended; from the programme on now it goes on to the bundle stripe (or the bundle list) as before. Up and Down change the row and keep the time, so the cursor lands on that row's programme at the same time. The window moves only when the programme would leave the two-hour view (it starts past the view, or within its last 15 minutes, or before it), to the 30 minute slot its start is in. The info panel follows the cursor: a later programme shows with its time range in place of the progress bar (I-089). Going back to the playing channel (Menu, the end of full screen, selecting a row) puts the cursor on the live programme and the window at its start.
+- **LARGER grows the guide's row with its text:** 76 pt rows and a 66 pt time header (SMALLER and DEFAULT keep 64 and 58), so 29 pt text keeps the room 20 pt has in 64 (about 23 pt above and below), and the 29 pt times keep the 18 pt the 22 pt ones have. The bundle list's rows follow; the number box is unchanged; the Now Playing panel's rows stay 64.
+- **The guide info panel shows the programme's poster** beside the title, badges and description, the channel line above, the progress bar and UP NEXT under both (Variant A, 120 x 180, the same poster chain as the Now Playing panel, #312). On Plex only, where the posters come from; the column is always there on Plex, art or not, so the text never moves. It never had one.
+- **UP NEXT is one plain line, minutes first, in both panels:** "UP NEXT IN 24 MIN" then the title, no pill and no border, as the web tuner since 1.0.21. Under a minute it reads "UP NEXT IN LESS THAN 1 MIN". The guide info panel had no minutes before.
+- **The Now Playing panel has no help line under its rows** (Chad: "it feels so out of place there"), nor under its lists. PLAYBACK INFORMATION keeps its note, which is what that list shows, and RETRY ORIGINAL VIDEO still writes its result there while it has focus.
+
+**Tests.** `GuideProgramCursorTests` (Right over short, long and gap, Left back to live and none from live, another row keeps the time, a cursor behind the clock, when the window moves) and the row and header numbers in `GuideTextSizeTests`; with `GuideTimeCursorTests`, `InfoPanelLayoutTests` and `NowPlayingPanelLogicTests`, 74 pass. UI: `GuideInfoPanelTimeTests` passes; of `GuideStripeFocusTests`, one test fails (the last package's first channel lands 9.5 pt below the top of the list), and it fails the same way on main `106e8dda`, so not from this. A walk on the Simulator in demo mode: Right, Right, Right x2, Down, Left x6, Left. Not on a TV yet.
+
+## 2026-11-14 (Apple TV: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT, LARGER)
+
+**State.** Branch `appletv/guide-text-three-steps` off main `f76c021f`. Not merged, not in a build, not pushed. The smoke script `scripts/guide-text-smoke.mjs` fails 10 checks on purpose until Roku and the web tuner take the new numbers (below), so this must not reach main without them.
+
+**Why.** Chad, on 1.0.32: the guide type "feels overly too big", then: add a smaller size to the setting we already have, make the pulled-back sizes the default, and keep the larger one. It supersedes `appletv/guide-text-smaller` (`225ec8d8`), whose numbers are the DEFAULT step here.
+
+**Changed.**
+- `GuideTextSize` is `small`, `normal`, `large`. The labels are SMALLER, DEFAULT and LARGER. The raw values are the contract with stored prefs, iCloud sync and the other platforms: "large" is the old LARGE and "normal" is still the middle step (only the label says DEFAULT). "small" is new. Anything unknown, empty or missing reads as "normal". Roku and the web tuner only know normal and large, so they read "small" as normal, which is the safe fall back.
+- The Settings row (PLAYBACK & PICTURE) cycles SMALLER, DEFAULT, LARGER and round again (`GuideTextSize.next`); its value and accessibility value are the label. Checked on the Simulator: DEFAULT, then LARGER, SMALLER, DEFAULT.
+- The bundle list and the Now Playing panel follow the step. They used to be fixed at 22 pt whatever the setting; they now read the saved step when they draw (`GuideTextSize.current`, which `AppState.guideTextSize` writes the moment the row changes). Their DEFAULT text is 20 pt (the smaller branch's change reached the panel through `packageRowText`), and LARGER keeps the 22 pt they always had at LARGE.
+- Row height (64), the 58 pt header and the 340 pt channel column are the same at every step.
+
+| Token | SMALLER | DEFAULT | LARGER (today's LARGE) |
+|---|---|---|---|
+| program title, channel number, channel name | 17 | 20 | 29 |
+| times, CHANNEL heading, placeholder | 19 | 22 | 29 |
+| channel number box | 31 | 36 | 54 |
+| bundle list rows, BUNDLES heading | 17, 19 | 20, 22 | 22, 25 |
+| Now Playing text | 17 | 20 | 22 |
+| Now Playing item title, CH tag | 25, 24 | 29, 28 | 29, 28 |
+
+**Why 17 and 19.** The first cut of SMALLER was 18 and 20 (the same 2 pt step DEFAULT took), and on the Simulator it read as a nudge, so it went one point further: 85% and 86% of DEFAULT. One point is 1/1080 of the screen height, so 17 pt is 1.6% of it, a 12 px capital in DM Mono Medium. The strokes stay crisp in the 4K shots, but this is the floor: not judged on a TV from a couch, only on the Simulator. If it looks too small on the TV, 18 and 20 is a one-line change in `GuideTextMetrics.small`.
+
+**What Roku and the web must change** (the smoke script lists the failing checks):
+- Roku `GuideText.brs`: NORMAL becomes the DEFAULT numbers (title, number, name 20; time, heading 22) and a third step SMALLER (17 and 19) saved as "small"; LARGE stays 29 and keeps the raw value "large". The label of the middle step reads DEFAULT.
+- Web `plex-tuner.html`: the `--gt-*` multipliers of LARGE become 1.45 (title, number, name) and 1.3182 (time, heading) over the new DEFAULT; a SMALLER class takes 0.85 and 0.8636; the web's own GUIDE TEXT SIZE reads the same three raw values.
+- Android: its NORMAL and LARGE take the same two moves, and the new "small".
+
+**Tests.** `GuideTextSizeTests` (round trip for all three, unknown falls back, the cycle, the labels and raw values, every metric for every step, the floors, each step at least as big as the one below, three digits fit the box, lines fit the row and header, time labels fit their slot) and the iCloud sync test. One focused class run each, serial on the one Simulator: both pass. The smoke script: 15 checks pass, 10 fail on the Roku and web pairs by design. Screenshots of all three steps (guide, focused row, Now Playing, bundle list, the Settings row cycle) are in `projects/nostalgex-internal/docs/roku-shots/appletv-textsize-2026-11-13/` (`steps-*`, with `steps-compare-*` stacking the three). Demo mode on the Simulator only; no Apple TV used.
+
+**Not done.** `content/changelog.json` still describes the setting as NORMAL and LARGE; the site agent rewrites it when this is cut into a build. No device pass of SMALLER from a couch.
+
 ## 2026-11-14 (Apple TV: a file plays to its own end, #315)
 
 **State.** Branch `appletv/315-play-to-end` off main `106e8dda`. Not merged, not in a build, not pushed. This is the Swift reference of an engine change: the web tuner's JS engine, the Roku and Android each have a port to make, and the golden vectors move with it (listed under Half-done).

@@ -91,13 +91,16 @@ enum GuideStripes {
     }
 
     /// The previous (`step` -1) or next (+1) run that is a package, from run `index`. Runs with no package
-    /// are stepped over, and there is no wrap: past the first or last package there is nowhere to go (nil).
+    /// are stepped over, and it wraps as the channel rows do (Chad 2026-11-15): Down on the last package is the
+    /// first, Up on the first is the last. Nil only when there is no other package to go to.
     static func neighbourIndex(from index: Int, step: Int, in groups: [GuideStripeGroup]) -> Int? {
         precondition(step == 1 || step == -1)
-        var i = index + step
-        while groups.indices.contains(i) {
+        guard !groups.isEmpty else { return nil }
+        var i = index
+        for _ in 0..<groups.count {
+            i = (i + step + groups.count) % groups.count
+            if i == index { return nil }
             if groups[i].package != nil { return i }
-            i += step
         }
         return nil
     }

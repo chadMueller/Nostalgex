@@ -100,10 +100,70 @@ extension AppState {
         UIApplication.shared.open(url, options: [:], completionHandler: completion)
     }
 
-    /// The poster URLs to try, best first (`PlexPosterChain`): a TV episode's season poster, then its series poster,
-    /// then its own frame; a movie's poster. Empty off Plex and in demo mode.
+    // MARK: - Open in Jellyfin
+
+    /// Swiftfin's item link (its `DeepLink`, jellyfin/Swiftfin Shared/Services/DeepLink.swift, the `jellyfin` scheme
+    /// since #2268, in 1.7.0): `jellyfin://{serverId}/{userId}/item/{itemId}`. Swiftfin opens the item, switching to
+    /// that server and user when they are signed in there. Nil when an id is missing or has characters its link does
+    /// not take.
+    static func jellyfinItemLink(serverID: String, userID: String, itemID: String) -> URL? {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        for part in [serverID, userID, itemID] {
+            guard !part.isEmpty, part.unicodeScalars.allSatisfy({ allowed.contains($0) && $0.isASCII }) else { return nil }
+        }
+        return URL(string: "jellyfin://\(serverID)/\(userID)/item/\(itemID)")
+    }
+
+    /// Whether the current program can be handed to Swiftfin: Jellyfin backend, not demo, and Swiftfin installed.
+    /// Emby's Apple TV app has no item link (it opens to its home screen), so there is no Emby row.
+    var canOpenCurrentItemInJellyfin: Bool {
+        guard backendKind == .jellyfin, !isDemoMode, let item = currentItem,
+              let service = api as? JellyfinAPIService,
+              Self.jellyfinItemLink(serverID: service.serverID, userID: service.userId, itemID: item.ratingKey) != nil,
+              let probe = URL(string: "jellyfin://") else { return false }
+        return UIApplication.shared.canOpenURL(probe)
+    }
+
+    func openCurrentItemInJellyfin(completion: @escaping (Bool) -> Void) {
+        guard let item = currentItem, let service = api as? JellyfinAPIService,
+              let url = Self.jellyfinItemLink(serverID: service.serverID, userID: service.userId, itemID: item.ratingKey) else {
+            completion(false); return
+        }
+        print("[Plex90] OPEN IN JELLYFIN: \(url.absoluteString)")
+        UIApplication.shared.open(url, options: [:], completionHandler: completion)
+    }
+
+    /// The app the panel's OPEN IN row hands the program to, if any.
+    enum ExternalApp {
+        case plex, jellyfin
+        var rowLabel: String { self == .plex ? "OPEN IN PLEX" : "OPEN IN JELLYFIN" }
+        var failure: String { self == .plex ? "NO PLEX APP" : "NO JELLYFIN APP" }
+    }
+
+    var currentItemExternalApp: ExternalApp? {
+        if canOpenCurrentItemInPlex { return .plex }
+        if canOpenCurrentItemInJellyfin { return .jellyfin }
+        return nil
+    }
+
+    func openCurrentItemInExternalApp(completion: @escaping (Bool) -> Void) {
+        switch currentItemExternalApp {
+        case .plex: openCurrentItemInPlex(completion: completion)
+        case .jellyfin: openCurrentItemInJellyfin(completion: completion)
+        case nil: completion(false)
+        }
+    }
+
+    /// The poster URLs to try, best first: a TV episode's season poster, then its series poster, then its own frame;
+    /// a movie's poster. Plex (`PlexPosterChain`), Jellyfin and Emby (their Primary images, the same chain; Chad
+    /// 2026-11-15: the panels are the same on every server). Empty in demo mode.
     func posterURLs(for item: PlexMediaItem) -> [URL] {
-        guard backendKind == .plex, !isDemoMode else { return [] }
+        guard !isDemoMode else { return [] }
+        switch backendKind {
+        case .jellyfin: return (api as? JellyfinAPIService)?.posterURLs(for: item) ?? []
+        case .emby: return (api as? EmbyAPIService)?.posterURLs(for: item) ?? []
+        case .plex: break
+        }
         let service: PlexAPIService?
         if let sid = item.serverID,
            let server = selectedServers.first(where: { $0.machineIdentifier == sid }),

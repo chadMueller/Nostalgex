@@ -38,6 +38,12 @@ enum SignInFlow {
         switch tokens[flag + 1] {
         case "none":
             return []
+        case "otherkind":
+            // Only an Emby server on the network, whatever was searched for: what a Jellyfin search on a network
+            // with only Emby sees.
+            return kind == .emby
+                ? [DiscoveredServer(kind: .emby, name: "Living-Room-Server", address: "http://192.0.2.79:8096", id: "fixture-emby")]
+                : []
         case "several":
             return [
                 DiscoveredServer(kind: kind, name: "Living Room", address: "http://192.0.2.10:8096", id: "fixture-1"),
@@ -46,6 +52,25 @@ enum SignInFlow {
         default:
             return nil
         }
+    }
+
+    /// Jellyfin and Emby speak the same discovery protocol to different probe strings, and each answers only its
+    /// own. When a search for one finds nothing, the screen searches for the other, so a viewer who picked the wrong
+    /// one is told which server is there (Chad 2026-11-15: picked Jellyfin on a network whose only server is Emby).
+    static func otherKind(of kind: MediaBackendKind) -> MediaBackendKind? {
+        switch kind {
+        case .jellyfin: return .emby
+        case .emby: return .jellyfin
+        case .plex: return nil
+        }
+    }
+
+    /// What the screen says after a search for `kind` found nothing and the search for the other kind found
+    /// `other`: nil when that found nothing too (the usual "No server answered").
+    static func otherKindFound(searched kind: MediaBackendKind, other: [DiscoveredServer]) -> [DiscoveredServer]? {
+        guard let otherKind = otherKind(of: kind) else { return nil }
+        let found = LANServerDiscovery.dedupe(other.filter { $0.kind == otherKind })
+        return found.isEmpty ? nil : found
     }
 
     static func outcome(of servers: [DiscoveredServer]) -> DiscoveryOutcome {
@@ -238,10 +263,24 @@ enum SignInFlow {
         static let waitingForApproval = "WAITING FOR APPROVAL"
         static let notAServer = "That address answered, but it isn't a Jellyfin or Emby server. Check the port (both use 8096 unless you changed it)."
         static func switchedKind(_ kind: MediaBackendKind) -> String { "That address is a \(kind.displayName) server, so this is a \(kind.displayName) sign-in." }
+        /// "No Jellyfin server answered. Found an Emby server: Living-Room-Server. Switch to Emby?"
+        static func foundOtherKind(searched: MediaBackendKind, found: MediaBackendKind, names: [String]) -> String {
+            let article = found == .emby ? "an" : "a"
+            let what = names.count == 1
+                ? "\(article) \(found.displayName) server: \(names[0])"
+                : "\(names.count) \(found.displayName) servers: \(names.joined(separator: ", "))"
+            return "No \(searched.displayName) server answered. Found \(what). Switch to \(found.displayName)?"
+        }
+        /// The button on each server found that way: "SWITCH TO EMBY: LIVING-ROOM-SERVER".
+        static func switchTo(_ kind: MediaBackendKind, name: String) -> String { "SWITCH TO \(kind.displayName.uppercased()): \(name.uppercased())" }
 
         static var all: [String] {
             let kinds: [MediaBackendKind] = [.jellyfin, .emby]
             return kinds.flatMap { [connectTitle($0), findIntro($0), switchedKind($0)] } + [
+                foundOtherKind(searched: .jellyfin, found: .emby, names: ["Server"]),
+                foundOtherKind(searched: .emby, found: .jellyfin, names: ["Server", "NAS"]),
+                switchTo(.emby, name: "Server"),
+            ] + [
                 typeAddress, searchAgain, pickServer, addressTitle, addressHint, addressPlaceholder, connect, pressToType,
                 connecting("server"), signInTo, whoIsWatching, someoneElse, username, password, signIn,
                 useQuickConnect, usePassword, back, cancel, quickConnectTitle, quickConnectSteps,
