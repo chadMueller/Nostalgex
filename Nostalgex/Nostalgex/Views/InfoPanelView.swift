@@ -203,22 +203,25 @@ struct InfoPanelView: View {
                 .padding(.bottom, Spacing.sectionGap)
 
         case .upNext:
-            // One plain line, the minutes first and then the title, as the Now Playing panel and the web tuner:
-            // "UP NEXT IN 24 MIN  Varsity Blues". The minutes move with the clock, so this line re-reads it every 15 s.
+            // One plain line, the title first in the guide's yellow and then the minutes, as the Now Playing panel:
+            // "Varsity Blues  UP NEXT IN 24 MIN" (`UpNextLabel.line`). The minutes move with the clock, so this line
+            // re-reads it every 15 s. A long title ends in an ellipsis; the label never shrinks.
             if let next {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     HStack(spacing: 14) {
+                        Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                            .font(Typo.upNextTitle)
+                            .foregroundStyle(UpNextLabel.titleColor.color)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(context.date)))
                             .font(Typo.upNextLabel)
                             .tracking(3)
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                             .fixedSize()
-                        Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                            .font(Typo.upNextTitle)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            .layoutPriority(1)
+                        Spacer(minLength: 0)
                     }
                 }
                 .accessibilityElement(children: .combine)

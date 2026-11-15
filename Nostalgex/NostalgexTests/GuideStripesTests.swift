@@ -138,10 +138,17 @@ final class GuideStripesTests: XCTestCase {
         XCTAssertEqual(GuideStripes.neighbourIndex(from: 1, step: -1, in: g), 0)
     }
 
-    func testThereIsNoWrapPastTheFirstOrLastPackage() {
+    /// It wraps as the channel rows do (Chad 2026-11-15): Down on the last package is the first, Up on the first the last,
+    /// stepping over runs with no package on the way round. One package alone has nowhere to go.
+    func testItWrapsPastTheLastAndTheFirstPackage() {
         let g = groups(["A", "B", "C"])
-        XCTAssertNil(GuideStripes.neighbourIndex(from: 0, step: -1, in: g))
-        XCTAssertNil(GuideStripes.neighbourIndex(from: 2, step: 1, in: g))
+        XCTAssertEqual(GuideStripes.neighbourIndex(from: 2, step: 1, in: g), 0)
+        XCTAssertEqual(GuideStripes.neighbourIndex(from: 0, step: -1, in: g), 2)
+        let gaps = groups([nil, "A", "B", nil])
+        XCTAssertEqual(GuideStripes.neighbourIndex(from: 2, step: 1, in: gaps), 1, "over the unnamed runs at both ends")
+        XCTAssertEqual(GuideStripes.neighbourIndex(from: 1, step: -1, in: gaps), 2)
+        XCTAssertNil(GuideStripes.neighbourIndex(from: 0, step: 1, in: groups(["A"])))
+        XCTAssertNil(GuideStripes.neighbourIndex(from: 1, step: 1, in: groups([nil, "A", nil])))
     }
 
     /// Channels in no package are not a package to jump to: they are stepped over.
@@ -149,7 +156,7 @@ final class GuideStripesTests: XCTestCase {
         let g = groups(["A", nil, "B", nil])
         XCTAssertEqual(GuideStripes.neighbourIndex(from: 0, step: 1, in: g), 2)
         XCTAssertEqual(GuideStripes.neighbourIndex(from: 2, step: -1, in: g), 0)
-        XCTAssertNil(GuideStripes.neighbourIndex(from: 2, step: 1, in: g), "only an unnamed run is left")
+        XCTAssertEqual(GuideStripes.neighbourIndex(from: 2, step: 1, in: g), 0, "over the unnamed run at the end, round to the first")
     }
 
     func testThereAreNoPackagesToMoveBetweenWhenNoRunIsNamed() {

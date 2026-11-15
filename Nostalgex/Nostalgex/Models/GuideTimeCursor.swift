@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// The guide's time cursor (I-089): Right and Left move the guide's window through time, 30 minutes at a time, with
 /// focus staying on the row. The info panel follows the window: moved later than now, it shows the focused
@@ -79,4 +80,20 @@ enum GuideProgramCursor {
         let wanted = Int((start.timeIntervalSince(windowStart) / slot).rounded(.down))
         return min(max(0, wanted), maxOffset)
     }
+}
+
+/// How the programme under the guide's cursor is drawn (Chad 2026-11-15: "the active state needs to be way more
+/// obvious"). Roku, Android and the web tuner copy these numbers.
+enum GuideCursorStyle {
+    /// The cell's fill: cyan (#00D4FF) at 30% over the row, much brighter than the row's own focus wash.
+    static let fillOpacity = 0.30
+    static var fill: Color { Color.nxCyan.opacity(fillOpacity) }
+    /// The ring, full cyan, inset 2 pt.
+    static let ringWidth: CGFloat = 3
+    /// Two cyan glows around the ring: a wide one and a tight bright one. The row's own focus glow is 6 pt at 25%
+    /// while a cell is under the cursor.
+    static let glowRadius: CGFloat = 18
+    static let glowOpacity = 0.9
+    static let innerGlowRadius: CGFloat = 6
+    static let innerGlowOpacity = 1.0
 }

@@ -231,11 +231,16 @@ struct NowPlayingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The next programme on one plain line, the minutes first and then the title: "UP NEXT IN 24 MIN  Varsity Blues"
-    /// (Chad 2026-11-15, the web's form since 1.0.21). No pill, no border. The label is in capitals like the rest of the
-    /// panel's labels, the title as it is written; a long title ends in an ellipsis and the label never shrinks.
+    /// The next programme on one plain line, the title first in the guide's yellow and then the minutes:
+    /// "Varsity Blues  UP NEXT IN 24 MIN" (Chad 2026-11-15, `UpNextLabel.line`). No pill, no border. A long title ends
+    /// in an ellipsis; the label never shrinks.
     private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
         HStack(spacing: 14) {
+            Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                .font(NowPlayingFont.textMedium)
+                .foregroundStyle(UpNextLabel.titleColor.color)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
                 .font(NowPlayingFont.textMedium)
                 .tracking(2)
@@ -243,11 +248,6 @@ struct NowPlayingPanel: View {
                 .lineLimit(1)
                 .fixedSize()
                 .layoutPriority(1)
-            Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                .font(NowPlayingFont.textMedium)
-                .foregroundStyle(Color.nxText)
-                .lineLimit(1)
-                .truncationMode(.tail)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

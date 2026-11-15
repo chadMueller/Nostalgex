@@ -548,7 +548,7 @@ struct ChannelGuideView: View {
     }
 
     /// Up or Down on the stripe: the guide scrolls so that the previous or next package's first channel is at
-    /// the top. Focus stays on the stripe. Past the first or last package nothing moves.
+    /// the top. Focus stays on the stripe. Down on the last package goes to the first, Up on the first to the last.
     private func jumpPackage(_ step: Int, _ proxy: ScrollViewProxy) {
         let groups = stripeGroups
         guard let current = stripeGroupIndex,
@@ -843,10 +843,13 @@ private struct EPGRow: View {
             .background(rowBackground)
             .overlay {
                 if isFocused {
+                    // With a programme cell under the cursor the row's own focus steps back, so the cell clearly
+                    // wins: a 2 pt outline at 55% and a faint glow, against the cell's full cyan ring and glow.
+                    let soft = cursorEntryID != nil
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(channel.color, lineWidth: 3)
+                        .strokeBorder(channel.color.opacity(soft ? 0.55 : 1), lineWidth: soft ? 2 : 3)
                         .padding(2)
-                        .shadow(color: channel.color.opacity(0.7), radius: 14)
+                        .shadow(color: channel.color.opacity(soft ? 0.25 : 0.7), radius: soft ? 6 : 14)
                 }
             }
             .zIndex(isFocused ? 1 : 0)
@@ -965,7 +968,7 @@ private struct EPGRow: View {
                         .clipped()
                         .background(
                             entry.id == cursorEntryID
-                                ? Color.nxSelectedRow
+                                ? GuideCursorStyle.fill
                                 : entry.isNowPlaying
                                     ? (isFocused ? focusedFills.nowPlaying.color : channel.color.opacity(0.25))
                                     : isPast
@@ -974,10 +977,13 @@ private struct EPGRow: View {
                         )
                         .overlay {
                             if entry.id == cursorEntryID {
+                                // The glow spills onto the cells beside it but never out of the row: the programme
+                                // area is clipped to the row, so the stripe and the rows above and below stay clear.
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.nxCyan, lineWidth: 3)
+                                    .strokeBorder(Color.nxCyan, lineWidth: GuideCursorStyle.ringWidth)
                                     .padding(2)
-                                    .shadow(color: Color.nxCyan.opacity(0.6), radius: 8)
+                                    .shadow(color: Color.nxCyan.opacity(GuideCursorStyle.glowOpacity), radius: GuideCursorStyle.glowRadius)
+                                    .shadow(color: Color.nxCyan.opacity(GuideCursorStyle.innerGlowOpacity), radius: GuideCursorStyle.innerGlowRadius)
                             }
                         }
                         .zIndex(entry.id == cursorEntryID ? 1 : 0)
