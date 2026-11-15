@@ -124,6 +124,24 @@ class Prefs(context: Context) {
         get() = GuideTextSize.fromStored(prefs.getString(GuideTextSize.STORAGE_KEY, null))
         set(value) = prefs.edit().putString(GuideTextSize.STORAGE_KEY, value.raw).apply()
 
+    /** The rating banner's counters, under the Apple TV's keys (RatingNudgeStore). */
+    var nudgeSessions: Int
+        get() = prefs.getInt("nostalgex_rating_nudge_sessions", 0)
+        set(value) = prefs.edit().putInt("nostalgex_rating_nudge_sessions", value).apply()
+    var nudgeShownVersion: String?
+        get() = prefs.getString("nostalgex_rating_nudge_shown_version", null)
+        set(value) = prefs.edit().putString("nostalgex_rating_nudge_shown_version", value).apply()
+    var nudgeRated: Boolean
+        get() = prefs.getBoolean("nostalgex_rating_nudge_rated", false)
+        set(value) = prefs.edit().putBoolean("nostalgex_rating_nudge_rated", value).apply()
+
+    /** Once per process: whether this is the first launch ever, recorded as it is asked. */
+    fun consumeFirstLaunch(): Boolean {
+        val seenBefore = prefs.getBoolean("nostalgex_rating_nudge_has_launched", false)
+        prefs.edit().putBoolean("nostalgex_rating_nudge_has_launched", true).apply()
+        return !seenBefore
+    }
+
     /** WATERSHED (Settings > SCHEDULE), off unless switched on, under the Apple TV's key. */
     var watershed: Boolean
         get() = prefs.getBoolean(ChannelConfig.WATERSHED_STORAGE_KEY, false)

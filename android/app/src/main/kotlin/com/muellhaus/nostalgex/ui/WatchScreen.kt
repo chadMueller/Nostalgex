@@ -313,6 +313,12 @@ fun WatchScreen(model: AppModel) {
                         focusLive()
                     }
                 }
+                // The rating banner sits at the foot of the guide, taking focus on RATE; any way out puts focus back on the live row.
+                if (model.ratingNudgeVisible && !model.fullScreen) {
+                    Box(Modifier.fillMaxSize().padding(horizontal = u(60), vertical = u(40)), contentAlignment = Alignment.BottomCenter) {
+                        RatingNudgeBanner(model, onDismissed = { focusLive() })
+                    }
+                }
                 if (model.sleepGrace) SleepGracePrompt(model)
             }
         }

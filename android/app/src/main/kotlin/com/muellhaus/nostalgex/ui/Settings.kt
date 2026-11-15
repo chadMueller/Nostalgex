@@ -754,6 +754,15 @@ private fun AboutRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "about_version"),
         ) {}
+        // RATE, as the Apple TV's Settings tile: opens the Play listing, and says thanks once pressed (the banner never shows again).
+        ToggleRow(
+            title = "RATE NOSTALGEX",
+            subtitle = if (model.hasTappedRate) "Thank you. A star rating helps other people find it." else "A star rating helps other people find it",
+            detail = if (model.hasTappedRate) "THANKS" else "RATE",
+            on = true,
+            showToggle = false,
+            modifier = Modifier.paneRow(model, "about_rate"),
+        ) { model.rate() }
         Box(Modifier.padding(top = u(24))) { SectionHeader("LINKS", null) }
         // AboutLinks.all, as the Apple TV's SettingsAboutView: a line to read and open on a phone or
         // computer, not a button that opens anything.

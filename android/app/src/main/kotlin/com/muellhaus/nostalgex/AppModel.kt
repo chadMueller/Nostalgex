@@ -20,6 +20,7 @@ import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.GuideTextSize
 import com.muellhaus.nostalgex.engine.NaturalEnd
+import com.muellhaus.nostalgex.engine.RatingNudgePolicy
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
@@ -185,8 +186,11 @@ class AppModel(private val context: Context) : Playback.Listener {
     var fullScreen: Boolean
         get() = fullScreenState
         set(value) {
+            val wasFullScreen = fullScreenState
             fullScreenState = value
             applySubtitles()
+            // The one moment the rating banner is considered: the viewer has just left full screen for the guide.
+            if (wasFullScreen && !value) ratingNudgeGuideDidReturn()
         }
     private var fullScreenState by mutableStateOf(false)
 
@@ -466,6 +470,60 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** An answer to "STILL WATCHING?": keep playing, the timer is used up. */
     fun keepAwake() = cancelSleepTimer()
 
+    // ── The rating banner (the Apple TV's AppState+RatingNudge, rules in RatingNudgePolicy) ──────────────
+
+    var ratingNudgeVisible by mutableStateOf(false)
+        private set
+    /** RATE was pressed on the banner or in Settings: the banner never shows again and the Settings row says thanks. */
+    var hasTappedRate by mutableStateOf(prefs.nudgeRated)
+        private set
+    private var nudgeLaunch = RatingNudgePolicy.Launch(appVersion = versionName, isFirstLaunch = prefs.consumeFirstLaunch())
+    /** When the programme now playing first showed a picture, for counting a viewing session. */
+    private var watchStartMs: Long? = null
+    private var watchKey: String? = null
+    private var watchCounted = false
+
+    private fun noteWatchStarted(item: MediaItem) {
+        if (watchKey != item.ratingKey) { watchKey = item.ratingKey; watchStartMs = System.currentTimeMillis(); watchCounted = false }
+    }
+
+    private fun countViewingSessionIfQualifies() {
+        val start = watchStartMs ?: return
+        if (watchCounted || !RatingNudgePolicy.countsAsViewingSession((System.currentTimeMillis() - start) / 1000.0)) return
+        watchCounted = true
+        prefs.nudgeSessions = prefs.nudgeSessions + 1
+        Log.i(TAG, "RATING viewing session counted, total ${prefs.nudgeSessions}")
+    }
+
+    private fun ratingNudgeGuideDidReturn() {
+        // Playback carries on in the guide's preview, so the watch that just ended in full screen has not stopped: count it now.
+        countViewingSessionIfQualifies()
+        val persisted = RatingNudgePolicy.Persisted(prefs.nudgeSessions, prefs.nudgeShownVersion, prefs.nudgeRated)
+        if (!RatingNudgePolicy.shouldShow(persisted, nudgeLaunch)) return
+        nudgeLaunch = nudgeLaunch.copy(shownThisLaunch = true)
+        prefs.nudgeShownVersion = nudgeLaunch.appVersion   // recorded on appearance, so it never repeats this version
+        Log.i(TAG, "RATING banner shown (sessions ${persisted.qualifyingSessions}, version ${nudgeLaunch.appVersion})")
+        ratingNudgeVisible = true
+    }
+
+    /** NOT NOW, Up, Back, the timeout: every way out ends here. */
+    fun dismissRatingNudge() { ratingNudgeVisible = false }
+
+    /** RATE, on the banner or in Settings: opens the Play listing, never asks again. */
+    fun rate() {
+        prefs.nudgeRated = true
+        hasTappedRate = true
+        dismissRatingNudge()
+        val id = context.packageName
+        val opened = runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+        }.getOrDefault(false)
+        if (!opened) runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        Log.i(TAG, "RATING RATE pressed, opened=$opened")
+    }
+
     // ── OPEN IN PLEX (the Apple TV's AppState.canOpenCurrentItemInPlex and openCurrentItemInPlex) ──────────
 
     /** Whether something on this TV handles a `plex://` link, asked once. */
@@ -664,6 +722,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                             plex.discoverServers(token, includeShared = true)
                         } catch (e: Exception) {
                             Log.w(TAG, "Server discovery failed", e)
+                            nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
                             screen = Screen.Failed("Signed in, but couldn't reach plex.tv to find your servers. Check your connection and Retry.")
                             return@launch
                         }
@@ -1429,6 +1488,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Library load failed", e)
+                nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
                 screen = Screen.Failed(connectionFailure(e))
             } finally {
                 // Reading the saved library proves nothing about whether a full load can finish.
@@ -1996,6 +2056,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     override fun onPicture(item: MediaItem) {
         failureRun.reset()
+        noteWatchStarted(item)
     }
 
     override fun onEnded(item: MediaItem) {
@@ -2040,6 +2101,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     override fun onFailed(item: MediaItem, failure: PlaybackFailure) {
+        nudgeLaunch = nudgeLaunch.copy(hadPlaybackFailure = true)
         val ch = channel ?: return
         skipJob?.cancel()
         recordVerdict(failure.diagnosticSummary, item.title, failure.headline)
