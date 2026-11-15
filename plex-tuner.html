@@ -6956,7 +6956,7 @@
             network: !code && data.type === Hls.ErrorTypes.NETWORK_ERROR,
             decodedAFrame: video.currentTime > 0.5,
           };
-          explainedFailure(item, streamUrl, payload).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
+          explainedFailure(item, streamUrl, payload, request.controller.signal).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
           return;
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !networkRetried) {
@@ -6985,7 +6985,7 @@
           tooSlow: data.details === 'bufferStalledError' || data.details === 'bufferNudgeOnStall',
           mediaError: data.type === Hls.ErrorTypes.MEDIA_ERROR,
           decodedAFrame: video.currentTime > 0.5,
-        }).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
+        }, request.controller.signal).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
       });
     } else if (isHLS && video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
@@ -7108,21 +7108,38 @@
 
   // A Plex transcode the server refuses with HTTP 400 says why when asked (#324): the same request to /decision answers with the reason in words. A file in
   // Dolby Vision profile 5 reads "DoVi (Profile 5) color space is not supported". The server is asked first and not second-guessed: a Plex that can convert
-  // profile 5 simply streams it, and a browser that plays a profile 5 MP4 as it is does so. Null when the server will not say.
-  async function plexRefusalReason(streamUrl) {
+  // profile 5 simply streams it, and a browser that plays a profile 5 MP4 as it is does so. Null when the server will not say. The question gets 5 seconds:
+  // a /decision that never answers must not leave the channel black with no card, so a timeout is the same as a server that will not say. The fetch also
+  // ends when the playback request does (a channel change), and the timer is always cleared.
+  const PLEX_DECISION_TIMEOUT_MS = 5000;
+  async function plexRefusalReason(streamUrl, parentSignal) {
+    let timer = null, onParentAbort = null;
     try {
       if (!/\/video\/:\/transcode\/universal\/start\.m3u8\?/.test(streamUrl)) return null;
       const url = streamUrl.replace('/start.m3u8?', '/decision?') + '&directPlay=0&directStream=1';
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const ctl = new AbortController();
+      timer = setTimeout(() => ctl.abort(), PLEX_DECISION_TIMEOUT_MS);
+      if (parentSignal) {
+        if (parentSignal.aborted) ctl.abort();
+        else { onParentAbort = () => ctl.abort(); parentSignal.addEventListener('abort', onParentAbort); }
+      }
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
       if (!res.ok) return null;
       const mc = (await res.json()).MediaContainer || {};
       return `${mc.transcodeDecisionText || ''} ${mc.generalDecisionText || ''}`.trim() || null;
     } catch (e) { return null; }
+    finally {
+      if (timer) clearTimeout(timer);
+      if (parentSignal && onParentAbort) parentSignal.removeEventListener('abort', onParentAbort);
+    }
   }
   /** The failure for a stream the server answered with `payload`.httpStatus: a Plex 400 is explained by the server before it is blamed. */
-  async function explainedFailure(item, streamUrl, payload) {
-    if (payload.httpStatus === 400 && mediaBackend === 'plex') {
-      const why = await plexRefusalReason(streamUrl);
+  async function explainedFailure(item, streamUrl, payload, signal) {
+    // Asked once per programme: the capped retry that follows a 400 is a copy of the item and carries the flag, so a server that did not answer
+    // (or answered with another reason) is not waited on a second time before the card.
+    if (payload.httpStatus === 400 && mediaBackend === 'plex' && !item._refusalAsked) {
+      item._refusalAsked = true;
+      const why = await plexRefusalReason(streamUrl, signal);
       if (why && /DoVi \(Profile 5\)/i.test(why)) {
         item._cappedRetry = true;   // no smaller stream will do either
         return classifyPlaybackFailure({ dolbyVision5: true });

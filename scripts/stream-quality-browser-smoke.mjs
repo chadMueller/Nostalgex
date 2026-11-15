@@ -47,6 +47,9 @@ const plexFilm = (n, container, kbps) => ({
   Media: [{ container, videoResolution: "720", bitrate: kbps, videoCodec: "h264", audioCodec: "aac", Part: [{ key: `/library/parts/${n}/file.${container}` }] }],
 });
 const dv5Keys = new Set();   // files this Plex refuses to convert: Dolby Vision profile 5 (start.m3u8 answers 400, /decision says why)
+const otherRefusalKeys = new Set();   // files whose start.m3u8 answers 400 and whose /decision gives a reason that is not profile 5
+const hangKeys = new Set();           // files whose start.m3u8 answers 400 and whose /decision never answers
+const hungDecisions = [];             // { res, closedAt }: the /decision requests held open, so the smoke can see when the page gave up on them
 const plexFilms = [plexFilm(1, "mkv", 8000), plexFilm(2, "mp4", 20000), plexFilm(3, "mp4", 3000), plexFilm(4, "mkv", 8000), plexFilm(5, "mkv", 8000), plexFilm(6, "mkv", 8000)];
 
 function readBody(req) {
@@ -76,14 +79,16 @@ const plex = http.createServer(async (req, res) => {
   if (path === "/video/:/transcode/universal/decision") {
     const k = /\/library\/metadata\/(\d+)/.exec(new URL(req.url, "http://x").searchParams.get("path") || "");
     const refused = k && dv5Keys.has(k[1]);
+    if (k && hangKeys.has(k[1])) { const held = { res, closedAt: 0 }; hungDecisions.push(held); req.on("close", () => { held.closedAt = Date.now(); }); return; }
     res.writeHead(200, { "Content-Type": "application/json" });
+    if (k && otherRefusalKeys.has(k[1])) return res.end(JSON.stringify({ MediaContainer: { generalDecisionCode: 2000, generalDecisionText: "Neither direct play nor conversion is available.", transcodeDecisionCode: 2001, transcodeDecisionText: "Not enough bandwidth to convert this file." } }));
     return res.end(JSON.stringify({ MediaContainer: refused
       ? { generalDecisionCode: 2000, generalDecisionText: "Neither direct play nor conversion is available.", transcodeDecisionCode: 2003, transcodeDecisionText: "File is unplayable. DoVi (Profile 5) color space is not supported." }
       : { generalDecisionCode: 1000, generalDecisionText: "Direct play not available; Conversion OK.", transcodeDecisionCode: 1001, transcodeDecisionText: "Direct play not available; Conversion OK." } }));
   }
   if (path === "/video/:/transcode/universal/start.m3u8") {
     const k = /\/library\/metadata\/(\d+)/.exec(new URL(req.url, "http://x").searchParams.get("path") || "");
-    if (k && dv5Keys.has(k[1])) { res.writeHead(400, { "Content-Type": "text/html" }); return res.end("<html><head><title>Bad Request</title></head><body><h1>400 Bad Request</h1></body></html>"); }
+    if (k && (dv5Keys.has(k[1]) || otherRefusalKeys.has(k[1]) || hangKeys.has(k[1]))) { res.writeHead(400, { "Content-Type": "text/html" }); return res.end("<html><head><title>Bad Request</title></head><body><h1>400 Bad Request</h1></body></html>"); }
     res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
     return res.end("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.0,\nseg0.ts\n#EXT-X-ENDLIST\n");
   }
@@ -264,6 +269,51 @@ dv = await startReal("105");   // profile 8: the server converts it
 check("plex #324: a profile 8 file streams", dv.reqs.some((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)) && !dv.reqs.some((r) => /\/decision/.test(r.url)) && !/Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
 dv = await startReal("106", { videoCodec: "hevc", audioCodec: "aac", container: "mkv" });   // a plain HEVC file
 check("plex #324: a plain HEVC file streams", dv.reqs.some((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)) && !/Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+// A 400 whose /decision reason is something else: the page asks, reads no profile 5, and builds the failure it built before (the server answered HTTP 400).
+otherRefusalKeys.add("105");
+dv = await startReal("105");
+check("plex #324: a 400 with another reason still asks the server why", dv.reqs.some((r) => /\/transcode\/universal\/decision/.test(r.url)));
+check("plex #324: a 400 with another reason takes the old failure path (server-blaming card, no Dolby Vision card)", dv.card.visible && /answered HTTP 400/.test(dv.card.text) && !/Dolby Vision/.test(dv.card.text), dv.card.text);
+otherRefusalKeys.clear();
+// A /decision that never answers: the page waits 5 seconds, then falls back to the plain failure (the same card), and the channel moves on after its usual
+// five seconds. Nothing is shown before the timeout, and the held request is dropped by the page (aborted), not left open.
+hangKeys.add("106");
+hungDecisions.length = 0;
+log.length = 0;
+await pxr.page.evaluate(() => { consecutivePlaybackFailures = 0; });   // the failures above would otherwise park the channel instead of moving it on
+const hangStart = Date.now();
+await pxr.page.evaluate(() => { const item = allItemsCache.find((i) => i.ratingKey === "106"); const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+const cardNow = () => pxr.page.evaluate(() => { const st = document.getElementById("display-status"); return { text: st.textContent, visible: st.classList.contains("visible") }; });
+await pxr.page.waitForTimeout(3000);
+let hc = await cardNow();
+check("plex #324: while /decision has not answered, no card yet (the page is still waiting)", !(hc.visible && /answered HTTP/.test(hc.text)) && hungDecisions.length === 1 && !hungDecisions[0].closedAt, `${hungDecisions.length} ${hc.text}`);
+await pxr.page.waitForFunction(() => { const st = document.getElementById("display-status"); return st.classList.contains("visible") && /answered HTTP 400/.test(st.textContent); }, null, { timeout: 8000 }).catch(() => {});
+const hangElapsed = Date.now() - hangStart;
+hc = await cardNow();
+check("plex #324: a /decision that never answers falls back to the plain failure card", hc.visible && /answered HTTP 400/.test(hc.text) && !/Dolby Vision/.test(hc.text), hc.text);
+check("plex #324: and does so at the 5 second timeout, not before and not long after", hangElapsed >= 4800 && hangElapsed <= 7500, `${hangElapsed} ms`);
+check("plex #324: the capped retry that follows does not ask (and wait) a second time", hungDecisions.length === 1 && log.filter((r) => /\/transcode\/universal\/decision/.test(r.url)).length === 1 && log.filter((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)).length === 2, `${hungDecisions.length} decisions, ${log.filter((r) => /start\.m3u8/.test(r.url)).length} starts`);
+check("plex #324: the held /decision request was aborted by the page", hungDecisions.length === 1 && hungDecisions[0].closedAt > 0 && hungDecisions[0].closedAt - hangStart <= 7500, JSON.stringify(hungDecisions.map((h) => h.closedAt && h.closedAt - hangStart)));
+log.length = 0;
+await pxr.page.waitForTimeout(6500);
+check("plex #324: the channel moves on after the card, as it does for any failure (the next programme is started)", log.some((r) => r.server === "plex" && /\/transcode\/universal\/start\.m3u8|\/library\/parts\//.test(r.url)), log.map((r) => r.url.slice(0, 70)).join(" | "));
+await pxr.page.evaluate(() => stopVideo());
+await pxr.page.waitForTimeout(300);
+hangKeys.clear();
+// A channel change while /decision is held: the question is dropped at once and nothing from the old programme fires afterwards.
+hangKeys.add("106");
+hungDecisions.length = 0;
+await pxr.page.evaluate(() => { const item = { ...allItemsCache.find((i) => i.ratingKey === "106") }; delete item._refusalAsked; delete item._cappedRetry; const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+await pxr.page.waitForTimeout(1500);
+const heldBefore = hungDecisions.length;
+const changeAt = Date.now();
+await pxr.page.evaluate(() => { const item = allItemsCache.find((i) => i.ratingKey === "101"); const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+await pxr.page.waitForTimeout(1000);
+check("plex #324: a channel change drops the held /decision at once", heldBefore === 1 && hungDecisions[0].closedAt >= changeAt && hungDecisions[0].closedAt - changeAt < 1500, `${heldBefore} ${hungDecisions.map((h) => h.closedAt && h.closedAt - changeAt)}`);
+await pxr.page.waitForTimeout(5500);
+hc = await cardNow();
+check("plex #324: and no card for the old programme appears after the timeout would have fired", !(hc.visible && /answered HTTP 400/.test(hc.text)), hc.text);
+hangKeys.clear();
 check("plex #324: no page errors", pxr.errors.length === 0, pxr.errors.join(" | "));
 dv5Keys.clear();
 await pxr.ctx.close();
@@ -349,6 +399,7 @@ for (const backend of ["jellyfin", "plex"]) {
 }
 
 await browser.close();
+for (const h of hungDecisions) { try { h.res.destroy(); } catch {} }
 for (const s of [jellyfin, plex, files]) s.close();
 if (failures.length) {
   console.error(`stream-quality browser smoke: ${failures.length} failed, ${passed} passed`);
