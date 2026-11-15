@@ -310,7 +310,7 @@ sub buildRows()
     ' LIBRARIES (I-092): one row per library section, on or off, when there is
     ' more than one to choose between.
     if m.libs.Count() > 1 then
-        add({ kind: "subheader", text: "LIBRARIES" })
+        add({ kind: "subheader", text: "LIBRARIES" }, "servers")
         for i = 0 to m.libs.Count() - 1
             add({ kind: "library", index: i })
         end for
