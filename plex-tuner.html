@@ -5174,8 +5174,6 @@
     }
   }
 
-  /** The channel a load opens on: the last one watched when the switch is on and it is still
-   *  there with the same id and name, else the first enabled channel, as before. */
   // A link can name the channel to open on: plex-tuner.html?channel=<number>, the number the guide shows (the web's counterpart of the
   // Apple TV's Top Shelf link). The start screen passes its own query on, so a bookmark to web-tuner.html?channel=12 works too. An unknown
   // number is ignored, and it applies once, to the first channel a visit opens on.
@@ -5191,6 +5189,8 @@
     } catch (e) { return null; }
   }
 
+  /** The channel a load opens on: the one a link names, else the last one watched when the switch is on and it is still
+   *  there with the same id and name, else the first enabled channel, as before. */
   function channelToOpenOn() {
     const enabled = CHANNELS.filter(ch => ch.enabled);
     const linked = channelFromLink(enabled);
@@ -5276,6 +5276,7 @@
     text('np-upnext', '');
     setInfoChannelTag(ch);
     setInfoPoster(null);
+    updateOpenInLink(null);
     text('info-title', WATERSHED_GUIDE_LABEL);
     text('info-episode-title', '');
     text('info-description', '');
@@ -7249,8 +7250,8 @@
 
   // The poster, on every server, as on the Apple TV (Chad 2026-11-15: parity on Plex, Jellyfin and Emby): a TV episode's season
   // poster, then its series', then the episode's own image; a film's own. The first image that loads wins, and every one failing leaves
-  // an empty frame (the space is always reserved, so the text never moves). The URL carries the sign-in the way the other image
-  // requests do, since an <img> cannot send a header.
+  // an empty frame (the space is always reserved, so the text never moves). Plex's URL carries its token as its other image requests do
+  // (an <img> cannot send a header); Jellyfin and Emby images are asked for without one, as on the Apple TV.
   //   Plex:             /library/metadata/{season}/thumb, then /library/metadata/{show}/thumb, then the item's thumb
   //   Jellyfin, Emby:   /Items/{SeasonId}/Images/Primary, then {SeriesId}, then {ItemId}, each with ?maxWidth=300
   function infoPosterUrls(item) {
@@ -7266,7 +7267,8 @@
       if (episode && item.showKey) urls.push(via(`/library/metadata/${item.showKey}/thumb`));
       if (item.thumb) urls.push(via(item.thumb));
     } else {
-      const primary = (id) => `${server}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300&api_key=${encodeURIComponent(token)}`;
+      // No sign-in in the URL: the Apple TV asks for these images without one, and a token in an image address lands in access logs.
+      const primary = (id) => `${server}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300`;
       if (episode && item.seasonKey) urls.push(primary(item.seasonKey));
       if (episode && item.showKey) urls.push(primary(item.showKey));
       if (item.ratingKey) urls.push(primary(item.ratingKey));
@@ -7296,28 +7298,34 @@
   //   Plex:     https://app.plex.tv/desktop/#!/server/{machineIdentifier}/details?key=/library/metadata/{id}
   //   Jellyfin: {server}/web/#/details?id={id}&serverId={serverId}
   //   Emby:     {server}/web/index.html#!/item?id={id}&serverId={serverId}   (Emby's router takes the #! form: checked on 4.10.1.0)
-  let mediaServerId = null;
-  let mediaServerIdAsked = '';
+  let mediaServerId = null;          // the id of the server mediaServerIdFor names
+  let mediaServerIdFor = '';
+  let mediaServerIdAskedAt = 0;      // when the id was last asked for (once a minute at most, so a server that is down is not asked every second)
   function ensureMediaServerId() {
-    if (!isMediaBrowserBackend(mediaBackend) || !plexServerUrl || mediaServerIdAsked === plexServerUrl) return;
-    mediaServerIdAsked = plexServerUrl;
-    fetch(`${plexServerUrl}/System/Info/Public`, { headers: { 'Accept': 'application/json' } })
+    if (!isMediaBrowserBackend(mediaBackend) || !plexServerUrl) return;
+    const url = plexServerUrl;
+    if (mediaServerIdFor === url) return;
+    if (mediaServerId !== null) mediaServerId = null;   // an id from another server is never used
+    const now = Date.now();
+    if (mediaServerIdAskedAt && now - mediaServerIdAskedAt < 60000) return;
+    mediaServerIdAskedAt = now;
+    fetch(`${url}/System/Info/Public`, { headers: { 'Accept': 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d && d.Id) { mediaServerId = String(d.Id); updateOpenInLink(shownInfoItem); } })
-      .catch(() => { mediaServerIdAsked = ''; });
+      .then((d) => { if (d && d.Id && url === plexServerUrl) { mediaServerId = String(d.Id); mediaServerIdFor = url; updateOpenInLink(shownInfoItem); } })
+      .catch(() => {});
   }
   function openInTarget(item) {
     if (!item || !item.ratingKey) return null;
     const id = encodeURIComponent(String(item.ratingKey));
     if (mediaBackend === 'plex') {
-      const server = selectedServers.find((s) => s.url === item.serverUrl) || selectedServers[0];
+      const server = item.serverUrl ? selectedServers.find((s) => s.url === item.serverUrl) : selectedServers[0];
       const machine = server && server.machineIdentifier;
       if (!machine) return null;
       return { label: 'OPEN IN PLEX', url: `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(machine)}/details?key=${encodeURIComponent('/library/metadata/' + item.ratingKey)}` };
     }
     const server = String(plexServerUrl || '').replace(/\/+$/, '');
     if (!/^https?:\/\//i.test(server)) return null;
-    const sid = mediaServerId ? `&serverId=${encodeURIComponent(mediaServerId)}` : '';
+    const sid = mediaServerId && mediaServerIdFor === plexServerUrl ? `&serverId=${encodeURIComponent(mediaServerId)}` : '';
     if (mediaBackend === 'emby') return { label: 'OPEN IN EMBY', url: `${server}/web/index.html#!/item?id=${id}${sid}` };
     return { label: 'OPEN IN JELLYFIN', url: `${server}/web/#/details?id=${id}${sid}` };
   }
@@ -12351,8 +12359,7 @@
                     let partKey = null;
                     let container = null;
                     const epMedia = pickBestVersion(ep.Media, m => m.bitrate, m => resolutionHeight(m.videoResolution));
-                    // Codecs only feed PLAYBACK INFORMATION; Plex's direct play choice still
-                    // goes by container alone.
+                    // The codecs feed PLAYBACK INFORMATION and the direct play choice (scripts/nostalgex-direct-play.js).
                     const epVideoCodec = epMedia && epMedia.videoCodec ? String(epMedia.videoCodec).toLowerCase() : null;
                     const epAudioCodec = epMedia && epMedia.audioCodec ? String(epMedia.audioCodec).toLowerCase() : null;
                     if (epMedia) {

@@ -127,7 +127,7 @@ for (const backend of ["jellyfin", "emby", "plex"]) {
   const label = backend;
   let r = await poster(backend, episode, ["se1", "sh1", "ep1"]);
   check(`${label}: an episode's poster is its season's first`, idOf(r.src) === "se1" && r.loaded, JSON.stringify(r));
-  if (backend !== "plex") check(`${label}: asked for with ?maxWidth=300 and the sign-in`, /\?maxWidth=300&api_key=TOK$/.test(r.src), r.src);
+  if (backend !== "plex") check(`${label}: asked for with ?maxWidth=300 and no token in the address (as the Apple TV asks)`, /\?maxWidth=300$/.test(r.src) && !/TOK/.test(r.src), r.src);
   else check(`${label}: asked for through the transcoder at poster size with the token`, /photo\/:\/transcode\?width=300&height=450/.test(r.src) && /X-Plex-Token=TOK/.test(r.src), r.src);
   reservedW = reservedW ?? r.w; reservedLeft = reservedLeft ?? r.textLeft;
   r = await poster(backend, episode, ["sh1", "ep1"]);
@@ -158,6 +158,12 @@ check("jellyfin: OPEN IN JELLYFIN, the item in the server's web app, with the se
 l = await link("emby", episode);
 check("emby: OPEN IN EMBY, the #! form Emby's router takes, with the server's id", !l.hidden && l.text === "OPEN IN EMBY" && l.href === `${api}/web/index.html#!/item?id=ep1&serverId=srv0123456789abcdef` && l.target === "_blank", JSON.stringify(l));
 check("the server's id was asked for once (its public info), not per programme", serverIdAnswers <= 2, String(serverIdAnswers));
+// A server that never answers its public info is not asked every second: the id is retried once a minute at most.
+const before = serverIdAnswers;
+await page.evaluate(() => { mediaServerId = null; mediaServerIdFor = ""; mediaServerIdAskedAt = 0; });
+await page.evaluate(async (apiUrl) => { mediaBackend = "jellyfin"; plexServerUrl = apiUrl; for (let i = 0; i < 20; i++) { updateOpenInLink({ ratingKey: "x", type: "movie" }); await new Promise((r) => setTimeout(r, 20)); } }, api);
+await page.waitForTimeout(200);
+check("the server's id is not asked for again and again while the link is redrawn", serverIdAnswers - before <= 1, String(serverIdAnswers - before));
 l = await page.evaluate(() => { mediaBackend = "plex"; selectedServers = []; updateOpenInLink({ ratingKey: "x", type: "movie" }); const a = document.getElementById("info-open-in"); return { hidden: a.hidden, href: a.getAttribute("href") }; });
 check("plex: with no machine id for the server there is no link", l.hidden && l.href === null, JSON.stringify(l));
 l = await page.evaluate(() => { mediaBackend = "jellyfin"; plexServerUrl = "not a url"; updateOpenInLink({ ratingKey: "x", type: "movie" }); return { hidden: document.getElementById("info-open-in").hidden }; });

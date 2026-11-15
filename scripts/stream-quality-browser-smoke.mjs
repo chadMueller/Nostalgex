@@ -197,6 +197,30 @@ for (const [level, expect20, expect3] of [["auto", true, true], ["maximum", true
   const r3 = await start(px.page, "plex", "103", level);
   check(`plex ${level}: a 3 Mbps MP4 ${expect3 ? "direct plays" : "is transcoded"}`, expect3 ? plexDirect(r3) && !plexTranscode(r3) : plexTranscode(r3) && !plexDirect(r3), r3.map((r) => r.url.slice(0, 60)).join(" | "));
 }
+// The Plex direct play decision reads the file's codecs (#326): an MP4 holding HEVC or AC-3 goes to the server's stream where the
+// browser cannot decode it, and a file with no codecs kept (a library saved before) is decided by its container as before.
+await px.page.evaluate(() => { HTMLMediaElement.prototype.canPlayType = () => ""; });   // a browser that decodes neither HEVC nor AC-3
+const startPatched = async (patch) => {
+  await px.page.evaluate((l) => localStorage.setItem("nostalgex_stream_quality", l), "auto");
+  log.length = 0;
+  await px.page.evaluate((p) => {
+    const item = allItemsCache.find((i) => i.ratingKey === "102");
+    const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0];
+    playCurrentItem({ ...item, ...p, offsetSeconds: 0 }, channel);
+  }, patch);
+  await px.page.waitForTimeout(1200);
+  return log.filter((r) => r.server === "plex");
+};
+let rc = await startPatched({ videoCodec: "h264", audioCodec: "aac" });
+check("plex #326: an MP4 with H.264 and AAC direct plays", plexDirect(rc) && !plexTranscode(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "hevc", audioCodec: "aac" });
+check("plex #326: an MP4 holding HEVC goes to the server's stream where the browser cannot decode it", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "h264", audioCodec: "ac3" });
+check("plex #326: an MP4 with AC-3 audio goes to the server's stream", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "h264", audioCodec: "dca" });
+check("plex #326: DTS audio goes to the server's stream", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: null, audioCodec: null });
+check("plex #326: no codecs kept (a library saved before): the container decides, as before: direct play", plexDirect(rc) && !plexTranscode(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
 check("plex: no page errors", px.errors.length === 0, px.errors.join(" | "));
 await jf.ctx.close();
 await px.ctx.close();
