@@ -30,9 +30,12 @@ function NxRunGuideNavTests() as Integer
     s = NxGuideTextSizesFor("small")
     NxCheck(r, "text: the two-level call is DEFAULT and LARGER", FormatJson([NxGuideTextSizes(false), NxGuideTextSizes(true)]), FormatJson([n, l]))
     NxCheck(r, "text: DEFAULT is the Apple TV's", FormatJson([n.slot, n.slotY, n.slotH, n.title, n.titleY, n.num, n.numW, n.numY, n.name, n.nameY, n.nameGap, n.head, n.headY, n.held, n.heldY]), "[22,15,29,20,19,20,36,19,20,19,44,22,15,22,18]")
-    NxCheck(r, "text: LARGER is the old LARGE", FormatJson([l.slot, l.slotY, l.slotH, l.title, l.titleY, l.num, l.numW, l.numY, l.name, l.nameY, l.nameGap, l.head, l.headY, l.held, l.heldY]), "[29,10,38,29,13,29,54,13,29,13,62,29,10,29,13]")
+    NxCheck(r, "text: LARGER is the old LARGE, in a 76 px row and a 66 px header", FormatJson([l.slot, l.slotY, l.slotH, l.title, l.titleY, l.num, l.numW, l.numY, l.name, l.nameY, l.nameGap, l.head, l.headY, l.held, l.heldY]), "[29,14,38,29,19,29,54,19,29,19,62,29,14,29,19]")
     NxCheck(r, "text: SMALLER is 17 and 19", FormatJson([s.slot, s.slotY, s.slotH, s.title, s.titleY, s.num, s.numW, s.numY, s.name, s.nameY, s.nameGap, s.head, s.headY, s.held, s.heldY]), "[19,17,25,17,21,17,31,21,17,21,39,19,17,19,20]")
     NxCheck(r, "text: the bundle list rows and heading follow the level", FormatJson([s.pkgRow, s.pkgHead, n.pkgRow, n.pkgHead, l.pkgRow, l.pkgHead]), "[17,19,20,22,22,25]")
+    NxCheck(r, "text: the row and the header by step (integration-1115): 64 and 58, 64 and 58, 76 and 66", FormatJson([s.rowH, s.headerH, n.rowH, n.headerH, l.rowH, l.headerH]), "[64,58,64,58,76,66]")
+    NxCheck(r, "text: the geometry's other numbers do not move", FormatJson([NxGuideGeometryFor("large").colX, NxGuideGeometryFor("large").slotWidth, NxGuideGeometryFor("small").colX]), "[340,395,340]")
+    NxCheck(r, "text: the default geometry is DEFAULT's", FormatJson(NxGuideGeometry()), FormatJson(NxGuideGeometryFor("normal")))
     NxCheck(r, "text: SMALLER's constants", FormatJson([NxGuideSmallerText(), NxGuideSmallerTime(), NxGuideSmallerNumW()]), "[17,19,31]")
     ' The saved value: nothing, or anything unknown, is DEFAULT.
     NxCheck(r, "text: never chosen is normal", NxGuideTextStepFrom(""), "normal")
@@ -54,10 +57,10 @@ function NxRunGuideNavTests() as Integer
     for each level in ["small", "normal", "large"]
         z = NxGuideTextSizesFor(level)
         for each k in [["title", "titleY"], ["num", "numY"], ["name", "nameY"], ["held", "heldY"]]
-            NxCheck(r, "text: " + k[0] + " fits the row, " + level, NxGuideTextFits(z[k[0]], z[k[1]], 64).ToStr(), "true")
+            NxCheck(r, "text: " + k[0] + " fits the row, " + level, NxGuideTextFits(z[k[0]], z[k[1]], z.rowH).ToStr(), "true")
         end for
-        NxCheck(r, "text: time label fits the header, " + level, NxGuideTextFits(z.slot, z.slotY, 58).ToStr(), "true")
-        NxCheck(r, "text: heading fits the header, " + level, NxGuideTextFits(z.head, z.headY, 58).ToStr(), "true")
+        NxCheck(r, "text: time label fits the header, " + level, NxGuideTextFits(z.slot, z.slotY, z.headerH).ToStr(), "true")
+        NxCheck(r, "text: heading fits the header, " + level, NxGuideTextFits(z.head, z.headY, z.headerH).ToStr(), "true")
         ' A three-digit number (up to 216) in DM Mono, about 0.6 of its size wide.
         NxCheck(r, "text: three digits fit the number box, " + level, NxGuideTextAtLeast(z.numW, Int(z.num * 0.6 * 3)).ToStr(), "true")
         NxCheck(r, "text: the name starts past the number box, " + level, NxGuideTextBigger(z.nameGap, z.numW).ToStr(), "true")

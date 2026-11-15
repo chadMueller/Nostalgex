@@ -76,6 +76,21 @@ function NxGuideGeometry() as Object
     return { rowH: 64, headerH: 58, colX: 340, slotWidth: 395 }
 end function
 
+' The same by GUIDE TEXT SIZE step (Chad 2026-11-15, the Apple TV's
+' integration-1115): LARGER grows the row to 76 and the time header to 66 with
+' its 29 px text, so the text keeps the room 20 px has in 64 (about 23 above and
+' below); SMALLER and DEFAULT keep 64 and 58. The channel column and the
+' half-hour width do not move. The bundle list's rows follow the row; the Now
+' Playing panel's rows stay 64 (NxPanelMetrics).
+function NxGuideGeometryFor(level as String) as Object
+    g = NxGuideGeometry()
+    if level = "large" then
+        g.rowH = 76
+        g.headerH = 66
+    end if
+    return g
+end function
+
 ' The top of a line of text `size` px tall, centred in a space `height` px
 ' tall: the middle less half the line's height (about 1.3 times its size).
 function NxGuideLineTop(height as Integer, size as Integer) as Integer
@@ -89,7 +104,7 @@ end function
 '   title, number, name      17       20       29
 '   times, heading, held     19       22       29
 '   number box (3 digits)    31       36       54
-' No step moves a row or the column; LARGER gives the name fewer characters.
+' Only LARGER moves a row (76) and the header (66); the column does not move and LARGER gives the name fewer characters.
 '   slot, slotY, slotH: a time label, and the rule beside it
 '   title, titleY: a program's title
 '   num, numW, numY: a channel's number, its width (three digits) and top
@@ -127,8 +142,9 @@ function NxGuideTextSizesFor(level as String) as Object
         pkgRow = text
         pkgHead = time
     end if
-    g = NxGuideGeometry()
+    g = NxGuideGeometryFor(level)
     return {
+        rowH: g.rowH, headerH: g.headerH,
         pkgRow: pkgRow, pkgHead: pkgHead,
         slot: time, slotY: NxGuideLineTop(g.headerH, time), slotH: Int(time * 1.3 + 0.5),
         title: text, titleY: NxGuideLineTop(g.rowH, text),

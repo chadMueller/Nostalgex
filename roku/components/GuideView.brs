@@ -173,6 +173,16 @@ function applyGuideText() as Boolean
     end if
     m.guideTextStep = level
     m.guideText = NxGuideTextSizesFor(level)
+    ' The row and the header follow the step (NxGuideGeometryFor): LARGER's are
+    ' 76 and 66, the others' 64 and 58.
+    m.rowH = m.guideText.rowH
+    m.rowPitch = m.guideText.rowH + 1
+    m.viewHeight = 525 - (m.guideText.headerH + 1)
+    m.top.FindNode("headerBg").height = m.guideText.headerH
+    m.top.FindNode("headerRule").translation = [0, m.guideText.headerH]
+    rowsNode = m.top.FindNode("rows")
+    rowsNode.translation = [0, m.guideText.headerH + 1]
+    rowsNode.clippingRect = [0, 0, 1920, m.viewHeight]
     styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text2)
     m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
     return true
@@ -966,9 +976,12 @@ sub renderInfo()
     up = m.top.FindNode("upNext")
     up.visible = n <> invalid
     if n <> invalid then
-        lw = setTracked("upNextLabel", "UP NEXT", "VT323-Regular", 24, "0xFFFFFF80", 3)
+        ' One plain line, minutes first (Chad 2026-11-15): UP NEXT IN 24 MIN, two
+        ' spaces, the title; under a minute LESS THAN 1 MIN. Minutes from now,
+        ' as the Apple TV counts them, even for a programme the cursor is on.
+        lw = setTracked("upNextLabel", NxUpNextBadge(n.startSec - t), "VT323-Regular", 24, "0xFFFFFF80", 3)
         m.top.FindNode("upNextLabel").translation = [0, y]
-        up.translation = [lw + 10, y]
+        up.translation = [lw + 20, y]
         up.text = musicLine(n)
     end if
 end sub
@@ -2505,7 +2518,8 @@ sub renderSidebar()
     ' colour only in the row's left bar, and the selected row in the
     ' selected-row fill with the cyan outline and glow.
     tk = NxTokens()
-    rowH = tk.compactRow.height
+    ' The rows follow GUIDE TEXT SIZE's row (64, or 76 at LARGER).
+    rowH = m.rowH
     side = m.top.FindNode("sidebar")
     side.RemoveChildrenIndex(side.GetChildCount(), 0)
     side.AppendChild(newRect(0, 0, 380, 525, tk.color.panel))
@@ -2733,7 +2747,10 @@ sub onSettingsResult()
     applySubtitles()
     applyRetro()
     applyReportPrefs()
-    if applyGuideText() and m.channels <> invalid then renderGrid()
+    if applyGuideText() and m.channels <> invalid then
+        keepFocusVisible()
+        renderGrid()
+    end if
     if result = "rebuild" or result = "signOut" then
         NxTuneDrop(m.tuneQueue)
         stopTracker()
