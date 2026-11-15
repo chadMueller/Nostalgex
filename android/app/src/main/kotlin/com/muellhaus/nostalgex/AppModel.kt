@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -464,6 +465,29 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** An answer to "STILL WATCHING?": keep playing, the timer is used up. */
     fun keepAwake() = cancelSleepTimer()
+
+    // ── OPEN IN PLEX (the Apple TV's AppState.canOpenCurrentItemInPlex and openCurrentItemInPlex) ──────────
+
+    /** Whether something on this TV handles a `plex://` link, asked once. */
+    private val plexLinkHandled: Boolean by lazy {
+        runCatching { context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("plex://")), 0) != null }.getOrDefault(false)
+    }
+
+    /** Whether the programme can be handed to the Plex app: Plex backend, not demo mode, and the Plex app is installed. */
+    val canOpenInPlex: Boolean get() = !demoMode && mbServer == null && channel != null && plexLinkHandled
+
+    /**
+     * Deep-links the programme into the Plex app with the community-documented preplay link, as the Apple TV does.
+     * False when nothing took it, so the row can say so instead of failing silently.
+     */
+    fun openInPlex(item: MediaItem): Boolean {
+        val machineID = selectedServers.firstOrNull { it.url == item.serverUrl }?.machineIdentifier
+            ?: selectedServers.firstOrNull()?.machineIdentifier ?: ""
+        val uri = Uri.Builder().scheme("plex").authority("preplay").path("/")
+            .appendQueryParameter("metadataKey", "/library/metadata/${item.ratingKey}")
+            .appendQueryParameter("server", machineID).build()
+        return runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    }
 
     // ── Posters (PlexAPIService.thumbnailURL, 300 wide) ──────────────────
 

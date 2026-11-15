@@ -269,6 +269,15 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.AUDIO_LANGUAGE)),
                         ) { onPicker(PanelPicker.AUDIO_LANGUAGE) }
                     }
+                    // Plex only, and only with the Plex app installed: hands this title to it (the Apple TV's row, at the foot of
+                    // the left column). Says so when nothing took the link.
+                    if (model.canOpenInPlex) {
+                        var openFailed by remember(item.ratingKey) { mutableStateOf(false) }
+                        ControlRow(
+                            label = "OPEN IN PLEX", value = if (openFailed) "COULDN'T OPEN" else null, color = color, active = false, disabled = false,
+                            note = "Leaves Nostalgex and opens this title in the Plex app.",
+                        ) { openFailed = !model.openInPlex(item) }
+                    }
                 }
                 // What the device is doing.
                 Column(Modifier.width(u(440)), verticalArrangement = Arrangement.spacedBy(u(8))) {
@@ -281,6 +290,10 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                         note = "Takes effect on the next program.",
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.STREAM_QUALITY)),
                     ) { onPicker(PanelPicker.STREAM_QUALITY) }
+                    ControlRow(
+                        label = "PLAYBACK INFORMATION", value = "VIEW", chevron = true, color = color, active = false, disabled = false,
+                        modifier = Modifier.focusRequester(owners.getValue(PanelPicker.PLAYBACK_INFORMATION)),
+                    ) { onPicker(PanelPicker.PLAYBACK_INFORMATION) }
                     // One row that reads OFF, or the countdown in yellow while one runs, so OFF can never look
                     // like ON; select opens the list (the Apple TV's collapsed SLEEP TIMER row).
                     val armed = model.sleepEndMs
@@ -292,10 +305,6 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                         note = "Stops playback after the time you pick. A still-watching prompt comes first.",
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.SLEEP_TIMER)),
                     ) { onPicker(PanelPicker.SLEEP_TIMER) }
-                    ControlRow(
-                        label = "PLAYBACK INFORMATION", value = "VIEW", chevron = true, color = color, active = false, disabled = false,
-                        modifier = Modifier.focusRequester(owners.getValue(PanelPicker.PLAYBACK_INFORMATION)),
-                    ) { onPicker(PanelPicker.PLAYBACK_INFORMATION) }
                 }
                 LaunchedEffect(Unit) {
                     val target = returnTo?.let(owners::getValue) ?: cc

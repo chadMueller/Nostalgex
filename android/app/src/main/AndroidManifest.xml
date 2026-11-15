@@ -11,6 +11,14 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- OPEN IN PLEX asks whether anything handles a plex:// link before it shows the row (package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="plex" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:largeHeap="true"
