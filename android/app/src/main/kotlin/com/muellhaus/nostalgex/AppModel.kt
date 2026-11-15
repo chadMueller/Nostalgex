@@ -19,6 +19,7 @@ import com.muellhaus.nostalgex.engine.ServerTokens
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.GuideTextSize
+import com.muellhaus.nostalgex.engine.MusicEnrichmentService
 import com.muellhaus.nostalgex.engine.NaturalEnd
 import com.muellhaus.nostalgex.engine.RatingNudgePolicy
 import com.muellhaus.nostalgex.engine.PlexDecision
@@ -624,6 +625,11 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** TMDB and OMDb, in a build that turned them on (EnrichmentSetup); null otherwise. */
     private val enrichment = EnrichmentSetup.create(context)
+
+    // Music video genres from MusicBrainz and Deezer (#319), resolved in the background and kept on the TV.
+    private val music by lazy { newMusicEnrichment(context, versionName) }
+    private var musicJob: kotlinx.coroutines.Job? = null
+    private suspend fun musicApplied(items: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.Default) { music.first.apply(items) }
     val enrichmentOn: Boolean get() = enrichment != null
 
     /**
@@ -1708,6 +1714,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 Log.w(TAG, "Background refresh failed; keeping the saved library", e)
             } finally {
                 refreshing = false
+                startMusicEnrichment()
             }
         }
     }
@@ -1719,7 +1726,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      * Without enrichment, the items as they came.
      */
     private suspend fun enrich(items: List<MediaItem>, remote: Boolean, onStatus: (String, Int, Int) -> Unit = { _, _, _ -> }): List<MediaItem> {
-        val service = enrichment ?: return items
+        val service = enrichment ?: return musicApplied(items)
         val rules = channelData.await().first.channels.map { it.rules }
         val t0 = SystemClock.elapsedRealtime()
         val result = withContext(Dispatchers.IO) {
@@ -1729,7 +1736,40 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
         }
         Log.i(TAG, "ENRICHMENT (${if (remote) "full" else "local"}) ${result.stats} in ${SystemClock.elapsedRealtime() - t0} ms")
-        return withContext(Dispatchers.Default) { EnrichmentService.attach(items, result.records) }
+        return musicApplied(withContext(Dispatchers.Default) { EnrichmentService.attach(items, result.records) })
+    }
+
+    /**
+     * Asks MusicBrainz and then Deezer for the music videos that have no genre yet, once the guide is up and behind it (the Apple TV
+     * waits until after the first tune-in too). When it has something new the lineup is built again, so the channels that match on
+     * genre take the videos in. One run at a time; a stopped run keeps what it did (the cache is saved as it grows).
+     */
+    private fun startMusicEnrichment() {
+        if (demoMode || musicJob?.isActive == true) return
+        val items = libraryItems
+        if (items.none(MusicEnrichmentService::isMusicVideo)) return
+        musicJob = scope.launch {
+            try {
+                val changed = withContext(Dispatchers.IO) {
+                    music.first.enrich(items, { System.currentTimeMillis() }, { music.second.save(it) }, { isActive })
+                }
+                if (!changed) return@launch
+                val applied = musicApplied(libraryItems)
+                if (applied == libraryItems) return@launch
+                libraryItems = applied
+                Log.i(TAG, "MUSIC genres resolved, rebuilding")
+                val fresh = buildLineup(applied, "music")
+                if (fresh.channels.isEmpty()) return@launch
+                val id = channel?.id
+                lineup = fresh
+                channel = fresh.channels.firstOrNull { it.id == id } ?: channel
+                scheduleTick++
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Music genre lookups failed; keeping what the guide has", e)
+            }
+        }
     }
 
     private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
