@@ -55,6 +55,11 @@ const metrics = (name) => {
 };
 const normal = metrics("normal");
 const large = metrics("large");
+const small = metrics("small");
+const ratioSmall = {
+  title: small.title / normal.title, time: small.timeLabel / normal.timeLabel,
+  head: small.channelHeading / normal.channelHeading, num: small.number / normal.number, name: small.name / normal.name,
+};
 const ratio = {
   title: large.title / normal.title, time: large.timeLabel / normal.timeLabel,
   head: large.channelHeading / normal.channelHeading, num: large.number / normal.number, name: large.name / normal.name,
@@ -160,6 +165,8 @@ const read = (page) => page.evaluate(() => {
   const info = document.getElementById("info-title");
   return {
     large: document.body.classList.contains("guide-text-large"),
+    small: document.body.classList.contains("guide-text-small"),
+    chipLabels: [...document.querySelectorAll("#cfg-guide-text-chips .sleep-chip")].map((b) => b.textContent.trim()),
     stored: localStorage.getItem("nostalgex_guide_text_size"),
     program: px(document.querySelector("#grid-body .grid-program")),
     time: px(slots[0]),
@@ -217,9 +224,11 @@ for (const name of Object.keys(viewports)) try {
   check(`${name}: NORMAL spills no time label`, n.spills.length === 0, n.spills.join(", "));
   check(`${name}: NORMAL header fits the screen and lines up with the rows`, n.headerFits && n.slotsAlign, `${n.headerFits} ${n.slotsAlign}`);
 
+  if (shots && (name === "tv960" || name === "phone" || name === "desktop")) await page.screenshot({ path: join(shots, `guide-text-default-${name}.png`) });
   await openSettingsGeneral(page);
   s = await read(page);
   check(`${name}: Settings > GENERAL has NORMAL and LARGE buttons`, !!s.chips.normal && !!s.chips.large);
+  check(`${name}: the three steps are SMALLER, DEFAULT and LARGER, in that order`, JSON.stringify(s.chipLabels) === JSON.stringify(["SMALLER", "DEFAULT", "LARGER"]), JSON.stringify(s.chipLabels));
   check(`${name}: NORMAL is pressed, LARGE is not`, s.chips.normal.pressed === "true" && s.chips.large.pressed === "false", JSON.stringify(s.chips));
   const lb = s.chips.large.rect;
   check(`${name}: LARGE is on screen`, lb && lb.l >= 0 && lb.rt <= s.vw + 0.5 && lb.w > 20 && lb.h > 12, JSON.stringify(lb));
@@ -264,6 +273,41 @@ for (const name of Object.keys(viewports)) try {
   await closeSettings(page);
   s = await read(page);
   check(`${name}: click NORMAL: back to the original sizes`, !s.large && s.stored === "normal" && s.program === n.program && s.time === n.time && s.head === n.head && s.num === n.num && s.name === n.name, JSON.stringify({ stored: s.stored, program: [n.program, s.program], time: [n.time, s.time], name: [n.name, s.name] }));
+  // SMALLER: the Apple TV's 17 and 19 pt over its 20 and 22, text only.
+  await openSettingsGeneral(page);
+  await page.locator('#cfg-guide-text-chips [data-size="small"]').scrollIntoViewIfNeeded();
+  await page.locator('#cfg-guide-text-chips [data-size="small"]').click();
+  await settle(page, 400);
+  s = await read(page);
+  check(`${name}: click SMALLER: pressed, class set, saved as 'small', LARGER class off`, s.small && !s.large && s.chips.normal.pressed === "false" && s.stored === "small", `${s.small} ${s.large} ${s.stored}`);
+  await closeSettings(page);
+  s = await read(page);
+  const S = s;
+  // A phone, a tablet and a TV browser keep the readable floor (--nx-fs) under every guide size, so SMALLER there is as small as
+  // the floor allows (never bigger than DEFAULT, never under it); on a desktop window it is exactly the Apple TV's ratio.
+  const floored = s.vw <= 1024;
+  const smaller = (got, was, r) => (floored ? got <= was + 0.05 && got >= 11.9 : near(got, was * r));
+  check(`${name}: SMALLER program titles ${floored ? "keep the floor" : "x" + ratioSmall.title.toFixed(2)}`, smaller(S.program, n.program, ratioSmall.title), `${n.program} -> ${S.program}`);
+  check(`${name}: SMALLER times ${floored ? "keep the floor" : "x" + ratioSmall.time.toFixed(4)}`, smaller(S.time, n.time, ratioSmall.time), `${n.time} -> ${S.time}`);
+  // The CHANNEL heading is the one face with its own floor: Press Start 2P is 8 px at the smallest on a desktop window (the
+  // arcade look), and it follows the ratio without a floor on a phone, a tablet and a TV browser.
+  check(`${name}: SMALLER CHANNEL heading x${ratioSmall.head.toFixed(4)}${floored ? "" : " (8 px at the least)"}`, near(S.head, floored ? n.head * ratioSmall.head : Math.max(8, n.head * ratioSmall.head)), `${n.head} -> ${S.head}`);
+  check(`${name}: SMALLER channel number and name ${floored ? "keep the floor" : "x" + ratioSmall.num.toFixed(2)}`, smaller(S.num, n.num, ratioSmall.num) && smaller(S.name, n.name, ratioSmall.name), `${n.num} -> ${S.num}, ${n.name} -> ${S.name}`);
+  check(`${name}: SMALLER keeps the row, the header, the channel column and the Now Playing panel`, S.rowH === n.rowH && S.headerH === n.headerH && S.channelColW === n.channelColW && S.rowChannelW === n.rowChannelW && S.infoSize === n.infoSize);
+  if (shots && (name === "tv960" || name === "phone" || name === "desktop")) await page.screenshot({ path: join(shots, `guide-text-small-${name}.png`) });
+  check(`${name}: SMALLER spills no time label and the header fits`, S.spills.length === 0 && S.headerFits && S.slotsAlign, `${S.spills.join(", ")} ${S.headerFits} ${S.slotsAlign}`);
+  await page.reload();
+  await page.waitForFunction(() => localStorage.getItem("nostalgex_completed_initial_load") === "1", null, { timeout: 30000 }).catch(() => {});
+  await settle(page, 1500);
+  s = await read(page);
+  check(`${name}: reload keeps SMALLER`, s.small && smaller(s.program, n.program, ratioSmall.title), `${s.small} ${s.program}`);
+  await openSettingsGeneral(page);
+  await page.locator('#cfg-guide-text-chips [data-size="normal"]').scrollIntoViewIfNeeded();
+  await page.locator('#cfg-guide-text-chips [data-size="normal"]').click();
+  await settle(page, 300);
+  await closeSettings(page);
+  s = await read(page);
+  check(`${name}: click DEFAULT after SMALLER: back to the original sizes`, !s.small && !s.large && s.program === n.program && s.time === n.time && s.num === n.num, `${s.program} ${s.time}`);
   check(`${name}: not in browser full screen`, s.fullscreen === false);
   check(`${name}: no page errors`, errors.length === 0, errors.join(" | "));
   await page.context().close();

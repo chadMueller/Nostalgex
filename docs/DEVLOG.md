@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (web tuner: GUIDE TEXT SIZE has three steps, branch `web/guide-text-three-steps`)
+
+**Why.** Chad: all four platforms stay level, and the Apple TV's GUIDE TEXT SIZE now has three steps (SMALLER, DEFAULT, LARGER, branch `appletv/guide-text-three-steps`). The web tuner had two (NORMAL, LARGE), with LARGE sized against an Apple TV DEFAULT that has since come down.
+
+**Changed.**
+- Settings has three buttons: SMALLER, DEFAULT, LARGER. They are saved under the Apple TV's key as `small`, `normal` and `large` (the middle step keeps the raw value `normal`, and `large` is what LARGE always was), and anything else reads as DEFAULT, so a saved choice and the other platforms keep working.
+- The multipliers are the Apple TV's ratios over DEFAULT: LARGER 1.45 for titles, channel numbers and names and 1.3182 for times and the CHANNEL heading (they were 1.3182 and 1.16); SMALLER 0.85 and 0.8636. SMALLER is one CSS block, `body.guide-text-small .guide-grid`: its two numbers are the one place to change if Chad picks other sizes on the Apple TV (18 and 20 pt would be 0.9 and 0.9091). The guide scale (0.74) and the base sizes are untouched, so DEFAULT draws what 1.0.21 drew; LARGER is therefore larger than 1.0.21's LARGE by the 10% the Apple TV's DEFAULT came down.
+- `scripts/guide-text-smoke.mjs` holds the page's two blocks to the Swift file (it was 10 failing); `scripts/guide-text-browser-smoke.mjs` clicks SMALLER, checks the ratios on a desktop window and the readable floor on a phone, a tablet and a TV browser, a reload and the way back, and the labels.
+
+**Half-done.** Branch `web/guide-text-three-steps`, on top of the Apple TV branch. On a phone, a tablet and a TV browser every guide size has a readable floor, so SMALLER there is only as small as the floor allows (13 px titles go to 12); on a desktop window at 1440x900 SMALLER draws programme text near 11.6 px, which is the Apple TV's ratio and small for a pixel face. Five checks still fail on purpose: the Roku sizes are not the Apple TV's DEFAULT ones yet. Screenshots of the three steps are with the regression shots.
+
+**Next.** Chad's pick of the SMALLER sizes, the Roku sizes, then a reviewer pass.
+
 ## 2026-11-14 (web tuner: a file plays to its own end, #315)
 
 **State.** Branch `web/315-play-to-end`, on top of the Apple TV branch `appletv/315-play-to-end` (the Swift reference, and the source of the regenerated `scripts/schedule-parity-golden.json`). Not merged, not pushed, no tuner version cut. Docker takes the same files.

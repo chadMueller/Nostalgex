@@ -15,9 +15,9 @@
  * guide draws exactly what it drew before the setting existed, and no guide rule may carry a
  * raw font size that would escape the multiplier. The storage key is the Apple TV's.
  *
- * The Apple TV has three steps (SMALLER "small", DEFAULT "normal", LARGER "large"); Roku and the page still have two
- * (normal and large) and read "small" as normal, which is the safe degrade. Until they take the Apple TV's DEFAULT
- * sizes and a SMALLER step, the Swift against Roku pairs and the page's LARGE multipliers below fail on purpose.
+ * The Apple TV has three steps (SMALLER "small", DEFAULT "normal", LARGER "large") and so has the page, with the Apple TV's
+ * ratios (SMALLER 0.85 and 0.8636, LARGER 1.45 and 1.3182 over DEFAULT). Roku follows; until its sizes are the Apple TV's
+ * DEFAULT ones the Swift against Roku pairs below fail on purpose.
  *
  * The page's one deliberate exception, the time labels on a phone, is named below.
  *
@@ -79,6 +79,7 @@ const rokuSizes = (large) => {
 
 const sn = metrics("normal");
 const sl = metrics("large");
+const ss = metrics("small");
 const rn = rokuSizes(false);
 const rl = rokuSizes(true);
 
@@ -108,13 +109,17 @@ const cssBlock = (selector) => {
 };
 const vars = (block) => Object.fromEntries([...block.matchAll(/--gt-(\w+):\s*([\d.]+)/g)].map((x) => [x[1], Number(x[2])]));
 const normalVars = vars(cssBlock("  .guide-grid {\n    --gt-"));
+const smallVars = vars(cssBlock("  body.guide-text-small .guide-grid {\n    --gt-"));
 const largeVars = vars(cssBlock("  body.guide-text-large .guide-grid {\n    --gt-"));
 
 for (const [part, swiftKey] of pairs) {
   check(`${part}: NORMAL multiplier is 1`, normalVars[part] === 1, String(normalVars[part]));
   const want = sl[swiftKey] / sn[swiftKey];
-  check(`${part}: LARGE multiplier ${largeVars[part]} is Swift LARGE over NORMAL (${want.toFixed(4)})`,
+  check(`${part}: LARGER multiplier ${largeVars[part]} is Swift LARGE over NORMAL (${want.toFixed(4)})`,
     Math.abs(largeVars[part] - want) < 0.001, String(largeVars[part]));
+  const wantSmall = ss[swiftKey] / sn[swiftKey];
+  check(`${part}: SMALLER multiplier ${smallVars[part]} is Swift SMALL over NORMAL (${wantSmall.toFixed(4)})`,
+    Math.abs(smallVars[part] - wantSmall) < 0.001, String(smallVars[part]));
 }
 
 // The one exception: four time columns on a phone are 72px wide, and a wider label pushes the
@@ -146,9 +151,16 @@ check("Apple TV: raw values small, normal, large (the middle step is labelled DE
   && /stored\.flatMap\(GuideTextSize\.init\(rawValue:\)\) \?\? \.normal/.test(swift)
   && /case \.small: return "SMALLER"[\s\S]*case \.normal: return "DEFAULT"[\s\S]*case \.large: return "LARGER"/.test(swift));
 // Roku and the page know two steps: only exactly "large" is LARGE, so the Apple TV's "small" degrades to their normal.
-check("the page and Roku read only exactly 'large' as LARGE, so the Apple TV's 'small' degrades to normal",
-  html.includes("localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'")
-  && /return saved = "large"/.test(roku));
+// The page has the three steps too: small, normal, large saved under the Apple TV's key, unknown reads as normal.
+check("the page: raw values small, normal, large; unknown reads as normal (the middle step is labelled DEFAULT)",
+  /saved === 'large' \|\| saved === 'small' \? saved : 'normal'/.test(html)
+  && /lsSet\(GUIDE_TEXT_KEY, size === 'large' \|\| size === 'small' \? size : 'normal'\)/.test(html)
+  && />SMALLER<\/button>/.test(html) && />DEFAULT<\/button>/.test(html) && />LARGER<\/button>/.test(html)
+  && /classList\.toggle\('guide-text-small'/.test(html) && /classList\.toggle\('guide-text-large'/.test(html));
+check("the page's SMALLER block is one place: its five multipliers are the two ratios", Object.keys(smallVars).length === 5);
+// Roku knows two steps until it takes the Apple TV's: only exactly "large" is LARGE there, so the Apple TV's "small" degrades to normal.
+check("Roku reads only exactly 'large' as LARGE until it has the third step",
+  /return saved = "large"/.test(roku) || /small/.test(roku));
 
 if (failures.length) {
   console.error(`guide text: ${failures.length} failed, ${passed} passed`);

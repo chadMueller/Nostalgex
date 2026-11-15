@@ -1598,13 +1598,16 @@
     display: flex;
   }
 
-  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY). NORMAL is every size the guide drew
-     before the setting existed, so each multiplier is 1 and calc(18px * 1) is 18px. LARGE
-     scales by the ratios of the Apple TV's GuideTextMetrics.large over .normal (the 1.0.32
-     sizes, which Roku's GuideText.brs has too): everything goes to body (29), so titles, channel
-     numbers and names are 29/22 and the times and the CHANNEL heading 29/25. Only text grows: rows, header and the channel
-     column keep their size, so the name gives up characters to the ellipsis. The panel above
-     the grid is not touched. scripts/guide-text-smoke.mjs holds these to the Swift file. */
+  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY): three steps, SMALLER, DEFAULT and LARGER, as on the Apple TV. DEFAULT
+     (saved as "normal") is the guide as this page draws it, so each multiplier is 1 and calc(18px * 1) is 18px. The other two
+     scale by the ratios of the Apple TV's GuideTextMetrics over .normal (row text 20 pt, times and heading 22 pt at DEFAULT):
+       LARGER ("large", what LARGE always was there): body (29) everywhere, so titles, channel numbers and names are 29/20 = 1.45
+       and the times and the CHANNEL heading 29/22 = 1.3182;
+       SMALLER ("small"): 17 pt row text and 19 pt times and heading, 17/20 = 0.85 and 19/22 = 0.8636.
+     SMALLER is awaiting Chad's visual pick on the Apple TV (18 and 20 pt, 0.9 and 0.9091, is the fallback): the two numbers in
+     the .guide-text-small block below are its one place. Only text changes: rows, header and the channel column keep their size,
+     so at LARGER the name gives up characters to the ellipsis. The panel above the grid is not touched.
+     scripts/guide-text-smoke.mjs holds these to the Swift file. */
   .guide-grid {
     --gt-title: 1;
     --gt-time: 1;
@@ -1612,12 +1615,19 @@
     --gt-num: 1;
     --gt-name: 1;
   }
+  body.guide-text-small .guide-grid {
+    --gt-title: 0.85;
+    --gt-time: 0.8636;
+    --gt-head: 0.8636;
+    --gt-num: 0.85;
+    --gt-name: 0.85;
+  }
   body.guide-text-large .guide-grid {
-    --gt-title: 1.3182;
-    --gt-time: 1.16;
-    --gt-head: 1.16;
-    --gt-num: 1.3182;
-    --gt-name: 1.3182;
+    --gt-title: 1.45;
+    --gt-time: 1.3182;
+    --gt-head: 1.3182;
+    --gt-num: 1.45;
+    --gt-name: 1.45;
   }
   /* A phone has four time columns of 72px (390 wide), and a label wider than its column
      pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)
@@ -4156,11 +4166,12 @@
       <div class="cfg-row cfg-row--wrap">
         <div>
           <div class="cfg-row-title">Guide text size</div>
-          <div class="cfg-row-desc">Bigger program titles, times and channel names in the guide</div>
+          <div class="cfg-row-desc">Smaller or bigger program titles, times and channel names in the guide</div>
         </div>
         <div class="sleep-chips" id="cfg-guide-text-chips" role="group" aria-label="Guide text size">
-          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">NORMAL</button>
-          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGE</button>
+          <button class="sleep-chip" type="button" data-size="small" onclick="setGuideTextSize('small')" aria-pressed="false">SMALLER</button>
+          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">DEFAULT</button>
+          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGER</button>
         </div>
       </div>
 
@@ -8375,19 +8386,23 @@
   }
 
   // ── GUIDE TEXT SIZE ─────────────────────────────────────────────────────
-  // NORMAL or LARGE, saved as 'normal' / 'large' under the Apple TV's own key. Nothing saved,
-  // or anything else, is NORMAL (GuideTextSize.init(stored:), NxGuideTextFrom). The sizes are
-  // CSS (body.guide-text-large); this only keeps the class and the buttons in step. Kept per
-  // browser: the web has no settings sync.
+  // SMALLER, DEFAULT or LARGER, saved as 'small' / 'normal' / 'large' under the Apple TV's own key (the middle step keeps the
+  // raw value 'normal' and 'large' is what LARGE always was). Nothing saved, or anything unknown, is DEFAULT
+  // (GuideTextSize.init(stored:)). The sizes are CSS (body.guide-text-small, body.guide-text-large); this only keeps the class and
+  // the buttons in step. Kept per browser: the web has no settings sync.
   const GUIDE_TEXT_KEY = 'nostalgex_guide_text_size';
 
   function guideTextSize() {
-    try { return localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'; } catch (e) { return 'normal'; }
+    try {
+      const saved = localStorage.getItem(GUIDE_TEXT_KEY);
+      return saved === 'large' || saved === 'small' ? saved : 'normal';
+    } catch (e) { return 'normal'; }
   }
 
   /** The class and the buttons show what is saved, so a write storage refused reads as unchanged. */
   function applyGuideTextSize() {
     const size = guideTextSize();
+    document.body.classList.toggle('guide-text-small', size === 'small');
     document.body.classList.toggle('guide-text-large', size === 'large');
     for (const b of document.querySelectorAll('#cfg-guide-text-chips .sleep-chip')) {
       const active = b.dataset.size === size;
@@ -8461,7 +8476,7 @@
   renderGuideTimeoutChips();
 
   function setGuideTextSize(size) {
-    lsSet(GUIDE_TEXT_KEY, size === 'large' ? 'large' : 'normal');
+    lsSet(GUIDE_TEXT_KEY, size === 'large' || size === 'small' ? size : 'normal');
     applyGuideTextSize();
   }
 
