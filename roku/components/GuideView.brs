@@ -838,6 +838,43 @@ end function
 
 ' ── Info panel: follows focus; for the tuned channel, what is playing ───────
 
+' The guide info panel's poster for `ref` (NxPosterRef), fetched again only when
+' the paths change: the dark column stands in until it arrives, and when the
+' programme has none to ask for (not Plex) there is no column.
+sub showInfoPoster(ref as Dynamic)
+    key = ""
+    if ref <> invalid then key = FormatJson(ref.paths)
+    p = m.top.FindNode("poster")
+    back = m.top.FindNode("posterBack")
+    back.visible = ref <> invalid
+    if key = NxToStr(m.infoPosterKey) then
+        p.visible = ref <> invalid and m.infoPosterShown = true
+        return
+    end if
+    m.infoPosterKey = key
+    m.infoPosterShown = false
+    p.visible = false
+    if m.infoPosterTask <> invalid then
+        m.infoPosterTask.UnobserveField("file")
+        m.infoPosterTask = invalid
+    end if
+    if ref = invalid then return
+    m.infoPosterTask = CreateObject("roSGNode", "PosterTask")
+    m.infoPosterTask.ObserveField("file", "onInfoPosterFile")
+    m.infoPosterTask.ref = ref
+    m.infoPosterTask.control = "run"
+end sub
+
+sub onInfoPosterFile()
+    if m.infoPosterTask = invalid then return
+    file = m.infoPosterTask.file
+    if file = "" then return
+    p = m.top.FindNode("poster")
+    p.uri = file
+    m.infoPosterShown = true
+    p.visible = true
+end sub
+
 sub renderInfo()
     if m.channels = invalid or m.channels.Count() = 0 then return
     ch = m.channels[m.focus]
@@ -874,12 +911,29 @@ sub renderInfo()
         for each n in names
             m.top.FindNode(n).visible = false
         end for
+        showInfoPoster(invalid)
         return
     end if
     for each n in names
         m.top.FindNode(n).visible = true
     end for
     title.text = b.title
+
+    ' The poster beside the title, badges and description (the Apple TV's Variant A,
+    ' 120 by 180, the channel line above and the progress bar and UP NEXT full width
+    ' under both). Plex only, where the posters come from; its column is always
+    ' there on Plex, art or not, so the text never moves (Chad 2026-11-15).
+    ref = NxPosterRef(b, NxSignedInKind())
+    showInfoPoster(ref)
+    lx = 0
+    if ref <> invalid then lx = 120 + 18
+    textW = 1100 - lx
+    title.translation = [lx, 56]
+    title.width = textW
+    for each n in ["artist", "genres", "subtitle", "summary"]
+        m.top.FindNode(n).width = textW
+    end for
+    m.top.FindNode("rule").width = textW
 
     ' The stack, 10 apart (Spacing.innerGap): title, artist and genres for a
     ' music video, the episode line, then the rule.
@@ -888,7 +942,7 @@ sub renderInfo()
     artist.visible = NxTruthy(b.music) and NxToStr(b.artist) <> ""
     if artist.visible then
         artist.text = b.artist
-        artist.translation = [0, y]
+        artist.translation = [lx, y]
         y = y + artist.boundingRect().height + 10
     end if
     genres = m.top.FindNode("genres")
@@ -896,7 +950,7 @@ sub renderInfo()
     if genres.visible then
         genres.text = b.genreLine
         genres.color = colorOf(ch.color, "BF")
-        genres.translation = [0, y]
+        genres.translation = [lx, y]
         y = y + genres.boundingRect().height + 10
     end if
     subtitle = m.top.FindNode("subtitle")
@@ -904,7 +958,7 @@ sub renderInfo()
     subtitle.visible = subLine <> ""
     if subtitle.visible then
         subtitle.text = subLine
-        subtitle.translation = [0, y]
+        subtitle.translation = [lx, y]
         y = y + subtitle.boundingRect().height + 10
     end if
     ' The Apple TV's InfoPanelLayout order (appletv 2026-11-14, "the description
@@ -912,12 +966,12 @@ sub renderInfo()
     ' description, always two lines tall so nothing under it moves from one
     ' programme to the next, then the progress row and UP NEXT. Sections are
     ' 10 apart (Spacing.sectionGap).
-    m.top.FindNode("rule").translation = [0, y]
+    m.top.FindNode("rule").translation = [lx, y]
     y = y + 1 + 10
 
     ' The badges row, which a programme with no year, rating or stars leaves out.
     meta = m.top.FindNode("meta")
-    meta.translation = [0, y]
+    meta.translation = [lx, y]
     badges = m.top.FindNode("badges")
     key = b.year + "|" + NxToStr(b.contentRating) + "|" + NxToStr(b.rating)
     if m.badgesKey <> key then
@@ -964,8 +1018,10 @@ sub renderInfo()
     summary.text = "A" + Chr(10) + "A"
     room = summary.boundingRect().height
     summary.text = b.summary
-    summary.translation = [0, y]
+    summary.translation = [lx, y]
     y = y + room + 10
+    ' The progress row and UP NEXT run the panel's full width, under the poster too.
+    if ref <> invalid and y < 56 + 180 + 10 then y = 56 + 180 + 10
 
     ' The progress row: the bar and the time, or a later programme's time range.
     row = m.top.FindNode("progressRow")

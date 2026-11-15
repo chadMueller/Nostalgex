@@ -115,6 +115,8 @@
       <Group id="info" translation="[40,204]">
         <!-- Letter-spaced text is a Label per character (VT323 is monospace). -->
         <Group id="tag" />
+        <Rectangle id="posterBack" translation="[0,56]" width="120" height="180" color="0xFFFFFF0A" visible="false" />
+        <Poster id="poster" translation="[0,56]" width="120" height="180" loadDisplayMode="scaleToFill" visible="false" />
         <Label id="title" translation="[0,56]" width="1100" wrap="true" maxLines="2" lineSpacing="2" />
         <Label id="artist" width="1100" />
         <Label id="genres" width="1100" wrap="true" maxLines="2" />

@@ -117,6 +117,12 @@ function NxGuideBlock(b as Object) as Object
         type: NxToStr(it.type)
     }
     if NxIsNumber(it.rating) then out.rating = it.rating
+    ' An episode's poster is its season's, then its series' (#312): the keys that
+    ' make those paths (NxPosterPaths), kept on an episode's block only.
+    if out.type = "episode" then
+        if it.showKey <> invalid then out.showKey = NxToStr(it.showKey)
+        if it.parentRatingKey <> invalid then out.parentRatingKey = NxToStr(it.parentRatingKey)
+    end if
     ' Music videos also show their artist and genres (PlexMediaItem+MusicDisplay.swift).
     if it.librarySource = "musicVideo" then
         out.music = true

@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: the Apple TV's basement batch, `appletv/integration-1115` `e20ebec0`: programme cursor, rows by text step, the info panel's poster, plain UP NEXT, no help line)
+
+**State.** Branch `roku/1.0.13-candidate-v13` (off candidate v12 `dbe433fc`). Written off the stick while Chad tests v12; not run on a device, not merged, not pushed.
+
+**Why.** Chad's look at the Apple TV in the basement (2026-11-15), with Apple TV commits `1286669b`, `81176b97` and `340c6eb4`; reference shots in `roku-shots/appletv-basement-batch-2026-11-15/`.
+
+**Changed.**
+- **Rows follow GUIDE TEXT SIZE** (`NxGuideGeometryFor`): SMALLER and DEFAULT keep the 64 px row and 58 px header, LARGER is 76 and 66, so 29 px text keeps the room 20 px has in 64. The number box stays 31, 36, 54 and the column and half-hour width do not move. `applyGuideText` sets the row, pitch, view height, header and the rows' clip, and the bundle list's rows follow; the Now Playing panel's rows stay 64.
+- **UP NEXT is one plain line in both panels**: "UP NEXT IN 24 MIN", two spaces, the title; whole minutes rounded down, "LESS THAN 1 MIN" under a minute, no pill. The guide panel had no minutes before; the minutes are from now, as the Apple TV counts them, also for a programme the cursor is on.
+- **No help sentence under the Now Playing lists** (STREAM QUALITY, SLEEP TIMER, AUDIO, AUDIO LANGUAGE, SUBTITLE LANGUAGE); PLAYBACK INFORMATION keeps its note. The rows already had none.
+- **The guide's programme cursor** (`GuideProgramCursor`, in `source/guide/GuideTimeCursor.brs`): focus stays on the row and the cursor is a time on it. Right goes to the next programme whatever its length, over a gap too; Left to the previous one that has not ended, and from the live programme to the bundle stripe as before; Up and Down keep the time. The two-hour window moves only when the target starts before the view, past it, or in its last 15 minutes, to the half hour its start is in (`NxGuideWindowOffset`). The cursor's programme gets the selected fill and a cyan ring and glow inside the row's own focus. The info panel follows the cursor (a later programme shows its time range where the progress bar is). Menu, Back from full screen, selecting a row and Back all return it to live.
+- **The guide's info panel has the poster** (the Apple TV's Variant A, 120 by 180, the channel line on top, the progress bar and UP NEXT full width under both): beside the title, badges and description, on Plex only, its column always there on Plex whether the art has arrived or not. Same poster chain as the Now Playing panel. This needed the season and series keys on an episode's block (`NxGuideBlock`): without them the #312 chain in v12 only ever had the episode's own frame for the Now Playing panel too, so v12's season poster is fixed here as well.
+
+**Tests.** `GuideTimeCursorTests` holds the Swift `GuideProgramCursorTests` case for case plus the window clamps (34 checks); `GuideNavTests` the row and header by step and the new LARGER tops; `PosterTests` the block's keys and the chain from a block.
+
+**Not seen on a stick.** The cursor ring and fill, the LARGER rows (and the bundle list at 76), the poster column and the UP NEXT line are SceneGraph drawing and have only had the interpreter checks above. Go to build is Chad's; the first look is a Plex show's episode (poster column), then Right, Left and Down across a row with a short programme and a gap.
+
 ## 2026-11-15 (Roku: a TV episode's Now Playing poster is its season's, then its series', then its own frame, #312)
 
 **State.** Branch `roku/s-episode-poster-chain` (off `roku/s-info-panel-order`). Not merged, not in a build, not pushed.
