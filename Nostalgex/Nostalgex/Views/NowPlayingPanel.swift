@@ -231,27 +231,23 @@ struct NowPlayingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The next programme on one line: its title, then a cyan badge with the minutes until it starts, like
-    /// "Movie Title [UP NEXT IN 84 MIN]". No card around it. A long title ends in an ellipsis; the badge never
-    /// shrinks or wraps. Cyan is the time; yellow stays for live things only.
+    /// The next programme on one plain line, the minutes first and then the title: "UP NEXT IN 24 MIN  Varsity Blues"
+    /// (Chad 2026-11-15, the web's form since 1.0.21). No pill, no border. The label is in capitals like the rest of the
+    /// panel's labels, the title as it is written; a long title ends in an ellipsis and the label never shrinks.
     private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
+            Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
+                .font(NowPlayingFont.textMedium)
+                .tracking(2)
+                .foregroundStyle(Color.nxText2)
+                .lineLimit(1)
+                .fixedSize()
+                .layoutPriority(1)
             Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
                 .font(NowPlayingFont.textMedium)
                 .foregroundStyle(Color.nxText)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
-                .font(NowPlayingFont.textMedium)
-                .tracking(2)
-                .foregroundStyle(Color.nxCyan)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.nxSelectedRow))
-                .overlay(Capsule().strokeBorder(Color.nxCyan, lineWidth: 1.5))
-                .layoutPriority(1)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -288,10 +284,13 @@ struct NowPlayingPanel: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .focusSection()
                 }
-                // Only as tall as the taller column, never the whole screen: the hint sits right under it.
+                // Only as tall as the taller column, never the whole screen.
                 .fixedSize(horizontal: false, vertical: true)
-                hintLine(NowPlayingPanelHints.hint(for: focusedControl) ?? " ", status: compatibilityHintOverride,
-                         width: columnWidth * 2 + columnGap)
+                // No help line under the rows (Chad 2026-11-15: "it feels so out of place there"). The one thing
+                // still written there is RETRY ORIGINAL VIDEO's result, while that row has focus.
+                if let status = compatibilityHintOverride {
+                    hintLine(status, width: columnWidth * 2 + columnGap)
+                }
             }
             .focusSection()
             .onAppear { focusedControl = .cc }
@@ -600,11 +599,13 @@ struct NowPlayingPanel: View {
             case .sleepTimer:
                 sleepOptions
             }
-            // A list that opens from the left spans both columns; one from the right sits under its column.
-            hintLine(pickerHint(picker),
-                     lines: (picker == .playbackInformation || picker == .streamQuality) ? 4 : 2,
-                     width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
-                .padding(.top, 6)
+            // No help line under a list either; PLAYBACK INFORMATION keeps its note, which is what the list is about
+            // (how this program reaches the screen), not help. It sits under its column.
+            if picker == .playbackInformation {
+                hintLine(pickerHint(picker), lines: 4,
+                         width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
+                    .padding(.top, 6)
+            }
         }
         .padding(.leading, pickerOffset(picker))
         .focusSection()
