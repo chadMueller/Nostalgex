@@ -148,6 +148,7 @@
     "gray-matter": "^4.0.3",
     "hls.js": "1.5.17",
     "marked": "^18.1.0",
+    "playwright": "1.62.1",
     "qrcodejs": "1.0.0",
     "vite": "^7.1.0"
   }
