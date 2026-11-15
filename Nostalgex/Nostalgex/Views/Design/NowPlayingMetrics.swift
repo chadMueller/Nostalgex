@@ -25,7 +25,8 @@ enum NowPlayingFont {
 }
 
 enum NowPlayingLayout {
-    static let rowHeight: CGFloat = GuideTextMetrics.rowHeight
+    /// The guide's DEFAULT row. The panel's rows do not grow at LARGER: only its text follows the step.
+    static let rowHeight: CGFloat = 64
     static let rowPaddingX: CGFloat = 18
     static let rowGap: CGFloat = 8
     static let columnWidth: CGFloat = 440

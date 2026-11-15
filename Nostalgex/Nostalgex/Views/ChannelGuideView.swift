@@ -76,8 +76,8 @@ struct ChannelGuideView: View {
     private let channelColumnWidth: CGFloat = 340
     // The guide's own row (Chad 2026-11-10: the grid read too big). Not the shared NXLayout.rowHeight (76), which
     // the Now Playing panel keeps. 64 holds a 29 pt LARGE line inside the 3 pt outline and 2 pt inset.
-    private let rowHeight: CGFloat = GuideTextMetrics.rowHeight
-    private let headerHeight: CGFloat = 58
+    private var rowHeight: CGFloat { appState.guideTextSize.metrics.rowHeight }
+    private var headerHeight: CGFloat { appState.guideTextSize.metrics.headerHeight }
     // 24-hour horizon, 30-min slots, 4 visible at a time → max scroll offset = 44.
     private let maxSlotOffset: Int = 44
 
@@ -991,7 +991,7 @@ private struct BundleJumpSidebar: View {
     /// `GuideTextMetrics`, colours and the selected state from the design tokens (`nxRowSurface`: 3 pt cyan
     /// outline, glow, 3% lift). The left bar keeps each package's own colour.
     private static let width: CGFloat = 380
-    private static let rowHeight = GuideTextMetrics.packageRowHeight
+    private static var rowHeight: CGFloat { GuideTextSize.current.metrics.packageRowHeight }
     private static var rowText: CGFloat { GuideTextSize.current.metrics.packageRowText }
     private static let rowRadius = NXLayout.rowRadius
 

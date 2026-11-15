@@ -51,9 +51,8 @@ enum GuideTextSize: String, CaseIterable {
 
 /// Type sizes (points, DM Mono Medium) for the text the guide draws, one set per step.
 ///
-/// Only text changes with the setting. The row stays `rowHeight` (64) and the header 58, the channel column
-/// stays 340, and program blocks are laid out by ProgramRowLayout from times alone, so no step moves a row or
-/// a block.
+/// The row and the header are 64 and 58 at SMALLER and DEFAULT and grow at LARGER (`rowHeight`, `headerHeight`); the
+/// channel column stays 340, and program blocks are laid out by ProgramRowLayout from times alone.
 struct GuideTextMetrics: Equatable {
     /// A program's title in its block.
     let title: CGFloat
@@ -76,11 +75,14 @@ struct GuideTextMetrics: Equatable {
     let panelText: CGFloat
     let panelTitle: CGFloat
     let panelTag: CGFloat
-
-    /// The guide's own row, shorter than the shared 76 (Chad 2026-11-10: the grid read too big), so more rows fit.
-    /// The same at every step.
-    static let rowHeight: CGFloat = 64
-    static let packageRowHeight: CGFloat = rowHeight
+    /// The guide's row (and the bundle list's), and the time header over it. SMALLER and DEFAULT keep the guide's own
+    /// 64 pt row and 58 pt header (Chad 2026-11-10: the grid read too big at the shared 76). LARGER grows them with its
+    /// text so it keeps the same room around a line (Chad 2026-11-15: "larger should increase the row as well"): 20 pt in
+    /// 64 leaves 22 pt above and below, 29 pt in 76 leaves 23.5; the 22 pt times in a 58 pt header leave 18, the 29 pt
+    /// times in 66 leave 18.5.
+    let rowHeight: CGFloat
+    let headerHeight: CGFloat
+    var packageRowHeight: CGFloat { rowHeight }
 
     /// DEFAULT (raw value "normal"): row text (titles, numbers, names) at 20 pt and times, the heading and the placeholder at
     /// 22 pt. Both are below the app's 25 pt floor, an exception for the guide only (Chad 2026-11-10, then pulled back
@@ -91,7 +93,8 @@ struct GuideTextMetrics: Equatable {
         title: 20, timeLabel: 22, channelHeading: 22,
         number: 20, numberWidth: 36, name: 20, placeholder: 22,
         packageRowText: 20, packageHeading: 22,
-        panelText: 20, panelTitle: NXType.body, panelTag: 28
+        panelText: 20, panelTitle: NXType.body, panelTag: 28,
+        rowHeight: 64, headerHeight: 58
     )
 
     /// A visible step down from DEFAULT, a bit more than the 2 pt DEFAULT took from 22 and 25 (Chad 2026-11-14: "the
@@ -104,7 +107,8 @@ struct GuideTextMetrics: Equatable {
         title: 17, timeLabel: 19, channelHeading: 19,
         number: 17, numberWidth: 31, name: 17, placeholder: 19,
         packageRowText: 17, packageHeading: 19,
-        panelText: 17, panelTitle: 25, panelTag: 24
+        panelText: 17, panelTitle: 25, panelTag: 24,
+        rowHeight: 64, headerHeight: 58
     )
 
     /// LARGER, what LARGE always was: the guide at body (29) everywhere, the channel column cannot widen so the name
@@ -114,6 +118,7 @@ struct GuideTextMetrics: Equatable {
         title: NXType.body, timeLabel: NXType.body, channelHeading: NXType.body,
         number: NXType.body, numberWidth: 54, name: NXType.body, placeholder: NXType.body,
         packageRowText: 22, packageHeading: NXType.caption,
-        panelText: 22, panelTitle: NXType.body, panelTag: 28
+        panelText: 22, panelTitle: NXType.body, panelTag: 28,
+        rowHeight: 76, headerHeight: 66
     )
 }

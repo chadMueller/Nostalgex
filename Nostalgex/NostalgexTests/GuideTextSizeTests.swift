@@ -217,17 +217,31 @@ final class GuideTextSizeTests: XCTestCase {
     /// A line is never taller than its row once the focus outline (3 pt, inset 2 pt) is
     /// taken off top and bottom, nor than the 58 pt header (which keeps at least 8 pt above and below a header line).
     func testLinesFitTheRowAndTheHeader() throws {
-        let rowRoom: CGFloat = GuideTextMetrics.rowHeight - 2 * (3 + 2)
         for size in GuideTextSize.allCases {
             let m = size.metrics
+            let rowRoom: CGFloat = m.rowHeight - 2 * (3 + 2)
             for s in [m.title, m.number, m.name, m.placeholder] {
                 print("GUIDE-TEXT \(size) row line \(s) pt: \(try font(s).lineHeight) tall, room \(rowRoom)")
                 XCTAssertLessThanOrEqual(try font(s).lineHeight, rowRoom, "\(size) \(s) pt")
             }
             for s in [m.timeLabel, m.channelHeading] {
-                XCTAssertLessThanOrEqual(try font(s).lineHeight, 58 - 2 * 8, "\(size) header \(s) pt")
+                XCTAssertLessThanOrEqual(try font(s).lineHeight, m.headerHeight - 2 * 8, "\(size) header \(s) pt")
             }
         }
+    }
+
+    /// LARGER grows the row and the header with its text, keeping about the room DEFAULT leaves around a line; the
+    /// other two steps keep the guide's 64 and 58 (Chad 2026-11-15).
+    func testRowsAndHeaders() {
+        XCTAssertEqual(GuideTextSize.small.metrics.rowHeight, 64)
+        XCTAssertEqual(GuideTextSize.normal.metrics.rowHeight, 64)
+        XCTAssertEqual(GuideTextSize.large.metrics.rowHeight, 76)
+        XCTAssertEqual(GuideTextSize.small.metrics.headerHeight, 58)
+        XCTAssertEqual(GuideTextSize.normal.metrics.headerHeight, 58)
+        XCTAssertEqual(GuideTextSize.large.metrics.headerHeight, 66)
+        let d = GuideTextSize.normal.metrics, l = GuideTextSize.large.metrics
+        XCTAssertEqual((l.rowHeight - l.title) / 2, (d.rowHeight - d.title) / 2, accuracy: 2, "the same room above and below a row line")
+        XCTAssertEqual((l.headerHeight - l.timeLabel) / 2, (d.headerHeight - d.timeLabel) / 2, accuracy: 1, "the same room around a time")
     }
 
     /// The longest header label still fits its quarter of the programme area at the
