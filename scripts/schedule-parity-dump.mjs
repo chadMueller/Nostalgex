@@ -34,7 +34,7 @@ export function loadEngine(source = readFileSync(new URL("scripts/nostalgex-dail
 export function makeItem(M, spec) {
   if (spec.compact) {
     const [key, title, type, minutes, addedAt] = spec.compact;
-    return [key, { ratingKey: key, title, type, duration: minutes, addedAt }];
+    return [key, { ratingKey: key, title, type, duration: minutes, addedAt, ...(spec.exact === undefined ? {} : { exactDurationSeconds: spec.exact }) }];
   }
   const { backend, kind, raw, show = {} } = spec;
   if (backend === "plex") {

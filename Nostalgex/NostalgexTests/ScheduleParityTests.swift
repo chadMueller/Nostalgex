@@ -221,7 +221,8 @@ final class ScheduleParityTests: XCTestCase {
         if let c = spec["compact"] as? [Any] {
             let key = try XCTUnwrap(c[0] as? String)
             let type = (c[2] as? String) == "episode" ? MediaType.episode : MediaType.movie
-            return (key, item(key: key, title: c[1] as? String ?? "", type: type, minutes: int(c[3]) ?? 0, addedAt: int(c[4]) ?? 0))
+            return (key, item(key: key, title: c[1] as? String ?? "", type: type, minutes: int(c[3]) ?? 0, addedAt: int(c[4]) ?? 0,
+                                 exact: (spec["exact"] as? NSNumber)?.doubleValue))
         }
         let backend = try XCTUnwrap(spec["backend"] as? String)
         let kind = try XCTUnwrap(spec["kind"] as? String)
