@@ -536,6 +536,33 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
     }
 end function
 
+' How many items of these types a parent holds, from a request for none
+' (the answer's TotalRecordCount), or 0 when the server won't say.
+function NxMbTotalOf(fetcher as Object, userId as String, parentId as String, types as String) as Integer
+    answer = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0).Replace("&Limit=200", "&Limit=0"))
+    if type(answer) = "roAssociativeArray" and NxIsNumber(answer.TotalRecordCount) then return answer.TotalRecordCount
+    return 0
+end function
+
+' A scan that stopped for a full memory says how far it got and how many titles
+' the server holds: what it has read, `leftHere` more in the library it stopped
+' in, and every library after it (I-091).
+sub NxMbNoteCut(fetcher as Object, userId as String, views as Object, at as Integer, out as Object, leftHere as Integer)
+    total = out.Count() + leftHere
+    for v = at + 1 to views.Count() - 1
+        if type(views[v]) = "roAssociativeArray" then
+            section = NxMbSectionType(views[v].CollectionType)
+            if section = "show" then
+                total = total + NxMbTotalOf(fetcher, userId, NxToStr(views[v].Id), "Episode")
+            else if section <> "" and section <> "other" then
+                total = total + NxMbTotalOf(fetcher, userId, NxToStr(views[v].Id), NxMbItemTypes(section))
+            end if
+        end if
+    end for
+    NxScanCapSet(out.Count(), total)
+    print "mediabrowser: memory is at "; NxScanMemoryCeiling(); "% of the limit, stopped at "; out.Count(); " of "; total; " titles"
+end sub
+
 ' The rest of a parent's items once its first page is in, page by page as
 ' fetchItems: it stops at TotalRecordCount, an empty page, or a page that
 ' failed (keeping what came before, as upstream's does).
@@ -568,7 +595,10 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
     views = NxList(viewsAnswer.Items)
     musicGenre = CreateObject("roRegex", "music", "i")
     out = []
-    for each view in views
+    for viewAt = 0 to views.Count() - 1
+        view = views[viewAt]
+        ' A full memory ends the scan: no library after the one it stopped in (I-091).
+        if NxScanCapped() > 0 then exit for
         section = ""
         if type(view) = "roAssociativeArray" then section = NxMbSectionType(view.CollectionType)
         ' A library with no videos in it is never asked for items (#205).
@@ -576,6 +606,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
             name = NxToStr(NxOr(view.Name, "Library"))
             isMusicVideoSection = section = "musicvideo"
             parentId = NxToStr(view.Id)
+            libStart = out.Count()
             if section = "show" then
                 series = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, "Series", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Series", 0))), "Series")
                 ' Five shows at a time, as upstream's BATCH_SIZE, kept in
@@ -611,21 +642,44 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         progress.barCaption = done.ToStr() + " of " + series.Count().ToStr() + " shows"
                     end if
                     if NxLoadStopped() then exit for
+                    if NxScanMemoryFull(fetcher) and b + batch < series.Count() then
+                        leftHere = NxMbTotalOf(fetcher, userId, parentId, "Episode") - (out.Count() - libStart)
+                        if leftHere < 0 then leftHere = 0
+                        NxMbNoteCut(fetcher, userId, views, viewAt, out, leftHere)
+                        exit for
+                    end if
                 end for
             else
                 types = NxMbItemTypes(section)
-                items = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, types, fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0))), types)
-                for each raw in items
-                    if type(raw) = "roAssociativeArray" then
-                        it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)
-                        if it <> invalid then
-                            it.serverIndex = serverIndex
-                            out.Push(it)
+                ' Page by page, each page made into records and dropped (a whole
+                ' library of raw answers held at once is most of a big scan's
+                ' peak), stopping at TotalRecordCount, an empty page, a page
+                ' that failed (keeping what came before) or a full memory.
+                page = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0))
+                seen = 0
+                while page <> invalid
+                    rows = NxList(page.Items)
+                    for each raw in NxMbAskedOnly(rows, types)
+                        if type(raw) = "roAssociativeArray" then
+                            it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)
+                            if it <> invalid then
+                                it.serverIndex = serverIndex
+                                out.Push(it)
+                            end if
                         end if
+                    end for
+                    seen = seen + rows.Count()
+                    total = seen
+                    if NxIsNumber(page.TotalRecordCount) then total = page.TotalRecordCount
+                    if rows.Count() = 0 or seen >= total then exit while
+                    if NxScanMemoryFull(fetcher) then
+                        NxMbNoteCut(fetcher, userId, views, viewAt, out, total - seen)
+                        exit while
                     end if
-                end for
+                    page = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, seen))
+                end while
                 if progress <> invalid then
-                    progress.progress = name + ": " + items.Count().ToStr() + " items"
+                    progress.progress = name + ": " + seen.ToStr() + " items"
                     progress.bar = -1
                 end if
             end if

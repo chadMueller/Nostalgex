@@ -129,7 +129,7 @@ end function
 ' Saves one server's items (only those with this serverIndex) and
 ' collections under a new generation, then the meta, then drops the old
 ' generation's chunks. `collections` may be invalid when they couldn't be read.
-sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger, skipped = 0 as Integer)
+sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger, skipped = 0 as Integer, cutRead = 0 as Integer, cutOf = 0 as Integer)
     CreateDirectory(dir)
     old = meta.servers[key]
     gen = 1
@@ -159,6 +159,11 @@ sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as 
         chunks = chunks + 1
     end if
     meta.servers[key] = { gen: gen, chunks: chunks, count: count, savedAt: nowSec, signature: signature, collections: collections, skipped: skipped }
+    ' A scan that stopped for a full memory (I-091): how far it got, and how many titles the server holds.
+    if cutRead > 0 then
+        meta.servers[key].cutRead = cutRead
+        meta.servers[key].cutOf = cutOf
+    end if
     NxSnapshotWriteMeta(dir, meta)
     if type(old) = "roAssociativeArray" and NxIsNumber(old.chunks) then
         for c = 0 to old.chunks - 1

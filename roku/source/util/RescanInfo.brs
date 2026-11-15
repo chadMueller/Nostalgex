@@ -109,6 +109,18 @@ function NxCoverageLine(cov as Dynamic, skipped as Integer) as String
     return parts.Join(" · ")
 end function
 
+' The line for a scan that stopped for a full memory (I-091): how far it got,
+' then why and what to do. "" when the scan read it all. The default wording,
+' Chad's to change.
+function NxCutLine(counts as Dynamic) as String
+    if type(counts) <> "roAssociativeArray" then return ""
+    read = NxNumberOr0(counts.cutRead)
+    if read <= 0 then return ""
+    of = NxNumberOr0(counts.cutOf)
+    if of < read then of = read
+    return "READ " + NxGroupedInt(read) + " OF " + NxGroupedInt(of) + " TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT."
+end function
+
 ' ── What the registry keeps ─────────────────────────────────────────────────
 
 ' After each load, with the sign-in, so a sign-out clears it as upstream's
@@ -184,6 +196,7 @@ function NxRescanLines(held as Dynamic, kindName as String, verdict as String, n
     end if
     lines = [NxLibrarySummaryText(counts)]
     if coverage <> "" then lines.Push(coverage)
+    if NxCutLine(counts) <> "" then lines.Push(NxCutLine(counts))
     lines.Push("Last updated " + updated + ". Pull a fresh copy of your " + kindName + " library after adding content")
     if verdict <> "" then lines.Push("Last playback failure: " + verdict)
     return lines

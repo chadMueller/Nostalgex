@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: a very large Jellyfin or Emby library no longer quits the app at the end of first setup, I-091)
+
+**State.** Branch `roku/i091-scan-memory-guard` (off candidate v11). Not merged, not in a build, not pushed.
+
+**Why.** Two Discord users: the app on a Streaming Stick HD quits at the end of the first setup, after the enrichment step, with a Jellyfin library of about 20 TB. Reproduced on a Streaming Stick Plus (limit 513,802,240 bytes) against a stand-in Jellyfin of 12,000 films and 60,000 episodes: the scan read all 72,000 titles in 276 s and left the app at 80% of its limit (a title costs 6 to 9 KB); the channel build and schedule took it to 518 MB; the OS ended the app, `EXIT_CHANNEL_MEM_LIMIT_FG`, at 701 s, right after "scheduled in 131 s". 12,000 films alone read in 18 s and sat at about 166 MB. A smaller stick has a lower limit, so it fails with fewer titles.
+
+**Changed.**
+- A Jellyfin or Emby scan stops reading when the app is past 55% of its own memory limit (`NxScanMemoryCeiling`, `NxScanMemoryFull`; the fetcher answers `memoryPercent()` from `roAppMemoryMonitor`). It keeps what it read, reads no later library, and counts how many titles the server holds in all with a request for none (`NxMbTotalOf`, `Limit=0`).
+- Films are made into records one page at a time; the old scan held every raw answer of a library before it made any.
+- RESCAN LIBRARY says so under the counts: READ 56,000 OF 72,000 TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT. (`NxCutLine`, `source/util/RescanInfo.brs`; the wording is a default for Chad to change.) The two numbers are kept with the saved library (`cutRead` and `cutOf` in its meta entry, and in the library-held record), so they survive a restart.
+
+**Measured** (same stand-in library, same stick, enrichment off): first setup with nothing saved stopped at 59,200 of 72,000 titles after 194 s, peaked at 433 MB (84% of the limit), finished the build, schedule, hand-over and saves, and settled at 63%; a rebuild behind a saved guide stopped at 56,000, peaked at 426 MB and settled at 61%. The app stayed up in both.
+
+**Tests.** `MediaBrowserTests` (the guard: no reading and a low reading read everything, a full memory stops after the page, a later library is counted and never read, the total, the page it stops on), `CoverageTests` (the line), `SnapshotTests` (the meta fields). A test's fetcher has no `memoryPercent`, so it is never full.
+
+**Not done.** Plex: its scan keeps the raw answers of a whole section before it makes records, so it is not the same shape, and there is no stand-in Plex to measure against. A per-library choice (I-092) is the real answer for a big library; the line says "turn off a library" before there is a switch for it.
+
 ## 2026-11-14 (Roku: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT and LARGER)
 
 **State.** Branch `roku/guide-text-three-steps`. Not merged, not in a build, not pushed. Chad: "make sure roku and android both have the small, normal, large text changes."

@@ -147,6 +147,8 @@ end function
 
 sub NxScanSkipsReset()
     GetGlobalAA().nxScanSkipped = 0
+    GetGlobalAA().nxScanCapped = 0
+    GetGlobalAA().nxScanCapTotal = 0
 end sub
 
 sub NxScanSkipAdd()
@@ -156,6 +158,43 @@ end sub
 
 function NxScanSkips() as Integer
     return NxNumberOr0(GetGlobalAA().nxScanSkipped)
+end function
+
+' ── The scan's memory guard (I-091) ─────────────────────────────────────────
+' A Jellyfin or Emby scan keeps every title it reads as one record (about 6 to
+' 9 KB each on the stick), and the channel build, the schedule and the saved
+' library then take about a quarter as much again. On a Streaming Stick Plus
+' (513,802,240 bytes) a library of 72,000 titles read to 80% of the limit and
+' the build took the app past it: EXIT_CHANNEL_MEM_LIMIT_FG at the end of the
+' first setup, which a smaller stick reaches with fewer. So a scan stops
+' reading more once the app is past NxScanMemoryCeiling percent of its own
+' limit (whatever that limit is on this TV), keeps what it has read, and says
+' so in the console. The fetcher answers memoryPercent() (a test's has none,
+' which is never full).
+
+function NxScanMemoryCeiling() as Integer
+    return 55
+end function
+
+function NxScanMemoryFull(fetcher as Object) as Boolean
+    if not fetcher.DoesExist("memoryPercent") then return false
+    return fetcher.memoryPercent() >= NxScanMemoryCeiling()
+end function
+
+' The titles a scan stopped at, 0 when it read everything, and how many the
+' server holds in all (0 when it could not be counted). The library task
+' resets them with the skipped count.
+sub NxScanCapSet(titles as Integer, total = 0 as Integer)
+    GetGlobalAA().nxScanCapped = titles
+    GetGlobalAA().nxScanCapTotal = total
+end sub
+
+function NxScanCapped() as Integer
+    return NxNumberOr0(GetGlobalAA().nxScanCapped)
+end function
+
+function NxScanCapTotal() as Integer
+    return NxNumberOr0(GetGlobalAA().nxScanCapTotal)
 end function
 
 ' Whether an audio track's title names a commentary (#236): "commentary"

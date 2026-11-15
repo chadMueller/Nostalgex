@@ -418,7 +418,7 @@ sub loadLibrary()
                 else
                     collections.failed = collections.failed + 1
                 end if
-                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt, skipped: NxNumberOr0(saved.entry.skipped) })
+                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt, skipped: NxNumberOr0(saved.entry.skipped), cutRead: NxNumberOr0(saved.entry.cutRead), cutOf: NxNumberOr0(saved.entry.cutOf) })
                 print "library: "; saved.items.Count(); " items from the saved library, server "; i
             else
                 m.top.progress = "Reading your library from " + NxToStr(servers[i].name) + "…"
@@ -426,6 +426,9 @@ sub loadLibrary()
                 NxScanSkipsReset()
                 got = scanUnderWatch(servers[i], i, info)
                 skipped = NxScanSkips()
+                cutRead = NxScanCapped()
+                cutOf = NxScanCapTotal()
+                if NxScanCapped() > 0 then print "library: "; NxToStr(servers[i].name); " was read only to "; NxScanCapped(); " titles, the app's memory is the limit (the scan stops at "; NxScanMemoryCeiling(); "% of it)"
                 stopped = info.stopped
                 if stopped <> "" then
                     count = 0
@@ -454,7 +457,7 @@ sub loadLibrary()
                 end if
                 items.Append(got)
                 if stopped = "" then
-                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec&, skipped: skipped }
+                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec&, skipped: skipped, cutRead: cutRead, cutOf: cutOf }
                     scanned.Push(s)
                     saves.Push(s)
                 end if
@@ -574,7 +577,7 @@ sub loadLibrary()
     end if
     timer.Mark()
     for each s in scanned
-        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&, s.skipped)
+        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&, s.skipped, NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
     end for
     NxSnapshotForgetServers(snapDir, snap, keys)
     ' What Settings' RESCAN LIBRARY row says the app holds, and since when.
@@ -582,8 +585,12 @@ sub loadLibrary()
     ' no runtime, so the number survives a restart (#207).
     counts = NxLibraryCounts(items)
     counts.skipped = 0
+    counts.cutRead = 0
+    counts.cutOf = 0
     for each s in saves
         counts.skipped = counts.skipped + NxNumberOr0(s.skipped)
+        counts.cutRead = counts.cutRead + NxNumberOr0(s.cutRead)
+        counts.cutOf = counts.cutOf + NxNumberOr0(s.cutOf)
     end for
     NxSaveLibraryHeld(counts, nowSec&)
     reg = NxPlexRegistry()
@@ -1220,7 +1227,7 @@ sub resaveClearedLibrary(lib as Object)
             ' Its first save time, so it still ages out a day after the scan.
             ' From JSON it may be an Integer or a Double.
             savedAt& = s.savedAt
-            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&, NxNumberOr0(s.skipped))
+            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&, NxNumberOr0(s.skipped), NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
             print "library: saved server "; s.index; "'s library again in "; t.TotalMilliseconds(); " ms"
         end if
     end for

@@ -64,7 +64,9 @@ function NxRunSnapshotTests() as Integer
 
     ' Servers the account no longer has are dropped.
     meta = NxSnapshotReadMeta(dir)
-    NxSnapshotSaveServer(dir, meta, "def", items, 1, [], "s", 6000)
+    NxSnapshotSaveServer(dir, meta, "def", items, 1, [], "s", 6000, 0, 56000, 72000)
+    NxCheck(r, "snapshot: a cut scan keeps how far it got and the server's total", NxToStr(meta.servers["def"].cutRead) + "/" + NxToStr(meta.servers["def"].cutOf), "56000/72000")
+    NxCheck(r, "snapshot: a whole scan keeps no cut", NxToStr(meta.servers["abc"].DoesExist("cutRead")), "false")
     NxSnapshotForgetServers(dir, meta, ["def"])
     meta = NxSnapshotReadMeta(dir)
     NxSnapCheck(r, "gone server forgotten", meta.servers.DoesExist("abc"), false)

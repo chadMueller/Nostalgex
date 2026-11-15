@@ -182,6 +182,21 @@ function NxRunCoverageTests(vectorsPath as String, manifestPath as String, shard
     held = { counts: NxLibraryCounts(items), at: 1000 }
     NxCovCheck(r, "rescan: a record from before #207 has no second line", NxRescanLines(held, "Plex", "", 1060).Count(), 2)
 
+    ' ── A scan that stopped for a full memory (I-091): a line of its own after the counts ──
+    counts = NxLibraryCounts(items)
+    counts.cutRead = 56000
+    counts.cutOf = 72000
+    held = { counts: counts, at: 1000 }
+    lines = NxRescanLines(held, "Jellyfin", "", 1060)
+    NxCovCheck(r, "rescan: a cut scan says how far it got", lines[1], "READ 56,000 OF 72,000 TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT.")
+    counts.skipped = 3
+    held.coverage = NxCoverageOf({ movie: 1, episode: 1, musicVideo: 0 }, { movie: 1, episode: 0, musicVideo: 0 })
+    lines = NxRescanLines(held, "Jellyfin", "", 1060)
+    NxCovCheck(r, "rescan: the cut line follows the count line", lines[2], "READ 56,000 OF 72,000 TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT.")
+    NxCovCheck(r, "rescan: an unknown total is not shown smaller than what was read", NxCutLine({ cutRead: 900, cutOf: 0 }), "READ 900 OF 900 TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT.")
+    NxCovCheck(r, "rescan: nothing cut, no line", NxCutLine({ cutRead: 0, cutOf: 0 }), "")
+    NxCovCheck(r, "rescan: no counts, no line", NxCutLine(invalid), "")
+
     ' ── The loaders count what they drop for having no runtime ──
     ' Plex: milliseconds, floored to whole minutes. Missing, 0, 30 s and
     ' 59,999 ms are dropped; 60,000 ms is kept.
