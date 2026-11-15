@@ -19,6 +19,8 @@ import com.muellhaus.nostalgex.engine.HeaderNotice
 import com.muellhaus.nostalgex.engine.LibraryLoadCommit
 import com.muellhaus.nostalgex.engine.LibraryRefresh
 import com.muellhaus.nostalgex.engine.LoadCommitEffects
+import com.muellhaus.nostalgex.engine.LoadCrashMark
+import com.muellhaus.nostalgex.engine.LoadMarkStore
 import com.muellhaus.nostalgex.engine.LoadResult
 import com.muellhaus.nostalgex.engine.LoadNotice
 import com.muellhaus.nostalgex.engine.RefreshResult
@@ -702,6 +704,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         musicPass.invalidate()
         refreshPass.invalidate()
         loadPass.invalidate()
+        // A load ended from outside leaves its marker behind (its own cleanup no longer runs for a library that is gone).
+        loadMark.loadAbandoned()
         refreshing = false
         loadingLibrary = false
         guideLoad = null
@@ -773,6 +777,10 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private val launchGuard = LaunchGuard(context)
+    private val loadMark = LoadCrashMark(object : LoadMarkStore {
+        override fun set() = launchGuard.loadStarted()
+        override fun clear(resetCount: Boolean) = launchGuard.loadEnded(resetCount)
+    })
 
     fun start() {
         // Once per process: an activity recreated mid-load must not count that load as unfinished.
@@ -803,7 +811,6 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     fun startOver() {
         // signOut ends the load (endBackgroundWork), as it does for every other library change.
-        launchGuard.loadEnded()
         Log.i(TAG, "START OVER")
         signOut()
     }
@@ -1526,7 +1533,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         loadingLibrary = true
         loadPass.start { current ->
             // Set until the load ends any way the process lives to see (LaunchGuard).
-            launchGuard.loadStarted()
+            loadMark.loadStarted()
             var fullLoad = false
             try {
                 val servers = selectedServers
@@ -1678,7 +1685,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 }
             } finally {
                 // Reading the saved library proves nothing about whether a full load can finish.
-                launchGuard.loadEnded(resetCount = fullLoad)
+                loadMark.loadEnded(current(), resetCount = fullLoad)
                 // A load that was ended left these to whoever ended it (endBackgroundWork): a newer load may own them.
                 if (current()) {
                     loadingLibrary = false
