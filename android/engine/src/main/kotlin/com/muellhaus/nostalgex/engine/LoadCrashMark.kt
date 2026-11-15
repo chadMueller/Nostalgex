@@ -7,6 +7,9 @@ interface LoadMarkStore {
 
     /** Clears the mark; with [resetCount] also the count of unfinished loads in a row. */
     fun clear(resetCount: Boolean)
+
+    /** Forgets the unfinished loads in a row, leaving the mark as it is. */
+    fun resetCount()
 }
 
 /**
@@ -23,6 +26,9 @@ class LoadCrashMark(private val store: LoadMarkStore) {
     fun loadEnded(current: Boolean, resetCount: Boolean) {
         if (current) store.clear(resetCount)
     }
+
+    /** START OVER: the viewer chose a fresh start, so the loads that never finished are forgotten (they asked the question that led here). */
+    fun startedOver() = store.resetCount()
 
     /** The library changed under a load (signed out, another server or backend, a new load): its marker goes, its count stays. */
     fun loadAbandoned() = store.clear(resetCount = false)

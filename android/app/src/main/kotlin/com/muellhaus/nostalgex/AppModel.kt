@@ -780,6 +780,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     private val loadMark = LoadCrashMark(object : LoadMarkStore {
         override fun set() = launchGuard.loadStarted()
         override fun clear(resetCount: Boolean) = launchGuard.loadEnded(resetCount)
+        override fun resetCount() = launchGuard.resetUnfinishedLoads()
     })
 
     fun start() {
@@ -812,6 +813,8 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun startOver() {
         // signOut ends the load (endBackgroundWork), as it does for every other library change.
         Log.i(TAG, "START OVER")
+        // A fresh start by choice: the loads that never finished (the question that led here) are forgotten.
+        loadMark.startedOver()
         signOut()
     }
 

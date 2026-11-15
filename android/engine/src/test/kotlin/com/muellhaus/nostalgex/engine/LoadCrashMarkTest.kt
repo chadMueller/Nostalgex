@@ -22,6 +22,7 @@ class LoadCrashMarkTest {
         var unfinished = 2
         override fun set() { inFlight = true }
         override fun clear(resetCount: Boolean) { inFlight = false; if (resetCount) unfinished = 0 }
+        override fun resetCount() { unfinished = 0 }
     }
 
     @Test fun aLoadThatIsStillTheLibrarysEndsItsOwnMarkAndAFullLoadResetsTheCount() {
@@ -80,5 +81,18 @@ class LoadCrashMarkTest {
         blocker.countDown(); ended.await()
         assertFalse("a stopped load's marker would count as an unfinished load at the next launch", store.inFlight)
         assertEquals("stopping a load is not a finished one", 2, store.unfinished)
+    }
+
+    @Test fun startOverForgetsTheUnfinishedLoadsThatAskedForIt() {
+        val store = Store(); val mark = LoadCrashMark(store)
+        assertEquals(2, store.unfinished)               // "LOADING DIDN'T FINISH" came up after two
+        mark.startedOver()
+        assertEquals(0, store.unfinished)
+    }
+
+    @Test fun startOverLeavesALoadsMarkToTheLoadThatSetIt() {
+        val store = Store(); val mark = LoadCrashMark(store)
+        mark.loadStarted(); mark.startedOver()
+        assertTrue(store.inFlight)
     }
 }
