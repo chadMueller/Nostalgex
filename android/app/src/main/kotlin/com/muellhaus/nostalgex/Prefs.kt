@@ -124,6 +124,14 @@ class Prefs(context: Context) {
         get() = GuideTextSize.fromStored(prefs.getString(GuideTextSize.STORAGE_KEY, null))
         set(value) = prefs.edit().putString(GuideTextSize.STORAGE_KEY, value.raw).apply()
 
+    /**
+     * SYNC WITH MY OTHER ANDROID TVS (Settings > SERVERS & ACCOUNTS, the Apple TV's iCloud row): per TV, off by default, and never
+     * itself synced. Off, nothing is mirrored for the backup; on, the 13 settings in SyncedPreferences are (SettingsBackup).
+     */
+    var settingsBackup: Boolean
+        get() = prefs.getBoolean(SettingsBackup.ENABLED_KEY, false)
+        set(value) = prefs.edit().putBoolean(SettingsBackup.ENABLED_KEY, value).apply()
+
     /** The rating banner's counters, under the Apple TV's keys (RatingNudgeStore). */
     var nudgeSessions: Int
         get() = prefs.getInt("nostalgex_rating_nudge_sessions", 0)

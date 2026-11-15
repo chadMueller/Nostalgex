@@ -85,6 +85,7 @@ import com.muellhaus.nostalgex.R
 import com.muellhaus.nostalgex.engine.DailyManifest
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.drawscope.clipPath
 import com.muellhaus.nostalgex.engine.GuideCursor
 import com.muellhaus.nostalgex.engine.UpNextLabel
 import androidx.compose.ui.graphics.ImageBitmap
@@ -649,9 +650,11 @@ private fun InfoUpNext(next: ScheduleEntry) {
     }
     Row(
         Modifier.semantics(mergeDescendants = true) { contentDescription = UpNextLabel.line(next.item.musicDisplayLine, next.startSec - nowS) },
-        horizontalArrangement = Arrangement.spacedBy(u(14)), verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(next.item.musicDisplayLine, style = font(DMMono, 18, Tokens.UpNextTitle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        // Two spaces of the title's face (a monospace character is 0.6 of its size).
+        Spacer(Modifier.width(u(18 * 1.2f)))
         Text(UpNextLabel.text(next.startSec - nowS), style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3), maxLines = 1, softWrap = false)
     }
 }
@@ -957,7 +960,12 @@ private fun EpgRow(
                     scaleX = k; scaleY = k
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
                 }
-                .then(if (focused) Modifier.cyanGlow() else Modifier)
+                // The row's own focus: stepped back while a programme cell has the cursor, as it was when the row has no cell.
+                .then(
+                    if (!focused) Modifier
+                    else if (cursorStart != null) Modifier.rowGlow(DesignTokens.RowFocus.STEPPED_BACK_GLOW_RADIUS.toFloat(), DesignTokens.RowFocus.STEPPED_BACK_GLOW_ALPHA, color)
+                    else Modifier.rowGlow(DesignTokens.RowFocus.GLOW_RADIUS.toFloat(), DesignTokens.RowFocus.GLOW_ALPHA, Tokens.Cyan),
+                )
                 .fillMaxHeight()
                 .focusRequester(requester)
                 .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
@@ -1004,7 +1012,11 @@ private fun EpgRow(
             }
             if (focused) {
                 // The shared focus outline: 3 pt cyan, not the channel colour (#268).
-                Box(Modifier.matchParentSize().padding(u(2)).border(u(DesignTokens.Row.SELECTED_OUTLINE), Tokens.Cyan, RoundedCornerShape(u(6))))
+                if (cursorStart != null) {
+                    Box(Modifier.matchParentSize().padding(u(2)).border(u(DesignTokens.RowFocus.STEPPED_BACK_OUTLINE.toFloat()), color.copy(alpha = DesignTokens.RowFocus.STEPPED_BACK_OUTLINE_ALPHA), RoundedCornerShape(u(6))))
+                } else {
+                    Box(Modifier.matchParentSize().padding(u(2)).border(u(DesignTokens.Row.SELECTED_OUTLINE), Tokens.Cyan, RoundedCornerShape(u(6))))
+                }
             }
         }
        }
@@ -1063,8 +1075,8 @@ private fun entryTitle(e: ScheduleEntry): String =
 
 @Composable
 private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, cursorStart: Long?, programsWidth: Float, visibleStart: Long, now: Double) {
-    // Not clipped to the row: the cursor cell's glow reaches over the rows beside it.
-    Row(Modifier.width(u(programsWidth)).fillMaxHeight()) {
+    // Clipped to the programme area: the cursor cell's glow never reaches the channel column, the bundle stripe or the rows above and below.
+    Row(Modifier.width(u(programsWidth)).fillMaxHeight().clipToBounds()) {
         if (schedule == null) {
             // ChannelGuideView's watershedRowPlaceholder.
             if (watershedHold) Row(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.02f)), verticalAlignment = Alignment.CenterVertically) {
@@ -1083,13 +1095,13 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                     // The cursor's programme is a cell of its own: lifted off the row, filled and ringed in cyan, so the
                     // viewer always sees which programme Left and Right have reached.
                     val isCursor = cursorStart != null && e.startSec == cursorStart
-                    val cursorShape = RoundedCornerShape(u(6))
+                    val cursorShape = RoundedCornerShape(u(DesignTokens.Cursor.CORNER))
                     Row(
                         Modifier
                             .width(width)
                             .fillMaxHeight()
                             .zIndex(if (isCursor) 1f else 0f)
-                            .then(if (isCursor) Modifier.padding(horizontal = u(3), vertical = u(5)).cursorGlow().clip(cursorShape).background(Tokens.CursorFill).border(u(DesignTokens.Cursor.RING.toFloat()), Tokens.Cyan, cursorShape) else Modifier)
+                            .then(if (isCursor) Modifier.padding(u(DesignTokens.Cursor.RING_INSET)).cursorGlow().clip(cursorShape).background(Tokens.Cyan.copy(alpha = DesignTokens.Cursor.FILL_ALPHA)).border(u(DesignTokens.Cursor.RING.toFloat()), Tokens.Cyan, cursorShape) else Modifier)
                             .background(
                                 when {
                                     isCursor -> Color.Transparent
@@ -1487,25 +1499,36 @@ internal fun FailureCard(failure: PlaybackFailure, compact: Boolean) {
  * The shared selected glow (#267): cyan, 30 pt radius at 55%, drawn behind the content as rings
  * that fade outwards, since Compose has no coloured blur of its own.
  */
-internal fun Modifier.cyanGlow(): Modifier = glow(DesignTokens.Row.GLOW_RADIUS.toFloat(), DesignTokens.Row.GLOW_ALPHA, DesignTokens.Row.CORNER.toFloat())
+internal fun Modifier.cyanGlow(): Modifier = glow(DesignTokens.Row.GLOW_RADIUS.toFloat(), DesignTokens.Row.GLOW_ALPHA, DesignTokens.Row.CORNER.toFloat(), Tokens.Cyan)
 
-/** The guide's cursor cell: a glow much stronger than the row's (DesignTokens.Cursor). */
-internal fun Modifier.cursorGlow(): Modifier = glow(DesignTokens.Cursor.GLOW_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_ALPHA, 6f)
+/** The guide row's glow, in a colour and at a strength of its own (DesignTokens.RowFocus). */
+internal fun Modifier.rowGlow(radius: Float, alpha: Float, colour: Color): Modifier = glow(radius, alpha, DesignTokens.Row.CORNER.toFloat(), colour)
 
-private fun Modifier.glow(glowRadius: Float, glowAlpha: Float, corner: Float): Modifier = composed {
+/** The guide's cursor cell: two cyan glow layers, an outer one and an inner one (DesignTokens.Cursor). */
+internal fun Modifier.cursorGlow(): Modifier =
+    glow(DesignTokens.Cursor.GLOW_OUTER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_OUTER_ALPHA, DesignTokens.Cursor.CORNER.toFloat(), Tokens.Cyan)
+        .glow(DesignTokens.Cursor.GLOW_INNER_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_INNER_ALPHA, DesignTokens.Cursor.CORNER.toFloat(), Tokens.Cyan)
+
+private fun Modifier.glow(glowRadius: Float, glowAlpha: Float, corner: Float, colour: Color): Modifier = composed {
     val unit = LocalUnit.current
     drawBehind {
         val radius = glowRadius * unit.toPx()
         val steps = 10
-        for (i in steps downTo 1) {
-            val spread = radius * i / steps
-            val alpha = glowAlpha * (1f - i.toFloat() / (steps + 1)) / steps * 2
-            drawRoundRect(
-                Tokens.Cyan.copy(alpha = alpha),
-                topLeft = androidx.compose.ui.geometry.Offset(-spread, -spread),
-                size = androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner * unit.toPx() + spread),
-            )
+        // A glow is a shadow: drawn around the shape only, so what is inside it (a translucent fill) is not washed by it.
+        val inside = androidx.compose.ui.graphics.Path().apply {
+            addRoundRect(androidx.compose.ui.geometry.RoundRect(0f, 0f, size.width, size.height, androidx.compose.ui.geometry.CornerRadius(corner * unit.toPx())))
+        }
+        clipPath(inside, androidx.compose.ui.graphics.ClipOp.Difference) {
+            for (i in steps downTo 1) {
+                val spread = radius * i / steps
+                val alpha = glowAlpha * (1f - i.toFloat() / (steps + 1)) / steps * 2
+                drawRoundRect(
+                    colour.copy(alpha = alpha),
+                    topLeft = androidx.compose.ui.geometry.Offset(-spread, -spread),
+                    size = androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner * unit.toPx() + spread),
+                )
+            }
         }
     }
 }

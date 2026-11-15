@@ -18,11 +18,16 @@ import com.muellhaus.nostalgex.engine.SyncedPreferences
 object SettingsBackup {
     private const val TAG = "Nostalgex"
 
+    /** The per-TV switch, in the main preferences and not among the synced keys. */
+    const val ENABLED_KEY = "nostalgex_settings_backup_enabled"
+
     private fun mainPrefs(context: Context) = context.getSharedPreferences("nostalgex", Context.MODE_PRIVATE)
     private fun mirrorPrefs(context: Context) = context.getSharedPreferences(SyncedPreferences.MIRROR_FILE, Context.MODE_PRIVATE)
 
+    /** Writes the mirror when the switch is on, and empties it when it is off, so nothing is held for a backup unless the viewer asked. */
     fun mirror(context: Context) {
-        val picked = SyncedPreferences.pick(mainPrefs(context).all)
+        val main = mainPrefs(context)
+        val picked = if (main.getBoolean(ENABLED_KEY, false)) SyncedPreferences.pick(main.all) else emptyMap()
         write(mirrorPrefs(context), picked)
     }
 
@@ -34,6 +39,8 @@ object SettingsBackup {
         val backed = SyncedPreferences.pick(mirrorPrefs(context).all)
         if (backed.isEmpty()) return false
         write(main, backed, clearOthers = false)
+        // A mirror existed, so the switch was on where it was written: it is on here too.
+        main.edit().putBoolean(ENABLED_KEY, true).apply()
         Log.i(TAG, "BACKUP restored ${backed.size} settings from the backup")
         return true
     }

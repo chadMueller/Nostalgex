@@ -17,7 +17,6 @@ internal object Tokens {
     val Cyan = c(DesignTokens.Color.CYAN)
     val Yellow = c(DesignTokens.Color.YELLOW)
     val UpNextTitle = c(DesignTokens.Color.UP_NEXT_TITLE)
-    val CursorFill = c(DesignTokens.Cursor.FILL)
     val Amber = c(DesignTokens.Color.AMBER)
     val RedText = c(DesignTokens.Color.RED_TEXT)
     val Red = c(DesignTokens.Color.RED)

@@ -678,6 +678,15 @@ private fun ServerRows(model: AppModel) {
     // The coverage line is counted when this page opens, and again when the lineup changes.
     LaunchedEffect(model.lineup) { model.ensureLibraryCoverage() }
     Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
+        // At the top, where the Apple TV puts its iCloud row. Off by default and per TV: on, this TV's settings (never a server, a token
+        // or the library) are held for Android's backup and come back on a new TV signed in to the same Google account.
+        ToggleRow(
+            title = "SYNC WITH MY OTHER ANDROID TVS",
+            subtitle = if (model.settingsBackup) "This Android TV's settings are saved to your Google account through Android backup."
+                else "Turn on to bring your settings to your other Android TVs through Android backup. Servers and sign-in stay on each TV.",
+            on = model.settingsBackup,
+            modifier = Modifier.paneRow(model, "backup_sync"),
+        ) { model.toggleSettingsBackup() }
         Subheader("SERVERS")
         val selected = model.selectedServers
         for (server in model.serversForSettings) {

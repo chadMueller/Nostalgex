@@ -130,6 +130,8 @@ class MediaBrowserLibrary(
                                 type = "episode",
                                 duration = minutes,
                                 exactDurationSeconds = DailyManifest.secondsFromTicks(ep.long("RunTimeTicks")),
+                                // The season's Primary image, then the series', then the episode's own (#312, as the Plex chain).
+                                posterThumbs = listOfNotNull(ep.str("SeasonId"), show.str("Id"), ep.str("Id")).filter { it.isNotEmpty() }.distinct().map(::primaryImagePath),
                                 addedAt = DailyManifest.unixSecondsFromISO(ep.str("DateCreated")),
                                 episodeTitle = ep.str("Name") ?: "",
                                 seTag = (s + e).ifEmpty { null },
@@ -188,6 +190,7 @@ class MediaBrowserLibrary(
                                 type = "movie",
                                 duration = minutes,
                                 exactDurationSeconds = DailyManifest.secondsFromTicks(jf.long("RunTimeTicks")),
+                                posterThumbs = listOfNotNull(jf.str("Id")).filter { it.isNotEmpty() }.map(::primaryImagePath),
                                 addedAt = DailyManifest.unixSecondsFromISO(jf.str("DateCreated")),
                                 artist = artist,
                                 summary = jf.str("Overview") ?: "",
@@ -351,6 +354,9 @@ class MediaBrowserLibrary(
         }
 
         /** True for a view the scan reads (one that holds videos). */
+        /** The Primary image of an item, on Jellyfin and Emby alike; the caller adds the size and the sign-in. */
+        fun primaryImagePath(id: String) = "/Items/${enc(id)}/Images/Primary"
+
         private fun holdsVideos(view: JsonObject) = sectionType(view.str("CollectionType")) != "other"
 
         /**

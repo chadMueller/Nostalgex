@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Android: round 3 values, music genres, posters on every backend, OPEN IN JELLYFIN, the backup switch)
+
+**State.** Branch `android/guide-stripes`, local commits, for release 8. Not pushed.
+
+**Why.** Chad: "the goal is parity across all platforms", and the Apple TV's round 3 values (`appletv/guide-text-three-steps` 13e6e643).
+
+**Changed.**
+- **Cursor cell, the Apple TV's values** (`DesignTokens.Cursor`, `RowFocus`): a fill of cyan at 30%, a 3 pt cyan ring inset 2 with corners of 6, two cyan glow layers (radius 18 at 90%, radius 6 at 100%). The programme area is clipped again, so the glow never reaches the channel column, the bundle stripe or the rows above and below, and a glow is drawn around the cell only, not through its translucent fill. While a cell has the cursor the row's own focus steps back (2 pt in the channel colour at 55%, glow of radius 6 at 25%); a row with no cell keeps 3 pt cyan and a glow of radius 14 at 70%.
+- **UP NEXT**: the title in `DesignTokens.Color.UP_NEXT_TITLE` (0xFFE500), two spaces of its face, then the label; the Now Playing label is text-2 (#B9C3DE), the guide info panel's is white at 50%.
+- **Posters on every backend**: the 120 by 180 column is kept on Plex, Jellyfin and Emby (not demo mode), the chain is the season's, the series' and the episode's own image (Jellyfin and Emby: `/Items/{id}/Images/Primary?maxWidth=300`, signed in as the other requests are; Plex: the server's own thumb paths), and an empty frame in the row colour when none loads. Loader tests for the chain on Plex, Jellyfin and Emby.
+- **Music video genres** (#319): MusicBrainz and Deezer as the Apple TV does them (`MusicEnrichment.kt`, 16 tests over canned answers): the same ranking, the same genre vocabulary, the 90 day cache, a failed lookup kept as a stamped row, Deezer for rows still without a genre, its year discarded, MusicBrainz's year and the server's (when plausible) through `MusicYear`. Run in the background after the guide is up, one request at a time per host (MusicBrainz at 1.05 s, Deezer at 0.25 s); the lineup is built again when something new arrives.
+- **OPEN IN JELLYFIN**: beside OPEN IN PLEX, only when the Jellyfin app for Android TV (org.jellyfin.androidtv) is installed. Read from its source: its exported startup activity (MAIN, SEARCH and VIEW) takes an `ItemId` extra and opens that item's details (`Destinations.itemDetails`, `StartupActivity.EXTRA_ITEM_ID`). Not tried against the real Jellyfin app. **OPEN IN EMBY is dropped**: the Emby apps have no item deep link (the Android TV app, tv.emby.embyatv, has no public source and nothing documented).
+- **SYNC WITH MY OTHER ANDROID TVS** at the top of SERVERS & ACCOUNTS, where the Apple TV puts its iCloud row: per TV, off by default, never itself synced. Off, nothing is mirrored for the backup (the mirror is emptied); on, the 13 settings are.
+
+**Seen** on the emulator against two stand-in Plex servers: `android/emulator-2026-11-15/` (the cell, the Settings row, the panel poster). The Jellyfin and Emby poster fetch, the music lookups and OPEN IN JELLYFIN were not run against a real server or app: they are covered by tests over canned answers only.
+
 ## 2026-11-15 (Android: the basement batch, the cursor rules aligned, UP NEXT, the cell glow, the stripe wrap)
 
 **State.** Branch `android/guide-stripes`, local commits, for release 8 (the 8 built earlier was never uploaded, so it is rebuilt). Not pushed.

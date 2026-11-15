@@ -13,6 +13,8 @@
 
     <!-- OPEN IN PLEX asks whether anything handles a plex:// link before it shows the row (package visibility). -->
     <queries>
+        <!-- OPEN IN JELLYFIN: the Jellyfin app for Android TV, whose startup activity opens an item given as the ItemId extra. -->
+        <package android:name="org.jellyfin.androidtv" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="plex" />

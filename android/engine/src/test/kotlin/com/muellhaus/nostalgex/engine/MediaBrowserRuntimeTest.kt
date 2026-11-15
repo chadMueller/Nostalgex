@@ -24,7 +24,7 @@ class MediaBrowserRuntimeTest {
     }
 
     private fun episode(id: String, runtimeSeconds: Double) = buildJsonObject {
-        put("Id", id); put("Name", "Episode $id"); put("Type", "Episode"); put("ParentIndexNumber", 1); put("IndexNumber", 1)
+        put("Id", id); put("Name", "Episode $id"); put("Type", "Episode"); put("ParentIndexNumber", 1); put("IndexNumber", 1); put("SeasonId", "season1")
         put("RunTimeTicks", ticks(runtimeSeconds))
     }
 
@@ -80,6 +80,11 @@ class MediaBrowserRuntimeTest {
         assertEquals(1500.2, e.exactDurationSeconds!!, 1e-6)
         assertEquals(1501, e.slotSeconds)
     }
+
+    @Test fun aFilmsPosterIsItsPrimaryImage() = assertEquals(listOf("/Items/a/Images/Primary"), item("a").posterThumbs)
+
+    @Test fun anEpisodesPosterChainIsSeasonThenSeriesThenItsOwnPrimaryImage() =
+        assertEquals(listOf("/Items/season1/Images/Primary", "/Items/show1/Images/Primary", "/Items/e1/Images/Primary"), item("e1").posterThumbs)
 
     @Test fun anItemWithNoRuntimeIsStillDropped() {
         assertEquals(listOf("a", "b", "c", "e1"), items.map { it.ratingKey }.sorted())

@@ -271,14 +271,14 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.AUDIO_LANGUAGE)),
                         ) { onPicker(PanelPicker.AUDIO_LANGUAGE) }
                     }
-                    // Plex only, and only with the Plex app installed: hands this title to it (the Apple TV's row, at the foot of
-                    // the left column). Says so when nothing took the link.
-                    if (model.canOpenInPlex) {
+                    // Plex or Jellyfin, and only with that app installed: hands this title to it (the Apple TV's row, at the foot of the
+                    // left column). Says so when nothing took the link. Emby has no item link, so no row.
+                    model.openInName?.let { app ->
                         var openFailed by remember(item.ratingKey) { mutableStateOf(false) }
                         ControlRow(
-                            label = "OPEN IN PLEX", value = if (openFailed) "COULDN'T OPEN" else null, color = color, active = false, disabled = false,
-                            note = "Leaves Nostalgex and opens this title in the Plex app.",
-                        ) { openFailed = !model.openInPlex(item) }
+                            label = "OPEN IN $app", value = if (openFailed) "COULDN'T OPEN" else null, color = color, active = false, disabled = false,
+                            note = "Leaves Nostalgex and opens this title in the ${app.lowercase().replaceFirstChar { it.uppercase() }} app.",
+                        ) { openFailed = !model.openInApp(item) }
                     }
                 }
                 // What the device is doing.
@@ -345,7 +345,7 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
     val upNextTitle = if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title
     Row(
         Modifier.padding(top = u(22)).semantics(mergeDescendants = true) { contentDescription = UpNextLabel.line(upNextTitle, next.startSec - nowSec) },
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14)),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             upNextTitle,
@@ -354,6 +354,8 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
+        // Two spaces of the title's face (a monospace character is 0.6 of its size).
+        Spacer(Modifier.width(u(LocalGuideText.current.panelText * 1.2f)))
         Text(
             UpNextLabel.text(next.startSec - nowSec),
             style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),

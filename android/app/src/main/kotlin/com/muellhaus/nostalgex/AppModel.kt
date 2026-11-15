@@ -230,6 +230,16 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
+    /** SYNC WITH MY OTHER ANDROID TVS: whether this TV's settings are mirrored for Android's backup (SettingsBackup). Off by default. */
+    var settingsBackup by mutableStateOf(prefs.settingsBackup)
+        private set
+
+    fun toggleSettingsBackup() {
+        settingsBackup = !settingsBackup
+        prefs.settingsBackup = settingsBackup
+        SettingsBackup.mirror(context)
+    }
+
     /** GUIDE TEXT SIZE: SMALLER, DEFAULT or LARGER for a couch nearer or further away (I-060); the guide, the bundle list and Now Playing follow it. */
     var guideTextSize by mutableStateOf(prefs.guideTextSize)
         private set
@@ -532,23 +542,50 @@ class AppModel(private val context: Context) : Playback.Listener {
         runCatching { context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("plex://")), 0) != null }.getOrDefault(false)
     }
 
-    /** Whether the guide's info panel keeps room for a poster: Plex, outside demo mode, art or not, so its text never moves from one programme to the next. */
-    val postersAvailable: Boolean get() = !demoMode && mbServer == null
-
-    /** Whether the programme can be handed to the Plex app: Plex backend, not demo mode, and the Plex app is installed. */
-    val canOpenInPlex: Boolean get() = !demoMode && mbServer == null && channel != null && plexLinkHandled
+    /** Whether the guide's info panel keeps room for a poster: on Plex, Jellyfin and Emby alike (outside demo mode), art or not, so its text never moves from one programme to the next. */
+    val postersAvailable: Boolean get() = !demoMode
 
     /**
-     * Deep-links the programme into the Plex app with the community-documented preplay link, as the Apple TV does.
-     * False when nothing took it, so the row can say so instead of failing silently.
+     * OPEN IN PLEX and OPEN IN JELLYFIN: the app on this TV that can show the programme on the server it came from, and only
+     * when it is installed. Plex: a `plex://preplay` link, as the Apple TV's. Jellyfin: the Jellyfin app for Android TV
+     * (org.jellyfin.androidtv), whose startup activity opens an item's details for an `ItemId` extra (read from its source,
+     * StartupActivity.EXTRA_ITEM_ID). Emby has none: the Emby apps have no item deep link. The name is Plex or Jellyfin, null when
+     * there is nothing to offer.
      */
-    fun openInPlex(item: MediaItem): Boolean {
+    val openInName: String?
+        get() = when {
+            demoMode || channel == null -> null
+            mbServer == null -> "PLEX".takeIf { plexLinkHandled }
+            mbServer?.kind == "jellyfin" -> "JELLYFIN".takeIf { jellyfinAppInstalled }
+            else -> null
+        }
+
+    private val jellyfinAppInstalled: Boolean by lazy {
+        runCatching { context.packageManager.getLaunchIntentForPackage(JELLYFIN_PACKAGE) != null }.getOrDefault(false)
+    }
+
+    /** False when nothing took the link, so the row can say so instead of failing silently. */
+    fun openInApp(item: MediaItem): Boolean = when (openInName) {
+        "PLEX" -> openInPlex(item)
+        "JELLYFIN" -> openInJellyfin(item)
+        else -> false
+    }
+
+    private fun openInPlex(item: MediaItem): Boolean {
         val machineID = selectedServers.firstOrNull { it.url == item.serverUrl }?.machineIdentifier
             ?: selectedServers.firstOrNull()?.machineIdentifier ?: ""
         val uri = Uri.Builder().scheme("plex").authority("preplay").path("/")
             .appendQueryParameter("metadataKey", "/library/metadata/${item.ratingKey}")
             .appendQueryParameter("server", machineID).build()
         return runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    }
+
+    private fun openInJellyfin(item: MediaItem): Boolean {
+        val intent = context.packageManager.getLaunchIntentForPackage(JELLYFIN_PACKAGE) ?: return false
+        // Jellyfin ids are 32 hex digits; the app reads them as UUIDs.
+        val id = item.ratingKey.takeIf { it.length == 32 && it.all { c -> c.isDigit() || c in 'a'..'f' || c in 'A'..'F' } }
+            ?.let { "${it.substring(0, 8)}-${it.substring(8, 12)}-${it.substring(12, 16)}-${it.substring(16, 20)}-${it.substring(20)}" } ?: item.ratingKey
+        return runCatching { context.startActivity(intent.putExtra("ItemId", id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
     }
 
     // ── Posters (PlexAPIService.thumbnailURL, 300 wide) ──────────────────
@@ -558,28 +595,36 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     suspend fun poster(item: MediaItem): ImageBitmap? {
-        // Plex only, as on the Apple TV.
-        if (mbServer != null) return null
-        val server = item.serverUrl ?: return null
-        // The season's poster, then the series', then the episode's frame (#312); a film's poster. A copy saved before the
-        // chain was kept has only its thumb.
+        val server = item.serverUrl ?: mbServer?.url ?: return null
+        val mb = mbServer
+        // The season's poster, then the series', then the episode's own frame (#312), a film's poster: the same chain on Plex, Jellyfin
+        // and Emby. A copy saved before the chain was kept has only its thumb (Plex).
         for (thumb in item.posterThumbs.ifEmpty { listOfNotNull(item.thumb) }) {
-            val url = Uri.parse("$server/photo/:/transcode").buildUpon()
-                .appendQueryParameter("url", thumb)
-                .appendQueryParameter("width", "300")
-                .appendQueryParameter("height", "450")
-                .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
-                .build().toString()
-            posters[url]?.let { return it }
+            val request = if (mb != null) {
+                // Jellyfin and Emby: the item's Primary image, signed in as the other requests are.
+                val url = Uri.parse("$server$thumb").buildUpon().appendQueryParameter("maxWidth", "300").build().toString()
+                Request.Builder().url(url).header("Authorization", mediaBrowser.authHeader(item.serverToken ?: mb.token))
+            } else {
+                val url = Uri.parse("$server/photo/:/transcode").buildUpon()
+                    .appendQueryParameter("url", thumb)
+                    .appendQueryParameter("width", "300")
+                    .appendQueryParameter("height", "450")
+                    .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
+                    .build().toString()
+                Request.Builder().url(url)
+            }
+            val built = request.build()
+            val cacheKey = built.url.toString().substringBefore("X-Plex-Token")
+            posters[cacheKey]?.let { return it }
             val got = withContext(Dispatchers.IO) {
                 runCatching {
-                    plex.http.newCall(Request.Builder().url(url).build()).execute().use { res ->
+                    plex.http.newCall(built).execute().use { res ->
                         if (!res.isSuccessful) return@use null
                         BitmapFactory.decodeStream(res.body.byteStream())?.asImageBitmap()
                     }
                 }.getOrNull()
             }
-            if (got != null) { posters[url] = got; return got }
+            if (got != null) { posters[cacheKey] = got; return got }
         }
         return null
     }
@@ -2243,6 +2288,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     companion object {
         private const val TAG = "Nostalgex"
+        private const val JELLYFIN_PACKAGE = "org.jellyfin.androidtv"
         /** LaunchGuard reads the last launch's marker once per process. */
         private var launchRecorded = false
     }
