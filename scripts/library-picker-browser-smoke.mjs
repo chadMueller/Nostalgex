@@ -17,6 +17,10 @@
  *   - there is no single switch any more; Settings switches one hidden library on and only it is read;
  *   - an install that had the old single switch ON keeps the same libraries on, and the old switch is gone;
  *   - Emby asks one list, never includeHidden.
+ * Sign-in rules, the Apple TV's: the picker opens at a sign-in only with more than one library or a hidden one (a single library
+ * just scans; a single hidden library opens it, with CONTINUE waiting until it is switched on), and every sign-in starts the
+ * choices again (an install that chose before is back to every library on, hidden ones off, the old switch gone), while a
+ * reload or a saved login coming back leaves them alone.
  * Every action is a real button or row (a TV browser has no keys), checked with the mouse at 960x540 (DPR 2) and on a
  * phone, where the rows and CONTINUE fit the screen.
  *
@@ -89,6 +93,8 @@ const VISIBLE = [{ Id: "lib1", Name: "Movies", CollectionType: "movies" }, { Id:
 const HIDDEN = [{ Id: "lib-hidden", Name: "Hidden Films", CollectionType: "movies" }, { Id: "lib-docs", Name: "Hidden Docs", CollectionType: "movies" }];
 let jfLog = { views: [], parents: [] };
 let embyServer = false;
+// What the stub lists: the views the user sees, and the ones they hide (a test changes these).
+let shape = { visible: VISIBLE, hidden: HIDDEN };
 const jellyfin = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -103,7 +109,7 @@ const jellyfin = http.createServer((req, res) => {
   if (u.pathname === "/UserViews" || /^\/Users\/[^/]+\/Views$/.test(u.pathname)) {
     jfLog.views.push(req.url);
     const include = u.pathname === "/UserViews" && u.searchParams.get("includeHidden") === "true";
-    const items = embyServer ? [...VISIBLE, ...HIDDEN.slice(0, 0)] : (include ? [...VISIBLE, ...HIDDEN] : VISIBLE);
+    const items = embyServer ? shape.visible : (include ? [...shape.visible, ...shape.hidden] : shape.visible);
     return res.end(JSON.stringify({ Items: items, TotalRecordCount: items.length }));
   }
   if (u.pathname === "/Items") {
@@ -197,7 +203,9 @@ const shot = async (page, name) => { if (shots) { await page.waitForTimeout(500)
 // ═══ Plex ════════════════════════════════════════════════════════════════════
 async function plexFlow(label, width, height, { dpr = 1, ownedDen = true, ownedGarage = false } = {}) {
   for (const k of Object.keys(plexLog)) plexLog[k].length = 0;
-  const { ctx, page, errors } = await newPage(width, height, { dpr, resources: [resource("Den", "mach-den", den, ownedDen), resource("Garage", "mach-garage", garage, ownedGarage)] });
+  // Choices left by an earlier sign-in on this browser: a sign-in starts again, so none of them may reach the picker.
+  const stale = { nostalgex_deselected_library_sections: ["mach-den::2", "mach-garage::1", "gone::7"], nostalgex_library_selection_seen: "1" };
+  const { ctx, page, errors } = await newPage(width, height, { dpr, local: stale, resources: [resource("Den", "mach-den", den, ownedDen), resource("Garage", "mach-garage", garage, ownedGarage)] });
   await page.goto(`${base}/plex-tuner.html`);
   await page.waitForFunction(() => typeof discoverServers === "function");
   await page.evaluate(() => { plexToken = "t"; discoverServers(); });
@@ -217,7 +225,7 @@ async function plexFlow(label, width, height, { dpr = 1, ownedDen = true, ownedG
   const libs = await rowsOf(page, "#library-picker .setup-row");
   check(`${label}: CHOOSE YOUR LIBRARIES lists the Movies and TV Shows of each server, the server named, and no Music or Photos`,
     libs.map((r) => `${r.title}|${r.sub}`).join() === "Movies|Den · Movies,TV Shows|Den · TV Shows,Movies|Garage · Movies,TV Shows|Garage · TV Shows", JSON.stringify(libs.map((r) => `${r.title}|${r.sub}`)));
-  check(`${label}: every library starts INCLUDED`, libs.every((r) => r.state === "INCLUDED" && r.checked === "true"), JSON.stringify(libs.map((r) => r.state)));
+  check(`${label}: every library starts INCLUDED, whatever an earlier sign-in switched off`, libs.every((r) => r.state === "INCLUDED" && r.checked === "true"), JSON.stringify(libs.map((r) => r.state)));
   check(`${label}: the rows fit the screen and CONTINUE can be pressed`, libs.every((r) => r.left >= 0 && r.right <= width + 0.5) && await fits(page) && await page.evaluate(() => {
     const b = document.querySelector("#library-picker .library-continue"); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !b.disabled && (hit === b || b.contains(hit));
@@ -349,7 +357,7 @@ await jellyfinFlow("jellyfin phone 390x844", 390, 844);
   await ctx.close();
 }
 
-// Emby: one list, never includeHidden, and no hidden libraries.
+// Emby: one list, never includeHidden, and no hidden libraries. One library once Music and Playlists are left out, so nothing to choose.
 {
   embyServer = true;
   jfLog = { views: [], parents: [] };
@@ -357,13 +365,77 @@ await jellyfinFlow("jellyfin phone 390x844", 390, 844);
     session: { ...jfSession, plex90_backend: "emby" }, local: { nostalgex_include_hidden_libraries: "1" },
   });
   await page.goto(`${base}/plex-tuner.html`);
-  await page.waitForSelector("#library-picker.active .setup-row", { timeout: 25000 }).catch(() => {});
-  const libs = await rowsOf(page, "#library-picker .setup-row");
-  check("Emby: CHOOSE YOUR LIBRARIES lists Movies only, none hidden", libs.length === 1 && libs[0].title === "Movies" && libs[0].sub === "Movies", JSON.stringify(libs));
+  await settledGuide(page);
+  check("Emby: one library once Music and Playlists are left out, so CHOOSE YOUR LIBRARIES is not offered and the scan runs", await page.evaluate(() => !document.getElementById("library-picker").classList.contains("active")) && (await titles(page)).length === 12);
   check("Emby: only /Users/u/Views is asked, never includeHidden", jfLog.views.length >= 1 && jfLog.views.every((v) => v === "/Users/u/Views"), JSON.stringify(jfLog.views));
+  await openSettings(page);
+  const rows = await rowsOf(page, "#cfg-library-rows .cfg-row");
+  check("Emby: Settings lists Movies only, none hidden", rows.length === 1 && rows[0].title === "Movies" && rows[0].sub.startsWith("Movies · only enabled") && !/HIDDEN/.test(rows[0].sub), JSON.stringify(rows));
   check("Emby: no page errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
   embyServer = false;
+}
+
+// Sign-in rules (the Apple TV's): nothing to choose, only a hidden library, and a sign-in on an install that chose before.
+{
+  // One library, nothing hidden: the picker is not offered at a fresh sign-in; the scan runs.
+  shape = { visible: [VISIBLE[0]], hidden: [] };
+  jfLog = { views: [], parents: [] };
+  const one = await newPage(1440, 900, { session: jfSession });
+  await one.page.goto(`${base}/plex-tuner.html`);
+  await settledGuide(one.page);
+  check("sign-in with one library: the picker is not offered and the guide loads (12 titles)", await one.page.evaluate(() => !document.getElementById("library-picker").classList.contains("active")) && (await titles(one.page)).length === 12);
+  check("sign-in with one library: no page errors", one.errors.length === 0, one.errors.join(" | "));
+  await one.ctx.close();
+
+  // One library and it is hidden: the picker is offered, it starts OFF, CONTINUE waits for it to be switched on.
+  shape = { visible: [], hidden: [HIDDEN[0]] };
+  jfLog = { views: [], parents: [] };
+  const hid = await newPage(1440, 900, { session: jfSession });
+  await hid.page.goto(`${base}/plex-tuner.html`);
+  await hid.page.waitForSelector("#library-picker.active .setup-row", { timeout: 25000 });
+  const hrows = await rowsOf(hid.page, "#library-picker .setup-row");
+  check("sign-in with only a hidden library: the picker is offered, the row marked and OFF, CONTINUE waits", hrows.length === 1 && hrows[0].sub === "Movies · HIDDEN ON JELLYFIN" && hrows[0].state === "OFF" && await hid.page.evaluate(() => document.querySelector("#library-picker .library-continue").disabled));
+  await hid.page.click("#library-picker .setup-row");
+  check("sign-in with only a hidden library: switching it on lets CONTINUE through, and it is read", !(await hid.page.evaluate(() => document.querySelector("#library-picker .library-continue").disabled)));
+  await hid.page.click("#library-picker .library-continue");
+  await settledGuide(hid.page);
+  check("sign-in with only a hidden library: its 6 films load", (await titles(hid.page)).filter((x) => /^Hidden Film/.test(x)).length === 6);
+  check("sign-in with only a hidden library: no page errors", hid.errors.length === 0, hid.errors.join(" | "));
+  await hid.ctx.close();
+  shape = { visible: VISIBLE, hidden: HIDDEN };
+
+  // An install that chose before signs in again: both lists and the old switch are cleared, every library is on, hidden ones off.
+  jfLog = { views: [], parents: [] };
+  const again = await newPage(1440, 900, {
+    session: { ...jfSession, plex90_fresh_signin: "1" },
+    local: {
+      nostalgex_completed_initial_load: "1", nostalgex_library_selection_seen: "1", nostalgex_include_hidden_libraries: "1",
+      nostalgex_deselected_library_sections: [`${sid}::lib1`, "gone::x"], nostalgex_included_hidden_library_sections: [`${sid}::lib-hidden`],
+    },
+  });
+  await again.page.goto(`${base}/plex-tuner.html`);
+  await again.page.waitForSelector("#library-picker.active .setup-row", { timeout: 25000 });
+  const arows = await rowsOf(again.page, "#library-picker .setup-row");
+  check("sign-in again: the picker is offered on an install that chose before, Movies INCLUDED and the hidden libraries OFF", arows.map((r) => `${r.title}:${r.state}`).join() === "Movies:INCLUDED,Hidden Films:OFF,Hidden Docs:OFF", JSON.stringify(arows.map((r) => `${r.title}:${r.state}`)));
+  const cleared = await lists(again.page);
+  check("sign-in again: both saved lists and the old switch are cleared", cleared.off.length === 0 && cleared.included.length === 0 && cleared.legacy === null, JSON.stringify(cleared));
+  check("sign-in again: the one-time flag is used up", await again.page.evaluate(() => sessionStorage.getItem("plex90_fresh_signin") === null));
+  await again.page.click("#library-picker .library-continue");
+  await settledGuide(again.page);
+  const t = await titles(again.page);
+  check("sign-in again: CONTINUE with the defaults reads Movies and none of the hidden libraries", t.length === 12 && !t.some((x) => /^Hidden/.test(x)), `${t.length} titles`);
+  // A reload now is not a sign-in: a choice made in Settings lasts.
+  await openSettings(again.page);
+  await again.page.click("#cfg-library-rows .cfg-row:nth-of-type(2)");
+  await again.page.waitForFunction(() => allItemsCache.some((i) => /^Hidden Film/.test(i.title)), null, { timeout: 30000 });
+  await again.page.waitForTimeout(800);
+  await again.page.reload();
+  await settledGuide(again.page);
+  const kept = await lists(again.page);
+  check("a reload is not a sign-in: the choice made in Settings is kept, and the picker does not open", kept.included.length === 1 && (await again.page.evaluate(() => !document.getElementById("library-picker").classList.contains("active"))), JSON.stringify(kept));
+  check("sign-in again: no page errors", again.errors.length === 0, again.errors.join(" | "));
+  await again.ctx.close();
 }
 
 await browser.close();

@@ -18,7 +18,8 @@
 // The server id is the Plex machineIdentifier (the server's name when plex.tv gave none), or the Jellyfin/Emby
 // server's address; the section key is Plex's section key or the Jellyfin/Emby view Id. Both are the server's own
 // ids, not names, so renaming a library on the server does not turn it back on, and a rescan leaves the choice
-// alone. A saved id for a server that did not answer, or a library the server no longer lists, is never dropped.
+// alone. A saved id for a server that did not answer, or a library the server no longer lists, is never dropped,
+// except at a sign-in, which starts again (resetForSignIn, rule 9).
 //
 // The scan reads this itself (the state is read from storage on every call), so the two scan loops need no state
 // passed in, and a page or a test with no storage skips nothing.
@@ -100,6 +101,16 @@
   /** The line under a library's name: its kind, the server when more than one is in play, and the hidden mark. */
   function subtitle(section, multiServer) { return picker().subtitle(section, multiServer); }
 
+  /** Rule 9 of the picker: a sign-in starts again. Clears both lists and the old single switch. Returns whether it saved. */
+  function resetForSignIn() {
+    const s = storage();
+    const next = picker().afterSignIn();
+    const savedOff = save(next.off);
+    const savedIncluded = saveIncludedHidden(next.includedHidden);
+    try { if (s) s.removeItem(LEGACY_HIDDEN_SWITCH_KEY); } catch (e) { /* nothing to remove */ }
+    return savedOff && savedIncluded;
+  }
+
   /** Carries the old single switch over (see UPGRADE above). `rows` are the Jellyfin libraries as listed, `hiddenKnown` is whether the includeHidden list was answered. */
   function carryOverHiddenSwitch(rows, hiddenKnown) {
     const s = storage();
@@ -165,6 +176,6 @@
   global.NostalgexLibrarySelection = {
     STORAGE_KEY, INCLUDED_HIDDEN_KEY, LEGACY_HIDDEN_SWITCH_KEY, sectionId, load, save, loadIncludedHidden, saveIncludedHidden, state,
     isOff, setOff, sectionOn, setSectionOn, plexServerId, mediaBrowserServerId, typeLabel, subtitle,
-    carryOverHiddenSwitch, mediaBrowserViews, noteListing, listed, forgetListings,
+    resetForSignIn, carryOverHiddenSwitch, mediaBrowserViews, noteListing, listed, forgetListings,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

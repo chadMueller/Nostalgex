@@ -601,6 +601,7 @@
         serverUrl: working.conn.uri, serverName: server.name,
       }));
     } catch (e) {}
+    sessionStorage.setItem('plex90_fresh_signin', '1');   // the tuner page starts every sign-in with every library on
     showScreen('done');
     window.location.href = 'plex-tuner.html';
   }
@@ -897,6 +898,7 @@
         jfUser: username || (result.User && result.User.Name) || '',
       }));
     } catch (e) {}
+    sessionStorage.setItem('plex90_fresh_signin', '1');   // the tuner page starts every sign-in with every library on
     showScreen('done');
     window.location.href = 'plex-tuner.html';
   }

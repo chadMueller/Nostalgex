@@ -9,6 +9,8 @@
  *      the same cases: listLibrarySections lists what `plexListing` and `mediaBrowserListing` say, the Plex scan and the
  *      Jellyfin scan read exactly what `reads` says, discoverServers turns on what `serverDefaults` says, and a Music or
  *      Photo library is never asked for items.
+ * The picker is offered at a sign-in only with more than one library or a hidden one, and every sign-in starts the choices again
+ * (the Apple TV's behaviour; rules 8 and 9 in scripts/nostalgex-library-picker.js).
  * Plus the upgrade: saved choices from the format before this change (one OFF list, the single hidden-libraries
  * switch, a bare saved listing) carry over, and nothing is lost.
  *
@@ -36,6 +38,7 @@ const failures = [];
 const check = (label, ok, detail = "") => { if (ok) passed += 1; else failures.push(`${label}${detail ? `: ${detail}` : ""}`); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const sorted = (a) => [...a].sort();
+const L2 = (id, hidden = false) => ({ id, hidden });
 
 function lift(source, signature) {
   const at = source.indexOf(signature);
@@ -105,6 +108,15 @@ for (const c of golden.choices) {
 for (const c of golden.hiddenSwitchUpgrade) {
   const r = LP.carryOverHiddenSwitch(c.switchOn, c.hiddenKnown, rowsOf(c.libraries), { off: c.off, includedHidden: c.includedHidden });
   check(`rules, hidden switch upgrade: ${c.name}`, same(sorted(r.includedHidden), sorted(c.includedHiddenAfter)) && r.done === c.done, JSON.stringify({ included: [...r.includedHidden], done: r.done }));
+}
+
+for (const c of golden.pickerOffered) check(`rules, picker offered: ${c.name}`, LP.offersPicker(rowsOf(c.libraries)) === c.offered);
+for (const c of golden.signInReset) {
+  const ls = fakeStorage({ [LS.STORAGE_KEY]: c.off, [LS.INCLUDED_HIDDEN_KEY]: c.includedHidden, ...(c.legacySwitch ? { [LS.LEGACY_HIDDEN_SWITCH_KEY]: c.legacySwitch === "on" ? "1" : "0" } : {}) });
+  const after = LP.afterSignIn({ off: c.off, includedHidden: c.includedHidden });
+  check(`rules, sign-in reset: ${c.name}`, same([...after.off], c.offAfter) && same([...after.includedHidden], c.includedHiddenAfter));
+  LS.resetForSignIn();
+  check(`storage, sign-in reset: ${c.name}`, same(saved(ls, LS.STORAGE_KEY), c.offAfter) && same(saved(ls, LS.INCLUDED_HIDDEN_KEY), c.includedHiddenAfter) && (c.legacySwitchAfter === null) === !ls._store.has(LS.LEGACY_HIDDEN_SWITCH_KEY));
 }
 
 // ═══ 2. The page's own functions, against the same cases ═════════════════════
@@ -234,6 +246,31 @@ for (const c of golden.reads.filter((x) => x.libraries.every((l) => l.id.startsW
   check("page, Emby scan asks /Users/u/Views once and never includeHidden", same(r.asks, ["/Users/u/Views"]), JSON.stringify(r.asks));
 }
 
+// Whether the page opens CHOOSE YOUR LIBRARIES: lifted maybeChooseLibraries, with the listing and the screen stubbed.
+async function pageOffersPicker(libraries, { signIn, firstLoad = false, seen = false }) {
+  let shown = false;
+  const el = { style: {}, classList: { add() {}, remove() {} }, innerHTML: "", textContent: "" };
+  const known = {
+    libraryPickAllowed: true, signInPending: signIn, document: { getElementById: () => el }, localStorage: { getItem: () => (seen ? "1" : null) },
+    backendDisplayName: () => "Jellyfin", mediaBackend: "jellyfin", isMediaBrowserBackend: () => true, discoveredServers: [], knownLibrarySections: [],
+    listLibrarySections: async () => rowsOf(libraries), showLibrarySelection: async () => { shown = true; return "continue"; }, lsSet() {}, showServerPicker() {},
+    globalThis: { ...globalThis, NostalgexLibraryLoad: { isFirstLibraryLoad: () => firstLoad } },
+  };
+  await runLifted([PLEX_FN("async function maybeChooseLibraries(")], "return maybeChooseLibraries();", known);
+  return { shown, signInPending: known.signInPending };
+}
+for (const c of golden.pickerOffered) {
+  const r = await pageOffersPicker(c.libraries, { signIn: true });
+  check(`page, picker at a sign-in: ${c.name}`, r.shown === c.offered && r.signInPending === false, JSON.stringify(r));
+}
+{
+  const two = [L2("machine-a::1"), L2("machine-a::2")];
+  check("page, picker: a reload or a saved login on an install that has loaded before does not open it", (await pageOffersPicker(two, { signIn: false, firstLoad: false })).shown === false);
+  check("page, picker: a first setup that was not finished (a reload on the picker) opens it again", (await pageOffersPicker(two, { signIn: false, firstLoad: true })).shown === true);
+  check("page, picker: a first setup already confirmed does not open it again", (await pageOffersPicker(two, { signIn: false, firstLoad: true, seen: true })).shown === false);
+  check("page, picker: a sign-in opens it even on an install that has loaded before", (await pageOffersPicker(two, { signIn: true, firstLoad: false, seen: true })).shown === true);
+}
+
 // Server defaults on the page: discoverServers turns on what the golden says.
 for (const c of golden.serverDefaults.filter((x) => x.servers.length > 0)) {
   const known = {
@@ -323,4 +360,4 @@ if (failures.length) {
   for (const f of failures) console.error(`  FAIL ${f}`);
   process.exit(1);
 }
-console.log(`library picker smoke: ${passed} checks passed (the golden file's ${golden.plexListing.length} Plex listings, ${golden.mediaBrowserListing.length} Jellyfin and Emby listings, ${golden.serverDefaults.length} server defaults, ${golden.reads.length} reads, ${golden.choices.length} choices and ${golden.hiddenSwitchUpgrade.length} upgrades, in the rules and in the page; saved choices carry over)`);
+console.log(`library picker smoke: ${passed} checks passed (the golden file's ${golden.plexListing.length} Plex listings, ${golden.mediaBrowserListing.length} Jellyfin and Emby listings, ${golden.serverDefaults.length} server defaults, ${golden.reads.length} reads, ${golden.choices.length} choices and ${golden.hiddenSwitchUpgrade.length} upgrades, ${golden.pickerOffered.length} picker rules and ${golden.signInReset.length} sign-in resets, in the rules and in the page; saved choices carry over)`);

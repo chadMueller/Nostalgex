@@ -5340,6 +5340,16 @@
   // True only when this visit came straight from a sign-in (the landing page hands the session over, or a
   // Plex code was just approved). A restored saved login never opens CHOOSE YOUR LIBRARIES.
   let libraryPickAllowed = false;
+  // A sign-in just happened on this visit (rule 9 of scripts/nostalgex-library-picker.js): the choices start again and the
+  // picker is offered, as on the Apple TV. A reload, a saved login coming back and a rescan are not sign-ins.
+  let signInPending = false;
+  const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  function beginSignInChoices() {
+    try { globalThis.NostalgexLibrarySelection.resetForSignIn(); } catch (e) { /* the choices stay as they were */ }
+    try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    libraryPickAllowed = true;
+    signInPending = true;
+  }
   let appState = 'connect'; // 'connect' | 'player' | 'guide' | 'config'
   let discoveredGenres = {}; // { genreName: itemCount }
   let allItemsCache = []; // cached items for populating new channels
@@ -9503,12 +9513,15 @@
     if (picker && picker.dataset.canGoBack && picker._finish) picker._finish('back');
   }
 
-  // First setup only: an existing install (initial load done) never sees it. Skipped, silently, if the
-  // libraries cannot be listed or there are none: the scan then runs as it always did.
-  const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  // At a sign-in, and while a first setup is not finished: a reload or a saved login on an install that has loaded
+  // before never sees it. Offered only when there is something to choose (more than one library, or a hidden one;
+  // rule 8 of scripts/nostalgex-library-picker.js). Skipped, silently, if the libraries cannot be listed or there is
+  // nothing to choose: the scan then runs as it always did.
   async function maybeChooseLibraries() {
     const LL = globalThis.NostalgexLibraryLoad;
-    if (!libraryPickAllowed || !LL || !LL.isFirstLibraryLoad() || localStorage.getItem(LIBRARY_PICK_SEEN_KEY) === '1') return 'skip';
+    const signedIn = signInPending;
+    signInPending = false;
+    if (!libraryPickAllowed || !LL || !(signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) return 'skip';
     // While the list loads, the same left-hand copy shows with one quiet line on the right.
     const picker = document.getElementById('library-picker');
     document.getElementById('plex-connect').style.display = '';
@@ -9521,8 +9534,8 @@
     if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
     let sections;
     try { sections = await listLibrarySections(); } catch (err) { console.warn('[Nostalgex] Library list failed, scanning everything:', err); picker.classList.remove('active'); return 'skip'; }
-    if (!sections.length) { picker.classList.remove('active'); return 'skip'; }
     knownLibrarySections = sections;
+    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) { picker.classList.remove('active'); return 'skip'; }
     const canGoBack = !isMediaBrowserBackend(mediaBackend) && discoveredServers.length > 1;
     const how = await showLibrarySelection(sections, canGoBack);
     if (how === 'back') { document.getElementById('library-picker').classList.remove('active'); showServerPicker(); return 'back'; }
@@ -10278,7 +10291,7 @@
 
     plexConnected = true;
     updateConfigPlexStatus();
-    libraryPickAllowed = true;
+    beginSignInChoices();
     await fetchPlexLibrary();
   }
 
@@ -10338,6 +10351,11 @@
       // Hide connect screen immediately so Jellyfin users don't see "CONNECT WITH PLEX" during validation.
       document.getElementById('plex-connect').style.display = 'none';
       libraryPickAllowed = true;
+      // The start screen sets this flag when it signs the viewer in (and not when a saved login comes back).
+      if (sessionStorage.getItem('plex90_fresh_signin') === '1') {
+        sessionStorage.removeItem('plex90_fresh_signin');
+        beginSignInChoices();
+      }
     }
 
     // Re-read backend selection (web-tuner.html sets this before redirecting here).

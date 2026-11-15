@@ -25,8 +25,14 @@
 //     nothing is hidden. A library that is in the first and not the second is kept (the union, the second's order).
 //     Emby has no includeHidden and no hidden libraries.
 //  6. A library's key is `<serverId>::<sectionKey>` (the server's own ids, never names).
-//  7. A saved choice is kept for a server that did not answer, and for a library the server no longer lists. A choice
-//     only ever changes the one library the viewer touched.
+//  7. Within a sign-in, a saved choice is kept for a server that did not answer, and for a library the server no
+//     longer lists. A choice only ever changes the one library the viewer touched.
+//  8. The picker (CHOOSE YOUR LIBRARIES) is offered at a sign-in only when there is something to choose: more than one
+//     library across the chosen servers, or a hidden Jellyfin library (which starts off, so without the screen nothing
+//     would offer it). With a single library that is not hidden the scan just runs.
+//  9. Every sign-in starts again: both saved lists are cleared (and the old single hidden switch, where there was
+//     one), so every library is on and every hidden one off, whatever an earlier sign-in chose. A choice made in
+//     Settings afterwards lasts until the next sign-in.
 //
 // WHAT IS SAVED (the Apple TV's two sets, under the same key names)
 //   nostalgex_deselected_library_sections        ids the viewer switched OFF. Every library but a hidden one reads this.
@@ -150,6 +156,12 @@
     return isOn(row, state) === !!on ? stateOf(state) : toggled(row, state);
   }
 
+  /** Rule 8. Whether the picker is offered at a sign-in, for the libraries listed across the chosen servers. */
+  function offersPicker(rows) { return (rows || []).length > 1 || (rows || []).some(r => r.hidden); }
+
+  /** Rule 9. The saved state after a sign-in, whatever it was before. */
+  function afterSignIn() { return { off: new Set(), includedHidden: new Set() }; }
+
   /** Rule 4. The ids of the servers that start on. `servers` is [{ id, owned }]. */
   function defaultServerIds(servers) {
     const list = servers || [];
@@ -176,6 +188,6 @@
   global.NostalgexLibraryPicker = {
     HIDDEN_MARK, PLEX_LIBRARY_TYPES, libraryKey, rowId, isPlexVideoType, musicVideoName, typeLabel, subtitle, multiServer,
     plexListed, mediaBrowserViews, fetchHiddenViews, viewRow, mediaBrowserListed, startsOn, isOn, readable, toggled, setOn, defaultServerIds,
-    carryOverHiddenSwitch,
+    carryOverHiddenSwitch, offersPicker, afterSignIn,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

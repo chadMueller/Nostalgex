@@ -8,7 +8,9 @@
     "`mediaBrowserListing`: Jellyfin or Emby views. `shown` is the plain /UserViews (Emby: /Users/{id}/Views) answer, `all` the answer with includeHidden=true (null: not asked, which is every Emby, or the ask failed). A view only in `all` is hidden; a view in `shown` and not in `all` is kept (the union, in the order of `all` then the rest of `shown`); a view whose CollectionType holds no videos is never listed, hidden or not. Hidden libraries start off.",
     "`serverDefaults`: which Plex servers start on at first setup: the viewer's own (`owned`), or all of them when none is owned, in list order.",
     "`reads`: given the listed libraries (`hidden` as listed) and the two saved lists, the ids a scan reads, in listed order. Ids saved for a server that did not answer, or for a library the server no longer lists, change nothing.",
-    "`choices`: the saved lists after the viewer switches the named libraries, one after another (a library on goes off, off goes on). Only the touched id moves; every other saved id stays, including ids for a server that did not answer. Lists compare as sets.",
+    "`choices`: the saved lists after the viewer switches the named libraries, one after another, within one sign-in (a library on goes off, off goes on). Only the touched id moves; every other saved id stays, including ids for a server that did not answer. Lists compare as sets.",
+    "`pickerOffered`: whether CHOOSE YOUR LIBRARIES is offered at a sign-in, for the libraries listed across the chosen servers (`hidden` as listed): more than one library, or any hidden one (a hidden library starts off, so without the screen nothing would offer it). With one library that is not hidden, or none, the scan just runs.",
+    "`signInReset`: every sign-in starts again (the Apple TV's presentLibrarySelectionOrScan): both saved lists are emptied, whatever they held, ids for a server that did not answer included, and the old single hidden switch is cleared where there was one (`legacySwitch`: \"on\", \"off\" or null for never set). A choice made in Settings afterwards lasts until the next sign-in.",
     "`hiddenSwitchUpgrade`: Android and the web tuner (until now) had ONE switch for all hidden Jellyfin libraries, off by default. On upgrade, with the switch on and the hidden libraries known (`hiddenKnown`: the includeHidden list was answered), each hidden library not in `off` goes into `includedHidden` once and the old switch is cleared (`done`). With the hidden libraries not yet known, nothing changes and the old switch is kept (`done` false). Switch off or never set: nothing to carry, `done` true."
   ],
   "plexListing": [
@@ -1786,6 +1788,152 @@
         "jelly::hid1"
       ],
       "done": true
+    }
+  ],
+  "pickerOffered": [
+    {
+      "name": "no library: nothing to choose",
+      "libraries": [],
+      "offered": false
+    },
+    {
+      "name": "one library: nothing to choose, the scan just runs",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        }
+      ],
+      "offered": false
+    },
+    {
+      "name": "one library that is hidden on Jellyfin: offered, because it starts off",
+      "libraries": [
+        {
+          "id": "jelly::h1",
+          "hidden": true
+        }
+      ],
+      "offered": true
+    },
+    {
+      "name": "two libraries",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        }
+      ],
+      "offered": true
+    },
+    {
+      "name": "one library on each of two servers",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "offered": true
+    },
+    {
+      "name": "one library and one hidden library",
+      "libraries": [
+        {
+          "id": "jelly::lib1",
+          "hidden": false
+        },
+        {
+          "id": "jelly::hid1",
+          "hidden": true
+        }
+      ],
+      "offered": true
+    },
+    {
+      "name": "three libraries",
+      "libraries": [
+        {
+          "id": "machine-a::1",
+          "hidden": false
+        },
+        {
+          "id": "machine-a::2",
+          "hidden": false
+        },
+        {
+          "id": "machine-b::1",
+          "hidden": false
+        }
+      ],
+      "offered": true
+    }
+  ],
+  "signInReset": [
+    {
+      "name": "nothing saved: nothing to clear",
+      "off": [],
+      "includedHidden": [],
+      "legacySwitch": null,
+      "offAfter": [],
+      "includedHiddenAfter": [],
+      "legacySwitchAfter": null
+    },
+    {
+      "name": "libraries switched off and hidden ones switched on are all cleared",
+      "off": [
+        "machine-a::2",
+        "machine-b::1"
+      ],
+      "includedHidden": [
+        "jelly::hid1"
+      ],
+      "legacySwitch": null,
+      "offAfter": [],
+      "includedHiddenAfter": [],
+      "legacySwitchAfter": null
+    },
+    {
+      "name": "ids for a server that did not answer, or a library that is gone, are cleared too",
+      "off": [
+        "machine-c::9",
+        "old::lib9"
+      ],
+      "includedHidden": [
+        "old::hid9"
+      ],
+      "legacySwitch": null,
+      "offAfter": [],
+      "includedHiddenAfter": [],
+      "legacySwitchAfter": null
+    },
+    {
+      "name": "the old single hidden switch, on, is cleared, and does not bring hidden libraries back",
+      "off": [],
+      "includedHidden": [],
+      "legacySwitch": "on",
+      "offAfter": [],
+      "includedHiddenAfter": [],
+      "legacySwitchAfter": null
+    },
+    {
+      "name": "the old single hidden switch, off, is cleared",
+      "off": [
+        "jelly::lib2"
+      ],
+      "includedHidden": [],
+      "legacySwitch": "off",
+      "offAfter": [],
+      "includedHiddenAfter": [],
+      "legacySwitchAfter": null
     }
   ]
 }
