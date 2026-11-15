@@ -266,6 +266,12 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
 end function
 
 sub loadLibrary()
+    ' A task of its own for the library sections on the servers, asked for before the
+    ' first scan (I-092): mode "sections".
+    if m.top.mode = "sections" then
+        listSections()
+        return
+    end if
     ' The keys the saved guide and pools were last written or read under, and
     ' the pools' fingerprint, so a build that would write the same skips it.
     m.savedGuideKey = ""
@@ -1304,4 +1310,52 @@ sub fail(message as String)
     m.top.message = message
     m.top.status = "error"
     print "library: "; message
+end sub
+
+' The library sections on the signed-in servers, for the picker shown before the
+' first scan (LibraryPickerView, I-092). Never fails the sign-in: any trouble gives
+' an empty list, and the scan starts without the picker. A Plex server is checked
+' first, as the load does, and Jellyfin and Emby are asked twice, plain and with the
+' hidden libraries, so the ones the viewer hides on the server are marked.
+sub listSections()
+    reg = NxPlexRegistry()
+    servers = ParseJson(reg.Read("servers"))
+    out = []
+    if type(servers) = "roArray" and servers.Count() > 0 then
+        on = NxServersOn(servers, NxSavedServerChoices())
+        if NxSignedInKind() = "plex" then NxPlexResolveSaved(servers, on)
+        for i = 0 to servers.Count() - 1
+            s = servers[i]
+            if on[i] and NxToStr(s.uri) <> "" then
+                kind = NxServerKind(s)
+                if kind = "plex" then
+                    err = { auth: false }
+                    mc = NxPlexGetContainer(s, "/library/sections", err)
+                    if mc <> invalid then out.Append(NxPlexSectionRefs(s, mc.Directory))
+                else
+                    userId = NxToStr(s.userId)
+                    fetcher = NxMbFetcher(s)
+                    plain = fetcher.getJSON(NxMbViewsPath(kind, userId, false))
+                    all = fetcher.getJSON(NxMbViewsPath(kind, userId, true))
+                    if all = invalid then all = plain
+                    if all <> invalid then
+                        hidden = {}
+                        if plain <> invalid and kind <> "emby" then
+                            shown = {}
+                            for each v in NxList(plain.Items)
+                                shown[NxToStr(v.Id)] = true
+                            end for
+                            for each v in NxList(all.Items)
+                                if shown[NxToStr(v.Id)] <> true then hidden[NxToStr(v.Id)] = true
+                            end for
+                        end if
+                        out.Append(NxMbSectionRefs(s, all.Items, hidden))
+                    end if
+                end if
+            end if
+        end for
+    end if
+    print "sections: "; out.Count(); " library sections listed on "; NxPlexRegistry().Read("kind")
+    m.top.sections = out
+    m.top.status = "done"
 end sub

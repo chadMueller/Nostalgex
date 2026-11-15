@@ -245,7 +245,8 @@ end sub
 sub afterSignIn()
     if m.sectionsTask <> invalid or m.libPicker <> invalid then return
     m.prompt.text = "Finding your libraries…"
-    m.sectionsTask = CreateObject("roSGNode", "LibrarySectionsTask")
+    m.sectionsTask = CreateObject("roSGNode", "LibraryTask")
+    m.sectionsTask.mode = "sections"
     m.sectionsTask.ObserveField("status", "onSections")
     m.sectionsTask.control = "run"
 end sub

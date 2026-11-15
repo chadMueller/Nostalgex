@@ -60,6 +60,9 @@
     <field id="matchCounts" type="assocarray" />
     <!-- Set (any value) to re-check schedules against the clock. -->
     <field id="reschedule" type="boolean" alwaysNotify="true" />
+    <!-- "sections": list the servers' library sections (I-092) instead of loading; the answer is sections, then status "done". -->
+    <field id="mode" type="string" value="" />
+    <field id="sections" type="array" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
