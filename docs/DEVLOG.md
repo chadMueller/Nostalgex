@@ -3,6 +3,13 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Roku: the guide's stripe colours are held to the shared golden, GuideStripesTests)
+
+**State.** Branch `roku/stripe-golden`. Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV wrote `scripts/guide-stripe-colours-golden.json` (from `android/guide-stripes` `5aeb38a0`): the ten palette colours and the palette index of 22 names (the 14 shipped bundle names, a pinned name in two cases, the empty name, a long one, accents, CJK, a sharp s). Android reads it; the Roku's test held a hand-copied list of the 14 names.
+
+**Changed.** `GuideStripesTests.brs` reads the golden (via `tests/gen-vectors.mjs`, which copies it to `tests/vectors/`) and asserts the ten hex colours, every name's index, and that every bundle name in `channels.json` is in the file. `NxStripeIndex` no longer leans on `UCase` and `FromAsciiString`, whose handling of a non-ASCII name is the firmware's: it upper-cases by code point as Swift's `uppercased()` does (ASCII, Latin-1 with sharp s as SS, Latin Extended-A, Greek, Cyrillic) and writes the UTF-8 bytes itself. All 22 names match off-device with the old and the new hash (the interpreter is not the firmware); the stick's golden run is the check on the device.
 ## 2026-11-14 (Roku: a file plays to its end, the Apple TV's play-to-end schedule, 315)
 
 **State.** Branch `roku/315-play-to-end`. Not merged, not in a build, not pushed. A separate branch from the 1.0.13 line on purpose; the candidate v10 takes it with the rest.

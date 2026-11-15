@@ -11,12 +11,59 @@ function NxStripePalette() as Object
     return ["#FF2DB4", "#E74C3C", "#E67E22", "#F1C40F", "#2ECC71", "#2DC7B0", "#00BFFF", "#7B68EE", "#8E44AD", "#B9770E"]
 end function
 
+' The upper-case of one code point as the Apple TV's String.uppercased() gives
+' it, as a list of code points: ASCII, Latin-1 (sharp s is two letters), Latin
+' Extended-A, Greek and Cyrillic. Anything else (kana, CJK) has no case and
+' stays as it is. (BrightScript's UCase is not trusted past ASCII.)
+function NxStripeUpperCode(c as Integer) as Object
+    if c >= 97 and c <= 122 then return [c - 32]
+    if c < 128 then return [c]
+    if c = 223 then return [83, 83]
+    if c = 255 then return [376]
+    if c >= 224 and c <= 254 and c <> 247 then return [c - 32]
+    if c = 305 then return [73]
+    if c = 383 then return [83]
+    if c >= 256 and c <= 311 and c <> 305 and (c mod 2) = 1 then return [c - 1]
+    if c >= 314 and c <= 328 and (c mod 2) = 0 then return [c - 1]
+    if c >= 330 and c <= 375 and (c mod 2) = 1 then return [c - 1]
+    if c = 378 or c = 380 or c = 382 then return [c - 1]
+    if c = 962 then return [931]
+    if c >= 945 and c <= 969 then return [c - 32]
+    if c >= 1072 and c <= 1103 then return [c - 32]
+    if c >= 1104 and c <= 1119 then return [c - 80]
+    return [c]
+end function
+
+' The UTF-8 bytes of the upper-cased name, as a list of integers.
+function NxStripeUtf8Upper(name as String) as Object
+    out = []
+    for i = 1 to Len(name)
+        for each c in NxStripeUpperCode(Asc(Mid(name, i, 1)))
+            if c < 128 then
+                out.Push(c)
+            else if c < 2048 then
+                out.Push(192 + (c \ 64))
+                out.Push(128 + (c mod 64))
+            else if c < 65536 then
+                out.Push(224 + (c \ 4096))
+                out.Push(128 + ((c \ 64) mod 64))
+                out.Push(128 + (c mod 64))
+            else
+                out.Push(240 + (c \ 262144))
+                out.Push(128 + ((c \ 4096) mod 64))
+                out.Push(128 + ((c \ 64) mod 64))
+                out.Push(128 + (c mod 64))
+            end if
+        end for
+    end for
+    return out
+end function
+
 ' FNV-1a over the upper-cased name's UTF-8 bytes, its two 16-bit halves folded
 ' together, modulo the palette: written out so a name is the same colour on
 ' every launch and every TV (and on the Apple TV and the web tuner).
 function NxStripeIndex(name as String) as Integer
-    bytes = CreateObject("roByteArray")
-    bytes.FromAsciiString(UCase(name))
+    bytes = NxStripeUtf8Upper(name)
     h& = &h811C9DC5&
     for each b in bytes
         h& = ((h& or b) and not (h& and b)) * &h01000193&

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "hexes": ["#FF2DB4", "#E74C3C", "#E67E22", "#F1C40F", "#2ECC71", "#2DC7B0", "#00BFFF", "#7B68EE", "#8E44AD", "#B9770E"],
+  "names": {
+    "NOSTALGEX": 9,
+    "KIDZ ZONE": 1,
+    "CASE FILES": 2,
+    "PRIME TIME": 6,
+    "MARQUEE": 1,
+    "ARTHOUSE": 0,
+    "ADVENTURELAND": 4,
+    "OVERTIME": 9,
+    "DECADES": 4,
+    "FRANCHISES": 6,
+    "NETWORKS": 6,
+    "SCREAM": 0,
+    "TIS THE SEASON": 5,
+    "HIGH ROTATION": 7,
+    "Kidz Zone": 1,
+    "": 5,
+    "A": 9,
+    "A VERY LONG BUNDLE NAME WITH MANY WORDS": 5,
+    "ÅNGSTRÖM": 0,
+    "日本語": 4,
+    "ß": 7,
+    "straße": 6
+  }
+}
