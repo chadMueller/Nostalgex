@@ -200,7 +200,7 @@ function NxParityItem(spec as Object, musicGenre as Object) as Dynamic
     if spec.compact <> invalid then
         c = spec.compact
         it = { ratingKey: NxToStr(c[0]), title: NxToStr(c[1]), type: NxToStr(c[2]), duration: c[3], addedAt: c[4] }
-        if spec.exact <> invalid then it.runtimeSec = spec.exact
+        if spec.exact <> invalid then it.exactDurationSeconds = spec.exact
         return it
     end if
     raw = spec.raw

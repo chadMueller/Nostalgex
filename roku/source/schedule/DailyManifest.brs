@@ -117,7 +117,7 @@ function NxDuration(item as Object) as Integer
 end function
 
 ' How long the schedule gives a programme, in seconds: the file's real runtime
-' (`runtimeSec`, kept by the loaders) rounded up to a whole second, so the slot
+' (`exactDurationSeconds`, kept by the loaders) rounded up to a whole second, so the slot
 ' and the file end together and nothing is cut at a boundary (#315). The
 ' servers floor a runtime to whole minutes (`duration`), which left a file 0 to
 ' 59 s past its slot. An item with no real runtime (a saved library read before
@@ -126,7 +126,7 @@ end function
 ' PlexMediaItem.slotSeconds.
 function NxSlotSeconds(item as Object) as Integer
     minutes = NxDuration(item) * 60
-    exact = item.runtimeSec
+    exact = item.exactDurationSeconds
     if NxIsNumber(exact) then
         e# = exact
         if e# >= 1 and Abs(e# - minutes) < 61 then

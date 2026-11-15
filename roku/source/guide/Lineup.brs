@@ -182,11 +182,16 @@ end function
 
 ' ── Schedule ────────────────────────────────────────────────────────────────
 
-' Mirrors poolFingerprint: a 32-bit string hash of the sorted ratingKeys.
+' Mirrors poolFingerprint: a 32-bit string hash of the sorted ratingKeys, then
+' "r" and how many of the pool's items carry a usable runtime (a slot that is
+' not just their minutes, or an exact runtime at all), so a day packed while
+' the library had no runtimes is packed again once they arrive.
 function NxPoolFingerprint(pool as Object) as String
     keys = []
+    withRuntime = 0
     for each it in pool
         keys.Push(NxToStr(it.ratingKey))
+        if NxSlotSeconds(it) <> NxDuration(it) * 60 or NxIsNumber(it.exactDurationSeconds) then withRuntime = withRuntime + 1
     end for
     keys.Sort()
     ' Over the bytes, in one pass: Mid() on a long string is slow enough that a
@@ -201,7 +206,7 @@ function NxPoolFingerprint(pool as Object) as String
     for each c in bytes
         h& = (h& * 31 + c) mod 4294967296&
     end for
-    return NxToInt32(h&).ToStr()
+    return NxToInt32(h&).ToStr() + "r" + withRuntime.ToStr()
 end function
 
 ' The session's schedule cache: channelId_dayKey -> { fp, blocks }.
