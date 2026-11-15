@@ -23,7 +23,7 @@
 // each strip block (markers included) and unwraps each `only` line.
 
 import { resolve, dirname, basename } from 'path'
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync, cpSync } from 'fs'
 import { fileURLToPath } from 'url'
 
 // Vendored files come straight from node_modules (several packages do not export
@@ -243,6 +243,12 @@ export function selfhostPlugins({ root, version }) {
           if (existsSync(src)) copyInto(outDir, src, f)
           else if (f !== 'franchises.json') throw new Error(`self-host build: public/${f} is missing`)
         }
+
+        // The weather channel's place list and map outlines (public/weather/, built by scripts/build-weather-data.mjs):
+        // the image carries them, so typing a city never reaches a service of ours or anyone else's.
+        const weatherData = resolve(root, 'public', 'weather')
+        if (!existsSync(resolve(weatherData, 'places', 'meta.json'))) throw new Error('self-host build: public/weather/places/meta.json is missing (npm run weather:data)')
+        cpSync(weatherData, resolve(outDir, 'weather'), { recursive: true })
 
         for (const v of SCRIPT_VENDOR) {
           copyInto(outDir, mod(v.from), v.to)
