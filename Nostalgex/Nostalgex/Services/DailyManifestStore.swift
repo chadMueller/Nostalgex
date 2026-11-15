@@ -22,7 +22,10 @@ enum DailyManifestStore {
     /// 2: the lineup's days are packed together, so one title is never on two channels at once
     /// (DailyManifestScheduler.packLineupDay). A day stored at 1 is packed again once, from
     /// what aired the day before, which still reads at any version.
-    static let schemaVersion = 2
+    /// 3: a programme's slot is its real runtime in seconds, the day starts when the programme running over midnight
+    /// from yesterday ends, and the filler loop no longer cuts or shortens a block at midnight (#315). A day stored at
+    /// 2 has minute slots and is packed again once.
+    static let schemaVersion = 3
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]

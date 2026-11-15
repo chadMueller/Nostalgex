@@ -317,6 +317,7 @@ enum DailyManifestScheduler {
                 isPremiereChannel: channel.isPremiereChannel,
                 yesterdayAiredKeys: Set(prev.map(\.ratingKey)),
                 yesterdayLastItemID: prev.last?.ratingKey,
+                runsOverUntil: prev.map(\.endUnix).max().map { Date(timeIntervalSince1970: Double($0)) },
                 occupancy: occupancy,
                 gated: channel.timeRestrictions != nil
             )
@@ -358,6 +359,22 @@ enum DailyManifestScheduler {
         var result: [ManifestBlock] = []
         var cursor = DailyManifestStore.startOfLocalDay(for: from, calendar: calendar)
         let endDay = DailyManifestStore.startOfLocalDay(for: to, calendar: calendar)
+
+        // The programme running over midnight from yesterday is on air until it ends, and today's day starts after
+        // it (packDay's `runsOverUntil`): without it the guide would show today's first programme under a file that
+        // is still playing its last minutes. Yesterday's stored day only; one that was never packed has no such
+        // programme.
+        let fromUnix = Int(from.timeIntervalSince1970)
+        let yesterdayRows = DailyManifestStore.storedBlocks(
+            channelId: channel.id,
+            dayKey: DailyManifestStore.previousLocalDayKey(before: from, calendar: calendar),
+            credentialFingerprint: credentialFingerprint
+        ).filter { $0.endUnix > fromUnix }
+        if !yesterdayRows.isEmpty {
+            for block in resolveBlocks(yesterdayRows, pool: channel.filteredPool()) where block.endTime > from && block.startTime < to {
+                result.append(block)
+            }
+        }
 
         while cursor <= endDay {
             let dayBlocks = blocks(
@@ -438,6 +455,7 @@ enum DailyManifestScheduler {
         isPremiereChannel: Bool,
         yesterdayAiredKeys: Set<String>,
         yesterdayLastItemID: String?,
+        runsOverUntil: Date? = nil,
         occupancy: ScheduleOccupancy? = nil,
         gated: Bool = false
     ) -> [ManifestBlock] {
@@ -478,7 +496,9 @@ enum DailyManifestScheduler {
         }
 
         var blocks: [ManifestBlock] = []
-        var t = dayStart
+        // The day starts when the programme running over midnight from yesterday ends: it plays to its own end (#315),
+        // so nothing of today's may be on air under it. Nil, or before midnight, is the start of the day.
+        var t = max(dayStart, runsOverUntil ?? dayStart)
 
         // In the channel's order, except that a programme another channel has on in the same
         // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
@@ -491,13 +511,13 @@ enum DailyManifestScheduler {
             let picked: Int? = {
                 let current = queue
                 return pickCandidate(current, at: Int(t.timeIntervalSince1970),
-                                     playSeconds: { current[$0].duration * 60 },
+                                     playSeconds: { current[$0].slotSeconds },
                                      occupancy: occupancy, channelId: channelId,
                                      avoidKey: nil, mustFit: true, skippingGated: gated)
             }()
             guard let j = picked else { break }
             let item = queue.remove(at: j)
-            let end = t.addingTimeInterval(TimeInterval(item.duration * 60))
+            let end = t.addingTimeInterval(TimeInterval(item.slotSeconds))
             blocks.append(ManifestBlock(item: item, startTime: t, endTime: end))
             t = end
         }
@@ -509,14 +529,12 @@ enum DailyManifestScheduler {
             let goldenShift = Int(Double(totalPoolSec) * 0.6180339887)
             let offsetSec = (dayNumber * goldenShift) % totalPoolSec
 
-            var posInLoop = offsetSec
             var cycleIndex = 0
             var elapsed = 0
             for i in 0..<orderedFull.count {
                 let d = orderedFull[i].duration * 60
                 if elapsed + d > offsetSec {
                     cycleIndex = i
-                    posInLoop = offsetSec - elapsed
                     break
                 }
                 elapsed += d
@@ -539,31 +557,27 @@ enum DailyManifestScheduler {
             if orderedFull.count > 1, let lastPlayed = blocks.last?.item.id ?? yesterdayLastItemID,
                orderedFull[cycleIndex].id == lastPlayed {
                 cycleIndex = (cycleIndex + 1) % orderedFull.count
-                posInLoop = 0
             }
 
             // The loop as a queue from the cycle's start: what airs goes to the back, so with
-            // nothing on elsewhere this is the cycle in order. The first programme starts part
-            // way in (posInLoop) only if it airs first; one picked ahead of it starts at 0.
+            // nothing on elsewhere this is the cycle in order. Every programme airs whole, from its
+            // start to its own end, including the one that runs past midnight and the first of the
+            // day (#315): the day's cut and a part-way start were cut files short.
             var loop = (Array(orderedFull[cycleIndex...]) + Array(orderedFull[..<cycleIndex]))
                 .filter { $0.duration > 0 }
-            var first = true
             while t < dayEnd, !loop.isEmpty {
-                let remainingDay = Int(dayEnd.timeIntervalSince(t))
-                let lead = first ? posInLoop : 0
                 let lastKey = blocks.last?.item.id ?? yesterdayLastItemID
                 // Scoped like the primary pass: no copy of the loop per programme.
                 let j: Int = {
                     let current = loop
                     return pickCandidate(current, at: Int(t.timeIntervalSince1970),
-                                         playSeconds: { min(current[$0].duration * 60 - ($0 == 0 ? lead : 0), remainingDay) },
+                                         playSeconds: { current[$0].slotSeconds },
                                          occupancy: occupancy, channelId: channelId,
                                          avoidKey: lastKey, mustFit: false, skippingGated: gated) ?? 0
                 }()
-                let playSec = min(loop[j].duration * 60 - (j == 0 ? lead : 0), remainingDay)
+                let playSec = loop[j].slotSeconds
                 let item = loop.remove(at: j)
                 loop.append(item)
-                first = false
 
                 let end = t.addingTimeInterval(TimeInterval(playSec))
                 blocks.append(ManifestBlock(item: item, startTime: t, endTime: end))

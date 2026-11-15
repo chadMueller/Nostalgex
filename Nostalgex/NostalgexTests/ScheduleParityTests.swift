@@ -238,7 +238,8 @@ final class ScheduleParityTests: XCTestCase {
             let minutes = (raw.duration ?? 0) / 60000
             guard minutes > 0 else { return (raw.ratingKey, nil) }
             return (raw.ratingKey, item(key: raw.ratingKey, title: show["title"] as? String ?? "", type: .episode,
-                                        minutes: minutes, addedAt: raw.addedAt ?? 0))
+                                        minutes: minutes, addedAt: raw.addedAt ?? 0,
+                                        exact: raw.duration.map { Double($0) / 1000 }))
         case ("jellyfin", "movie"):
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
@@ -251,13 +252,14 @@ final class ScheduleParityTests: XCTestCase {
             let minutes = JellyfinAPIService.minutes(fromTicks: raw.RunTimeTicks)
             guard minutes > 0 else { return (raw.Id, nil) }
             return (raw.Id, item(key: raw.Id, title: show["Name"] as? String ?? raw.SeriesName ?? "", type: .episode,
-                                 minutes: minutes, addedAt: JellyfinAPIService.unixSeconds(fromISO: raw.DateCreated)))
+                                 minutes: minutes, addedAt: JellyfinAPIService.unixSeconds(fromISO: raw.DateCreated),
+                                 exact: JellyfinAPIService.seconds(fromTicks: raw.RunTimeTicks)))
         default:
             throw NSError(domain: "parity", code: 2, userInfo: [NSLocalizedDescriptionKey: "unknown item \(backend) \(kind)"])
         }
     }
 
-    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int) -> PlexMediaItem {
+    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double? = nil) -> PlexMediaItem {
         PlexMediaItem(
             id: key, title: title, artist: nil, episodeTitle: nil, seTag: nil, summary: "",
             year: 2000, originallyAvailableAt: nil, contentRating: nil, duration: minutes,
@@ -265,6 +267,6 @@ final class ScheduleParityTests: XCTestCase {
             videoProfile: nil, bitrate: nil, genres: [], rating: 0, userRating: 0,
             type: type, thumb: nil, art: nil, viewCount: 0,
             addedAt: addedAt, studio: nil, tmdbID: nil, imdbID: nil,
-            librarySource: type == .episode ? .tv : .movie)
+            librarySource: type == .episode ? .tv : .movie, exactDurationSeconds: exact)
     }
 }

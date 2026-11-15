@@ -3,6 +3,52 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Apple TV: a file plays to its own end, #315)
+
+**State.** Branch `appletv/315-play-to-end` off main `f76c021f`. Not merged, not in a build, not pushed. This is the Swift reference of an engine change: the web tuner's JS engine, the Roku and Android each have a port to make, and the golden vectors move with it (listed under Half-done). Apple TV 1.0.33 is not cut.
+
+**Why.** Chad: "the file should play till the end always". A tester on 1.0.32 (Plex 4.163, Original quality) saw a 4:11 music video show 4:00 and cut at 4:00. The servers floor a runtime to whole minutes and the schedule slot was that floored length, so a file runs 0 to 59 s past its slot. Until 1.0.31 nothing moved the channel on at the slot's end, and the player fell further behind the clock at every boundary (#293: the headline named the programme still playing while the guide had moved on). 1.0.32 fixed that by cutting the file at its slot end, which is the cut. The fix has to keep both: the file plays through and the guide, Now Playing and Up Next agree with it.
+
+**Changed.**
+- A programme's slot is the file's real runtime in whole seconds, rounded up (`PlexMediaItem.slotSeconds`), so the slot and the file end together and the guide never moves on before a file ends. A runtime that is missing, or that disagrees with the floored minutes by a minute or more, is the minutes, as before. Plex already kept the runtime (`exactDurationSeconds`); the Jellyfin and Emby scans now keep it too (from `RunTimeTicks`, the whole stack for a disc-stacked film), and `LibrarySnapshotStore.scanFieldsVersion` is 3 so a Jellyfin or Emby snapshot rescans once behind the guide.
+- The 1.0.32 slot tick is gone (`liveScheduleTick`, `liveSlotEnd`, the once-a-second timer): nothing moves a file on while it is playing.
+- A day no longer cuts a programme at midnight. The filler loop (a channel whose pool is too small to fill the day once) clipped its last block at midnight and shortened its first block of the day by an offset into the item; both are gone, so every block is its file's whole length. The day now starts when yesterday's last programme ends, and the guide's window includes yesterday's stored programme that is still on air after midnight, so no programme of today is on air under a file that is still playing. `DailyManifestStore.schemaVersion` is 3, so a stored day repacks once on update.
+- A natural end starts the next programme at 0, as it always did. The one new rule: the next file takes a second or two to load, which the clock keeps counting, so the player falls behind the guide by that much at every boundary. Once the guide is 10 s or more into the programme a natural end is about to start, it joins where the clock is instead (`AppState.naturalEndCatchUpSeconds`): the opening seconds of a programme go, never the end of anything.
+- The playback tracker and the Now Playing info use `slotSeconds` for the programme's length, so the position and the total agree with the guide.
+
+**Measured** (`TailLossMeasureTests`, six hours from 20:00 to 02:00 so every channel crosses midnight, on the 20 demo channels; a file really lasts its runtime plus 0 to 0.6 s the metadata does not say; the next file starts 2 s after the last ended, an assumed load time, not measured on a TV; "small pool" channels fill the day with the filler loop, "big pool" ones with the first pass, as on a real library). Tail lost is the part of a file that never played at a boundary; lag is how far behind the guide the player is when a programme starts; mismatch is the share of samples (every 15 s) where Now Playing names a different programme from the guide.
+
+| | Cuts | Tail lost, mean | Tail lost, max | Over 60 s | Now Playing differs from guide | Lag, mean / max |
+|---|---|---|---|---|---|---|
+| 1.0.29, music videos, big pools | 0 | 0 s | 0 s | 0 | 55.8% | 123 / 286 s |
+| 1.0.29, music videos, small pools | 0 | 0 s | 0 s | 0 | 56.6% | 124 / 300 s |
+| 1.0.29, demo (films), small pools | 0 | 0 s | 0 s | 0 | 23.0% | 956 / 5,575 s |
+| 1.0.32, music videos, big pools | 456 of 461 | 39.0 s | 229.1 s | 10 | 0% | 2 / 2 s |
+| 1.0.32, music videos, small pools | 449 of 454 | 38.0 s | 318.6 s | 9 | 0% | 2 / 2 s |
+| 1.0.32, demo (films), small pools | 19 of 24 | 1,063.7 s | 5,467.4 s | 9 | 0% | 2 / 2 s |
+| **This branch**, music videos, big pools | 0 | 0 s | 0 s | 0 | 2.7% | 8.9 / 14.4 s |
+| **This branch**, music videos, small pools | 0 | 0 s | 0 s | 0 | 2.8% | 8.9 / 14.4 s |
+| **This branch**, demo (films), small pools | 0 | 0 s | 0 s | 0 | 0.1% | 6.3 / 13.7 s |
+
+The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at midnight (a block the day clipped, up to 98% of a file). The branch's remaining 2.7% is the time between a file ending and the next one loading, and it stays bounded: with no catch-up it grows to 31.6% (lag 88 / 191 s) after six hours. The catch-up threshold is the one free number; the sweep (music videos, big pools, 2 s load):
+
+| Catch-up at | 5 s | 10 s | 15 s | 20 s | 30 s | 60 s | never |
+|---|---|---|---|---|---|---|---|
+| Now Playing differs from guide | 1.6% | 2.7% | 3.3% | 4.2% | 5.8% | 10.8% | 31.6% |
+| Lag, max | 9.5 s | 14.4 s | 19.5 s | 24.5 s | 34.3 s | 64.3 s | 190.8 s |
+| Programmes that lose their opening (of 394) | 153 | 80 | 54 | 39 | 27 | 12 | 0 |
+| Opening seconds skipped, total | 884 | 876 | 855 | 808 | 828 | 731 | 0 |
+
+10 s is the middle: about 11 s skipped every fifth programme. With no load time at all (0 s) the same pools give 1.8% and 10 files with a skipped opening, from the 0 to 0.6 s jitter alone.
+
+**Tests.** `NaturalEndDriftTests` is rewritten: the slot is the real runtime (rounded up, falling back to the minutes), every block on every channel is as long as its file across a midnight, the guide tiles with no overlap or gap across midnight, a programme running over midnight is on air until it ends and the next starts as it ends, the headline follows the guide with no cut (0 of 7,200 samples), a short file starts the next programme at its end, the lag stays under the catch-up, the catch-up joins the clock only far past it, and the 4:11 case: every slot 251 s, the next programme starts as the file ends, nothing cut. `CollectionShowsTests` expected the last block of the day to end exactly at midnight; it now expects it to run to its own end. The full `NostalgexTests` serial on one visible Simulator (1,385 tests) failed three, all of them asserting the old cut-at-midnight day: that one, the DST golden's fill case, and the parity golden. Those are updated (the DST case now expects the last programme to run past midnight by less than its own length, whole blocks, and only the last one over; the parity golden is regenerated from this build with `scripts/schedule-parity-golden.mjs`), and the four classes re-ran green.
+
+**Half-done.**
+- The port to the JS engine (`scripts/nostalgex-daily-manifest.js` and the web loaders), the Roku (`roku/source/schedule/DailyManifest.brs`, the Plex and MediaBrowser loaders) and Android. What each must change is listed in the coordinator's report; `scripts/schedule-parity-golden.json` is regenerated here from the Apple TV (all four cases change: the fixtures' pools are small, so every channel runs the filler loop, and their Jellyfin and Emby items carry real runtimes in ticks and their Plex items in milliseconds, which are now the slots); `npm run test:schedule-parity` is red until the JS engine matches. `scripts/schedule-dst-golden.json` has no data change, but what its `fill` case means does: the last programme may run past midnight (the Swift test and `nostalgex-schedule-dst-smoke.mjs` must agree).
+- A day stored before the update has minute slots until midnight, and Jellyfin and Emby items read before the rescan has run have no runtime: a file there can still run past its slot, and the catch-up bounds the lag.
+- Not measured on a TV: the real time a natural-end advance takes to start the picture (2 s is assumed), and the real gap between a file's runtime and its stream. The Plex HLS end fallback (the player parked within 2 s of the end with no notification) is a separate 2 s loss at most and is untouched.
+
+**Next.** Chad's go to merge; the web, Roku and Android ports; then 1.0.33 when he says.
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

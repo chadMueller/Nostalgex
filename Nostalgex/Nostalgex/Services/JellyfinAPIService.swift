@@ -446,6 +446,7 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     serverID: serverID.isEmpty ? nil : serverID,
                     videoBitDepth: source?.videoBitDepth,
                     videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+                    exactDurationSeconds: Self.seconds(fromTicks: ep.RunTimeTicks),
                     showKey: show.Id
                 )
             }
@@ -513,7 +514,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
             librarySource: isMusicVideo ? .musicVideo : .movie,
             serverID: serverID.isEmpty ? nil : serverID,
             videoBitDepth: source?.videoBitDepth,
-            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+            exactDurationSeconds: Self.seconds(fromTicks: stack?.totalRunTimeTicks ?? item.RunTimeTicks)
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -529,6 +531,12 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
     /// them, so they are named for both (#204). The web tuner, the Roku and the Android app
     /// send the same list.
     static let scanFields = "ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating"
+
+    /// The runtime in seconds, kept next to the floored minutes so the schedule can give a programme its real length.
+    static func seconds(fromTicks ticks: Int64?) -> Double? {
+        guard let ticks, ticks > 0 else { return nil }
+        return Double(ticks) / 10_000_000
+    }
 
     static func minutes(fromTicks ticks: Int64?) -> Int {
         guard let ticks else { return 0 }

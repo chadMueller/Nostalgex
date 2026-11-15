@@ -819,7 +819,6 @@ extension AppState {
                                                      credentialFingerprint: scheduleCredentialFingerprint)
             }?.nowPlaying?.endTime
             : nil
-        liveSlotEnd = liveSlotEnd(for: item)
 
         // Small delay to let AVPlayer clean up the old item
         let playerSeek = playerSeekSeconds
@@ -1311,17 +1310,6 @@ extension AppState {
         }
         var monitor = PlaybackStarvation()
         let title = item?.title ?? currentItem?.title ?? "Unknown"
-        if !isDemoMode {
-            // Same generation-only rule as the demo tick above: a retry of the file still
-            // stands in for the same slot.
-            Timer.publish(every: 1.0, on: .main, in: .common)
-                .autoconnect()
-                .sink { [weak self] _ in
-                    guard let self, self.loadGeneration == generation else { return }
-                    self.liveScheduleTick()
-                }
-                .store(in: &self.cancellables)
-        }
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -1551,10 +1539,18 @@ extension AppState {
         }
     }
 
-    // fromNaturalEnd: true when called from AVPlayerItemDidPlayToEndTime. In that case we
-    // always start the next item at 0 — actual file durations differ from Jellyfin/Plex
-    // metadata (sometimes by 40+ seconds), so applying schedule.elapsedSeconds would skip
-    // into the next episode. Schedule-sync seeks are only correct when tuning into a channel.
+    // fromNaturalEnd: true when called from AVPlayerItemDidPlayToEndTime. A file always plays to its own end
+    // (#315): the schedule gives each programme its real runtime (`PlexMediaItem.slotSeconds`), so the file and its
+    // slot end together and the next item starts at 0, at the moment the clock says it should. What is left over is
+    // the time the next file takes to load, a second or two a programme, which adds up. Once the guide is
+    // `naturalEndCatchUpSeconds` or more into the programme this starts, the player joins it where the clock is
+    // instead (its opening seconds go, never the end of anything), so the headline cannot lag the guide by more than
+    // that and a little. 10 s, from the sweep in TailLossMeasureTests: with 2 s of load a programme, a file's opening
+    // is skipped every fifth programme or so (about 11 s of it), and the headline is behind the guide 2.7% of the
+    // time (60 s: 10.8%; never: 31.6% and growing). Schedule-sync seeks are otherwise only for tuning into a channel.
+    /// How far behind the guide the player may fall at a natural end before the next programme joins where the clock is.
+    nonisolated(unsafe) static var naturalEndCatchUpSeconds = 10
+
     private func advanceToNextItem(fromNaturalEnd: Bool = false) {
         guard let channel = currentChannel else { return }
         let prevRatingKey = currentItem?.ratingKey
@@ -1590,6 +1586,11 @@ extension AppState {
             // the schedule is being re-synced from outside (channel change, watchdog).
             // Demo mode has no file to overrun, so it always joins the block at the clock.
             var newSeekOffset = (scheduleHasMoved && pick != nil && (!fromNaturalEnd || isDemoMode)) ? schedule.elapsedSeconds : 0
+            if fromNaturalEnd, !isDemoMode, scheduleHasMoved, pick?.id == schedule.nowPlaying?.item.id,
+               schedule.elapsedSeconds >= Self.naturalEndCatchUpSeconds {
+                newSeekOffset = schedule.elapsedSeconds
+                print("[Plex90] ADVANCE: \(schedule.elapsedSeconds)s behind the guide, joining \"\(pick?.title ?? "nil")\" where the clock is")
+            }
 
             if let item = pick,
                let conflictCH = ChannelScheduleBuilder.findConflict(
@@ -1622,44 +1623,6 @@ extension AppState {
             print("[Plex90] ADVANCE: \"\(prevTitle)\" -> \"\(currentItem?.title ?? "nil")\" on CH \(channel.name) (random fallback)")
         }
         loadCurrentItem()
-    }
-
-    // MARK: - Keeping a real file on the guide's clock
-
-    /// Plex, Jellyfin and Emby floor a runtime to whole minutes and the schedule slot is
-    /// that floored length, so a file runs 0 to 59 s past its slot. Starting the next item
-    /// at 0 when the file ends (the only safe start, a seek would skip into the episode)
-    /// left the player that much further behind the clock at every boundary: the headline
-    /// named the programme still playing while the guide had moved on (22.9% of samples in
-    /// the NaturalEndDriftTests model, 2026-11-09), and the gap grew about 30 s a programme.
-    /// Live TV does not wait for the tail of a programme, so neither do we: when the slot
-    /// ends and the file is still running, move to what the guide now shows. What is lost
-    /// is the end of the file past its slot, 59 s at most (credits, nearly always).
-    static let liveSlotGraceSeconds: TimeInterval = 90
-
-    /// When the slot of `item` ends, if the schedule has `item` on air right now. Nil for
-    /// demo mode (its own tick), multi-disc films (the slot is for the whole stack, the
-    /// parts end on their own) and anything the schedule does not have on air.
-    func liveSlotEnd(for item: PlexMediaItem) -> Date? {
-        guard !isDemoMode, item.additionalPartKeys == nil, let channel = currentChannel else { return nil }
-        let now = scheduleClock()
-        guard let live = ChannelScheduleBuilder.buildSchedule(
-            for: channel, at: now, credentialFingerprint: scheduleCredentialFingerprint
-        )?.nowPlaying, live.item.id == item.id else { return nil }
-        return live.endTime
-    }
-
-    /// Once a second while a real file plays. Past the end of its slot, and not by more
-    /// than the grace (beyond that the drift has another cause and the file's own end is
-    /// the safer signal), start what the guide shows at 0.
-    func liveScheduleTick() {
-        guard !isDemoMode, let end = liveSlotEnd else { return }
-        let late = scheduleClock().timeIntervalSince(end)
-        guard late >= 0, late <= Self.liveSlotGraceSeconds else { return }
-        print("[Plex90] SLOT END: \"\(currentItem?.title ?? "nil")\" ran \(Int(late))s past its slot, moving to the guide's programme")
-        liveSlotEnd = nil
-        playbackTracker?.onPlaybackPreparing()
-        advanceToNextItem(fromNaturalEnd: true)
     }
 
     // MARK: - Demo clip

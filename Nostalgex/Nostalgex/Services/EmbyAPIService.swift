@@ -367,6 +367,7 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
                     videoBitDepth: source?.videoBitDepth,
                     doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
                     videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+                    exactDurationSeconds: JellyfinAPIService.seconds(fromTicks: ep.RunTimeTicks),
                     showKey: show.Id
                 )
             }
@@ -435,7 +436,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             serverID: serverID.isEmpty ? nil : serverID,
             videoBitDepth: source?.videoBitDepth,
             doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
-            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+            exactDurationSeconds: JellyfinAPIService.seconds(fromTicks: stack?.totalRunTimeTicks ?? item.RunTimeTicks)
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))

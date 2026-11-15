@@ -120,7 +120,7 @@ final class PlaybackTracker {
         self.queue = queue
         self.now = now
 
-        let totalSec = Double(item.duration * 60)
+        let totalSec = Double(item.slotSeconds)
         let entryFrac = totalSec > 0 ? Double(seekOffset) / totalSec : 1.0
         self.eligibleEntry = entryFrac <= 0.15
 
@@ -324,7 +324,7 @@ final class PlaybackTracker {
         let epoch = permissions.activityEpoch
         let sid = sessionID
         let ticks = currentTimeMs() * 10_000
-        let durationTicks = item.duration * 60 * 10_000_000
+        let durationTicks = item.slotSeconds * 10_000_000
         let reported = state == "playing" ? (playerState ?? "playing") : state
         let backoff = self.backoff
         queue.enqueue {
@@ -367,7 +367,7 @@ final class PlaybackTracker {
 
     private func evaluateAndScrobble() {
         guard markWatched, eligibleEntry, !scrobbled, plexAPI != nil || watchReporter != nil else { return }
-        let totalSec = Double(item.duration * 60)
+        let totalSec = Double(item.slotSeconds)
         guard totalSec > 0, activeWatchSeconds / totalSec >= 0.75 else { return }
         scrobbled = true
         let api = plexAPI
