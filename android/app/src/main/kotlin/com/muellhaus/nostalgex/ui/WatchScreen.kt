@@ -81,6 +81,8 @@ import androidx.tv.material3.Text
 import com.muellhaus.nostalgex.AppModel
 import com.muellhaus.nostalgex.R
 import com.muellhaus.nostalgex.engine.DailyManifest
+import com.muellhaus.nostalgex.engine.InfoPanelLayout
+import com.muellhaus.nostalgex.engine.InfoPanelSection
 import com.muellhaus.nostalgex.engine.GuideChannel
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.MediaItem
@@ -502,60 +504,83 @@ private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
 
 @Composable
 private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaItem?) {
+    // The Apple TV's InfoPanelView at 106e8dda: gaps of 10 and 6, the order held in InfoPanelLayout.
     val color = hex(ch.def.colorHex)
     val now = ticking()
-    Column(Modifier.fillMaxSize().padding(u(40))) {
-        Spacer(Modifier.height(u(24)))
+    val sectionGap = u(10)
+    val innerGap = u(6)
+    // Held to the room it is given and anchored to the top, as the Apple TV's panel is: a long title, an
+    // artist, genres and a long description are taller than the room, and then the last line is cut.
+    Column(Modifier.fillMaxSize().clipToBounds().padding(u(40))) {
+        Spacer(Modifier.height(u(4)))
         Text(
             "CH %02d - %s".format(ch.number, ch.name.uppercase()),
             style = font(VT323, 36, color, tracking = 2),
             maxLines = 1,
-            modifier = Modifier.padding(bottom = u(20)),
+            modifier = Modifier.padding(bottom = sectionGap),
         )
         val np = schedule.nowPlaying ?: return@Column
         // The item the player has, when this is the channel on: the schedule can run a few seconds apart.
         val item = playingItem ?: np.item
-        Text(item.title, style = font(DMMonoMedium, 38, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = u(10)))
-        val subtitle = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
-        run {
-            if (subtitle.isNotEmpty()) {
-                Text(subtitle, style = font(DMMono, 22, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = u(10)))
-            }
-        }
-        Box(Modifier.padding(bottom = u(20)).fillMaxWidth().height(u(1)).background(color.copy(alpha = 0.3f)))
-        if (item.summary.isNotEmpty()) {
-            Text(
-                item.summary,
-                style = font(DMMono, 20, Color.White.copy(alpha = 0.65f)).copy(lineHeight = sp(28)),
-                // Two lines, as the Apple TV reserves; one under an episode line, so UP NEXT still
-                // fits in the panel (SwiftUI shrinks the stack to fit; Compose would push it off).
-                maxLines = if (subtitle.isNotEmpty()) 1 else 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(bottom = u(20)),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14)), modifier = Modifier.padding(bottom = u(20))) {
-            item.year?.let { MetaBadge(it.toString()) }
-            item.contentRating?.takeIf { it.isNotEmpty() }?.let { MetaBadge(it) }
-            if (item.rating > 0) {
-                Row(horizontalArrangement = Arrangement.spacedBy(u(6)), verticalAlignment = Alignment.CenterVertically) {
-                    Text("★", style = font(DMMono, 22, Yellow))
-                    Text("%.1f".format(item.rating), style = font(VT323, 24, Color.White.copy(alpha = 0.6f)))
+        val next = schedule.upNext
+        val episodeLine = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
+        val genres = item.musicGenreDisplay
+        val sections = InfoPanelLayout.sections(
+            hasArtist = !item.artist.isNullOrEmpty(),
+            hasGenres = genres != null,
+            hasEpisodeLine = episodeLine.isNotEmpty(),
+            hasBadges = item.year != null || !item.contentRating.isNullOrEmpty() || item.rating > 0,
+            hasUpNext = next != null,
+        )
+        for (section in sections) when (section) {
+            InfoPanelSection.TITLE ->
+                Text(item.title, style = font(DMMonoMedium, 38, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = innerGap))
+            InfoPanelSection.ARTIST ->
+                Text(item.artist.orEmpty(), style = font(DMMono, 22, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = innerGap))
+            InfoPanelSection.GENRES ->
+                Text(genres.orEmpty(), style = font(DMMono, 22, color.copy(alpha = 0.75f)), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = innerGap))
+            InfoPanelSection.EPISODE ->
+                Text(episodeLine, style = font(DMMono, 22, Color.White.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = innerGap))
+            InfoPanelSection.DIVIDER ->
+                Box(Modifier.padding(bottom = sectionGap).fillMaxWidth().height(u(1)).background(color.copy(alpha = 0.3f)))
+            InfoPanelSection.BADGES ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14)), modifier = Modifier.padding(bottom = sectionGap)) {
+                    item.year?.let { MetaBadge(it.toString()) }
+                    item.contentRating?.takeIf { it.isNotEmpty() }?.let { MetaBadge(it) }
+                    if (item.rating > 0) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(u(6)), verticalAlignment = Alignment.CenterVertically) {
+                            Text("★", style = font(DMMono, 22, Yellow))
+                            Text("%.1f".format(item.rating), style = font(VT323, 24, Color.White.copy(alpha = 0.6f)))
+                        }
+                    }
+                }
+            // Always two lines tall, empty or not, so the progress bar and UP NEXT under it never move.
+            InfoPanelSection.DESCRIPTION ->
+                Box(Modifier.padding(bottom = sectionGap).fillMaxWidth().height(u(28 * InfoPanelLayout.DESCRIPTION_LINES))) {
+                    Text(
+                        item.summary,
+                        style = font(DMMono, 20, Color.White.copy(alpha = 0.65f)).copy(lineHeight = sp(28)),
+                        maxLines = InfoPanelLayout.DESCRIPTION_LINES,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            InfoPanelSection.PROGRESS -> {
+                // The progress bar and time follow the wall clock (schedule.livePlayback).
+                val total = maxOf(1L, item.duration * 60L)
+                val elapsed = DailyManifest.liveElapsedSeconds(schedule, now) ?: schedule.elapsedSeconds
+                val progress = (elapsed.toFloat() / total).coerceIn(0f, 1f)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10)), modifier = Modifier.padding(bottom = sectionGap)) {
+                    Box(Modifier.weight(1f).height(u(4)).clip(RoundedCornerShape(u(2))).background(Color.White.copy(alpha = 0.08f))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(color))
+                    }
+                    Text("${formatTime(elapsed)} / ${formatTime(total)}", style = font(VT323, 24, Color.White.copy(alpha = 0.55f)))
                 }
             }
-            // The progress bar and time follow the wall clock (schedule.livePlayback).
-            val total = maxOf(1L, item.duration * 60L)
-            val elapsed = DailyManifest.liveElapsedSeconds(schedule, now) ?: schedule.elapsedSeconds
-            val progress = (elapsed.toFloat() / total).coerceIn(0f, 1f)
-            Box(Modifier.weight(1f).height(u(4)).clip(RoundedCornerShape(u(2))).background(Color.White.copy(alpha = 0.08f))) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(color))
-            }
-            Text("${formatTime(elapsed)} / ${formatTime(total)}", style = font(VT323, 24, Color.White.copy(alpha = 0.55f)))
-        }
-        schedule.upNext?.let { next ->
-            Row(horizontalArrangement = Arrangement.spacedBy(u(10)), verticalAlignment = Alignment.CenterVertically) {
-                Text("UP NEXT", style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3))
-                Text(next.item.title, style = font(DMMono, 18, Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            InfoPanelSection.UP_NEXT -> next?.let {
+                Row(horizontalArrangement = Arrangement.spacedBy(u(10)), verticalAlignment = Alignment.CenterVertically) {
+                    Text("UP NEXT", style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3))
+                    Text(it.item.musicDisplayLine, style = font(DMMono, 18, Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
