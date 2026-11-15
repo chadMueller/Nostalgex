@@ -3,6 +3,28 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV: a programme ends where Emby's file ends, not where its playlist says, #315)
+
+**State.** On `appletv/315-play-to-end`, on top of the play-to-end change below. Not pushed, not merged. In 1.0.33 (57) through the `appletv/1.0.33` merge.
+
+**Why.** Play to the end only works if the end is noticed. Emby lists every HLS segment as 6.0 s, the last one too, so its playlist runs up to 6 s past the file. With fMP4 segments (every HEVC stream Emby sends to an Apple TV, copied or re-encoded) the player shows the last frame it gets and waits for the rest. Nothing ended the programme: the old backstop needed 2 s or less left on the playlist with the rate at 0, the starvation monitor ignores a paused player, and nobody listened for the "failed to play to end" that comes much later. With the 1.0.32 slot tick gone, the channel sat on the last frame. Measured against Emby 4.10.1.0 with AVPlayer, the stream as the app asks for it:
+
+| file | last frame | runtime | playlist left | then |
+|---|---|---|---|---|
+| 21 min HEVC MKV, video copied | 1263.91 s | 1260.39 s | 2.1 s | paused; failed to play to end 41 s later |
+| 90 s HEVC MKV, video copied | 83.80 s | 90.03 s | 12.2 s | paused; same 52 s later (Apple TV: item failed, "Cannot Complete Action") |
+| 90 s hev1 MP4, re-encoded | 83.96 s | 90.01 s | 9.0 s | paused; same 13 s later |
+| 90 s H.264 MKV, copied into TS | 89.82 s, its last frame | 90.05 s | | ended normally |
+
+Emby never sends the missing 2 to 6 s, so moving on promptly is all the app can do. Request settings were tried and rejected: `SegmentLength=2` alone broke the timeline (24 s and 8 s jumps), `BreakOnNonKeyFrames=True` alone changed nothing (6.3 s lost), the two together ended cleanly but dropped 2 to 5 frames at every segment boundary for the whole programme and still lost 2.2 to 5.6 s. TS segments end cleanly, but AVPlayer will not show HEVC from TS.
+
+**Changed.**
+- `PlaybackEndRule` / `PlaybackEndWatch`: inside 8 s (one Emby segment and 2 s) of the programme's real runtime (`exactDurationSeconds`, checked against the minutes as `slotSeconds` does; none for a multi-part film), a playhead still for 2 s is the end, whether the player paused or was left waiting. The old playlist backstop stays.
+- The same window makes a failure the end: the item going `.failed` (the three status observers check it before retrying) and `AVPlayerItemFailedToPlayToEndTime`, which nothing heard before.
+- The starvation monitor stands down inside the window, so the tail never gets a 1080p retry or the "server too slow" card. A stall anywhere else is unchanged.
+
+**Tested.** `PlaybackEndRuleTests` replays the three measured ends, paused and waiting, and a stall mid-file; it was red on the old backstop (all three ends never ended, the window and wiring checks failed) and is green now. The next programme starts 2 s after the last frame arrives, plus its load.
+
 ## 2026-11-15 (Apple TV 1.0.33 (57): the release branch)
 
 **State.** Branch `appletv/1.0.33`: `appletv/315-play-to-end`, `appletv/guide-text-three-steps`, `appletv/stripe-colours-golden` and `appletv/318-collection-paging` on main, version 1.0.33, build 57. Archived locally, not uploaded; on the basement Apple TV for a look. PR #328 (#315) is not merged yet; the branch is rebased on main once it is.
