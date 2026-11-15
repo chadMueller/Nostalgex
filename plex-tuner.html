@@ -7934,7 +7934,11 @@
   }
 
   // What this browser decodes beyond the codecs every one does (scripts/nostalgex-direct-play.js).
-  const directPlayProbe = NostalgexDirectPlay.browserProbe(() => document.createElement('video'));
+  let directPlayProbeFn = null;
+  function directPlayProbe(name) {
+    if (!directPlayProbeFn) directPlayProbeFn = NostalgexDirectPlay.browserProbe(() => document.createElement('video'));
+    return directPlayProbeFn(name);
+  }
 
   function toggleFullscreen() {
     const container = document.getElementById('video-container');

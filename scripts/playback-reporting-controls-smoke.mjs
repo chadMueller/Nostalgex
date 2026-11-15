@@ -33,6 +33,8 @@ function fixture({ backend = 'plex', type = 'movie', unreadable = false } = {}) 
     mediaBackend: backend, plexServerUrl: 'https://fixture.invalid', plexToken: 'fixture-token',
     jellyfinUserId: 'fixture-user', jellyfinAuthHeader: () => 'fixture-header', getClientId: () => 'fixture-client',
     document: { getElementById: () => video },
+    // The tracker's length is the programme's slot (#315); the minutes are all these fixtures need of it.
+    NostalgexDailyManifest: { slotSeconds: (item) => (item.duration || 0) * 60 },
     setInterval: fn => { tick = fn; return 1; }, clearInterval() {},
     setTimeout: fn => { fn(); return 1; },
     fetch: async (raw, init = {}) => {
