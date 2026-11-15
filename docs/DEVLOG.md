@@ -3,6 +3,15 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Roku: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT and LARGER)
+
+**State.** Branch `roku/guide-text-three-steps`. Not merged, not in a build, not pushed. Chad: "make sure roku and android both have the small, normal, large text changes."
+
+**Why.** The Apple TV's `appletv/guide-text-three-steps` (`db43276f`): the middle step is labelled DEFAULT and keeps the raw value "normal", "large" is the old LARGE's value, "small" is new, anything unknown reads as "normal". The Roku had two steps and sizes 22 and 25 for its normal.
+
+**Changed.** `source/guide/GuideText.brs`: `NxGuideTextStep` and `NxGuideTextStepFrom` (the saved value), `NxGuideTextNext` (SMALLER, DEFAULT, LARGER and round), `NxGuideTextLabel`, `NxSaveGuideTextStep`, and `NxGuideTextSizesFor(level)`. Sizes in px on the 1920 by 1080 canvas: program title, number and name 17, 20, 29; times, CHANNEL heading and the WATERSHED placeholder 19, 22, 29; the number box 31, 36, 54; the bundle list's rows 17, 20, 22 and its BUNDLES heading 19, 22, 25. SMALLER's three numbers are the named constants `NxGuideSmallerText`, `NxGuideSmallerTime` and `NxGuideSmallerNumW`, awaiting Chad's pick (18, 20 and 33 is the fallback). The Now Playing panel's text follows too (`NxPanelMetricsFor`): 17, 20, 22, the item title 25, 29, 29 and the CH tag 24, 28, 28. A row is still 64 px, the header 58 and the channel column 340 at every step. The Settings row cycles the three; the sync key and the raw values are unchanged. `NxGuideTextSizes(large)` and `NxGuideTextLarge` stay as the two-step calls.
+
+**Checks.** `GuideNavTests` and `SleepTimerTests` (every size, the fits, the cycle, the read), and `scripts/guide-text-smoke.mjs`, which now reads the Roku's three steps (its own commit, built on the web branch's version `e22b7eb6`).
 ## 2026-11-14 (Roku: the guide's stripe colours are held to the shared golden, GuideStripesTests)
 
 **State.** Branch `roku/stripe-golden`. Not merged, not in a build, not pushed.

@@ -294,7 +294,7 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
     right = x + w - pm.padX
     opens = e.id <> invalid and (Left(NxToStr(e.id), 5) = "pick:" or e.id = "info")
     if opens then
-        chev = newLabel(">", tk.font.label, pm.text, tk.color.text2, right - 20, y + 17, 20)
+        chev = newLabel(">", tk.font.label, pm.text, tk.color.text2, right - 20, y + NxPanelTextTop(pm), 20)
         if focused then chev.color = tk.color.cyan
         chev.horizAlign = "right"
         g.AppendChild(chev)
@@ -322,12 +322,12 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
             valueColor = tk.color.cyan
             font = tk.font.label
         end if
-        v = newLabel(e.value, font, pm.text, valueColor, x + pm.padX, y + 17, right - x - pm.padX)
+        v = newLabel(e.value, font, pm.text, valueColor, x + pm.padX, y + NxPanelTextTop(pm), right - x - pm.padX)
         v.horizAlign = "right"
         g.AppendChild(v)
-        valueW = Len(e.value) * 13.2 + 12
+        valueW = Len(e.value) * pm.text * 0.6 + 12
     end if
-    g.AppendChild(newLabel(e.label, tk.font.label, pm.text, labelColor, x + pm.padX, y + 17, right - x - pm.padX - valueW))
+    g.AppendChild(newLabel(e.label, tk.font.label, pm.text, labelColor, x + pm.padX, y + NxPanelTextTop(pm), right - x - pm.padX - valueW))
     return h
 end function
 
@@ -612,7 +612,7 @@ function renderInfo(s as Object) as Integer
     tag = newLabel("CH " + NxToStr(s.number), tk.font.tag, pm.tag, tk.color.text, x + 18, y, 0)
     g.AppendChild(tag)
     nameX = x + 18 + tag.boundingRect().width + 14
-    g.AppendChild(newLabel(UCase(NxToStr(s.name)), tk.font.label, pm.text, tk.color.text2, nameX, y + 3, x + w - nameX))
+    g.AppendChild(newLabel(UCase(NxToStr(s.name)), tk.font.label, pm.text, tk.color.text2, nameX, y + 3 + (22 - pm.text) \ 2, x + w - nameX))
     y = y + 44
     title = newLabel(NxToStr(s.title), tk.font.label, pm.title, tk.color.text, x, y, w)
     title.wrap = true
@@ -628,18 +628,18 @@ function renderInfo(s as Object) as Integer
         ux = pm.safeX
         uw = m.colX[0] - pm.zoneGap - ux
         badgeText = NxUpNextBadge(s.upNextIn)
-        chipW = Len(badgeText) * 13.2 + 28
+        chipW = Len(badgeText) * pm.text * 0.6 + 28
         ' The title takes what the capsule leaves and is cut with an ellipsis; the capsule is always whole.
-        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, ux, y + 5, uw - chipW - 14)
+        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, ux, y + 6 + (20 - pm.text) \ 2, uw - chipW - 14)
         g.AppendChild(nextLbl)
         ' The label is as wide as the room it may take, so its text's own width is
-        ' counted (DM Mono at 22 is 13.2 px a character), not its box.
-        textW = Len(NxToStr(s.upNext)) * 13.2
+        ' counted (DM Mono is 0.6 of its size wide), not its box.
+        textW = Len(NxToStr(s.upNext)) * pm.text * 0.6
         if textW > uw - chipW - 14 then textW = uw - chipW - 14
         chipX = ux + textW + 14
         g.AppendChild(newCapsule(chipX, y, chipW, 36, tk.color.cyan))
         g.AppendChild(newCapsule(chipX + 2, y + 2, chipW - 4, 32, tk.color.selectedRow))
-        chip = newLabel(badgeText, tk.font.label, pm.text, tk.color.cyan, chipX, y + 5, chipW)
+        chip = newLabel(badgeText, tk.font.label, pm.text, tk.color.cyan, chipX, y + 6 + (20 - pm.text) \ 2, chipW)
         chip.horizAlign = "center"
         g.AppendChild(chip)
         y = y + 36

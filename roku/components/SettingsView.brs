@@ -1061,13 +1061,11 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
         label = "GUIDE TEXT SIZE"
-        detail = "Bigger program titles and channel names in the guide"
-        state = "NORMAL"
+        detail = "Size of the text in the guide"
+        level = NxGuideTextStep()
+        state = NxGuideTextLabel(level)
         stateColor = m.t2
-        if NxGuideTextLarge() then
-            state = "LARGE"
-            stateColor = m.accent + "FF"
-        end if
+        if level <> "normal" then stateColor = m.accent + "FF"
     else if row.kind = "guideTimeout" then
         ' The Apple TV's GUIDE TIMEOUT (#274): OFF, 5 MIN, 15 MIN; OK moves to the next.
         label = "GUIDE TIMEOUT"
@@ -1448,8 +1446,8 @@ sub pressRow()
         print "settings: watershed "; NxWatershedOn()
         render()
     else if row.kind = "guideText" then
-        NxSaveGuideTextLarge(not NxGuideTextLarge())
-        print "settings: guide text size "; NxGuideTextLarge()
+        NxSaveGuideTextStep(NxGuideTextNext(NxGuideTextStep()))
+        print "settings: guide text size "; NxGuideTextLabel(NxGuideTextStep())
         render()
     else if row.kind = "guideTimeout" then
         NxSaveGuideTimeout(NxGuideTimeoutNext(NxGuideTimeoutRead()))

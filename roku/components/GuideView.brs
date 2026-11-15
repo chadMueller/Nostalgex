@@ -166,13 +166,13 @@ end sub
 ' choice, and the CHANNEL heading set to match. True when the sizes changed,
 ' so the grid wants drawing again.
 function applyGuideText() as Boolean
-    large = NxGuideTextLarge()
-    ' Never compare invalid to a Boolean: the first call has no choice yet.
+    level = NxGuideTextStep()
+    ' Never compare invalid to a String: the first call has no choice yet.
     if m.guideText <> invalid then
-        if m.guideTextLarge = large then return false
+        if m.guideTextStep = level then return false
     end if
-    m.guideTextLarge = large
-    m.guideText = NxGuideTextSizes(large)
+    m.guideTextStep = level
+    m.guideText = NxGuideTextSizesFor(level)
     styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text2)
     m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
     return true
@@ -2487,7 +2487,7 @@ end sub
 sub renderSidebar()
     ' The bundle list on the Apple TV 1.0.32's footing (#264, issue #262's
     ' tokens): a 380 px panel in the panel colour, a 25 px text-2 heading, rows
-    ' 64 px high with 22 px names that do not follow GUIDE TEXT SIZE, a bundle's
+    ' 64 px high with names at GUIDE TEXT SIZE's list step (17, 20 or 22), a bundle's
     ' colour only in the row's left bar, and the selected row in the
     ' selected-row fill with the cyan outline and glow.
     tk = NxTokens()
@@ -2496,7 +2496,9 @@ sub renderSidebar()
     side.RemoveChildrenIndex(side.GetChildCount(), 0)
     side.AppendChild(newRect(0, 0, 380, 525, tk.color.panel))
     side.AppendChild(newRect(380, 0, 1, 525, "0xFFFFFF1A"))
-    side.AppendChild(newLabel("BUNDLES", tk.font.label, tk.compactSize.body, tk.color.text2, 24, 16, 0))
+    gt = m.guideText
+    if gt = invalid then gt = NxGuideTextSizesFor(NxGuideTextStep())
+    side.AppendChild(newLabel("BUNDLES", tk.font.label, gt.pkgHead, tk.color.text2, 24, NxGuideLineTop(62, gt.pkgHead), 0))
     first = m.sideFocus - 4
     if first < 0 then first = 0
     y = 62
@@ -2536,7 +2538,7 @@ sub renderSidebar()
             side.AppendChild(gear)
             x = x + 26 + 14
         end if
-        side.AppendChild(newLabel(t.name, tk.font.label, tk.guideRow, tc, x, y + (rowH - 29) \ 2, 360 - x))
+        side.AppendChild(newLabel(t.name, tk.font.label, gt.pkgRow, tc, x, y + NxGuideLineTop(rowH, gt.pkgRow), 360 - x))
         y = y + rowH + 4
         if i = 0 then
             side.AppendChild(newRect(16, y + 1, 348, 1, "0xFFFFFF1A"))

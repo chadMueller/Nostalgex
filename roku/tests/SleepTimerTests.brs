@@ -46,8 +46,15 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "up next: no number", NxUpNextBadge(invalid), "UP NEXT IN LESS THAN 1 MIN")
 
     ' ── The panel's measures: the Apple TV 1.0.32's NowPlayingMetrics.swift (#266) ──
-    pm = NxPanelMetrics()
-    NxCheck(r, "metrics: text 22, title 29, tag 28", pm.text.ToStr() + "," + pm.title.ToStr() + "," + pm.tag.ToStr(), "22,29,28")
+    ' NxPanelMetrics() itself reads the saved level from the registry, which the interpreter has no section for.
+    pm = NxPanelMetricsFor("normal")
+    NxCheck(r, "metrics: DEFAULT text 20, title 29, tag 28", pm.text.ToStr() + "," + pm.title.ToStr() + "," + pm.tag.ToStr(), "20,29,28")
+    for each x in [["small", "17,25,24"], ["normal", "20,29,28"], ["large", "22,29,28"]]
+        pf = NxPanelMetricsFor(x[0])
+        NxCheck(r, "metrics: " + x[0] + " text, title, tag", pf.text.ToStr() + "," + pf.title.ToStr() + "," + pf.tag.ToStr(), x[1])
+        NxCheck(r, "metrics: " + x[0] + " leaves the row, poster and columns alone", FormatJson([pf.rowH, pf.colW, pf.posterW, pf.posterH]), "[64,440,120,180]")
+    end for
+    NxCheck(r, "metrics: a line of text sits in the 64 px row", FormatJson([NxPanelTextTop(NxPanelMetricsFor("small")), NxPanelTextTop(NxPanelMetricsFor("normal")), NxPanelTextTop(NxPanelMetricsFor("large"))]), "[20,19,17]")
     NxCheck(r, "metrics: row 64, padding 18, gap 8", pm.rowH.ToStr() + "," + pm.padX.ToStr() + "," + pm.rowGap.ToStr(), "64,18,8")
     NxCheck(r, "metrics: columns 440, 28 apart", pm.colW.ToStr() + "," + pm.colGap.ToStr(), "440,28")
     NxCheck(r, "metrics: poster 120 by 180, 18 to the text", pm.posterW.ToStr() + "," + pm.posterH.ToStr() + "," + pm.posterGap.ToStr(), "120,180,18")
