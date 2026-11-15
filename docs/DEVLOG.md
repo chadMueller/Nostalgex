@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV 1.0.33 (57): the release branch)
+
+**State.** Branch `appletv/1.0.33`: `appletv/315-play-to-end`, `appletv/guide-text-three-steps`, `appletv/stripe-colours-golden` and `appletv/318-collection-paging` on main, version 1.0.33, build 57. Archived locally, not uploaded; on the basement Apple TV for a look. PR #328 (#315) is not merged yet; the branch is rebased on main once it is.
+
+**Changed.** `GuideStripeFocusTests` failed on main since the guide's rows went to 64 pt, for two reasons in the test, not the app. The last bundle (channels 14 to 20) is shorter than the screen, so the list stops with channel 20 at its bottom (1,079 of 1,080 pt) and channel 14 9.5 pt below the top; the test now accepts that only when the list has run out. And it took a row to be 81 pt (the old 80 pt row and its divider); it now reads the row's own frame.
+
+## 2026-11-15 (Apple TV: the Jellyfin and Emby collection list in pages, and what reading library pages ahead would save, #318)
+
+**State.** Branch `appletv/318-collection-paging` off main. Not merged, not in a build, not pushed.
+
+**Changed.** The list of collections (BoxSets) on Jellyfin and Emby was one request with no StartIndex or Limit; a server with an auto-collections plugin can hold thousands. It is now read 500 at a time, as the web tuner does (`MediaBrowserPaging.readAll`), until the server's TotalRecordCount, a short page or an empty one.
+
+**Measured, not wired.** Reading library pages ahead (`MediaBrowserPaging.readAllAhead`, three in flight, handed back in order) against a model server that takes the same time for every 200-title page and builds pages in parallel: 30 pages at 100 ms each took 3.12 s one at a time and 1.14 s three ahead (63% less). The time the app spends on a page between two requests is small: decoding a realistic 200-title page (326 KB) takes 5.7 ms median on the Simulator, so overlapping that alone saves almost nothing; the gain is all in the server building pages at the same time. A model can't say whether a real Jellyfin or Emby does that, so the scan still reads library pages one at a time. Shows were already read ten series at a time. Next: time three-ahead against a real big library before wiring it into `fetchAllItems`.
+
+**Tests.** `MediaBrowserPagingTests` (three requests for 1,234 collections, a short or empty page or no total ends it, the query) and `MediaBrowserReadAheadTests`, with `CollectionShowsTests`: all pass.
+
 ## 2026-11-15, later (Apple TV: UP NEXT title first, a louder cursor, the stripe wraps, ICLOUD on top, posters on Jellyfin and Emby, OPEN IN JELLYFIN, the other server's discovery)
 
 **State.** On branch `appletv/guide-text-three-steps`. Not merged, not in a build, not pushed. From Chad's second and third looks at the basement TV.
@@ -115,16 +131,6 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 - Not measured on a TV: the real time a natural-end advance takes to start the picture (2 s is assumed), and the real gap between a file's runtime and its stream. The Plex HLS end fallback (the player parked within 2 s of the end with no notification) is a separate 2 s loss at most and is untouched.
 
 **Next.** The web, Roku and Android ports of this engine change, against the regenerated golden.
-
-## 2026-11-15 (Apple TV: the Jellyfin and Emby collection list in pages, and what reading library pages ahead would save, #318)
-
-**State.** Branch `appletv/318-collection-paging` off main. Not merged, not in a build, not pushed.
-
-**Changed.** The list of collections (BoxSets) on Jellyfin and Emby was one request with no StartIndex or Limit; a server with an auto-collections plugin can hold thousands. It is now read 500 at a time, as the web tuner does (`MediaBrowserPaging.readAll`), until the server's TotalRecordCount, a short page or an empty one.
-
-**Measured, not wired.** Reading library pages ahead (`MediaBrowserPaging.readAllAhead`, three in flight, handed back in order) against a model server that takes the same time for every 200-title page and builds pages in parallel: 30 pages at 100 ms each took 3.12 s one at a time and 1.14 s three ahead (63% less). The time the app spends on a page between two requests is small: decoding a realistic 200-title page (326 KB) takes 5.7 ms median on the Simulator, so overlapping that alone saves almost nothing; the gain is all in the server building pages at the same time. A model can't say whether a real Jellyfin or Emby does that, so the scan still reads library pages one at a time. Shows were already read ten series at a time. Next: time three-ahead against a real big library before wiring it into `fetchAllItems`.
-
-**Tests.** `MediaBrowserPagingTests` (three requests for 1,234 collections, a short or empty page or no total ends it, the query) and `MediaBrowserReadAheadTests`, with `CollectionShowsTests`: all pass.
 
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
