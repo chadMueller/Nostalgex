@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (web tuner: the weather channel, first version, Trello I-016)
+
+**State.** Branch `web/weather-channel` off main `eaf4443e`. Not merged, not pushed, not deployed. A push to main ships the page and the relay together.
+
+**Why.** Chad wants a 24/7 local weather channel: current conditions, today's forecast, a 5-day forecast and radar, in the app's look. The web tuner goes first and is the reference the Apple TV, Roku and Android ports copy.
+
+**Changed.**
+- CH 600, LOCAL WEATHER. Not in channels.json and in no bundle: the page adds it to the guide while its switch in Settings is on, last in the list. Its id is 1,030,000 (the next free dynamic block), so a channel the viewer makes later cannot take it, and CH 600 is clear of every id and number in channels.json, the franchise block (310-399), the collection block (400-499) and HIGH ROTATION (500-513).
+- The picture is a 1920x1080 canvas the page draws (`scripts/nostalgex-weather-screens.js`): four screens on a 65 second loop that follows the wall clock. The rules are `scripts/nostalgex-weather.js`; `scripts/weather-golden.json` holds the Apple TV, Roku and Android ports to the same answers.
+- Forecast: MET Norway Locationforecast 2.0 through a new relay, `api/weather.js`, next to `api/tmdb.js`. It identifies itself, rounds to 2 decimals, never asks MET before its Expires, uses If-Modified-Since after it, and holds an answer at the edge 3 hours (30 minutes in the Nordics). The Docker tuner calls the same relay with `X-Nostalgex-Client: selfhost`.
+- Places: a viewer types a city or postcode (Settings > PLAYBACK & PICTURE > WEATHER). GeoNames files, built by `scripts/build-weather-data.mjs` into `public/weather/places/` (70,042 cities, 112,451 postcodes in US, CA, GB, AU, DE; GB and CA keep only the outward part). The Docker image copies them (`selfhost-build.mjs`). No IP lookup.
+- Radar: NOAA MRMS (US) and Environment Canada GeoMet (Canada) over a map the page draws itself from Natural Earth outlines (`public/weather/basemap.json`). Elsewhere the card says RADAR NOT AVAILABLE IN YOUR AREA. Echo colours are mapped to the app's five (cyan, yellow, amber, red, pink).
+- Music: if the library has music videos, one plays under the loop from a shuffled bag; no reporting, no failure card. None means silence.
+- Units: Fahrenheit where the place's country is the US, Celsius elsewhere, a setting to change it.
+- Tests: `npm run test:weather` and `test:weather-proxy` are in `npm test`; `test:weather:browser` (headless, 140 checks, three sizes) is run by hand like the other browser smokes. `test:season` and `test:web-tune-ownership` run slices of the page; the second needed two stubs.
+
+**Half-done.** Radar for countries outside the US and Canada (DWD for Germany has a clear licence and works, the frame list needs a 983 KB capabilities file, so it was left out). No alerts. Apple TV, Roku and Android have not ported it.
+
+**Next.** Chad's go on: CH 600 or another number; whether the 9 MB of place files stay committed; the privacy page line (written, not added).
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

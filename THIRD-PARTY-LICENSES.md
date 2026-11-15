@@ -23,6 +23,20 @@ The image (`npm run build:selfhost`) bundles these from npm instead of loading t
 | DM Mono Regular and Medium (`tuner/fonts/`, license in `vendor/licenses/OFL-DMMono.txt`) | SIL Open Font License 1.1 |
 | nginx (base image `nginxinc/nginx-unprivileged`) | 2-clause BSD |
 
+## Weather channel (web tuner and Docker image)
+
+The LOCAL WEATHER channel (CH 600) draws its own screens and uses these data sources. The credit shows on the channel and in Settings.
+
+| Source | Used for | License and credit |
+|---|---|---|
+| MET Norway, Locationforecast 2.0 (api.met.no), through the relay at `api/weather.js` | The forecast | CC BY 4.0 and NLOD 2.0. "Data from MET Norway." Rearranged for display. https://creativecommons.org/licenses/by/4.0/ |
+| GeoNames (geonames.org), cities5000 and postal code files | The place list a viewer types into, shipped as static files under `weather/places/` (built by `scripts/build-weather-data.mjs`) | CC BY 4.0. Place names from GeoNames. Only the outward part of a UK postcode is kept. |
+| Natural Earth (naturalearthdata.com), 1:50m coastline, lakes and boundary lines | The map drawn under the radar (`weather/basemap.json`) | Public domain. |
+| US National Weather Service, MRMS composite reflectivity (opengeo.ncep.noaa.gov) | Radar for the United States | Public domain (weather.gov/disclaimer). Not presented as official NWS material. |
+| Environment and Climate Change Canada, GeoMet (geo.weather.gc.ca), RADAR_1KM_RRAI and RADAR_1KM_RSNO | Radar for Canada | ECCC data licence, commercial use allowed. "Data Source: Environment and Climate Change Canada." |
+
+The Yr name and logo are not used, and the channel does not copy the look of Yr or of any other weather service.
+
 ## Roku app (`roku/`)
 
 The Roku port is contributed work under its own MIT license, copyright the

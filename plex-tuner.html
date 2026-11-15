@@ -48,6 +48,8 @@
 <script src="scripts/nostalgex-playback-recovery.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
+<script src="scripts/nostalgex-weather.js"></script>
+<script src="scripts/nostalgex-weather-screens.js"></script>
 <style>
   :root {
     /* Text floors, in screen pixels (Chad, 2026-11-10: 1 Apple TV pt is 0.5 CSS px on a desktop
@@ -3502,6 +3504,24 @@
     text-align: center;
   }
   .watershed-card[hidden] { display: none; }
+
+  /* WEATHER CHANNEL (I-016). The picture is a canvas the page draws (scripts/nostalgex-weather-screens.js): over the video (it plays the
+     music under it), under the failure card, the static and every overlay. The button on the no-location card is for a TV browser with no keys. */
+  #weather-screen { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #0a0a1a; z-index: 2; }
+  #weather-screen.on { display: block; }
+  #weather-actions { display: none; position: absolute; left: 0; right: 0; bottom: 14%; z-index: 4; justify-content: center; }
+  #weather-actions.on { display: flex; }
+  .wx-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .wx-actions [hidden], .wx-search[hidden] { display: none !important; }
+  .wx-search { margin: 0 0 14px; padding: 16px; border: 1.5px solid #3A4670; border-radius: 12px; background: #0A0F1E; }
+  .wx-input { width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.6); color: #fff; border: 2px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 12px 14px; font-family: 'DM Mono', monospace; font-size: var(--fs-body); letter-spacing: 0.04em; text-transform: uppercase; }
+  .wx-input:focus { outline: none; border-color: var(--cyan); }
+  .wx-hint { min-height: 1.4em; margin: 10px 2px 0; font-size: var(--fs-cap); color: rgba(255,255,255,0.55); letter-spacing: 0.06em; }
+  .wx-results { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .wx-result { text-align: left; background: #141B33; color: #fff; border: 1.5px solid #3A4670; border-radius: 12px; padding: 14px 18px; font-family: 'DM Mono', monospace; font-size: var(--fs-body); cursor: pointer; }
+  .wx-result:hover, .wx-result:focus { outline: none; border-color: var(--cyan); background: #0B2A3A; }
+  .wx-credits { font-size: var(--fs-cap); color: rgba(255,255,255,0.55); line-height: 1.5; margin: 14px 0 0; }
+  .wx-credits a { color: rgba(0,255,255,0.7); }
   .watershed-card-title { font-family: 'DM Mono', monospace; font-size: var(--fs-cap); letter-spacing: 0.08em; color: var(--cyan); line-height: 1.6; font-weight: 500; }
   .watershed-card-detail { font-size: var(--fs-desc); color: rgba(255,255,255,0.7); margin-top: 12px; line-height: 1.3; }
   .watershed-card-hint { font-size: var(--fs-cap); color: rgba(255,255,255,0.55); margin-top: 10px; font-weight: 500; }
@@ -3886,6 +3906,10 @@
            box with a large play icon over a video with no poster while the next
            channel loads; this tells it there is nothing to draw. -->
       <video id="plex-video" autoplay muted playsinline webkit-playsinline poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
+
+      <!-- The weather channel (CH 600): drawn by the page, over the video. See WEATHER CHANNEL in the script. -->
+      <canvas id="weather-screen" width="1920" height="1080" role="img" aria-label="Local weather: current conditions, today's forecast, the 5-day forecast and radar"></canvas>
+      <div id="weather-actions"><button class="nx-btn" type="button" onclick="wxOpenSettings()">SET LOCATION</button></div>
 
       <!-- Unmute button -->
       <button class="unmute-btn" id="unmute-btn">CLICK TO UNMUTE &nbsp;/&nbsp; M KEY</button>
@@ -4301,6 +4325,43 @@
           <button class="plex-btn plex-btn--toggle" id="cfg-auto-subs" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleAutoSubsForeignAudio()">ON</button>
         </div>
       </div>
+      <div class="config-section-label" id="wx-section" style="margin-top: 28px;">WEATHER</div>
+      <!-- LOCAL WEATHER, CH 600: a loop of current conditions, today's forecast, the 5-day forecast and radar. Real buttons and a text box,
+           so a TV browser with no keys can set it up. -->
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Location</div>
+          <div class="cfg-row-desc" id="wx-place-desc">Type a city or a postcode, then pick it from the matches.</div>
+        </div>
+        <div class="wx-actions">
+          <button class="plex-btn" id="wx-change-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxOpenSearch()">SET LOCATION</button>
+          <button class="plex-btn" id="wx-remove-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxClearPlace()" hidden>REMOVE</button>
+        </div>
+      </div>
+      <div class="wx-search" id="wx-search" hidden>
+        <input class="wx-input" id="wx-input" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="City or postcode" aria-label="City or postcode" oninput="wxSearchInput(this.value)" onkeydown="wxSearchKey(event)">
+        <div class="wx-hint" id="wx-hint" role="status"></div>
+        <div class="wx-results" id="wx-results" role="listbox" aria-label="Matching places"></div>
+      </div>
+      <div class="cfg-row cfg-row--wrap">
+        <div>
+          <div class="cfg-row-title">Units</div>
+          <div class="cfg-row-desc">AUTO uses Fahrenheit in the United States and Celsius everywhere else. <span id="wx-units-note"></span></div>
+        </div>
+        <div class="sleep-chips" id="wx-units-chips" role="group" aria-label="Weather units">
+          <button class="sleep-chip" type="button" data-units="auto" onclick="wxSetUnits('auto')" aria-pressed="true">AUTO</button>
+          <button class="sleep-chip" type="button" data-units="F" onclick="wxSetUnits('F')" aria-pressed="false">&deg;F</button>
+          <button class="sleep-chip" type="button" data-units="C" onclick="wxSetUnits('C')" aria-pressed="false">&deg;C</button>
+        </div>
+      </div>
+      <div class="cfg-row">
+        <div>
+          <div class="cfg-row-title">Show the weather channel</div>
+          <div class="cfg-row-desc">LOCAL WEATHER, channel 600, in the guide. Off takes it out.</div>
+        </div>
+        <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
+      </div>
+      <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service and Environment and Climate Change Canada. Map outlines from Natural Earth. To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
     </div>
 
     <div id="config-tab-server" style="display:none" tabindex="-1">
@@ -4726,6 +4787,7 @@
   function applyBundleFilter() {
     if (bundles.length === 0) {
       // No bundles defined: show all channels (backward compat)
+      if (WX.channelOn && !CHANNELS.includes(WX_CHANNEL)) { buildWeatherSchedule(WX_CHANNEL); CHANNELS.push(WX_CHANNEL); }
       return;
     }
     const enabledChannelIDs = new Set();
@@ -4754,10 +4816,456 @@
       if (FL && !FL.franchiseChannelVisible(ch, franchiseGate)) return;
       CHANNELS.push(ch);
     });
+    // LOCAL WEATHER is in no bundle: it is in the guide while its switch in Settings is on.
+    if (WX.channelOn) { buildWeatherSchedule(WX_CHANNEL); CHANNELS.push(WX_CHANNEL); }
     const ordered = sortChannelsForGuide(CHANNELS);
     CHANNELS.length = 0;
     ordered.forEach(ch => CHANNELS.push(ch));
   }
+
+  // ══════════════════════════════════════
+  // WEATHER CHANNEL (Trello I-016)
+  // ══════════════════════════════════════
+  // CH 600, LOCAL WEATHER: a 24/7 local-forecast loop the page draws itself on a canvas over the video
+  // (scripts/nostalgex-weather-screens.js). CURRENT CONDITIONS, TODAY'S FORECAST, the 5-DAY FORECAST, RADAR.
+  // The rules and the numbers are scripts/nostalgex-weather.js, the reference the Apple TV, Roku and Android
+  // ports follow (scripts/weather-golden.json holds them to it).
+  //
+  // The channel is not in channels.json and not in a bundle: applyBundleFilter adds it to the guide when the
+  // WEATHER row in Settings has it on. It has no pool, so the pool builders never see it.
+  // Data: the forecast through the site's relay (api/weather.js, MET Norway), the place from the viewer's own
+  // typing (static GeoNames files under weather/places/), radar from NOAA (US) or Environment Canada (Canada).
+  // Nothing leaves the browser until the forecast call, and that call carries the town rounded to 2 decimals.
+  // Music under the loop: one of the viewer's own music videos, if the library has any, else silence.
+  // A page whose helper scripts did not load (a stale cache, a test that runs the page in a bare VM) simply has no weather channel.
+  const WXE = globalThis.NostalgexWeather || null;
+  const WXS = globalThis.NostalgexWeatherScreens || null;
+  const WX_KEY = { place: 'nostalgex_weather_place', units: 'nostalgex_weather_units', channel: 'nostalgex_weather_channel', forecast: 'nostalgex_weather_forecast' };
+  const WX_CHANNEL = !WXE ? null : {
+    id: WXE.CHANNEL_ID, number: WXE.CHANNEL_NUMBER, name: WXE.CHANNEL_NAME, color: WXE.CHANNEL_COLOR, colorHex: WXE.CHANNEL_COLOR,
+    category: 'weather', weather: true, stock: false, enabled: true, minItems: 0, rules: {}, schedule: [], itemPool: [],
+  };
+  const WX = {
+    place: null, units: 'auto', channelOn: !!WXE,
+    met: null, metKey: '', savedMs: 0, expiresMs: 0, loading: false, failedMs: 0, model: null, status: 'noplace',
+    radar: { status: 'none', key: '', frames: [], provider: null, base: null, loadedMs: 0, loading: false },
+    basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false,
+    musicBag: [], musicItem: null,
+    index: null, results: [], searchSeq: 0, searchTimer: null,
+  };
+  function wxStored(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function wxLoadSettings() {
+    if (!WXE || !WXS) { WX.channelOn = false; return; }
+    try { WX.place = WXE.normalizePlace(JSON.parse(wxStored(WX_KEY.place) || 'null')); } catch (e) { WX.place = null; }
+    const u = wxStored(WX_KEY.units);
+    WX.units = u === 'F' || u === 'C' ? u : 'auto';
+    WX.channelOn = wxStored(WX_KEY.channel) !== '0';
+  }
+  wxLoadSettings();
+  const wxUnits = () => WXE.unitsFor(WX.place, WX.units);
+  const wxPlaceKey = (p) => `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`;
+  const wxPlaceTitle = () => (WX.place ? WXE.placeLabel(WX.place) : '');
+  const wxActive = () => !!WXE && currentChannel === WXE.CHANNEL_ID;
+
+  /** The relay: the page's own /api/weather, or the site's from a self-hosted tuner or a local dev server. */
+  function wxRelay() {
+    const cfg = globalThis.NostalgexEnrichment.configFromPage(document, location);
+    return { url: String(cfg.relayURL || '/api/tmdb').replace(/\/tmdb$/, '/weather'), client: cfg.clientValue || 'web' };
+  }
+
+  // The forecast: kept in this browser with its time, and asked for again only when MET's rules allow.
+  function wxReadForecast(key) {
+    try {
+      const v = JSON.parse(wxStored(WX_KEY.forecast) || 'null');
+      return v && v.key === key && v.body && v.body.properties ? v : null;
+    } catch (e) { return null; }
+  }
+  function wxSaveForecast() {
+    lsSet(WX_KEY.forecast, JSON.stringify({ key: WX.metKey, savedMs: WX.savedMs, expiresMs: WX.expiresMs, body: WX.met }));
+  }
+  /** Only what the channel reads, so the copy kept in this browser is a third of the size. */
+  function wxTrim(met) {
+    const keep = ['air_pressure_at_sea_level', 'air_temperature', 'apparent_air_temperature', 'cloud_area_fraction', 'dew_point_temperature',
+      'relative_humidity', 'ultraviolet_index_clear_sky', 'wind_from_direction', 'wind_speed'];
+    const ts = ((met && met.properties && met.properties.timeseries) || []).map((s) => {
+      const details = {};
+      for (const k of keep) if (s.data && s.data.instant && k in s.data.instant.details) details[k] = s.data.instant.details[k];
+      const data = { instant: { details } };
+      for (const k of ['next_1_hours', 'next_6_hours', 'next_12_hours']) if (s.data && s.data[k]) data[k] = s.data[k];
+      return { time: s.time, data };
+    });
+    return { properties: { meta: { updated_at: met.properties.meta && met.properties.meta.updated_at }, timeseries: ts } };
+  }
+  function wxRebuildModel() {
+    WX.lastBuildMs = Date.now();
+    if (!WX.place || !WX.met) { WX.model = null; return; }
+    try {
+      WX.model = WXE.buildModel(WX.met, WX.place, Date.now());
+      WX.status = 'ready';
+    } catch (e) {
+      // A document that ends before now: ask again at the next check.
+      WX.model = null;
+      WX.status = 'error';
+      WX.expiresMs = 0;
+    }
+    if (wxActive()) buildChannelSchedule(WX_CHANNEL);
+  }
+  async function wxEnsureForecast(force) {
+    if (!WX.place) { WX.status = 'noplace'; WX.model = null; return; }
+    const key = wxPlaceKey(WX.place);
+    const now = Date.now();
+    if (WX.metKey !== key) {
+      const saved = wxReadForecast(key);
+      WX.met = saved ? saved.body : null;
+      WX.metKey = key;
+      WX.savedMs = saved ? saved.savedMs : 0;
+      WX.expiresMs = saved ? saved.expiresMs : 0;
+      WX.model = null;
+    }
+    if (!force && WX.met && !WXE.forecastDue({ body: true, savedMs: WX.savedMs, expiresMs: WX.expiresMs }, now)) {
+      if (!WX.model) wxRebuildModel();
+      return;
+    }
+    if (WX.loading || (!force && WX.failedMs && now - WX.failedMs < 60000)) { if (!WX.model) wxRebuildModel(); return; }
+    WX.loading = true;
+    if (!WX.met) WX.status = 'loading';
+    const mine = key;
+    try {
+      const relay = wxRelay();
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(WXE.forecastUrl(relay.url, WX.place), { headers: { Accept: 'application/json', 'X-Nostalgex-Client': relay.client }, signal: ctrl.signal });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = wxTrim(await res.json());
+      if (!body.properties.timeseries.length) throw new Error('empty forecast');
+      if (mine === WX.metKey) {
+        WX.met = body;
+        WX.savedMs = Date.now();
+        const exp = Date.parse(res.headers.get('expires') || '');
+        WX.expiresMs = Number.isFinite(exp) ? exp : WX.savedMs + 30 * 60000;
+        WX.failedMs = 0;
+        wxSaveForecast();
+      }
+    } catch (e) {
+      WX.failedMs = Date.now();
+      if (!WX.met) WX.status = 'error';
+    }
+    WX.loading = false;
+    wxRebuildModel();
+  }
+
+  // Radar: the frames of the last hour or so, recolored to our five bands and kept as small canvases.
+  function wxLoadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timer = setTimeout(() => { img.src = ''; reject(new Error('timeout')); }, 15000);
+      img.onload = () => { clearTimeout(timer); resolve(img); };
+      img.onerror = () => { clearTimeout(timer); reject(new Error('image')); };
+      img.src = url;
+    });
+  }
+  async function wxEnsureRadar() {
+    const R = WX.radar;
+    if (!WX.place) return;
+    const provider = WXE.radarProvider(WX.place);
+    if (!provider) { R.status = 'none'; R.provider = null; R.frames = []; R.key = ''; return; }
+    const key = wxPlaceKey(WX.place);
+    const now = Date.now();
+    if (R.loading) return;
+    if (R.key === key && R.status === 'ready' && now - R.loadedMs < 5 * 60000) return;
+    if (R.key === key && R.status === 'error' && now - R.loadedMs < 60000) return;
+    R.loading = true;
+    R.provider = provider;
+    if (R.key !== key) { R.frames = []; R.base = null; R.status = 'loading'; }
+    R.key = key;
+    const place = WX.place;
+    try {
+      const bbox = WXE.radarBBox(place.lat, place.lon, WXS.MAP_ASPECT, 5);
+      if (!WX.basemap) {
+        const r = await fetch('weather/basemap.json');
+        if (r.ok) WX.basemap = await r.json();
+      }
+      if (WX.basemap) R.base = WXS.prepareBasemap(WX.basemap, bbox);
+      // One pixel of the picture is 4 of the screen: chunky on purpose, and a quarter of the download.
+      const w = Math.round(WXS.MAP.w / 4), h = Math.round(WXS.MAP.h / 4);
+      const capsRes = await fetch(provider.capabilitiesUrl(provider.layers[0]));
+      if (!capsRes.ok) throw new Error(`capabilities ${capsRes.status}`);
+      const stamps = WXE.pickFrameTimes(WXE.parseTimeDimension(await capsRes.text()), provider.frames, provider.stepMinutes);
+      if (!stamps.length) throw new Error('no frames');
+      const frames = await Promise.all(stamps.map(async (t) => {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const cx = c.getContext('2d');
+        let any = false;
+        for (const layer of provider.layers) {
+          try {
+            const img = await wxLoadImage(provider.mapUrl(layer, bbox, w, h, t));
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const tx = tmp.getContext('2d', { willReadFrequently: true });
+            tx.drawImage(img, 0, 0, w, h);
+            try { tx.putImageData(WXS.recolorRadar(tx.getImageData(0, 0, w, h)), 0, 0); } catch (e) { /* a picture the browser will not let us read is drawn as it came */ }
+            cx.drawImage(tmp, 0, 0);
+            any = true;
+          } catch (e) { /* this layer's frame is missing; the other may be there */ }
+        }
+        return any ? { timeMs: Date.parse(t), canvas: c } : null;
+      }));
+      if (key === wxPlaceKey(WX.place || place)) {
+        R.frames = frames.filter(Boolean);
+        R.status = R.frames.length ? 'ready' : 'error';
+      }
+    } catch (e) {
+      R.status = R.frames.length ? 'ready' : 'error';
+    }
+    R.loadedMs = Date.now();
+    R.loading = false;
+  }
+
+  // The picture.
+  function wxState() {
+    return {
+      nowMs: Date.now(), place: WX.place, units: wxUnits(), channelNumber: WXE.CHANNEL_NUMBER,
+      textScale: guideTextSize() === 'large' ? 1.16 : 1,
+      status: WX.place ? (WX.model ? 'ready' : WX.status) : 'noplace',
+      model: WX.place ? WX.model : null, updatedMs: WX.model ? WX.model.updatedMs : null,
+      radar: WX.radar,
+    };
+  }
+  function wxDraw() {
+    const canvas = document.getElementById('weather-screen');
+    if (!canvas || !WX.fonts) return;
+    WXS.render(canvas.getContext('2d'), wxState());
+  }
+  function wxTick() {
+    WX.timer = null;
+    if (!wxActive()) return;
+    const now = Date.now();
+    wxDraw();
+    if (now - WX.lastBuildMs > 60000) wxRebuildModel();
+    if (now - WX.lastCheckMs > 20000) {
+      WX.lastCheckMs = now;
+      wxEnsureForecast(false);
+    }
+    // The radar frames load from the TODAY screen on, so they are there when the radar comes up.
+    if (WXE.screenAt(now).index >= 1) wxEnsureRadar();
+    WX.timer = setTimeout(wxTick, WXS.nextDelay(now));
+  }
+  async function wxLoadFonts() {
+    if (WX.fonts) return;
+    try {
+      await Promise.race([
+        Promise.all(['400 25px "DM Mono"', '500 40px "DM Mono"', '40px "VT323"'].map((f) => document.fonts.load(f, '0123456789 ABC'))),
+        new Promise((r) => setTimeout(r, 4000)),
+      ]);
+    } catch (e) { /* the fallback monospace draws */ }
+    WX.fonts = true;
+  }
+  function wxShowActions() {
+    const el = document.getElementById('weather-actions');
+    if (el) el.classList.toggle('on', wxActive() && !WX.place);
+  }
+  /** Tuned onto the channel. */
+  function startWeatherScreen(ch) {
+    const canvas = document.getElementById('weather-screen');
+    if (canvas) canvas.classList.add('on');
+    clearVideoError();
+    document.getElementById('channel-display').classList.remove('active');
+    wxShowActions();
+    wxLoadFonts().then(() => {
+      if (wxActive() && !WX.timer) wxTick();
+    });
+    wxEnsureForecast(false).then(() => { if (wxActive()) { renderActiveGuide(); updateInfoPanel(); } });
+    wxStartMusic();
+  }
+  /** Left the channel (or hid it). */
+  function hideWeatherScreen() {
+    const canvas = document.getElementById('weather-screen');
+    if (canvas) canvas.classList.remove('on');
+    const el = document.getElementById('weather-actions');
+    if (el) el.classList.remove('on');
+    if (WX.timer) { clearTimeout(WX.timer); WX.timer = null; }
+    WX.musicItem = null;
+  }
+
+  // The music: the viewer's own music videos, a shuffled bag, only while the channel is up. See WXE.musicPool.
+  function wxStartMusic() {
+    const pool = plexConnected ? WXE.musicPool(allItemsCache) : [];
+    if (!pool.length) { WX.musicItem = null; stopVideo(); return; }
+    const r = WXE.nextTrack(pool, WX.musicBag, Math.random);
+    WX.musicBag = r.bag;
+    WX.musicItem = r.item;
+    if (r.item) playCurrentItem({ ...r.item, offsetSeconds: 0, _weatherBed: true }, WX_CHANNEL);
+  }
+  function wxMusicLine() {
+    const it = WX.musicItem;
+    if (!it) return '';
+    return `♪ ${it.artist ? `${it.artist} · ` : ''}${it.title || ''}`;
+  }
+
+  // The guide row and the info panel: hour-long blocks, and a summary of what the channel says now.
+  function buildWeatherSchedule(ch, nowSec = Date.now() / 1000) {
+    const blocks = WXE.guideBlocks(wxPlaceTitle(), nowSec * 1000, 26);
+    const summary = WX.model ? WXE.infoSummary(WX.model, wxUnits()) : (WX.place ? '' : 'Set your location in Settings to see the forecast.');
+    blocks.forEach((b) => { if (summary) b.item.summary = summary; });
+    ch._live = null;
+    ch._guide = null;
+    ch._manifestBlocks = blocks;
+    const i = blocks.findIndex((b) => nowSec >= b.startSec && nowSec < b.endSec);
+    const rows = blocks.slice(Math.max(i, 0), Math.max(i, 0) + 4);
+    ch.schedule = rows.map((b, j) => {
+      const item = { ...b.item, startSec: b.startSec, endSec: b.endSec };
+      if (j === 0) {
+        const span = b.endSec - b.startSec;
+        item.progress = ((nowSec - b.startSec) / span) * 100;
+        item.position = formatTime(nowSec - b.startSec);
+        item.total = formatTime(span);
+        item.offsetSeconds = 0;
+      }
+      return item;
+    });
+  }
+
+  // Settings: LOCATION, UNITS, and the channel's switch.
+  function wxPlaceIndex() {
+    if (!WX.index) {
+      WX.index = WXE.createPlaceIndex({
+        load: async (path) => {
+          const r = await fetch(`weather/${path}`);
+          return r.ok ? r.json() : null;
+        },
+      });
+    }
+    return WX.index;
+  }
+  function wxRenderSettings() {
+    const desc = document.getElementById('wx-place-desc');
+    if (!desc) return;
+    desc.textContent = WX.place ? `${wxPlaceTitle()}${WX.place.code ? ` (${WX.place.code})` : ''}` : 'Type a city or a postcode, then pick it from the matches.';
+    document.getElementById('wx-change-btn').textContent = WX.place ? 'CHANGE' : 'SET LOCATION';
+    document.getElementById('wx-remove-btn').hidden = !WX.place;
+    document.querySelectorAll('#wx-units-chips .sleep-chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.units === WX.units ? 'true' : 'false'));
+    const t = document.getElementById('wx-channel-toggle');
+    t.textContent = WX.channelOn ? 'ON' : 'OFF';
+    t.classList.toggle('on', WX.channelOn);
+    t.setAttribute('aria-pressed', WX.channelOn ? 'true' : 'false');
+    const u = document.getElementById('wx-units-note');
+    if (u) u.textContent = WX.place ? `Showing ${wxUnits() === 'F' ? 'degrees Fahrenheit, miles per hour and inches' : 'degrees Celsius, kilometres per hour and millimetres'}.` : '';
+  }
+  function wxOpenSearch() {
+    const box = document.getElementById('wx-search');
+    box.hidden = false;
+    const input = document.getElementById('wx-input');
+    input.value = '';
+    document.getElementById('wx-results').textContent = '';
+    document.getElementById('wx-hint').textContent = 'Type at least 2 letters of a city, or a postcode.';
+    input.focus({ preventScroll: false });
+  }
+  function wxCloseSearch() {
+    document.getElementById('wx-search').hidden = true;
+    WX.results = [];
+  }
+  function wxSearchInput(value) {
+    clearTimeout(WX.searchTimer);
+    WX.searchTimer = setTimeout(() => wxRunSearch(value), 140);
+  }
+  async function wxRunSearch(value) {
+    const seq = ++WX.searchSeq;
+    const hint = document.getElementById('wx-hint');
+    const list = document.getElementById('wx-results');
+    const q = String(value || '').trim();
+    if (q.length < 2) { list.textContent = ''; WX.results = []; hint.textContent = 'Type at least 2 letters of a city, or a postcode.'; return; }
+    let r;
+    try { r = await wxPlaceIndex().search(q); } catch (e) { r = { places: [], hint: 'PLACE LIST NOT AVAILABLE' }; }
+    if (seq !== WX.searchSeq) return;
+    WX.results = r.places;
+    list.textContent = '';
+    r.places.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'wx-result';
+      b.setAttribute('role', 'option');
+      b.dataset.i = String(i);
+      b.textContent = p.label;
+      b.addEventListener('click', () => wxPickPlace(i));
+      list.appendChild(b);
+    });
+    hint.textContent = r.places.length ? `${r.places.length} ${r.places.length === 1 ? 'match' : 'matches'}. Pick one.` : (r.hint || 'NO MATCH. TRY THE CITY NAME OR A POSTCODE.');
+  }
+  function wxSearchKey(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(WX.searchTimer);
+      wxRunSearch(e.target.value).then(() => { if (WX.results.length) wxPickPlace(0); });
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      wxCloseSearch();
+      document.getElementById('wx-change-btn').focus();
+    } else if (e.key === 'ArrowDown') {
+      const first = document.querySelector('#wx-results .wx-result');
+      if (first) { e.preventDefault(); first.focus(); }
+    }
+  }
+  function wxPickPlace(i) {
+    const p = WXE.normalizePlace(WX.results[i]);
+    if (!p) return;
+    WX.place = p;
+    lsSet(WX_KEY.place, JSON.stringify(p));
+    WX.met = null; WX.metKey = ''; WX.model = null; WX.savedMs = 0; WX.expiresMs = 0; WX.failedMs = 0;
+    WX.radar.key = ''; WX.radar.frames = []; WX.radar.status = 'none';
+    try { localStorage.removeItem(WX_KEY.forecast); } catch (e) { /* nothing kept */ }
+    wxCloseSearch();
+    wxRenderSettings();
+    wxEnsureForecast(true).then(() => { renderActiveGuide(); if (wxActive()) { buildChannelSchedule(WX_CHANNEL); updateInfoPanel(); } });
+    if (wxActive()) { wxShowActions(); wxDraw(); }
+    document.getElementById('wx-change-btn').focus();
+  }
+  function wxClearPlace() {
+    WX.place = null; WX.met = null; WX.metKey = ''; WX.model = null; WX.status = 'noplace';
+    WX.radar.key = ''; WX.radar.frames = []; WX.radar.status = 'none';
+    try { localStorage.removeItem(WX_KEY.place); localStorage.removeItem(WX_KEY.forecast); } catch (e) { /* nothing kept */ }
+    wxRenderSettings();
+    renderActiveGuide();
+    if (wxActive()) { buildChannelSchedule(WX_CHANNEL); updateInfoPanel(); wxShowActions(); wxDraw(); }
+  }
+  function wxSetUnits(u) {
+    WX.units = u === 'F' || u === 'C' ? u : 'auto';
+    lsSet(WX_KEY.units, WX.units);
+    wxRenderSettings();
+    if (wxActive()) { buildChannelSchedule(WX_CHANNEL); updateInfoPanel(); wxDraw(); }
+  }
+  function wxToggleChannel() {
+    WX.channelOn = !WX.channelOn;
+    lsSet(WX_KEY.channel, WX.channelOn ? '1' : '0');
+    wxRenderSettings();
+    const leaving = !WX.channelOn && wxActive();
+    if (!WX.channelOn) {
+      const at = CHANNELS.indexOf(WX_CHANNEL);
+      if (at >= 0) CHANNELS.splice(at, 1);
+    }
+    applyBundleFilter();
+    if (leaving) {
+      hideWeatherScreen();
+      currentChannel = null;
+      const next = channelToOpenOn();
+      if (next) switchChannel(next.id); else stopVideo();
+    }
+    if (guideVisible) renderActiveGuide();
+  }
+  /** The button on the channel's own card: straight to the setting, for a TV browser with no keys. */
+  function wxOpenSettings() {
+    showConfig();
+    switchConfigTab('general');
+    const sec = document.getElementById('wx-section');
+    if (sec) sec.scrollIntoView({ block: 'start' });
+    wxOpenSearch();
+    // Settings moves focus into itself as it opens; the box takes it back once that is done.
+    setTimeout(() => { const i = document.getElementById('wx-input'); if (i && !document.getElementById('wx-search').hidden) i.focus({ preventScroll: true }); }, 150);
+  }
+  // The text size can change under a drawn channel.
+  document.addEventListener('DOMContentLoaded', wxRenderSettings);
 
   // Exclusive rule matching: returns the owning channelID if item is exclusive, else null
   function itemGuideTitle(item) {
@@ -5111,7 +5619,8 @@
       const last = NostalgexLastChannel.channelToOpen(saved, enabled);
       if (last) return last;
     }
-    return enabled[0] || null;
+    // The weather channel is never what a load opens on by default: it is a guest in the guide, not a library channel.
+    return enabled.find(ch => !ch.weather) || null;
   }
 
   // ── WATERSHED: the switch, and the card for a channel it has emptied ─────────
@@ -5736,6 +6245,7 @@
   }
 
   function showPlaybackFailure(failure, willSkip) {
+    if (wxActive()) return;   // a music video that will not play under the weather is skipped without a word
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
     display.classList.add('active', 'has-failure');
@@ -5755,6 +6265,7 @@
   }
 
   function showVideoError(message) {
+    if (wxActive()) return;
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
     display.classList.add('active', 'has-failure');
@@ -5788,6 +6299,7 @@
    * guide rows, `schedule` the rows the panels read, now first, its offset from the clock.
    */
   function buildChannelSchedule(channel, nowSec = Date.now() / 1000) {
+    if (channel.weather) { buildWeatherSchedule(channel, nowSec); return; }
     channel.itemPool = (channel.itemPool || []).filter(item => item && item.duration > 0);
     const items = getTimeFilteredPool(channel);
     if (items.length === 0) {
@@ -5841,6 +6353,7 @@
     const schedules = new Map();
     CHANNELS.forEach(ch => {
       ch._guide = null;
+      if (ch.weather) { buildWeatherSchedule(ch, nowSec); return; }
       if (ch.itemPool && ch.itemPool.length > 0) {
         buildChannelSchedule(ch, nowSec);
         if (ch.enabled && ch._live) schedules.set(ch.id, ch._live);
@@ -5995,8 +6508,8 @@
       const progsCol = document.createElement('div');
       progsCol.className = 'grid-row-programs';
 
-      if (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0) {
-        const items = getTimeFilteredPool(ch);
+      if (ch.weather || (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0)) {
+        const items = ch.weather ? [] : getTimeFilteredPool(ch);
         const nowSec = nowMs / 1000;
         const windowStartSec = windowStartMs / 1000;
 
@@ -6196,6 +6709,7 @@
     if (!ch || !ch.enabled) return;
     if (currentChannel === channelId) return;
 
+    if (!ch.weather) hideWeatherScreen();
     clearVideoError();
     hideWatershedCard();
     sleepStoppedPlayback = false;
@@ -6210,7 +6724,7 @@
     // Rebuild schedule for this channel (clock-based position may have changed). Its first
     // row is what tuning in plays on the Apple TV (AppState.selectChannel): what is on by the
     // clock, from where it is now, even on a channel the guide shows giving a title way.
-    if (ch.itemPool && ch.itemPool.length > 0) {
+    if (ch.weather || (ch.itemPool && ch.itemPool.length > 0)) {
       buildChannelSchedule(ch);
     }
 
@@ -6264,7 +6778,9 @@
       : '';
 
     // Try to play video if we have Plex data
-    if (plexConnected && now.ratingKey) {
+    if (ch.weather) {
+      startWeatherScreen(ch);
+    } else if (plexConnected && now.ratingKey) {
       playCurrentItem(now, ch);
       display.classList.remove('active');
     } else {
@@ -6801,7 +7317,7 @@
 
     // Track the live program even with both reporting choices off, so an explicit
     // opt-in can take effect without restarting the live stream.
-    playbackTracker = makePlaybackTracker(item);
+    playbackTracker = item._weatherBed ? null : makePlaybackTracker(item);   // the music under the weather is never reported as watched
 
     // Check if it's an HLS stream
     const isHLS = streamUrl.includes('.m3u8');
@@ -7018,6 +7534,7 @@
   // A programme ended: on its own (`fromNaturalEnd`), or skipped after a stall or a failure.
   // What plays next is the Apple TV's pick (nextAfterEnd), not simply what the clock says.
   function onItemEnded(channel, endedItem, fromNaturalEnd = false) {
+    if (channel && channel.weather) { if (currentChannel === channel.id) wxStartMusic(); return; }   // the next music video
     buildChannelSchedule(channel);
     const next = nextAfterEnd(channel, endedItem, fromNaturalEnd);
     if (next && next.ratingKey) {
@@ -7083,7 +7600,7 @@
     // InfoPanelView: the details are what the player is playing (`playingItem`), which can run
     // a little behind the clock after a programme overruns its slot; the progress is the
     // schedule's.
-    const playing = !preview && activePlaybackRequest && activePlaybackRequest.channelId === ch.id ? activePlaybackRequest.item : null;
+    const playing = !preview && !ch.weather && activePlaybackRequest && activePlaybackRequest.channelId === ch.id ? activePlaybackRequest.item : null;
     const shown = preview ? preview.entry.item : (playing || now);
 
     setInfoChannelTag(ch);
@@ -7107,6 +7624,7 @@
     const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
     const upNextLead = upNextSeconds === null ? 'Up next' : (t => t.charAt(0) + t.slice(1).toLowerCase())(NostalgexUpNext.label(upNextSeconds));
     document.getElementById('info-upnext').textContent = next ? `${upNextLead}: ${itemGuideTitle(next)}` : '';
+    if (ch.weather) document.getElementById('info-upnext').textContent = wxMusicLine();   // the music under the loop, if there is any
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -7610,7 +8128,7 @@
     // Collection and found-franchise channels are rebuilt from the server scan, the library
     // and the saved switches (nostalgex_enabled_collections, nostalgex_enabled_franchises);
     // restoring one here would bring it back as a custom channel with no rules.
-    const config = CHANNELS.filter(ch => !ch.autoGenerated && !isRuntimeChannel(ch)).map(ch => ({
+    const config = CHANNELS.filter(ch => !ch.autoGenerated && !isRuntimeChannel(ch) && !ch.weather).map(ch => ({
       id: ch.id,
       name: ch.name,
       colorHex: ch.colorHex,
@@ -10888,7 +11406,7 @@
   // screen. Switches on every package with content (not seasonal, not collections), saves the
   // choice, and builds what that brings in. Returns true if it switched any on.
   function autoEnableBundlesWithContent() {
-    if (CHANNELS.some(ch => ch.enabled)) return false;
+    if (CHANNELS.some(ch => ch.enabled && !ch.weather)) return false;
     const ids = globalThis.NostalgexLibraryLoad.bundlesToAutoEnable({
       bundles,
       enabledBundleIDs,
