@@ -3,6 +3,24 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: library selection, the Apple TV's per-library picker, I-092)
+
+**State.** Branch `roku/i092-library-picker` (off `roku/i091-scan-memory-guard`). Not merged, not in a build, not pushed.
+
+**Why.** The real answer to a very large library (I-091): let the viewer leave a library out before the first scan ever reads it. The Apple TV's `LibrarySectionRef` and `LibrarySectionSelectionStore` (docs/LIBRARY-SELECTION.md, I-054): one row per library section, on or off, every one on to start with (opting out, so nobody lands on an empty guide), shown before the first scan and again in Settings.
+
+**Changed.**
+- `source/util/LibrarySections.brs`: the saved set of sections turned off (`deselectedSections`, "serverID::sectionKey"), the sections the last scan or the picker saw (`librarySections`), the Apple TV's type labels and subtitles (a library the viewer hides on Jellyfin reads HIDDEN ON JELLYFIN), and the lists that leave a turned-off section out.
+- Both scans leave a turned-off section alone before they ask it for anything: Plex through its section list, Jellyfin and Emby through their views. Each scan saves the sections it saw with the library (hidden marks kept), so Settings lists them without asking the server.
+- `LibraryPickerView` (CHOOSE YOUR LIBRARIES, cloned from the server picker's look: Movies, TV Shows and so on, each ON or OFF, CONTINUE on top of the choice). `MainScene.afterSignIn` asks for the sections (`LibraryTask` in its new `sections` mode, which resolves a Plex server first) after sign-in and after the Plex server picker, and shows the picker only when there is more than one section. Any trouble listing them starts the scan as before. A Jellyfin library the viewer hides starts off unless INCLUDE LIBRARIES HIDDEN ON JELLYFIN is on; turning one on in the picker makes the scan ask for hidden libraries.
+- Settings, SERVERS & ACCOUNTS: a LIBRARIES list under the servers, a row each, ON or OFF, the last one on stays on. Leaving Settings with a change saves it and reads the library again behind the guide, as RESCAN LIBRARY does. A new sign-in or a sign-out starts with every library on.
+
+**Seen on the stick** (test-data build, stand-in Jellyfin with a Movies and a Shows library, a hook that walks the picker as a first sign-in does): the picker lists Movies and Shows, both ON, focus on CONTINUE; Up and OK turned Shows OFF; CONTINUE read 600 items in 1 s and never asked the server for the Shows library; Settings listed MOVIES ("only library on") and SHOWS (OFF); turning Shows ON and leaving Settings read the library again, 700 items. Screenshots in `projects/nostalgex-internal/docs/roku-shots/i092-2026-11-15/`.
+
+**Tests.** `LibrarySectionsTests` (33 checks: the saved set, the labels, the section lists for Plex and Jellyfin, the merge, and a scan that never asks for a library that is off). pr-check passes.
+
+**Not done.** A Plex library on a stick: the section list and the scan filter are written the same way but no Plex stand-in exists, so it is untested on a device. A Jellyfin library the viewer hides, as the picker marks it, is not seen on a stick either. The sections task lists only the servers that are on; a server turned on in Settings has its sections after the next scan.
+
 ## 2026-11-15 (Roku: a very large Jellyfin or Emby library no longer quits the app at the end of first setup, I-091)
 
 **State.** Branch `roku/i091-scan-memory-guard` (off candidate v11). Not merged, not in a build, not pushed.
