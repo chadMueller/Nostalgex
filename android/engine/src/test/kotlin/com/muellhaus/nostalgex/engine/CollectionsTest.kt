@@ -47,6 +47,46 @@ class CollectionsTest {
         assertEquals(CollectionCategory.CUSTOM, ch.category)
     }
 
+    /** A server of 1,200 collections that honours StartIndex and Limit, and says how many there are. */
+    private fun boxSetServer(count: Int, calls: MutableList<String>, honoursStart: Boolean = true, sendsTotal: Boolean = true): (String) -> kotlinx.serialization.json.JsonElement = { p ->
+        calls.add(p)
+        val doc = if (p.contains("IncludeItemTypes=BoxSet")) {
+            val start = if (honoursStart) Regex("StartIndex=(\\d+)").find(p)!!.groupValues[1].toInt() else 0
+            val limit = Regex("Limit=(\\d+)").find(p)!!.groupValues[1].toInt()
+            val ids = (start until minOf(count, start + limit)).joinToString(",") { "{\"Id\":\"b$it\",\"Name\":\"Box $it\"}" }
+            """{"Items":[$ids]""" + (if (sendsTotal) ""","TotalRecordCount":$count""" else "") + "}"
+        } else """{"Items":[{"Id":"m1"}],"TotalRecordCount":1}"""
+        Json.parseToJsonElement(doc)
+    }
+
+    @Test fun theCollectionListIsReadFiveHundredAtATime() {
+        val calls = ArrayList<String>()
+        val rows = C.readBoxSetList("u", boxSetServer(1200, calls))
+        assertEquals(1200, rows.size)
+        assertEquals(listOf(0, 500, 1000), calls.map { Regex("StartIndex=(\\d+)").find(it)!!.groupValues[1].toInt() })
+        assertTrue(calls.all { it.contains("Limit=500") })
+        assertEquals((0 until 1200).map { "b$it" }, rows.map { it.id })
+    }
+
+    @Test fun aServerThatSendsNoTotalIsReadUntilAShortPage() {
+        val calls = ArrayList<String>()
+        assertEquals(1200, C.readBoxSetList("u", boxSetServer(1200, calls, sendsTotal = false)).size)
+        assertEquals(3, calls.size)
+    }
+
+    @Test fun aServerThatIgnoresStartIndexIsNotAskedForEver() {
+        val calls = ArrayList<String>()
+        val rows = C.readBoxSetList("u", boxSetServer(1200, calls, honoursStart = false, sendsTotal = false))
+        assertEquals(500, rows.size)          // the first page, again and again, brings nothing new
+        assertEquals(2, calls.size)
+    }
+
+    @Test fun aSmallListIsOneRequest() {
+        val calls = ArrayList<String>()
+        assertEquals(30, C.readBoxSetList("u", boxSetServer(30, calls)).size)
+        assertEquals(1, calls.size)
+    }
+
     @Test fun boxSetsPagePast200AndDedupe() {
         val calls = ArrayList<String>()
         val out = C.fetchBoxSetCollections("jellyfin", "u 1", { p ->
@@ -60,7 +100,7 @@ class CollectionsTest {
             }
             Json.parseToJsonElement(doc)
         })
-        assertEquals("/Items?userId=u%201&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName", calls[0])
+        assertEquals("/Items?userId=u%201&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName&StartIndex=0&Limit=500", calls[0])
         assertEquals(
             "/Items?userId=u%201&ParentId=b1&Recursive=true&IncludeItemTypes=Movie,Series&StartIndex=0&Limit=200&SortBy=SortName",
             calls[1],

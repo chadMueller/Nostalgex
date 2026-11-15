@@ -609,8 +609,12 @@ object Collections {
 
     const val BOXSET_PAGE_SIZE = 200
 
-    fun boxSetListPath(userId: String) =
-        "/Items?userId=${encodeURIComponent(userId)}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName"
+    /** The collection list is read this many at a time (#318): a server with an auto-collections plugin can hold thousands. */
+    const val BOXSET_LIST_PAGE_SIZE = 500
+
+    fun boxSetListPath(userId: String, startIndex: Int = 0) =
+        "/Items?userId=${encodeURIComponent(userId)}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName" +
+            "&StartIndex=$startIndex&Limit=$BOXSET_LIST_PAGE_SIZE"
 
     fun boxSetChildrenPath(userId: String, boxSetId: String, startIndex: Int) =
         "/Items?userId=${encodeURIComponent(userId)}&ParentId=${encodeURIComponent(boxSetId)}&Recursive=true" +
@@ -664,7 +668,7 @@ object Collections {
         getJSON: (String) -> JsonElement,
         onProgress: ((Int, Int) -> Unit)? = null,
     ): List<ServerCollection> {
-        val boxSets = parseBoxSetList(getJSON(boxSetListPath(userId)))
+        val boxSets = readBoxSetList(userId, getJSON)
         val done = AtomicInteger()
         return mapLimit(boxSets, COLLECTION_READS_AT_ONCE) { b ->
             val childKeys = try {
@@ -683,6 +687,29 @@ object Collections {
             onProgress?.invoke(done.incrementAndGet(), boxSets.size)
             childKeys?.let { boxSetCollection(serverKey, b, it) }
         }.filterNotNull()
+    }
+
+    /**
+     * Every BoxSet, [BOXSET_LIST_PAGE_SIZE] a page, deduped by id across pages. Paging stops when a page is empty, when the keys so
+     * far reach the server's TotalRecordCount, when a short page comes with no total, or when a page brings nothing new (a server that
+     * ignores StartIndex would otherwise answer the same page for ever). A page failing throws, as the single request did.
+     */
+    fun readBoxSetList(userId: String, getJSON: (String) -> JsonElement): List<BoxSetRow> {
+        val seen = HashSet<String>()
+        val out = ArrayList<BoxSetRow>()
+        var start = 0
+        while (true) {
+            val doc = getJSON(boxSetListPath(userId, start))
+            val received = itemsOf(doc).size
+            var added = 0
+            for (row in parseBoxSetList(doc)) if (seen.add(row.id)) { out.add(row); added++ }
+            start += received
+            val total = ((doc as? JsonObject)?.get("TotalRecordCount") as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
+            val done = received == 0 || added == 0 ||
+                (if (total != null) start >= total else received < BOXSET_LIST_PAGE_SIZE)
+            if (done) break
+        }
+        return out
     }
 
     /** How many collections' members are read at once: the JS's mapLimit(list, 4, ...). */

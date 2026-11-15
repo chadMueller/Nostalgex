@@ -159,8 +159,11 @@ class CollectionsVectorTest {
         // Collection members are read four at a time (Collections.mapLimit), so from several threads.
         val calls: MutableList<String> = java.util.Collections.synchronizedList(ArrayList())
         fun get(path: String): JsonElement {
-            calls.add(path)
-            return docs[path] ?: throw IllegalStateException("404")
+            // Android pages the BoxSet list, 500 a page (#318); the web tuner's single request is the vector's, so the first page
+            // answers as that request, and the paging itself is held by CollectionsTest (theCollectionListIsReadFiveHundredAtATime).
+            val asWeb = path.removeSuffix("&StartIndex=0&Limit=${Collections.BOXSET_LIST_PAGE_SIZE}")
+            calls.add(asWeb)
+            return docs[asWeb] ?: throw IllegalStateException("404")
         }
     }
 
