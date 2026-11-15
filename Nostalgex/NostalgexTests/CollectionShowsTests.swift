@@ -312,7 +312,11 @@ final class CollectionShowsTests: XCTestCase {
         let day = DateComponents(calendar: calendar, year: 2026, month: 10, day: 14, hour: 12).date!
         let blocks = DailyManifestScheduler.blocks(for: channel, at: day, credentialFingerprint: fp, calendar: calendar)
         XCTAssertFalse(blocks.isEmpty)
-        XCTAssertEqual(blocks.last?.endTime, calendar.startOfDay(for: day).addingTimeInterval(86400), "fills the day")
+        // Fills the day, and the last programme plays to its own end past midnight instead of being cut at it (#315).
+        let dayEnd = calendar.startOfDay(for: day).addingTimeInterval(86400)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(blocks.last?.endTime), dayEnd, "fills the day")
+        XCTAssertLessThan(blocks.dropLast().last?.endTime ?? dayEnd, dayEnd, "only the last programme runs over midnight")
+        XCTAssertTrue(blocks.allSatisfy { $0.durationSeconds == Double($0.item.slotSeconds) }, "no block is cut short")
         XCTAssertTrue(blocks.allSatisfy { $0.item.type == .episode })
 
         // The first pass airs every episode once before any repeat ...

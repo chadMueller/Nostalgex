@@ -473,12 +473,14 @@ extension AppState {
             isLibraryStale = scanWasAbandoned
             LibraryLoadProbe.mark("guideVisible")
 
-            // Library refresh: only purge yesterday's (and older) manifests. Today's
-            // schedule is already self-invalidating via pool fingerprint inside
-            // DailyManifestStore — leave it alone so a background refresh can't
-            // reshuffle the EPG the user is currently watching.
-            let todayKey = DailyManifestStore.localDayKey(for: Date())
-            DailyManifestStore.purgeDays(keeping: todayKey, credentialFingerprint: scheduleCredentialFingerprint)
+            // Library refresh: only purge the manifests older than yesterday's. Today's schedule is
+            // self-invalidating via the pool fingerprint inside DailyManifestStore: a refresh that changes
+            // nothing leaves it alone and cannot reshuffle the EPG the user is watching. The fingerprint
+            // carries each item's slot in seconds, so a refresh that changes a runtime rebuilds the day: once
+            // on the update day for Jellyfin and Emby, when their runtimes first arrive (#315), and after that
+            // only when a file's length really changes. Yesterday's day stays too: the programme running over
+            // midnight is on air from it.
+            DailyManifestStore.purgeStaleDays(credentialFingerprint: scheduleCredentialFingerprint)
 
             if isBackground {
                 libraryUpdateNotice = scanWasAbandoned ? "Lineup partly updated" : "Lineup updated"

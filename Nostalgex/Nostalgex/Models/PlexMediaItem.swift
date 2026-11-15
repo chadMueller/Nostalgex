@@ -75,6 +75,20 @@ struct PlexMediaItem: Identifiable, Hashable {
     var partIndex: Int = 0
     var playbackParts: [PlexPartPlaybackInfo]? = nil
     var exactDurationSeconds: Double? = nil
+
+    /// How long the schedule gives this programme, in seconds: the file's real runtime rounded up to a whole second,
+    /// so the slot and the file end together and nothing is cut at a boundary (#315). The servers floor a runtime to
+    /// whole minutes (`duration`), which left a file 0 to 59 s past its slot. An item with no real runtime (a
+    /// snapshot read before one was kept, or a runtime that disagrees with `duration` by a minute or more, which is
+    /// a bad value) gets `duration` minutes, as every build up to 1.0.32 did. Mirrored by `slotSeconds` in
+    /// scripts/nostalgex-daily-manifest.js once that port is made.
+    var slotSeconds: Int {
+        if let exact = exactDurationSeconds, exact.isFinite, exact >= 1,
+           abs(exact - Double(duration * 60)) < 61 {
+            return Int(exact.rounded(.up))
+        }
+        return duration * 60
+    }
     /// Episodes only: the server-local id of the show (Plex `grandparentRatingKey`,
     /// Jellyfin and Emby `SeriesId`). A collection of shows lists the shows, not their
     /// episodes, so this is what lets the collection scan expand a show into the

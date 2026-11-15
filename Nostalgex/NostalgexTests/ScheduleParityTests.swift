@@ -221,7 +221,8 @@ final class ScheduleParityTests: XCTestCase {
         if let c = spec["compact"] as? [Any] {
             let key = try XCTUnwrap(c[0] as? String)
             let type = (c[2] as? String) == "episode" ? MediaType.episode : MediaType.movie
-            return (key, item(key: key, title: c[1] as? String ?? "", type: type, minutes: int(c[3]) ?? 0, addedAt: int(c[4]) ?? 0))
+            return (key, item(key: key, title: c[1] as? String ?? "", type: type, minutes: int(c[3]) ?? 0, addedAt: int(c[4]) ?? 0,
+                                 exact: (spec["exact"] as? NSNumber)?.doubleValue))
         }
         let backend = try XCTUnwrap(spec["backend"] as? String)
         let kind = try XCTUnwrap(spec["kind"] as? String)
@@ -238,7 +239,8 @@ final class ScheduleParityTests: XCTestCase {
             let minutes = (raw.duration ?? 0) / 60000
             guard minutes > 0 else { return (raw.ratingKey, nil) }
             return (raw.ratingKey, item(key: raw.ratingKey, title: show["title"] as? String ?? "", type: .episode,
-                                        minutes: minutes, addedAt: raw.addedAt ?? 0))
+                                        minutes: minutes, addedAt: raw.addedAt ?? 0,
+                                        exact: raw.duration.map { Double($0) / 1000 }))
         case ("jellyfin", "movie"):
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
@@ -246,18 +248,21 @@ final class ScheduleParityTests: XCTestCase {
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, EmbyAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
         case ("jellyfin", "episode"), ("emby", "episode"):
-            // The episode loops in JellyfinAPIService/EmbyAPIService.fetchEpisodes, as they read them.
+            // The services' own episode parse (fetchEpisodes calls it per episode), so the golden reads what the loaders keep.
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
-            let minutes = JellyfinAPIService.minutes(fromTicks: raw.RunTimeTicks)
-            guard minutes > 0 else { return (raw.Id, nil) }
-            return (raw.Id, item(key: raw.Id, title: show["Name"] as? String ?? raw.SeriesName ?? "", type: .episode,
-                                 minutes: minutes, addedAt: JellyfinAPIService.unixSeconds(fromISO: raw.DateCreated)))
+            var showDict = show
+            if showDict["Id"] == nil { showDict["Id"] = "show" }
+            let showItem = try JSONDecoder().decode(JellyfinItem.self, from: JSONSerialization.data(withJSONObject: showDict))
+            let parsed = backend == "jellyfin"
+                ? JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseEpisodeItem(raw, show: showItem)
+                : EmbyAPIService(serverURL: "", accessToken: "", userId: "").parseEpisodeItem(raw, show: showItem)
+            return (raw.Id, parsed)
         default:
             throw NSError(domain: "parity", code: 2, userInfo: [NSLocalizedDescriptionKey: "unknown item \(backend) \(kind)"])
         }
     }
 
-    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int) -> PlexMediaItem {
+    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double? = nil) -> PlexMediaItem {
         PlexMediaItem(
             id: key, title: title, artist: nil, episodeTitle: nil, seTag: nil, summary: "",
             year: 2000, originallyAvailableAt: nil, contentRating: nil, duration: minutes,
@@ -265,6 +270,6 @@ final class ScheduleParityTests: XCTestCase {
             videoProfile: nil, bitrate: nil, genres: [], rating: 0, userRating: 0,
             type: type, thumb: nil, art: nil, viewCount: 0,
             addedAt: addedAt, studio: nil, tmdbID: nil, imdbID: nil,
-            librarySource: type == .episode ? .tv : .movie)
+            librarySource: type == .episode ? .tv : .movie, exactDurationSeconds: exact)
     }
 }

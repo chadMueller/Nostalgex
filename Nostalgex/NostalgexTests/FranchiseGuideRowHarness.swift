@@ -177,7 +177,7 @@ final class FranchiseGuideRowHarness: XCTestCase {
             }
             let day = DailyManifestStore.load(channelId: ch.id, dayKey: DailyManifestStore.localDayKey(for: now),
                                               credentialFingerprint: fingerprint,
-                                              expectedPoolFingerprint: DailyManifestStore.poolFingerprint(ratingKeys: ch.itemPool.map(\.id)))
+                                              expectedPoolFingerprint: DailyManifestStore.poolFingerprint(items: ch.itemPool))
 
             let intervals = schedule.entries.map { ($0.startTime, $0.endTime) }
             var blocksMax = 0, gapsMax = 0

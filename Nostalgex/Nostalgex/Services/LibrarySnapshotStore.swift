@@ -152,8 +152,10 @@ enum LibrarySnapshotStore {
     /// unasked, so no title carried a certificate or a star rating before);
     /// 2 = it also reads only the views that hold videos and drops a row whose `Type` it did not
     /// ask for (#205, #206; a playlist, a track or a box set was a "film" before).
+    /// 3 = Jellyfin and Emby items also carry their real runtime in seconds (`exactDurationSeconds`, from
+    /// `RunTimeTicks`), which the schedule gives a programme as its slot (#315); Plex always kept it.
     /// A snapshot with no number was read by the first scan.
-    static let scanFieldsVersion = 2
+    static let scanFieldsVersion = 3
 
     /// True when a snapshot has to be refreshed because the scan that made it read the library
     /// the old way, and what it holds is wrong on this backend: Emby (no ratings, playlists as

@@ -84,7 +84,18 @@ function plexCase() {
       } });
     }
   }
-  const keys = (pred) => items.filter((it) => pred(it.raw, it)).map((it) => String(it.raw.ratingKey));
+  // The slot's fallback (#315). A slot is the runtime in seconds rounded up, unless the runtime is missing or is a
+  // minute or more (61 s) from the floored minutes, which is a bad value: then it is the minutes. No server answer
+  // gives a runtime and minutes that disagree, so these are compact items with an `exact` runtime of their own.
+  const runtimeEdges = [
+    [["1301", "Minutes Only", "movie", 95, 0], undefined],        // no runtime: 95 minutes
+    [["1302", "Bad Runtime", "movie", 90, 0], 5461],              // 61 s off the minutes: 90 minutes
+    [["1303", "Runtime In Range", "movie", 90, 0], 5460.4],       // 60.4 s off: 5461 s, rounded up
+    [["1304", "Runtime Shorter", "movie", 90, 0], 5390],          // 10 s short of the minutes: 5390 s
+    [["1305", "Exact Minute", "movie", 60, 0], 3600],             // a whole minute: 3600 s
+  ];
+  for (const [compact, exact] of runtimeEdges) items.push(exact === undefined ? { compact } : { compact, exact });
+  const keys = (pred) => items.filter((it) => it.raw && pred(it.raw, it)).map((it) => String(it.raw.ratingKey));
   const film = (i) => String(1001 + i);
   const channels = [
     { id: 2, pool: [film(0)] },
@@ -95,6 +106,7 @@ function plexCase() {
     { id: 8, pool: ["1104"] },
     { id: 9, pool: [...keys((r) => r.ratingKey >= 1200 && r.ratingKey < 1300), "1103"] },
     { id: 11, pool: [film(2), film(3), film(4), film(0), "2001", "2002"] },
+    { id: 12, pool: runtimeEdges.map(([c]) => c[0]) },
   ];
   return {
     name: "plex-new-york-clocks-go-back",
@@ -315,7 +327,7 @@ function pretty(value, pad = "") {
     return `[\n${value.map((v) => inner + pretty(v, inner)).join(",\n")}\n${pad}]`;
   }
   const keys = Object.keys(value);
-  if (keys.length && keys.every((k) => k === "raw" || k === "show" || k === "backend" || k === "kind" || k === "compact")) {
+  if (keys.length && keys.every((k) => k === "raw" || k === "show" || k === "backend" || k === "kind" || k === "compact" || k === "exact")) {
     return JSON.stringify(value);
   }
   return `{\n${keys.map((k) => `${inner}${JSON.stringify(k)}: ${pretty(value[k], inner)}`).join(",\n")}\n${pad}}`;
