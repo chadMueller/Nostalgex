@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Android: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT and LARGER)
+
+**State.** Branch `android/guide-stripes`, local commit. Not pushed, not in a build.
+
+**Why.** Chad: "make sure roku and android both have the small, normal, large text changes." The Apple TV's `appletv/guide-text-three-steps` (db43276f) has them.
+
+**Changed.** `GuideTextSize` and `GuideTextMetrics` in the engine (`GuideTextSize.kt`): raw values "small", "normal", "large" under the Apple TV's key, anything else or nothing saved reads as DEFAULT, and the Settings row cycles SMALLER > DEFAULT > LARGER. The step sets the guide, the bundle list (rows and BUNDLES heading) and the Now Playing panel (text, item title, CH tag). DEFAULT is now the Apple TV's 20 pt rows and 22 pt times (Android still had the old 22 and 25); LARGER is what LARGE always was; SMALLER is 17 and 19 with the box at 31, panel title 25 and CH tag 24. SMALLER's two numbers are named constants (`SMALL_ROW_TEXT`, `SMALL_TIMES`), awaiting Chad's pick (18 and 20 are the fallback). `Prefs.guideTextSize` replaces `guideTextLarge`; the sizes go through `sp()` as before, so they keep the same proportion of the screen as the Apple TV.
+
+**Checked.** 419 engine tests pass (`GuideTextSizeTest`, 8 tests: defaults, cycle, raw values, the sizes per step, nothing below 17, each step at least as big as the one below). Seen on the Android TV emulator at each step: `android/emulator-2026-11-14/textsize-*.png` in nostalgex-internal (the evidence build kept the saved library at format 8 so the emulator's existing library loaded).
+
+**Half-done.** Not put beside the Apple TV's `appletv-textsize-2026-11-13` shots yet. Roku has its own.
+
 ## 2026-11-14 (Android: a file plays to its end, the schedule gives each programme its real runtime; #315)
 
 **State.** Branch `android/guide-stripes`, a local commit on top of the stripe work. Not pushed, not in a build. It depends on the Apple TV's golden at `b282b946` (`appletv/315-play-to-end`): `scripts/schedule-parity-golden.json` from that commit is needed for `ScheduleParityGoldenTest` to pass, and is not committed here. If the Apple TV's reviewer changes day packing, the golden moves and this is re-run against it.

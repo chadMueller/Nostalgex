@@ -311,10 +311,10 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
         // One hint line under the columns, two lines tall at a fixed height so rows never jump.
         Text(
             hint ?: "",
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.End).padding(top = u(16)).width(u(440 * 2 + 28)).height(u(DesignTokens.PanelSize.TEXT * 2 + 12)),
+            modifier = Modifier.align(Alignment.End).padding(top = u(16)).width(u(440 * 2 + 28)).height(u(LocalGuideText.current.panelText * 2 + 12)),
         )
         }
         }
@@ -343,14 +343,14 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
     Row(Modifier.padding(top = u(22)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
         Text(
             if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title,
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
         Text(
             UpNextLabel.text(next.startSec - nowSec),
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Cyan),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Cyan),
             maxLines = 1,
             modifier = Modifier
                 .clip(RoundedCornerShape(u(6)))
@@ -374,7 +374,7 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                 PanelPicker.SUBTITLE_LANGUAGE -> "Choose which subtitle track to prefer when multiple are available."
                 PanelPicker.AUDIO_LANGUAGE -> "Choose which audio track to prefer when multiple are available."
             },
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
             modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
         )
         when (picker) {
@@ -382,11 +382,11 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                 val rows = model.playbackInfo?.rows(model.videoSize?.first, model.videoSize?.second)
                 Column(verticalArrangement = Arrangement.spacedBy(u(8))) {
                     if (rows == null) {
-                        Text("Playback information is unavailable.", style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2))
+                        Text("Playback information is unavailable.", style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2))
                     } else for (r in rows) {
                         Row(Modifier.padding(vertical = u(3)), horizontalArrangement = Arrangement.spacedBy(u(16))) {
-                            Text(r.label, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2), modifier = Modifier.width(u(260)))
-                            Text(r.value, style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text))
+                            Text(r.label, style = font(DMMonoMedium, LocalGuideText.current.panelText, Tokens.Text2), modifier = Modifier.width(u(260)))
+                            Text(r.value, style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text))
                         }
                     }
                 }
@@ -449,18 +449,18 @@ private fun InfoZone(model: AppModel, ch: GuideChannel, item: MediaItem, color: 
         Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(12))) {
                 Box(Modifier.size(u(8), u(24)).background(color))
-                Text("CH ${ch.number}", style = font(VT323, DesignTokens.PanelSize.TAG, Tokens.Text))
-                Text(ch.name.uppercase(), style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("CH ${ch.number}", style = font(VT323, LocalGuideText.current.panelTag, Tokens.Text))
+                Text(ch.name.uppercase(), style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             val line = if (item.isMusicVideo) item.musicDisplayLine else item.title + (item.year?.let { "  $it" } ?: "")
-            Text(line, style = font(DMMonoMedium, DesignTokens.PanelSize.ITEM_TITLE, Tokens.Text), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(line, style = font(DMMonoMedium, LocalGuideText.current.panelTitle, Tokens.Text), maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun ControlHeader(text: String) {
-    Text(text, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2, tracking = 1.5))
+    Text(text, style = font(DMMonoMedium, LocalGuideText.current.panelText, Tokens.Text2, tracking = 1.5))
 }
 
 /**
@@ -499,13 +499,13 @@ private fun ControlRow(
     ) {
         Text(
             label,
-            style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, if (disabled) Tokens.Text2 else Tokens.Text),
+            style = font(DMMonoMedium, LocalGuideText.current.panelText, if (disabled) Tokens.Text2 else Tokens.Text),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (value != null) {
-            Text(value, style = font(DMMono, DesignTokens.PanelSize.TEXT, if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
+            Text(value, style = font(DMMono, LocalGuideText.current.panelText, if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
         }
     }
 }

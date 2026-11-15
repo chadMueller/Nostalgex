@@ -324,15 +324,15 @@ private fun PlaybackRows(model: AppModel) {
             on = model.retroMode,
             modifier = Modifier.paneRow(model, "retro_mode"),
         ) { model.toggleRetroMode() }
-        // Two built-in sizes; OK switches between them.
+        // Three built-in steps, SMALLER, DEFAULT and LARGER; OK moves to the next.
         ToggleRow(
             title = "GUIDE TEXT SIZE",
-            subtitle = "Bigger program titles, times and channel names in the guide",
-            detail = if (model.guideTextLarge) "LARGE" else "NORMAL",
+            subtitle = "Size of the text in the guide, the bundle list and Now Playing",
+            detail = model.guideTextSize.label,
             on = true,
             showToggle = false,
             modifier = Modifier.paneRow(model, "guide_text_size"),
-        ) { model.toggleGuideTextSize() }
+        ) { model.cycleGuideTextSize() }
         // OFF, 5 MIN, 15 MIN; select moves to the next (#290, the Apple TV's row).
         ToggleRow(
             title = "GUIDE TIMEOUT",

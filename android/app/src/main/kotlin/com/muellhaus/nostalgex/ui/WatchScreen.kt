@@ -84,6 +84,7 @@ import com.muellhaus.nostalgex.engine.DailyManifest
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.muellhaus.nostalgex.engine.GuideStripes
+import com.muellhaus.nostalgex.engine.GuideTextMetrics
 import com.muellhaus.nostalgex.engine.InfoPanelLayout
 import com.muellhaus.nostalgex.engine.InfoPanelSection
 import com.muellhaus.nostalgex.engine.GuideChannel
@@ -169,7 +170,7 @@ internal fun ticking(): Double {
 fun WatchScreen(model: AppModel) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val unit = maxWidth / 1920f
-        CompositionLocalProvider(LocalUnit provides unit, LocalGuideText provides if (model.guideTextLarge) GuideText.LARGE else GuideText.NORMAL) {
+        CompositionLocalProvider(LocalUnit provides unit, LocalGuideText provides model.guideTextSize.metrics) {
             val height = maxHeight / unit
             // TunerView: the top section is 51.43% of the screen; the picture is 4:3 at that height.
             val videoHeight = height * 0.5143f
@@ -1028,7 +1029,7 @@ private fun PackageSidebar(
         ) {
             Text(
                 "BUNDLES",
-                style = font(DMMonoMedium, DesignTokens.Size.CAPTION, Tokens.Text2),
+                style = font(DMMonoMedium, LocalGuideText.current.packageHeading, Tokens.Text2),
                 modifier = Modifier.padding(horizontal = u(24), vertical = u(18)),
             )
             // 6 between rows, with room for the selected row's lift and glow (#270).
@@ -1082,29 +1083,16 @@ private fun SidebarRow(title: String, color: Color, modifier: Modifier, onSelect
     ) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
             Box(Modifier.width(u(if (focused) 8 else 4)).fillMaxHeight().background(if (focused) color else color.copy(alpha = 0.4f)))
-            Text(title, style = font(DMMonoMedium, DesignTokens.GuideSize.ROW, if (focused) Tokens.Text else Tokens.Text2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = font(DMMonoMedium, LocalGuideText.current.packageRowText, if (focused) Tokens.Text else Tokens.Text2), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 // ── GUIDE TEXT SIZE (GuideTextSize.swift, Roku's GuideText.brs) ──────────
 
-/**
- * Type sizes for the text the guide grid draws, the Apple TV 1.0.32's (#268). Only text
- * changes: rows stay 64 high, the header 58, the channel column 340, and blocks are laid out
- * from times alone, so LARGE never moves a row or a block. The number sits in a box that grows
- * with it.
- */
-internal data class GuideText(val title: Int, val timeLabel: Int, val channelHeading: Int, val number: Int, val numberWidth: Int, val name: Int, val placeholder: Int) {
-    companion object {
-        /** 22 for rows, 25 for the times and the CHANNEL heading. */
-        val NORMAL = GuideText(title = 22, timeLabel = 25, channelHeading = 25, number = 22, numberWidth = 40, name = 22, placeholder = 25)
-        /** Everything 29, the number in a box 54 wide. */
-        val LARGE = GuideText(title = 29, timeLabel = 29, channelHeading = 29, number = 29, numberWidth = 54, name = 29, placeholder = 29)
-    }
-}
+// The step's sizes are in the engine (GuideTextSize.kt, GuideTextMetrics): only text changes, so a step never moves a row or a block.
 
-internal val LocalGuideText = staticCompositionLocalOf { GuideText.NORMAL }
+internal val LocalGuideText = staticCompositionLocalOf { GuideTextMetrics.NORMAL }
 
 // ── CONNECTION FAILED and NO CHANNELS FOUND (Plex90App.swift) ──────────────
 

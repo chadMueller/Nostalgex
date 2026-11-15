@@ -17,6 +17,7 @@ import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.ServerTokens
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
+import com.muellhaus.nostalgex.engine.GuideTextSize
 import com.muellhaus.nostalgex.engine.NaturalEnd
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
@@ -223,13 +224,14 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    /** GUIDE TEXT SIZE: NORMAL, the guide as it was, or LARGE for a couch further away (I-060). */
-    var guideTextLarge by mutableStateOf(prefs.guideTextLarge)
+    /** GUIDE TEXT SIZE: SMALLER, DEFAULT or LARGER for a couch nearer or further away (I-060); the guide, the bundle list and Now Playing follow it. */
+    var guideTextSize by mutableStateOf(prefs.guideTextSize)
         private set
 
-    fun toggleGuideTextSize() {
-        guideTextLarge = !guideTextLarge
-        prefs.guideTextLarge = guideTextLarge
+    /** SMALLER > DEFAULT > LARGER > SMALLER, what select does on the Settings row. */
+    fun cycleGuideTextSize() {
+        guideTextSize = guideTextSize.next
+        prefs.guideTextSize = guideTextSize
     }
 
     /** STREAM QUALITY: read as each programme starts, so a change reaches the next one. */
