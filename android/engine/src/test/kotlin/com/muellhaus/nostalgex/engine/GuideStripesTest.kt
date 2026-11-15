@@ -3,6 +3,9 @@ package com.muellhaus.nostalgex.engine
 import com.muellhaus.nostalgex.engine.GuideStripes.Group
 import com.muellhaus.nostalgex.engine.GuideStripes.GuideBundle
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -181,6 +184,18 @@ class GuideStripesTest {
         assertEquals("#FFFFFF", GuideStripes.Palette.focusedHex("#FFFFFF"))
         assertTrue(GuideStripes.Palette.nameIsBlack("#F1C40F")); assertFalse(GuideStripes.Palette.nameIsBlack("#8E44AD"))
         assertEquals(1.0, GuideStripes.Palette.luminance("#FFFFFF"), 0.001); assertEquals(0.0, GuideStripes.Palette.luminance("#000000"), 0.001)
+    }
+
+    /** scripts/guide-stripe-colours-golden.json, written by the Apple TV's GuideStripeColoursGoldenTests. */
+    @Test fun theColoursMatchTheAppleTVsGolden() {
+        val root = File(System.getProperty("nostalgex.repoRoot") ?: "..")
+        val golden = Json.parseToJsonElement(root.resolve("scripts/guide-stripe-colours-golden.json").readText()).jsonObject
+        assertEquals(golden["hexes"]!!.jsonArray.map { it.jsonPrimitive.content }, GuideStripes.Palette.hexes)
+        val names = golden["names"]!!.jsonObject
+        assertTrue(names.size >= 20)
+        for ((name, index) in names) assertEquals(name, index.jsonPrimitive.int, GuideStripes.Palette.index(name))
+        val config = ChannelConfig(Json.parseToJsonElement(root.resolve("channels.json").readText()).jsonObject)
+        for (b in config.bundles) assertTrue("${b.name} is a shipped bundle and is not in the golden", b.name in names)
     }
 
     /** The shipped bundles in guide order (by their first channel number): no two neighbours share a colour. */
