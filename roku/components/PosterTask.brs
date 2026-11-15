@@ -14,10 +14,11 @@ sub fetchPoster()
             if ref.serverIndex >= 0 and ref.serverIndex < servers.Count() then s = servers[ref.serverIndex]
         end if
     end if
-    if s = invalid or NxServerKind(s) <> "plex" then
+    if s = invalid then
         m.top.file = ""
         return
     end if
+    kind = NxServerKind(s)
     ' The same address rule as every other Plex request (NxServerTransfer):
     ' HTTPS, or plain HTTP to a home-network address. The token is a header.
     ' The paths are tried in order until one answers (an episode's season, then
@@ -29,7 +30,14 @@ sub fetchPoster()
     end for
     m.top.file = ""
     for each path in paths
-        xfer = NxPlexTransfer(NxPlexPosterUrl(NxToStr(s.uri), NxToStr(path), 300), NxToStr(s.accessToken))
+        ' Plex asks its thumbnail transcode; Jellyfin and Emby the item's Primary
+        ' image, with the sign-in's token in the usual header.
+        xfer = invalid
+        if kind = "plex" then
+            xfer = NxPlexTransfer(NxPlexPosterUrl(NxToStr(s.uri), NxToStr(path), 300), NxToStr(s.accessToken))
+        else
+            xfer = NxServerTransfer(NxToStr(s.uri) + NxToStr(path), { "Authorization": NxMbAuthHeader(NxToStr(s.accessToken)) })
+        end if
         if xfer <> invalid then
             out = NxPosterFile(NxToStr(path))
             port = CreateObject("roMessagePort")

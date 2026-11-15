@@ -504,6 +504,11 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         duration: durationMin,
         exactDurationSeconds: NxMbRuntimeSec(ep.RunTimeTicks),
         ratingKey: ep.Id,
+        ' The episode's series and season (SeriesId, SeasonId), whose Primary images
+        ' are its poster before its own frame (#312), as the Plex items keep
+        ' showKey and parentRatingKey.
+        showKey: NxToStr(NxOr(ep.SeriesId, show.Id)),
+        parentRatingKey: NxMbSeasonKey(ep),
         partKey: mi.msid,
         container: mi.container,
         videoCodec: mi.videoCodec,
@@ -736,4 +741,11 @@ function NxScanIncludesHidden() as Boolean
     if NxIncludeHidden(NxHiddenLibrariesRegistry()) then return true
     reg = NxPlexRegistry()
     return NxAnyHiddenOn(NxSavedSections(reg), NxDeselectedSections(reg))
+end function
+
+' The episode's season id when the server names one, else invalid.
+function NxMbSeasonKey(ep as Object) as Dynamic
+    key = NxToStr(ep.SeasonId)
+    if key = "" or key = "invalid" then return invalid
+    return key
 end function

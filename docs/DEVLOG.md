@@ -3,6 +3,16 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: the poster is on every backend, Jellyfin and Emby too, #312)
+
+**State.** Branch `roku/1.0.13-candidate-v13`. Chad's standing rule: "doesnt matter the platform, jellyfin, emby, plex - the user interface should be parity unless absolute tech restrictions."
+
+**Changed.** `NxPosterRef` now answers for Jellyfin and Emby: the Primary image of the item (`/Items/<id>/Images/Primary?maxWidth=300&quality=90`), and for an episode its season's, then its series', then its own, as on Plex. The Jellyfin and Emby scan keeps an episode's `parentRatingKey` (SeasonId) and `showKey` (SeriesId), which the guide's block carries; the saved library's format is 11, so a Jellyfin or Emby library is read again once to gain them. `PosterTask` asks the right address for the kind (Plex's thumbnail transcode, or the server's image with the sign-in's token in the usual header) and tries the paths in order, a 404 being the cue for the next. The column is reserved on every backend in both panels.
+
+**Audit.** The poster was the only Plex-only condition in the guide's info panel and the Now Playing panel (`NxSignedInKind() = "plex"` was the whole test); the rest of what the panels read (year, rating, stars, runtime, genres, the episode line, UP NEXT) comes from fields all three scans fill. OPEN IN PLEX is inherently Plex's (see the deep-link question to the coordinator).
+
+**Tests.** `PosterTests`: a Jellyfin and an Emby movie, an episode's season/series/own paths, an episode with no season id, the ref's kind; `MediaBrowserTests` allows the two new item fields.
+
 ## 2026-11-15 (Roku: the Apple TV's basement batch, `appletv/integration-1115` `e20ebec0`: programme cursor, rows by text step, the info panel's poster, plain UP NEXT, no help line)
 
 **State.** Branch `roku/1.0.13-candidate-v13` (off candidate v12 `dbe433fc`). Written off the stick while Chad tests v12; not run on a device, not merged, not pushed.
