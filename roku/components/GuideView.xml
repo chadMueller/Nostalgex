@@ -97,6 +97,7 @@
       <Poster id="snow" uri="pkg:/images/look/snow_0.png" translation="[1180,0]" width="740" height="556" opacity="0.32" />
       <Label id="hazeText" translation="[1180,261]" width="740" horizAlign="center" />
     </Group>
+    <Timer id="infoPosterTimer" repeat="false" duration="0.25" />
     <Animation id="hazeIn" duration="0.35" repeat="false" easeFunction="linear">
       <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="haze.opacity" />
     </Animation>

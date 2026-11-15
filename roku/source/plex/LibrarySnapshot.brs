@@ -72,7 +72,14 @@ function NxSnapshotReadMeta(dir as String) as Object
     if text = "" then return empty
     meta = ParseJson(text)
     if type(meta) <> "roAssociativeArray" then return empty
-    if meta.format <> NxSnapshotFormat() or type(meta.servers) <> "roAssociativeArray" then return empty
+    ' Another format: the saved library is ignored, and its chunk files, which no
+    ' meta will ever name again, are deleted rather than left filling cachefs:
+    ' (the format 11 bump left the format 10 files behind).
+    if meta.format <> NxSnapshotFormat() then
+        NxSnapshotClear(dir)
+        return empty
+    end if
+    if type(meta.servers) <> "roAssociativeArray" then return empty
     return meta
 end function
 
@@ -125,6 +132,40 @@ function NxSnapshotFindItem(dir as String, meta as Object, keys as Object, ratin
         end if
     end for
     return invalid
+end function
+
+' Whether a scan that was cut for a full memory (I-091) must not replace the
+' saved copy: the copy is whole (no cut of its own) and holds more titles than
+' this scan read. A rebuild runs with the guide's own memory held, so it is cut
+' about 3,200 titles sooner than first setup was; saving it would shrink a
+' library that fit, a little more every daily rebuild. `old` is the saved entry,
+' `read` the titles this scan has for the server, `cutRead` the cut it made (0
+' when it read everything).
+function NxSnapshotKeepSaved(old as Dynamic, read as Integer, cutRead as Integer) as Boolean
+    if cutRead <= 0 then return false
+    if type(old) <> "roAssociativeArray" or not NxIsNumber(old.count) then return false
+    if NxNumberOr0(old.cutRead) > 0 then return false
+    return old.count > read
+end function
+
+' How many of `items` belong to the server with this index.
+function NxSnapshotCountServer(items as Object, serverIndex as Integer) as Integer
+    n = 0
+    for each it in items
+        if it.serverIndex = serverIndex then n = n + 1
+    end for
+    return n
+end function
+
+' What a load does to a server's saved copy after a scan of it: saves what was read,
+' or keeps the saved copy when this scan was cut for a full memory and the copy is
+' whole and larger (NxSnapshotKeepSaved). `s` is the scan's record { key, index,
+' collections, signature, skipped, cutRead, cutOf }. Returns "saved" or "kept".
+function NxSnapshotSaveScan(dir as String, meta as Object, s as Object, items as Object, nowSec as LongInteger) as String
+    read = NxSnapshotCountServer(items, s.index)
+    if NxSnapshotKeepSaved(meta.servers[s.key], read, NxNumberOr0(s.cutRead)) then return "kept"
+    NxSnapshotSaveServer(dir, meta, s.key, items, s.index, s.collections, s.signature, nowSec, NxNumberOr0(s.skipped), NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
+    return "saved"
 end function
 
 ' Saves one server's items (only those with this serverIndex) and

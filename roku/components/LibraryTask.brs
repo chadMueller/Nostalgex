@@ -584,7 +584,10 @@ sub loadLibrary()
     end if
     timer.Mark()
     for each s in scanned
-        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&, s.skipped, NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
+        ' A rebuild cut for a full memory never replaces a whole saved copy that
+        ' holds more (NxSnapshotSaveScan): the guide shows what fit, the file keeps
+        ' the library.
+        if NxSnapshotSaveScan(snapDir, snap, s, items, nowSec&) = "kept" then print "library: server "; s.index; "'s rebuild was cut, the saved copy is kept"
     end for
     NxSnapshotForgetServers(snapDir, snap, keys)
     ' What Settings' RESCAN LIBRARY row says the app holds, and since when.

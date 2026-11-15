@@ -113,34 +113,22 @@ end function
 '   held, heldY: WATERSHED's placeholder (BROADCASTS RESUME AT 9 PM)
 '   pkgRow, pkgHead: the bundle list's rows and its BUNDLES heading
 function NxGuideTextSizes(large as Boolean) as Object
-    if large then return NxGuideTextSizesFor("large")
-    return NxGuideTextSizesFor("normal")
-end function
-
-function NxGuideTextSizesFor(level as String) as Object
+    ' DEFAULT (20 and 22, a 36 px box, the bundle list at 20 and 22) and LARGER
+    ' (29 and 29, 54, 22 and 25). SMALLER is NxGuideTextSizesSmall. The numbers sit in
+    ' these locals so scripts/guide-text-smoke.mjs reads them against the Apple TV's.
     text = 20
     time = 22
     numW = 36
-    if level = "large" then
+    pkgRow = 20
+    pkgHead = 22
+    level = "normal"
+    if large then
         text = 29
         time = 29
         numW = 54
-    else if level = "small" then
-        text = NxGuideSmallerText()
-        time = NxGuideSmallerTime()
-        numW = NxGuideSmallerNumW()
-    end if
-    ' The bundle list's rows and its BUNDLES heading follow the step too
-    ' (the Apple TV's packageRowText and packageHeading): 17 and 19, 20 and 22,
-    ' and LARGER's 22 and 25, as they were at LARGE.
-    pkgRow = 20
-    pkgHead = 22
-    if level = "large" then
         pkgRow = 22
         pkgHead = 25
-    else if level = "small" then
-        pkgRow = text
-        pkgHead = time
+        level = "large"
     end if
     g = NxGuideGeometryFor(level)
     return {
@@ -153,6 +141,32 @@ function NxGuideTextSizesFor(level as String) as Object
         head: time, headY: NxGuideLineTop(g.headerH, time),
         held: time, heldY: NxGuideLineTop(g.rowH, time)
     }
+end function
+
+' SMALLER (the Apple TV's .small: 17 and 19, a 31 px box), its numbers the named
+' constants above.
+function NxGuideTextSizesSmall() as Object
+    text = NxGuideSmallerText()
+    time = NxGuideSmallerTime()
+    numW = NxGuideSmallerNumW()
+    pkgRow = text
+    pkgHead = time
+    g = NxGuideGeometryFor("small")
+    return {
+        rowH: g.rowH, headerH: g.headerH,
+        pkgRow: pkgRow, pkgHead: pkgHead,
+        slot: time, slotY: NxGuideLineTop(g.headerH, time), slotH: Int(time * 1.3 + 0.5),
+        title: text, titleY: NxGuideLineTop(g.rowH, text),
+        num: text, numW: numW, numY: NxGuideLineTop(g.rowH, text),
+        name: text, nameY: NxGuideLineTop(g.rowH, text), nameGap: numW + 8,
+        head: time, headY: NxGuideLineTop(g.headerH, time),
+        held: time, heldY: NxGuideLineTop(g.rowH, time)
+    }
+end function
+
+function NxGuideTextSizesFor(level as String) as Object
+    if level = "small" then return NxGuideTextSizesSmall()
+    return NxGuideTextSizes(level = "large")
 end function
 
 ' The grid's surfaces, as GuideView draws them: the grid under its rows, the

@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku 1.0.13 v14: the reviewer's five)
+
+**State.** Branch `roku/1.0.13-candidate-v13` (the same branch, v14 on top of `448b1102`). The reviewer passed v13; these are what it found.
+
+**Changed.**
+- **A cut rebuild no longer shrinks a whole saved library** (I-091): a rebuild runs with the guide's memory held, so it is cut about 3,200 titles sooner than first setup, and saving it replaced a complete copy with a smaller one, a little more each daily rebuild. `NxSnapshotSaveScan` keeps the saved copy when the scan was cut and the copy is whole and holds more (`NxSnapshotKeepSaved`); the guide shows what fit, the file keeps the library. The new `SnapshotTests` cases fail without it.
+- **The WATERSHED hold clip stops after three failed tries** (`NxKeepAliveAction`): `onKeepState` restarted a clip that errored for ever. A finished clip still loops; the third error stops it until a channel starts.
+- **The guide panel's poster waits 250 ms** after the cursor moves and the stale fetch is stopped, so moving across a row is not a request a programme.
+- **The old format's chunk files are deleted** when the saved library's format changes (`NxSnapshotReadMeta` clears the folder): the format 11 bump had left the format 10 files in cachefs:.
+- **`NxGuideTextSizes(large)` is back in the shape `scripts/guide-text-smoke.mjs` reads** (the locals 20, 22, 36 and 29, 29, 54 and the record built from them), with SMALLER in `NxGuideTextSizesSmall`, so the shared check holds the Roku to the Apple TV's table: SMALLER 31 box, 17 and 19; DEFAULT 36, 20 and 22; LARGER 54, 29 and 29.
+
 ## 2026-11-15 (Roku: the poster is on every backend, Jellyfin and Emby too, #312)
 
 **State.** Branch `roku/1.0.13-candidate-v13`. Chad's standing rule: "doesnt matter the platform, jellyfin, emby, plex - the user interface should be parity unless absolute tech restrictions."

@@ -111,6 +111,14 @@ function NxRunWatershedGateTests() as Integer
     NxCheck(r, "tick gap: asleep across 9 PM, the re-check key has moved", FormatJson(NxScheduleHourKey(nine& + 30, true) <> NxScheduleHourKey(nine& - 600, true) and NxTickGapDue(nine& - 600, nine& + 30)), "true")
     NxCheck(r, "tick gap: not asleep across it, the 30 s ask sees the key move itself", FormatJson(NxTickGapDue(nine& - 5, nine& + 5)), "false")
     gz.nxTzOffsetSec = invalid
+    ' The hold clip is restarted on an error at most twice, a third failure stops it (#190).
+    NxCheck(r, "keep-alive: a finished clip loops", NxKeepAliveAction("finished", 0), "play")
+    NxCheck(r, "keep-alive: a first error is tried again", NxKeepAliveAction("error", 1), "play")
+    NxCheck(r, "keep-alive: a second error is tried again", NxKeepAliveAction("error", 2), "play")
+    NxCheck(r, "keep-alive: a third error gives up", NxKeepAliveAction("error", 3), "giveup")
+    NxCheck(r, "keep-alive: a fifth error still gives up", NxKeepAliveAction("error", 5), "giveup")
+    NxCheck(r, "keep-alive: playing and buffering do nothing", NxKeepAliveAction("playing", 0) + NxKeepAliveAction("buffering", 0), "")
+
     print "watershed gate cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

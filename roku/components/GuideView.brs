@@ -99,6 +99,8 @@ sub init()
     m.keepVideo.mute = true
     m.keepVideo.ObserveField("state", "onKeepState")
     m.keepAlive = false
+    m.infoPosterTimer = m.top.FindNode("infoPosterTimer")
+    m.infoPosterTimer.ObserveField("fire", "onInfoPosterTimer")
     m.video.ObserveField("state", "onVideoState")
     m.video.ObserveField("bufferingStatus", "onBuffering")
     m.video.ObserveField("availableSubtitleTracks", "applySubtitles")
@@ -870,10 +872,23 @@ sub showInfoPoster(ref as Dynamic)
     m.infoPosterKey = key
     m.infoPosterShown = false
     p.visible = false
+    ' The stale fetch is stopped, and the next waits 250 ms: Right, Left, Up and Down
+    ' move the cursor faster than a poster arrives, and a fetch for every programme it
+    ' passes is a request each (the reviewer's find).
     if m.infoPosterTask <> invalid then
         m.infoPosterTask.UnobserveField("file")
+        m.infoPosterTask.control = "stop"
         m.infoPosterTask = invalid
     end if
+    m.infoPosterTimer.control = "stop"
+    m.infoPosterRef = ref
+    if ref = invalid then return
+    m.infoPosterTimer.control = "start"
+end sub
+
+' The cursor has rested on a programme for 250 ms: its poster is fetched.
+sub onInfoPosterTimer()
+    ref = m.infoPosterRef
     if ref = invalid then return
     m.infoPosterTask = CreateObject("roSGNode", "PosterTask")
     m.infoPosterTask.ObserveField("file", "onInfoPosterFile")
@@ -1576,7 +1591,8 @@ end sub
 ' go quiet, measured 2026-11-13), so a muted 4 px black clip plays on its own
 ' Video node, looping, until a channel starts or another tune begins (#190).
 sub startKeepAlive()
-    if m.keepAlive then return
+    if m.keepAlive or m.keepGaveUp = true then return
+    m.keepErrors = 0
     content = CreateObject("roSGNode", "ContentNode")
     content.url = "pkg:/videos/hold.mp4"
     content.streamFormat = "mp4"
@@ -1588,6 +1604,8 @@ sub startKeepAlive()
 end sub
 
 sub stopKeepAlive()
+    ' A channel starting is a new hold's start: a clip given up on is tried again then.
+    m.keepGaveUp = false
     if not m.keepAlive then return
     m.keepAlive = false
     m.keepVideo.control = "stop"
@@ -1597,9 +1615,18 @@ end sub
 sub onKeepState()
     state = m.keepVideo.state
     print "keepalive: clip "; state
-    if m.keepAlive and (state = "finished" or state = "error") then
+    if not m.keepAlive then return
+    if state = "error" then m.keepErrors = NxNumberOr0(m.keepErrors) + 1
+    action = NxKeepAliveAction(state, NxNumberOr0(m.keepErrors))
+    if action = "play" then
         m.keepVideo.control = "stop"
         m.keepVideo.control = "play"
+    else if action = "giveup" then
+        ' The clip cannot play: three tries, then it stays stopped until a channel starts.
+        m.keepAlive = false
+        m.keepGaveUp = true
+        m.keepVideo.control = "stop"
+        print "keepalive: the hold clip failed "; NxKeepAliveTries(); " times, stopped"
     end if
 end sub
 
