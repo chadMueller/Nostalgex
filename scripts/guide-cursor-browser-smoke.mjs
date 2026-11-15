@@ -126,7 +126,7 @@ for (const name of Object.keys(viewports)) {
   check(`${name}: opens on the live programme: cursor null, window at its start`, s.cursor === null && s.offset === 0, JSON.stringify([s.cursor, s.offset]));
   check(`${name}: one highlighted cell, the live one, on the focused row`, s.cursorCells === 1 && s.cell && s.cell.start <= s.now && s.now < s.cell.end, JSON.stringify(s.cell));
   check(`${name}: the info panel shows it with its progress`, /^\d+:\d\d(:\d\d)? \/ \d+:\d\d/.test(s.infoTime) && s.infoTitle === s.cell.text, `${s.infoTime} | ${s.infoTitle} | ${s.cell && s.cell.text}`);
-  check(`${name}: UP NEXT IN n MIN, two spaces, the title`, /^UP NEXT IN (\d+|LESS THAN 1) MIN {2}\S/.test(s.infoUp) && !/:/.test(s.infoUp.split("MIN")[0]), JSON.stringify(s.infoUp));
+  check(`${name}: UP NEXT: the title first, two spaces, then UP NEXT IN n MIN`, /^\S.* {2}UP NEXT IN (\d+|LESS THAN 1) MIN$/.test(s.infoUp), JSON.stringify(s.infoUp));
   const liveUp = Number(/IN (\d+) MIN/.exec(s.infoUp)?.[1] ?? NaN);
   const minutesToNext = Math.floor((s.cell.end - s.now) / 60);
   check(`${name}: the minutes are whole minutes to the next start, rounded down`, liveUp === minutesToNext || (Number.isNaN(liveUp) && minutesToNext < 1), `${liveUp} vs ${minutesToNext}`);
@@ -143,8 +143,39 @@ for (const name of Object.keys(viewports)) {
   const range = (t) => new Date(t * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
   check(`${name}: Right: the range is the programme's start and end`, s.infoTime === `${range(s.cell.start)} - ${range(s.cell.end)}`, `${s.infoTime} vs ${range(s.cell.start)} - ${range(s.cell.end)}`);
   const upMin = Number(/IN (\d+) MIN/.exec(s.infoUp)?.[1] ?? NaN);
-  check(`${name}: Right: UP NEXT counts from now to the programme after it`, /^UP NEXT IN (\d+|LESS THAN 1) MIN {2}\S/.test(s.infoUp) && upMin >= Math.floor((s.cell.end - s.now) / 60) - 1, JSON.stringify(s.infoUp));
+  check(`${name}: Right: UP NEXT counts from now to the programme after it`, /^\S.* {2}UP NEXT IN (\d+|LESS THAN 1) MIN$/.test(s.infoUp) && upMin >= Math.floor((s.cell.end - s.now) / 60) - 1, JSON.stringify(s.infoUp));
+  // The highlighted cell is much stronger than the row's own focus: a full-cyan ring, a bright fill and a wide glow.
+  const look = await page.evaluate(() => {
+    const cell = document.querySelector(".grid-row.focused .grid-program--cursor");
+    const rowCs = getComputedStyle(document.querySelector(".grid-row.focused"));
+    const cs = getComputedStyle(cell);
+    const blurs = [...cs.boxShadow.matchAll(/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px(?: (\d+(?:\.\d+)?)px)? ?(?:inset)?/g)];
+    const outer = cs.boxShadow.split(/,(?![^(]*\))/).filter((x) => !/inset/.test(x)).map((x) => Number((/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px/.exec(x) || [])[3] || 0));
+    const rowOuter = rowCs.boxShadow.split(/,(?![^(]*\))/).filter((x) => !/inset/.test(x)).map((x) => Number((/(\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px/.exec(x) || [])[3] || 0));
+    const ring = /inset 0px 0px 0px 3px/.test(cs.boxShadow) || /rgb\(0, 196, 255\) 0px 0px 0px 3px inset/.test(cs.boxShadow);
+    const rect = cell.getBoundingClientRect();
+    return { shadow: cs.boxShadow, outerBlur: Math.max(0, ...outer), rowBlur: Math.max(0, ...rowOuter), ring, bg: cs.backgroundColor, rowOverflow: getComputedStyle(cell.parentElement).overflow, w: rect.width, h: rect.height };
+  });
+  check(`${name}: the highlighted cell has a full-cyan 3px ring`, look.ring, look.shadow);
+  check(`${name}: and a glow much stronger than the row's (outer blur ${look.outerBlur}px against ${look.rowBlur}px)`, look.outerBlur >= 30 && look.outerBlur >= look.rowBlur * 2, JSON.stringify(look));
+  check(`${name}: the strip lets the glow out, and the fill is opaque`, look.rowOverflow === "visible" && /^(rgb|color)\(/.test(look.bg) && !/\//.test(look.bg), JSON.stringify([look.rowOverflow, look.bg]));
   await shot("c1-right");
+  // UP NEXT: the title in the highlight colour, the label after it; a long title is cut, never the label.
+  const up = await page.evaluate(() => {
+    const el = document.getElementById("info-upnext");
+    const title = el.querySelector(".info-upnext-title"), label = el.querySelector(".info-upnext-label");
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--upnext-title-color").trim();
+    const before = { titleColor: getComputedStyle(title).color, labelColor: getComputedStyle(label).color, kids: el.children.length };
+    title.textContent = "A very long programme title that goes on and on and on and on and on and on and on and on and on and on and on";
+    const panel = document.querySelector(".info-text, .info-panel").getBoundingClientRect();
+    const t = title.getBoundingClientRect(), l = label.getBoundingClientRect(), whole = el.getBoundingClientRect();
+    const out = { ...before, accent, titleCut: title.scrollWidth > title.clientWidth, labelFull: label.scrollWidth <= label.clientWidth + 1, labelInside: l.right <= whole.right + 1 && l.left >= t.right - 1, titleBeforeLabel: t.right <= l.left + 1, text: label.textContent };
+    updateInfoPanel();
+    return out;
+  });
+  check(`${name}: UP NEXT: the title and the label are two spans on one line, the title first`, up.kids === 2 && up.titleBeforeLabel, JSON.stringify(up));
+  check(`${name}: UP NEXT: the title is in the highlight colour, the label stays dim`, up.titleColor !== up.labelColor && /^rgb\(25[0-5], 2\d\d, \d+\)$/.test(up.titleColor.replace(/\s+/g, " ")) , JSON.stringify([up.titleColor, up.labelColor, up.accent]));
+  check(`${name}: UP NEXT: a long title is cut with an ellipsis before the label is`, up.titleCut && up.labelFull && up.labelInside, JSON.stringify(up));
 
   // Right again and on, the window moves only when the programme would leave the view.
   let windowMoves = 0, steps = 0, badMove = null;
@@ -221,6 +252,24 @@ for (const name of Object.keys(viewports)) {
   await key(page, "Enter", 400);
   s = await state(page);
   check(`${name}: select (Enter) tunes the row and the cursor is live again`, s.cursor === null && s.offset === 0, JSON.stringify([s.cursor, s.offset]));
+
+  // The bundle stripe wraps like the channel rows: Down from the last bundle goes to the first, Up from the first to the last.
+  const wrap = await page.evaluate(() => {
+    const saved = guideStripeGroups, savedGroup = guideStripeGroup;
+    // Three bundles with a bare group after them (channels in no bundle).
+    guideStripeGroups = () => [{ pkg: { name: "A" }, first: 0 }, { pkg: { name: "B" }, first: 1 }, { pkg: { name: "C" }, first: 2 }, { pkg: null, first: 3 }];
+    const out = {};
+    guideStripeGroup = 2; jumpPackage(1); out.downFromLast = guideStripeGroup;
+    guideStripeGroup = 0; jumpPackage(-1); out.upFromFirst = guideStripeGroup;
+    guideStripeGroup = 1; jumpPackage(1); out.downInside = guideStripeGroup;
+    guideStripeGroup = 1; jumpPackage(-1); out.upInside = guideStripeGroup;
+    guideStripeGroups = () => [{ pkg: { name: "A" }, first: 0 }];
+    guideStripeGroup = 0; jumpPackage(1); out.onlyOne = guideStripeGroup;
+    guideStripeGroups = saved; guideStripeGroup = savedGroup;
+    return out;
+  });
+  check(`${name}: bundle stripe: Down on the last bundle goes to the first, Up on the first to the last`, wrap.downFromLast === 0 && wrap.upFromFirst === 2, JSON.stringify(wrap));
+  check(`${name}: bundle stripe: inside the list Up and Down move one bundle, and a single bundle stays`, wrap.downInside === 2 && wrap.upInside === 0 && wrap.onlyOne === 0, JSON.stringify(wrap));
 
   check(`${name}: not in browser full screen`, await page.evaluate(() => !document.fullscreenElement));
   check(`${name}: no page errors`, errors.length === 0, errors.join(" | "));

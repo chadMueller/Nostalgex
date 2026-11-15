@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (web tuner: the guide cursor goes a programme at a time, LARGER rows, UP NEXT title first, the bundle stripe wraps)
+
+**State.** Branch `web/guide-text-three-steps`, on top of the Apple TV branch of the same name (`appletv/guide-text-three-steps`, which now carries the cursor, the LARGER rows and UP NEXT). Not merged, not pushed. From Chad's look at the basement TV build: "it should jump to the next title not the next 30 minutes and we should have a highlight", "larger should increase the row as well", "the active state needs to be way more obvious", "reverse this globally: movie title up next in # of minutes", "bundle strip, reaching the bottom should take you back to the top".
+
+**Changed.**
+- **The guide's Left and Right move a programme at a time** (`scripts/nostalgex-guide-cursor.js`, the Apple TV's `GuideProgramCursor`; its test vectors are replayed in `scripts/nostalgex-guide-cursor-smoke.mjs`). The web moved the window 30 minutes a press before. Now the cursor is a time on the focused row. Right goes to the next programme whatever its length, over a gap too. Left goes to the previous one that has not ended, and from the programme on now it goes on to the bundle stripe (or the bundle list) as before. Up and Down change the row and keep the time. The window moves only when the programme would leave the two-hour view (it starts before it, past it, or in its last 15 minutes), to the 30 minute slot its start is in. Back (Escape or Backspace, with the cursor off the live programme) and select put the cursor back on the live programme and the window at its start. The info panel follows the cursor: a later programme shows with its time range ("10:05 PM - 11:05 PM") where the progress bar was.
+- **The cursor's cell is highlighted**: a bright selected fill, a full cyan 3 px ring and a glow much stronger than the row's own (outer blur 38 px against the row's 14), drawn outside the cell. The live programme's cell is highlighted on the focused row until the cursor moves.
+- **LARGER grows the row and the header** by the Apple TV's proportions (76 over 64, 66 over 58: 1.1875 and 1.1379), at every window size; DEFAULT and SMALLER keep theirs. The text at LARGER is still 1.0.21's LARGE, no bigger.
+- **UP NEXT reads the title first, in a highlight colour, then "UP NEXT IN 24 MIN"** (two spaces between), "UP NEXT IN LESS THAN 1 MIN" under a minute, on every panel. A long title is cut with an ellipsis before the label is. The colour is one CSS variable, `--upnext-title-color`, a placeholder until the Apple TV's value comes.
+- **The bundle stripe wraps**: Down on the last bundle goes to the first, Up on the first to the last, as the channel rows do.
+
+**Tests.** `npm run test:guide-cursor` (24 checks, the Apple TV's vectors) and `npm run test:guide-cursor:browser` (72 checks: a key walk at 1440x900 and 1920x1080 with the clock pinned and films of 8 to 130 minutes: the highlighted cell, Right and Left, the window rule, Down and Up keeping the time, the info panel's time range and UP NEXT, the glow, Back and select, the stripe wrap). `guide-text-smoke` holds the page's row and header steps to the Swift metrics.
+
+**Half-done.** Chromium only; no key reaches a TV browser such as TV Bro, where the cursor stays a keyboard feature as the window step was. Left and Right on the web's promo rows do nothing but go to the stripe. The highlight colour and glow values are the web's own until the Apple TV's come. The Roku and Android ports of the cursor are theirs. The web still enters browser full screen when select is pressed on the playing row; that is as it was.
+
+**Next.** The Apple TV's highlight colour, Chad's look, then a reviewer pass.
+
 ## 2026-11-14 (web tuner: GUIDE TEXT SIZE has three steps, branch `web/guide-text-three-steps`)
 
 **Why.** Chad: all four platforms stay level, and the Apple TV's GUIDE TEXT SIZE now has three steps (SMALLER, DEFAULT, LARGER, branch `appletv/guide-text-three-steps`). The web tuner had two (NORMAL, LARGE), with LARGE sized against an Apple TV DEFAULT that has since come down.

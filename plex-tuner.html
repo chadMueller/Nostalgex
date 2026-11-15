@@ -396,17 +396,32 @@
     color: rgba(255,255,255,0.4);
     white-space: nowrap;
   }
-  /* UP NEXT: one plain, dim line, "UP NEXT IN 44 MIN" and two spaces (kept: white-space: pre) and the title. No badge or capsule; a long title is cut with an ellipsis. */
+  /* UP NEXT: one plain line, the title in a highlight colour and then "UP NEXT IN 44 MIN" in dim text (Chad 2026-11-15, all platforms).
+     No badge or capsule. The label keeps its width; a long title is cut with an ellipsis, so the label is never the part that goes.
+     The highlight colour is one variable, --upnext-title-color (the Apple TV's value is still to come; this is the placeholder). */
+  :root { --upnext-title-color: #FFD60A; }
   .info-upnext {
+    display: flex;
+    align-items: baseline;
+    gap: calc(14 * var(--pt));
     margin-top: calc(14 * var(--pt));
     font-family: 'VT323', monospace;
     font-size: max(16px, calc(var(--info-next) * var(--pt)));
     color: rgba(255,255,255,0.4);
     letter-spacing: 1px;
-    white-space: pre;
+    min-width: 0;
+  }
+  .info-upnext-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    color: var(--upnext-title-color);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
+  }
+  .info-upnext-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .info-hint {
     position: absolute;
@@ -1738,16 +1753,23 @@
     background: color-mix(in srgb, var(--ch) 45%, var(--bg)) !important;
   }
 
-  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js): lifted, in the selected fill, with a
-     3px cyan ring and a glow, inside the row's own focus. The live programme's cell on the playing row until the cursor moves. */
+  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js): lifted, in a bright selected fill, with a
+     full-cyan 3px ring and a glow much stronger than the row's own, so it reads from the couch (Chad 2026-11-15: "way more obvious").
+     The live programme's cell on the playing row until the cursor moves. */
   .grid-row.focused .grid-program.grid-program--cursor {
-    background: color-mix(in srgb, var(--cyan) 30%, var(--bg)) !important;
-    box-shadow: inset 0 0 0 3px var(--cyan), 0 0 12px rgba(0,196,255,0.6);
+    background: color-mix(in srgb, var(--cyan) 52%, var(--bg)) !important;
+    box-shadow:
+      inset 0 0 0 3px var(--cyan),
+      inset 0 0 18px rgba(0,196,255,0.55),
+      0 0 14px 3px rgba(0,196,255,0.95),
+      0 0 38px 8px rgba(0,196,255,0.55);
     border-radius: 6px;
     color: #fff !important;
     position: relative;
-    z-index: 2;
+    z-index: 3;
   }
+  /* The glow is drawn outside the cell, so the focused row's strip lets it out (the cell clips its own text). */
+  .grid-row.focused .grid-row-programs { overflow: visible; }
 
   /* Channel name column */
   .grid-row-channel {
@@ -7149,10 +7171,21 @@
       ? [preview.entry.startSec, preview.entry.endSec].map(s => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })).join(' - ')
       : `${now.position || '0:00'} / ${now.total || ''}`;
 
-    // UP NEXT: one plain line, as on the Apple TV: "UP NEXT IN 24 MIN", two spaces, the title. Whole minutes from now to the next
-    // programme's start, rounded down, "UP NEXT IN LESS THAN 1 MIN" under a minute (scripts/nostalgex-up-next.js).
+    // UP NEXT: one plain line, as on the Apple TV (all platforms, Chad 2026-11-15): the programme's title in a highlight colour, two
+    // spaces, then "UP NEXT IN 24 MIN". Whole minutes from now to the next programme's start, rounded down, "UP NEXT IN LESS THAN 1
+    // MIN" under a minute (scripts/nostalgex-up-next.js). A long title is cut with an ellipsis before the label is.
     const upNextSeconds = nextStartSec !== null ? nextStartSec - Date.now() / 1000 : (now && now.endSec ? now.endSec - Date.now() / 1000 : 0);
-    document.getElementById('info-upnext').textContent = next ? `${NostalgexUpNext.label(upNextSeconds)}  ${itemGuideTitle(next)}` : '';
+    const upNextEl = document.getElementById('info-upnext');
+    upNextEl.textContent = '';
+    if (next) {
+      const titleEl = document.createElement('span');
+      titleEl.className = 'info-upnext-title';
+      titleEl.textContent = itemGuideTitle(next);
+      const labelEl = document.createElement('span');
+      labelEl.className = 'info-upnext-label';
+      labelEl.textContent = NostalgexUpNext.label(upNextSeconds);
+      upNextEl.append(titleEl, '  ', labelEl);
+    }
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -13127,7 +13160,12 @@
     const groups = guideStripeGroups();
     let i = guideStripeGroup + step;
     while (i >= 0 && i < groups.length && !groups[i].pkg) i += step;
-    if (i < 0 || i >= groups.length) return;
+    if (i < 0 || i >= groups.length) {
+      // Past the last bundle goes to the first and past the first to the last, as the channel rows wrap (Chad 2026-11-15).
+      const bundled = groups.map((g, k) => (g.pkg ? k : -1)).filter((k) => k >= 0);
+      if (!bundled.length) return;
+      i = step > 0 ? bundled[0] : bundled[bundled.length - 1];
+    }
     guideStripeGroup = i; guideStripeJumped = true;
     const rows = [...document.querySelectorAll('#grid-body > .grid-row[data-channel-id]')];
     const body = document.getElementById('grid-body');

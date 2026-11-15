@@ -129,6 +129,7 @@ vm.runInContext(`
   function manifestServerKey() { return 'smoke'; }
   function isWatershedHold() { return false; }
   function addStripeCells() {}
+  function applyGuideCursor() {}
   ${fn("renderGrid")}
   this.grid = { set(c) { CHANNELS = c; }, offset(n) { guideSlotOffset = n; }, renderGrid };
 `, ctx);
