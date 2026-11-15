@@ -15,12 +15,15 @@ Commits carry the detail of *what*; this carries the *why*.
 | 90 s HEVC MKV, video copied | 83.80 s | 90.03 s | 12.2 s | paused; same 52 s later (Apple TV: item failed, "Cannot Complete Action") |
 | 90 s hev1 MP4, re-encoded | 83.96 s | 90.01 s | 9.0 s | paused; same 13 s later |
 | 90 s H.264 MKV, copied into TS | 89.82 s, its last frame | 90.05 s | | ended normally |
+| 90 s HEVC MKV, copied, on the basement Apple TV through the app | 81.79 s | 90.03 s | 14.2 s | left waiting; the startup watchdog (tuned 20 s before the end) retried it at 1080p, which stopped at 81.79 s again |
+
+How much goes missing depends on the file: Emby cuts a copied stream at the first keyframe after each 6 s, so the real segments are as long as that (8 s for the test files' 4 s keyframes, about 10.4 s at x264 and x265's default 250 frames at 24 fps) and the last one is what never comes. The Apple TV lost 8.24 s of the 90 s file.
 
 Emby never sends the missing 2 to 6 s, so moving on promptly is all the app can do. Request settings were tried and rejected: `SegmentLength=2` alone broke the timeline (24 s and 8 s jumps), `BreakOnNonKeyFrames=True` alone changed nothing (6.3 s lost), the two together ended cleanly but dropped 2 to 5 frames at every segment boundary for the whole programme and still lost 2.2 to 5.6 s. TS segments end cleanly, but AVPlayer will not show HEVC from TS.
 
 **Changed.**
-- `PlaybackEndRule` / `PlaybackEndWatch`: inside 8 s (one Emby segment and 2 s) of the programme's real runtime (`exactDurationSeconds`, checked against the minutes as `slotSeconds` does; none for a multi-part film), a playhead still for 2 s is the end, whether the player paused or was left waiting. The old playlist backstop stays.
-- The same window makes a failure the end: the item going `.failed` (the three status observers check it before retrying) and `AVPlayerItemFailedToPlayToEndTime`, which nothing heard before.
+- `PlaybackEndRule` / `PlaybackEndWatch`: inside 15 s (one copied segment at the common 10.4 s keyframe interval, and slack; 8 s, the first figure, missed the Apple TV's 8.24 s) of the programme's real runtime (`exactDurationSeconds`, checked against the minutes as `slotSeconds` does; none for a multi-part film), a playhead still for 2 s is the end, whether the player paused or was left waiting. The old playlist backstop stays.
+- The same window makes a failure the end: the item going `.failed` (the three status observers check it before retrying), `AVPlayerItemFailedToPlayToEndTime`, which nothing heard before, and the startup watchdog finding no picture (a channel tuned less than its 20 s deadline before the end).
 - The starvation monitor stands down inside the window, so the tail never gets a 1080p retry or the "server too slow" card. A stall anywhere else is unchanged.
 
 **Tested.** `PlaybackEndRuleTests` replays the three measured ends, paused and waiting, and a stall mid-file; it was red on the old backstop (all three ends never ended, the window and wiring checks failed) and is green now. The next programme starts 2 s after the last frame arrives, plus its load.

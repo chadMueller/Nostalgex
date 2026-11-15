@@ -77,7 +77,12 @@ final class LiveEndOfProgrammeHarness: XCTestCase {
             var lastCodeOfTitle = -1, lastFrameOfTitleAt: Date?, firstFrameOfNextAt: Date?, nextTitle = ""
             var firstCodeOfNext = -1
             let started = Date()
+            var lastTrace = Date.distantPast
             while Date().timeIntervalSince(started) < lead + 90 {
+                if env["NX_END_TRACE"] != nil, Date().timeIntervalSince(lastTrace) >= 1, let p = state.player, let it = p.currentItem {
+                    lastTrace = Date()
+                    print("[ENDTRACE] +\(String(format: "%.1f", Date().timeIntervalSince(started))) \(state.currentItem?.title ?? "?") t=\(String(format: "%.2f", it.currentTime().seconds)) dur=\(String(format: "%.1f", it.duration.seconds)) rate=\(p.rate) tc=\(p.timeControlStatus.rawValue) status=\(it.status.rawValue) state=\(state.playbackState) base=\(state.hlsBaseOffset) runtime=\(PlaybackEndRule.runtime(for: state.currentItem).map { String($0) } ?? "nil")")
+                }
                 if let item = state.player?.currentItem, item !== watchedItem {
                     let o = AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
                     item.add(o); output = o; watchedItem = item

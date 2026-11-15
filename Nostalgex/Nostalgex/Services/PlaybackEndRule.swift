@@ -14,9 +14,14 @@ import Foundation
 /// | 21 min HEVC MKV, video copied | 1263.91 s    | 1260.39 s | 2.1 s        | paused; "failed to play to end" 41 s later |
 /// | 90 s HEVC MKV, video copied   | 83.80 s      | 90.03 s   | 12.2 s       | paused; same, 52 s later               |
 /// | 90 s hev1 MP4, re-encoded     | 83.96 s      | 90.01 s   | 9.0 s        | paused; same, 13 s later               |
+/// | 90 s HEVC MKV, copied, Apple TV | 81.79 s    | 90.03 s   | 14.2 s       | left waiting (rate 1), twice in a row  |
 ///
-/// and on the Apple TV the same 90 s copy ended with the item `.failed` ("Cannot Complete
-/// Action") at the last segment, or the player left waiting. H.264 copied into TS segments
+/// and on the Apple TV the same 90 s copy has also ended with the item `.failed` ("Cannot
+/// Complete Action") at the last segment. How much is lost depends on the file: a copied
+/// stream is cut at the first keyframe after each 6 s, so its real segments are as long as
+/// that (8 s for the 4 s keyframe interval of the test files, about 10.4 s for x264 and
+/// x265's default of 250 frames at 24 fps), and the last one is what goes missing. The
+/// Apple TV lost 8.24 s of the 90 s file. H.264 copied into TS segments
 /// ended normally, on its last frame. Emby never sends the missing seconds (2 to 6 s), so
 /// the most the app can do is move on promptly. The old backstop (2 s left on the playlist
 /// and the rate at 0) caught none of these, the starvation monitor ignores a paused player,
@@ -27,8 +32,9 @@ import Foundation
 /// failure of the item, is the end of the programme. Outside the window nothing changes:
 /// a stall mid-file is still the starvation ladder's, and a failure still retries.
 enum PlaybackEndRule {
-    /// One Emby segment (6 s) and 2 s of slack.
-    static let windowSeconds: Double = 8
+    /// One copied segment at the common 10.4 s keyframe interval, and slack. 8 s (one 6 s
+    /// segment and 2 s) was the first figure and missed the Apple TV's own 8.24 s loss.
+    static let windowSeconds: Double = 15
     /// How long the playhead must sit still inside the window.
     static let stallSeconds: Double = 2
     /// Progress below this between samples is "did not move" (the starvation monitor's figure).
