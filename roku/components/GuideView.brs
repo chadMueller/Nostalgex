@@ -1214,6 +1214,8 @@ sub startTune(idx as Integer)
     m.stopServer = b.serverIndex
     rememberStop()
     NxApplyStreamAuth(m.video, b)
+    ' Only one video plays on the stick: the hold clip goes before the channel starts (#190).
+    stopKeepAlive()
     m.video.content = stream.content
     m.video.control = "play"
     m.tuneFormat = stream.content.streamFormat
