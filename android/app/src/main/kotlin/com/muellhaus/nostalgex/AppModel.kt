@@ -2425,6 +2425,9 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun release() {
+        // A load the scope's cancel ends no longer clears its own mark (it is not current): clear it here, so Back during a long load
+        // is not counted as an unfinished load at the next cold start.
+        loadMark.released()
         scope.cancel()
         watchReporter.stop()
         playback.release()

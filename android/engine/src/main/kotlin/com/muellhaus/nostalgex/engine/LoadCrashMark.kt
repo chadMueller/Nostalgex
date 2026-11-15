@@ -30,6 +30,13 @@ class LoadCrashMark(private val store: LoadMarkStore) {
     /** START OVER: the viewer chose a fresh start, so the loads that never finished are forgotten (they asked the question that led here). */
     fun startedOver() = store.resetCount()
 
+    /**
+     * The screen is gone (MainActivity.onDestroy, Back during a long first load) and the model's scope is cancelled with a load in it. Its
+     * cleanup then sees it is no longer current and leaves the mark, which the next cold start would count as an unfinished load: two
+     * of those show "LOADING DIDN'T FINISH". Called before the scope is cancelled; the marker goes, the count stays.
+     */
+    fun released() = loadAbandoned()
+
     /** The library changed under a load (signed out, another server or backend, a new load): its marker goes, its count stays. */
     fun loadAbandoned() = store.clear(resetCount = false)
 }

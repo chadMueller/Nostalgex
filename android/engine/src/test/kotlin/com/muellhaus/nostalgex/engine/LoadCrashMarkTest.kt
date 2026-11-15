@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -94,5 +95,34 @@ class LoadCrashMarkTest {
         val store = Store(); val mark = LoadCrashMark(store)
         mark.loadStarted(); mark.startedOver()
         assertTrue(store.inFlight)
+    }
+
+    /** AppModel.release(): the mark's `released()`, then the scope is cancelled with the load in it. */
+    private fun loadThenRelease(releaseFirst: Boolean): Store {
+        val store = Store(); val mark = LoadCrashMark(store)
+        val ownScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val pass = BackgroundPass(ownScope)
+        val started = java.util.concurrent.CountDownLatch(1)
+        val ended = java.util.concurrent.CountDownLatch(1)
+        pass.start { current ->
+            mark.loadStarted(); started.countDown()
+            try { kotlinx.coroutines.awaitCancellation() } finally { mark.loadEnded(current(), resetCount = true); ended.countDown() }
+        }
+        assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        if (releaseFirst) mark.released()
+        ownScope.cancel()
+        assertTrue(ended.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        return store
+    }
+
+    @Test fun aLoadEndedByReleaseLeavesNoMarkAndKeepsTheCount() {
+        val store = loadThenRelease(releaseFirst = true)
+        assertFalse("Back during a long first load would count as an unfinished load at the next cold start", store.inFlight)
+        assertEquals(2, store.unfinished)
+    }
+
+    @Test fun withoutReleaseClearingItTheCancelledLoadLeavesTheMarkBehind() {
+        // The bug: the scope's cancel makes the load's own cleanup see it is not current, so nothing clears the mark.
+        assertTrue(loadThenRelease(releaseFirst = false).inFlight)
     }
 }
