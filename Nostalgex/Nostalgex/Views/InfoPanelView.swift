@@ -232,12 +232,12 @@ struct InfoPanelView: View {
 
     // MARK: - Poster
 
-    /// A poster column where the server can give posters (Plex, as the Now Playing panel: the season's, then the series',
-    /// then the episode's frame for TV, the film's poster for films, #312). It is always there on such a server, art or
-    /// not, so the text beside it never moves from one programme to the next; a programme with no art shows an empty
-    /// frame. Jellyfin, Emby and demo mode have no posters here, so no column.
+    /// The poster column, on every server (Plex, Jellyfin and Emby: the season's, then the series', then the episode's
+    /// own image for TV, the film's poster for films, #312). It is always there, art or not, so the text beside it never
+    /// moves from one programme to the next; a programme with no art shows an empty frame. Not in demo mode, which has
+    /// no art at all (the UI-test fixture turns it on).
     private var showsPoster: Bool {
-        (appState.backendKind == .plex && !appState.isDemoMode) || DemoData.infoPanelFixtureRequested
+        !appState.isDemoMode || DemoData.infoPanelFixtureRequested
     }
 
     private func poster(for item: PlexMediaItem) -> some View {

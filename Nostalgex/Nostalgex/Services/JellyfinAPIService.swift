@@ -446,7 +446,8 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
                     serverID: serverID.isEmpty ? nil : serverID,
                     videoBitDepth: source?.videoBitDepth,
                     videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
-                    showKey: show.Id
+                    showKey: show.Id,
+                    parentRatingKey: ep.SeasonId
                 )
             }
         } catch {
@@ -845,6 +846,26 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         }
     }
 
+    /// The poster URLs to try, best first: an episode's season Primary image, then its series', then its own; a
+    /// film's own (#312's chain, on Jellyfin and Emby). Emby reads the same paths (EmbyAPIService calls this).
+    static func posterURLs(serverURL: String, for item: PlexMediaItem, width: Int) -> [URL] {
+        var ids: [String] = []
+        if item.type == .episode {
+            if let season = item.parentRatingKey, !season.isEmpty { ids.append(season) }
+            if let series = item.showKey, !series.isEmpty, !ids.contains(series) { ids.append(series) }
+        }
+        if !ids.contains(item.ratingKey) { ids.append(item.ratingKey) }
+        return ids.compactMap { id in
+            var components = URLComponents(string: "\(serverURL)/Items/\(id)/Images/Primary")
+            components?.queryItems = [.init(name: "maxWidth", value: "\(width)")]
+            return components?.url
+        }
+    }
+
+    func posterURLs(for item: PlexMediaItem, width: Int = 300) -> [URL] {
+        Self.posterURLs(serverURL: serverURL, for: item, width: width)
+    }
+
     func thumbnailURL(for item: PlexMediaItem, width: Int = 400) -> URL? {
         guard var components = URLComponents(string: "\(serverURL)/Items/\(item.ratingKey)/Images/Primary") else { return nil }
         var query: [URLQueryItem] = [.init(name: "maxWidth", value: "\(width)")]
@@ -1010,6 +1031,8 @@ struct JellyfinItem: Decodable {
     let CollectionType: String?
     let ParentIndexNumber: Int?
     let IndexNumber: Int?
+    /// Episodes: the season they are in. Its Primary image is the episode's poster first (as Plex's season poster).
+    let SeasonId: String?
     let ProviderIds: [String: String]?
     let Studios: [Studio]?
     let MediaSources: [MediaSource]?
@@ -1021,7 +1044,7 @@ struct JellyfinItem: Decodable {
     enum CodingKeys: String, CodingKey {
         case Id, Name, SeriesName, Overview, ProductionYear, PremiereDate, DateCreated, ChildCount
         case OfficialRating, CommunityRating, RunTimeTicks, Genres, CollectionType, ParentIndexNumber
-        case IndexNumber, ProviderIds, Studios, MediaSources, ImageTags, UserData
+        case IndexNumber, ProviderIds, Studios, MediaSources, ImageTags, UserData, SeasonId
         case itemType = "Type"
     }
 

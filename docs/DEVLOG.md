@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15, later (Apple TV: UP NEXT title first, a louder cursor, the stripe wraps, ICLOUD on top, posters on Jellyfin and Emby, OPEN IN JELLYFIN, the other server's discovery)
+
+**State.** On branch `appletv/guide-text-three-steps`. Not merged, not in a build, not pushed. From Chad's second and third looks at the basement TV.
+
+**Changed.**
+- **UP NEXT reads title first, in the guide's yellow (#FFE500), then the minutes:** "Varsity Blues  UP NEXT IN 24 MIN", under a minute "UP NEXT IN LESS THAN 1 MIN" (`UpNextLabel.line`). The yellow holds 14.96:1 on the Now Playing panel and about 15:1 on the guide info panel. A long title ends in an ellipsis; the label never shrinks. Both panels.
+- **The guide cursor's cell is louder** (`GuideCursorStyle`): cyan #00D4FF at 30% over the row, a full cyan 3 pt ring, and two cyan glows (18 pt at 90%, 6 pt at 100%), clipped to the row's programme area so it never covers the stripe, the channel column or the rows above and below. While a cell is under the cursor the row's own focus steps back to a 2 pt outline at 55% with a 6 pt glow at 25%. White titles hold 8.5:1 or better on the cell.
+- **The bundle stripe wraps**, as the channel rows do: Down on the last bundle is the first, Up on the first is the last, stepping over runs with no bundle.
+- **SERVERS & ACCOUNTS starts with ICLOUD:** the sync switch moved to the top under its own heading, the same subtitle and behaviour; it is the pane's first focus.
+- **Posters on Jellyfin and Emby, the same chain as Plex:** an episode's season Primary image, then its series', then its own; a film's own (`/Items/{id}/Images/Primary`). The scans keep the episode's `SeasonId`; an episode read before that goes series then itself. The guide info panel's poster space is there on every server now (not in demo mode).
+- **OPEN IN JELLYFIN** on the Now Playing panel's last row, on Jellyfin with Swiftfin installed: Swiftfin's item link, `jellyfin://{serverId}/{userId}/item/{itemId}` (its `DeepLink`, the `jellyfin` scheme since its #2268, in 1.7.0), `jellyfin` listed for `canOpenURL`, "NO JELLYFIN APP" when it fails, as OPEN IN PLEX. No Emby row: Emby's Apple TV app has no item link (on its forum the iOS form opens the app but not the item), and a row that only opens an app is not worth it.
+- **A server search that finds the other kind says so:** Jellyfin and Emby each answer only their own discovery probe, so a Jellyfin search on a network with only Emby used to end in "No server answered". It now searches for the other kind too and says "No Jellyfin server answered. Found an Emby server: NAME. Switch to Emby?", with a SWITCH TO EMBY button per server that goes to its sign-in with the address filled in. The usual message stays when neither answers.
+
+**Still Plex only, for a reason.** OPEN IN PLEX (Plex's app link), ORIGINAL (LOCAL PLEX) in STREAM QUALITY and RETRY ORIGINAL VIDEO (both drive Plex's transcoder decision API, which Jellyfin and Emby do not have). Everything else in the two panels (year, certificate, star rating, description, genres, artist, time range, UP NEXT, poster) comes from the Jellyfin and Emby scans as well.
+
+**Tests.** `UpNextLineTests` (the line, the colour's contrast, white on the cursor cell), `GuideStripesTests` (the wrap), `DiscoveryOtherKindTests` (canned Emby and Jellyfin replies), `MediaBrowserPosterTests` and `OpenInJellyfinLinkTests` (the link against Swiftfin's own pattern), with the panels' and sign-in classes: all pass. Simulator screenshots in demo mode; not seen on Emby or Jellyfin in the Simulator (no server signed in there) and Swiftfin not tried on a TV.
+
 ## 2026-11-15 (Apple TV: a programme cursor in the guide, LARGER rows, the info panel's poster, plain UP NEXT, no help line in Now Playing)
 
 **State.** On branch `appletv/guide-text-three-steps`, now on main `106e8dda`. Not merged, not in a build, not pushed. From Chad's look at the basement TV build.

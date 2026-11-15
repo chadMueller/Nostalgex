@@ -322,7 +322,7 @@ struct NowPlayingPanel: View {
                 NowPlayingPanelLayout.programRows(
                     hasSubtitleTracks: appState.hasSubtitleTracks,
                     audioTrackCount: appState.audioTracks.count,
-                    canOpenInPlex: appState.canOpenCurrentItemInPlex
+                    canOpenInPlex: appState.currentItemExternalApp != nil
                 ),
                 id: \.self
             ) { row in
@@ -428,14 +428,17 @@ struct NowPlayingPanel: View {
 
     @State private var openInPlexStatus: String?
 
+    /// OPEN IN PLEX on Plex, OPEN IN JELLYFIN on Jellyfin with Swiftfin installed (its item link); the same row and
+    /// the same failure line.
     private var openInPlexRow: some View {
-        Button {
-            appState.openCurrentItemInPlex { [self] opened in
-                if !opened { openInPlexStatus = "NO PLEX APP" }
+        let app = appState.currentItemExternalApp ?? .plex
+        return Button {
+            appState.openCurrentItemInExternalApp { [self] opened in
+                if !opened { openInPlexStatus = app.failure }
             }
         } label: {
             PanelRow(
-                label: "OPEN IN PLEX",
+                label: app.rowLabel,
                 value: openInPlexStatus.map { PanelRow.Value.warning($0) } ?? PanelRow.Value.none,
                 trailing: .external,
                 isFocused: focusedControl == .openInPlex
@@ -443,7 +446,7 @@ struct NowPlayingPanel: View {
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .openInPlex)
-        .accessibilityLabel("OPEN IN PLEX")
+        .accessibilityLabel(app.rowLabel)
     }
 
     private var autoSubtitlesRow: some View {
