@@ -296,11 +296,20 @@ async function jellyfinFlow(label, width, height, dpr = 1) {
   check(`${label}: there is no single switch for the hidden libraries any more`, (await page.evaluate(() => !document.getElementById("cfg-include-hidden-row") && !document.getElementById("cfg-include-hidden-toggle"))));
   await shot(page, `${label}-settings`);
   const hiddenIndex = rows.findIndex((r) => r.title === "Hidden Films") + 1;
+  // The viewer is on a channel other than the first, with Settings open: the read must not retune them.
+  await closeSettings(page);
+  const other = await page.evaluate(() => CHANNELS.filter((c) => c.enabled).map((c) => c.id)[1]);
+  await page.evaluate((id) => { tuneFromGuide(id); window.__tunes = []; const original = switchChannel; window.switchChannel = (...args) => { window.__tunes.push(args[0]); return original(...args); }; }, other);
+  check(`${label}: setup, the viewer is on a channel other than the first`, other !== undefined && (await page.evaluate(() => currentChannel)) === other);
+  await openSettings(page);
   jfLog = { views: [], parents: [] };
   await page.click(`#cfg-library-rows .cfg-row:nth-of-type(${hiddenIndex})`);
   await page.waitForFunction(() => allItemsCache.some((i) => /^Hidden Film/.test(i.title)), null, { timeout: 30000 });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(2200);
   t = await titles(page);
+  check(`${label}: switching a hidden row reads the library again once (the plain list, then includeHidden), and no more`, jfLog.views.join() === "/UserViews?userId=u,/UserViews?userId=u&includeHidden=true", JSON.stringify(jfLog.views));
+  const stay = await page.evaluate(() => ({ current: currentChannel, tunes: window.__tunes.slice(), appState, configOpen: document.getElementById("config-overlay").classList.contains("open"), loading: document.getElementById("loading-library").style.display }));
+  check(`${label}: the read is in the background: the viewer stays on their channel (no retune), Settings stays open, no loading screen`, stay.current === other && stay.tunes.length === 0 && stay.appState === "config" && stay.configOpen === true && stay.loading === "none", JSON.stringify(stay));
   check(`${label}: switching Hidden Films on reads it, and only it (the other hidden library stays out)`, t.filter((x) => /^Hidden Film/.test(x)).length === 6 && !t.some((x) => /^Hidden Doc/.test(x)) && !jfLog.parents.includes("lib-docs"), `${t.length} titles`);
   const s = await lists(page);
   check(`${label}: it is saved in the included list, not the off list`, JSON.stringify(s.included) === JSON.stringify([`${sid}::lib-hidden`]) && s.off.length === 0, JSON.stringify(s));
