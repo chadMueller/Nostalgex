@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (web tuner: big Jellyfin and Emby libraries, branch `web/library-choice`)
+
+**Why.** Chad asked for library selection on Jellyfin and Emby "similar to plex" and for large libraries to stop stalling, after Discord reports of a very large Emby library stuck on a rescan and a very large Jellyfin library with no way to leave sections out. The web tuner already had the choice (CHOOSE YOUR LIBRARIES on first setup, a row per library in Settings, for Plex, Jellyfin and Emby, since 1.0.17), so the open question was how it behaves at that size. `scripts/mediabrowser-library-browser-smoke.mjs` runs the real page against a Jellyfin or Emby stub with several libraries and a synthetic library of N titles (about 4 KB each, like a real answer). With N=30,000 and a server that takes a second to build 200 titles, main took 131 s to reach the guide and the page was blocked for up to 2.3 s at a time.
+
+**Changed.**
+- Channel filter (`scripts/nostalgex-channel-filter.cjs`): the title-word rule compiled a new regular expression on every call. Building channels over 30,000 titles spent 5 s of 13 s doing that. One compiled test per word is kept now. The answer for any title is the same; the engine and golden tests pass unchanged.
+- Jellyfin and Emby scan, film and music video libraries: after the first page shows the server honours the page size, the next three pages are asked for while the one before is being read, and are still handed over in order. A page that fails ends the read where it stands, as before; a request that throws mid-read now keeps the pages already read (it used to lose the library's pages) and the library is still reported as not whole, so it is not cached. Each page is turned into the library's own shape as it arrives instead of holding every raw answer until the library is read, and the loading screen counts titles as they come. The per-show episode reads of a TV library are unchanged, one page at a time.
+- Collections (`scripts/nostalgex-collections.js`): the list of Jellyfin and Emby collections was one request with no page size. It is read 500 at a time now.
+- Same stub, same 30,000 titles: 60 s to the guide (was 131 s), longest block 0.7 s (was 2.3 s). The stub answers every request in parallel after its think time, so a real server that builds pages one at a time gains less. Heap at the end is about 140 MB either way (4.6 KB a title; the peak did not move, so releasing the raw answers early saved nothing measurable). A 60,000 title library would peak near 290 MB; that is a run at 60,000, not a TV browser.
+
+**Kept.** The CHOOSE YOUR LIBRARIES step and the Settings rows were not changed. They are now covered for Jellyfin and Emby: the step lists the video libraries (not Playlists or Music) before any title is asked for, a library left off is never asked for items, the last library that is on cannot be switched off, and a Jellyfin library hidden from My Media is listed only with the hidden-libraries switch on.
+
+**Half-done.** Branch `web/library-choice`. Chromium only, against a stub; no real 15,000 or 60,000 title server and no TV browser. The Apple TV 1.0.32 lists a hidden Jellyfin library marked and off until switched on; the web keeps its one switch. The memory per title is the library's own size and was not reduced. `scripts/stop-waiting-browser-smoke.mjs` has three failing checks (the slow-but-working load and the negative control) that fail the same on main.
+
+**Next.** Reviewer pass.
+
 ## 2026-11-15, later (Apple TV: UP NEXT title first, a louder cursor, the stripe wraps, ICLOUD on top, posters on Jellyfin and Emby, OPEN IN JELLYFIN, the other server's discovery)
 
 **State.** On branch `appletv/guide-text-three-steps`. Not merged, not in a build, not pushed. From Chad's second and third looks at the basement TV.

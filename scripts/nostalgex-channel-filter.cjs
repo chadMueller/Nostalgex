@@ -133,11 +133,19 @@ function channelIncludesGenre(rules, genreSet) {
   return includeList(rules).some((g) => genreSet.has(g.toLowerCase()));
 }
 
+// One compiled test per word. The rules name the same few hundred words for every item, so on a 30,000 title library building
+// the regex on each call was most of the time a guide took to build (measured: 5 s of 13 s). The cache holds the compiled test
+// only, so the answer for any (haystack, needle) is the one it always was.
+const WORD_TESTS = new Map();
 function titleContainsWord(haystack, needle) {
-  const n = needle.toLowerCase();
-  if (!n) return false;
-  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b${escaped}\\b`).test(haystack);
+  let re = WORD_TESTS.get(needle);
+  if (re === undefined) {
+    const n = needle.toLowerCase();
+    re = n ? new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`) : null;
+    if (WORD_TESTS.size >= 4000) WORD_TESTS.clear();
+    WORD_TESTS.set(needle, re);
+  }
+  return re ? re.test(haystack) : false;
 }
 
 function stripYearSuffix(s) {

@@ -780,12 +780,26 @@
     return out.filter(Boolean);
   }
 
+  const BOXSET_PAGE = 500;
+
   /** Jellyfin and Emby. `getJSON(pathAndQuery)` against the server. */
   async function fetchBoxSetCollections(serverKey, userId, getJSON, onProgress) {
     const uid = encodeURIComponent(userId);
-    const listing = await getJSON(`/Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName`);
+    // The list of collections is paged like everything else the scan reads: a server with an auto-collections plugin can hold
+    // thousands, and asking for all of them in one answer is the single request the page cannot take back. A page that adds no
+    // collection not seen before ends the read (a server that ignores StartIndex would otherwise answer the same page for ever).
     const seen = new Set();
-    const boxSets = (listing.Items || []).filter((b) => b && b.Id && !seen.has(b.Id) && seen.add(b.Id));
+    const boxSets = [];
+    for (let start = 0, rows = 0; ; ) {
+      const page = await getJSON(`/Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName&StartIndex=${start}&Limit=${BOXSET_PAGE}`);
+      const items = page.Items || [];
+      const before = boxSets.length;
+      for (const b of items) if (b && b.Id && !seen.has(b.Id) && seen.add(b.Id)) boxSets.push(b);
+      start += items.length;
+      rows += items.length;
+      const total = page.TotalRecordCount ?? rows;
+      if (!items.length || rows >= total || boxSets.length === before) break;
+    }
     let done = 0;
     const out = await mapLimit(boxSets, 4, async (b) => {
       const childKeys = [];

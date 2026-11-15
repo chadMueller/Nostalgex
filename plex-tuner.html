@@ -11549,49 +11549,92 @@
     // answer unless Fields asks for them (Jellyfin sends them either way), and every rating
     // rule reads them: contentRatings allow-lists, the kids gate, the 9 PM hold, WATERSHED
     // and ratingMin (GitHub #204).
-    async function fetchItems(parentId, includeItemTypes) {
-      let collected = [], start = 0;
-      while (true) {
-        const url = `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
-          + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
-          + `&IncludeItemTypes=${includeItemTypes}`
-          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
-          + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
+    //
+    // A big library (tens of thousands of titles) is read in two ways that a small one never notices:
+    //  - `onPage(items)` hands each page over as it is read, in order, so the caller can turn it into
+    //    its own shape and let the raw answers go (the call then returns []). Without it every raw answer
+    //    of the library is held until the library is read.
+    //  - with `onPage`, once the first page has shown the server honours the page size, the next
+    //    ITEM_PAGES_AHEAD pages are asked for while the one before is still being read, and are still
+    //    handed over in order. A server that takes a second or two to build 200 titles was a
+    //    one-page-at-a-time wait. The per-show episode reads (no `onPage`) stay one page at a time:
+    //    five shows are already in flight, and a show rarely has a second page.
+    // A page that fails ends the read where it stands: the pages before it are kept. (A request that
+    // throws mid-read used to lose the whole library's pages; the ones already handed over are now kept
+    // and the library is still reported as not whole, so it is not cached.)
+    const ITEM_PAGE = 200;
+    const ITEM_PAGES_AHEAD = 3;   // only for a read with onPage
+    async function fetchItems(parentId, includeItemTypes, onPage) {
+      const kept = [];
+      let read = 0;   // rows the server sent
+      const pageUrl = (start) => `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
+        + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
+        + `&IncludeItemTypes=${includeItemTypes}`
+        + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
+        + `&StartIndex=${start}&Limit=${ITEM_PAGE}&SortBy=SortName`;
+      // One page: { items, total }, or { thrown } / { status } for a page that did not come. Never rejects.
+      const getPage = async (start) => {
         let r, d;
         try {
-          r = await fetch(url, { headers, signal: scanSignal() });
+          r = await fetch(pageUrl(start), { headers, signal: scanSignal() });
           noteScanAnswer();
           if (r.ok) d = await r.json();
-        } catch (err) {
+        } catch (err) { return { thrown: err }; }
+        if (!r.ok) return { status: r.status };
+        return { items: (d && d.Items) || [], total: d && d.TotalRecordCount };
+      };
+      // Takes a page in. Returns true when the read is over (the last page, or a page that did not come).
+      const take = (res) => {
+        if (res.thrown) {
           // STOP WAITING, or 3 min 30 s of silence: keep the pages already read, as for any other
           // page that fails, and say this library is not whole.
-          if (!scanIsAbandoned()) throw err;
+          if (!scanIsAbandoned()) throw res.thrown;
           const e = abandonedScanError();
-          if (collected.length === 0) throw e;
+          if (read === 0) throw e;
           lostViews.push(scanningViewName);
           lastViewError = e;
-          break;
+          return true;
         }
-        if (!r.ok) {
+        if (res.status) {
           // A refused sign-in ends the scan, as it does on Plex. Any other failure loses the
           // library; pages already read are kept, as the Apple TV keeps them.
-          const e = new Error(`HTTP ${r.status} from ${scanningViewName}`);
-          if (r.status === 401 || r.status === 403) { e.plexStatus = r.status; throw e; }
-          if (collected.length === 0) throw e;
+          const e = new Error(`HTTP ${res.status} from ${scanningViewName}`);
+          if (res.status === 401 || res.status === 403) { e.plexStatus = res.status; throw e; }
+          if (read === 0) throw e;
           lostViews.push(scanningViewName);
           lastViewError = e;
-          break;
+          return true;
         }
-        const items = d.Items || [];
-        collected.push(...items);
-        const total = d.TotalRecordCount ?? collected.length;
-        start += items.length;
-        if (items.length === 0 || collected.length >= total) break;
+        // Only the types that were asked for. A server may answer with more (the Playlists view
+        // always answers with playlists, whatever the request says), and a playlist or a song is
+        // not a programme. Paging counts the rows the server sent, so the count comes from `items`.
+        const asked = res.items.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
+        if (onPage) { if (asked.length) onPage(asked); } else kept.push(...asked);
+        read += res.items.length;
+        const total = res.total ?? read;
+        return res.items.length === 0 || read >= total;
+      };
+      const first = await getPage(0);
+      if (take(first)) return kept;
+      const total = first.total ?? read;
+      if (first.items.length === ITEM_PAGE && onPage) {
+        // The server honours the page size: the rest are at known offsets.
+        const starts = [];
+        for (let s = ITEM_PAGE; s < total; s += ITEM_PAGE) starts.push(s);
+        const ahead = [];
+        let launched = 0;
+        const launch = () => { while (ahead.length < ITEM_PAGES_AHEAD && launched < starts.length) ahead.push(getPage(starts[launched++])); };
+        launch();
+        while (ahead.length) {
+          if (take(await ahead.shift())) return kept;
+          launch();
+        }
+        return kept;
       }
-      // Only the types that were asked for. A server may answer with more (the Playlists view
-      // always answers with playlists, whatever the request says), and a playlist or a song is
-      // not a programme. Paging above counts the rows the server sent, so this comes last.
-      return collected.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
+      // A server that answered with fewer rows than asked for: one page at a time, from where it stopped.
+      while (true) {
+        if (take(await getPage(read))) return kept;
+      }
     }
 
     function tmdbFromProviderIds(ids) {
@@ -11740,8 +11783,8 @@
           // for Movie alone returned nothing and HIGH ROTATION stayed empty (I-067). Ask for
           // both there, since a few libraries file clips as Movie. Every other library keeps
           // asking for Movie only.
-          const items = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
-          items.forEach(jf => {
+          let moviesRead = 0;
+          await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type), (page) => { page.forEach(jf => {
             const genres = jf.Genres || [];
             if (isMusicVideoSection && !genres.some(g => /music/i.test(g))) genres.push('Music Video');
             genres.forEach(g => { discoveredGenres[g] = (discoveredGenres[g] || 0) + 1; });
@@ -11794,7 +11837,10 @@
               doviProfile: mi.doviProfile,
             });
           });
+          moviesRead += page.length;
           LL.state.scanItemsFound = allItems.length;
+          LL.setPhase('scanningLibrary', `${view.Name} · ${moviesRead} titles`);
+          });
         }
       } catch (err) {
         console.warn(`Failed to fetch Jellyfin view ${view.Name}:`, err);

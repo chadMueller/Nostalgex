@@ -76,6 +76,7 @@
     "test:arcade-fonts:builds": "node scripts/arcade-fonts-check.mjs --builds",
     "test:first-run:browser": "node scripts/first-run-browser-smoke.mjs",
     "test:web-layout:browser": "node scripts/web-layout-browser-smoke.mjs",
+    "test:mediabrowser-libraries:browser": "node scripts/mediabrowser-library-browser-smoke.mjs",
     "test:leak-guard": "node scripts/public-repo-leak-guard.mjs",
     "test:ui-test-isolation": "node scripts/ui-test-isolation-check.mjs",
     "test:library-purge": "node scripts/library-purge-check.mjs",
