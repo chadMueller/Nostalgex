@@ -46,6 +46,7 @@ const plexFilm = (n, container, kbps) => ({
   Genre: [{ tag: "Action" }],
   Media: [{ container, videoResolution: "720", bitrate: kbps, videoCodec: "h264", audioCodec: "aac", Part: [{ key: `/library/parts/${n}/file.${container}` }] }],
 });
+const dvProfiles = {};   // ratingKey -> the Dolby Vision profile its video stream reports
 const plexFilms = [plexFilm(1, "mkv", 8000), plexFilm(2, "mp4", 20000), plexFilm(3, "mp4", 3000), plexFilm(4, "mkv", 8000), plexFilm(5, "mkv", 8000), plexFilm(6, "mkv", 8000)];
 
 function readBody(req) {
@@ -77,6 +78,12 @@ const plex = http.createServer(async (req, res) => {
   if (path === "/identity") return res.end(JSON.stringify({ MediaContainer: { machineIdentifier: "lab-plex" } }));
   if (path === "/library/sections") return res.end(JSON.stringify({ MediaContainer: { Directory: [{ key: "1", title: "Movies", type: "movie" }] } }));
   if (path === "/library/sections/1/all") return res.end(JSON.stringify({ MediaContainer: { size: plexFilms.length, totalSize: plexFilms.length, Metadata: plexFilms } }));
+  // One file's own metadata, with the video stream's Dolby Vision profile where the test says so (the library list carries no streams).
+  const mm = /^\/library\/metadata\/(\d+)$/.exec(path);
+  if (mm && plexFilms.some((f) => f.ratingKey === mm[1])) {
+    const stream = [{ id: 1, streamType: 1, codec: "hevc", ...(dvProfiles[mm[1]] ? { DOVIPresent: true, DOVIProfile: dvProfiles[mm[1]] } : {}) }, { id: 2, streamType: 2, codec: "aac", languageCode: "eng", selected: true }];
+    return res.end(JSON.stringify({ MediaContainer: { Metadata: [{ ratingKey: mm[1], Media: [{ Part: [{ Stream: stream }] }] }] } }));
+  }
   res.end(JSON.stringify({ MediaContainer: { size: 0, Metadata: [] } }));
 });
 
@@ -221,6 +228,30 @@ rc = await startPatched({ videoCodec: "h264", audioCodec: "dca" });
 check("plex #326: DTS audio goes to the server's stream", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
 rc = await startPatched({ videoCodec: null, audioCodec: null });
 check("plex #326: no codecs kept (a library saved before): the container decides, as before: direct play", plexDirect(rc) && !plexTranscode(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+// Dolby Vision profile 5 (#324): Plex's transcoder refuses it (HTTP 400), so it is stopped with its reason before any stream is asked for;
+// profile 8 (HDR10 compatible) converts as any other file does.
+const startKey = async (key) => {
+  await px.page.evaluate((l) => localStorage.setItem("nostalgex_stream_quality", l), "auto");
+  log.length = 0;
+  await px.page.evaluate((k) => {
+    const item = allItemsCache.find((i) => i.ratingKey === k);
+    const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0];
+    playCurrentItem({ ...item, offsetSeconds: 0 }, channel);
+  }, key);
+  await px.page.waitForTimeout(1500);
+  return { reqs: log.filter((r) => r.server === "plex"), card: await px.page.evaluate(() => { const st = document.getElementById("display-status"); return { text: st.textContent, visible: st.classList.contains("visible") }; }) };
+};
+dvProfiles["104"] = 5; dvProfiles["102"] = 5; dvProfiles["105"] = 8;
+await px.page.evaluate(() => plexStreamCache.clear());   // the tracks of the files played above are cached without a profile
+let dv = await startKey("104");
+check("plex #324: a Dolby Vision profile 5 MKV asks for no stream at all", !dv.reqs.some((r) => /\/transcode\/universal\/start|\/library\/parts\//.test(r.url)), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+check("plex #324: and says why, not blaming the server", dv.card.visible && /Dolby Vision profile 5/.test(dv.card.text) && !/answered HTTP/.test(dv.card.text), dv.card.text);
+dv = await startKey("102");
+check("plex #324: a profile 5 MP4 is stopped where the browser does not decode Dolby Vision", !dv.reqs.some((r) => /\/transcode\/universal\/start|\/library\/parts\//.test(r.url)) && /Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+dv = await startKey("105");
+check("plex #324: a profile 8 file converts as any other does", dv.reqs.some((r) => /\/transcode\/universal\/start/.test(r.url)) && !/Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+for (const k of Object.keys(dvProfiles)) delete dvProfiles[k];   // the later cases play these files as ordinary ones
+await px.page.evaluate(() => plexStreamCache.clear());
 check("plex: no page errors", px.errors.length === 0, px.errors.join(" | "));
 await jf.ctx.close();
 await px.ctx.close();

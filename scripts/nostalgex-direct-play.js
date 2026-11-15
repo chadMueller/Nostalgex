@@ -48,6 +48,7 @@
       hevc: 'video/mp4; codecs="hvc1.1.6.L93.B0"',
       ac3: 'video/mp4; codecs="ac-3"',
       eac3: 'video/mp4; codecs="ec-3"',
+      dv5: 'video/mp4; codecs="dvh1.05.06"',
     };
     return (name) => {
       if (name in cache) return cache[name];
@@ -58,7 +59,15 @@
     };
   }
 
-  const api = { codecsOK, videoPlays, audioPlays, browserProbe };
+  /**
+   * Dolby Vision profile 5 plays only where the browser decodes Dolby Vision (`probe('dv5')`) and the file is one it plays as it is
+   * (an MP4, WebM or MOV): Plex's transcoder refuses profile 5 (GitHub #324), and any other decoder shows it green and purple.
+   */
+  function dolbyVision5Plays(container, probe) {
+    return ['mp4', 'webm', 'mov'].includes(String(container || '').toLowerCase()) && !!(probe && probe('dv5'));
+  }
+
+  const api = { codecsOK, videoPlays, audioPlays, dolbyVision5Plays, browserProbe };
   global.NostalgexDirectPlay = api;
   if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -5807,6 +5807,11 @@
       headline: "Can't reach your server",
       detail: `Nothing answered at the address saved for your ${server} server. Check it's awake and on the same network.`,
     };
+    if (e.dolbyVision5) return {
+      kind: 'dolbyVision5', serverSide: false,
+      headline: `${server} can't play this one in a browser`,
+      detail: `This file is Dolby Vision profile 5, a colour format ${server} can't convert and a browser can't show as it is. An Apple TV, a Roku or an Android TV plays it.`,
+    };
     if (e.noSource) return {
       kind: 'noPlayableSource', serverSide: true,
       headline: 'Nothing to play for this title',
@@ -6852,6 +6857,15 @@
       if (plexStreams) {
         Object.defineProperty(item, 'audioStreams', { value: plexStreams.audio, enumerable: false, writable: true, configurable: true });
         Object.defineProperty(item, 'subtitles', { value: plexStreams.subtitles, enumerable: false, writable: true, configurable: true });
+      }
+      // A Dolby Vision profile 5 file cannot be played here (#324). Plex's transcoder refuses it ("DoVi (Profile 5) color space is not
+      // supported": its start.m3u8 answers HTTP 400, measured on a Plex 1.43.4: of 112 4K files only the one profile 5 file was refused,
+      // profiles 7, 8 and 10 convert), and a browser shows it green and purple unless it decodes Dolby Vision itself, which only an MP4
+      // played as it is can use. So say so now, instead of a request the server turns down and a card that blames the server.
+      if (plexStreams && plexStreams.doviProfile === 5 && !NostalgexDirectPlay.dolbyVision5Plays(item.container, directPlayProbe)) {
+        item._cappedRetry = true;   // no smaller stream will do either
+        failCurrentItem(channel, item, classifyPlaybackFailure({ dolbyVision5: true }));
+        return;
       }
       // A track other than the one Plex starts on can only be had from a server stream: a browser cannot pick a track of a
       // file it plays directly. Subtitles that live inside the file are burned into the server stream, the way a forced
@@ -8789,9 +8803,11 @@
       const data = await res.json();
       const meta = ((data.MediaContainer || {}).Metadata || [])[0];
       const part = meta && meta.Media && meta.Media[0] && meta.Media[0].Part && meta.Media[0].Part[0];
-      const out = { audio: [], subtitles: [] };
+      const out = { audio: [], subtitles: [], doviProfile: null };
       for (const st of ((part && part.Stream) || [])) {
         const lang = String(st.languageCode || '').toLowerCase();
+        // The video stream's Dolby Vision profile, when it has one (the library list does not carry streams).
+        if (st.streamType === 1 && st.DOVIProfile !== undefined && st.DOVIProfile !== null && st.DOVIPresent !== false) out.doviProfile = Number(st.DOVIProfile);
         if (st.streamType === 2) {
           out.audio.push({ index: st.id, lang, codec: String(st.codec || '').toLowerCase(), channels: st.channels || 0,
             title: st.displayTitle || st.title || 'Audio', rawTitle: st.title || '', isDefault: st.selected === true || st.selected === 1 });

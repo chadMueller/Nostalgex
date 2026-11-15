@@ -34,6 +34,13 @@ eq("only a known good video codec: plays", D.codecsOK(item("h264", null), no), t
 eq("only a known bad audio codec: does not", D.codecsOK(item(null, "dts"), no), false);
 eq("no item: unknown", D.codecsOK(undefined, no), null);
 
+// Dolby Vision profile 5 (#324): only where the browser decodes Dolby Vision and the file is played as it is.
+const dv = (n) => n === "dv5";
+eq("DV5 in an MP4 plays in a browser that decodes Dolby Vision", D.dolbyVision5Plays("mp4", dv), true);
+eq("DV5 in an MKV does not, even there: Plex will not convert it", D.dolbyVision5Plays("mkv", dv), false);
+eq("DV5 does not play in a browser that does not decode Dolby Vision", D.dolbyVision5Plays("mp4", no), false);
+eq("DV5 with no probe does not play", D.dolbyVision5Plays("mp4", none), false);
+
 // browserProbe asks canPlayType once per codec.
 let asked = 0;
 const probe = D.browserProbe(() => ({ canPlayType: (t) => { asked++; return /hvc1/.test(t) ? "probably" : ""; } }));
@@ -46,6 +53,7 @@ eq("probe: a browser that throws says no", throwing("hevc"), false);
 
 // The page uses it for Plex: the container, the codecs and then the rest.
 const html = readFileSync(new URL("../plex-tuner.html", import.meta.url), "utf8");
+eq("a Dolby Vision profile 5 file is stopped with its reason before a stream is asked for", /plexStreams\.doviProfile === 5 && !NostalgexDirectPlay\.dolbyVision5Plays\(item\.container, directPlayProbe\)/.test(html) && /kind: 'dolbyVision5'/.test(html), true);
 eq("the page loads the module", html.includes('<script src="scripts/nostalgex-direct-play.js"></script>'), true);
 eq("the Plex path asks the codecs unless they are unknown", /canDirectPlay = !item\._forceTranscode && item\.partKey && \['mp4', 'webm', 'mov'\]\.includes\(item\.container\)\s*&& NostalgexDirectPlay\.codecsOK\(item, directPlayProbe\) !== false/.test(html), true);
 
