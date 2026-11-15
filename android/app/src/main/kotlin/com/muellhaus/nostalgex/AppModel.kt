@@ -2064,8 +2064,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         // Demo mode: the clip running out says nothing about the schedule. Stay on the block
         // that is on, at the clock's position (advanceToNextItem's demo branch).
         if (demoMode) return play(lineup?.tune(ch))
-        // Held to the guide's clock: a file that ran past its slot joins the next programme
-        // where the guide is, not at 0 s (#293, NaturalEnd).
+        // A file plays to its end (#315): the schedule gives it its real runtime, so the next programme
+        // starts at 0, and joins where the guide is only once the guide is 10 s or more into it (NaturalEnd).
         val guide = lineup?.tune(ch)
         val next = NaturalEnd.pick(item.ratingKey, lineup?.next(ch, item, fromNaturalEnd = true), guide)
         play(next)

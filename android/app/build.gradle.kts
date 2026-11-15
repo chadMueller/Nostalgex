@@ -37,6 +37,9 @@ android {
     namespace = "com.muellhaus.nostalgex"
     compileSdk = 37
 
+    // The loaders are tested against a local server with the android.jar stubs (Log and Build return defaults).
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     defaultConfig {
         applicationId = "com.muellhaus.nostalgex"
         // The SHIELD runs Android 11 (API 30); 28 still covers older Android TV boxes.
@@ -91,6 +94,7 @@ kotlin {
 }
 
 dependencies {
+    testImplementation(libs.junit)
     implementation(project(":engine"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

@@ -64,7 +64,7 @@ class PlexClient(private val clientId: String, versionName: String) {
         "X-Plex-Version" to versionName,
         "X-Plex-Platform" to "Android",
         "X-Plex-Device" to "Android TV",
-        "X-Plex-Device-Name" to Build.MODEL,
+        "X-Plex-Device-Name" to (Build.MODEL ?: "Android TV"),
         "X-Plex-Client-Identifier" to clientId,
     )
 
