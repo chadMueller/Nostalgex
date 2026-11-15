@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
+
+**State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.
+
+**Why.** Chad: the description on the Now Playing panel "adds in a weird spot". It sat between the divider and the badges, above the year, rating and progress bar, and took no room when a programme had none, so the badges, the bar and UP NEXT moved up and down from one programme to the next.
+
+**Changed.** `InfoPanelView` now draws, top to bottom: the channel line, the title, then artist, genres and episode line where the programme has them, a divider, the badges (year, rating, star rating), the description, the progress bar (or a later programme's time range) and UP NEXT as one line. The order is one list, `InfoPanelLayout.sections`, which the view draws from and `InfoPanelLayoutTests` checks. The description always holds two lines, empty or not, so nothing under it moves; a longer one ends in an ellipsis. The progress bar is its own row now, not inline after the badges. To make that fit the panel's gaps are 10 and 6 pt (were 20 and 10) and the top gap 4, the title is allowed its two lines (the room left no longer cuts it to one), and the panel is held to its room and anchored to the top, so a very tall programme loses its last line instead of pushing the nav bar and logo off the screen.
+
+**Looked at.** Before and after on the Simulator for a film, an episode and a music video, each with a description and without, a film with a long one and a worst case music video (two-line title, long artist, four genres, long description): `projects/nostalgex-internal/docs/roku-shots/appletv-nowplaying-description-2026-11-14/` (`before-grid.png`, `after-grid.png`, one image per case). Every realistic case fits with UP NEXT visible and the bar at the same height with and without a description; the worst case loses its UP NEXT line at the bottom. A new test flag, `-uiTestInfoPanelFixture`, gives demo mode those eight channels. Demo mode only, no Apple TV used.
+
+**Not done.** The guide panel's UP NEXT has no minutes ("UP NEXT IN 44 MIN"); the in-player panel has them as a chip. The text-size steps do not reach this panel: it still uses its own fixed sizes.
+
 ## 2026-11-13 (web tuner: the 8-bit guide and now-playing window are back)
 
 **Why.** Testing 1.0.20, Chad put it next to 1.0.16 and asked for the old look: the guide was too big (he had asked for bigger, then it went too far) and the 8-bit arcade type was gone. The pull toward Apple TV type had flattened the one place that was supposed to feel like a 90s guide channel. The rest of the page stays Apple TV style.

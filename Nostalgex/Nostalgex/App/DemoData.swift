@@ -23,8 +23,61 @@ enum DemoData {
     static let uiTestChannelCount = 20
 
     static func channels() -> [Channel] {
+        if infoPanelFixtureRequested { return infoPanelFixtureChannels() }
         if guideTextFixtureRequested { return guideTextFixtureChannels() }
         return manyChannelsForUITest ? paddedChannels() : baseChannels()
+    }
+
+    /// Test-only: `-uiTestInfoPanelFixture` gives demo mode six channels whose programmes are a film, an episode and a
+    /// music video, each with a description and without one, plus a film with a long one, for the guide's info panel
+    /// (where the description sits, and that it moves nothing under it). Never set in a shipping run.
+    static var infoPanelFixtureRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestInfoPanelFixture")
+    }
+
+    private static func infoPanelFixtureChannels() -> [Channel] {
+        let short = "A short description of this programme."
+        let long = "A long description that runs well past two lines so the panel has to end it with an ellipsis instead of pushing the progress bar and the next programme down the screen, whatever the programme is."
+        func make(_ id: String, _ title: String, _ type: MediaType, _ summary: String, source: LibrarySource,
+                  artist: String? = nil, episode: String? = nil, se: String? = nil, genres: [String], minutes: Int) -> PlexMediaItem {
+            PlexMediaItem(
+                id: id, title: title, artist: artist, episodeTitle: episode, seTag: se, summary: summary,
+                year: 1989, originallyAvailableAt: nil, contentRating: type == .episode ? "TV-PG" : "PG-13", duration: minutes,
+                ratingKey: id, partKey: nil, container: nil, videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil,
+                genres: genres, rating: 7.5, userRating: 0, type: type, thumb: nil, art: nil,
+                viewCount: 0, addedAt: Int(Date().timeIntervalSince1970), studio: "Nostalgex Demo",
+                tmdbID: nil, imdbID: nil, librarySource: source)
+        }
+        let rows: [(id: Int, number: Int, name: String, hex: String, kind: String, summary: String)] = [
+            (9001, 1, "FILM WITH TEXT", "#FF2244", "film", short),
+            (9002, 2, "FILM NO TEXT", "#FFD400", "film", ""),
+            (9003, 3, "FILM LONG TEXT", "#00C4FF", "film", long),
+            (9004, 4, "EPISODE WITH TEXT", "#FF66CC", "episode", short),
+            (9005, 5, "EPISODE NO TEXT", "#7C3AED", "episode", ""),
+            (9006, 6, "MUSIC VIDEO WITH TEXT", "#22CC88", "music", short),
+            (9007, 7, "MUSIC VIDEO NO TEXT", "#FF8800", "music", ""),
+            (9008, 8, "MUSIC VIDEO WORST CASE", "#CC66FF", "musiclong", long),
+        ]
+        return rows.map { row in
+            channel(id: row.id, number: row.number, name: row.name, colorHex: row.hex, items: (0..<4).map { n in
+                let id = "d-ip-\(row.number)-\(n)"
+                switch row.kind {
+                case "episode":
+                    return make(id, "Late Shift Diner", .episode, row.summary, source: .tv, episode: "The One With the Long Episode Title \(n + 1)",
+                                se: "S01E0\(n + 1)", genres: ["Drama"], minutes: 44)
+                case "musiclong":
+                    return make(id, "Take On Me (Extended Dance Remix Featuring the Whole Orchestra of Oslo) \(n + 1)", .movie, row.summary,
+                                source: .musicVideo, artist: "a-ha and the Norwegian Philharmonic Orchestra",
+                                genres: ["Pop", "Synth-pop", "New Wave", "Dance"], minutes: 4)
+                case "music":
+                    return make(id, "Take On Me \(n + 1)", .movie, row.summary, source: .musicVideo, artist: "a-ha",
+                                genres: ["Pop", "Synth-pop", "New Wave"], minutes: 4)
+                default:
+                    return make(id, "Return to the Haunted Drive-In on Route Sixty-Six", .movie, row.summary, source: .movie,
+                                genres: ["Action"], minutes: 96 + n)
+                }
+            })
+        }
     }
 
     /// Test-only: `-uiTestGuideTextFixture` gives demo mode three-digit channel numbers

@@ -1,5 +1,37 @@
 import SwiftUI
 
+/// The lines of the guide's info panel, top to bottom. One place says the order so the view and its test agree:
+/// the channel line above everything (drawn first, not listed), the title as the lead line, then artist, genres and
+/// episode subtitle where the programme has them, a divider, the badges (year, rating, star rating), the description,
+/// the progress bar (or a later programme's time range) and UP NEXT as one line.
+///
+/// The description used to sit above the badges and the progress, between the divider and the meta row, and took
+/// no room when a programme had none, so every line under it moved up and down from one programme to the next.
+/// It now comes after the badges and always holds `descriptionLines` lines, empty or not, so the progress bar and
+/// UP NEXT stay where they are.
+enum InfoPanelSection: Equatable {
+    case title, artist, genres, episode, divider, badges, description, progress, upNext
+}
+
+enum InfoPanelLayout {
+    /// Lines the description area always holds. A longer description ends in an ellipsis.
+    static let descriptionLines = 2
+
+    static func sections(for item: PlexMediaItem, hasUpNext: Bool) -> [InfoPanelSection] {
+        var out: [InfoPanelSection] = [.title]
+        if let artist = item.artist, !artist.isEmpty { out.append(.artist) }
+        if item.musicGenreDisplay != nil { out.append(.genres) }
+        if item.type == .episode,
+           !([item.seTag, item.episodeTitle].compactMap { $0 }.joined(separator: "  ")).isEmpty { out.append(.episode) }
+        out.append(.divider)
+        if item.year != nil || !(item.contentRating ?? "").isEmpty || item.rating > 0 { out.append(.badges) }
+        out.append(.description)
+        out.append(.progress)
+        if hasUpNext { out.append(.upNext) }
+        return out
+    }
+}
+
 struct InfoPanelView: View {
     let channel: Channel
     let schedule: ChannelSchedule
@@ -30,14 +62,15 @@ struct InfoPanelView: View {
     // MARK: - Spacing
 
     private enum Spacing {
-        static let sectionGap: CGFloat = 20
-        static let innerGap: CGFloat = 10
+        static let sectionGap: CGFloat = 10
+        static let innerGap: CGFloat = 6
         static let panelPadding: CGFloat = 40
     }
 
     var body: some View {
+        GeometryReader { geo in
         VStack(alignment: .leading, spacing: 0) {
-            Spacer().frame(height: 24)
+            Spacer().frame(height: 4)
 
             // Channel tag
             Text("CH \(String(format: "%02d", channel.number)) \u{2014} \(channel.name.uppercased())")
@@ -52,87 +85,23 @@ struct InfoPanelView: View {
                 // programme is shown as it is on the schedule.
                 let displayItem = previewEntry?.item ?? playingItem ?? now.item
 
-                // Title (+ artist for music videos)
-                Text(displayItem.title)
-                    .font(Typo.title)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .lineSpacing(2)
-                    .padding(.bottom, Spacing.innerGap)
-
-                if let artist = displayItem.artist, !artist.isEmpty {
-                    Text(artist)
-                        .font(Typo.episode)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                        .padding(.bottom, Spacing.innerGap)
-                }
-
-                if let genres = displayItem.musicGenreDisplay {
-                    Text(genres)
-                        .font(Typo.episode)
-                        .foregroundStyle(channel.color.opacity(0.75))
-                        .lineLimit(2)
-                        .padding(.bottom, Spacing.innerGap)
-                }
-
-                // Episode subtitle
-                if displayItem.type == .episode {
-                    let subtitle = [displayItem.seTag, displayItem.episodeTitle]
-                        .compactMap { $0 }
-                        .joined(separator: "  ")
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(Typo.episode)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .lineLimit(1)
-                            .padding(.bottom, Spacing.innerGap)
-                    }
-                }
-
-                // Divider
-                Rectangle()
-                    .fill(channel.color.opacity(0.3))
-                    .frame(height: 1)
-                    .padding(.bottom, Spacing.sectionGap)
-
-                // Description (reserve up to 2 lines so layout doesn't collapse to one)
-                if !displayItem.summary.isEmpty {
-                    Text(displayItem.summary)
-                        .font(Typo.description)
-                        .foregroundStyle(.white.opacity(0.65))
-                        .lineSpacing(4)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .layoutPriority(1)
-                        .padding(.bottom, Spacing.sectionGap)
-                }
-
-                // Meta row + inline progress (or, for a later programme, when it is on)
-                metaRow(item: displayItem)
-                    .padding(.bottom, Spacing.sectionGap)
-
-                // Up Next
-                if let next = previewEntry != nil
+                let next = previewEntry != nil
                     ? previewEntry.flatMap({ GuideTimeCursor.entry(after: $0, in: schedule.entries) })
-                    : schedule.upNext {
-                    HStack(spacing: 10) {
-                        Text("UP NEXT")
-                            .font(Typo.upNextLabel)
-                            .tracking(3)
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                            .font(Typo.upNextTitle)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                    }
+                    : schedule.upNext
+                ForEach(Array(InfoPanelLayout.sections(for: displayItem, hasUpNext: next != nil).enumerated()), id: \.offset) { _, section in
+                    sectionView(section, item: displayItem, next: next)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(Spacing.panelPadding)
+        // Held to the room it is given, anchored to the top: a programme with a title on two lines, an artist, genres
+        // and a long description is taller than that room, and then its last line is cut at the bottom. It must not
+        // grow the column, which pushed the nav bar and the logo up off the screen.
+        .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+        .clipped()
+        }
         .background(
             LinearGradient(
                 colors: [
@@ -145,9 +114,94 @@ struct InfoPanelView: View {
         )
     }
 
-    // MARK: - Meta row
+    // MARK: - Sections
 
-    private func metaRow(item: PlexMediaItem) -> some View {
+    @ViewBuilder
+    private func sectionView(_ section: InfoPanelSection, item: PlexMediaItem, next: ScheduleEntry?) -> some View {
+        switch section {
+        case .title:
+            // Title (+ artist for music videos)
+            Text(item.title)
+                .font(Typo.title)
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)   // two lines when it needs them, never cut to one by the room left
+                .padding(.bottom, Spacing.innerGap)
+
+        case .artist:
+            Text(item.artist ?? "")
+                .font(Typo.episode)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .padding(.bottom, Spacing.innerGap)
+
+        case .genres:
+            Text(item.musicGenreDisplay ?? "")
+                .font(Typo.episode)
+                .foregroundStyle(channel.color.opacity(0.75))
+                .lineLimit(2)
+                .padding(.bottom, Spacing.innerGap)
+
+        case .episode:
+            Text([item.seTag, item.episodeTitle].compactMap { $0 }.joined(separator: "  "))
+                .font(Typo.episode)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .padding(.bottom, Spacing.innerGap)
+
+        case .divider:
+            Rectangle()
+                .fill(channel.color.opacity(0.3))
+                .frame(height: 1)
+                .padding(.bottom, Spacing.sectionGap)
+
+        case .badges:
+            badgesRow(item: item)
+                .padding(.bottom, Spacing.sectionGap)
+
+        case .description:
+            // Always two lines tall, empty or not, so what is under it never moves (see InfoPanelLayout).
+            ZStack(alignment: .topLeading) {
+                Text(Array(repeating: "A", count: InfoPanelLayout.descriptionLines).joined(separator: "\n"))
+                    .font(Typo.description)
+                    .lineSpacing(4)
+                    .hidden()
+                Text(item.summary)
+                    .font(Typo.description)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .lineSpacing(4)
+                    .lineLimit(InfoPanelLayout.descriptionLines)
+                    .truncationMode(.tail)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, Spacing.sectionGap)
+            .accessibilityIdentifier("infoPanelDescription")
+
+        case .progress:
+            progressRow(item: item)
+                .padding(.bottom, Spacing.sectionGap)
+
+        case .upNext:
+            if let next {
+                HStack(spacing: 10) {
+                    Text("UP NEXT")
+                        .font(Typo.upNextLabel)
+                        .tracking(3)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                        .font(Typo.upNextTitle)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    // MARK: - Badges
+
+    private func badgesRow(item: PlexMediaItem) -> some View {
         HStack(spacing: 14) {
             if let year = item.year {
                 metaBadge(String(year))
@@ -164,39 +218,45 @@ struct InfoPanelView: View {
                 }
                 .font(Typo.metaBadge)
             }
+        }
+    }
 
+    // MARK: - Progress (or, for a later programme, when it is on)
+
+    private func progressRow(item: PlexMediaItem) -> some View {
+        Group {
             if let previewEntry {
                 Text("\(Self.clock(previewEntry.startTime)) - \(Self.clock(previewEntry.endTime))")
                     .font(Typo.progressTime)
                     .foregroundStyle(channel.color)
                     .accessibilityIdentifier("infoPanelTime")
             } else {
-            // Inline progress bar + time (wall clock, updates every second)
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let live = schedule.livePlayback(at: context.date)
-                let elapsed = live?.elapsedSeconds ?? schedule.elapsedSeconds
-                let progress = live?.progress ?? schedule.progress
-                let total = live?.totalSeconds ?? item.duration * 60
+                // Progress bar + time (wall clock, updates every second)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let live = schedule.livePlayback(at: context.date)
+                    let elapsed = live?.elapsedSeconds ?? schedule.elapsedSeconds
+                    let progress = live?.progress ?? schedule.progress
+                    let total = live?.totalSeconds ?? item.duration * 60
 
-                HStack(spacing: 10) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(.white.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
-                            Rectangle()
-                                .fill(channel.color)
-                                .frame(width: geo.size.width * progress)
-                                .clipShape(RoundedRectangle(cornerRadius: 2))
+                    HStack(spacing: 10) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle()
+                                    .fill(.white.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                                Rectangle()
+                                    .fill(channel.color)
+                                    .frame(width: geo.size.width * progress)
+                                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                            }
                         }
-                    }
-                    .frame(height: 4)
+                        .frame(height: 4)
 
-                    Text("\(formatTime(elapsed)) / \(formatTime(total))")
-                        .font(Typo.progressTime)
-                        .foregroundStyle(.white.opacity(0.55))
+                        Text("\(formatTime(elapsed)) / \(formatTime(total))")
+                            .font(Typo.progressTime)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
                 }
-            }
             }
         }
     }
