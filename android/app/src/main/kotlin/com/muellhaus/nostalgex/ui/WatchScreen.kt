@@ -81,6 +81,9 @@ import androidx.tv.material3.Text
 import com.muellhaus.nostalgex.AppModel
 import com.muellhaus.nostalgex.R
 import com.muellhaus.nostalgex.engine.DailyManifest
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.muellhaus.nostalgex.engine.GuideStripes
 import com.muellhaus.nostalgex.engine.InfoPanelLayout
 import com.muellhaus.nostalgex.engine.InfoPanelSection
 import com.muellhaus.nostalgex.engine.GuideChannel
@@ -619,9 +622,61 @@ private fun Guide(
     val lead = if (offer != null) 1 else 0
     var slotOffset by remember { mutableIntStateOf(0) }
     var rowFocus by remember { mutableStateOf<Int?>(null) }
+    // The bundle stripe at the left edge (GuideStripes): Left from the first half hour enters it, Up and Down
+    // jump between bundles, Right goes back to the rows, Left again or Select opens the bundle list.
+    var stripeMode by remember { mutableStateOf(false) }
+    var stripeGroupIndex by remember { mutableStateOf<Int?>(null) }
+    var stripeJumped by remember { mutableStateOf(false) }
+    var stripeReturnRow by remember { mutableStateOf<Int?>(null) }
+    var suppressFocusScroll by remember { mutableStateOf(false) }
+    val stripeFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    val enabled = model.enabledBundles
+    val stripeGroups = remember(lineup, enabled, channels) { GuideStripes.groups(channels.map { it.id }, lineup.stripeMembership(enabled)) }
+    val stripeCells = remember(stripeGroups, channels.size) { GuideStripes.rowCells(stripeGroups, channels.size) }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, channels.indexOfFirst { it.id == focusTarget } + lead - 2))
     val visibleStart = lineup.windowStartSec + slotOffset * 1800L
     val now = ticking()
+
+    fun canEnterStripe(): Boolean {
+        val id = rowFocus ?: return false
+        return GuideStripes.hasBundles(stripeGroups) && (id == SEASONAL_ROW_ID || channels.any { it.id == id })
+    }
+    fun enterStripe() {
+        val row = channels.indexOfFirst { it.id == rowFocus }
+        stripeReturnRow = rowFocus
+        stripeJumped = false
+        stripeGroupIndex = (if (row >= 0) GuideStripes.groupIndexContainingRow(row, stripeGroups) else null)
+            ?: stripeGroups.indexOfFirst { it.bundle != null }.takeIf { it >= 0 }
+        stripeMode = true
+    }
+    // Up or Down on the stripe: the guide scrolls so the previous or next bundle's first channel is at the top.
+    // Focus stays on the stripe; past the first or last bundle nothing moves.
+    fun jumpBundle(step: Int) {
+        val next = GuideStripes.neighbourIndex(stripeGroupIndex ?: return, step, stripeGroups) ?: return
+        val first = stripeGroups[next].firstRow
+        if (first !in channels.indices) return
+        stripeGroupIndex = next
+        stripeJumped = true
+        // The first bundle goes to the very top, seasonal invite and all.
+        val index = if (first == 0 && offer != null) 0 else first + lead
+        scope.launch { listState.animateScrollToItem(index) }
+    }
+    // Right on the stripe: back to the row the viewer left, or the first channel of the bundle the stripe was
+    // moved to. The list stays where the jump put it.
+    fun returnFromStripe() {
+        var target = stripeReturnRow
+        val idx = stripeGroupIndex
+        if (stripeJumped && idx != null && stripeGroups.indices.contains(idx) && stripeGroups[idx].firstRow in channels.indices) {
+            target = channels[stripeGroups[idx].firstRow].id
+        }
+        if (target == null || (target != SEASONAL_ROW_ID && channels.none { it.id == target })) target = model.channel?.id ?: channels.firstOrNull()?.id
+        stripeMode = false
+        suppressFocusScroll = true
+        scope.launch { delay(400); suppressFocusScroll = false }
+        target?.let(onFocusTarget)
+    }
+    fun openBundleList() { stripeMode = false; onSidebar(true) }
 
     BoxWithConstraints(
         Modifier
@@ -629,6 +684,16 @@ private fun Guide(
             .background(GuideBackground)
             .onPreviewKeyEvent { e ->
                 val down = e.type == KeyEventType.KeyDown
+                if (stripeMode && !sidebarOpen) {
+                    return@onPreviewKeyEvent when (e.key.nativeKeyCode) {
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> { if (down) jumpBundle(-1); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (down) jumpBundle(1); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) returnFromStripe(); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) openBundleList(); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> { if (e.type == KeyEventType.KeyUp) openBundleList(); true }
+                        else -> false
+                    }
+                }
                 // With the sidebar open, its rows take Up and Down; Right closes it, Left does nothing.
                 if (sidebarOpen) {
                     return@onPreviewKeyEvent when (e.key.nativeKeyCode) {
@@ -639,8 +704,8 @@ private fun Guide(
                 }
                 when (e.key.nativeKeyCode) {
                     // Left and Right move the window by a half hour (ChannelGuideView's onMoveCommand);
-                    // Left at the first half hour opens the package sidebar.
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) { if (slotOffset > 0) slotOffset-- else onSidebar(true) }; true }
+                    // Left at the first half hour goes to the bundle stripe, or opens the bundle list when there is none.
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) { if (slotOffset > 0) slotOffset-- else if (canEnterStripe()) enterStripe() else onSidebar(true) }; true }
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down && slotOffset < MAX_SLOT_OFFSET) slotOffset++; true }
                     // Down off the last channel wraps to the first; Up off the first does not.
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -653,10 +718,11 @@ private fun Guide(
                 }
             },
     ) {
-        val programsWidth = maxWidth / LocalUnit.current - CHANNEL_COLUMN
+        val programsWidth = maxWidth / LocalUnit.current - CHANNEL_COLUMN - GuideStripes.STRIPE_WIDTH
         Column(Modifier.fillMaxSize()) {
             GridHeader(visibleStart, programsWidth)
             Box(Modifier.fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.25f)))
+            Box(Modifier.fillMaxSize()) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 if (offer != null) item(key = "seasonal-invite") {
                     SeasonalInviteRow(
@@ -679,8 +745,10 @@ private fun Guide(
                         now = now,
                         requestFocus = ch.id == focusTarget,
                         focusRequest = focusRequest,
+                        stripe = stripeCells.getOrNull(index),
                         onFocused = {
                             rowFocus = ch.id
+                            stripeMode = false
                             onFocused(ch.id)
                         },
                         onSelect = {
@@ -691,13 +759,20 @@ private fun Guide(
                     )
                 }
             }
+            GuideStripeOverlay(stripeGroups, listState, leading = if (offer != null) ROW_HEIGHT.toFloat() else 0f, hasInvite = offer != null, focusedGroup = if (stripeMode) stripeGroupIndex else null)
+            }
+        }
+        // The stripe's own focus target, only while the viewer is in the stripe, so it can never be reached by accident.
+        if (stripeMode) {
+            Box(Modifier.width(u(GuideStripes.STRIPE_WIDTH)).fillMaxHeight().focusRequester(stripeFocus).focusable())
+            LaunchedEffect(Unit) { runCatching { stripeFocus.requestFocus() } }
         }
         // The now line, across header and rows.
         val fraction = (now - visibleStart) / VISIBLE_SECONDS
         if (fraction in 0.0..1.0) {
             Box(
                 Modifier
-                    .offset(x = u(CHANNEL_COLUMN + fraction * programsWidth))
+                    .offset(x = u(GuideStripes.STRIPE_WIDTH + CHANNEL_COLUMN + fraction * programsWidth))
                     .width(u(2))
                     .fillMaxHeight()
                     .background(BrandCyan),
@@ -717,12 +792,12 @@ private fun Guide(
     fun lazyIndex(id: Int?) = if (id == SEASONAL_ROW_ID && offer != null) 0 else channels.indexOfFirst { it.id == id }.let { if (it < 0) -1 else it + lead }
     LaunchedEffect(focusRequest) {
         val index = lazyIndex(focusTarget)
-        if (index >= 0) listState.animateScrollToItem(maxOf(0, index - 2))
+        if (index >= 0 && !suppressFocusScroll) listState.animateScrollToItem(maxOf(0, index - 2))
     }
     // And keep a row moved to with Up and Down there too.
     LaunchedEffect(rowFocus) {
         val index = lazyIndex(rowFocus)
-        if (index >= 0) listState.animateScrollToItem(maxOf(0, index - 2))
+        if (index >= 0 && !suppressFocusScroll) listState.animateScrollToItem(maxOf(0, index - 2))
     }
 }
 
@@ -731,6 +806,7 @@ private fun GridHeader(visibleStart: Long, programsWidth: Float) {
     Row(Modifier.fillMaxWidth().height(u(HEADER_HEIGHT)).background(Color(0.04f, 0.04f, 0.08f)), verticalAlignment = Alignment.CenterVertically) {
         // The Apple TV's header runs 12 points wide of the rows (its padding is outside the
         // column's frame); kept in line with the rows here, as the Roku port does.
+        Spacer(Modifier.width(u(GuideStripes.STRIPE_WIDTH)))
         Text("CHANNEL", style = font(DMMonoMedium, LocalGuideText.current.channelHeading, Tokens.Text2), modifier = Modifier.width(u(CHANNEL_COLUMN)).padding(start = u(12)))
         for (i in 0 until 4) {
             Box(Modifier.width(u(programsWidth / 4)).fillMaxHeight()) {
@@ -758,6 +834,7 @@ private fun EpgRow(
     now: Double,
     requestFocus: Boolean,
     focusRequest: Int,
+    stripe: GuideStripes.RowCell?,
     onFocused: () -> Unit,
     onSelect: () -> Unit,
 ) {
@@ -797,6 +874,7 @@ private fun EpgRow(
                 .background(if (focused) Tokens.SelectedRow else if (isEvenRow) Color.White.copy(alpha = 0.03f) else Tokens.Guide),
         ) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                GuideStripeCell(stripe)
                 Box(Modifier.width(u(if (accent) 8 else 4)).fillMaxHeight().background(if (accent) color else color.copy(alpha = 0.4f)))
                 Row(
                     Modifier.width(u(CHANNEL_COLUMN - (if (accent) 8 else 4))).padding(start = u(if (isLive) 8 else 6), end = u(4)),
