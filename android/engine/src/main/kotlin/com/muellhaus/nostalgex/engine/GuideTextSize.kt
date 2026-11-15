@@ -52,6 +52,9 @@ data class GuideTextMetrics(
     /** The item title, and the CH tag in VT323. */
     val panelTitle: Int,
     val panelTag: Int,
+    /** A guide row and the time header, and the bundle list's rows (Apple TV 1286669b): 64 and 58 until LARGER, which grows them with the text. The Now Playing panel's rows stay 64. */
+    val rowHeight: Int = 64,
+    val headerHeight: Int = 58,
 ) {
     companion object {
         /**
@@ -81,6 +84,7 @@ data class GuideTextMetrics(
         val LARGE = GuideTextMetrics(
             title = BODY, timeLabel = BODY, channelHeading = BODY, number = BODY, numberWidth = 54, name = BODY, placeholder = BODY,
             packageRowText = 22, packageHeading = CAPTION, panelText = 22, panelTitle = BODY, panelTag = 28,
+            rowHeight = 76, headerHeight = 66,
         )
     }
 }

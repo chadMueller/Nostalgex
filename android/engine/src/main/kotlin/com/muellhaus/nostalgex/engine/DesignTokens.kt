@@ -55,6 +55,8 @@ object DesignTokens {
         const val CYAN = 0x00D4FF
         /** Live status only (the sleep countdown). */
         const val YELLOW = 0xFFE500
+        /** The next programme's title on the UP NEXT line (Chad 2026-11-15: "highlight the movie title as a color"); the Apple TV picks the value, YELLOW until it does. */
+        const val UP_NEXT_TITLE = YELLOW
         /** Warnings that need attention. */
         const val AMBER = 0xFFB020
         /** Danger as text. */
@@ -80,6 +82,18 @@ object DesignTokens {
     }
 
     /** Row geometry, in points. */
+    /**
+     * The guide's cursor cell, the programme Left and Right have reached (Chad 2026-11-15: "the active state needs to be way
+     * more obvious"): a ring in full cyan, a brighter fill than the selected row's and a glow much stronger than the row's.
+     * Provisional values until the Apple TV's land.
+     */
+    object Cursor {
+        const val RING = 3
+        const val FILL = 0x0F5F80
+        const val GLOW_RADIUS = 36
+        const val GLOW_ALPHA = 1.0f
+    }
+
     object Row {
         const val CORNER = 12
         const val RESTING_OUTLINE = 1.5f

@@ -23,9 +23,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.muellhaus.nostalgex.engine.GuideStripes
 
-/** Height of a channel row with its divider, in Apple TV points (the guide's `rowPitch`). */
-internal const val STRIPE_ROW_PITCH = 65f
-
 /** One row's piece of the stripe, drawn in the slot at the left of the row (GuideStripeCell). */
 @Composable
 internal fun GuideStripeCell(cell: GuideStripes.RowCell?, modifier: Modifier = Modifier) {
@@ -51,19 +48,21 @@ internal fun GuideStripeOverlay(
     listState: LazyListState,
     leading: Float,
     hasInvite: Boolean,
+    /** A channel row with its divider, in Apple TV points: it follows the text step. */
+    rowPitch: Float,
     focusedGroup: Int?,
 ) {
     val unitPx = with(LocalDensity.current) { LocalUnit.current.toPx() }
     val first = listState.firstVisibleItemIndex
     val inItem = listState.firstVisibleItemScrollOffset / unitPx
     // The guide's scroll position in points from the top of the first channel row's list.
-    val offset = (if (!hasInvite) first * STRIPE_ROW_PITCH else if (first == 0) 0f else leading + (first - 1) * STRIPE_ROW_PITCH) + inItem
+    val offset = (if (!hasInvite) first * rowPitch else if (first == 0) 0f else leading + (first - 1) * rowPitch) + inItem
     val viewport = listState.layoutInfo.viewportSize.height / unitPx
-    val labels = GuideStripes.labels(groups, STRIPE_ROW_PITCH, leading, offset, viewport)
+    val labels = GuideStripes.labels(groups, rowPitch, leading, offset, viewport)
     Box(Modifier.width(u(LIFT_WIDTH + 20)).fillMaxHeight().clipToBounds()) {
         if (focusedGroup != null && focusedGroup in groups.indices) {
             val name = groups[focusedGroup].name
-            val span = name?.let { GuideStripes.visibleSpan(groups[focusedGroup], STRIPE_ROW_PITCH, leading, offset, viewport) }
+            val span = name?.let { GuideStripes.visibleSpan(groups[focusedGroup], rowPitch, leading, offset, viewport) }
             if (span != null) {
                 val lifted = hex(GuideStripes.Palette.focusedHex(GuideStripes.Palette.hex(name)))
                 Box(

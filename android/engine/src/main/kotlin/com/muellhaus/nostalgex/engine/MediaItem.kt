@@ -68,6 +68,12 @@ data class MediaItem(
      * Null for a copy saved before one was kept.
      */
     val exactDurationSeconds: Double? = null,
+    /**
+     * Plex artwork paths for the poster, in the order to try them (#312, the Apple TV's PlexPosterChain): for an episode its
+     * season's poster, then the series', then the episode's own frame; for a film its poster. Empty when none, and for a
+     * copy saved before the chain was kept (the poster then falls back to [thumb]).
+     */
+    val posterThumbs: List<String> = emptyList(),
 ) {
     /**
      * How long the schedule gives this programme, in seconds: the file's real runtime rounded up to a whole

@@ -36,7 +36,7 @@ class PlexLibraryRuntimeTest {
                 ).joinToString(",") + "]}}"
                 path == "/library/sections/2/all" -> """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"s1","type":"show","title":"A Show"}]}}"""
                 path == "/library/metadata/s1/allLeaves" ->
-                    """{"MediaContainer":{"Metadata":[{"ratingKey":"e1","type":"episode","title":"Episode 1","index":1,"parentIndex":1,"duration":1500200}]}}"""
+                    """{"MediaContainer":{"Metadata":[{"ratingKey":"e1","type":"episode","title":"Episode 1","index":1,"parentIndex":1,"duration":1500200,"thumb":"/library/metadata/e1/thumb/1","parentThumb":"/library/metadata/season1/thumb/1","grandparentThumb":"/library/metadata/s1/thumb/1"}]}}"""
                 else -> """{"MediaContainer":{}}"""
             }.toByteArray()
             ex.responseHeaders.add("Content-Type", "application/json")
@@ -75,6 +75,15 @@ class PlexLibraryRuntimeTest {
         assertEquals(25, item("e1").duration)
         assertEquals(1500.2, item("e1").exactDurationSeconds!!, 1e-6)
         assertEquals(1501, item("e1").slotSeconds)
+    }
+
+    @Test fun anEpisodeKeepsItsPosterChainSeasonThenSeriesThenFrame() {
+        assertEquals(listOf("/library/metadata/season1/thumb/1", "/library/metadata/s1/thumb/1", "/library/metadata/e1/thumb/1"), item("e1").posterThumbs)
+    }
+
+    @Test fun aFilmsPosterIsItsThumb() {
+        // No thumb in the canned answer: an empty chain, and the poster has nothing to ask for.
+        assertEquals(emptyList<String>(), item("a").posterThumbs)
     }
 
     @Test fun anItemWithNoRuntimeIsStillDropped() {

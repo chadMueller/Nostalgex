@@ -47,6 +47,12 @@ class GuideTextSizeTest {
         assertEquals(listOf(22, 25, 22, 29, 28), listOf(m.packageRowText, m.packageHeading, m.panelText, m.panelTitle, m.panelTag))
     }
 
+    @Test fun rowsAndHeaderByStep() {
+        assertEquals(listOf(64, 58), GuideTextSize.SMALL.metrics.let { listOf(it.rowHeight, it.headerHeight) })
+        assertEquals(listOf(64, 58), GuideTextSize.NORMAL.metrics.let { listOf(it.rowHeight, it.headerHeight) })
+        assertEquals(listOf(76, 66), GuideTextSize.LARGE.metrics.let { listOf(it.rowHeight, it.headerHeight) })
+    }
+
     @Test fun noGuideTextIsBelow17() {
         for (s in GuideTextSize.entries) assertTrue(s.name, all(s.metrics).all { it >= 17 })
     }

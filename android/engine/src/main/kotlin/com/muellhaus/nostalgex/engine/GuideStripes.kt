@@ -112,6 +112,18 @@ object GuideStripes {
         return null
     }
 
+    /**
+     * Up or Down on the stripe with a wrap, as the channel rows have it: past the last bundle the first, before the first the
+     * last (Chad 2026-11-15: "reaching the bottom should take you back to the top"). Runs with no bundle are stepped over. Null
+     * when there is no other bundle to go to.
+     */
+    fun neighbourIndexWrapping(from: Int, step: Int, groups: List<Group>): Int? {
+        neighbourIndex(from, step, groups)?.let { return it }
+        val named = groups.indices.filter { groups[it].bundle != null }
+        val target = (if (step > 0) named.firstOrNull() else named.lastOrNull()) ?: return null
+        return target.takeIf { it != from }
+    }
+
     /** Whether there is any bundle to move between. With none, Left goes to the bundle list as it always did. */
     fun hasBundles(groups: List<Group>): Boolean = groups.any { it.bundle != null }
 

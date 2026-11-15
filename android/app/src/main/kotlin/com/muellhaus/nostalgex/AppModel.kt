@@ -531,6 +531,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         runCatching { context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("plex://")), 0) != null }.getOrDefault(false)
     }
 
+    /** Whether the guide's info panel keeps room for a poster: Plex, outside demo mode, art or not, so its text never moves from one programme to the next. */
+    val postersAvailable: Boolean get() = !demoMode && mbServer == null
+
     /** Whether the programme can be handed to the Plex app: Plex backend, not demo mode, and the Plex app is installed. */
     val canOpenInPlex: Boolean get() = !demoMode && mbServer == null && channel != null && plexLinkHandled
 
@@ -556,23 +559,28 @@ class AppModel(private val context: Context) : Playback.Listener {
     suspend fun poster(item: MediaItem): ImageBitmap? {
         // Plex only, as on the Apple TV.
         if (mbServer != null) return null
-        val thumb = item.thumb ?: return null
         val server = item.serverUrl ?: return null
-        val url = Uri.parse("$server/photo/:/transcode").buildUpon()
-            .appendQueryParameter("url", thumb)
-            .appendQueryParameter("width", "300")
-            .appendQueryParameter("height", "450")
-            .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
-            .build().toString()
-        posters[url]?.let { return it }
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                plex.http.newCall(Request.Builder().url(url).build()).execute().use { res ->
-                    if (!res.isSuccessful) return@use null
-                    BitmapFactory.decodeStream(res.body.byteStream())?.asImageBitmap()
-                }
-            }.getOrNull()
-        }?.also { posters[url] = it }
+        // The season's poster, then the series', then the episode's frame (#312); a film's poster. A copy saved before the
+        // chain was kept has only its thumb.
+        for (thumb in item.posterThumbs.ifEmpty { listOfNotNull(item.thumb) }) {
+            val url = Uri.parse("$server/photo/:/transcode").buildUpon()
+                .appendQueryParameter("url", thumb)
+                .appendQueryParameter("width", "300")
+                .appendQueryParameter("height", "450")
+                .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
+                .build().toString()
+            posters[url]?.let { return it }
+            val got = withContext(Dispatchers.IO) {
+                runCatching {
+                    plex.http.newCall(Request.Builder().url(url).build()).execute().use { res ->
+                        if (!res.isSuccessful) return@use null
+                        BitmapFactory.decodeStream(res.body.byteStream())?.asImageBitmap()
+                    }
+                }.getOrNull()
+            }
+            if (got != null) { posters[url] = got; return got }
+        }
+        return null
     }
     /** Bumped on each tune, so the channel banner shows again. */
     var tuneCount by mutableStateOf(0)

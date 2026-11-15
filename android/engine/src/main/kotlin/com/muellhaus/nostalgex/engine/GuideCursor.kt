@@ -4,52 +4,70 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The guide's programme cursor (Chad, 2026-11-15, after release 7: Left and Right "should jump to the next title not
- * the next 30 minutes", with a highlight "of where the cursor is"). The Apple TV's guide still moves its window 30
- * minutes at a time (`GuideTimeCursor`), with focus on the whole row; this is Android's own step beyond it, and the
- * info panel's preview of the focused programme is the Apple TV's (I-089).
+ * The guide's programme cursor: Left and Right go to the previous or next programme on the focused row, whatever its
+ * length, and the programme the cursor is on has a cell of its own. A port of the Apple TV's `GuideProgramCursor`
+ * (appletv/integration-1115, Chad 2026-11-15), with the same rules:
  *
- * The cursor is one instant, [cursorSec], that lies inside the focused programme of whichever row has focus: Left and
- * Right set it to the previous or next programme's start, and Up and Down keep it, so the new row's focused programme
- * is whatever covers that instant, which keeps the cursor in the same column of the grid. Null is the live programme.
- * Everything here is pure.
+ * - The cursor is a time on the row ([cursorSec], seconds); null is the live programme. A cursor that has fallen
+ *   behind now stands at now.
+ * - Right: the programme after the cursor's, or the first to start after the cursor's time when it is in a gap.
+ * - Left: the programme before the cursor's that has not ended yet. From the programme on now there is none (null), and
+ *   the guide goes to the bundle stripe.
+ * - Up and Down change the row and keep the time, so the cursor is on the new row's programme at that time.
+ * - The window moves in time only when the programme the cursor moves to starts before the view, past it, or in its last
+ *   15 minutes, to the half hour its start is in ([windowOffset]).
+ * - Back to the live programme (Back, a return from full screen, select): the cursor to null and the window to its start.
  */
 object GuideCursor {
-    /** The programme the cursor is on in a row: the live one when there is no cursor, else the one covering it (or the next one starting after it). */
-    fun focusedEntry(entries: List<ScheduleEntry>, cursorSec: Long?, nowSec: Double): ScheduleEntry? {
-        if (entries.isEmpty()) return null
-        if (cursorSec == null) return entries.firstOrNull { it.isNowPlaying } ?: entries.firstOrNull { it.endSec > nowSec } ?: entries.last()
-        return entries.firstOrNull { it.startSec <= cursorSec && cursorSec < it.endSec }
-            ?: entries.firstOrNull { it.startSec >= cursorSec }
-            ?: entries.last()
+    /** The time the cursor stands at: its own, or now when it is on the live programme or has fallen behind now. */
+    fun time(cursorSec: Long?, nowSec: Double): Double = max(cursorSec?.toDouble() ?: nowSec, nowSec)
+
+    /** The programme the cursor is on: the one covering its time. Null in a gap. */
+    fun current(entries: List<ScheduleEntry>, cursorSec: Long?, nowSec: Double): ScheduleEntry? {
+        val t = time(cursorSec, nowSec)
+        return entries.firstOrNull { it.startSec <= t && t < it.endSec }
     }
 
-    /** The programme that follows [entry]: the earliest one starting at or after its end. */
-    fun next(entries: List<ScheduleEntry>, entry: ScheduleEntry): ScheduleEntry? =
+    /** The programme after [entry]: the earliest one starting at or after its end. */
+    fun after(entries: List<ScheduleEntry>, entry: ScheduleEntry): ScheduleEntry? =
         entries.filter { it.startSec >= entry.endSec }.minByOrNull { it.startSec }
 
-    /** The programme before [entry]: the latest one that ended at or before its start. */
-    fun previous(entries: List<ScheduleEntry>, entry: ScheduleEntry): ScheduleEntry? =
-        entries.filter { it.endSec <= entry.startSec }.maxByOrNull { it.startSec }
-
-    /** The instant that stands for [entry]: its start, but never before the guide's first moment (a live programme began earlier). */
-    fun referenceTime(entry: ScheduleEntry, baseSec: Long): Long = max(entry.startSec, baseSec)
-
-    /**
-     * The window's offset, in half hours from the base, that keeps [entry] in view: unchanged while its start is inside the
-     * window with at least half an hour of room, otherwise moved so the programme's own half hour is at the left edge.
-     */
-    fun slotOffsetFor(entry: ScheduleEntry, currentOffset: Int, baseSec: Long, visibleSeconds: Long, maxOffset: Int, slotSeconds: Long = 1800): Int {
-        val start = baseSec + currentOffset * slotSeconds
-        val ref = referenceTime(entry, baseSec)
-        val own = Math.floorDiv(ref - baseSec, slotSeconds).toInt()
-        return when {
-            ref < start -> max(0, own)
-            ref >= start + visibleSeconds - slotSeconds -> min(maxOffset, own)
-            else -> currentOffset
-        }
+    /** Right. */
+    fun next(entries: List<ScheduleEntry>, cursorSec: Long?, nowSec: Double): ScheduleEntry? {
+        current(entries, cursorSec, nowSec)?.let { return after(entries, it) }
+        val t = time(cursorSec, nowSec)
+        return entries.filter { it.startSec > t }.minByOrNull { it.startSec }
     }
 
-    /** What the info panel shows while the cursor is on a programme that is not the live one: its time range, and the programme after it. */
-    fun isPreview(entry: ScheduleEntry?, nowSec: Double): Boolean = entry != null && !(entry.startSec <= nowSec && nowSec < entry.endSec)
+    /** Left: the programme before the cursor's that has not ended yet. Null from the programme on now. */
+    fun previous(entries: List<ScheduleEntry>, cursorSec: Long?, nowSec: Double): ScheduleEntry? {
+        val anchor = current(entries, cursorSec, nowSec)?.startSec?.toDouble() ?: time(cursorSec, nowSec)
+        return entries.filter { it.endSec <= anchor && it.endSec > nowSec }.maxByOrNull { it.startSec }
+    }
+
+    /** The cursor for a programme: its start, or null (live) when it is on now. */
+    fun cursorFor(entry: ScheduleEntry, nowSec: Double): Long? = if (entry.startSec <= nowSec) null else entry.startSec
+
+    /**
+     * The window's offset, in half hours from [windowStartSec], that shows [entry]: the offset it has while the
+     * programme starts inside the view with at least half a slot of it showing; otherwise the slot its start is in
+     * (for the live programme, the slot now is in), within [0, maxOffset].
+     */
+    fun windowOffset(
+        entry: ScheduleEntry, offset: Int, windowStartSec: Long, nowSec: Double, maxOffset: Int,
+        visibleSeconds: Long = 7200, slotSeconds: Long = 1800,
+    ): Int {
+        val start = max(entry.startSec.toDouble(), nowSec)
+        val viewStart = windowStartSec + offset * slotSeconds
+        val viewEnd = viewStart + visibleSeconds
+        if (start >= viewStart && start < viewEnd - slotSeconds / 2.0) return offset
+        val wanted = Math.floor((start - windowStartSec) / slotSeconds).toInt()
+        return min(max(0, wanted), maxOffset)
+    }
+
+    /** What the info panel shows while the cursor is on a later programme: that programme, with its time range. Null shows what is on now. */
+    fun preview(entries: List<ScheduleEntry>, cursorSec: Long?, nowSec: Double): ScheduleEntry? {
+        if (cursorSec == null) return null
+        return current(entries, cursorSec, nowSec)?.takeIf { it.startSec > nowSec }
+    }
 }

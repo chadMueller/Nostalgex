@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Android: the basement batch, the cursor rules aligned, UP NEXT, the cell glow, the stripe wrap)
+
+**State.** Branch `android/guide-stripes`, local commits, for release 8 (the 8 built earlier was never uploaded, so it is rebuilt). Not pushed.
+
+**Why.** Chad's findings from the basement TV, ported from the Apple TV's `appletv/integration-1115` (`e20ebec0`), and three more asks from him.
+
+**Changed.**
+- **Rows by text step:** the guide row, the time header and the bundle list's rows are 64, 58 and 64 at SMALLER and DEFAULT, and 76, 66 and 76 at LARGER (`GuideTextMetrics.rowHeight` and `headerHeight`); the number box is 31, 36 and 54. The Now Playing panel's rows stay 64. The stripe's row pitch follows.
+- **Cursor rules aligned** to the Apple TV's `GuideProgramCursor` (`GuideCursor`, 15 tests): the cursor never goes behind now, Left on the live programme finds nothing so the guide goes to the stripe, Up and Down keep the time, and the window moves only when the programme starts before the view, past it or in its last 15 minutes, to the half hour its start is in. Back, a return from full screen and a select reset to the live programme and the window to now. This replaces the first version, which could go to programmes already past.
+- **Guide info panel:** the channel line on top, then a 120 by 180 poster beside the title, badges and description, then the progress bar and UP NEXT across the whole width. The poster column is kept on Plex (not demo mode, not Jellyfin or Emby) whether or not there is art, so the text never moves. The poster chain is #312's: the season's poster, then the series', then the episode's own frame, a film's poster (`MediaItem.posterThumbs`; the saved library format is 10).
+- **UP NEXT, both panels:** one plain line, no pill, no border: the title first in a highlight colour, then `UP NEXT IN {n} MIN` (whole minutes, rounded down; `UP NEXT IN LESS THAN 1 MIN` under a minute), the title ending in an ellipsis before the label ever shrinks. The colour (`DesignTokens.Color.UP_NEXT_TITLE`, yellow for now) and the cursor cell's values (`DesignTokens.Cursor`: ring 3 in full cyan, a brighter fill, a glow of 36 at full strength) are named constants awaiting the Apple TV's values.
+- **No help line** under the Now Playing panel's rows or lists; PLAYBACK INFORMATION keeps its note.
+- **Cursor cell:** a glow much stronger than the row's, a brighter fill and the full-cyan ring. The programs area is no longer clipped to the row, so the glow reaches over the rows beside it.
+- **Bundle stripe:** Down on the last bundle wraps to the first and Up on the first to the last, as the channel rows do (`neighbourIndexWrapping`, tested with the unnamed runs skipped and one bundle staying put). The Apple TV's shared test still says no wrap, so the Apple TV and Roku differ from Android until they follow.
+
+**Seen** on the Android TV emulator against two stand-in Plex servers (one with art): `android/emulator-2026-11-15/` in nostalgex-internal, with `compare-20` (info panel), `compare-21` (Now Playing) and `compare-22` (rows by step) against the Apple TV's basement-batch shots. The Apple TV shots predate the UP NEXT order and the glow values, so those two details differ from them.
+
+**Half-done.** Not on the real TV. The glow, fill and highlight colour are provisional.
+
 ## 2026-11-15 (Android: Left and Right go programme by programme, the cursor's cell is highlighted, the panel previews it; the stripe ring)
 
 **State.** Branch `android/guide-stripes`, local commits. Not pushed. For release 8.

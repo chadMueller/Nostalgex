@@ -173,6 +173,9 @@ class PlexLibrary(private val client: PlexClient) {
                     serverUrl = server.url,
                     serverToken = server.token,
                     thumb = ep.str("thumb") ?: show.str("thumb"),
+                    // The season's poster, then the series', then the episode's own frame (#312).
+                    posterThumbs = listOfNotNull(ep.str("parentThumb"), ep.str("grandparentThumb") ?: show.str("thumb"), ep.str("thumb"))
+                        .filter { it.isNotEmpty() }.distinct(),
                 )
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -225,6 +228,7 @@ class PlexLibrary(private val client: PlexClient) {
             serverUrl = server.url,
             serverToken = server.token,
             thumb = item.str("thumb"),
+            posterThumbs = listOfNotNull(item.str("thumb")).filter { it.isNotEmpty() },
         )
     }
 

@@ -84,6 +84,9 @@ import com.muellhaus.nostalgex.engine.DailyManifest
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.muellhaus.nostalgex.engine.GuideCursor
+import com.muellhaus.nostalgex.engine.UpNextLabel
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import com.muellhaus.nostalgex.engine.GuideStripes
 import com.muellhaus.nostalgex.engine.GuideTextMetrics
 import com.muellhaus.nostalgex.engine.InfoPanelLayout
@@ -129,8 +132,6 @@ private val Yellow = Color(0xFFFFE500)
 // screenshots when they land on main: the width is what lets three-digit numbers and 22 pt
 // names fit.
 private const val CHANNEL_COLUMN = 340
-private const val ROW_HEIGHT = 64
-private const val HEADER_HEIGHT = 58
 /** 24-hour horizon in 30-minute slots, four visible: Left and Right scroll up to 44 slots on. */
 private const val MAX_SLOT_OFFSET = 44
 private const val VISIBLE_SECONDS = 7200L
@@ -460,9 +461,8 @@ private fun Tuner(
                 val schedule = ch?.let { lineup?.schedules?.get(it.id) }
                 if (ch != null && schedule != null) {
                     // A programme that is not the live one, focused in the guide: the panel shows it (I-089), with its time range.
-                    val focusedEntry = GuideCursor.focusedEntry(schedule.entries, cursor, nowSec())
-                    val preview = focusedEntry?.takeIf { GuideCursor.isPreview(it, nowSec()) }
-                    InfoPanel(ch, schedule, playingItem = if (ch.id == model.channel?.id) model.item else null, preview = preview)
+                    val preview = GuideCursor.preview(schedule.entries, cursor, nowSec())
+                    InfoPanel(model, ch, schedule, playingItem = if (ch.id == model.channel?.id) model.item else null, preview = preview)
                 }
             }
             NavBar(panelWidth, onSettings = model::openSettings)
@@ -529,7 +529,7 @@ private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
 // ── The info panel (InfoPanelView.swift) ─────────────────────────────────
 
 @Composable
-private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaItem?, preview: ScheduleEntry? = null) {
+private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, playingItem: MediaItem?, preview: ScheduleEntry? = null) {
     // The Apple TV's InfoPanelView at 106e8dda: gaps of 10 and 6, the order held in InfoPanelLayout.
     val color = hex(ch.def.colorHex)
     val now = ticking()
@@ -550,7 +550,7 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
         // The item the player has, when this is the channel on: the schedule can run a few seconds apart. A programme
         // the guide's cursor is on, not the live one, is shown as it is on the schedule, with its time range (I-089).
         val item = preview?.item ?: playingItem ?: np!!.item
-        val next = if (preview != null) GuideCursor.next(schedule.entries, preview) else schedule.upNext
+        val next = if (preview != null) GuideCursor.after(schedule.entries, preview) else schedule.upNext
         val episodeLine = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
         val genres = item.musicGenreDisplay
         val sections = InfoPanelLayout.sections(
@@ -560,7 +560,10 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
             hasBadges = item.year != null || !item.contentRating.isNullOrEmpty() || item.rating > 0,
             hasUpNext = next != null,
         )
-        for (section in sections) when (section) {
+        // The poster beside the title, badges and description; the progress bar and UP NEXT under both, across the whole
+        // panel (the Apple TV's InfoPanelView, appletv/integration-1115).
+        val below = setOf(InfoPanelSection.PROGRESS, InfoPanelSection.UP_NEXT)
+        @Composable fun renderSection(section: InfoPanelSection) { when (section) {
             InfoPanelSection.TITLE ->
                 Text(item.title, style = font(DMMonoMedium, 38, Color.White), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = innerGap))
             InfoPanelSection.ARTIST ->
@@ -611,13 +614,40 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
                     Text("${formatTime(elapsed)} / ${formatTime(total)}", style = font(VT323, 24, Color.White.copy(alpha = 0.55f)))
                 }
             }
-            InfoPanelSection.UP_NEXT -> next?.let {
-                Row(horizontalArrangement = Arrangement.spacedBy(u(10)), verticalAlignment = Alignment.CenterVertically) {
-                    Text("UP NEXT", style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3))
-                    Text(it.item.musicDisplayLine, style = font(DMMono, 18, Color.White.copy(alpha = 0.75f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
+            InfoPanelSection.UP_NEXT -> next?.let { InfoUpNext(it) }
+        } }
+        Row(Modifier.padding(bottom = sectionGap), horizontalArrangement = Arrangement.spacedBy(u(18))) {
+            if (model.postersAvailable) InfoPoster(model, item)
+            Column(Modifier.weight(1f)) { for (section in sections) if (section !in below) renderSection(section) }
         }
+        for (section in sections) if (section in below) renderSection(section)
+    }
+}
+
+/**
+ * A poster column where the server can give posters (Plex, as the Now Playing panel: the season's, then the series', then the
+ * episode's frame for TV, the film's poster for films, #312). It is always there on such a server, art or not, so the text
+ * beside it never moves from one programme to the next; a programme with no art shows an empty frame.
+ */
+@Composable
+private fun InfoPoster(model: AppModel, item: MediaItem) {
+    var poster by remember(item.ratingKey) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(item.ratingKey) { poster = model.poster(item) }
+    Box(Modifier.size(u(120), u(180)).clip(RoundedCornerShape(u(10))).background(Tokens.Row)) {
+        poster?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+    }
+}
+
+/** One plain line, the title first in the highlight colour and then the minutes: "Varsity Blues  UP NEXT IN 24 MIN". It re-reads the clock every 15 s. */
+@Composable
+private fun InfoUpNext(next: ScheduleEntry) {
+    var nowS by remember { mutableStateOf(nowSec()) }
+    LaunchedEffect(next.id) {
+        while (true) { nowS = nowSec(); delay(UpNextLabel.REFRESH_MS) }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(u(14)), verticalAlignment = Alignment.CenterVertically) {
+        Text(next.item.musicDisplayLine, style = font(DMMono, 18, Tokens.UpNextTitle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(UpNextLabel.text(next.startSec - nowS), style = font(VT323, 24, Color.White.copy(alpha = 0.5f), tracking = 3), maxLines = 1, softWrap = false)
     }
 }
 
@@ -673,13 +703,16 @@ private fun Guide(
     // The programme cursor: Left and Right move programme by programme, Up and Down keep the column (GuideCursor).
     var cursorSec by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(cursorSec) { onCursor(cursorSec) }
-    // Asked to focus a row from outside (Back to the playing channel, the bundle list): back to the live programme.
-    LaunchedEffect(focusRequest) { cursorSec = null; slotOffset = 0 }
+    // Back on the live programme, the window at its start: after a return to the playing channel (Back, the bundle list),
+    // a return from full screen, and a select (the Apple TV's resetCursorToLive).
+    fun resetToLive() { cursorSec = null; slotOffset = 0 }
+    LaunchedEffect(focusRequest) { resetToLive() }
+    LaunchedEffect(model.fullScreen) { if (!model.fullScreen) resetToLive() }
     fun rowEntries(): List<ScheduleEntry> = rowFocus?.let { lineup.schedules[it]?.entries } ?: emptyList()
-    fun focusedEntry(): ScheduleEntry? = GuideCursor.focusedEntry(rowEntries(), cursorSec, nowSec())
     fun moveCursorTo(entry: ScheduleEntry) {
-        cursorSec = GuideCursor.referenceTime(entry, lineup.windowStartSec)
-        slotOffset = GuideCursor.slotOffsetFor(entry, slotOffset, lineup.windowStartSec, VISIBLE_SECONDS, MAX_SLOT_OFFSET)
+        val n = nowSec()
+        cursorSec = GuideCursor.cursorFor(entry, n)
+        slotOffset = GuideCursor.windowOffset(entry, slotOffset, lineup.windowStartSec, n, MAX_SLOT_OFFSET)
     }
 
     fun canEnterStripe(): Boolean {
@@ -695,9 +728,9 @@ private fun Guide(
         stripeMode = true
     }
     // Up or Down on the stripe: the guide scrolls so the previous or next bundle's first channel is at the top.
-    // Focus stays on the stripe; past the first or last bundle nothing moves.
+    // Focus stays on the stripe; past the last bundle it wraps to the first, and back, as the channel rows do.
     fun jumpBundle(step: Int) {
-        val next = GuideStripes.neighbourIndex(stripeGroupIndex ?: return, step, stripeGroups) ?: return
+        val next = GuideStripes.neighbourIndexWrapping(stripeGroupIndex ?: return, step, stripeGroups) ?: return
         val first = stripeGroups[next].firstRow
         if (first !in channels.indices) return
         stripeGroupIndex = next
@@ -752,13 +785,13 @@ private fun Guide(
                     // or opens the bundle list when there is none.
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (down) {
-                            val prev = focusedEntry()?.let { GuideCursor.previous(rowEntries(), it) }
+                            val prev = GuideCursor.previous(rowEntries(), cursorSec, nowSec())
                             if (prev != null) moveCursorTo(prev) else if (canEnterStripe()) enterStripe() else onSidebar(true)
                         }
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (down) focusedEntry()?.let { cur -> GuideCursor.next(rowEntries(), cur)?.let(::moveCursorTo) }
+                        if (down) GuideCursor.next(rowEntries(), cursorSec, nowSec())?.let(::moveCursorTo)
                         true
                     }
                     // Down off the last channel wraps to the first; Up off the first does not.
@@ -800,13 +833,14 @@ private fun Guide(
                         requestFocus = ch.id == focusTarget,
                         focusRequest = focusRequest,
                         stripe = stripeCells.getOrNull(index),
-                        cursorStart = if (ch.id == rowFocus && !stripeMode) GuideCursor.focusedEntry(lineup.schedules[ch.id]?.entries.orEmpty(), cursorSec, now)?.startSec else null,
+                        cursorStart = if (ch.id == rowFocus && !stripeMode) GuideCursor.current(lineup.schedules[ch.id]?.entries.orEmpty(), cursorSec, now)?.startSec else null,
                         onFocused = {
                             rowFocus = ch.id
                             stripeMode = false
                             onFocused(ch.id)
                         },
                         onSelect = {
+                            resetToLive()
                             // Selecting the channel that is on goes full screen, unless it stopped after
                             // repeated failures: then selecting it retries. Any other channel tunes.
                             if (ch.id == model.channel?.id && !model.channelStopped) model.fullScreen = true else model.tuneFromViewer(ch)
@@ -814,7 +848,7 @@ private fun Guide(
                     )
                 }
             }
-            GuideStripeOverlay(stripeGroups, listState, leading = if (offer != null) ROW_HEIGHT.toFloat() else 0f, hasInvite = offer != null, focusedGroup = if (stripeMode) stripeGroupIndex else null)
+            GuideStripeOverlay(stripeGroups, listState, leading = if (offer != null) LocalGuideText.current.rowHeight.toFloat() else 0f, hasInvite = offer != null, rowPitch = LocalGuideText.current.rowHeight + 1f, focusedGroup = if (stripeMode) stripeGroupIndex else null)
             }
         }
         // The stripe's own focus target, only while the viewer is in the stripe, so it can never be reached by accident.
@@ -858,7 +892,7 @@ private fun Guide(
 
 @Composable
 private fun GridHeader(visibleStart: Long, programsWidth: Float) {
-    Row(Modifier.fillMaxWidth().height(u(HEADER_HEIGHT)).background(Color(0.04f, 0.04f, 0.08f)), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(u(LocalGuideText.current.headerHeight)).background(Color(0.04f, 0.04f, 0.08f)), verticalAlignment = Alignment.CenterVertically) {
         // The Apple TV's header runs 12 points wide of the rows (its padding is outside the
         // column's frame); kept in line with the rows here, as the Roku port does.
         Spacer(Modifier.width(u(GuideStripes.STRIPE_WIDTH)))
@@ -905,7 +939,7 @@ private fun EpgRow(
       // The stripe has its own column at the left of the row, and the row's focus (fill, outline, glow and lift) starts
       // to the right of it, as on the Apple TV: the stripe is never inside the focus ring, and runs on unbroken through
       // the focused row. It is drawn last, so the glow can't wash over it.
-      Box(Modifier.fillMaxWidth().height(u(ROW_HEIGHT))) {
+      Box(Modifier.fillMaxWidth().height(u(LocalGuideText.current.rowHeight))) {
        Row(Modifier.fillMaxSize()) {
         Spacer(Modifier.width(u(GuideStripes.STRIPE_WIDTH)))
         Box(
@@ -1024,7 +1058,8 @@ private fun entryTitle(e: ScheduleEntry): String =
 
 @Composable
 private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, cursorStart: Long?, programsWidth: Float, visibleStart: Long, now: Double) {
-    Row(Modifier.width(u(programsWidth)).fillMaxHeight().clipToBounds()) {
+    // Not clipped to the row: the cursor cell's glow reaches over the rows beside it.
+    Row(Modifier.width(u(programsWidth)).fillMaxHeight()) {
         if (schedule == null) {
             // ChannelGuideView's watershedRowPlaceholder.
             if (watershedHold) Row(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.02f)), verticalAlignment = Alignment.CenterVertically) {
@@ -1048,9 +1083,11 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                         Modifier
                             .width(width)
                             .fillMaxHeight()
-                            .then(if (isCursor) Modifier.padding(horizontal = u(3), vertical = u(5)).clip(cursorShape).background(Tokens.SelectedRow).border(u(3), Tokens.Cyan, cursorShape) else Modifier)
+                            .zIndex(if (isCursor) 1f else 0f)
+                            .then(if (isCursor) Modifier.padding(horizontal = u(3), vertical = u(5)).cursorGlow().clip(cursorShape).background(Tokens.CursorFill).border(u(DesignTokens.Cursor.RING.toFloat()), Tokens.Cyan, cursorShape) else Modifier)
                             .background(
                                 when {
+                                    isCursor -> Color.Transparent
                                     // Kept at 25% when focused: white titles stay at 4.5:1 on a bright channel colour.
                                     e.isNowPlaying -> color.copy(alpha = 0.25f)
                                     isPast -> Color.White.copy(alpha = 0.02f)
@@ -1134,7 +1171,7 @@ private fun SidebarRow(title: String, color: Color, modifier: Modifier, onSelect
             .zIndex(if (focused) 1f else 0f)
             .graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
             .then(if (focused) Modifier.cyanGlow() else Modifier)
-            .height(u(64))
+            .height(u(LocalGuideText.current.rowHeight))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .onKeyEvent { e ->
@@ -1304,7 +1341,7 @@ private fun SeasonalInviteRow(
         Modifier
             .zIndex(1f)
             .fillMaxWidth()
-            .height(u(ROW_HEIGHT))
+            .height(u(LocalGuideText.current.rowHeight))
             .focusRequester(requester)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .focusable()
@@ -1445,19 +1482,24 @@ internal fun FailureCard(failure: PlaybackFailure, compact: Boolean) {
  * The shared selected glow (#267): cyan, 30 pt radius at 55%, drawn behind the content as rings
  * that fade outwards, since Compose has no coloured blur of its own.
  */
-internal fun Modifier.cyanGlow(): Modifier = composed {
+internal fun Modifier.cyanGlow(): Modifier = glow(DesignTokens.Row.GLOW_RADIUS.toFloat(), DesignTokens.Row.GLOW_ALPHA, DesignTokens.Row.CORNER.toFloat())
+
+/** The guide's cursor cell: a glow much stronger than the row's (DesignTokens.Cursor). */
+internal fun Modifier.cursorGlow(): Modifier = glow(DesignTokens.Cursor.GLOW_RADIUS.toFloat(), DesignTokens.Cursor.GLOW_ALPHA, 6f)
+
+private fun Modifier.glow(glowRadius: Float, glowAlpha: Float, corner: Float): Modifier = composed {
     val unit = LocalUnit.current
     drawBehind {
-        val radius = DesignTokens.Row.GLOW_RADIUS * unit.toPx()
+        val radius = glowRadius * unit.toPx()
         val steps = 10
         for (i in steps downTo 1) {
             val spread = radius * i / steps
-            val alpha = DesignTokens.Row.GLOW_ALPHA * (1f - i.toFloat() / (steps + 1)) / steps * 2
+            val alpha = glowAlpha * (1f - i.toFloat() / (steps + 1)) / steps * 2
             drawRoundRect(
                 Tokens.Cyan.copy(alpha = alpha),
                 topLeft = androidx.compose.ui.geometry.Offset(-spread, -spread),
                 size = androidx.compose.ui.geometry.Size(size.width + 2 * spread, size.height + 2 * spread),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(DesignTokens.Row.CORNER * unit.toPx() + spread),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner * unit.toPx() + spread),
             )
         }
     }

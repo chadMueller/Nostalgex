@@ -313,14 +313,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                 }
             }
         }
-        // One hint line under the columns, two lines tall at a fixed height so rows never jump.
-        Text(
-            hint ?: "",
-            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.End).padding(top = u(16)).width(u(440 * 2 + 28)).height(u(LocalGuideText.current.panelText * 2 + 12)),
-        )
+        // No help line under the rows (Chad 2026-11-15: "it feels so out of place there", as on the Apple TV).
         }
         }
     }
@@ -345,23 +338,21 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
     }
     model.scheduleTick
     val next = model.lineup?.schedules?.get(ch.id)?.upNext ?: return
+    // One plain line, the title first in the highlight colour and then the minutes: "Varsity Blues  UP NEXT IN 24 MIN" (Chad
+    // 2026-11-15, across all platforms). No pill, no border. The title ends in an ellipsis before the label ever shrinks.
     Row(Modifier.padding(top = u(22)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
         Text(
             if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title,
-            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.UpNextTitle),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
         Text(
             UpNextLabel.text(next.startSec - nowSec),
-            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Cyan),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
             maxLines = 1,
-            modifier = Modifier
-                .clip(RoundedCornerShape(u(6)))
-                .background(Tokens.SelectedRow)
-                .border(u(1.5), Tokens.Cyan, RoundedCornerShape(u(6)))
-                .padding(horizontal = u(10), vertical = u(4)),
+            softWrap = false,
         )
     }
 }
@@ -372,17 +363,15 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
     val selected = remember { FocusRequester() }
     Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         ControlHeader(picker.title)
-        Text(
-            when (picker) {
-                PanelPicker.PLAYBACK_INFORMATION -> PlaybackInfo.EVIDENCE_NOTE
-                PanelPicker.STREAM_QUALITY -> "Lower this when your connection is slow or shared. Takes effect on the next program."
-                PanelPicker.SUBTITLE_LANGUAGE -> "Choose which subtitle track to prefer when multiple are available."
-                PanelPicker.AUDIO_LANGUAGE -> "Choose which audio track to prefer when multiple are available."
-                PanelPicker.SLEEP_TIMER -> "Back returns to the panel. Pick OFF to cancel a running timer."
-            },
-            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
-            modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
-        )
+        // No help line under a list either; PLAYBACK INFORMATION keeps its note, which is what the list is about (how this
+        // program reaches the screen), not help.
+        if (picker == PanelPicker.PLAYBACK_INFORMATION) {
+            Text(
+                PlaybackInfo.EVIDENCE_NOTE,
+                style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
+                modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
+            )
+        }
         when (picker) {
             PanelPicker.PLAYBACK_INFORMATION -> Column(Modifier.width(u(880)), verticalArrangement = Arrangement.spacedBy(u(10))) {
                 val rows = model.playbackInfo?.rows(model.videoSize?.first, model.videoSize?.second)

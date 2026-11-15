@@ -126,6 +126,21 @@ class GuideStripesTest {
         assertNull(GuideStripes.neighbourIndex(0, -1, g)); assertNull(GuideStripes.neighbourIndex(2, 1, g))
     }
 
+    @Test fun theWrappingStepGoesFromTheLastBundleToTheFirstAndBack() {
+        val g = groups(listOf("A", "B", "C"))
+        assertEquals(0, GuideStripes.neighbourIndexWrapping(2, 1, g))
+        assertEquals(2, GuideStripes.neighbourIndexWrapping(0, -1, g))
+        assertEquals(1, GuideStripes.neighbourIndexWrapping(0, 1, g))
+    }
+
+    @Test fun theWrappingStepSkipsUnnamedRunsAndStaysPutOnOneBundle() {
+        val g = groups(listOf(null, "A", null, "B", null))
+        assertEquals(1, GuideStripes.neighbourIndexWrapping(3, 1, g))
+        assertEquals(3, GuideStripes.neighbourIndexWrapping(1, -1, g))
+        assertNull(GuideStripes.neighbourIndexWrapping(1, 1, groups(listOf(null, "A", null))))
+        assertNull(GuideStripes.neighbourIndexWrapping(0, 1, emptyList()))
+    }
+
     @Test fun anUnnamedRunIsSteppedOver() {
         val g = groups(listOf("A", null, "B", null))
         assertEquals(2, GuideStripes.neighbourIndex(0, 1, g)); assertEquals(0, GuideStripes.neighbourIndex(2, -1, g))
