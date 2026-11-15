@@ -471,23 +471,27 @@ private fun Tuner(
 /** TunerView's NavBar: the logo, and SETTINGS, which Up from channel one reaches. */
 @Composable
 private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
+    // The Apple TV's TunerView NavBar: the wordmark 36 tall (about 272 wide, it is 7.5 times as wide as tall), and
+    // SETTINGS as the pill every selectable thing is: 29 pt, 22 across and 6 up and down, the shared row surface and
+    // selected state (3 pt cyan outline, glow, 3% lift).
     var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(u(40))
     Row(
         Modifier.width(u(panelWidth)).height(u(140)).padding(start = u(40), end = u(40), top = u(40)),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
             painterResource(R.drawable.wordmark),
             contentDescription = "Nostalgex",
-            modifier = Modifier.height(u(80)).width(u(600)),
+            modifier = Modifier.height(u(36)).width(u(272)),
             alignment = Alignment.CenterStart,
         )
         Spacer(Modifier.weight(1f))
-        Text(
-            "SETTINGS",
-            style = font(DMMonoMedium, 24, if (focused) Yellow else Color.White.copy(alpha = 0.5f)),
-            modifier = Modifier
-                .padding(top = u(16))
+        Box(
+            Modifier
+                .zIndex(if (focused) 1f else 0f)
+                .graphicsLayer { val k = if (focused) DesignTokens.Row.LIFT else 1f; scaleX = k; scaleY = k }
+                .then(if (focused) Modifier.cyanGlow() else Modifier)
                 .onFocusChanged { focused = it.isFocused }
                 .focusable()
                 .onKeyEvent { e ->
@@ -499,8 +503,13 @@ private fun NavBar(panelWidth: Float, onSettings: () -> Unit) {
                         else -> false
                     }
                 }
-                .padding(horizontal = u(16), vertical = u(12)),
-        )
+                .clip(shape)
+                .background(if (focused) Tokens.SelectedRow else Tokens.Row)
+                .border(u(if (focused) DesignTokens.Row.SELECTED_OUTLINE.toFloat() else DesignTokens.Row.RESTING_OUTLINE), if (focused) Tokens.Cyan else Tokens.RestingOutline, shape)
+                .padding(horizontal = u(22), vertical = u(6)),
+        ) {
+            Text("SETTINGS", style = font(DMMonoMedium, DesignTokens.Size.BODY, Tokens.Text), maxLines = 1)
+        }
     }
 }
 

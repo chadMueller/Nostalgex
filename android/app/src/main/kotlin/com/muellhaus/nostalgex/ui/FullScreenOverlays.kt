@@ -177,6 +177,7 @@ internal enum class PanelPicker(val title: String) {
     PLAYBACK_INFORMATION("PLAYBACK INFORMATION"),
     SUBTITLE_LANGUAGE("SUBTITLE LANGUAGE"),
     AUDIO_LANGUAGE("AUDIO LANGUAGE"),
+    SLEEP_TIMER("SLEEP TIMER"),
 }
 
 /**
@@ -244,7 +245,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                     // The language preferences only where their effect can be seen or heard.
                     if (model.hasSubtitleTracks) {
                         ControlRow(
-                            label = "SUBTITLE LANGUAGE", value = LanguageChoice.shortLabel(model.subtitleLanguage), color = color, active = false, disabled = false,
+                            label = "SUBTITLE LANGUAGE", value = LanguageChoice.shortLabel(model.subtitleLanguage), chevron = true, color = color, active = false, disabled = false,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.SUBTITLE_LANGUAGE)),
                         ) { onPicker(PanelPicker.SUBTITLE_LANGUAGE) }
                         ControlRow(
@@ -264,7 +265,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                             }
                         }
                         ControlRow(
-                            label = "AUDIO LANGUAGE", value = LanguageChoice.shortLabel(model.audioLanguage), color = color, active = false, disabled = false,
+                            label = "AUDIO LANGUAGE", value = LanguageChoice.shortLabel(model.audioLanguage), chevron = true, color = color, active = false, disabled = false,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.AUDIO_LANGUAGE)),
                         ) { onPicker(PanelPicker.AUDIO_LANGUAGE) }
                     }
@@ -276,28 +277,23 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                     // Shown for every program: nothing says whether this one is transcoded, and the
                     // note says the part that matters.
                     ControlRow(
-                        label = "STREAM QUALITY", value = model.streamQuality.displayName.uppercase(), color = color, active = false, disabled = false,
+                        label = "STREAM QUALITY", value = model.streamQuality.displayName.uppercase(), chevron = true, color = color, active = false, disabled = false,
                         note = "Takes effect on the next program.",
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.STREAM_QUALITY)),
                     ) { onPicker(PanelPicker.STREAM_QUALITY) }
-                    ControlHeader("SLEEP TIMER")
+                    // One row that reads OFF, or the countdown in yellow while one runs, so OFF can never look
+                    // like ON; select opens the list (the Apple TV's collapsed SLEEP TIMER row).
                     val armed = model.sleepEndMs
-                    ControlRow(label = "OFF", value = if (armed == null) "ACTIVE" else null, color = color, active = armed == null, disabled = false) {
-                        model.cancelSleepTimer()
-                    }
-                    for (minutes in offeredSleepMinutes(model.sleepMinutes)) {
-                        val selected = armed != null && model.sleepMinutes == minutes
-                        val remaining = if (armed != null && selected) maxOf(0.0, armed / 1000.0 - now) else 0.0
-                        ControlRow(
-                            label = sleepLabel(minutes),
-                            value = if (selected) countdownLabel(remaining) else null,
-                            color = color,
-                            active = selected,
-                            disabled = false,
-                        ) { model.startSleepTimer(minutes) }
-                    }
                     ControlRow(
-                        label = "PLAYBACK INFORMATION", value = "VIEW", color = color, active = false, disabled = false,
+                        label = "SLEEP TIMER",
+                        value = if (armed == null) "OFF" else countdownLabel(maxOf(0.0, armed / 1000.0 - now)),
+                        valueColor = if (armed == null) null else Tokens.Yellow,
+                        chevron = true, color = color, active = armed != null, disabled = false,
+                        note = "Stops playback after the time you pick. A still-watching prompt comes first.",
+                        modifier = Modifier.focusRequester(owners.getValue(PanelPicker.SLEEP_TIMER)),
+                    ) { onPicker(PanelPicker.SLEEP_TIMER) }
+                    ControlRow(
+                        label = "PLAYBACK INFORMATION", value = "VIEW", chevron = true, color = color, active = false, disabled = false,
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.PLAYBACK_INFORMATION)),
                     ) { onPicker(PanelPicker.PLAYBACK_INFORMATION) }
                 }
@@ -373,6 +369,7 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                 PanelPicker.STREAM_QUALITY -> "Lower this when your connection is slow or shared. Takes effect on the next program."
                 PanelPicker.SUBTITLE_LANGUAGE -> "Choose which subtitle track to prefer when multiple are available."
                 PanelPicker.AUDIO_LANGUAGE -> "Choose which audio track to prefer when multiple are available."
+                PanelPicker.SLEEP_TIMER -> "Back returns to the panel. Pick OFF to cancel a running timer."
             },
             style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
             modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
@@ -399,6 +396,23 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                         label = q.displayName.uppercase(), value = if (on) "ACTIVE" else null, color = color, active = on, disabled = false, note = q.detail,
                         modifier = if (on) Modifier.focusRequester(selected) else Modifier,
                     ) { model.chooseStreamQuality(q); onDone() }
+                }
+            }
+            PanelPicker.SLEEP_TIMER -> Column(Modifier.width(u(560)), verticalArrangement = Arrangement.spacedBy(u(10))) {
+                val armed = model.sleepEndMs
+                val now = ticking()
+                ControlRow(
+                    label = "OFF", value = if (armed == null) "ACTIVE" else null, color = color, active = armed == null, disabled = false,
+                    modifier = if (armed == null) Modifier.focusRequester(selected) else Modifier,
+                ) { model.cancelSleepTimer(); onDone() }
+                for (minutes in offeredSleepMinutes(model.sleepMinutes)) {
+                    val on = armed != null && model.sleepMinutes == minutes
+                    ControlRow(
+                        label = sleepLabel(minutes),
+                        value = if (on) countdownLabel(maxOf(0.0, armed!! / 1000.0 - now)) else null,
+                        color = color, active = on, disabled = false,
+                        modifier = if (on) Modifier.focusRequester(selected) else Modifier,
+                    ) { model.startSleepTimer(minutes); onDone() }
                 }
             }
             PanelPicker.SUBTITLE_LANGUAGE, PanelPicker.AUDIO_LANGUAGE -> {
@@ -478,6 +492,10 @@ private fun ControlRow(
     modifier: Modifier = Modifier,
     focusable: Boolean = true,
     note: String? = null,
+    /** A row that opens a list shows a chevron after its value. */
+    chevron: Boolean = false,
+    /** The value's colour when it is not the active cyan: the running sleep timer's yellow. */
+    valueColor: Color? = null,
     onClick: () -> Unit = {},
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -505,7 +523,10 @@ private fun ControlRow(
             modifier = Modifier.weight(1f),
         )
         if (value != null) {
-            Text(value, style = font(DMMono, LocalGuideText.current.panelText, if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
+            Text(value, style = font(DMMono, LocalGuideText.current.panelText, valueColor ?: if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
+        }
+        if (chevron) {
+            Text("\u203A", style = font(DMMonoMedium, LocalGuideText.current.panelText, if (focused) Tokens.Cyan else Tokens.Text2), modifier = Modifier.padding(start = u(10)))
         }
     }
 }
