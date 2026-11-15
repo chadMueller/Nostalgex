@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Android: the guide's bundle stripe, the info panel's new order, the strip closes on Down)
+
+**State.** Branch `android/guide-stripes` off main `106e8dda`. Local commits, not pushed, not in a build.
+
+**Why.** Chad asked for the Apple TV's Now Playing updates, the bundle strip and key parity on Android.
+
+**Changed.**
+- **Bundle stripe** (`GuideStripes.kt` in the engine, `GuideStripeViews.kt`, the guide in `WatchScreen.kt`): a port of `GuideStripes.swift` and its keys. A 28 point stripe in every row's left slot (the programs grid and the now line give up those 28 points), the bundle name written up it and kept in the part of the bundle that is on screen. Left from the first half hour enters the stripe when there is a bundle to move between (otherwise it opens the bundle list, as before); Up and Down jump to the previous or next bundle's first channel, with no wrap; Right goes back to the row left, or the first channel of the bundle jumped to; Left again or Select opens the bundle list. FRANCHISES is one bundle (`Lineup.stripeMembership`, as `jumpTargets`). `GuideStripesTest` (31 tests) is the Apple TV's tests, with the 14 shipped names pinned to the same colour index.
+- **Info panel order** (`InfoPanelLayout.kt`, 6 tests): channel line, title, artist, genres, episode line, divider, badges, description (always two lines of room), progress bar, UP NEXT; the gaps are 10 and 6 and the top 4, as Apple TV 106e8dda changed them. Music videos get artist and genres, and UP NEXT reads `musicDisplayLine`.
+- **Mini channel strip**: Down closes it, the reverse of the Up that opened it (the Apple TV's `MiniChannelStrip`). The panel already closed with Up and opened with Down.
+
+**Seen** on the Android TV emulator (nx_tv_1080p, 1920 x 1080, demo mode, debug build): `android/emulator-2026-11-14/` in nostalgex-internal. Left enters the stripe (ring and lift), Right returns to the row, Left twice opens BUNDLES, Up opens the strip and Down closes it, Down opens Now Playing and Up closes it. 401 engine tests pass, `:app:assembleDebug` builds.
+
+**Half-done.** Demo mode has one bundle, so Up and Down between bundles were not seen on a device, only in the unit tests. The info panel was not put beside the Apple TV's screenshots, and nothing was run on the real TV. The seasonal invite row has no stripe cell. A preview programme in the info panel (I-089) is not ported.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

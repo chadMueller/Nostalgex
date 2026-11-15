@@ -369,7 +369,7 @@ private fun FullScreen(
                 model.tuneFromViewer(picked)
                 onOverlay(Overlay.NONE)
                 onFlash()
-            })
+            }, onDismiss = { onOverlay(Overlay.NONE) })
             Overlay.PANEL -> if (ch != null && item != null) NowPlayingPanel(model, ch, item, picker, onPicker, onClose = { onOverlay(Overlay.NONE) })
             Overlay.NONE -> {}
         }

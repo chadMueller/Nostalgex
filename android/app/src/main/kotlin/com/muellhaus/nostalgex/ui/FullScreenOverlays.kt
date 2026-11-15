@@ -78,9 +78,9 @@ private fun Modifier.onSelect(action: () -> Unit) = onKeyEvent { e ->
 
 // ── The mini channel strip ───────────────────────────────────────────────
 
-/** Every channel as a card along the bottom, opened with Up; focus starts on the one on. */
+/** Every channel as a card along the bottom, opened with Up and closed with Down; focus starts on the one on. */
 @Composable
-internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit) {
+internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit, onDismiss: () -> Unit = {}) {
     val lineup = model.lineup ?: return
     val channels = lineup.channels
     val current = model.channel?.id
@@ -89,7 +89,17 @@ internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit)
     var focusedId by remember { mutableStateOf(current) }
     val first = remember { FocusRequester() }
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+    Box(
+        Modifier.fillMaxSize()
+            // The reverse of what opened it: the strip comes up with Up, so Down closes it (the Apple TV's
+            // MiniChannelStrip). Left and Right are not handled here, so they keep moving along the strip.
+            .onKeyEvent { e ->
+                if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_DOWN) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyDown) onDismiss()
+                true
+            },
+        contentAlignment = Alignment.BottomStart,
+    ) {
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(u(12)),
