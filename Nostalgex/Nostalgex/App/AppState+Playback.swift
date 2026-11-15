@@ -1387,11 +1387,14 @@ extension AppState {
                 // Same clock on both sides, so it holds whether the server rebased the HLS
                 // timeline to zero or kept source timestamps.
                 let remaining: Double? = duration.isNumeric ? duration.seconds - playerItem.currentTime().seconds : nil
-                // Inside the end window a still playhead is the end of the file (Emby's playlist runs
-                // up to a segment past it), which the end backstop handles; a 1080p retry there
-                // would only replay the same missing seconds.
-                if PlaybackEndRule.isInEndWindow(playhead: playerItem.currentTime().seconds, baseOffset: self.hlsBaseOffset,
-                                                 runtime: PlaybackEndRule.runtime(for: self.currentItem)) { return }
+                // Inside the end window, with the playlist claiming more than the file has left
+                // (Emby's runs up to a segment past it), a still playhead is the end of the file,
+                // which the end backstop handles; a 1080p retry there would only replay the same
+                // missing seconds. With an honest playlist a stall there is a real one, as before.
+                if PlaybackEndRule.stillPlayheadIsTheEnd(playhead: playerItem.currentTime().seconds,
+                                                         playlistDuration: playerItem.duration.isNumeric ? playerItem.duration.seconds : nil,
+                                                         baseOffset: self.hlsBaseOffset,
+                                                         runtime: PlaybackEndRule.runtime(for: self.currentItem)) { return }
                 guard let verdict = monitor.observe(playhead: playerItem.currentTime().seconds, wall: Date().timeIntervalSinceReferenceDate,
                                                     paused: paused, remaining: remaining) else { return }
                 guard case .starving(let stalls, let longest) = verdict else { return }
@@ -1579,10 +1582,10 @@ extension AppState {
                 let detail: String
                 switch verdict {
                 case .parkedAtPlaylistEnd(let left):
-                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" parked \(String(format: "%.1f", left))s from end, no end-of-item notification — advancing")
+                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" parked \(String(format: "%.1f", left))s from end, no end-of-item notification, advancing")
                     detail = String(format: "parked %.1fs from end, rate 0, item duration %.0fs, playhead %.0fs, offset base %.0fs", left, total ?? 0, current, self.hlsBaseOffset)
                 case .stalledAtRealEnd(let left):
-                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" still for \(Int(PlaybackEndRule.stallSeconds))s, \(String(format: "%.1f", left))s from its real end (playlist \(String(format: "%.1f", (total ?? current) - current))s) — advancing")
+                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" still for \(Int(PlaybackEndRule.stallSeconds))s, \(String(format: "%.1f", left))s from its real end (playlist \(String(format: "%.1f", (total ?? current) - current))s), advancing")
                     detail = String(format: "still %.0fs at %.1fs from the real end, rate %.0f, playlist %.0fs, playhead %.1fs, offset base %.0fs", PlaybackEndRule.stallSeconds, left, player.rate, total ?? 0, current, self.hlsBaseOffset)
                 }
                 PlaybackDiagnostics.record(outcome: "end-of-item fallback", title: title, detail: detail)
@@ -1612,7 +1615,7 @@ extension AppState {
         let runtime = PlaybackEndRule.runtime(for: currentItem)
         guard current > 0.5, PlaybackEndRule.isInEndWindow(playhead: current, baseOffset: hlsBaseOffset, runtime: runtime) else { return false }
         let left = PlaybackEndRule.secondsToRealEnd(playhead: current, baseOffset: hlsBaseOffset, runtime: runtime) ?? 0
-        print("[Plex90] gen=\(generation) | END WINDOW: \"\(title)\" \(signal) \(String(format: "%.1f", left))s from its real end — treating it as the end")
+        print("[Plex90] gen=\(generation) | END WINDOW: \"\(title)\" \(signal) \(String(format: "%.1f", left))s from its real end, treating it as the end")
         PlaybackDiagnostics.record(outcome: "end-of-item fallback", title: title,
                                    detail: String(format: "%@ at %.1fs from the real end, playhead %.1fs, offset base %.0fs: %@", signal, left, current, hlsBaseOffset,
                                                   PlaybackDiagnostics.redactSensitiveText(playerItem.error?.localizedDescription ?? "no error")))

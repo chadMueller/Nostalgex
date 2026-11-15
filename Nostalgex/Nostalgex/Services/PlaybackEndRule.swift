@@ -27,16 +27,26 @@ import Foundation
 /// and the rate at 0) caught none of these, the starvation monitor ignores a paused player,
 /// and nothing listened for the late failure: the channel sat on the last frame.
 ///
-/// The rule: inside `windowSeconds` of the programme's real runtime (the server's own
-/// runtime, not the playlist's), a playhead that has not moved for `stallSeconds`, or any
-/// failure of the item, is the end of the programme. Outside the window nothing changes:
-/// a stall mid-file is still the starvation ladder's, and a failure still retries.
+/// The rule: within `windowSeconds` either side of the programme's real runtime (the
+/// server's own runtime, not the playlist's), any failure of the item is the end of the
+/// programme; so is a playhead still for `stallSeconds`, but only while the playlist claims
+/// at least `overrunSeconds` more than the file has left (`playlistOverruns`). Every Emby
+/// case measured overran by 3 to 6 s. An honest playlist (Plex, Jellyfin) does not, so a
+/// stall there is a real one, a Wi-Fi hiccup, and keeps waiting and recovering as before
+/// instead of losing the last seconds of the programme. Outside the window nothing
+/// changes: a stall mid-file is still the starvation ladder's, and a failure still retries.
+/// The window closes on the far side too: a runtime shorter than the version on the server
+/// (an extended cut under the theatrical runtime) would otherwise hold it open for the rest
+/// of the film.
 enum PlaybackEndRule {
     /// One copied segment at the common 10.4 s keyframe interval, and slack. 8 s (one 6 s
     /// segment and 2 s) was the first figure and missed the Apple TV's own 8.24 s loss.
     static let windowSeconds: Double = 15
     /// How long the playhead must sit still inside the window.
     static let stallSeconds: Double = 2
+    /// How much more the playlist must claim than the file has left for a stall to be the
+    /// end. Measured Emby overruns: 5.6, 6.0, 3.0 and 6.0 s.
+    static let overrunSeconds: Double = 1
     /// Progress below this between samples is "did not move" (the starvation monitor's figure).
     static let minimumProgressSeconds: Double = PlaybackStarvation.minimumProgressSeconds
     /// The older backstop, which still applies on its own: this close to the playlist's end
@@ -62,10 +72,27 @@ enum PlaybackEndRule {
         return runtime - (playhead + baseOffset)
     }
 
-    /// Inside the end window: a failure here ends the programme, and a stall here is not starvation.
+    /// Inside the end window, `windowSeconds` either side of the real end: a failure here
+    /// ends the programme.
     static func isInEndWindow(playhead: Double, baseOffset: Double, runtime: Double?) -> Bool {
         guard let left = secondsToRealEnd(playhead: playhead, baseOffset: baseOffset, runtime: runtime) else { return false }
-        return left <= windowSeconds
+        return left <= windowSeconds && left >= -windowSeconds
+    }
+
+    /// The playlist claims at least `overrunSeconds` more than the file has left: Emby's
+    /// rounded-up last segment. Both sides on their own clocks (the playlist's on the item's,
+    /// the runtime's on the file's), as everywhere here.
+    static func playlistOverruns(playhead: Double, playlistDuration: Double?, baseOffset: Double, runtime: Double?) -> Bool {
+        guard let total = playlistDuration, total.isFinite, total > 0,
+              let realLeft = secondsToRealEnd(playhead: playhead, baseOffset: baseOffset, runtime: runtime) else { return false }
+        return (total - playhead) - realLeft >= overrunSeconds
+    }
+
+    /// A still playhead here is the end of the file, not starvation: inside the window and
+    /// the playlist overrunning. The starvation monitor stands down; the end backstop takes it.
+    static func stillPlayheadIsTheEnd(playhead: Double, playlistDuration: Double?, baseOffset: Double, runtime: Double?) -> Bool {
+        isInEndWindow(playhead: playhead, baseOffset: baseOffset, runtime: runtime)
+            && playlistOverruns(playhead: playhead, playlistDuration: playlistDuration, baseOffset: baseOffset, runtime: runtime)
     }
 }
 
@@ -74,7 +101,8 @@ struct PlaybackEndWatch {
     enum Verdict: Equatable {
         /// Near the playlist's end with the rate at 0 (the older backstop).
         case parkedAtPlaylistEnd(secondsLeft: Double)
-        /// Inside the end window of the real runtime with the playhead still for `stallSeconds`.
+        /// Inside the end window of the real runtime, the playlist overrunning, and the playhead
+        /// still for `stallSeconds`.
         case stalledAtRealEnd(secondsToRealEnd: Double)
     }
 
@@ -104,8 +132,9 @@ struct PlaybackEndWatch {
             let left = total - playhead
             if left <= PlaybackEndRule.playlistTailSeconds { return .parkedAtPlaylistEnd(secondsLeft: left) }
         }
-        guard let left = PlaybackEndRule.secondsToRealEnd(playhead: playhead, baseOffset: baseOffset, runtime: runtime),
-              left <= PlaybackEndRule.windowSeconds,
+        guard PlaybackEndRule.stillPlayheadIsTheEnd(playhead: playhead, playlistDuration: playlistDuration,
+                                                    baseOffset: baseOffset, runtime: runtime),
+              let left = PlaybackEndRule.secondsToRealEnd(playhead: playhead, baseOffset: baseOffset, runtime: runtime),
               let since = stillSince, wall - since >= PlaybackEndRule.stallSeconds else { return nil }
         return .stalledAtRealEnd(secondsToRealEnd: left)
     }
