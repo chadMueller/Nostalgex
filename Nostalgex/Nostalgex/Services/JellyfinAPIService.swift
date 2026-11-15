@@ -562,19 +562,15 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         // per-section. Every movie section therefore receives the same global list and the
         // caller dedupes by id — the alternative, guessing which library a BoxSet "belongs"
         // to from its members, would drop any collection that spans two libraries.
-        let queryItems: [URLQueryItem] = [
-            .init(name: "userId", value: userId),
-            .init(name: "IncludeItemTypes", value: "BoxSet"),
-            .init(name: "Recursive", value: "true"),
-            .init(name: "Fields", value: "ChildCount"),
-            .init(name: "SortBy", value: "SortName"),
-        ]
-        guard let req = request(path: "/Items", queryItems: queryItems) else {
-            throw PlexAPIService.APIError.invalidResponse
+        let items: [JellyfinItem] = try await MediaBrowserPaging.readAll(pageSize: MediaBrowserPaging.collectionPageSize) { start, limit in
+            guard let req = request(path: "/Items", queryItems: MediaBrowserPaging.collectionQuery(userId: userId, start: start, limit: limit)) else {
+                throw PlexAPIService.APIError.invalidResponse
+            }
+            let (data, response) = try await Self.session.data(for: req)
+            let page = try Self.decode(ItemsResponse.self, data: data, response: response)
+            return (page.Items ?? [], page.TotalRecordCount)
         }
-        let (data, response) = try await Self.session.data(for: req)
-        let page = try Self.decode(ItemsResponse.self, data: data, response: response)
-        let boxSets = (page.Items ?? []).map {
+        let boxSets = items.map {
             PlexCollection(
                 ratingKey: $0.Id,
                 title: $0.Name ?? "Untitled",
@@ -986,6 +982,64 @@ private struct QuickConnectResult: Decodable {
     let Code: String?
     let Secret: String?
     let Authenticated: Bool?
+}
+
+/// The collection list (BoxSets) in pages (#318). It was one request with no StartIndex or Limit, and a server with an
+/// auto-collections plugin can hold thousands; the web tuner reads 500 at a time. Pages until the server's
+/// TotalRecordCount is reached, or a short or empty page says there are no more. Jellyfin and Emby both use it.
+enum MediaBrowserPaging {
+    static let collectionPageSize = 500
+
+    /// Reads every page through `fetch(startIndex, limit)`, which returns that page's items and the server's total.
+    static func readAll<T>(pageSize: Int, maxPages: Int = 1000,
+                           fetch: (_ start: Int, _ limit: Int) async throws -> (items: [T], total: Int?)) async throws -> [T] {
+        var collected: [T] = []
+        for _ in 0..<maxPages {
+            let page = try await fetch(collected.count, pageSize)
+            collected.append(contentsOf: page.items)
+            if page.items.isEmpty || page.items.count < pageSize { break }
+            if let total = page.total, collected.count >= total { break }
+            if Task.isCancelled { break }
+        }
+        return collected
+    }
+
+    /// Reads the first page, then the rest with up to `ahead` requests in flight, handed back in order. Not wired
+    /// into the library scan yet (#318): the gain depends on whether the server builds pages in parallel, which a
+    /// model can't say. `MediaBrowserPagingTests` measures it against a model server.
+    static func readAllAhead<T: Sendable>(pageSize: Int, ahead: Int,
+                                          fetch: @escaping @Sendable (_ start: Int, _ limit: Int) async throws -> (items: [T], total: Int?)) async throws -> [T] {
+        let first = try await fetch(0, pageSize)
+        guard let total = first.total, first.items.count == pageSize, total > pageSize else { return first.items }
+        let starts = Array(stride(from: pageSize, to: total, by: pageSize))
+        var pages = [Int: [T]]()
+        try await withThrowingTaskGroup(of: (Int, [T]).self) { group in
+            var next = 0
+            func launch() {
+                guard next < starts.count else { return }
+                let start = starts[next]; next += 1
+                group.addTask { (start, try await fetch(start, pageSize).items) }
+            }
+            for _ in 0..<max(1, ahead) { launch() }
+            for try await (start, items) in group {
+                pages[start] = items
+                launch()
+            }
+        }
+        return first.items + starts.flatMap { pages[$0] ?? [] }
+    }
+
+    static func collectionQuery(userId: String, start: Int, limit: Int) -> [URLQueryItem] {
+        [
+            .init(name: "userId", value: userId),
+            .init(name: "IncludeItemTypes", value: "BoxSet"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Fields", value: "ChildCount"),
+            .init(name: "SortBy", value: "SortName"),
+            .init(name: "StartIndex", value: "\(start)"),
+            .init(name: "Limit", value: "\(limit)"),
+        ]
+    }
 }
 
 private struct ItemsResponse: Decodable {
