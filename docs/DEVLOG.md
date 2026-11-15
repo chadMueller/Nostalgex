@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-14 (Android: a file plays to its end, the schedule gives each programme its real runtime; #315)
+
+**State.** Branch `android/guide-stripes`, a local commit on top of the stripe work. Not pushed, not in a build. It depends on the Apple TV's golden at `b282b946` (`appletv/315-play-to-end`): `scripts/schedule-parity-golden.json` from that commit is needed for `ScheduleParityGoldenTest` to pass, and is not committed here. If the Apple TV's reviewer changes day packing, the golden moves and this is re-run against it.
+
+**Why.** Chad: "the file should play till the end always." The servers floor a runtime to whole minutes, which left a file 0 to 59 s past its slot, and the guide cut it at the boundary.
+
+**Changed.**
+- `MediaItem.exactDurationSeconds` and `slotSeconds` (the Apple TV's `PlexMediaItem.slotSeconds`): the real runtime rounded up to a second, or the floored minutes when there is none or it is 61 s or more from them. Plex `duration` (ms), Jellyfin and Emby `RunTimeTicks` fill it (`PlexLibrary.kt`, `MediaBrowserLibrary.kt`). `LibraryStore.FORMAT` is 9, so an older saved copy is read again.
+- `DailyManifest`: every programme airs whole. A slot is `slotSeconds`. The day starts when the programme running over midnight from yesterday ends (`runsOverUntil`, `packDay`), the filler loop no longer cuts a block at midnight or starts the first one part way in, and `blocksInRange` includes yesterday's still-airing block. The filler cycle offset and the promotion offset stay in whole minutes, as on the Apple TV. `SCHEMA_VERSION` is 4 (a stored day at 3 has minute slots and is packed again once), and the pool fingerprint includes each slot, so a stored day packed before the runtimes arrived is packed again when they do.
+- `NaturalEnd.pick`: the next programme starts at 0, and joins where the clock is only once the guide is 10 s or more into it (`CATCH_UP_SECONDS`). This replaces #293's fix, which joined the clock whenever the guide had moved on.
+- The sites that read `duration * 60` for a slot read `slotSeconds`: the guide panel, the full-screen OSD, the progress in `DailyManifest.liveElapsedSeconds`, `WatchReporter` and the demo block end.
+- Midnight purge: Android has nothing to fix. `clearManifests` has no caller and `pruneManifests` keeps yesterday's stored day, so a library refresh just after midnight cannot delete the run-over block.
+
+**Checked.** 403 engine tests pass, including `ScheduleParityGoldenTest` against the Apple TV's new golden (channel 12's five slot cases), `SlotSecondsTest` (the same five cases and the server conversions) and `NaturalEndTest`. `:app:assembleDebug` builds.
+
+**Half-done.** Not seen on a device or the emulator: demo mode has no real files to run to their end, so the effect on a real library is untested. The 10 s catch-up is the Apple TV's number from its own sweep; Android's player load time is not measured.
+
 ## 2026-11-14 (Android: the guide's bundle stripe, the info panel's new order, the strip closes on Down)
 
 **State.** Branch `android/guide-stripes` off main `106e8dda`. Local commits, not pushed, not in a build.

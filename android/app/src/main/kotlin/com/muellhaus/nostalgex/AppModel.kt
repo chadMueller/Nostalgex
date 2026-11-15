@@ -1817,7 +1817,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
             return
         }
-        if (demoMode) demoBlockEndSec = System.currentTimeMillis() / 1000.0 - pick.seekSeconds + pick.item.duration * 60L
+        if (demoMode) demoBlockEndSec = System.currentTimeMillis() / 1000.0 - pick.seekSeconds + pick.item.slotSeconds.toLong()
         watchReporter.begin(pick.item, pick.seekSeconds, reportServer(pick.item))
         playback.play(pick.item, pick.seekSeconds)
     }

@@ -409,8 +409,8 @@ private fun ChannelOsd(ch: GuideChannel, item: MediaItem, schedule: Schedule?, n
             Text(ch.name, style = font(DMMono, 24, Color.White.copy(alpha = 0.9f)))
             val np = schedule?.nowPlaying?.takeIf { it.item.ratingKey == item.ratingKey }
             val label = if (np != null) {
-                "${formatTime(DailyManifest.liveElapsedSeconds(schedule, now) ?: 0)} / ${formatTime(maxOf(1L, item.duration * 60L))}"
-            } else formatTime(item.duration * 60L)
+                "${formatTime(DailyManifest.liveElapsedSeconds(schedule, now) ?: 0)} / ${formatTime(maxOf(1L, item.slotSeconds.toLong()))}"
+            } else formatTime(item.slotSeconds.toLong())
             Text(label, style = font(DMMono, 18, Color.Gray))
         }
     }
@@ -569,7 +569,7 @@ private fun InfoPanel(ch: GuideChannel, schedule: Schedule, playingItem: MediaIt
                 }
             InfoPanelSection.PROGRESS -> {
                 // The progress bar and time follow the wall clock (schedule.livePlayback).
-                val total = maxOf(1L, item.duration * 60L)
+                val total = maxOf(1L, item.slotSeconds.toLong())
                 val elapsed = DailyManifest.liveElapsedSeconds(schedule, now) ?: schedule.elapsedSeconds
                 val progress = (elapsed.toFloat() / total).coerceIn(0f, 1f)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10)), modifier = Modifier.padding(bottom = sectionGap)) {

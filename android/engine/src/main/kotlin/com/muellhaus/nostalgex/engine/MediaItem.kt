@@ -62,7 +62,29 @@ data class MediaItem(
     /** The picture's size, for the startup watchdog's 4K deadline (PlexMediaItem.videoWidth/videoHeight). */
     val videoWidth: Int? = null,
     val videoHeight: Int? = null,
-)
+    /**
+     * The file's real runtime in seconds (Plex `duration` in ms, Jellyfin and Emby `RunTimeTicks`), kept next to
+     * the floored minutes in [duration] so the schedule can give a programme its real length ([slotSeconds], #315).
+     * Null for a copy saved before one was kept.
+     */
+    val exactDurationSeconds: Double? = null,
+) {
+    /**
+     * How long the schedule gives this programme, in seconds: the file's real runtime rounded up to a whole
+     * second, so the slot and the file end together and nothing is cut at a boundary (#315). The servers floor a
+     * runtime to whole minutes, which left a file 0 to 59 s past its slot. An item with no real runtime, or a
+     * runtime that disagrees with [duration] by 61 s or more (a bad value), gets `duration` minutes, as every
+     * build up to release 6 did. The Apple TV's `PlexMediaItem.slotSeconds`.
+     */
+    val slotSeconds: Int
+        get() {
+            val exact = exactDurationSeconds
+            if (exact != null && exact.isFinite() && exact >= 1 && kotlin.math.abs(exact - duration * 60.0) < 61) {
+                return kotlin.math.ceil(exact).toInt()
+            }
+            return duration * 60
+        }
+}
 
 /**
  * TMDB and OMDb values, as MediaEnrichment on the Apple TV and the web tuner's record

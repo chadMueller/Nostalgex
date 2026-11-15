@@ -168,7 +168,8 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         if (extra != null && memo != null && memo.key == memoKey && memo.generation == lineupGeneration) {
             val prev = storedBlocks(serverKey, extra.channel.id, yesterdayKey)
             val packed = packDay(extra.pool, dayStartSec, dayNumber, extra.channel.id, prev.mapTo(HashSet()) { it.ratingKey },
-                extra.channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, memo.occupancy, extra.channel.gated)
+                extra.channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, memo.occupancy, extra.channel.gated,
+                prev.maxOfOrNull { it.endSec })
             saveManifest(serverKey, Manifest(SCHEMA_VERSION, extra.channel.id, dayKey, poolFingerprint(extra.pool), packed))
             return mapOf(extra.channel.id to packed)
         }
@@ -199,7 +200,8 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
             val channel = entry.channel
             val prev = yesterday.getValue(channel.id)
             val packed = packDay(entry.pool, dayStartSec, dayNumber, channel.id, prev.mapTo(HashSet()) { it.ratingKey },
-                channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, occupancy, channel.gated)
+                channel.isPremiereChannel, prev.lastOrNull()?.ratingKey, occupancy, channel.gated,
+                prev.maxOfOrNull { it.endSec })
             saveManifest(serverKey, Manifest(SCHEMA_VERSION, channel.id, dayKey, fp, packed))
             packedBy[channel.id] = packed
             if (entry !== extra) {
@@ -253,6 +255,8 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         yesterdayLastRatingKey: String?,
         occupancy: Occupancy? = null,
         gated: Boolean = false,
+        /** When the programme running over midnight from yesterday ends, if one is. */
+        runsOverUntil: Long? = null,
     ): List<StoredBlock> {
         val dayEndSec = dayStartSec + localDayLengthSec(dayStartSec)
         val totalPoolSec = pool.sumOf { it.duration.toLong() * 60 }
@@ -270,17 +274,19 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
             unplayedOrdered.add(unplayedOrdered.removeAt(0))
         }
         val blocks = ArrayList<StoredBlock>()
-        var t = dayStartSec
+        // The day starts when the programme running over midnight from yesterday ends: it plays to its own end
+        // (#315), so nothing of today's may be on air under it. Null, or before midnight, is the start of the day.
+        var t = max(dayStartSec, runsOverUntil ?: dayStartSec)
 
         // In the channel's order, except that a programme another channel has on in the same
         // slot waits for a later one (pickCandidate). It stays in the queue, so it still airs
         // today if the day has room. When nothing waiting fits, the filler loop below goes on.
         val queue = unplayedOrdered.filter { it.duration > 0 }.toMutableList()
         while (queue.isNotEmpty() && t < dayEndSec) {
-            val j = pickCandidate(queue, t, { queue[it].duration.toLong() * 60 }, occupancy, channelId, null, true, gated)
+            val j = pickCandidate(queue, t, { queue[it].slotSeconds.toLong() }, occupancy, channelId, null, true, gated)
             if (j < 0) break
             val item = queue.removeAt(j)
-            val dur = item.duration.toLong() * 60
+            val dur = item.slotSeconds.toLong()
             blocks.add(StoredBlock(item.ratingKey, t, t + dur))
             t += dur
         }
@@ -291,14 +297,14 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
             val goldenShift = floor(totalPoolSec * 0.6180339887).toLong()
             val offsetSec = (dayNumber * goldenShift) % totalPoolSec
 
+            // The cycle offset stays in whole minutes, as the Apple TV keeps it, so a day's start in the cycle does
+            // not move with a runtime arriving.
             var elapsed = 0L
             var cycleIndex = 0
-            var offsetInItem = offsetSec
             for (i in orderedFull.indices) {
                 val d = orderedFull[i].duration.toLong() * 60
                 if (elapsed + d > offsetSec) {
                     cycleIndex = i
-                    offsetInItem = offsetSec - elapsed
                     break
                 }
                 elapsed += d
@@ -309,26 +315,22 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
                 val lastPlayed = blocks.lastOrNull()?.ratingKey ?: yesterdayLastRatingKey
                 if (lastPlayed != null && orderedFull[cycleIndex].ratingKey == lastPlayed) {
                     cycleIndex = (cycleIndex + 1) % orderedFull.size
-                    offsetInItem = 0
                 }
             }
 
             // The loop as a queue from the cycle's start: what airs goes to the back, so with
-            // nothing on elsewhere this is the cycle in order. The first programme starts part
-            // way in (offsetInItem) only if it airs first; one picked ahead of it starts at 0.
+            // nothing on elsewhere this is the cycle in order. Every programme airs whole, from its start to its
+            // own end, including the one that runs past midnight and the first of the day (#315): the day's cut
+            // and a part-way start were cutting files short.
             val loop = (orderedFull.subList(cycleIndex, orderedFull.size) + orderedFull.subList(0, cycleIndex))
                 .filter { it.duration > 0 }.toMutableList()
-            var first = true
             while (t < dayEndSec && loop.isNotEmpty()) {
-                val remainingDay = dayEndSec - t
-                val isFirst = first
-                val playFor = { i: Int -> min(loop[i].duration.toLong() * 60 - (if (isFirst && i == 0) offsetInItem else 0L), remainingDay) }
+                val playFor = { i: Int -> loop[i].slotSeconds.toLong() }
                 val lastKey = blocks.lastOrNull()?.ratingKey ?: yesterdayLastRatingKey
                 val j = pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated)
                 val playSec = playFor(j)
                 val item = loop.removeAt(j)
                 loop.add(item)
-                first = false
                 blocks.add(StoredBlock(item.ratingKey, t, t + playSec))
                 t += playSec
             }
@@ -370,6 +372,12 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
     /** Every block of each local day from `fromSec`'s to `toSec`'s that overlaps [fromSec, toSec). */
     fun blocksInRange(channel: ScheduleChannel, pool: List<MediaItem>, fromSec: Long, toSec: Long, serverKey: String): List<Block> {
         val result = ArrayList<Block>()
+        // The programme running over midnight from yesterday is on air until it ends, and today's day starts after
+        // it (packDay's runsOverUntil): without it the guide would show today's first programme under a file that is
+        // still playing its last minutes. Yesterday's stored day only; one that was never packed has no such programme.
+        val valid = pool.filter { it.duration > 0 }
+        val yesterday = storedBlocks(serverKey, channel.id, previousLocalDayKey(fromSec * 1000)).filter { it.endSec > fromSec }
+        for (b in resolveBlocks(yesterday, valid)) if (b.endSec > fromSec && b.startSec < toSec) result.add(b)
         var cursor = startOfLocalDayMs(fromSec * 1000)
         val endDay = startOfLocalDayMs(toSec * 1000)
         while (cursor <= endDay) {
@@ -379,7 +387,8 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
             // The same clock time a day on, as calendar.date(byAdding: .day) and JS setDate.
             cursor = Instant.ofEpochMilli(cursor).atZone(zone).plusDays(1).toInstant().toEpochMilli()
         }
-        return result.sortedBy { it.startSec }
+        // A block read from two days (it ran over midnight) is one block.
+        return result.distinctBy { it.item.ratingKey to it.startSec }.sortedBy { it.startSec }
     }
 
     /**
@@ -493,8 +502,11 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         /**
          * 2: the schedule follows the Apple TV's. 3: the lineup's days are packed together, so
          * one title is never on two channels at once; a day stored before is packed again once.
+         * 4: a programme's slot is its real runtime in seconds, the day starts when the programme running over
+         * midnight from yesterday ends, and the filler loop no longer cuts or shortens a block at midnight
+         * (#315, the Apple TV's schema 3). A day stored at 3 has minute slots and is packed again once.
          */
-        private const val SCHEMA_VERSION = 3
+        private const val SCHEMA_VERSION = 4
 
         /** How far down its running order a channel looks for a programme no other channel has on. DailyManifestScheduler.lookahead. */
         const val LOOKAHEAD = 8
@@ -535,6 +547,12 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
 
         fun minutesFromPlexMs(ms: Long?): Int = if (ms != null && ms > 0) (ms / 60_000).toInt() else 0
 
+        /** A Plex runtime in seconds, kept next to the floored minutes (#315); null when the server gives none. */
+        fun secondsFromPlexMs(ms: Long?): Double? = if (ms != null && ms > 0) ms / 1000.0 else null
+
+        /** A Jellyfin or Emby runtime in seconds, from `RunTimeTicks` (100 ns); null when there is none. */
+        fun secondsFromTicks(ticks: Long?): Double? = if (ticks != null && ticks > 0) ticks / 10_000_000.0 else null
+
         fun minutesFromTicks(ticks: Long?): Int = if (ticks != null && ticks > 0) (ticks / 600_000_000).toInt() else 0
 
         /** 0 when it doesn't parse: an unreadable date reads as "not recent", never "added now". */
@@ -551,7 +569,7 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
         /** Seconds into what is on now, from the clock, capped at the programme's length. */
         fun liveElapsedSeconds(schedule: Schedule?, nowSec: Double): Long? {
             val np = schedule?.nowPlaying ?: return null
-            val total = max(1L, np.item.duration.toLong() * 60)
+            val total = max(1L, np.item.slotSeconds.toLong())
             return max(0L, min(total, (nowSec - np.startSec).toLong()))
         }
 
@@ -738,7 +756,9 @@ class DailyManifest(private val zone: ZoneId, private val store: ManifestStore) 
 
         /** Only decides whether a stored manifest is still valid; never feeds the order. */
         fun poolFingerprint(pool: List<MediaItem>): String {
-            val keys = pool.map { it.ratingKey }.sorted().joinToString(",")
+            // The slot is part of it: a stored day packed with minute slots is packed again once the real
+            // runtimes arrive (a library read after the first scan), as a stored day is for any other change.
+            val keys = pool.map { "${it.ratingKey}:${it.slotSeconds}" }.sorted().joinToString(",")
             var h = 0
             for (c in keys) h = (h shl 5) - h + c.code
             return h.toString()
