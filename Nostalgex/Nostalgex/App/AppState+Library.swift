@@ -473,12 +473,12 @@ extension AppState {
             isLibraryStale = scanWasAbandoned
             LibraryLoadProbe.mark("guideVisible")
 
-            // Library refresh: only purge yesterday's (and older) manifests. Today's
+            // Library refresh: only purge the manifests older than yesterday's. Today's
             // schedule is already self-invalidating via pool fingerprint inside
             // DailyManifestStore — leave it alone so a background refresh can't
-            // reshuffle the EPG the user is currently watching.
-            let todayKey = DailyManifestStore.localDayKey(for: Date())
-            DailyManifestStore.purgeDays(keeping: todayKey, credentialFingerprint: scheduleCredentialFingerprint)
+            // reshuffle the EPG the user is currently watching. Yesterday's stays too: the programme
+            // running over midnight is on air from it (#315).
+            DailyManifestStore.purgeStaleDays(credentialFingerprint: scheduleCredentialFingerprint)
 
             if isBackground {
                 libraryUpdateNotice = scanWasAbandoned ? "Lineup partly updated" : "Lineup updated"

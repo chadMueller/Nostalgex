@@ -181,7 +181,7 @@ enum DailyManifestScheduler {
         let key = memoKey(channelID: channel.id, dayKey: dayKey, pool: pool, credentialFingerprint: credentialFingerprint)
         if let hit = memoized(key) { return hit }
 
-        let poolFP = DailyManifestStore.poolFingerprint(ratingKeys: pool.map(\.id))
+        let poolFP = DailyManifestStore.poolFingerprint(items: pool)
         if let cached = DailyManifestStore.load(
             channelId: channel.id,
             dayKey: dayKey,
@@ -286,7 +286,7 @@ enum DailyManifestScheduler {
         var dayByChannel: [Int: [ManifestBlock]] = [:]
         var toPack: [(entry: LineupEntry, fingerprint: String)] = []
         for entry in all {
-            let fp = DailyManifestStore.poolFingerprint(ratingKeys: entry.pool.map(\.id))
+            let fp = DailyManifestStore.poolFingerprint(items: entry.pool)
             if let cached = DailyManifestStore.load(channelId: entry.channel.id, dayKey: dayKey,
                                                     credentialFingerprint: credentialFingerprint,
                                                     expectedPoolFingerprint: fp) {
@@ -349,6 +349,23 @@ enum DailyManifestScheduler {
         return dayByChannel
     }
 
+    /// Yesterday's stored blocks that run into today, resolved against the channel's pool, memoised like a day is: the
+    /// guide asks for a schedule on every body evaluation and this reads and decodes a file. Only yesterday's stored day;
+    /// one that was never packed has none. `purgeStaleDays` keeps the file; `invalidateMemo` drops this with the days.
+    private static func yesterdayRunOver(for channel: Channel, before from: Date, credentialFingerprint: String,
+                                         calendar: Calendar) -> [ManifestBlock] {
+        let yesterdayKey = DailyManifestStore.previousLocalDayKey(before: from, calendar: calendar)
+        let pool = channel.filteredPool()
+        let key = memoKey(channelID: channel.id, dayKey: "over-" + yesterdayKey, pool: pool, credentialFingerprint: credentialFingerprint)
+        if let hit = memoized(key) { return hit }
+        let startOfToday = Int(DailyManifestStore.startOfLocalDay(for: from, calendar: calendar).timeIntervalSince1970)
+        let rows = DailyManifestStore.storedBlocks(channelId: channel.id, dayKey: yesterdayKey,
+                                                   credentialFingerprint: credentialFingerprint).filter { $0.endUnix > startOfToday }
+        let resolved = rows.isEmpty ? [] : resolveBlocks(rows, pool: pool)
+        storeMemo(resolved, for: key)
+        return resolved
+    }
+
     static func blocksInRange(
         for channel: Channel,
         from: Date,
@@ -364,16 +381,9 @@ enum DailyManifestScheduler {
         // it (packDay's `runsOverUntil`): without it the guide would show today's first programme under a file that
         // is still playing its last minutes. Yesterday's stored day only; one that was never packed has no such
         // programme.
-        let fromUnix = Int(from.timeIntervalSince1970)
-        let yesterdayRows = DailyManifestStore.storedBlocks(
-            channelId: channel.id,
-            dayKey: DailyManifestStore.previousLocalDayKey(before: from, calendar: calendar),
-            credentialFingerprint: credentialFingerprint
-        ).filter { $0.endUnix > fromUnix }
-        if !yesterdayRows.isEmpty {
-            for block in resolveBlocks(yesterdayRows, pool: channel.filteredPool()) where block.endTime > from && block.startTime < to {
-                result.append(block)
-            }
+        for block in yesterdayRunOver(for: channel, before: from, credentialFingerprint: credentialFingerprint, calendar: calendar)
+        where block.endTime > from && block.startTime < to {
+            result.append(block)
         }
 
         while cursor <= endDay {

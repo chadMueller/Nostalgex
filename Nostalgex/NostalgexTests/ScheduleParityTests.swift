@@ -248,13 +248,15 @@ final class ScheduleParityTests: XCTestCase {
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, EmbyAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
         case ("jellyfin", "episode"), ("emby", "episode"):
-            // The episode loops in JellyfinAPIService/EmbyAPIService.fetchEpisodes, as they read them.
+            // The services' own episode parse (fetchEpisodes calls it per episode), so the golden reads what the loaders keep.
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
-            let minutes = JellyfinAPIService.minutes(fromTicks: raw.RunTimeTicks)
-            guard minutes > 0 else { return (raw.Id, nil) }
-            return (raw.Id, item(key: raw.Id, title: show["Name"] as? String ?? raw.SeriesName ?? "", type: .episode,
-                                 minutes: minutes, addedAt: JellyfinAPIService.unixSeconds(fromISO: raw.DateCreated),
-                                 exact: JellyfinAPIService.seconds(fromTicks: raw.RunTimeTicks)))
+            var showDict = show
+            if showDict["Id"] == nil { showDict["Id"] = "show" }
+            let showItem = try JSONDecoder().decode(JellyfinItem.self, from: JSONSerialization.data(withJSONObject: showDict))
+            let parsed = backend == "jellyfin"
+                ? JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseEpisodeItem(raw, show: showItem)
+                : EmbyAPIService(serverURL: "", accessToken: "", userId: "").parseEpisodeItem(raw, show: showItem)
+            return (raw.Id, parsed)
         default:
             throw NSError(domain: "parity", code: 2, userInfo: [NSLocalizedDescriptionKey: "unknown item \(backend) \(kind)"])
         }

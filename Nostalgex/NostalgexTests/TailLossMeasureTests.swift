@@ -7,7 +7,7 @@ import XCTest
 /// channels, and plays each programme the way the player does: a file lasts its real length (the server's runtime
 /// in seconds, 5 to 55 s past its floored minutes, plus 0 to 0.6 s the metadata does not say), the next file starts
 /// `loadSeconds` after the last ended, and the next programme is whatever `advanceToNextItem` picks at the moment a
-/// file ends. Per boundary it records the tail of a file that never played (`lost`), the seconds the player is
+/// file ends. Per boundary it records how much longer the file that just ended is than the slot the guide gave it (`overrun`: 0 or less means the guide never moved on before the file finished, so no tail is cut), the seconds the player is
 /// behind the guide when a programme starts (`lag`), the opening seconds a catch-up skipped (`head`), and every 15 s
 /// whether the Now Playing headline names the programme the guide has on air (`mismatch`). It prints `[TAILLOSS]`
 /// lines and asserts only what the code under test is meant to guarantee; see NaturalEndDriftTests.
@@ -87,14 +87,14 @@ final class TailLossMeasureTests: XCTestCase {
     }
 
     struct Run {
-        var advances = 0, cuts = 0
-        var lost: [Double] = []
+        var advances = 0
+        var overrun: [Double] = []
         var lag: [Double] = []
         var headSkipped: [Double] = []
         var samples = 0, mismatches = 0
     }
 
-    private func walk(_ ch: Channel, hours: Double, loadSeconds: Double, useTick: Bool) throws -> Run {
+    private func walk(_ ch: Channel, hours: Double, loadSeconds: Double) throws -> Run {
         var run = Run()
         let fp = state.scheduleCredentialFingerprint
         func guide(_ t: Date) -> ChannelSchedule? { ChannelScheduleBuilder.buildSchedule(for: ch, at: t, credentialFingerprint: fp) }
@@ -116,12 +116,14 @@ final class TailLossMeasureTests: XCTestCase {
         var playStart = clock.addingTimeInterval(-seek)
         var fileEnd = playStart.addingTimeInterval(Self.realLength(item))
         var lastSample = 0
+        // How long the guide gives the programme now playing. A file longer than this is one the guide moves on from
+        // before it finishes; that is what cut a tail. (Not how late the file ends: a file that starts late, after a load
+        // or a catch-up, ends late by as much, which is the lag, measured separately.)
+        func blockLength(_ e: ScheduleEntry?) -> Double { e.map { $0.endTime.timeIntervalSince($0.startTime) } ?? .infinity }
+        var slot = blockLength(guide(t)?.nowPlaying)
 
-        func started(from advanceAt: Date, previous: PlexMediaItem, playedSeconds: Double, natural: Bool) {
+        func started(from advanceAt: Date) {
             run.advances += 1
-            let lost = max(0, Self.realLength(previous) - playedSeconds)
-            run.lost.append(lost)
-            if lost > 0.5 { run.cuts += 1 }
             item = state.currentItem!
             seek = Double(state.playerSeekSeconds)
             run.headSkipped.append(seek)
@@ -130,6 +132,7 @@ final class TailLossMeasureTests: XCTestCase {
             if let np = guide(advanceAt)?.nowPlaying {
                 let start = np.item.id == item.id ? np.startTime : (guide(advanceAt)?.upNext?.startTime ?? np.startTime)
                 run.lag.append(playStart.timeIntervalSince(start))
+                slot = blockLength(np.item.id == item.id ? np : guide(advanceAt)?.upNext ?? np)
             }
         }
 
@@ -140,10 +143,11 @@ final class TailLossMeasureTests: XCTestCase {
             if fileEnd <= t {
                 clock = fileEnd
                 let gen = state.loadGeneration
-                let before = item
-                let played = Self.realLength(before) - 0 // a natural end plays all of it
+                // How much longer the file that just ended is than the slot the guide gave it: 0 or less means the guide
+                // never moved on before the file finished.
+                let ranPast = Self.realLength(item) - slot
                 state.handlePartEnded()
-                if state.loadGeneration != gen { started(from: clock, previous: before, playedSeconds: played, natural: true) } else { fileEnd = .distantFuture }
+                if state.loadGeneration != gen { run.overrun.append(ranPast); started(from: clock) } else { fileEnd = .distantFuture }
             }
             clock = t
             if step - lastSample >= 15, let live = guide(t)?.nowPlaying {
@@ -155,44 +159,74 @@ final class TailLossMeasureTests: XCTestCase {
         return run
     }
 
-    private func report(_ label: String, _ pool: Pool, loadSeconds: Double = 2, useTick: Bool = false) throws {
+    struct Summary {
+        var advances = 0, samples = 0, mismatches = 0, headSkips = 0
+        var overrunMax = -Double.infinity, lagMax = 0.0
+        var mismatchPercent: Double { Double(mismatches) * 100 / Double(max(1, samples)) }
+    }
+
+    @discardableResult
+    private func report(_ label: String, _ pool: Pool, loadSeconds: Double = 2) throws -> Summary {
         let lu = lineup(pool)
         state.allChannels = lu; state.channels = lu
         var all = Run()
         for ch in lu {
             DailyManifestScheduler.invalidateMemo()
-            let r = try walk(ch, hours: 6, loadSeconds: loadSeconds, useTick: useTick)
-            all.advances += r.advances; all.cuts += r.cuts; all.lost += r.lost; all.lag += r.lag
+            let r = try walk(ch, hours: 6, loadSeconds: loadSeconds)
+            all.advances += r.advances; all.overrun += r.overrun; all.lag += r.lag
             all.headSkipped += r.headSkipped; all.samples += r.samples; all.mismatches += r.mismatches
         }
         func f(_ v: Double) -> String { String(format: "%.1f", v) }
-        let n = Double(max(1, all.advances))
-        let lostSorted = all.lost.sorted()
-        let over60 = all.lost.filter { $0 > 60 }.count
         let headCuts = all.headSkipped.filter { $0 > 0 }
-        print("[TAILLOSS] \(label): advances=\(all.advances) tailLostMean=\(f(all.lost.reduce(0, +) / n))s tailLostMax=\(f(lostSorted.last ?? 0))s cutsOver0.5s=\(all.cuts) over60s=\(over60) mismatch=\(f(Double(all.mismatches) * 100 / Double(max(1, all.samples))))% (\(all.mismatches)/\(all.samples)) lagMean=\(f(all.lag.reduce(0, +) / Double(max(1, all.lag.count))))s lagMax=\(f(all.lag.max() ?? 0))s headSkips=\(headCuts.count) headSkippedTotal=\(f(headCuts.reduce(0, +)))s")
+        var out = Summary(advances: all.advances, samples: all.samples, mismatches: all.mismatches, headSkips: headCuts.count)
+        out.overrunMax = all.overrun.max() ?? 0
+        out.lagMax = all.lag.max() ?? 0
+        print("[TAILLOSS] \(label): advances=\(all.advances) fileLongerThanItsSlotMax=\(f(out.overrunMax))s mismatch=\(f(out.mismatchPercent))% (\(all.mismatches)/\(all.samples)) lagMean=\(f(all.lag.reduce(0, +) / Double(max(1, all.lag.count))))s lagMax=\(f(out.lagMax))s headSkips=\(headCuts.count) headSkippedTotal=\(f(headCuts.reduce(0, +)))s")
         XCTAssertGreaterThan(all.advances, 0)
+        return out
     }
 
-    func testDemoPoolsFillerLoop() throws { try report("demo pools (filler loop) load=2s", .demo) }
-    func testMusicSmallPools() throws { try report("music videos, small pools load=2s", .music) }
-    func testMusicBigPools() throws { try report("music videos, big pools (first pass) load=2s", .bigMusic) }
-    func testMusicBigPoolsNoLoadTime() throws { try report("music videos, big pools load=0s", .bigMusic, loadSeconds: 0) }
-    func testMusicBigPoolsWithoutCatchUp() throws {
-        AppState.naturalEndCatchUpSeconds = Int.max
-        defer { AppState.naturalEndCatchUpSeconds = 10 }
-        try report("music videos, big pools load=2s, NO catch-up", .bigMusic)
+    /// Nothing moves a file on before it ends (no programme ends in the guide before its file, but for the 0 to 0.6 s the
+    /// runtime does not say), so no tail is cut; and the headline stays within the catch-up of the guide.
+    private func assertPlaysThrough(_ s: Summary, _ label: String) {
+        XCTAssertLessThanOrEqual(s.overrunMax, 0.61, "\(label): a file was \(s.overrunMax) s longer than its slot, the guide moved on before it ended")
+        XCTAssertLessThan(s.mismatchPercent, 5, "\(label): Now Playing differs from the guide in \(s.mismatchPercent)% of samples")
+        XCTAssertLessThanOrEqual(s.lagMax, Double(AppState.naturalEndCatchUpSeconds) + 2 + 5, "\(label)")
     }
-    func testCatchUpThresholds() throws {
+
+    func testDemoPoolsFillerLoop() throws { assertPlaysThrough(try report("demo pools (filler loop) load=2s", .demo), "demo") }
+    func testMusicSmallPools() throws { assertPlaysThrough(try report("music videos, small pools load=2s", .music), "music small") }
+    func testMusicBigPools() throws { assertPlaysThrough(try report("music videos, big pools (first pass) load=2s", .bigMusic), "music big") }
+    func testMusicBigPoolsNoLoadTime() throws { assertPlaysThrough(try report("music videos, big pools load=0s", .bigMusic, loadSeconds: 0), "music big, no load") }
+
+    /// Without the catch-up the lag from load time grows for the whole run: the reason it exists.
+    func testWithoutTheCatchUpTheHeadlineFallsFarBehind() throws {
+        let saved = AppState.naturalEndCatchUpSeconds
+        AppState.naturalEndCatchUpSeconds = Int.max
+        defer { AppState.naturalEndCatchUpSeconds = saved }
+        let off = try report("music videos, big pools load=2s, NO catch-up", .bigMusic)
+        AppState.naturalEndCatchUpSeconds = saved
+        let on = try report("music videos, big pools load=2s, catch-up \(saved)s", .bigMusic)
+        XCTAssertGreaterThan(off.mismatchPercent, on.mismatchPercent * 3)
+        XCTAssertGreaterThan(off.lagMax, on.lagMax * 3)
+        XCTAssertEqual(off.headSkips, 0)
+        XCTAssertGreaterThan(on.headSkips, 0)
+    }
+
+    /// The threshold sweep behind `naturalEndCatchUpSeconds` (about 100 s): set TEST_RUNNER_NX_TAILLOSS_SWEEP=1 to run it. A
+    /// lower threshold skips the opening of more programmes and keeps the headline closer to the guide.
+    func testCatchUpThresholdSweep() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["NX_TAILLOSS_SWEEP"] != nil, "set TEST_RUNNER_NX_TAILLOSS_SWEEP=1 to run the sweep")
+        let saved = AppState.naturalEndCatchUpSeconds
+        defer { AppState.naturalEndCatchUpSeconds = saved }
+        var runs: [(Int, Summary)] = []
         for threshold in [5, 10, 15, 20, 30, 60] {
             AppState.naturalEndCatchUpSeconds = threshold
-            try report("music videos, big pools load=2s catch-up \(threshold)s", .bigMusic)
+            runs.append((threshold, try report("music videos, big pools load=2s catch-up \(threshold)s", .bigMusic)))
         }
-        AppState.naturalEndCatchUpSeconds = 10
-    }
-    func testDemoPoolsWithoutCatchUp() throws {
-        AppState.naturalEndCatchUpSeconds = Int.max
-        defer { AppState.naturalEndCatchUpSeconds = 10 }
-        try report("demo pools load=2s, NO catch-up", .demo)
+        for (a, b) in zip(runs, runs.dropFirst()) {
+            XCTAssertLessThanOrEqual(a.1.mismatchPercent, b.1.mismatchPercent, "\(a.0) s against \(b.0) s")
+            XCTAssertGreaterThanOrEqual(a.1.headSkips, b.1.headSkips, "\(a.0) s against \(b.0) s")
+        }
     }
 }

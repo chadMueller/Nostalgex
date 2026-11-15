@@ -319,6 +319,70 @@ final class NaturalEndDriftTests: XCTestCase {
         XCTAssertGreaterThan(checked, 0, "no channel without a conflict to check")
     }
 
+    // MARK: - The day around midnight, and what a library refresh does to it
+
+    /// A programme running over midnight is on air from yesterday's stored day. A library refresh purges old days, and
+    /// when it also purged yesterday's, a refresh just after midnight left Now Playing and Up Next with nothing on air for
+    /// every channel whose programme ran over (4 of 4 channels in the probe; on the filler loop it can be a whole film).
+    func testARefreshAfterMidnightKeepsTheProgrammeRunningOver() throws {
+        let lu = lineup(extra: Self.spread)
+        state.allChannels = lu; state.channels = lu
+        let midnight = Calendar.current.startOfDay(for: Self.base.addingTimeInterval(86400))
+        let justAfter = midnight.addingTimeInterval(1)
+        var checked = 0
+        for ch in lu {
+            DailyManifestScheduler.invalidateMemo()
+            _ = DailyManifestScheduler.blocksInRange(for: ch, from: Self.base, to: midnight.addingTimeInterval(3600), credentialFingerprint: fp)
+            guard let straddler = raw(ch, midnight.addingTimeInterval(-60))?.nowPlaying, straddler.endTime > justAfter else { continue }
+            checked += 1
+        }
+        XCTAssertGreaterThan(checked, 0)
+
+        // What the library refresh runs when it finishes.
+        DailyManifestStore.purgeStaleDays(now: justAfter, credentialFingerprint: fp)
+        for ch in lu {
+            guard let before = DailyManifestScheduler.blocksInRange(for: ch, from: Self.base, to: midnight.addingTimeInterval(-1), credentialFingerprint: fp)
+                .last, before.endTime > justAfter else { continue }
+            let guide = try XCTUnwrap(raw(ch, justAfter), "CH \(ch.number): no schedule at 00:00:01 after the refresh")
+            XCTAssertEqual(guide.nowPlaying?.item.id, before.item.id, "CH \(ch.number): the programme running over midnight is not on air")
+            XCTAssertNotNil(guide.upNext, "CH \(ch.number): no Up Next")
+        }
+        let yesterdayKey = DailyManifestStore.previousLocalDayKey(before: justAfter)
+        XCTAssertFalse(DailyManifestStore.storedBlocks(channelId: try XCTUnwrap(lu.first).id, dayKey: yesterdayKey, credentialFingerprint: fp).isEmpty,
+                       "yesterday's day is kept")
+    }
+
+    /// The first guide of a Jellyfin or Emby TV comes up from a snapshot read before runtimes were kept, so it packs minute
+    /// slots and saves them; the rescan then adds runtimes to the same items. The stored day has to be rebuilt with them
+    /// (the pool fingerprint carries each slot), or a file would run past its slot until midnight.
+    func testRuntimesArrivingAfterTheFirstPackRebuildTheStoredDay() throws {
+        let minutesOnly = DemoData.channels()
+        state.allChannels = minutesOnly; state.channels = minutesOnly
+        let ch = try XCTUnwrap(minutesOnly.first)
+        let from = Self.base, to = Self.base.addingTimeInterval(6 * 3600)
+        let first = DailyManifestScheduler.blocksInRange(for: ch, from: from, to: to, credentialFingerprint: fp)
+        XCTAssertTrue(first.allSatisfy { $0.durationSeconds == Double($0.item.duration * 60) }, "the first pack is minute slots")
+
+        // The rescan: same items, runtimes now on them; the library path then purges stale days and drops the memo.
+        let withRuntimes = lineup(extra: Self.spread)
+        state.allChannels = withRuntimes; state.channels = withRuntimes
+        DailyManifestStore.purgeStaleDays(now: Self.base, credentialFingerprint: fp)
+        let second = DailyManifestScheduler.blocksInRange(for: try XCTUnwrap(withRuntimes.first), from: from, to: to, credentialFingerprint: fp)
+        XCTAssertFalse(second.isEmpty)
+        for b in second {
+            XCTAssertEqual(b.durationSeconds, Double(b.item.slotSeconds), accuracy: 0.001, "\"\(b.item.title)\" kept its minute slot")
+        }
+        XCTAssertTrue(second.contains { $0.durationSeconds != Double($0.item.duration * 60) }, "some slot is not a whole number of minutes")
+    }
+
+    func testThePoolFingerprintChangesWhenARuntimeArrives() throws {
+        let plain = DemoData.channels().flatMap(\.itemPool)
+        let withRuntime = lineup(extra: Self.spread).flatMap(\.itemPool)
+        XCTAssertNotEqual(DailyManifestStore.poolFingerprint(items: plain), DailyManifestStore.poolFingerprint(items: withRuntime))
+        XCTAssertEqual(DailyManifestStore.poolFingerprint(items: plain), DailyManifestStore.poolFingerprint(items: plain.reversed()),
+                       "the order of the pool is not part of it")
+    }
+
     /// The acceptance case from #315 (1.0.32, Plex 4.163, Original quality): a 4:11 music video. Plex says 4 minutes,
     /// so it showed 4:00 in the guide and was cut at 4:00 with 11 s unplayed. Every programme here is that video: each
     /// slot is 251 s, the guide shows 4:11, a player that plays the file through (251 s) ends exactly where the next

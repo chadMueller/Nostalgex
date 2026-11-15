@@ -520,7 +520,7 @@ private struct ChannelOSD: View {
         if let live = schedule?.livePlayback(at: now) {
             return "\(formatTime(live.elapsedSeconds)) / \(formatTime(live.totalSeconds))"
         }
-        return formatTime(item.duration * 60)
+        return formatTime(item.slotSeconds)
     }
 
     private func formatTime(_ totalSeconds: Int) -> String {

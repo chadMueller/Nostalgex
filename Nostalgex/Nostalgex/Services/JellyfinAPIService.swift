@@ -406,54 +406,58 @@ struct JellyfinAPIService: MediaBackend, WatchActivityReporting {
         do {
             let episodes = try await fetchAllItems(parentId: show.Id, includeItemTypes: "Episode")
                 .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Episode") }
-            let showGenres = show.Genres ?? []
-            return episodes.compactMap { ep -> PlexMediaItem? in
-                let durationMin = Self.minutes(fromTicks: ep.RunTimeTicks)
-                guard durationMin > 0 else { scanSkips.add(); return nil }
-                let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
-                let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
-                let source = JellyfinItem.bestMediaSource(ep.MediaSources)
-                return PlexMediaItem(
-                    id: PlexAPIService.compositeID(serverID: serverID, ratingKey: ep.Id),
-                    title: show.Name ?? ep.SeriesName ?? "",
-                    artist: nil,
-                    episodeTitle: ep.Name,
-                    seTag: (s + e).isEmpty ? nil : s + e,
-                    summary: ep.Overview ?? show.Overview ?? "",
-                    year: show.ProductionYear,
-                    originallyAvailableAt: Self.dateOnly(ep.PremiereDate ?? show.PremiereDate),
-                    contentRating: show.OfficialRating ?? ep.OfficialRating,
-                    duration: durationMin,
-                    ratingKey: ep.Id,
-                    partKey: source?.Id ?? ep.Id,      // stash MediaSourceId for URL builders
-                    container: source?.Container,
-                    videoCodec: source?.videoCodec,
-                    audioCodec: source?.audioCodec,
-                    videoProfile: source?.videoProfile,
-                    bitrate: source?.Bitrate.map { $0 / 1000 },
-                    genres: showGenres,
-                    rating: show.CommunityRating ?? 0,
-                    userRating: 0,
-                    type: .episode,
-                    thumb: ep.ImageTags?["Primary"] ?? show.ImageTags?["Primary"],
-                    art: show.ImageTags?["Backdrop"],
-                    viewCount: ServerWatchCount.viewCount(playCount: ep.UserData?.PlayCount, played: ep.UserData?.Played),
-                    addedAt: Self.unixSeconds(fromISO: ep.DateCreated),
-                    studio: show.Studios?.first?.Name,
-                    tmdbID: show.tmdbID,
-                    imdbID: show.imdbID,
-                    librarySource: .tv,
-                    serverID: serverID.isEmpty ? nil : serverID,
-                    videoBitDepth: source?.videoBitDepth,
-                    videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
-                    exactDurationSeconds: Self.seconds(fromTicks: ep.RunTimeTicks),
-                    showKey: show.Id
-                )
-            }
+            return episodes.compactMap { parseEpisodeItem($0, show: show) }
         } catch {
             incompleteReads.add()   // the section goes on without this show and is no longer whole
             return []   // skip shows that fail individually, matching the Plex path
         }
+    }
+
+    /// One episode as the schedule reads it. The runtime is kept in seconds as well as floored minutes: the schedule
+    /// gives the episode its real length as its slot (#315). Nil, and counted as skipped, when the server gave no runtime.
+    func parseEpisodeItem(_ ep: JellyfinItem, show: JellyfinItem) -> PlexMediaItem? {
+        let showGenres = show.Genres ?? []
+        let durationMin = Self.minutes(fromTicks: ep.RunTimeTicks)
+        guard durationMin > 0 else { scanSkips.add(); return nil }
+        let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
+        let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
+        let source = JellyfinItem.bestMediaSource(ep.MediaSources)
+        return PlexMediaItem(
+            id: PlexAPIService.compositeID(serverID: serverID, ratingKey: ep.Id),
+            title: show.Name ?? ep.SeriesName ?? "",
+            artist: nil,
+            episodeTitle: ep.Name,
+            seTag: (s + e).isEmpty ? nil : s + e,
+            summary: ep.Overview ?? show.Overview ?? "",
+            year: show.ProductionYear,
+            originallyAvailableAt: Self.dateOnly(ep.PremiereDate ?? show.PremiereDate),
+            contentRating: show.OfficialRating ?? ep.OfficialRating,
+            duration: durationMin,
+            ratingKey: ep.Id,
+            partKey: source?.Id ?? ep.Id,      // stash MediaSourceId for URL builders
+            container: source?.Container,
+            videoCodec: source?.videoCodec,
+            audioCodec: source?.audioCodec,
+            videoProfile: source?.videoProfile,
+            bitrate: source?.Bitrate.map { $0 / 1000 },
+            genres: showGenres,
+            rating: show.CommunityRating ?? 0,
+            userRating: 0,
+            type: .episode,
+            thumb: ep.ImageTags?["Primary"] ?? show.ImageTags?["Primary"],
+            art: show.ImageTags?["Backdrop"],
+            viewCount: ServerWatchCount.viewCount(playCount: ep.UserData?.PlayCount, played: ep.UserData?.Played),
+            addedAt: Self.unixSeconds(fromISO: ep.DateCreated),
+            studio: show.Studios?.first?.Name,
+            tmdbID: show.tmdbID,
+            imdbID: show.imdbID,
+            librarySource: .tv,
+            serverID: serverID.isEmpty ? nil : serverID,
+            videoBitDepth: source?.videoBitDepth,
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+            exactDurationSeconds: Self.seconds(fromTicks: ep.RunTimeTicks),
+            showKey: show.Id
+        )
     }
 
     func parseMovieItem(_ item: JellyfinItem, isMusicSection: Bool) -> PlexMediaItem? {

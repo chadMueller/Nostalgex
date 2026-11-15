@@ -236,7 +236,7 @@ struct InfoPanelView: View {
                     let live = schedule.livePlayback(at: context.date)
                     let elapsed = live?.elapsedSeconds ?? schedule.elapsedSeconds
                     let progress = live?.progress ?? schedule.progress
-                    let total = live?.totalSeconds ?? item.duration * 60
+                    let total = live?.totalSeconds ?? item.slotSeconds
 
                     HStack(spacing: 10) {
                         GeometryReader { geo in
