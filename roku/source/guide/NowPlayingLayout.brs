@@ -50,7 +50,11 @@ end function
 ' text beside it; 36 between the info zone and the controls; 90 and 60 from
 ' the sides and the top, 44 under the content.
 function NxPanelMetrics() as Object
-    return NxPanelMetricsFor(NxGuideTextStep())
+    ' The saved GUIDE TEXT SIZE (source/guide/GuideText.brs, whose own file the panel's components do not carry).
+    saved = NxRegSection("guide").Read("textSize")
+    level = "normal"
+    if saved = "small" or saved = "large" then level = saved
+    return NxPanelMetricsFor(level)
 end function
 
 function NxPanelMetricsFor(level as String) as Object
