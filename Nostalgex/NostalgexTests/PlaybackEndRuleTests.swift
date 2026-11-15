@@ -10,11 +10,12 @@ final class PlaybackEndRuleTests: XCTestCase {
         let playlist: Double
         let lastFrame: Double
     }
-    /// Last frame shown, the server's runtime, and the playlist's length (2.1, 12.2 and 9.0 s left on it).
+    /// Last frame shown, the server's runtime, and the playlist's length (2.1, 12.2, 9.0 and 14.2 s left on it).
     static let measured = [
         Measured(name: "21 min HEVC MKV, copied", runtime: 1260.39, playlist: 1266, lastFrame: 1263.91),
         Measured(name: "90 s HEVC MKV, copied", runtime: 90.03, playlist: 96, lastFrame: 83.80),
         Measured(name: "90 s hev1 MP4, re-encoded", runtime: 90.01, playlist: 93, lastFrame: 83.96),
+        Measured(name: "90 s HEVC MKV, copied, on the Apple TV", runtime: 90.028, playlist: 96, lastFrame: 81.79),
     ]
 
     /// One sample a second: playing up to `lastFrame`, then still there for `stillSeconds`.
@@ -72,8 +73,8 @@ final class PlaybackEndRuleTests: XCTestCase {
         XCTAssertNil(replay(m, rate: 0))
         XCTAssertFalse(PlaybackEndRule.isInEndWindow(playhead: 600, baseOffset: 0, runtime: 1260.39))
         // Just outside the window: still the old path.
-        XCTAssertFalse(PlaybackEndRule.isInEndWindow(playhead: 1260.39 - 8.5, baseOffset: 0, runtime: 1260.39))
-        XCTAssertTrue(PlaybackEndRule.isInEndWindow(playhead: 1260.39 - 8, baseOffset: 0, runtime: 1260.39))
+        XCTAssertFalse(PlaybackEndRule.isInEndWindow(playhead: 1260.39 - 15.5, baseOffset: 0, runtime: 1260.39))
+        XCTAssertTrue(PlaybackEndRule.isInEndWindow(playhead: 1260.39 - 15, baseOffset: 0, runtime: 1260.39))
     }
 
     func testAHealthyStreamPlayingThroughTheWindowIsNotEnded() {
@@ -113,7 +114,9 @@ final class PlaybackEndRuleTests: XCTestCase {
 
     /// The rule only helps if the player uses it: the end backstop feeds `PlaybackEndWatch`, the
     /// starvation monitor stands down inside the window, the late failure notification is
-    /// heard, and each of the three status observers checks the window before retrying.
+    /// heard, and each of the three status observers and the startup watchdog check the
+    /// window before retrying (a channel tuned 20 s before the end reached it before the
+    /// watchdog's 20 s deadline on the Apple TV, and the watchdog retried it at 1080p).
     func testThePlayerIsWiredToTheRule() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Nostalgex/App/AppState+Playback.swift")
@@ -125,6 +128,9 @@ final class PlaybackEndRuleTests: XCTestCase {
         for site in failedSites {
             XCTAssertTrue(site.prefix(400).contains("endsInsideEndWindow("), "a .failed observer retries without checking the end window")
         }
+        let watchdog = try XCTUnwrap(source.range(of: "private func installWatchdog"))
+        XCTAssertTrue(source[watchdog.lowerBound...].prefix(5000).contains("endsInsideEndWindow("),
+                      "the startup watchdog retries a programme that has simply reached its end")
         let starvation = try XCTUnwrap(source.range(of: "private func installStarvationMonitor"))
         let monitorBody = source[starvation.lowerBound...].prefix(4000)
         XCTAssertTrue(monitorBody.contains("PlaybackEndRule.isInEndWindow("), "the starvation monitor does not stand down in the end window")

@@ -1286,6 +1286,9 @@ extension AppState {
             }
             let access = playerItem.accessLog()?.events.last.map { "segments=\($0.numberOfMediaRequests) stalls=\($0.numberOfStalls) bytes=\($0.numberOfBytesTransferred) dropped=\($0.numberOfDroppedVideoFrames) watched=\(String(format: "%.1f", $0.durationWatched))s" } ?? "no access log"
             let errors = playerItem.errorLog()?.events.suffix(3).map { "\($0.errorStatusCode) \(PlaybackDiagnostics.redactSensitiveText($0.errorComment ?? ""))" }.joined(separator: " | ") ?? ""
+            // Tuned in just before the end: the programme reached its end inside the deadline.
+            if self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt,
+                                        title: item?.title ?? self.currentItem?.title ?? "?", signal: "still at the startup deadline") { return }
             let detail = "ready=\(reachedReady), playhead moved \(String(format: "%.1f", progressed))s, frames=\(frames), declared \(Int(playerItem.presentationSize.width))x\(Int(playerItem.presentationSize.height)), rate=\(self.player?.rate ?? -1), status=\(playerItem.status.rawValue), \(access)\(errors.isEmpty ? "" : ", errors: " + errors)"
             self.handleWatchdogNoPicture(playerItem: playerItem, item: item, isDirectPlay: isDirectPlay,
                                          generation: generation, attempt: attempt, allowCappedRetry: allowCappedRetry,
