@@ -164,6 +164,17 @@ function NxGuideColors() as Object
     return { grid: "0x0D0D1FFF", header: "0x0A0A14FF", stripe: "0xFFFFFF08", past: "0xFFFFFF05", liveAlpha: "40" }
 end function
 
+' The focused programme's cell on the focused row (the programme cursor, Chad
+' 2026-11-15: "the active state needs to be way more obvious, can we have a
+' glow"): a fill brighter than the row's selected fill, a full-cyan ring, and
+' a glow much stronger than the row's own, made by stacking the glow image
+' (images/look/focus.9.png: a cyan ring with its halo) `layers` times, each
+' laid over the last. The numbers are the Apple TV agent's to give; these are
+' the structure's starting values.
+function NxGuideCursorStyle() as Object
+    return { fill: "0x0F4C6AFF", ring: "0x00D4FFFF", layers: 3 }
+end function
+
 function NxGuideLightestTitleBg() as String
     c = NxGuideColors()
     return NxTokOver(c.past, NxTokOver(c.stripe, c.grid))

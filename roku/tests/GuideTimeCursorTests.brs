@@ -87,6 +87,17 @@ function NxRunGuideTimeCursorTests() as Integer
     NxCheck(r, "window: clamped to the last offset", NxToStr(NxGuideWindowOffset(late, 0, t0&, nowC&, 2)), "2")
     NxCheck(r, "window: a programme that starts before the view moves it back", NxToStr(NxGuideWindowOffset(row[1], 3, t0&, nowC&, 44)), "0")
 
+    ' ── The cursor's cell stands out (Chad 2026-11-15: "way more obvious", a glow) ──
+    style = NxGuideCursorStyle()
+    NxCheck(r, "style: the cell's fill is brighter than the row's selected fill", NxToStr(NxChannelSum(style.fill) > NxChannelSum(NxTokens().color.selectedRow)), "true")
+    NxCheck(r, "style: the ring is the full cyan", style.ring, NxTokens().color.cyan)
+    NxCheck(r, "style: the glow is stacked more than once, where the row's own is one layer", NxToStr(style.layers > 1), "true")
+
     print "guide time cursor tests: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
+end function
+
+' The red, green and blue of "0xRRGGBBAA" added up, to say which of two fills is brighter.
+function NxChannelSum(hex as String) as Integer
+    return Val(Mid(hex, 3, 2), 16) + Val(Mid(hex, 5, 2), 16) + Val(Mid(hex, 7, 2), 16)
 end function

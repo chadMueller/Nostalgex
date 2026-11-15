@@ -180,10 +180,18 @@ function NxStripeGroupIndex(groups as Object, row as Integer) as Integer
 end function
 
 ' The previous (-1) or next (+1) run that is a bundle, from run `index`:
-' unnamed runs are stepped over and there is no wrap (-1 past either end).
+' unnamed runs are stepped over, and past either end it wraps round, as the
+' channel rows do (Chad 2026-11-15: reaching the bottom takes you back to the
+' top). -1 when there is no other bundle to go to.
 function NxStripeNeighbour(groups as Object, index as Integer, dir as Integer) as Integer
     i = index + dir
     while i >= 0 and i < groups.Count()
+        if groups[i].name <> invalid then return i
+        i = i + dir
+    end while
+    ' Round the other end, up to the run it started from.
+    if dir > 0 then i = 0 else i = groups.Count() - 1
+    while i >= 0 and i < groups.Count() and i <> index
         if groups[i].name <> invalid then return i
         i = i + dir
     end while

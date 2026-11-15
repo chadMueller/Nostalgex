@@ -43,6 +43,9 @@ function NxRunSleepTimerTests() as Integer
     NxCheck(r, "up next: under a minute", NxUpNextBadge(59), "UP NEXT IN LESS THAN 1 MIN")
     NxCheck(r, "up next: due now", NxUpNextBadge(0), "UP NEXT IN LESS THAN 1 MIN")
     NxCheck(r, "up next: already started", NxUpNextBadge(-30), "UP NEXT IN LESS THAN 1 MIN")
+    ' The line is the title first, in a highlight colour, then the label (Chad 2026-11-15).
+    NxCheck(r, "up next: a highlight colour is named", NxToStr(Len(NxUpNextTitleColor())), "10")
+    NxCheck(r, "up next: the label under a minute", NxUpNextBadge(30), "UP NEXT IN LESS THAN 1 MIN")
     NxCheck(r, "up next: no number", NxUpNextBadge(invalid), "UP NEXT IN LESS THAN 1 MIN")
 
     ' ── The panel's measures: the Apple TV 1.0.32's NowPlayingMetrics.swift (#266) ──

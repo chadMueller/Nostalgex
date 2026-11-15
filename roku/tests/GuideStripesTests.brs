@@ -113,11 +113,15 @@ function NxRunGuideStripesTests(configPath as String, goldenPath as String) as I
     NxCheck(r, "runs: a row past the end", NxToStr(NxStripeGroupIndex(groups, 8)), "-1")
     NxCheck(r, "runs: has bundles", NxToStr(NxStripeHasBundles(groups)), "true")
     NxCheck(r, "runs: none named has none", NxToStr(NxStripeHasBundles(NxStripeGroups([{ id: 99 }], {}))), "false")
-    ' Stepping skips the plain run and does not wrap.
+    ' Stepping skips the plain run and wraps round the ends.
     NxCheck(r, "step: down from the first ALPHA skips the plain run", NxToStr(NxStripeNeighbour(groups, 0, 1)), "2")
     NxCheck(r, "step: up from BETA", NxToStr(NxStripeNeighbour(groups, 3, -1)), "2")
-    NxCheck(r, "step: up from the first run has nowhere to go", NxToStr(NxStripeNeighbour(groups, 0, -1)), "-1")
-    NxCheck(r, "step: down from the last run has nowhere to go", NxToStr(NxStripeNeighbour(groups, 4, 1)), "-1")
+    ' Past either end it wraps, as the channel rows do (Chad 2026-11-15).
+    NxCheck(r, "step: up from the first run wraps to the last bundle", NxToStr(NxStripeNeighbour(groups, 0, -1)), "4")
+    NxCheck(r, "step: down from the last run wraps to the first bundle", NxToStr(NxStripeNeighbour(groups, 4, 1)), "0")
+    NxCheck(r, "step: one bundle alone has nowhere to go either way", NxToStr(NxStripeNeighbour([{ name: "ONLY", firstRow: 0, rowCount: 3 }], 0, 1)) + NxToStr(NxStripeNeighbour([{ name: "ONLY", firstRow: 0, rowCount: 3 }], 0, -1)), "-1-1")
+    NxCheck(r, "step: the wrap steps over a plain run at the end", NxToStr(NxStripeNeighbour([{ name: "A" }, { name: "B" }, { name: invalid }], 1, 1)), "0")
+    NxCheck(r, "step: and over one at the start", NxToStr(NxStripeNeighbour([{ name: invalid }, { name: "A" }, { name: "B" }], 1, -1)), "2")
     NxCheck(r, "step: up from the run after the plain one skips it", NxToStr(NxStripeNeighbour(groups, 2, -1)), "0")
 
     print "guide stripes tests: "; r.pass; " passed, "; r.fail; " failed"

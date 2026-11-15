@@ -602,20 +602,28 @@ function renderInfo(s as Object) as Integer
     title.maxLines = 3
     g.AppendChild(title)
     y = y + title.boundingRect().height
-    ' UP NEXT under the poster, left-aligned with it: one plain line, minutes
-    ' first, "UP NEXT IN 24 MIN" and two spaces and the title, with no pill and
-    ' no border (Chad 2026-11-15, the Apple TV's and the web tuner's line).
+    ' UP NEXT under the poster, left-aligned with it: one plain line, title first
+    ' (Chad 2026-11-15, reversing the earlier order globally): the title in a
+    ' highlight colour, two spaces, then UP NEXT IN 24 MIN, with no pill and no
+    ' border. LESS THAN 1 MIN under a minute. The title is cut with an ellipsis
+    ' before the label is.
     top = y + 12
     if NxToStr(m.posterPath) <> "" and top < pm.safeY + pm.posterH + 12 then top = pm.safeY + pm.posterH + 12
     y = top
     if NxToStr(s.upNext) <> "" then
         ux = pm.safeX
         uw = m.colX[0] - pm.zoneGap - ux
-        lead = newLabel(NxUpNextBadge(s.upNextIn), tk.font.label, pm.text, tk.color.text2, ux, y, 0)
-        g.AppendChild(lead)
+        titleLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, NxUpNextTitleColor(), ux, y, 0)
+        badge = newLabel(NxUpNextBadge(s.upNextIn), tk.font.label, pm.text, tk.color.text2, ux, y, 0)
         gap = Int(2 * pm.text * 0.6 + 0.5)
-        nx = ux + Int(Len(NxUpNextBadge(s.upNextIn)) * pm.text * 0.6 + 0.5) + gap
-        g.AppendChild(newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, nx, y, uw - (nx - ux)))
+        tw = titleLbl.boundingRect().width
+        bw = badge.boundingRect().width
+        if tw > uw - bw - gap then tw = uw - bw - gap
+        if tw < 0 then tw = 0
+        titleLbl.width = tw
+        badge.translation = [ux + tw + gap, y]
+        g.AppendChild(titleLbl)
+        g.AppendChild(badge)
         y = y + Int(pm.text * 1.3 + 0.5)
     end if
     bottom = pm.safeY + pm.posterH

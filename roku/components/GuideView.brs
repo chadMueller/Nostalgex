@@ -479,13 +479,16 @@ sub renderGrid()
             if cs& < wStart& then cs& = wStart&
             ce& = cb.endSec
             if ce& > wEnd& then ce& = wEnd&
-            ring = CreateObject("roSGNode", "Poster")
-            ring.uri = "pkg:/images/look/focus.9.png"
-            ring.translation = [m.colX + 1 + (cs& - wStart&) * scale - 16, y - 16]
-            ring.width = (ce& - cs&) * scale + 32
-            ring.height = m.rowH + 32
-            ring.blendColor = NxTokens().color.cyan
-            cut.AppendChild(ring)
+            style = NxGuideCursorStyle()
+            for layer = 1 to style.layers
+                ring = CreateObject("roSGNode", "Poster")
+                ring.uri = "pkg:/images/look/focus.9.png"
+                ring.translation = [m.colX + 1 + (cs& - wStart&) * scale - 16, y - 16]
+                ring.width = (ce& - cs&) * scale + 32
+                ring.height = m.rowH + 32
+                ring.blendColor = style.ring
+                cut.AppendChild(ring)
+            end for
         end if
         rows.AppendChild(cut)
     end if
@@ -567,7 +570,7 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
             end if
             ' The cursor's programme on the focused row: the selected fill.
             if focused and m.cursorBlock <> invalid then
-                if b.startSec = m.cursorBlock.startSec and b.ratingKey = m.cursorBlock.ratingKey then row.AppendChild(newRect(x, 0, w, m.rowH, NxTokens().color.selectedRow))
+                if b.startSec = m.cursorBlock.startSec and b.ratingKey = m.cursorBlock.ratingKey then row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideCursorStyle().fill))
             end if
             row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
             ' The title runs to the block's edge, 15 in from its start: white
@@ -1065,13 +1068,22 @@ sub renderInfo()
     up = m.top.FindNode("upNext")
     up.visible = n <> invalid
     if n <> invalid then
-        ' One plain line, minutes first (Chad 2026-11-15): UP NEXT IN 24 MIN, two
-        ' spaces, the title; under a minute LESS THAN 1 MIN. Minutes from now,
-        ' as the Apple TV counts them, even for a programme the cursor is on.
-        lw = setTracked("upNextLabel", NxUpNextBadge(n.startSec - t), "VT323-Regular", 24, "0xFFFFFF80", 3)
-        m.top.FindNode("upNextLabel").translation = [0, y]
-        up.translation = [lw + 20, y]
+        ' One plain line, title first (Chad 2026-11-15, reversing the earlier order
+        ' globally): the title in a highlight colour, two spaces, then UP NEXT IN
+        ' 24 MIN (LESS THAN 1 MIN under a minute). The title is cut with an
+        ' ellipsis before the label is. Minutes from now, as the Apple TV counts them.
         up.text = musicLine(n)
+        up.color = NxUpNextTitleColor()
+        up.width = 0
+        natural = up.boundingRect().width
+        lw = setTracked("upNextLabel", NxUpNextBadge(n.startSec - t), "VT323-Regular", 24, "0xFFFFFF80", 3)
+        avail = 1100 - lw - 20
+        tw = natural
+        if tw > avail then tw = avail
+        if tw < 0 then tw = 0
+        up.width = tw
+        up.translation = [0, y]
+        m.top.FindNode("upNextLabel").translation = [tw + 20, y]
     end if
 end sub
 

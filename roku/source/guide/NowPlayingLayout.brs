@@ -41,6 +41,13 @@ function NxUpNextBadge(secondsAway as Dynamic) as String
 end function
 
 
+' The colour the next programme's title is in on both panels' UP NEXT line
+' (Chad 2026-11-15: "highlight the movie title as a color"). The Apple TV
+' agent gives the value; until then the guide's cyan.
+function NxUpNextTitleColor() as String
+    return "0x00D4FFFF"
+end function
+
 ' The panel's measures, the Apple TV's NowPlayingMetrics.swift and
 ' NowPlayingPanel.swift in px on the 1920 by 1080 canvas (#266): the item
 ' title and the CH tag by GUIDE TEXT SIZE's step (the Apple TV's panelText,
