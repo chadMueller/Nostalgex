@@ -18,6 +18,10 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Tests.** `tests/LoadStateTests.brs` (the words, the library line, which state shows, the header's line, the epoch). The stick walks are in `docs/roku-shots/v15-2026-11-15/`.
 
+**Checked on the stick.** A server switched on in Settings (stand-in Jellyfin B, 12,000 movies and 400 shows, slowed so the read can be watched): the guide stays, the rows go, and the block counts up ("READ 11,400 TITLES", "STAND-IN B · MOVIES: 5,400 OF 12,000", then "SHOWS: 400 OF 400") until the new guide arrives. A RESCAN LIBRARY behind a guide with rows reads "UPDATING LIBRARY: 200 TITLES READ" in the header, and on a real library the launch refresh went "UPDATING LIBRARY" with a count, then "GUIDE READY" with the total in yellow (those two shots are kept out of the repo). SIGN OUT pressed 18 s into a rescan: the connect screen came up, the server's request count stopped at once and stayed stopped for 100 s, and the console shows no save or hand-over after it. Shots in `docs/roku-shots/v15-2026-11-15/`. Not done: the first load with no guide is still the full-screen loading view (by design, Android and Chad's rule); a stopped read keeps no header line.
+
+**Emby end of stream (the #315 port's check).** Roku asks both Jellyfin and Emby for TS segments (`SegmentContainer=ts`, 2 s), never fMP4, so the Apple TV's freeze on an fMP4 playlist that claims more than the file does not apply. On a stub (real h264/aac TS, 10 segments, 19 s) the Video node reaches `finished` and the guide moves on in all three cases: an honest playlist (at the last frame), a last segment declared 6.0 s instead of 1.0 s (Emby's overrun: a short re-buffer, then `finished` about 4 s after the file's end, inside the 20 s picture deadline), and a playlist with a whole extra segment that does not exist (it buffers about 21 s, then closes and advances). No end rule ported.
+
 ## 2026-11-15 (Roku 1.0.13 v14: the reviewer's five)
 
 **State.** Branch `roku/1.0.13-candidate-v13` (the same branch, v14 on top of `448b1102`). The reviewer passed v13; these are what it found.
