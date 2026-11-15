@@ -187,6 +187,12 @@ sub open(unused = invalid as Dynamic)
     ' way out compares with this rather than counting presses.
     m.serversOnAtOpen = FormatJson(m.serversOn)
     m.serversChanged = false
+    ' The library sections the last scan or the picker saw, and the ones turned
+    ' off (I-092); a visit that changes them reads the library again on the way out.
+    m.libs = NxSavedSections(reg)
+    m.libOff = NxDeselectedSections(reg)
+    m.libOffAtOpen = FormatJson(m.libOff)
+    m.libsChanged = false
     ' Which MY COLLECTIONS categories are open, by category.
     m.collectionsOpen = {}
     m.languageOpen = ""
@@ -301,6 +307,14 @@ sub buildRows()
     for i = 0 to m.servers.Count() - 1
         add({ kind: "server", index: i })
     end for
+    ' LIBRARIES (I-092): one row per library section, on or off, when there is
+    ' more than one to choose between.
+    if m.libs.Count() > 1 then
+        add({ kind: "subheader", text: "LIBRARIES" })
+        for i = 0 to m.libs.Count() - 1
+            add({ kind: "library", index: i })
+        end for
+    end if
     ' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231), with the servers, where the
     ' Apple TV lists its libraries. On a Jellyfin sign-in only.
     if NxSignedInKind() = "jellyfin" then add({ kind: "includeHidden" })
@@ -980,6 +994,26 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
                 state = ""
             end if
         end if
+    else if row.kind = "library" then
+        ' The library picker's rows (source/util/LibrarySections.brs): ON or OFF,
+        ' and none on the only library that is on.
+        sec = m.libs[row.index]
+        label = UCase(NxToStr(sec.title))
+        multi = false
+        for each o in m.libs
+            if o.serverId <> m.libs[0].serverId then multi = true
+        end for
+        detail = NxSectionSubtitle(sec, multi)
+        state = "OFF"
+        stateColor = m.t2
+        if NxSectionIsOn(m.libOff, sec.serverId, sec.key) then
+            state = "ON"
+            stateColor = m.accent + "FF"
+            if NxSectionsOnCount(m.libs, m.libOff) <= 1 then
+                detail = detail + " · only library on"
+                state = ""
+            end if
+        end if
     else if row.kind = "rescan" then
         ' Upstream's subtitle, a line each: what the app holds, when it last
         ' loaded and what the row does, then the last playback failure.
@@ -1407,6 +1441,19 @@ sub pressRow()
             m.serversChanged = true
             render()
         end if
+    else if row.kind = "library" then
+        ' The last library on stays on, as the last server does.
+        sec = m.libs[row.index]
+        key = NxSectionKey(sec.serverId, sec.key)
+        if m.libOff[key] = true then
+            m.libOff.Delete(key)
+            m.libsChanged = true
+            render()
+        else if NxSectionsOnCount(m.libs, m.libOff) > 1 then
+            m.libOff[key] = true
+            m.libsChanged = true
+            render()
+        end if
     else if row.kind = "rescan" then
         if not m.top.rescanning then m.top.rescan = true
     else if row.kind = "includeHidden" then
@@ -1513,6 +1560,14 @@ sub leave()
         plex = NxPlexRegistry()
         plex.Write("serverChoices", FormatJson(choices))
         plex.Flush()
+    end if
+    ' Libraries turned off or on: saved, and read again behind the guide, as
+    ' RESCAN LIBRARY does (the scan leaves the ones that are off alone).
+    if m.libsChanged then m.libsChanged = FormatJson(m.libOff) <> m.libOffAtOpen
+    if m.libsChanged then
+        NxSaveDeselectedSections(NxPlexRegistry(), m.libOff)
+        print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff); " of "; m.libs.Count(); " on, reading the library again"
+        if not m.top.rescanning then m.top.rescan = true
     end if
     if m.franchisesChanged or m.collectionsChanged then
         reg = NxRegSection("guide")

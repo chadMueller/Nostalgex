@@ -589,10 +589,14 @@ end function
 ' was rejected or the libraries list failed. A scan told to stop waiting
 ' (NxLoadStopped) returns what it has read, as NxPlexScanServer's does.
 ' `includeHidden` is the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (#231).
-function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean) as Dynamic
+' `deselected` (source/util/LibrarySections.brs) is the set of libraries the viewer
+' turned off, by serverId::Id; none of those is asked for items.
+function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean, deselected = invalid as Dynamic, serverId = "" as String) as Dynamic
     viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId, includeHidden))
     if viewsAnswer = invalid then return invalid
-    views = NxList(viewsAnswer.Items)
+    ' The libraries the viewer turned off are never read (I-092); sections() says which there were.
+    NxScanSectionsAdd(NxMbSectionRefs({ machineIdentifier: serverId, name: serverId }, viewsAnswer.Items, invalid))
+    views = NxSectionsKept(NxList(viewsAnswer.Items), deselected, serverId, "Id")
     musicGenre = CreateObject("roRegex", "music", "i")
     out = []
     for viewAt = 0 to views.Count() - 1
@@ -703,7 +707,33 @@ end function
 ' A server's items (NxPlexScanServer or NxMbScanServer), or invalid.
 function NxScanServerFor(server as Object, serverIndex as Integer, progress as Dynamic, info as Object) as Dynamic
     kind = NxServerKind(server)
-    if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info)
+    if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info, NxDeselectedSections(NxPlexRegistry()))
     info.signature = invalid
-    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxIncludeHidden(NxHiddenLibrariesRegistry()))
+    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxScanIncludesHidden(), NxDeselectedSections(NxPlexRegistry()), NxToStr(server.machineIdentifier))
+end function
+
+' The Jellyfin or Emby libraries that hold videos (the scan's own test:
+' NxMbSectionType), `hiddenIds` the ids the plain list leaves out.
+function NxMbSectionRefs(server as Object, views as Dynamic, hiddenIds as Dynamic) as Object
+    out = []
+    for each v in NxList(views)
+        if type(v) = "roAssociativeArray" then
+            kind = NxMbSectionType(v.CollectionType)
+            if kind <> "" and kind <> "other" then
+                hidden = false
+                if type(hiddenIds) = "roAssociativeArray" then hidden = hiddenIds[NxToStr(v.Id)] = true
+                out.Push({ serverId: NxToStr(server.machineIdentifier), serverName: NxToStr(server.name), key: NxToStr(v.Id), title: NxToStr(v.Name), type: kind, hidden: hidden })
+            end if
+        end if
+    end for
+    return out
+end function
+
+' Whether a scan asks the server for the libraries a viewer hides from the
+' Jellyfin home screen: the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch, or a
+' hidden library the viewer turned on in the library picker.
+function NxScanIncludesHidden() as Boolean
+    if NxIncludeHidden(NxHiddenLibrariesRegistry()) then return true
+    reg = NxPlexRegistry()
+    return NxAnyHiddenOn(NxSavedSections(reg), NxDeselectedSections(reg))
 end function

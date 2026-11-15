@@ -398,6 +398,7 @@ sub loadLibrary()
         end if
         return
     end if
+    NxScanSectionsReset()
     for i = 0 to servers.Count() - 1
         ' A server with no address is left out this time; it's tried again on
         ' the next load.
@@ -594,6 +595,7 @@ sub loadLibrary()
     end for
     NxSaveLibraryHeld(counts, nowSec&)
     reg = NxPlexRegistry()
+    if scanned.Count() > 0 and NxScanSections().Count() > 0 then NxSaveSections(reg, NxMergeSections(NxNameSections(NxScanSections(), ParseJson(reg.Read("servers"))), NxSavedSections(reg)))
     if reg.Read("librarySaved") <> "1" and (scanned.Count() > 0 or not m.top.firstRun) then
         reg.Write("librarySaved", "1")
         reg.Flush()

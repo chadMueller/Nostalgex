@@ -154,6 +154,8 @@ sub NxMbSaveSignIn(kind as String, base as String, info as Object, auth as Objec
     reg.Delete("token")
     reg.Delete("needsPick")
     reg.Delete("serverChoices")
+    reg.Delete("deselectedSections")
+    reg.Delete("librarySections")
     reg.Write("kind", kind)
     reg.Write("servers", FormatJson([server]))
     reg.Flush()

@@ -145,12 +145,15 @@ end function
 ' as the scan found it (NxLibrarySignature). A scan told to stop waiting
 ' (NxLoadStopped) returns what it has read, as the Apple TV's
 ' LibraryScanInterrupted carries it.
-function NxPlexScanServer(server as Object, serverIndex as Integer, progress = invalid as Dynamic, info = invalid as Dynamic) as Dynamic
+function NxPlexScanServer(server as Object, serverIndex as Integer, progress = invalid as Dynamic, info = invalid as Dynamic, deselected = invalid as Dynamic) as Dynamic
     err = { auth: false }
     mc = NxPlexGetContainer(server, "/library/sections", err)
     if mc = invalid then return invalid
     sections = NxList(mc.Directory)
     if info <> invalid then info.signature = NxLibrarySignature(NxToStr(server.machineIdentifier), sections)
+    ' The libraries the viewer turned off are never read (I-092).
+    NxScanSectionsAdd(NxPlexSectionRefs(server, sections))
+    sections = NxSectionsKept(sections, deselected, server.machineIdentifier, "key")
     mvSection = CreateObject("roRegex", "music.?video|^music$|^mv[s]?$", "i")
     musicGenre = CreateObject("roRegex", "music", "i")
 
@@ -665,4 +668,19 @@ function NxPlexCollectionsNet() as Object
             return NxPlexGetContainer(server, path, err)
         end function
     }
+end function
+
+' The Plex sections that hold videos, as the picker lists them: the scan reads
+' movie and show sections (a photo or music one holds nothing the engine uses).
+function NxPlexSectionRefs(server as Object, directories as Dynamic) as Object
+    out = []
+    for each d in NxList(directories)
+        if type(d) = "roAssociativeArray" then
+            kind = NxToStr(d.type)
+            if kind = "movie" or kind = "show" then
+                out.Push({ serverId: NxToStr(server.machineIdentifier), serverName: NxToStr(server.name), key: NxToStr(d.key), title: NxToStr(d.title), type: kind, hidden: false })
+            end if
+        end if
+    end for
+    return out
 end function
