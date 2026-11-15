@@ -127,6 +127,40 @@ final class PlaybackEndRuleTests: XCTestCase {
         }
     }
 
+    /// A stream the server started at an offset (a Plex mid-programme join) may start at an
+    /// earlier keyframe than asked, which reads as an overrun of a few seconds. Its stall near
+    /// the end is a real one.
+    func testAStallOnAStreamStartedAtAnOffsetIsNotTheEnd() {
+        // Asked for 1200 s, the server started at 1195.6: item clock 52 is file 1252, 8.4 s
+        // from the real end, while the item's 70 s duration leaves 18 s: a 9.6 s "overrun".
+        var watch = PlaybackEndWatch()
+        var wall = 0.0
+        for p in stride(from: 40.0, through: 52.0, by: 1.0) { _ = watch.observe(playhead: p, wall: wall, rate: 1, playlistDuration: 70, baseOffset: 1200, runtime: 1260.39); wall += 1 }
+        for _ in 0..<30 {
+            XCTAssertNil(watch.observe(playhead: 52, wall: wall, rate: 1, playlistDuration: 70, baseOffset: 1200, runtime: 1260.39),
+                         "a stall on an offset stream cut the tail"); wall += 1
+        }
+        XCTAssertFalse(PlaybackEndRule.stillPlayheadIsTheEnd(playhead: 52, playlistDuration: 70, baseOffset: 1200, runtime: 1260.39))
+    }
+
+    /// A version far longer than the runtime says (an extended cut) is not Emby's rounded-up
+    /// last segment: an overrun of more than the window must not end the film on a stall.
+    func testAnOverrunLongerThanTheWindowIsNotTheEnd() {
+        // Runtime says 5400 s, the playlist is the 6000 s cut: at 5390 s the runtime has 10 s
+        // left and the playlist 610.
+        var watch = PlaybackEndWatch()
+        var wall = 0.0
+        for p in stride(from: 5370.0, through: 5390, by: 1.0) { _ = watch.observe(playhead: p, wall: wall, rate: 1, playlistDuration: 6000, baseOffset: 0, runtime: 5400); wall += 1 }
+        for _ in 0..<30 {
+            XCTAssertNil(watch.observe(playhead: 5390, wall: wall, rate: 1, playlistDuration: 6000, baseOffset: 0, runtime: 5400),
+                         "a stall in an extended cut ended it 10 minutes early"); wall += 1
+        }
+        XCTAssertFalse(PlaybackEndRule.playlistOverruns(playhead: 5390, playlistDuration: 6000, baseOffset: 0, runtime: 5400))
+        // At the cap it still counts.
+        XCTAssertTrue(PlaybackEndRule.playlistOverruns(playhead: 5390, playlistDuration: 5415, baseOffset: 0, runtime: 5400))
+        XCTAssertFalse(PlaybackEndRule.playlistOverruns(playhead: 5390, playlistDuration: 5415.5, baseOffset: 0, runtime: 5400))
+    }
+
     func testAHealthyStreamPlayingThroughTheWindowIsNotEnded() {
         var watch = PlaybackEndWatch()
         for (i, p) in stride(from: 1240.0, through: 1260.0, by: 1.0).enumerated() {

@@ -79,13 +79,17 @@ enum PlaybackEndRule {
         return left <= windowSeconds && left >= -windowSeconds
     }
 
-    /// The playlist claims at least `overrunSeconds` more than the file has left: Emby's
-    /// rounded-up last segment. Both sides on their own clocks (the playlist's on the item's,
-    /// the runtime's on the file's), as everywhere here.
+    /// The playlist claims at least `overrunSeconds`, and no more than `windowSeconds`, beyond
+    /// what the file has left: Emby's rounded-up last segment. Only on a stream that starts at
+    /// zero: a server-started offset (a Plex mid-programme join) can begin at an earlier
+    /// keyframe than asked, which reads as a few seconds of overrun that is not there (Emby
+    /// and Jellyfin joins are client seeks, always offset 0). Over the window it is not a
+    /// segment rounded up but a longer version than the runtime describes (an extended cut).
     static func playlistOverruns(playhead: Double, playlistDuration: Double?, baseOffset: Double, runtime: Double?) -> Bool {
-        guard let total = playlistDuration, total.isFinite, total > 0,
+        guard baseOffset == 0, let total = playlistDuration, total.isFinite, total > 0,
               let realLeft = secondsToRealEnd(playhead: playhead, baseOffset: baseOffset, runtime: runtime) else { return false }
-        return (total - playhead) - realLeft >= overrunSeconds
+        let overrun = (total - playhead) - realLeft
+        return overrun >= overrunSeconds && overrun <= windowSeconds
     }
 
     /// A still playhead here is the end of the file, not starvation: inside the window and
