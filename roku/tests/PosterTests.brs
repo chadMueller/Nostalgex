@@ -14,6 +14,18 @@ function NxRunPosterTests() as Integer
     NxCheck(r, "nothing playing", FormatJson(NxPosterRef(invalid, "plex")), "null")
     saved = { ratingKey: "456", serverIndex: 1 }
     NxCheck(r, "read back from the saved library: the item's own thumb", NxPosterRef(saved, "plex").path, "/library/metadata/456/thumb")
+    ' #312: an episode's poster is its season's, then its series', then its own frame.
+    ep = { ratingKey: "900", type: "episode", showKey: "50", parentRatingKey: "60", thumb: "/library/metadata/900/thumb/1", serverIndex: 0 }
+    NxCheck(r, "episode: season, series, then its frame", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/60/thumb"",""/library/metadata/50/thumb"",""/library/metadata/900/thumb/1""]")
+    NxCheck(r, "episode: the first path is the season's", NxPosterRef(ep, "plex").path, "/library/metadata/60/thumb")
+    ep.parentRatingKey = invalid
+    NxCheck(r, "episode with no season poster: the series, then its frame", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/50/thumb"",""/library/metadata/900/thumb/1""]")
+    older = { ratingKey: "901", type: "episode", serverIndex: 0 }
+    NxCheck(r, "episode read back from an older library: its own thumb", FormatJson(NxPosterRef(older, "plex").paths), "[""/library/metadata/901/thumb""]")
+    ep.showKey = "invalid"
+    NxCheck(r, "a show key that was never kept is not asked for", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/900/thumb/1""]")
+    NxCheck(r, "a movie has one path", FormatJson(NxPosterRef(movie, "plex").paths), "[""/library/metadata/123/thumb/1700000000""]")
+    NxCheck(r, "season key: kept only with a season poster", FormatJson([NxPosterSeasonKey({ parentRatingKey: "60", parentThumb: "/x" }), NxPosterSeasonKey({ parentRatingKey: "60" }), NxPosterSeasonKey({ parentThumb: "/x" })]), "[""60"",null,null]")
     NxCheck(r, "no rating key", FormatJson(NxPosterRef({ serverIndex: 0 }, "plex")), "null")
     NxCheck(r, "no server", FormatJson(NxPosterRef({ ratingKey: "1" }, "plex")), "null")
 

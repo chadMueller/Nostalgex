@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Roku: a TV episode's Now Playing poster is its season's, then its series', then its own frame, #312)
+
+**State.** Branch `roku/s-episode-poster-chain` (off `roku/s-info-panel-order`). Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV's `appletv/312-episode-poster` (`PlexPosterChain`): a Plex episode's own `thumb` is a frame grabbed from the episode, landscape and arbitrary, which is not a poster. The panel asked for it first.
+
+**Changed.** `NxPosterRef` (`source/plex/PlexPoster.brs`) now carries `paths`, in the Apple TV's order: the season's poster (`/library/metadata/<parentRatingKey>/thumb`), the series' (`showKey`), then the item's own thumb. A film has just its own. The Plex scan keeps the season's key on an episode only when that season has a poster of its own (`NxPosterSeasonKey`, from `parentThumb`), so the panel never asks for one that is not there; an item read back from a library saved before this has no season key and gets the shorter list. `PosterTask` tries the paths in order and shows the first that answers 200. Plex only, as the poster itself is.
+
+**Tests.** `PosterTests`: the order for an episode with and without a season poster, an episode from an older library, a show key never kept, a film, and the season key rule.
+
+**Not seen on a stick.** No Plex stand-in server: the paths and the fetch loop are held by the interpreter tests only. The first check on a real Plex is an episode of a show with season posters (the panel should show the season's), then a library saved before this build (the series').
+
 ## 2026-11-15 (Roku: the guide's info panel puts the description after the badges, the Apple TV's order)
 
 **State.** Branch `roku/s-info-panel-order` (off `roku/i092-library-picker`). Not merged, not in a build, not pushed.

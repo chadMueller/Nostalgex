@@ -14,9 +14,34 @@ function NxPosterRef(b as Dynamic, kind as String) as Dynamic
     if b = invalid or kind <> "plex" then return invalid
     key = NxToStr(b.ratingKey)
     if key = "" or not NxIsNumber(b.serverIndex) then return invalid
-    path = NxToStr(b.thumb)
-    if path = "" then path = "/library/metadata/" + key + "/thumb"
-    return { path: path, serverIndex: b.serverIndex }
+    own = NxToStr(b.thumb)
+    if own = "" then own = "/library/metadata/" + key + "/thumb"
+    paths = NxPosterPaths(b, own)
+    return { path: paths[0], paths: paths, serverIndex: b.serverIndex }
+end function
+
+' Which image the poster asks for, in order (#312, the Apple TV's
+' PlexPosterChain). A film has one: its poster. A TV episode's own thumb is a
+' frame grabbed from the episode, landscape and arbitrary, so it comes last:
+' the season's poster first, then the series', and the frame only when
+' neither loads. The paths are made from keys the item already holds (the
+' season's `parentRatingKey`, kept only when that season has a poster of its
+' own, and `showKey`), so no extra request finds them, and an item read back
+' from an older saved library, which has no season key, has a shorter list.
+function NxPosterPaths(b as Object, own as String) as Object
+    paths = []
+    if NxToStr(b.type) = "episode" then
+        season = NxToStr(b.parentRatingKey)
+        if season <> "" then paths.Push("/library/metadata/" + season + "/thumb")
+        show = NxToStr(b.showKey)
+        if show <> "" and show <> "invalid" then paths.Push("/library/metadata/" + show + "/thumb")
+    end if
+    seen = false
+    for each p in paths
+        if p = own then seen = true
+    end for
+    if not seen then paths.Push(own)
+    return paths
 end function
 
 ' thumbnailURL(for:width:), less the token.

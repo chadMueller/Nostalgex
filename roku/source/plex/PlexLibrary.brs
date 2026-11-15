@@ -336,6 +336,10 @@ function NxPlexEpisodeItem(ep as Object, show as Object, showGenres as Object, s
         ' The show's key (the episode's grandparentRatingKey), which a
         ' collection of shows lists in place of its episodes.
         showKey: NxToStr(show.ratingKey),
+        ' The episode's season (parentRatingKey), kept only when that season has
+        ' a poster of its own, so the Now Playing poster (#312) never asks for
+        ' one that is not there.
+        parentRatingKey: NxPosterSeasonKey(ep),
         seasonNumber: ep.parentIndex,
         episodeNumber: ep.index,
         videoCodec: codecs.video,
@@ -683,4 +687,12 @@ function NxPlexSectionRefs(server as Object, directories as Dynamic) as Object
         end if
     end for
     return out
+end function
+
+' The season's key when the season has a poster, else invalid.
+function NxPosterSeasonKey(ep as Object) as Dynamic
+    if NxToStr(ep.parentThumb) = "" then return invalid
+    key = NxToStr(ep.parentRatingKey)
+    if key = "" then return invalid
+    return key
 end function
