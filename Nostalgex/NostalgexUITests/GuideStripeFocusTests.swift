@@ -100,14 +100,28 @@ final class GuideStripeFocusTests: XCTestCase {
             XCTAssertEqual(stripeLabel, "Bundle \(name)")
             let top = rowTop(firstChannel)
             XCTAssertNotNil(top, "channel \(firstChannel) is not on screen after the jump to \(name)")
-            if let top { XCTAssertEqual(top, listTop, accuracy: 6, "\(name): its first channel (\(firstChannel)) is not at the top of the list") }
+            // At the top of the list, unless the list has run out: the last package is shorter than the screen, so the
+            // list stops with its last channel at the bottom and the package's first channel a little below the top.
+            if let top {
+                let last = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Channel 20,")).firstMatch
+                let listBottom = app.scrollViews.firstMatch.frame.maxY
+                let atEnd = last.exists && abs(last.frame.maxY - listBottom) <= 6
+                print("STRIPE \(name): first channel top \(top), list top \(listTop), last channel bottom \(last.exists ? last.frame.maxY : -1), list bottom \(listBottom)")
+                if !atEnd {
+                    XCTAssertEqual(top, listTop, accuracy: 6, "\(name): its first channel (\(firstChannel)) is not at the top of the list")
+                } else {
+                    XCTAssertGreaterThanOrEqual(top, listTop - 6, "\(name): its first channel is above the list")
+                }
+            }
             shot("3-\(name)")
         }
 
-        // Past the last package nothing moves.
-        press(.down, 1.0)
+        // Down on the last package wraps to the first, and Up on the first back to the last, as the channel rows wrap.
+        press(.down, 1.3)
         XCTAssertTrue(stripeIsFocused)
-        XCTAssertEqual(stripeLabel, "Bundle THE REST OF THE DEMO", "no wrap past the last package")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION", "Down on the last package wraps to the first")
+        press(.up, 1.3)
+        XCTAssertEqual(stripeLabel, "Bundle THE REST OF THE DEMO", "Up on the first package wraps to the last")
 
         // Up goes back, package by package.
         press(.up, 1.3)
@@ -123,19 +137,21 @@ final class GuideStripeFocusTests: XCTestCase {
         XCTAssertFalse(stripeIsFocused, "Right did not leave the stripe: \(focusText())")
         XCTAssertTrue(focused().label.hasPrefix("Channel 7,"), "back on \(focusText()), not channel 7")
         let list = app.scrollViews.firstMatch.frame
-        if let top = rowTop(7) {
-            XCTAssertGreaterThanOrEqual(top, list.minY - 1, "channel 7 is cut off at the top")
-            XCTAssertLessThanOrEqual(top + 81, list.maxY + 1, "channel 7 is cut off at the bottom")
+        // The row's own frame, not a fixed height: the guide's row is 64 pt (76 at LARGER) since 1.0.32; the 81 here
+        // was the old 80 pt row plus its divider.
+        let row7 = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Channel 7,")).firstMatch
+        if row7.exists {
+            XCTAssertGreaterThanOrEqual(row7.frame.minY, list.minY - 1, "channel 7 is cut off at the top")
+            XCTAssertLessThanOrEqual(row7.frame.maxY, list.maxY + 1, "channel 7 is cut off at the bottom")
         }
         shot("4-back-on-the-rows")
 
-        // Up from the top of the stripe's first package goes nowhere either.
+        // Up from LATE NIGHT is the first package.
         press(.left, 1.6)
         XCTAssertTrue(stripeIsFocused, "the second Left did not reach the stripe: \(focusText())")
         XCTAssertEqual(stripeLabel, "Bundle LATE NIGHT")
         press(.up, 1.3)
-        press(.up, 1.3)
-        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION", "no wrap before the first package")
+        XCTAssertEqual(stripeLabel, "Bundle RETRO ACTION")
         if let top = rowTop(1) { XCTAssertEqual(top, listTop, accuracy: 6, "the first package is at the very top") }
         // Right returns to the first channel of the package the stripe was moved to.
         press(.right, 1.2)

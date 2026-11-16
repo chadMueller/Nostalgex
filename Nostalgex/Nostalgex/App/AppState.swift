@@ -322,6 +322,17 @@ class AppState {
     /// with it), which is itself the answer when the connect screen shows no diagnosis.
     static let hasHeldSignInMarkerKey = "nostalgex_has_held_sign_in"
     var libraryUpdateNotice: String? = nil
+    /// The loading pattern (`LoadNotice`): a load running in front of a guide that stays up
+    /// (a server or library switch from Settings, RESCAN LIBRARY). Nil when none is; the
+    /// full-screen `LoadingView` is for a load with no guide yet.
+    var guideLoadInPlace: GuideLoadKind? = nil
+    /// The block's line under the count: the library being read.
+    var guideLoadDetail: String = ""
+    /// GUIDE READY's count while it shows in the header (`LoadNotice.readySeconds`).
+    var guideReadyTitles: Int? = nil
+    @ObservationIgnored var guideReadyTask: Task<Void, Never>?
+    /// A foreground load is running with the guide still on screen.
+    var isLoadingInPlace: Bool { isLoading && guideLoadInPlace != nil && !channels.isEmpty }
     var loadingMessage: String = ""
     /// Step rail + detail line on `LoadingView`.
     var libraryLoadPhase: LibraryLoadPhase = .preparing
@@ -784,10 +795,6 @@ class AppState {
     /// Demo mode only: when the block the demo clip is standing in for ends. See
     /// `demoScheduleTick()`.
     @ObservationIgnored var demoBlockEnd: Date?
-    /// Real libraries: when the schedule slot of the item now loading ends, or nil when the
-    /// loading item is not the one the schedule has on air (a random fallback, an early
-    /// advance) or is a multi-disc film. See `liveScheduleTick()`.
-    @ObservationIgnored var liveSlotEnd: Date?
     /// Offset the server was asked to start an HLS transcode at (0 = none). See hlsBaseOffset.
     var hlsRequestedOffset: Int = 0
     /// Added to the player's clock for every position report. An HLS transcode started at an

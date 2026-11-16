@@ -22,7 +22,10 @@ enum DailyManifestStore {
     /// 2: the lineup's days are packed together, so one title is never on two channels at once
     /// (DailyManifestScheduler.packLineupDay). A day stored at 1 is packed again once, from
     /// what aired the day before, which still reads at any version.
-    static let schemaVersion = 2
+    /// 3: a programme's slot is its real runtime in seconds, the day starts when the programme running over midnight
+    /// from yesterday ends, and the filler loop no longer cuts or shortens a block at midnight (#315). A day stored at
+    /// 2 has minute slots and is packed again once.
+    static let schemaVersion = 3
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]
@@ -30,8 +33,13 @@ enum DailyManifestStore {
     }()
     private static let decoder = JSONDecoder()
 
-    static func poolFingerprint(ratingKeys: [String]) -> String {
-        let sorted = ratingKeys.sorted().joined(separator: ",")
+    /// The pool a day was packed from: each item's key and its slot in seconds. The slot is in it because a stored day
+    /// carries the lengths it was packed with (#315): the first guide of a Jellyfin or Emby TV comes up from a snapshot
+    /// read before runtimes were kept, packs minute slots and saves them, and the rescan that follows adds the
+    /// runtimes to the same keys. Without the slot in the fingerprint that day would stay at minute slots, and a file
+    /// would run past its slot until midnight.
+    static func poolFingerprint(items: [PlexMediaItem]) -> String {
+        let sorted = items.map { "\($0.id)@\($0.slotSeconds)" }.sorted().joined(separator: ",")
         let digest = SHA256.hash(data: Data(sorted.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }
@@ -189,6 +197,13 @@ enum DailyManifestStore {
         DailyManifestScheduler.invalidateMemo()
     }
 
+    /// What a library refresh purges: every day except today and yesterday (see `purgeDays`).
+    static func purgeStaleDays(now: Date = Date(), credentialFingerprint: String, calendar: Calendar = .current) {
+        purgeDays(keeping: localDayKey(for: now, calendar: calendar),
+                  alsoKeeping: [previousLocalDayKey(before: now, calendar: calendar)],
+                  credentialFingerprint: credentialFingerprint)
+    }
+
     /// Delete manifest files for any day key other than `keepDayKey`.
     /// Preserves today's schedule so a library refresh (background or foreground)
     /// can't blow away an EPG the user is currently watching.
@@ -196,14 +211,18 @@ enum DailyManifestStore {
     /// Also drops the scheduler's in-memory memo: this runs right after a library
     /// rebuild, and a refreshed pool can keep the same shape (and therefore the same
     /// memo key) while its contents differ.
-    static func purgeDays(keeping keepDayKey: String, credentialFingerprint: String) {
+    ///
+    /// `alsoKeeping` are more day keys to leave alone. Yesterday's is one: a programme that runs over midnight is
+    /// on air from yesterday's file until it ends, in the guide and in what Now Playing and Up Next read (#315), so
+    /// a refresh just after midnight that deleted it blanked both. `purgeStaleDays` is the call that keeps it.
+    static func purgeDays(keeping keepDayKey: String, alsoKeeping extraDayKeys: [String] = [], credentialFingerprint: String) {
         DailyManifestScheduler.invalidateMemo()
         guard let dir = baseDirectory(credentialFingerprint: credentialFingerprint) else { return }
-        let suffix = "_\(keepDayKey).json"
+        let suffixes = ([keepDayKey] + extraDayKeys).map { "_\($0).json" }
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
         var removed = 0
-        for url in entries where url.pathExtension == "json" && !url.lastPathComponent.hasSuffix(suffix) {
+        for url in entries where url.pathExtension == "json" && !suffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
             do {
                 try fm.removeItem(at: url)
                 removed += 1

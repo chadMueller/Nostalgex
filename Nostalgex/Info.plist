@@ -9,6 +9,7 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>plex</string>
+		<string>jellyfin</string>
 	</array>
 	<!-- NSAllowsArbitraryLoads ONLY. On tvOS 10+ the presence of any of
 	     NSAllowsLocalNetworking, NSAllowsArbitraryLoadsInWebContent or

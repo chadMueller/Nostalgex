@@ -16,6 +16,10 @@ enum InfoPanelSection: Equatable {
 enum InfoPanelLayout {
     /// Lines the description area always holds. A longer description ends in an ellipsis.
     static let descriptionLines = 2
+    /// The poster beside the text (Variant A, as in the Now Playing panel), the size the Now Playing panel uses.
+    static let posterSize = CGSize(width: 120, height: 180)
+    /// The lines under the poster and its text, across the panel's whole width: the progress bar and UP NEXT.
+    static let belowPoster: Set<InfoPanelSection> = [.progress, .upNext]
 
     static func sections(for item: PlexMediaItem, hasUpNext: Bool) -> [InfoPanelSection] {
         var out: [InfoPanelSection] = [.title]
@@ -33,6 +37,7 @@ enum InfoPanelLayout {
 }
 
 struct InfoPanelView: View {
+    @Environment(AppState.self) private var appState
     let channel: Channel
     let schedule: ChannelSchedule
     /// When showing the active channel, pass the actual playing item so the title
@@ -88,7 +93,21 @@ struct InfoPanelView: View {
                 let next = previewEntry != nil
                     ? previewEntry.flatMap({ GuideTimeCursor.entry(after: $0, in: schedule.entries) })
                     : schedule.upNext
-                ForEach(Array(InfoPanelLayout.sections(for: displayItem, hasUpNext: next != nil).enumerated()), id: \.offset) { _, section in
+                let sections = InfoPanelLayout.sections(for: displayItem, hasUpNext: next != nil)
+                // The poster beside the title, badges and description; the progress bar and UP NEXT under both.
+                HStack(alignment: .top, spacing: 18) {
+                    if showsPoster {
+                        poster(for: displayItem)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(sections.filter { !InfoPanelLayout.belowPoster.contains($0) }.enumerated()), id: \.offset) { _, section in
+                            sectionView(section, item: displayItem, next: next)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.bottom, Spacing.sectionGap)
+                ForEach(Array(sections.filter { InfoPanelLayout.belowPoster.contains($0) }.enumerated()), id: \.offset) { _, section in
                     sectionView(section, item: displayItem, next: next)
                 }
             }
@@ -184,19 +203,53 @@ struct InfoPanelView: View {
                 .padding(.bottom, Spacing.sectionGap)
 
         case .upNext:
+            // One plain line, the title first in the guide's yellow and then the minutes, as the Now Playing panel:
+            // "Varsity Blues  UP NEXT IN 24 MIN" (`UpNextLabel.line`). The minutes move with the clock, so this line
+            // re-reads it every 15 s. A long title ends in an ellipsis; the label never shrinks.
             if let next {
-                HStack(spacing: 10) {
-                    Text("UP NEXT")
-                        .font(Typo.upNextLabel)
-                        .tracking(3)
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
-                        .font(Typo.upNextTitle)
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 15)) { context in
+                    HStack(spacing: 14) {
+                        Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
+                            .font(Typo.upNextTitle)
+                            .foregroundStyle(UpNextLabel.titleColor.color)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(context.date)))
+                            .font(Typo.upNextLabel)
+                            .tracking(3)
+                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .layoutPriority(1)
+                        Spacer(minLength: 0)
+                    }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("infoPanelUpNext")
             }
         }
+    }
+
+    // MARK: - Poster
+
+    /// The poster column, on every server (Plex, Jellyfin and Emby: the season's, then the series', then the episode's
+    /// own image for TV, the film's poster for films, #312). It is always there, art or not, so the text beside it never
+    /// moves from one programme to the next; a programme with no art shows an empty frame. Not in demo mode, which has
+    /// no art at all (the UI-test fixture turns it on).
+    private var showsPoster: Bool {
+        !appState.isDemoMode || DemoData.infoPanelFixtureRequested
+    }
+
+    private func poster(for item: PlexMediaItem) -> some View {
+        let size = InfoPanelLayout.posterSize
+        return FallbackPosterImage(urls: appState.posterURLs(for: item), size: size, cornerRadius: 10) {
+            Color.nxRow
+        } onAllFailed: {
+            Color.nxRow
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .id(item.id)
     }
 
     // MARK: - Badges
@@ -236,7 +289,7 @@ struct InfoPanelView: View {
                     let live = schedule.livePlayback(at: context.date)
                     let elapsed = live?.elapsedSeconds ?? schedule.elapsedSeconds
                     let progress = live?.progress ?? schedule.progress
-                    let total = live?.totalSeconds ?? item.duration * 60
+                    let total = live?.totalSeconds ?? item.slotSeconds
 
                     HStack(spacing: 10) {
                         GeometryReader { geo in

@@ -3,6 +3,173 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
+
+**Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.
+
+**Changed.**
+- A first load with no guide keeps the full-screen loading view.
+- A server or library switch from Settings (CHANNEL GUIDE IS CHANGING) and RESCAN LIBRARY (LOADING YOUR LIBRARY) keep the guide on screen with the video playing; the guide area holds one centred block: the yellow title, READ n TITLES in text-2, the library being read ("TV SHOWS: 1,200 OF 1,450", OF only when the server gave a total; then COLLECTIONS, METADATA, CHANNELS), and a cyan bar that moves (`GuideLoadBlock`).
+- A stalled read shows its notice and STOP WAITING inside that block, focused, never over the video.
+- The top bar, between the wordmark and SETTINGS: UPDATING LIBRARY: n TITLES READ while a refresh reads behind the guide, then GUIDE READY: n TITLES in yellow for 4 s after any read that came back whole. Nothing after a read that was cut short (STOP WAITING, a stall) or failed.
+- Disconnect mid-load ends the block at once; the load itself was already dropped by `librarySessionGeneration` before it saves or shows anything, and a test now holds that for a load in front of the guide.
+
+**Tested.** `LoadNoticeTests` (the wording), `BackendSwitchScheduleTests` (Disconnect during RESCAN LIBRARY lands nothing, saves nothing, says no GUIDE READY; left alone it ends with GUIDE READY and the count). Simulator walk with `-uiTestGuideLoadFixture`: screenshots in nostalgex-internal `docs/roku-shots/appletv-loading-pattern-2026-11-15/`.
+
+## 2026-11-15 (Apple TV: a programme ends where Emby's file ends, not where its playlist says, #315)
+
+**State.** On `appletv/315-play-to-end`, on top of the play-to-end change below. Not pushed, not merged.
+
+**Why.** Play to the end only works if the end is noticed. Emby lists every HLS segment as 6.0 s, the last one too, so its playlist runs up to 6 s past the file. With fMP4 segments (every HEVC stream Emby sends to an Apple TV, copied or re-encoded) the player shows the last frame it gets and waits for the rest. Nothing ended the programme: the old backstop needed 2 s or less left on the playlist with the rate at 0, the starvation monitor ignores a paused player, and nobody listened for the "failed to play to end" that comes much later. With the 1.0.32 slot tick gone, the channel sat on the last frame. Measured against Emby 4.10.1.0 with AVPlayer, the stream as the app asks for it:
+
+| file | last frame | runtime | playlist left | then |
+|---|---|---|---|---|
+| 21 min HEVC MKV, video copied | 1263.91 s | 1260.39 s | 2.1 s | paused; failed to play to end 41 s later |
+| 90 s HEVC MKV, video copied | 83.80 s | 90.03 s | 12.2 s | paused; same 52 s later (Apple TV: item failed, "Cannot Complete Action") |
+| 90 s hev1 MP4, re-encoded | 83.96 s | 90.01 s | 9.0 s | paused; same 13 s later |
+| 90 s H.264 MKV, copied into TS | 89.82 s, its last frame | 90.05 s | | ended normally |
+| 90 s HEVC MKV, copied, on an Apple TV 4K through the app | 81.79 s | 90.03 s | 14.2 s | left waiting; the startup watchdog (tuned 20 s before the end) retried it at 1080p, which stopped at 81.79 s again |
+
+How much goes missing depends on the file: Emby cuts a copied stream at the first keyframe after each 6 s, so the real segments are as long as that (8 s for the test files' 4 s keyframes, about 10.4 s at x264 and x265's default 250 frames at 24 fps) and the last one is what never comes. An Apple TV 4K lost 8.24 s of the 90 s file.
+
+Emby never sends the missing 2 to 6 s, so moving on promptly is all the app can do. Request settings were tried and rejected: `SegmentLength=2` alone broke the timeline (24 s and 8 s jumps), `BreakOnNonKeyFrames=True` alone changed nothing (6.3 s lost), the two together ended cleanly but dropped 2 to 5 frames at every segment boundary for the whole programme and still lost 2.2 to 5.6 s. TS segments end cleanly, but AVPlayer will not show HEVC from TS.
+
+**Changed.**
+- `PlaybackEndRule` / `PlaybackEndWatch`: within 15 s either side (one copied segment at the common 10.4 s keyframe interval, and slack; 8 s, the first figure, missed the 8.24 s an Apple TV 4K lost) of the programme's real runtime (`exactDurationSeconds`, checked against the minutes as `slotSeconds` does; none for a multi-part film), a playhead still for 2 s is the end, whether the player paused or was left waiting, but only while the playlist claims 1 s to 15 s beyond what the file has left, and only on a stream that starts at zero (a Plex join the server starts at an offset can begin at an earlier keyframe, which looks like a few seconds of overrun; Emby and Jellyfin joins are client seeks at offset 0). More than 15 s is a longer version than the runtime describes, not a rounded-up segment. Every Emby case overran by 3 to 6 s; on an honest playlist (Plex, Jellyfin) a stall near the end is a real one and keeps waiting and recovering as before, instead of cutting up to 15 s. The far side of the window keeps a runtime shorter than the version that plays (an extended cut) from holding it open for the rest of the film. The old playlist backstop stays.
+- The same window makes a failure the end: the item going `.failed` (the three status observers check it before retrying), `AVPlayerItemFailedToPlayToEndTime`, which nothing heard before, and the startup watchdog finding no picture (a channel tuned less than its 20 s deadline before the end).
+- The starvation monitor stands down where a still playhead is the end (inside the window and the playlist overrunning), so Emby's tail never gets a 1080p retry or the "server too slow" card. A stall anywhere else, or on an honest playlist, is unchanged.
+
+**Tested.** `PlaybackEndRuleTests` replays the measured ends, paused and waiting, a stall mid-file, a stall 10 s from the end of an honest playlist (waits and recovers), a stall past a short runtime (window closed), a stall on a stream started at an offset, and a stall in an extended cut 610 s longer than its runtime (both red before their guards); it was red on the old backstop (the measured ends never ended, the window and wiring checks failed), the honest-playlist and short-runtime tests were red without the overrun check and the far side of the window (a 10 s cut, and a stall 300 s past the runtime ending the film), and all are green now. The next programme starts 2 s after the last frame arrives, plus its load.
+
+## 2026-11-15 (Apple TV 1.0.33 (57): the release branch)
+
+**State.** Branch `appletv/1.0.33`: `appletv/315-play-to-end`, `appletv/guide-text-three-steps`, `appletv/stripe-colours-golden` and `appletv/318-collection-paging` on main, version 1.0.33, build 57. Archived locally, not uploaded; on the basement Apple TV for a look. PR #328 (#315) is not merged yet; the branch is rebased on main once it is.
+
+**Changed.** `GuideStripeFocusTests` failed on main since the guide's rows went to 64 pt, for two reasons in the test, not the app. The last bundle (channels 14 to 20) is shorter than the screen, so the list stops with channel 20 at its bottom (1,079 of 1,080 pt) and channel 14 9.5 pt below the top; the test now accepts that only when the list has run out. And it took a row to be 81 pt (the old 80 pt row and its divider); it now reads the row's own frame.
+
+## 2026-11-15 (Apple TV: the Jellyfin and Emby collection list in pages, and what reading library pages ahead would save, #318)
+
+**State.** Branch `appletv/318-collection-paging` off main. Not merged, not in a build, not pushed.
+
+**Changed.** The list of collections (BoxSets) on Jellyfin and Emby was one request with no StartIndex or Limit; a server with an auto-collections plugin can hold thousands. It is now read 500 at a time, as the web tuner does (`MediaBrowserPaging.readAll`), until the server's TotalRecordCount, a short page or an empty one.
+
+**Measured, not wired.** Reading library pages ahead (`MediaBrowserPaging.readAllAhead`, three in flight, handed back in order) against a model server that takes the same time for every 200-title page and builds pages in parallel: 30 pages at 100 ms each took 3.12 s one at a time and 1.14 s three ahead (63% less). The time the app spends on a page between two requests is small: decoding a realistic 200-title page (326 KB) takes 5.7 ms median on the Simulator, so overlapping that alone saves almost nothing; the gain is all in the server building pages at the same time. A model can't say whether a real Jellyfin or Emby does that, so the scan still reads library pages one at a time. Shows were already read ten series at a time. Next: time three-ahead against a real big library before wiring it into `fetchAllItems`.
+
+**Tests.** `MediaBrowserPagingTests` (three requests for 1,234 collections, a short or empty page or no total ends it, the query) and `MediaBrowserReadAheadTests`, with `CollectionShowsTests`: all pass.
+
+## 2026-11-15, later (Apple TV: UP NEXT title first, a louder cursor, the stripe wraps, ICLOUD on top, posters on Jellyfin and Emby, OPEN IN JELLYFIN, the other server's discovery)
+
+**State.** On branch `appletv/guide-text-three-steps`. Not merged, not in a build, not pushed. From Chad's second and third looks at the basement TV.
+
+**Changed.**
+- **UP NEXT reads title first, in the guide's yellow (#FFE500), then the minutes:** "Varsity Blues  UP NEXT IN 24 MIN", under a minute "UP NEXT IN LESS THAN 1 MIN" (`UpNextLabel.line`). The yellow holds 14.96:1 on the Now Playing panel and about 15:1 on the guide info panel. A long title ends in an ellipsis; the label never shrinks. Both panels.
+- **The guide cursor's cell is louder** (`GuideCursorStyle`): cyan #00D4FF at 30% over the row, a full cyan 3 pt ring, and two cyan glows (18 pt at 90%, 6 pt at 100%), clipped to the row's programme area so it never covers the stripe, the channel column or the rows above and below. While a cell is under the cursor the row's own focus steps back to a 2 pt outline at 55% with a 6 pt glow at 25%. White titles hold 8.5:1 or better on the cell.
+- **The bundle stripe wraps**, as the channel rows do: Down on the last bundle is the first, Up on the first is the last, stepping over runs with no bundle.
+- **SERVERS & ACCOUNTS starts with ICLOUD:** the sync switch moved to the top under its own heading, the same subtitle and behaviour; it is the pane's first focus.
+- **Posters on Jellyfin and Emby, the same chain as Plex:** an episode's season Primary image, then its series', then its own; a film's own (`/Items/{id}/Images/Primary`). The scans keep the episode's `SeasonId`; an episode read before that goes series then itself. The guide info panel's poster space is there on every server now (not in demo mode).
+- **OPEN IN JELLYFIN** on the Now Playing panel's last row, on Jellyfin with Swiftfin installed: Swiftfin's item link, `jellyfin://{serverId}/{userId}/item/{itemId}` (its `DeepLink`, the `jellyfin` scheme since its #2268, in 1.7.0), `jellyfin` listed for `canOpenURL`, "NO JELLYFIN APP" when it fails, as OPEN IN PLEX. No Emby row: Emby's Apple TV app has no item link (on its forum the iOS form opens the app but not the item), and a row that only opens an app is not worth it.
+- **A server search that finds the other kind says so:** Jellyfin and Emby each answer only their own discovery probe, so a Jellyfin search on a network with only Emby used to end in "No server answered". It now searches for the other kind too and says "No Jellyfin server answered. Found an Emby server: NAME. Switch to Emby?", with a SWITCH TO EMBY button per server that goes to its sign-in with the address filled in. The usual message stays when neither answers.
+
+**Still Plex only, for a reason.** OPEN IN PLEX (Plex's app link), ORIGINAL (LOCAL PLEX) in STREAM QUALITY and RETRY ORIGINAL VIDEO (both drive Plex's transcoder decision API, which Jellyfin and Emby do not have). Everything else in the two panels (year, certificate, star rating, description, genres, artist, time range, UP NEXT, poster) comes from the Jellyfin and Emby scans as well.
+
+**Tests.** `UpNextLineTests` (the line, the colour's contrast, white on the cursor cell), `GuideStripesTests` (the wrap), `DiscoveryOtherKindTests` (canned Emby and Jellyfin replies), `MediaBrowserPosterTests` and `OpenInJellyfinLinkTests` (the link against Swiftfin's own pattern), with the panels' and sign-in classes: all pass. Simulator screenshots in demo mode; not seen on Emby or Jellyfin in the Simulator (no server signed in there) and Swiftfin not tried on a TV.
+
+## 2026-11-15 (Apple TV: a programme cursor in the guide, LARGER rows, the info panel's poster, plain UP NEXT, no help line in Now Playing)
+
+**State.** On branch `appletv/guide-text-three-steps`, now on main `106e8dda`. Not merged, not in a build, not pushed. From Chad's look at the basement TV build.
+
+**Changed.**
+- **The guide's Left and Right move a programme at a time** (`GuideProgramCursor`), not the window by 30 minutes. Focus stays on the row; the cursor is a time on it, and the programme covering that time gets its own cell: the selected fill, a 3 pt cyan ring and a glow, inside the row's focus. Right goes to the next programme whatever its length, over a gap too. Left goes to the previous one as long as it has not ended; from the programme on now it goes on to the bundle stripe (or the bundle list) as before. Up and Down change the row and keep the time, so the cursor lands on that row's programme at the same time. The window moves only when the programme would leave the two-hour view (it starts past the view, or within its last 15 minutes, or before it), to the 30 minute slot its start is in. The info panel follows the cursor: a later programme shows with its time range in place of the progress bar (I-089). Going back to the playing channel (Menu, the end of full screen, selecting a row) puts the cursor on the live programme and the window at its start.
+- **LARGER grows the guide's row with its text:** 76 pt rows and a 66 pt time header (SMALLER and DEFAULT keep 64 and 58), so 29 pt text keeps the room 20 pt has in 64 (about 23 pt above and below), and the 29 pt times keep the 18 pt the 22 pt ones have. The bundle list's rows follow; the number box is unchanged; the Now Playing panel's rows stay 64.
+- **The guide info panel shows the programme's poster** beside the title, badges and description, the channel line above, the progress bar and UP NEXT under both (Variant A, 120 x 180, the same poster chain as the Now Playing panel, #312). On Plex only, where the posters come from; the column is always there on Plex, art or not, so the text never moves. It never had one.
+- **UP NEXT is one plain line, minutes first, in both panels:** "UP NEXT IN 24 MIN" then the title, no pill and no border, as the web tuner since 1.0.21. Under a minute it reads "UP NEXT IN LESS THAN 1 MIN". The guide info panel had no minutes before.
+- **The Now Playing panel has no help line under its rows** (Chad: "it feels so out of place there"), nor under its lists. PLAYBACK INFORMATION keeps its note, which is what that list shows, and RETRY ORIGINAL VIDEO still writes its result there while it has focus.
+
+**Tests.** `GuideProgramCursorTests` (Right over short, long and gap, Left back to live and none from live, another row keeps the time, a cursor behind the clock, when the window moves) and the row and header numbers in `GuideTextSizeTests`; with `GuideTimeCursorTests`, `InfoPanelLayoutTests` and `NowPlayingPanelLogicTests`, 74 pass. UI: `GuideInfoPanelTimeTests` passes; of `GuideStripeFocusTests`, one test fails (the last package's first channel lands 9.5 pt below the top of the list), and it fails the same way on main `106e8dda`, so not from this. A walk on the Simulator in demo mode: Right, Right, Right x2, Down, Left x6, Left. Not on a TV yet.
+
+## 2026-11-14 (Apple TV: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT, LARGER)
+
+**State.** Branch `appletv/guide-text-three-steps` off main `f76c021f`. Not merged, not in a build, not pushed. The smoke script `scripts/guide-text-smoke.mjs` fails 10 checks on purpose until Roku and the web tuner take the new numbers (below), so this must not reach main without them.
+
+**Why.** Chad, on 1.0.32: the guide type "feels overly too big", then: add a smaller size to the setting we already have, make the pulled-back sizes the default, and keep the larger one. It supersedes `appletv/guide-text-smaller` (`225ec8d8`), whose numbers are the DEFAULT step here.
+
+**Changed.**
+- `GuideTextSize` is `small`, `normal`, `large`. The labels are SMALLER, DEFAULT and LARGER. The raw values are the contract with stored prefs, iCloud sync and the other platforms: "large" is the old LARGE and "normal" is still the middle step (only the label says DEFAULT). "small" is new. Anything unknown, empty or missing reads as "normal". Roku and the web tuner only know normal and large, so they read "small" as normal, which is the safe fall back.
+- The Settings row (PLAYBACK & PICTURE) cycles SMALLER, DEFAULT, LARGER and round again (`GuideTextSize.next`); its value and accessibility value are the label. Checked on the Simulator: DEFAULT, then LARGER, SMALLER, DEFAULT.
+- The bundle list and the Now Playing panel follow the step. They used to be fixed at 22 pt whatever the setting; they now read the saved step when they draw (`GuideTextSize.current`, which `AppState.guideTextSize` writes the moment the row changes). Their DEFAULT text is 20 pt (the smaller branch's change reached the panel through `packageRowText`), and LARGER keeps the 22 pt they always had at LARGE.
+- Row height (64), the 58 pt header and the 340 pt channel column are the same at every step.
+
+| Token | SMALLER | DEFAULT | LARGER (today's LARGE) |
+|---|---|---|---|
+| program title, channel number, channel name | 17 | 20 | 29 |
+| times, CHANNEL heading, placeholder | 19 | 22 | 29 |
+| channel number box | 31 | 36 | 54 |
+| bundle list rows, BUNDLES heading | 17, 19 | 20, 22 | 22, 25 |
+| Now Playing text | 17 | 20 | 22 |
+| Now Playing item title, CH tag | 25, 24 | 29, 28 | 29, 28 |
+
+**Why 17 and 19.** The first cut of SMALLER was 18 and 20 (the same 2 pt step DEFAULT took), and on the Simulator it read as a nudge, so it went one point further: 85% and 86% of DEFAULT. One point is 1/1080 of the screen height, so 17 pt is 1.6% of it, a 12 px capital in DM Mono Medium. The strokes stay crisp in the 4K shots, but this is the floor: not judged on a TV from a couch, only on the Simulator. If it looks too small on the TV, 18 and 20 is a one-line change in `GuideTextMetrics.small`.
+
+**What Roku and the web must change** (the smoke script lists the failing checks):
+- Roku `GuideText.brs`: NORMAL becomes the DEFAULT numbers (title, number, name 20; time, heading 22) and a third step SMALLER (17 and 19) saved as "small"; LARGE stays 29 and keeps the raw value "large". The label of the middle step reads DEFAULT.
+- Web `plex-tuner.html`: the `--gt-*` multipliers of LARGE become 1.45 (title, number, name) and 1.3182 (time, heading) over the new DEFAULT; a SMALLER class takes 0.85 and 0.8636; the web's own GUIDE TEXT SIZE reads the same three raw values.
+- Android: its NORMAL and LARGE take the same two moves, and the new "small".
+
+**Tests.** `GuideTextSizeTests` (round trip for all three, unknown falls back, the cycle, the labels and raw values, every metric for every step, the floors, each step at least as big as the one below, three digits fit the box, lines fit the row and header, time labels fit their slot) and the iCloud sync test. One focused class run each, serial on the one Simulator: both pass. The smoke script: 15 checks pass, 10 fail on the Roku and web pairs by design. Screenshots of all three steps (guide, focused row, Now Playing, bundle list, the Settings row cycle) are in `projects/nostalgex-internal/docs/roku-shots/appletv-textsize-2026-11-13/` (`steps-*`, with `steps-compare-*` stacking the three). Demo mode on the Simulator only; no Apple TV used.
+
+**Not done.** `content/changelog.json` still describes the setting as NORMAL and LARGE; the site agent rewrites it when this is cut into a build. No device pass of SMALLER from a couch.
+
+## 2026-11-14 (Apple TV: a file plays to its own end, #315)
+
+**State.** Branch `appletv/315-play-to-end` off main `106e8dda`. Not merged, not in a build, not pushed. This is the Swift reference of an engine change: the web tuner's JS engine, the Roku and Android each have a port to make, and the golden vectors move with it (listed under Half-done).
+
+**Why.** Chad: "the file should play till the end always". A tester on 1.0.32 (Plex 4.163, Original quality) saw a 4:11 music video show 4:00 and cut at 4:00. The servers floor a runtime to whole minutes and the schedule slot was that floored length, so a file runs 0 to 59 s past its slot. Until 1.0.31 nothing moved the channel on at the slot's end, and the player fell further behind the clock at every boundary (#293: the headline named the programme still playing while the guide had moved on). 1.0.32 fixed that by cutting the file at its slot end, which is the cut. The fix has to keep both: the file plays through and the guide, Now Playing and Up Next agree with it.
+
+**Changed.**
+- A programme's slot is the file's real runtime in whole seconds, rounded up (`PlexMediaItem.slotSeconds`), so the slot and the file end together and the guide never moves on before a file ends. A runtime that is missing, or that disagrees with the floored minutes by a minute or more, is the minutes, as before. Plex already kept the runtime (`exactDurationSeconds`); the Jellyfin and Emby scans now keep it too (from `RunTimeTicks`, the whole stack for a disc-stacked film), and `LibrarySnapshotStore.scanFieldsVersion` is 3 so a Jellyfin or Emby snapshot rescans once behind the guide.
+- The 1.0.32 slot tick is gone (`liveScheduleTick`, `liveSlotEnd`, the once-a-second timer): nothing moves a file on while it is playing.
+- A day no longer cuts a programme at midnight. The filler loop (a channel whose pool is too small to fill the day once) clipped its last block at midnight and shortened its first block of the day by an offset into the item; both are gone, so every block is its file's whole length. The day now starts when yesterday's last programme ends, and the guide's window includes yesterday's stored programme that is still on air after midnight, so no programme of today is on air under a file that is still playing. `DailyManifestStore.schemaVersion` is 3, so a stored day repacks once on update.
+- A natural end starts the next programme at 0, as it always did. The one new rule: the next file takes a second or two to load, which the clock keeps counting, so the player falls behind the guide by that much at every boundary. Once the guide is 10 s or more into the programme a natural end is about to start, it joins where the clock is instead (`AppState.naturalEndCatchUpSeconds`): the opening seconds of a programme go, never the end of anything.
+- A library refresh keeps yesterday's stored day (`DailyManifestStore.purgeStaleDays`: today and yesterday stay, older days go). It used to keep only today, so a refresh just after midnight deleted the file the programme running over midnight is on air from, and Now Playing and Up Next were empty on every channel whose programme ran over (4 of 4 channels in the probe; on the filler loop it can be a whole film). The yesterday read behind the guide's window is memoised like a day (`yesterdayRunOver`).
+- The pool fingerprint of a stored day carries each item's slot (`poolFingerprint(items:)`, was the keys only). The first guide of a Jellyfin or Emby TV after the update comes up from a snapshot with no runtimes, packs minute slots and saves them; the rescan then adds runtimes to the same keys, and the stored day is rebuilt with them instead of staying at minute slots until midnight. That rebuild is a one-time change of what is on now.
+- The Jellyfin and Emby episode loaders' per-episode parse is `parseEpisodeItem` (it was a closure in `fetchEpisodes`), so a test and the parity golden read what the loaders keep.
+- The playback tracker, the Now Playing info, the player's total and the info panel's fallback total use `slotSeconds` for the programme's length, so the position and the total agree with the guide.
+
+**Measured** (`TailLossMeasureTests`, six hours from 20:00 to 02:00 so every channel crosses midnight, on the 20 demo channels; a file really lasts its runtime plus 0 to 0.6 s the metadata does not say; the next file starts 2 s after the last ended, an assumed load time, not measured on a TV; "small pool" channels fill the day with the filler loop, "big pool" ones with the first pass, as on a real library). The 1.0.29 and 1.0.32 rows come from an earlier revision of this harness with a hook that called 1.0.32's `liveScheduleTick` (on) or left it out (off, which is how 1.0.29 behaves), run on main `f76c021f` with the same pools and the same 2 s load; that variant is not kept in the repo, and its table columns (tail lost per cut) are not the ones the harness here prints. The rows for this branch came from the harness as first written, run on the first commit of this branch. Tail lost is the part of a file that never played at a boundary; lag is how far behind the guide the player is when a programme starts; mismatch is the share of samples (every 15 s) where Now Playing names a different programme from the guide.
+
+| | Cuts | Tail lost, mean | Tail lost, max | Over 60 s | Now Playing differs from guide | Lag, mean / max |
+|---|---|---|---|---|---|---|
+| 1.0.29, music videos, big pools | 0 | 0 s | 0 s | 0 | 55.8% | 123 / 286 s |
+| 1.0.29, music videos, small pools | 0 | 0 s | 0 s | 0 | 56.6% | 124 / 300 s |
+| 1.0.29, demo (films), small pools | 0 | 0 s | 0 s | 0 | 23.0% | 956 / 5,575 s |
+| 1.0.32, music videos, big pools | 456 of 461 | 39.0 s | 229.1 s | 10 | 0% | 2 / 2 s |
+| 1.0.32, music videos, small pools | 449 of 454 | 38.0 s | 318.6 s | 9 | 0% | 2 / 2 s |
+| 1.0.32, demo (films), small pools | 19 of 24 | 1,063.7 s | 5,467.4 s | 9 | 0% | 2 / 2 s |
+| **This branch**, music videos, big pools | 0 | 0 s | 0 s | 0 | 2.7% | 8.9 / 14.4 s |
+| **This branch**, music videos, small pools | 0 | 0 s | 0 s | 0 | 2.8% | 8.9 / 14.4 s |
+| **This branch**, demo (films), small pools | 0 | 0 s | 0 s | 0 | 0.1% | 6.3 / 13.7 s |
+
+The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at midnight (a block the day clipped, up to 98% of a file). The branch's remaining 2.7% is the time between a file ending and the next one loading, and it stays bounded: with no catch-up it grows to 31.6% (lag 88 / 191 s) after six hours. The catch-up threshold is the one free number; the sweep (music videos, big pools, 2 s load):
+
+| Catch-up at | 5 s | 10 s | 15 s | 20 s | 30 s | 60 s | never |
+|---|---|---|---|---|---|---|---|
+| Now Playing differs from guide | 1.6% | 2.7% | 3.3% | 4.2% | 5.8% | 10.8% | 31.6% |
+| Lag, max | 9.5 s | 14.4 s | 19.5 s | 24.5 s | 34.3 s | 64.3 s | 190.8 s |
+| Programmes that lose their opening (of 394) | 153 | 80 | 54 | 39 | 27 | 12 | 0 |
+| Opening seconds skipped, total | 884 | 876 | 855 | 808 | 828 | 731 | 0 |
+
+10 s is the middle: about 11 s skipped every fifth programme. With no load time at all (0 s) the same pools give 1.8% and 10 files with a skipped opening, from the 0 to 0.6 s jitter alone.
+
+**Tests.** `NaturalEndDriftTests` is rewritten: the slot is the real runtime (rounded up, falling back to the minutes), every block on every channel is as long as its file across a midnight, the guide tiles with no overlap or gap across midnight, a programme running over midnight is on air until it ends and the next starts as it ends, the headline follows the guide with no cut (0 of 7,200 samples), a short file starts the next programme at its end, the lag stays under the catch-up, the catch-up joins the clock only far past it, and the 4:11 case: every slot 251 s, the next programme starts as the file ends, nothing cut. `CollectionShowsTests` expected the last block of the day to end exactly at midnight; it now expects it to run to its own end. The full `NostalgexTests` serial on one visible Simulator (1,385 tests) failed three, all of them asserting the old cut-at-midnight day: that one, the DST golden's fill case, and the parity golden. Those are updated (the DST case now expects the last programme to run past midnight by less than its own length, whole blocks, and only the last one over; the parity golden is regenerated from this build with `scripts/schedule-parity-golden.mjs`), and the four classes re-ran green. Added since: a refresh just after midnight keeps the programme running over (purge, then the guide at 00:00:01), runtimes arriving after the first pack rebuild the stored day, the fingerprint changes when a runtime arrives, saved Jellyfin and Emby episode and film answers keep their runtime (`EpisodeRuntimeLoaderTests`), and parity golden fixtures for the slot's fallback (a missing runtime, 61 s and 60.4 s off the minutes, shorter than the minutes, a whole minute). `TailLossMeasureTests` asserts that no file ran past its slot in the guide by more than its 0.6 s of jitter, that Now Playing differs from the guide in under 5% of samples, and that the lag stays under the catch-up plus the load; the threshold sweep runs only with `TEST_RUNNER_NX_TAILLOSS_SWEEP=1` (about 100 s).
+
+**Half-done.**
+- The port to the JS engine (`scripts/nostalgex-daily-manifest.js` and the web loaders), the Roku (`roku/source/schedule/DailyManifest.brs`, the Plex and MediaBrowser loaders) and Android. `scripts/schedule-parity-golden.json` is regenerated here from the Apple TV (all four cases change: the fixtures' pools are small, so every channel runs the filler loop, and their Jellyfin and Emby items carry real runtimes in ticks and their Plex items in milliseconds, which are now the slots); `npm run test:schedule-parity` is red until the JS engine matches. `scripts/schedule-dst-golden.json` has no data change, but what its `fill` case means does: the last programme may run past midnight (the Swift test and `nostalgex-schedule-dst-smoke.mjs` must agree).
+- A day stored before the update repacks once (the schema is 3, and the day is rejected at 2). What is left: on Jellyfin and Emby, between the first guide after the update and the end of the rescan, items have no runtime, the day is packed with minute slots, and a file can run past its slot; the rescan then rebuilds the day (see the fingerprint above), and until then the catch-up bounds the lag.
+- Port note: the filler loop's cycle offset (`totalPoolSec`, `goldenShift` and the search for the cycle's first item in `packDay`) and the premiere promotion offset (`SchedulePoolOrdering`, cumulative seconds) stay in whole minutes, as the Swift has them, in every port. Only block lengths use the slot in seconds. Converting those too would change which programme leads a day and break parity with the golden.
+- Not measured on a TV: the real time a natural-end advance takes to start the picture (2 s is assumed), and the real gap between a file's runtime and its stream. The Plex HLS end fallback (the player parked within 2 s of the end with no notification) is a separate 2 s loss at most and is untouched.
+
+**Next.** The web, Roku and Android ports of this engine change, against the regenerated golden.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

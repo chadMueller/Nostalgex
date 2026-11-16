@@ -10,8 +10,8 @@ struct TunerView: View {
     /// Guards against an older schedule rebuild landing after a newer one.
     @State private var scheduleBuildToken: Int = 0
     @State private var previewChannelID: Int? = nil
-    /// How far the guide's window is moved through time, in 30 minute steps (GuideTimeCursor).
-    @State private var guideTimeOffset = 0
+    /// The guide's programme cursor, nil on the live programme (GuideProgramCursor).
+    @State private var guideCursorTime: Date?
     // Refresh schedules every 30 seconds (progress bar + entry transitions)
     let scheduleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     /// GUIDE TIMEOUT's check. Every 5 seconds, so a 5-minute timeout fires within 5 seconds of it.
@@ -77,15 +77,21 @@ struct TunerView: View {
                 }
                 .frame(height: videoHeight)
 
-                // Bottom section: EPG Grid (takes remaining space)
-                ChannelGuideView(
-                    schedules: schedules,
-                    windowStart: windowStart,
-                    onFocusChanged: { id in previewChannelID = id },
-                    onTimeOffsetChanged: { guideTimeOffset = $0 },
-                    onOpenSettings: { navigationPath.append(AppDestination.settings) }
-                )
-                .frame(maxHeight: .infinity)
+                // Bottom section: EPG Grid (takes remaining space). While a switch or RESCAN
+                // LIBRARY reads the library in front of it, the guide area says so instead.
+                if appState.isLoadingInPlace {
+                    GuideLoadBlock()
+                        .frame(maxHeight: .infinity)
+                } else {
+                    ChannelGuideView(
+                        schedules: schedules,
+                        windowStart: windowStart,
+                        onFocusChanged: { id in previewChannelID = id },
+                        onCursorChanged: { guideCursorTime = $0 },
+                        onOpenSettings: { navigationPath.append(AppDestination.settings) }
+                    )
+                    .frame(maxHeight: .infinity)
+                }
 
                 // Rating nudge: below the guide rather than over it, so it never
                 // covers a channel row. The guide gives up the height while it shows.
@@ -105,6 +111,9 @@ struct TunerView: View {
         .ignoresSafeArea()
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            #if DEBUG
+            appState.applyGuideLoadFixtureIfRequested()
+            #endif
             RemoteActivityMonitor.install()
             RemoteActivityMonitor.noteActivity()
             buildAllSchedules()
@@ -172,11 +181,11 @@ struct TunerView: View {
         }
     }
 
-    /// The programme the info panel previews, when the guide's window is moved later than now: the one on the
-    /// focused channel at the window's left edge. Nil shows what is on now.
+    /// The programme the info panel previews: the one the guide's cursor is on in the focused channel's row, when it
+    /// is a later one. Nil shows what is on now.
     private func previewEntry(in schedule: ChannelSchedule) -> ScheduleEntry? {
-        guard let time = GuideTimeCursor.previewTime(slotOffset: guideTimeOffset, windowStart: windowStart),
-              let entry = GuideTimeCursor.entry(in: schedule.entries, at: time),
+        guard guideCursorTime != nil,
+              let entry = GuideProgramCursor.current(in: schedule.entries, cursor: guideCursorTime, now: Date()),
               !entry.isNowPlaying else { return nil }
         return entry
     }
@@ -234,6 +243,7 @@ struct TunerView: View {
 // MARK: - Navigation bar
 
 private struct NavBar: View {
+    @Environment(AppState.self) private var appState
     var onSettings: (() -> Void)? = nil
 
     var body: some View {
@@ -247,7 +257,20 @@ private struct NavBar: View {
                 .frame(height: 36)
                 .padding(.leading, 40)
 
-            Spacer()
+            Spacer(minLength: 24)
+
+            // The loading pattern's header line (LoadNotice): UPDATING LIBRARY while a refresh
+            // reads behind the guide, then GUIDE READY in yellow for 4 s.
+            if let notice = appState.headerLoadNotice {
+                Text(notice.text)
+                    .font(NXFont.captionMedium)
+                    .foregroundStyle(notice.isReady ? Color.nxYellow : Color.nxText2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .accessibilityIdentifier("guideHeaderNotice")
+                    .transition(.opacity)
+                Spacer(minLength: 24)
+            }
 
             // Menu items
             HStack(spacing: 32) {

@@ -97,8 +97,9 @@ final class ScheduleDSTGoldenTests: XCTestCase {
         }
     }
 
-    /// A 25-hour day has no empty last hour, and a 23-hour day doesn't run into tomorrow.
-    func testAFullDayOfScheduleWithNoHoleAndNoOverrun() throws {
+    /// A 25-hour day has no empty last hour, and a 23-hour day is covered to its end. The last programme plays to its own
+    /// end, so it may run past midnight by less than its own length (#315); the programme before it ends before midnight.
+    func testAFullDayOfScheduleWithNoHoleAndNoCutAtMidnight() throws {
         let g = try golden()
         let small = channel(id: 201, g.pools.small)
         for d in g.days {
@@ -109,7 +110,11 @@ final class ScheduleDSTGoldenTests: XCTestCase {
             let blocks = DailyManifestScheduler.blocks(for: small, at: at(d.at[2]), credentialFingerprint: fp, calendar: cal)
             let label = "\(d.zone) \(d.date) (\(d.hours) h)"
             XCTAssertEqual(blocks.first.map { unix($0.startTime) }, d.start, label)
-            XCTAssertEqual(blocks.last.map { unix($0.endTime) }, d.nextStart, label)
+            let lastEnd = try XCTUnwrap(blocks.last.map { unix($0.endTime) }, label)
+            XCTAssertGreaterThanOrEqual(lastEnd, d.nextStart, "\(label): the day is not covered")
+            XCTAssertLessThan(lastEnd - d.nextStart, try XCTUnwrap(blocks.last).item.slotSeconds, "\(label): runs a whole programme past midnight")
+            XCTAssertLessThan(unix(try XCTUnwrap(blocks.dropLast().last).endTime), d.nextStart, "\(label): only the last programme runs over")
+            XCTAssertTrue(blocks.allSatisfy { $0.durationSeconds == Double($0.item.slotSeconds) }, "\(label): a block is cut short")
             for (a, b) in zip(blocks, blocks.dropFirst()) {
                 XCTAssertEqual(a.endTime, b.startTime, "\(label): a hole or an overlap")
             }

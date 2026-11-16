@@ -231,26 +231,22 @@ struct NowPlayingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The next programme on one line: its title, then a cyan badge with the minutes until it starts, like
-    /// "Movie Title [UP NEXT IN 84 MIN]". No card around it. A long title ends in an ellipsis; the badge never
-    /// shrinks or wraps. Cyan is the time; yellow stays for live things only.
+    /// The next programme on one plain line, the title first in the guide's yellow and then the minutes:
+    /// "Varsity Blues  UP NEXT IN 24 MIN" (Chad 2026-11-15, `UpNextLabel.line`). No pill, no border. A long title ends
+    /// in an ellipsis; the label never shrinks.
     private func upNextCard(_ next: ScheduleEntry, now: Date) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Text(next.item.isMusicVideo ? next.item.musicDisplayLine : next.item.title)
                 .font(NowPlayingFont.textMedium)
-                .foregroundStyle(Color.nxText)
+                .foregroundStyle(UpNextLabel.titleColor.color)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Text(UpNextLabel.text(secondsUntilStart: next.startTime.timeIntervalSince(now)))
                 .font(NowPlayingFont.textMedium)
                 .tracking(2)
-                .foregroundStyle(Color.nxCyan)
+                .foregroundStyle(Color.nxText2)
                 .lineLimit(1)
                 .fixedSize()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.nxSelectedRow))
-                .overlay(Capsule().strokeBorder(Color.nxCyan, lineWidth: 1.5))
                 .layoutPriority(1)
             Spacer(minLength: 0)
         }
@@ -288,10 +284,13 @@ struct NowPlayingPanel: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .focusSection()
                 }
-                // Only as tall as the taller column, never the whole screen: the hint sits right under it.
+                // Only as tall as the taller column, never the whole screen.
                 .fixedSize(horizontal: false, vertical: true)
-                hintLine(NowPlayingPanelHints.hint(for: focusedControl) ?? " ", status: compatibilityHintOverride,
-                         width: columnWidth * 2 + columnGap)
+                // No help line under the rows (Chad 2026-11-15: "it feels so out of place there"). The one thing
+                // still written there is RETRY ORIGINAL VIDEO's result, while that row has focus.
+                if let status = compatibilityHintOverride {
+                    hintLine(status, width: columnWidth * 2 + columnGap)
+                }
             }
             .focusSection()
             .onAppear { focusedControl = .cc }
@@ -323,7 +322,7 @@ struct NowPlayingPanel: View {
                 NowPlayingPanelLayout.programRows(
                     hasSubtitleTracks: appState.hasSubtitleTracks,
                     audioTrackCount: appState.audioTracks.count,
-                    canOpenInPlex: appState.canOpenCurrentItemInPlex
+                    canOpenInPlex: appState.currentItemExternalApp != nil
                 ),
                 id: \.self
             ) { row in
@@ -429,14 +428,17 @@ struct NowPlayingPanel: View {
 
     @State private var openInPlexStatus: String?
 
+    /// OPEN IN PLEX on Plex, OPEN IN JELLYFIN on Jellyfin with Swiftfin installed (its item link); the same row and
+    /// the same failure line.
     private var openInPlexRow: some View {
-        Button {
-            appState.openCurrentItemInPlex { [self] opened in
-                if !opened { openInPlexStatus = "NO PLEX APP" }
+        let app = appState.currentItemExternalApp ?? .plex
+        return Button {
+            appState.openCurrentItemInExternalApp { [self] opened in
+                if !opened { openInPlexStatus = app.failure }
             }
         } label: {
             PanelRow(
-                label: "OPEN IN PLEX",
+                label: app.rowLabel,
                 value: openInPlexStatus.map { PanelRow.Value.warning($0) } ?? PanelRow.Value.none,
                 trailing: .external,
                 isFocused: focusedControl == .openInPlex
@@ -444,7 +446,7 @@ struct NowPlayingPanel: View {
         }
         .buttonStyle(NoHighlightButtonStyle())
         .focused($focusedControl, equals: .openInPlex)
-        .accessibilityLabel("OPEN IN PLEX")
+        .accessibilityLabel(app.rowLabel)
     }
 
     private var autoSubtitlesRow: some View {
@@ -600,11 +602,13 @@ struct NowPlayingPanel: View {
             case .sleepTimer:
                 sleepOptions
             }
-            // A list that opens from the left spans both columns; one from the right sits under its column.
-            hintLine(pickerHint(picker),
-                     lines: (picker == .playbackInformation || picker == .streamQuality) ? 4 : 2,
-                     width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
-                .padding(.top, 6)
+            // No help line under a list either; PLAYBACK INFORMATION keeps its note, which is what the list is about
+            // (how this program reaches the screen), not help. It sits under its column.
+            if picker == .playbackInformation {
+                hintLine(pickerHint(picker), lines: 4,
+                         width: pickerOffset(picker) == 0 ? columnWidth * 2 + columnGap : columnWidth)
+                    .padding(.top, 6)
+            }
         }
         .padding(.leading, pickerOffset(picker))
         .focusSection()

@@ -39,7 +39,7 @@ struct ChannelSchedule {
     /// Wall-clock position within the current program (for live UI; use with `TimelineView`).
     func livePlayback(at now: Date = Date()) -> (elapsedSeconds: Int, progress: Double, totalSeconds: Int)? {
         guard let np = nowPlaying else { return nil }
-        let totalSeconds = max(1, np.item.duration * 60)
+        let totalSeconds = max(1, np.item.slotSeconds)
         let elapsed = max(0, min(totalSeconds, Int(now.timeIntervalSince(np.startTime))))
         let blockDuration = np.durationSeconds
         let progress = blockDuration > 0

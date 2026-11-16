@@ -30,16 +30,16 @@ struct SettingsPlaybackView: View {
             }
             .settingsRow("retro", focus: focus)
 
-            // Two built-in sizes, NORMAL and LARGE; select switches between them.
+            // Three built-in steps, SMALLER, DEFAULT and LARGER; select moves to the next.
             SettingsToggleRow(
                 title: "GUIDE TEXT SIZE",
-                subtitle: "Bigger program titles, times and channel names in the guide",
+                subtitle: "Size of the text in the guide, the bundle list and Now Playing",
                 detail: appState.guideTextSize.label,
                 isOn: true,
                 isFocused: isFocused("guide_text_size"),
                 showToggle: false
             ) {
-                appState.guideTextSize = appState.guideTextSize == .large ? .normal : .large
+                appState.guideTextSize = appState.guideTextSize.next
             }
             .settingsRow("guide_text_size", focus: focus)
             .accessibilityValue(appState.guideTextSize.label)

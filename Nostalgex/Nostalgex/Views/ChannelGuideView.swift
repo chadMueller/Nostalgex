@@ -8,12 +8,15 @@ struct ChannelGuideView: View {
     let schedules: [Int: ChannelSchedule]
     let windowStart: Date
     var onFocusChanged: ((Int?) -> Void)? = nil
-    /// The window's offset in 30 minute steps, whenever it changes: the info panel follows it (GuideTimeCursor).
-    var onTimeOffsetChanged: ((Int) -> Void)? = nil
+    /// The programme cursor's time whenever it changes, nil on the live programme: the info panel follows it
+    /// (GuideProgramCursor).
+    var onCursorChanged: ((Date?) -> Void)? = nil
     var onOpenSettings: (() -> Void)? = nil
 
     // How many 30-min slots the user has scrolled forward (0-44 for 24-hour window)
     @State private var slotOffset: Int = 0
+    /// Where the programme cursor is on the focused row (GuideProgramCursor); nil is the live programme.
+    @State private var cursorTime: Date?
     @State private var suppressFocusScroll: Bool = false
     /// Open from when full screen closes, or the guide first appears, until tvOS hands focus to the
     /// guide. See `GuideReturnFocus`.
@@ -76,8 +79,8 @@ struct ChannelGuideView: View {
     private let channelColumnWidth: CGFloat = 340
     // The guide's own row (Chad 2026-11-10: the grid read too big). Not the shared NXLayout.rowHeight (76), which
     // the Now Playing panel keeps. 64 holds a 29 pt LARGE line inside the 3 pt outline and 2 pt inset.
-    private let rowHeight: CGFloat = GuideTextMetrics.rowHeight
-    private let headerHeight: CGFloat = 58
+    private var rowHeight: CGFloat { appState.guideTextSize.metrics.rowHeight }
+    private var headerHeight: CGFloat { appState.guideTextSize.metrics.headerHeight }
     // 24-hour horizon, 30-min slots, 4 visible at a time → max scroll offset = 44.
     private let maxSlotOffset: Int = 44
 
@@ -143,6 +146,7 @@ struct ChannelGuideView: View {
                                         guard rowActs(on: channel.id) else { return }
                                         // Selecting the channel that is on goes full screen, unless it
                                         // stopped after repeated failures: then selecting it retries.
+                                        resetCursorToLive()
                                         if appState.currentChannel?.id == channel.id, !appState.channelFailureRun.isStopped {
                                             appState.isFullScreen = true
                                         } else {
@@ -158,7 +162,8 @@ struct ChannelGuideView: View {
                                             programsWidth: programsWidth,
                                             visibleWindowStart: visibleStart,
                                             rowHeight: rowHeight,
-                                            stripe: stripeCells.indices.contains(index) ? stripeCells[index] : nil
+                                            stripe: stripeCells.indices.contains(index) ? stripeCells[index] : nil,
+                                            cursorEntryID: highlighted == channel.id ? cursorEntryID(on: channel) : nil
                                         )
                                     }
                                     .buttonStyle(NoHighlightButtonStyle())
@@ -205,8 +210,8 @@ struct ChannelGuideView: View {
                             GuideJumpProbe.shared.shownChanged(from: oldID, to: newID)
                         }
                         #endif
-                        .onChange(of: slotOffset) { _, offset in
-                            onTimeOffsetChanged?(offset)
+                        .onChange(of: cursorTime) { _, time in
+                            onCursorChanged?(time)
                         }
                         .onChange(of: stripeMode) { _, on in
                             // The stripe is a focus target only now, so ask for focus only now.
@@ -368,8 +373,8 @@ struct ChannelGuideView: View {
                     if focusedChannelID == Self.stripeFocusID {
                         // Left again, from the stripe: the package list, the way Left always reached it.
                         openPackageList()
-                    } else if slotOffset > 0 {
-                        slotOffset -= 1
+                    } else if moveCursor(forward: false) {
+                        // The previous programme on the row.
                     } else if !showBundleSidebar {
                         if canEnterStripe {
                             enterStripe()
@@ -386,8 +391,8 @@ struct ChannelGuideView: View {
                         withAnimation(.easeIn(duration: 0.15)) {
                             showBundleSidebar = false
                         }
-                    } else if slotOffset < maxSlotOffset {
-                        slotOffset += 1
+                    } else {
+                        _ = moveCursor(forward: true)
                     }
                 // Up and Down are deliberately not handled here. The vertical wrap is
                 // driven by focus landing on a sentinel row (see `wrapSentinel` and the
@@ -543,7 +548,7 @@ struct ChannelGuideView: View {
     }
 
     /// Up or Down on the stripe: the guide scrolls so that the previous or next package's first channel is at
-    /// the top. Focus stays on the stripe. Past the first or last package nothing moves.
+    /// the top. Focus stays on the stripe. Down on the last package goes to the first, Up on the first to the last.
     private func jumpPackage(_ step: Int, _ proxy: ScrollViewProxy) {
         let groups = stripeGroups
         guard let current = stripeGroupIndex,
@@ -646,8 +651,44 @@ struct ChannelGuideView: View {
 
     /// Focus the playing channel's row and center it, with focus-driven scrolling held
     /// off while the scroll settles.
+    // MARK: Programme cursor (GuideProgramCursor)
+
+    /// The schedule of the row that has focus.
+    private var focusedSchedule: ChannelSchedule? {
+        focusedChannelID.flatMap { schedules[$0] }
+    }
+
+    /// The programme the cursor is on in `channel`'s row, for its highlighted cell.
+    private func cursorEntryID(on channel: Channel) -> String? {
+        guard let entries = schedules[channel.id]?.entries else { return nil }
+        return GuideProgramCursor.current(in: entries, cursor: cursorTime, now: Date())?.id
+    }
+
+    /// Left or Right on a row: the cursor to the previous or next programme, and the window along when that programme
+    /// would leave the view. False when there is nowhere to go (Left from the live programme), so Left can go on to
+    /// the stripe.
+    private func moveCursor(forward: Bool) -> Bool {
+        guard let entries = focusedSchedule?.entries else { return false }
+        let now = Date()
+        guard let target = forward
+            ? GuideProgramCursor.next(in: entries, cursor: cursorTime, now: now)
+            : GuideProgramCursor.previous(in: entries, cursor: cursorTime, now: now) else { return false }
+        cursorTime = GuideProgramCursor.cursor(for: target, now: now)
+        let offset = GuideProgramCursor.windowOffset(showing: target, offset: slotOffset, windowStart: windowStart,
+                                                     now: now, maxOffset: maxSlotOffset)
+        if offset != slotOffset { slotOffset = offset }
+        return true
+    }
+
+    /// Back on the live programme, the window at its start: where the guide is after a return to the playing channel.
+    private func resetCursorToLive() {
+        cursorTime = nil
+        slotOffset = 0
+    }
+
     private func anchorFocusToLiveChannel(_ proxy: ScrollViewProxy) {
         guard let id = appState.currentChannel?.id else { return }
+        resetCursorToLive()
         suppressFocusScroll = true
         focusedChannelID = id
         // Now, so the guide is already on the live row when it is uncovered, and again once the focus
@@ -750,6 +791,9 @@ private struct EPGRow: View {
     let rowHeight: CGFloat
     /// This row's piece of the package stripe, in the slot at the row's left edge.
     var stripe: GuideStripes.RowCell? = nil
+    /// On the focused row, the programme the cursor is on: its cell is drawn lifted, in the selected fill with a cyan
+    /// ring, inside the row's own focus.
+    var cursorEntryID: String? = nil
 
     // 2-hour visible window
     private let visibleDuration: TimeInterval = 7200
@@ -799,10 +843,13 @@ private struct EPGRow: View {
             .background(rowBackground)
             .overlay {
                 if isFocused {
+                    // With a programme cell under the cursor the row's own focus steps back, so the cell clearly
+                    // wins: a 2 pt outline at 55% and a faint glow, against the cell's full cyan ring and glow.
+                    let soft = cursorEntryID != nil
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(channel.color, lineWidth: 3)
+                        .strokeBorder(channel.color.opacity(soft ? 0.55 : 1), lineWidth: soft ? 2 : 3)
                         .padding(2)
-                        .shadow(color: channel.color.opacity(0.7), radius: 14)
+                        .shadow(color: channel.color.opacity(soft ? 0.25 : 0.7), radius: soft ? 6 : 14)
                 }
             }
             .zIndex(isFocused ? 1 : 0)
@@ -920,12 +967,27 @@ private struct EPGRow: View {
                         .frame(width: max(fraction * programsWidth, 1), height: rowHeight, alignment: .leading)
                         .clipped()
                         .background(
-                            entry.isNowPlaying
-                                ? (isFocused ? focusedFills.nowPlaying.color : channel.color.opacity(0.25))
-                                : isPast
-                                    ? Color.white.opacity(0.02)
-                                    : Color.clear
+                            entry.id == cursorEntryID
+                                ? GuideCursorStyle.fill
+                                : entry.isNowPlaying
+                                    ? (isFocused ? focusedFills.nowPlaying.color : channel.color.opacity(0.25))
+                                    : isPast
+                                        ? Color.white.opacity(0.02)
+                                        : Color.clear
                         )
+                        .overlay {
+                            if entry.id == cursorEntryID {
+                                // The glow spills onto the cells beside it but never out of the row: the programme
+                                // area is clipped to the row, so the stripe and the rows above and below stay clear.
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(Color.nxCyan, lineWidth: GuideCursorStyle.ringWidth)
+                                    .padding(2)
+                                    .shadow(color: Color.nxCyan.opacity(GuideCursorStyle.glowOpacity), radius: GuideCursorStyle.glowRadius)
+                                    .shadow(color: Color.nxCyan.opacity(GuideCursorStyle.innerGlowOpacity), radius: GuideCursorStyle.innerGlowRadius)
+                            }
+                        }
+                        .zIndex(entry.id == cursorEntryID ? 1 : 0)
+                        .accessibilityIdentifier(entry.id == cursorEntryID ? "guideCursorCell" : "")
                     }
                 }
             } else if channel.isWatershedHold(watershedEnabled: appState.watershedEnabled) {
@@ -991,8 +1053,8 @@ private struct BundleJumpSidebar: View {
     /// `GuideTextMetrics`, colours and the selected state from the design tokens (`nxRowSurface`: 3 pt cyan
     /// outline, glow, 3% lift). The left bar keeps each package's own colour.
     private static let width: CGFloat = 380
-    private static let rowHeight = GuideTextMetrics.packageRowHeight
-    private static let rowText = GuideTextMetrics.packageRowText
+    private static var rowHeight: CGFloat { GuideTextSize.current.metrics.packageRowHeight }
+    private static var rowText: CGFloat { GuideTextSize.current.metrics.packageRowText }
     private static let rowRadius = NXLayout.rowRadius
 
     private var rowFont: Font { .custom("DMMono-Medium", size: Self.rowText) }
@@ -1017,7 +1079,7 @@ private struct BundleJumpSidebar: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 Text("BUNDLES")
-                    .font(.custom("DMMono-Medium", size: GuideTextMetrics.packageHeading))
+                    .font(.custom("DMMono-Medium", size: GuideTextSize.current.metrics.packageHeading))
                     .foregroundStyle(Color.nxText2)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 18)
@@ -1122,7 +1184,7 @@ private extension ChannelGuideView {
         case .jumpToLiveChannel(let id):
             // Menu from the stripe goes back to the playing channel like it does from any row: out of the
             // stripe first, so the move is an ordinary one.
-            return { stripeMode = false; focusedChannelID = id }
+            return { stripeMode = false; resetCursorToLive(); focusedChannelID = id }
         }
     }
 

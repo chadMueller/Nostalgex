@@ -100,10 +100,70 @@ extension AppState {
         UIApplication.shared.open(url, options: [:], completionHandler: completion)
     }
 
-    /// The poster URLs to try, best first (`PlexPosterChain`): a TV episode's season poster, then its series poster,
-    /// then its own frame; a movie's poster. Empty off Plex and in demo mode.
+    // MARK: - Open in Jellyfin
+
+    /// Swiftfin's item link (its `DeepLink`, jellyfin/Swiftfin Shared/Services/DeepLink.swift, the `jellyfin` scheme
+    /// since #2268, in 1.7.0): `jellyfin://{serverId}/{userId}/item/{itemId}`. Swiftfin opens the item, switching to
+    /// that server and user when they are signed in there. Nil when an id is missing or has characters its link does
+    /// not take.
+    static func jellyfinItemLink(serverID: String, userID: String, itemID: String) -> URL? {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        for part in [serverID, userID, itemID] {
+            guard !part.isEmpty, part.unicodeScalars.allSatisfy({ allowed.contains($0) && $0.isASCII }) else { return nil }
+        }
+        return URL(string: "jellyfin://\(serverID)/\(userID)/item/\(itemID)")
+    }
+
+    /// Whether the current program can be handed to Swiftfin: Jellyfin backend, not demo, and Swiftfin installed.
+    /// Emby's Apple TV app has no item link (it opens to its home screen), so there is no Emby row.
+    var canOpenCurrentItemInJellyfin: Bool {
+        guard backendKind == .jellyfin, !isDemoMode, let item = currentItem,
+              let service = api as? JellyfinAPIService,
+              Self.jellyfinItemLink(serverID: service.serverID, userID: service.userId, itemID: item.ratingKey) != nil,
+              let probe = URL(string: "jellyfin://") else { return false }
+        return UIApplication.shared.canOpenURL(probe)
+    }
+
+    func openCurrentItemInJellyfin(completion: @escaping (Bool) -> Void) {
+        guard let item = currentItem, let service = api as? JellyfinAPIService,
+              let url = Self.jellyfinItemLink(serverID: service.serverID, userID: service.userId, itemID: item.ratingKey) else {
+            completion(false); return
+        }
+        print("[Plex90] OPEN IN JELLYFIN: \(url.absoluteString)")
+        UIApplication.shared.open(url, options: [:], completionHandler: completion)
+    }
+
+    /// The app the panel's OPEN IN row hands the program to, if any.
+    enum ExternalApp {
+        case plex, jellyfin
+        var rowLabel: String { self == .plex ? "OPEN IN PLEX" : "OPEN IN JELLYFIN" }
+        var failure: String { self == .plex ? "NO PLEX APP" : "NO JELLYFIN APP" }
+    }
+
+    var currentItemExternalApp: ExternalApp? {
+        if canOpenCurrentItemInPlex { return .plex }
+        if canOpenCurrentItemInJellyfin { return .jellyfin }
+        return nil
+    }
+
+    func openCurrentItemInExternalApp(completion: @escaping (Bool) -> Void) {
+        switch currentItemExternalApp {
+        case .plex: openCurrentItemInPlex(completion: completion)
+        case .jellyfin: openCurrentItemInJellyfin(completion: completion)
+        case nil: completion(false)
+        }
+    }
+
+    /// The poster URLs to try, best first: a TV episode's season poster, then its series poster, then its own frame;
+    /// a movie's poster. Plex (`PlexPosterChain`), Jellyfin and Emby (their Primary images, the same chain; Chad
+    /// 2026-11-15: the panels are the same on every server). Empty in demo mode.
     func posterURLs(for item: PlexMediaItem) -> [URL] {
-        guard backendKind == .plex, !isDemoMode else { return [] }
+        guard !isDemoMode else { return [] }
+        switch backendKind {
+        case .jellyfin: return (api as? JellyfinAPIService)?.posterURLs(for: item) ?? []
+        case .emby: return (api as? EmbyAPIService)?.posterURLs(for: item) ?? []
+        case .plex: break
+        }
         let service: PlexAPIService?
         if let sid = item.serverID,
            let server = selectedServers.first(where: { $0.machineIdentifier == sid }),
@@ -819,7 +879,6 @@ extension AppState {
                                                      credentialFingerprint: scheduleCredentialFingerprint)
             }?.nowPlaying?.endTime
             : nil
-        liveSlotEnd = liveSlotEnd(for: item)
 
         // Small delay to let AVPlayer clean up the old item
         let playerSeek = playerSeekSeconds
@@ -940,6 +999,7 @@ extension AppState {
                             self.playbackTracker?.onPlaybackReady()
                         }
                     case .failed:
+                        if self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt, title: title, signal: "item failed") { return }
                         guard self.claimPlaybackRecovery(for: playerItem, generation: generation, attempt: attempt) else { return }
                         let errMsg = playerItem.error?.localizedDescription ?? "Unknown error"
                         print("[Plex90] gen=\(generation) | FAILED: \"\(title)\" - \(errMsg)")
@@ -1055,6 +1115,7 @@ extension AppState {
                             self.playbackTracker?.onPlaybackReady()
                         }
                     case .failed:
+                        if self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt, title: title, signal: "item failed") { return }
                         guard self.claimPlaybackRecovery(for: playerItem, generation: generation, attempt: attempt) else { return }
                         let msg = playerItem.error?.localizedDescription ?? "Unknown error"
                         print("[Plex90] gen=\(generation) | RETRY FAILED: \"\(title)\" - \(msg)")
@@ -1155,6 +1216,7 @@ extension AppState {
                             self.playbackTracker?.onPlaybackReady()
                         }
                     case .failed:
+                        if self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt, title: title, signal: "item failed") { return }
                         guard self.claimPlaybackRecovery(for: playerItem, generation: generation, attempt: attempt) else { return }
                         let msg = playerItem.error?.localizedDescription ?? "Unknown error"
                         print("[Plex90] gen=\(generation) | TRANSCODE FAILED: \"\(title)\" - \(msg)")
@@ -1224,6 +1286,9 @@ extension AppState {
             }
             let access = playerItem.accessLog()?.events.last.map { "segments=\($0.numberOfMediaRequests) stalls=\($0.numberOfStalls) bytes=\($0.numberOfBytesTransferred) dropped=\($0.numberOfDroppedVideoFrames) watched=\(String(format: "%.1f", $0.durationWatched))s" } ?? "no access log"
             let errors = playerItem.errorLog()?.events.suffix(3).map { "\($0.errorStatusCode) \(PlaybackDiagnostics.redactSensitiveText($0.errorComment ?? ""))" }.joined(separator: " | ") ?? ""
+            // Tuned in just before the end: the programme reached its end inside the deadline.
+            if self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt,
+                                        title: item?.title ?? self.currentItem?.title ?? "?", signal: "still at the startup deadline") { return }
             let detail = "ready=\(reachedReady), playhead moved \(String(format: "%.1f", progressed))s, frames=\(frames), declared \(Int(playerItem.presentationSize.width))x\(Int(playerItem.presentationSize.height)), rate=\(self.player?.rate ?? -1), status=\(playerItem.status.rawValue), \(access)\(errors.isEmpty ? "" : ", errors: " + errors)"
             self.handleWatchdogNoPicture(playerItem: playerItem, item: item, isDirectPlay: isDirectPlay,
                                          generation: generation, attempt: attempt, allowCappedRetry: allowCappedRetry,
@@ -1311,17 +1376,6 @@ extension AppState {
         }
         var monitor = PlaybackStarvation()
         let title = item?.title ?? currentItem?.title ?? "Unknown"
-        if !isDemoMode {
-            // Same generation-only rule as the demo tick above: a retry of the file still
-            // stands in for the same slot.
-            Timer.publish(every: 1.0, on: .main, in: .common)
-                .autoconnect()
-                .sink { [weak self] _ in
-                    guard let self, self.loadGeneration == generation else { return }
-                    self.liveScheduleTick()
-                }
-                .store(in: &self.cancellables)
-        }
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -1333,6 +1387,14 @@ extension AppState {
                 // Same clock on both sides, so it holds whether the server rebased the HLS
                 // timeline to zero or kept source timestamps.
                 let remaining: Double? = duration.isNumeric ? duration.seconds - playerItem.currentTime().seconds : nil
+                // Inside the end window, with the playlist claiming more than the file has left
+                // (Emby's runs up to a segment past it), a still playhead is the end of the file,
+                // which the end backstop handles; a 1080p retry there would only replay the same
+                // missing seconds. With an honest playlist a stall there is a real one, as before.
+                if PlaybackEndRule.stillPlayheadIsTheEnd(playhead: playerItem.currentTime().seconds,
+                                                         playlistDuration: playerItem.duration.isNumeric ? playerItem.duration.seconds : nil,
+                                                         baseOffset: self.hlsBaseOffset,
+                                                         runtime: PlaybackEndRule.runtime(for: self.currentItem)) { return }
                 guard let verdict = monitor.observe(playhead: playerItem.currentTime().seconds, wall: Date().timeIntervalSinceReferenceDate,
                                                     paused: paused, remaining: remaining) else { return }
                 guard case .starving(let stalls, let longest) = verdict else { return }
@@ -1478,6 +1540,11 @@ extension AppState {
     /// Play/Pause only flashes the OSD (see PlayerView), so the user cannot park the player
     /// here deliberately. Firing advances the schedule, which bumps `loadGeneration` and
     /// retires this timer, so it cannot fire twice for the same item.
+    ///
+    /// Two ways to be at the end (`PlaybackEndWatch`): parked within 2 s of the playlist's
+    /// end, or still for 2 s within 8 s of the programme's real runtime. The second is
+    /// Emby's fMP4 ending, where the playlist promises up to a segment more than the file
+    /// holds and the player waits for it (`PlaybackEndRule` has the measurements).
     private func installEndOfItemFallback(for playerItem: AVPlayerItem, generation: Int, title: String) {
         let attempt = playbackAttemptGeneration
         if isDemoMode {
@@ -1493,30 +1560,67 @@ extension AppState {
                 }
                 .store(in: &self.cancellables)
         }
+        var endWatch = PlaybackEndWatch()
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self, self.isCurrentPlaybackAttempt(generation: generation, attempt: attempt, playerItem: playerItem) else { return }
                 guard case .playing = self.playbackState, let player = self.player else { return }
                 let duration = playerItem.duration
-                guard duration.isNumeric else { return }
-                // Both on the item's own clock. A transcode started at an offset reports
-                // the *remainder* as its duration (measured 2026-10-06: 2806s for a 3908s
-                // offset on a 111-minute film), so adding the offset back here drove
-                // `remaining` negative on every tuned-in transcode and turned the first
-                // rate-0 moment into a skip to the next film.
-                let total = duration.seconds
+                // The playlist side stays on the item's own clock. A transcode started at an
+                // offset reports the *remainder* as its duration (measured 2026-10-06: 2806s
+                // for a 3908s offset on a 111-minute film), so adding the offset back there
+                // drove `remaining` negative on every tuned-in transcode and turned the first
+                // rate-0 moment into a skip to the next film. The real-runtime side moves the
+                // playhead onto the file's clock with `hlsBaseOffset`.
                 let current = playerItem.currentTime().seconds
-                guard total.isFinite, total > 0, current.isFinite else { return }
-                let remaining = total - current
-                // Parked at the tail with no forward motion. Mid-item buffering also stops
-                // the rate, hence the requirement that we are already at the end.
-                guard remaining <= 2.0, player.rate == 0 else { return }
-                print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" parked \(String(format: "%.1f", remaining))s from end, no end-of-item notification — advancing")
-                PlaybackDiagnostics.record(outcome: "end-of-item fallback", title: title, detail: String(format: "parked %.1fs from end, rate 0, item duration %.0fs, playhead %.0fs, offset base %.0fs", remaining, total, current, self.hlsBaseOffset))
+                let total = duration.isNumeric ? duration.seconds : nil
+                guard let verdict = endWatch.observe(playhead: current, wall: Date().timeIntervalSinceReferenceDate,
+                                                     rate: player.rate, playlistDuration: total,
+                                                     baseOffset: self.hlsBaseOffset,
+                                                     runtime: PlaybackEndRule.runtime(for: self.currentItem)) else { return }
+                let detail: String
+                switch verdict {
+                case .parkedAtPlaylistEnd(let left):
+                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" parked \(String(format: "%.1f", left))s from end, no end-of-item notification, advancing")
+                    detail = String(format: "parked %.1fs from end, rate 0, item duration %.0fs, playhead %.0fs, offset base %.0fs", left, total ?? 0, current, self.hlsBaseOffset)
+                case .stalledAtRealEnd(let left):
+                    print("[Plex90] gen=\(generation) | END FALLBACK: \"\(title)\" still for \(Int(PlaybackEndRule.stallSeconds))s, \(String(format: "%.1f", left))s from its real end (playlist \(String(format: "%.1f", (total ?? current) - current))s), advancing")
+                    detail = String(format: "still %.0fs at %.1fs from the real end, rate %.0f, playlist %.0fs, playhead %.1fs, offset base %.0fs", PlaybackEndRule.stallSeconds, left, player.rate, total ?? 0, current, self.hlsBaseOffset)
+                }
+                PlaybackDiagnostics.record(outcome: "end-of-item fallback", title: title, detail: detail)
                 self.handlePartEnded()
             }
             .store(in: &self.cancellables)
+
+        // The late failure: Emby's fMP4 ending reports "failed to play to end" 13 to 52 s
+        // after the last frame (see PlaybackEndRule). Inside the end window it is the end;
+        // anywhere else the status observer and the watchdogs keep the job they had.
+        NotificationCenter.default.publisher(for: .AVPlayerItemFailedToPlayToEndTime, object: playerItem)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                _ = self.endsInsideEndWindow(playerItem, generation: generation, attempt: attempt, title: title, signal: "failed to play to end")
+            }
+            .store(in: &self.cancellables)
+    }
+
+    /// A failure inside `PlaybackEndRule`'s end window is the programme ending: the server
+    /// sent the last of the file and the player gave up on the playlist's phantom tail. Moves
+    /// on as a natural end and returns true; outside the window returns false and the caller
+    /// carries on with its own recovery.
+    func endsInsideEndWindow(_ playerItem: AVPlayerItem, generation: Int, attempt: Int, title: String, signal: String) -> Bool {
+        guard isCurrentPlaybackAttempt(generation: generation, attempt: attempt, playerItem: playerItem) else { return false }
+        let current = playerItem.currentTime().seconds
+        let runtime = PlaybackEndRule.runtime(for: currentItem)
+        guard current > 0.5, PlaybackEndRule.isInEndWindow(playhead: current, baseOffset: hlsBaseOffset, runtime: runtime) else { return false }
+        let left = PlaybackEndRule.secondsToRealEnd(playhead: current, baseOffset: hlsBaseOffset, runtime: runtime) ?? 0
+        print("[Plex90] gen=\(generation) | END WINDOW: \"\(title)\" \(signal) \(String(format: "%.1f", left))s from its real end, treating it as the end")
+        PlaybackDiagnostics.record(outcome: "end-of-item fallback", title: title,
+                                   detail: String(format: "%@ at %.1fs from the real end, playhead %.1fs, offset base %.0fs: %@", signal, left, current, hlsBaseOffset,
+                                                  PlaybackDiagnostics.redactSensitiveText(playerItem.error?.localizedDescription ?? "no error")))
+        handlePartEnded()
+        return true
     }
 
     // MARK: - Auto-advance
@@ -1551,10 +1655,18 @@ extension AppState {
         }
     }
 
-    // fromNaturalEnd: true when called from AVPlayerItemDidPlayToEndTime. In that case we
-    // always start the next item at 0 — actual file durations differ from Jellyfin/Plex
-    // metadata (sometimes by 40+ seconds), so applying schedule.elapsedSeconds would skip
-    // into the next episode. Schedule-sync seeks are only correct when tuning into a channel.
+    // fromNaturalEnd: true when called from AVPlayerItemDidPlayToEndTime. A file always plays to its own end
+    // (#315): the schedule gives each programme its real runtime (`PlexMediaItem.slotSeconds`), so the file and its
+    // slot end together and the next item starts at 0, at the moment the clock says it should. What is left over is
+    // the time the next file takes to load, a second or two a programme, which adds up. Once the guide is
+    // `naturalEndCatchUpSeconds` or more into the programme this starts, the player joins it where the clock is
+    // instead (its opening seconds go, never the end of anything), so the headline cannot lag the guide by more than
+    // that and a little. 10 s, from the sweep in TailLossMeasureTests: with 2 s of load a programme, a file's opening
+    // is skipped every fifth programme or so (about 11 s of it), and the headline is behind the guide 2.7% of the
+    // time (60 s: 10.8%; never: 31.6% and growing). Schedule-sync seeks are otherwise only for tuning into a channel.
+    /// How far behind the guide the player may fall at a natural end before the next programme joins where the clock is.
+    nonisolated(unsafe) static var naturalEndCatchUpSeconds = 10
+
     private func advanceToNextItem(fromNaturalEnd: Bool = false) {
         guard let channel = currentChannel else { return }
         let prevRatingKey = currentItem?.ratingKey
@@ -1590,6 +1702,11 @@ extension AppState {
             // the schedule is being re-synced from outside (channel change, watchdog).
             // Demo mode has no file to overrun, so it always joins the block at the clock.
             var newSeekOffset = (scheduleHasMoved && pick != nil && (!fromNaturalEnd || isDemoMode)) ? schedule.elapsedSeconds : 0
+            if fromNaturalEnd, !isDemoMode, scheduleHasMoved, pick?.id == schedule.nowPlaying?.item.id,
+               schedule.elapsedSeconds >= Self.naturalEndCatchUpSeconds {
+                newSeekOffset = schedule.elapsedSeconds
+                print("[Plex90] ADVANCE: \(schedule.elapsedSeconds)s behind the guide, joining \"\(pick?.title ?? "nil")\" where the clock is")
+            }
 
             if let item = pick,
                let conflictCH = ChannelScheduleBuilder.findConflict(
@@ -1622,44 +1739,6 @@ extension AppState {
             print("[Plex90] ADVANCE: \"\(prevTitle)\" -> \"\(currentItem?.title ?? "nil")\" on CH \(channel.name) (random fallback)")
         }
         loadCurrentItem()
-    }
-
-    // MARK: - Keeping a real file on the guide's clock
-
-    /// Plex, Jellyfin and Emby floor a runtime to whole minutes and the schedule slot is
-    /// that floored length, so a file runs 0 to 59 s past its slot. Starting the next item
-    /// at 0 when the file ends (the only safe start, a seek would skip into the episode)
-    /// left the player that much further behind the clock at every boundary: the headline
-    /// named the programme still playing while the guide had moved on (22.9% of samples in
-    /// the NaturalEndDriftTests model, 2026-11-09), and the gap grew about 30 s a programme.
-    /// Live TV does not wait for the tail of a programme, so neither do we: when the slot
-    /// ends and the file is still running, move to what the guide now shows. What is lost
-    /// is the end of the file past its slot, 59 s at most (credits, nearly always).
-    static let liveSlotGraceSeconds: TimeInterval = 90
-
-    /// When the slot of `item` ends, if the schedule has `item` on air right now. Nil for
-    /// demo mode (its own tick), multi-disc films (the slot is for the whole stack, the
-    /// parts end on their own) and anything the schedule does not have on air.
-    func liveSlotEnd(for item: PlexMediaItem) -> Date? {
-        guard !isDemoMode, item.additionalPartKeys == nil, let channel = currentChannel else { return nil }
-        let now = scheduleClock()
-        guard let live = ChannelScheduleBuilder.buildSchedule(
-            for: channel, at: now, credentialFingerprint: scheduleCredentialFingerprint
-        )?.nowPlaying, live.item.id == item.id else { return nil }
-        return live.endTime
-    }
-
-    /// Once a second while a real file plays. Past the end of its slot, and not by more
-    /// than the grace (beyond that the drift has another cause and the file's own end is
-    /// the safer signal), start what the guide shows at 0.
-    func liveScheduleTick() {
-        guard !isDemoMode, let end = liveSlotEnd else { return }
-        let late = scheduleClock().timeIntervalSince(end)
-        guard late >= 0, late <= Self.liveSlotGraceSeconds else { return }
-        print("[Plex90] SLOT END: \"\(currentItem?.title ?? "nil")\" ran \(Int(late))s past its slot, moving to the guide's programme")
-        liveSlotEnd = nil
-        playbackTracker?.onPlaybackPreparing()
-        advanceToNextItem(fromNaturalEnd: true)
     }
 
     // MARK: - Demo clip

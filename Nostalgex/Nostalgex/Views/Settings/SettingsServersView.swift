@@ -1,23 +1,36 @@
 import SwiftUI
 
-/// SERVERS & ACCOUNTS: which servers and libraries feed the guide, rescans, iCloud
-/// sync between Apple TVs, and disconnect. DISCONNECT is still one press, as before.
+/// SERVERS & ACCOUNTS: iCloud sync between Apple TVs (first, under ICLOUD), which servers and libraries feed the
+/// guide, rescans, and disconnect. DISCONNECT is still one press, as before.
 struct SettingsServersView: View {
     @Environment(AppState.self) var appState
     let focus: FocusState<SettingsFocus?>.Binding
 
+    /// The pane's first row: the iCloud sync switch, at the top under ICLOUD.
     static func firstRowID(appState: AppState) -> String {
-        if let server = appState.serversForSettings.first {
-            return "server_\(server.machineIdentifier)"
-        }
-        if let section = appState.librarySectionsForSettings.first {
-            return "section_\(section.id)"
-        }
-        return "rescan"
+        "icloud_sync"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // iCloud sync first, under its own heading (Chad 2026-11-15: "its sort of hidden at the bottom").
+            SettingsSubheader(text: "ICLOUD")
+            // Off by default and per-TV. Turning it on takes the lineup and settings iCloud
+            // already holds (another TV's), and pushes this TV's only for what iCloud lacks.
+            // With nothing in iCloud it waits for the first download before seeding it, so a
+            // new TV's defaults never land on top of the other TVs' lineup.
+            SettingsToggleRow(
+                title: "SYNC WITH MY OTHER APPLE TVS",
+                subtitle: appState.iCloudSyncEnabled
+                    ? "This Apple TV's lineup is shared through iCloud."
+                    : "Turn on to share your lineup and settings with your other Apple TVs through iCloud.",
+                isOn: appState.iCloudSyncEnabled,
+                isFocused: isFocused("icloud_sync")
+            ) {
+                appState.iCloudSyncEnabled.toggle()
+            }
+            .settingsRow("icloud_sync", focus: focus)
+
             // A heading with nothing under it (demo mode has no server and no library) is left out.
             if !appState.serversForSettings.isEmpty {
                 SettingsSubheader(text: "SERVERS")
@@ -110,21 +123,6 @@ struct SettingsServersView: View {
             .accessibilityLabel("Rescan library")
             .padding(.top, 6)
 
-            // Off by default and per-TV. Turning it on takes the lineup and settings iCloud
-            // already holds (another TV's), and pushes this TV's only for what iCloud lacks.
-            // With nothing in iCloud it waits for the first download before seeding it, so a
-            // new TV's defaults never land on top of the other TVs' lineup.
-            SettingsToggleRow(
-                title: "SYNC WITH MY OTHER APPLE TVS",
-                subtitle: appState.iCloudSyncEnabled
-                    ? "This Apple TV's lineup is shared through iCloud."
-                    : "Turn on to share your lineup and settings with your other Apple TVs through iCloud.",
-                isOn: appState.iCloudSyncEnabled,
-                isFocused: isFocused("icloud_sync")
-            ) {
-                appState.iCloudSyncEnabled.toggle()
-            }
-            .settingsRow("icloud_sync", focus: focus)
 
             SettingsToggleRow(
                 title: "DISCONNECT FROM \(appState.backendDisplayName.uppercased())",

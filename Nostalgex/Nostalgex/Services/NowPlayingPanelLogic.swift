@@ -221,4 +221,14 @@ enum UpNextLabel {
         guard seconds >= 60 else { return "UP NEXT IN LESS THAN 1 MIN" }
         return "UP NEXT IN \(Int(seconds / 60)) MIN"
     }
+
+    /// The whole UP NEXT line, title first (Chad 2026-11-15: "Movie title up next in # of minutes"):
+    /// "Varsity Blues  UP NEXT IN 24 MIN". On screen the title is in `titleColor` and ends in an ellipsis when it is
+    /// long; the label after it never shrinks. Both panels, and every other surface, write it this way.
+    static func line(title: String, secondsUntilStart seconds: TimeInterval) -> String {
+        "\(title)  \(text(secondsUntilStart: seconds))"
+    }
+
+    /// The title's colour: the guide's yellow (#FFE500), the colour kept for live things. 14.96:1 on the Now Playing panel (#0A0F1E), 15.0:1 on the guide info panel.
+    static let titleColor = NXColor.yellow
 }

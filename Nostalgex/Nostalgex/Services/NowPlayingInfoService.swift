@@ -82,7 +82,7 @@ enum NowPlayingInfoService {
         }
 
         if item.duration > 0 {
-            info[MPMediaItemPropertyPlaybackDuration] = TimeInterval(item.duration * 60)
+            info[MPMediaItemPropertyPlaybackDuration] = TimeInterval(item.slotSeconds)
         }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed)
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0

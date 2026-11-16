@@ -326,54 +326,60 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
         do {
             let episodes = try await fetchAllItems(parentId: show.Id, includeItemTypes: "Episode")
                 .filter { JellyfinAPIService.isAskedType($0.itemType, asked: "Episode") }
-            let showGenres = show.Genres ?? []
-            return episodes.compactMap { ep -> PlexMediaItem? in
-                let durationMin = JellyfinAPIService.minutes(fromTicks: ep.RunTimeTicks)
-                guard durationMin > 0 else { scanSkips.add(); return nil }
-                let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
-                let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
-                let source = JellyfinItem.bestMediaSource(ep.MediaSources)
-                return PlexMediaItem(
-                    id: PlexAPIService.compositeID(serverID: serverID, ratingKey: ep.Id),
-                    title: show.Name ?? ep.SeriesName ?? "",
-                    artist: nil,
-                    episodeTitle: ep.Name,
-                    seTag: (s + e).isEmpty ? nil : s + e,
-                    summary: ep.Overview ?? show.Overview ?? "",
-                    year: show.ProductionYear,
-                    originallyAvailableAt: JellyfinAPIService.dateOnly(ep.PremiereDate ?? show.PremiereDate),
-                    contentRating: show.OfficialRating ?? ep.OfficialRating,
-                    duration: durationMin,
-                    ratingKey: ep.Id,
-                    partKey: source?.Id ?? ep.Id,
-                    container: source?.Container,
-                    videoCodec: source?.videoCodec,
-                    audioCodec: source?.audioCodec,
-                    videoProfile: source?.videoProfile,
-                    bitrate: source?.Bitrate.map { $0 / 1000 },
-                    genres: showGenres,
-                    rating: show.CommunityRating ?? 0,
-                    userRating: 0,
-                    type: .episode,
-                    thumb: ep.ImageTags?["Primary"] ?? show.ImageTags?["Primary"],
-                    art: show.ImageTags?["Backdrop"],
-                    viewCount: ServerWatchCount.viewCount(playCount: ep.UserData?.PlayCount, played: ep.UserData?.Played),
-                    addedAt: JellyfinAPIService.unixSeconds(fromISO: ep.DateCreated),
-                    studio: show.Studios?.first?.Name,
-                    tmdbID: show.tmdbID,
-                    imdbID: show.imdbID,
-                    librarySource: .tv,
-                    serverID: serverID.isEmpty ? nil : serverID,
-                    videoBitDepth: source?.videoBitDepth,
-                    doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
-                    videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
-                    showKey: show.Id
-                )
-            }
+            return episodes.compactMap { parseEpisodeItem($0, show: show) }
         } catch {
             incompleteReads.add()   // the section goes on without this show and is no longer whole
             return []
         }
+    }
+
+    /// One episode as the schedule reads it. The runtime is kept in seconds as well as floored minutes: the schedule
+    /// gives the episode its real length as its slot (#315). Nil, and counted as skipped, when the server gave no runtime.
+    func parseEpisodeItem(_ ep: JellyfinItem, show: JellyfinItem) -> PlexMediaItem? {
+        let showGenres = show.Genres ?? []
+        let durationMin = JellyfinAPIService.minutes(fromTicks: ep.RunTimeTicks)
+        guard durationMin > 0 else { scanSkips.add(); return nil }
+        let s = ep.ParentIndexNumber.map { "S\(String(format: "%02d", $0))" } ?? ""
+        let e = ep.IndexNumber.map { "E\(String(format: "%02d", $0))" } ?? ""
+        let source = JellyfinItem.bestMediaSource(ep.MediaSources)
+        return PlexMediaItem(
+            id: PlexAPIService.compositeID(serverID: serverID, ratingKey: ep.Id),
+            title: show.Name ?? ep.SeriesName ?? "",
+            artist: nil,
+            episodeTitle: ep.Name,
+            seTag: (s + e).isEmpty ? nil : s + e,
+            summary: ep.Overview ?? show.Overview ?? "",
+            year: show.ProductionYear,
+            originallyAvailableAt: JellyfinAPIService.dateOnly(ep.PremiereDate ?? show.PremiereDate),
+            contentRating: show.OfficialRating ?? ep.OfficialRating,
+            duration: durationMin,
+            ratingKey: ep.Id,
+            partKey: source?.Id ?? ep.Id,
+            container: source?.Container,
+            videoCodec: source?.videoCodec,
+            audioCodec: source?.audioCodec,
+            videoProfile: source?.videoProfile,
+            bitrate: source?.Bitrate.map { $0 / 1000 },
+            genres: showGenres,
+            rating: show.CommunityRating ?? 0,
+            userRating: 0,
+            type: .episode,
+            thumb: ep.ImageTags?["Primary"] ?? show.ImageTags?["Primary"],
+            art: show.ImageTags?["Backdrop"],
+            viewCount: ServerWatchCount.viewCount(playCount: ep.UserData?.PlayCount, played: ep.UserData?.Played),
+            addedAt: JellyfinAPIService.unixSeconds(fromISO: ep.DateCreated),
+            studio: show.Studios?.first?.Name,
+            tmdbID: show.tmdbID,
+            imdbID: show.imdbID,
+            librarySource: .tv,
+            serverID: serverID.isEmpty ? nil : serverID,
+            videoBitDepth: source?.videoBitDepth,
+            doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+            exactDurationSeconds: JellyfinAPIService.seconds(fromTicks: ep.RunTimeTicks),
+            showKey: show.Id,
+            parentRatingKey: ep.SeasonId
+        )
     }
 
     func parseMovieItem(_ item: JellyfinItem, isMusicSection: Bool) -> PlexMediaItem? {
@@ -435,7 +441,8 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             serverID: serverID.isEmpty ? nil : serverID,
             videoBitDepth: source?.videoBitDepth,
             doviProfile: Self.doviProfile(extendedVideoSubType: source?.videoExtendedSubType),
-            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight
+            videoWidth: source?.videoWidth, videoHeight: source?.videoHeight,
+            exactDurationSeconds: JellyfinAPIService.seconds(fromTicks: stack?.totalRunTimeTicks ?? item.RunTimeTicks)
         )
         if let stack, stack.parts.count > 1 {
             built.additionalPartKeys = Array(stack.parts.dropFirst().map(\.id))
@@ -448,19 +455,15 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
     /// Emby's collection model matches Jellyfin's: BoxSet items in a virtual folder, so
     /// the same global-list-plus-caller-dedupe approach applies.
     func loadCollections(sectionKey: String) async throws -> [PlexCollection] {
-        let queryItems: [URLQueryItem] = [
-            .init(name: "userId", value: userId),
-            .init(name: "IncludeItemTypes", value: "BoxSet"),
-            .init(name: "Recursive", value: "true"),
-            .init(name: "Fields", value: "ChildCount"),
-            .init(name: "SortBy", value: "SortName"),
-        ]
-        guard let req = request(path: "/Items", queryItems: queryItems) else {
-            throw PlexAPIService.APIError.invalidResponse
+        let items: [JellyfinItem] = try await MediaBrowserPaging.readAll(pageSize: MediaBrowserPaging.collectionPageSize) { start, limit in
+            guard let req = request(path: "/Items", queryItems: MediaBrowserPaging.collectionQuery(userId: userId, start: start, limit: limit)) else {
+                throw PlexAPIService.APIError.invalidResponse
+            }
+            let (data, response) = try await Self.session.data(for: req)
+            let page = try Self.decode(EmbyItemsResponse.self, data: data, response: response)
+            return (page.Items ?? [], page.TotalRecordCount)
         }
-        let (data, response) = try await Self.session.data(for: req)
-        let page = try Self.decode(EmbyItemsResponse.self, data: data, response: response)
-        let boxSets = (page.Items ?? []).map {
+        let boxSets = items.map {
             PlexCollection(
                 ratingKey: $0.Id,
                 title: $0.Name ?? "Untitled",
@@ -717,6 +720,10 @@ struct EmbyAPIService: MediaBackend, WatchActivityReporting {
             r.httpBody = try? JSONEncoder().encode(["PlaySessionId": psid])
             _ = try? await Self.session.data(for: r)
         }
+    }
+
+    func posterURLs(for item: PlexMediaItem, width: Int = 300) -> [URL] {
+        JellyfinAPIService.posterURLs(serverURL: serverURL, for: item, width: width)
     }
 
     func thumbnailURL(for item: PlexMediaItem, width: Int = 400) -> URL? {

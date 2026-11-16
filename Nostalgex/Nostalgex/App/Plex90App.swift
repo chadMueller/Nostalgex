@@ -43,7 +43,9 @@ struct RootView: View {
                         LaunchGuard.resetUnfinishedLoads()
                         Task { await launchLoad() }
                     }
-                } else if appState.isLoading {
+                } else if appState.isLoading && !appState.isLoadingInPlace {
+                    // A first load, or one with no guide to keep: the full screen. A switch or
+                    // RESCAN LIBRARY with a guide up keeps the guide (GuideLoadBlock).
                     LoadingView()
                 } else if appState.channels.isEmpty {
                     EmptyChannelsView(navigationPath: $navigationPath)
