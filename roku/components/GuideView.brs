@@ -2359,6 +2359,7 @@ sub openStrip()
 end sub
 
 sub onStripPicked()
+    if m.strip = invalid then return
     idx = m.strip.picked
     closeStrip()
     m.focus = idx
@@ -2456,6 +2457,7 @@ function npState() as Object
 end function
 
 sub onNpAction()
+    if m.np = invalid then return
     a = m.np.action
     if a = "cc" then
         if m.hasSubs then
@@ -3092,6 +3094,7 @@ sub onLibraryBusy()
 end sub
 
 sub onSettingsResult()
+    if m.settings = invalid then return
     result = m.settings.result
     ' A WATERSHED switch: the library task's re-check now, not in 30 s.
     m.top.reschedule = true

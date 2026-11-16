@@ -76,7 +76,7 @@ sub onMbCheck()
     if m.mbCheck = invalid or m.mbCheck.status <> "rejected" then return
     message = m.mbCheck.message
     signOut()
-    m.connect.notice = message
+    if m.connect <> invalid then m.connect.notice = message
 end sub
 
 ' CONNECT YOUR SERVER (ConnectView): Plex, Jellyfin or Emby, for a TV that
@@ -102,6 +102,7 @@ sub closeConnect()
 end sub
 
 sub onConnectDone()
+    if m.connect = invalid then return
     done = m.connect.done
     if done = "plex" then
         ' The code shows on the connect screen; it closes once signed in.
@@ -159,6 +160,7 @@ sub startSignIn()
 end sub
 
 sub onSignInState()
+    if m.signIn = invalid then return
     state = m.signIn.status
     if state = "checking" then
         m.prompt.text = "Checking your Plex sign-in…"
@@ -170,6 +172,7 @@ sub onSignInState()
         m.prompt.text = ""
         m.hint.text = ""
         showConnect()
+        if m.connect = invalid then return
         m.connect.plexCode = m.signIn.code
         m.connect.plexState = "code"
         signInShown()
@@ -227,6 +230,7 @@ end sub
 ' The choices are saved as Settings saves them, and only the servers picked
 ' are then checked and read.
 sub onPicked()
+    if m.picker = invalid then return
     reg = NxPlexRegistry()
     reg.Write("serverChoices", FormatJson(m.picker.choices))
     reg.Delete("needsPick")
@@ -304,6 +308,7 @@ sub closePicker()
 end sub
 
 sub onSignInCode()
+    if m.signIn = invalid then return
     if m.signIn.status = "code" and m.connect <> invalid then m.connect.plexCode = m.signIn.code
 end sub
 
@@ -586,6 +591,7 @@ end sub
 ' A package switched in Settings: the running library task builds for it
 ' behind Settings and says when (LibraryTask.bundleRequest).
 sub onBundleRequest()
+    if m.guide = invalid then return
     ' A task that has ended (a refresh that failed outright) would never answer.
     if m.library = invalid or m.library.state <> "run" then
         print "library: package change needs a full rebuild: no library task running"
@@ -674,6 +680,7 @@ sub setLibraryBusy(busy as Boolean)
 end sub
 
 sub onGuideAction()
+    if m.guide = invalid then return
     action = m.guide.action
     if action = "rebuild" then
         ' The guide stays where it is and says CHANNEL GUIDE IS CHANGING in its

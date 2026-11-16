@@ -33,6 +33,8 @@ python3 tests/tools/check-uninit.py
 # key (tests/pr-check.sh runs the same two, so they also run on a push to main).
 python3 tests/tools/check-testlists.py
 python3 tests/tools/check-dupkeys.py
+# An observer callback reading a node its component clears stops the app in the debugger.
+python3 tests/tools/check-observers.py
 bash tests/stamp-test.sh
 
 brs=$(npx -y -p @rokucommunity/brs@0.47.6 -c 'command -v brs')
