@@ -137,6 +137,14 @@ The Apple TV app and the web tuner can report what you are watching back to your
 
 With both off, nothing is reported and nothing in your library changes. Channel surfing never fills your Continue Watching row. On Plex the reports carry no position, so nothing is left half watched. On Jellyfin and Emby the app first reads the watch state your server already has and puts it back when the program ends, except that a watch Mark Watched counts stays counted; if it can't read it, it reports nothing for that program. When a switch is on, the reports go only to the server you connected. They do not come to us. If you have turned on iCloud sync on your Apple TVs, the two switches are shared between them through your iCloud account.
 
+## Weather channel
+
+If you set a location for the weather channel, the town or postcode you pick is saved on your device. To get the forecast, the app sends that spot's coordinates, rounded to about a kilometre, to our weather relay on nostalgex.app, which asks MET Norway (the Norwegian Meteorological Institute, api.met.no) for it. We don't store the location or write it to a log, and we don't use your IP address to work out where you are. Our host and MET Norway see your IP address and those coordinates in their ordinary server logs. In the US and Canada the radar map is fetched straight from the National Weather Service or Environment and Climate Change Canada, and in Germany from the Deutscher Wetterdienst (DWD), who see your IP address and a map window around your town.
+
+## Channel list updates
+
+The apps fetch the channel list (channels.json) from nostalgex.app to receive channel updates without an app release. That request carries no account or library data.
+
 ## The Roku app
 
 The Nostalgex app for Roku works with Plex, Jellyfin and Emby. It does not send usage analytics, and it does not use Roku's advertising identifier.
