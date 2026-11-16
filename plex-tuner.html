@@ -42,6 +42,8 @@
 <script src="scripts/nostalgex-language.js"></script>
 <script src="scripts/nostalgex-audio-pick.js"></script>
 <script src="scripts/nostalgex-up-next.js"></script>
+<script src="scripts/nostalgex-guide-cursor.js"></script>
+<script src="scripts/nostalgex-direct-play.js"></script>
 <script src="scripts/nostalgex-channel-requirements.js"></script>
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
@@ -316,7 +318,9 @@
     border: max(1px, calc(2 * var(--pt))) solid rgba(255,255,255,0.18);
     background: #101024;
   }
-  .info-poster[hidden] { display: none; }
+  /* No picture: an empty frame in the row colour, the same size, so the text beside it never moves. */
+  .info-poster--empty { visibility: visible; background: #101024; }
+  .info-poster:not([src]) { background: #101024; }
   .info-title {
     font-size: max(28px, calc(var(--info-title) * var(--pt)));
     color: #fff;
@@ -383,6 +387,7 @@
     border-radius: 2px;
     overflow: hidden;
   }
+  .info-progress-bar.previewing { visibility: hidden; }
   .info-progress-fill {
     height: 100%;
     border-radius: 2px;
@@ -394,27 +399,51 @@
     color: rgba(255,255,255,0.4);
     white-space: nowrap;
   }
-  /* UP NEXT: one plain, dim line, "Up next in 44 min: the title". No label, badge or capsule; a long title is cut with an ellipsis. */
+  /* UP NEXT: one plain line, the title in a highlight colour and then "UP NEXT IN 44 MIN" in dim text (Chad 2026-11-15, all platforms).
+     No badge or capsule. The label keeps its width; a long title is cut with an ellipsis, so the label is never the part that goes.
+     The title is the Apple TV's yellow, #FFE500, one variable (--upnext-title-color); the label is white at 50% on the guide's info panel. */
+  :root { --upnext-title-color: #FFE500; }
   .info-upnext {
+    display: flex;
+    align-items: baseline;
+    gap: calc(14 * var(--pt));
     margin-top: calc(14 * var(--pt));
     font-family: 'VT323', monospace;
     font-size: max(16px, calc(var(--info-next) * var(--pt)));
     color: rgba(255,255,255,0.4);
     letter-spacing: 1px;
+    min-width: 0;
+  }
+  .info-upnext-label { color: rgba(255,255,255,0.5); }
+  .info-upnext-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    color: var(--upnext-title-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
   }
-  .info-hint {
-    position: absolute;
-    left: 40px; right: 40px; bottom: 6px;
-    font-family: 'VT323', monospace;
-    font-size: max(var(--nx-fs), calc(20 * var(--pt)));
-    line-height: 1.2;
-    color: rgba(255,255,255,0.5);
-    pointer-events: none;
+  .info-upnext-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
+  /* OPEN IN PLEX / JELLYFIN / EMBY: the item's page in the server's own web app, in a new tab. A plain link, so a click reaches it
+     on a TV browser too. */
+  .info-open-in {
+    display: inline-block;
+    align-self: flex-start;
+    margin-top: calc(12 * var(--pt));
+    padding: 4px 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(8px, calc(var(--info-badge) * var(--pt)));
+    letter-spacing: 1px;
+    color: var(--cyan);
+    border: 2px solid var(--cyan);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .info-open-in[hidden] { display: none; }
+  .info-open-in:hover, .info-open-in:focus-visible { background: rgba(0,196,255,0.18); outline: none; }
 
   /* Unmute button */
   .unmute-btn {
@@ -1598,19 +1627,36 @@
     display: flex;
   }
 
-  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY). NORMAL is every size the guide drew
-     before the setting existed, so each multiplier is 1 and calc(18px * 1) is 18px. LARGE
-     scales by the ratios of the Apple TV's GuideTextMetrics.large over .normal (the 1.0.32
-     sizes, which Roku's GuideText.brs has too): everything goes to body (29), so titles, channel
-     numbers and names are 29/22 and the times and the CHANNEL heading 29/25. Only text grows: rows, header and the channel
-     column keep their size, so the name gives up characters to the ellipsis. The panel above
-     the grid is not touched. scripts/guide-text-smoke.mjs holds these to the Swift file. */
+  /* GUIDE TEXT SIZE (Settings > GENERAL > DISPLAY): three steps, SMALLER, DEFAULT and LARGER, as on the Apple TV. DEFAULT
+     (saved as "normal") is the guide as this page draws it, so each multiplier is 1 and calc(18px * 1) is 18px. The other two
+     scale it:
+       LARGER ("large", what LARGE always was): body (29) everywhere. This page's DEFAULT is the size it has always drawn (the
+       Apple TV's former NORMAL, 22 pt row text and 25 pt times; the Apple TV's own DEFAULT has since come down to 20 and 22), so
+       titles, channel numbers and names are 29/22 = 1.3182 and the times and the CHANNEL heading 29/25 = 1.16: LARGER is no
+       bigger than LARGE ever was here (Chad: don't make the fonts too big). The web's absolute scale differs from the Apple TV's
+       by design (--guide-scale), so these are not the Apple TV's 1.45 and 1.3182 over its DEFAULT;
+       SMALLER ("small"): the Apple TV's step, 17 pt row text and 19 pt times and heading over its 20 and 22, 0.85 and 0.8636.
+     SMALLER is awaiting Chad's visual pick on the Apple TV (18 and 20 pt, 0.9 and 0.9091, is the fallback): the two numbers in
+     the .guide-text-small block below are its one place. Only text changes: rows, header and the channel column keep their size,
+     so at LARGER the name gives up characters to the ellipsis. The panel above the grid is not touched.
+     scripts/guide-text-smoke.mjs holds these to the Swift file. */
   .guide-grid {
     --gt-title: 1;
     --gt-time: 1;
     --gt-head: 1;
     --gt-num: 1;
     --gt-name: 1;
+    /* The row and the header: the same at DEFAULT and SMALLER, and grown at LARGER by the Apple TV's proportions (76 over 64 pt rows,
+       66 over 58 pt headers), so the larger text keeps the room around a line that the default text has. */
+    --gt-row: 1;
+    --gt-header: 1;
+  }
+  body.guide-text-small .guide-grid {
+    --gt-title: 0.85;
+    --gt-time: 0.8636;
+    --gt-head: 0.8636;
+    --gt-num: 0.85;
+    --gt-name: 0.85;
   }
   body.guide-text-large .guide-grid {
     --gt-title: 1.3182;
@@ -1618,6 +1664,8 @@
     --gt-head: 1.16;
     --gt-num: 1.3182;
     --gt-name: 1.3182;
+    --gt-row: 1.1875;
+    --gt-header: 1.1379;
   }
   /* A phone has four time columns of 72px (390 wide), and a label wider than its column
      pushes the header off the screen and out of line with the rows: measured, 16.05px (1.07)
@@ -1630,7 +1678,7 @@
   .grid-header {
     display: flex;
     align-items: center;
-    height: var(--g-head);
+    height: calc(var(--g-head) * var(--gt-header));
     flex-shrink: 0;
     background: rgba(0,0,0,0.4);
     border-bottom: 1px solid rgba(255,215,0,0.2);
@@ -1674,7 +1722,7 @@
 
   .grid-row {
     display: flex;
-    height: var(--g-row);
+    height: calc(var(--g-row) * var(--gt-row));
     align-items: stretch;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     cursor: pointer;
@@ -1715,6 +1763,31 @@
      it is 5.19:1 or better on every colour in channels.json (97 of them, the lightest is #f5e6c8). */
   .grid-row.focused .grid-program.now-playing {
     background: color-mix(in srgb, var(--ch) 45%, var(--bg)) !important;
+  }
+
+  /* The programme the cursor is on (the focused row's cell, scripts/nostalgex-guide-cursor.js), with the Apple TV's values
+     (GuideCursorStyle): #00D4FF at 30% over the row, a 3px #00D4FF ring inset 2px with a 6px radius, and two cyan glows, 18px at
+     90% and 6px at 100%. The glow is clipped to the programme strip (it keeps overflow: hidden), so it never covers the channel
+     column, the bundle stripe or the rows above and below. The live programme's cell is it on the playing row until the cursor moves.
+     The colours are variables so the Apple TV's values stay one place. */
+  :root { --cursor-cyan: 0, 212, 255; }
+  .grid-row.focused .grid-program.grid-program--cursor {
+    background: rgba(var(--cursor-cyan), 0.30) !important;
+    outline: 3px solid rgb(var(--cursor-cyan));
+    outline-offset: -5px;
+    box-shadow: 0 0 18px rgba(var(--cursor-cyan), 0.9), 0 0 6px rgb(var(--cursor-cyan));
+    border-radius: 6px;
+    color: #fff !important;
+    position: relative;
+    z-index: 3;
+  }
+  /* While a cell has the cursor the row's own focus steps back: a 2px outline in the channel colour at 55% and a 6px glow at 25%
+     (with no cell it stays the 3px, 14px one above). */
+  .grid-row.focused.grid-row--has-cursor {
+    box-shadow:
+      inset 8px 0 0 var(--ch),
+      inset 0 0 0 2px color-mix(in srgb, var(--ch) 55%, transparent),
+      0 0 6px color-mix(in srgb, var(--ch) 25%, transparent);
   }
 
   /* Channel name column */
@@ -2784,7 +2857,7 @@
        is on screen at once. */
     .grid-channel-col, .grid-row-channel { width: 104px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
-    .grid-row { height: 34px; }
+    .grid-row { height: calc(34px * var(--gt-row)); }
     .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     /* The header is a fixed 32px; a wrapped time label spills into the rows. */
@@ -2819,7 +2892,7 @@
     }
     /* No room for prose next to a 16:9 video on a phone. The title, the meta
        row and the progress are what a glance needs. */
-    .info-poster, .info-hint, .info-description { display: none; }
+    .info-poster, .info-description { display: none; }
     .guide-grid { flex: 1 1 auto; min-height: 0; }
   }
 
@@ -2831,7 +2904,7 @@
     .m-topbar-logo { width: 84px; }
     /* A phone screen is all guide now, so the rows can afford to be a little
        tighter: one more channel on screen at 393x852. */
-    .grid-row { height: 32px; }
+    .grid-row { height: calc(32px * var(--gt-row)); }
     /* Four time columns in 256px once the channel column is paid for. */
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 5px; }
   }
@@ -3042,13 +3115,13 @@
       font-weight: 500;
     }
     .info-episode-title { font-size: var(--nx-fs); margin-bottom: 4px; font-weight: 500; }
-    .info-poster, .info-hint, .info-description { display: none; }
+    .info-poster, .info-description { display: none; }
     .info-time { font-family: 'DM Mono', monospace; font-size: var(--nx-fs); }
     .info-upnext { display: none; }
 
     .grid-channel-col, .grid-row-channel { width: 96px; padding: 0 8px; }
     .grid-channel-col { font-size: calc(var(--nx-fs) * var(--gt-head)); letter-spacing: 0.06em; }
-    .grid-row { height: 30px; }
+    .grid-row { height: calc(30px * var(--gt-row)); }
     .grid-ch-num { font-size: max(calc(12px * var(--gt-num)), var(--nx-fs)); min-width: calc(2.2 * max(12px, var(--nx-fs)) * var(--gt-num)); }
     .grid-ch-name { font-size: max(calc(12px * var(--gt-name)), var(--nx-fs)); letter-spacing: 0; }
     .grid-time-slot { font-size: max(calc(12px * var(--gt-time)), var(--nx-fs)); padding: 0 6px; white-space: nowrap; }
@@ -3638,7 +3711,7 @@
   .grid-header { padding-left: var(--g-stripe); position: relative; }
   .grid-stripe-cell { width: var(--g-stripe); flex-shrink: 0; background: var(--stripe, rgba(255,255,255,0.10)); }
   .grid-stripe-cell.starts { box-shadow: inset 0 2px 0 #0a0a2a; }
-  .grid-stripe-overlay { position: absolute; left: 0; top: var(--g-head); bottom: 0; width: calc(var(--g-stripe) + 10px); pointer-events: none; overflow: hidden; z-index: 3; }
+  .grid-stripe-overlay { position: absolute; left: 0; top: calc(var(--g-head) * var(--gt-header)); bottom: 0; width: calc(var(--g-stripe) + 10px); pointer-events: none; overflow: hidden; z-index: 3; }
   .grid-stripe-label {
     position: absolute; left: 0; width: var(--g-stripe); display: flex; align-items: center; justify-content: flex-start;
     writing-mode: vertical-rl; transform: rotate(180deg);
@@ -3774,7 +3847,7 @@
            with the elapsed and total time, and one plain line for what is on next. -->
       <div class="info-channel-tag" id="info-channel-tag"></div>
       <div class="info-main">
-        <img class="info-poster" id="info-poster" alt="" hidden>
+        <img class="info-poster" id="info-poster" alt="">
         <div class="info-text">
           <div class="info-title" id="info-title"></div>
           <div class="info-episode-title" id="info-episode-title"></div>
@@ -3789,8 +3862,7 @@
         <div class="info-time" id="info-time"></div>
       </div>
       <div class="info-upnext" id="info-upnext"></div>
-      <!-- Says what the focused control on the rail does; it sits over the foot of the window and takes no room. -->
-      <div class="info-hint" id="info-hint" aria-live="polite"></div>
+      <a class="info-open-in" id="info-open-in" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
 
     <!-- VERTICAL TOOLBAR (beside info panel in side layout) -->
@@ -4156,11 +4228,12 @@
       <div class="cfg-row cfg-row--wrap">
         <div>
           <div class="cfg-row-title">Guide text size</div>
-          <div class="cfg-row-desc">Bigger program titles, times and channel names in the guide</div>
+          <div class="cfg-row-desc">Smaller or bigger program titles, times and channel names in the guide</div>
         </div>
         <div class="sleep-chips" id="cfg-guide-text-chips" role="group" aria-label="Guide text size">
-          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">NORMAL</button>
-          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGE</button>
+          <button class="sleep-chip" type="button" data-size="small" onclick="setGuideTextSize('small')" aria-pressed="false">SMALLER</button>
+          <button class="sleep-chip" type="button" data-size="normal" onclick="setGuideTextSize('normal')" aria-pressed="true">DEFAULT</button>
+          <button class="sleep-chip" type="button" data-size="large" onclick="setGuideTextSize('large')" aria-pressed="false">LARGER</button>
         </div>
       </div>
 
@@ -5101,10 +5174,27 @@
     }
   }
 
-  /** The channel a load opens on: the last one watched when the switch is on and it is still
+  // A link can name the channel to open on: plex-tuner.html?channel=<number>, the number the guide shows (the web's counterpart of the
+  // Apple TV's Top Shelf link). The start screen passes its own query on, so a bookmark to web-tuner.html?channel=12 works too. An unknown
+  // number is ignored, and it applies once, to the first channel a visit opens on.
+  let deepLinkChannelUsed = false;
+  function channelFromLink(enabled) {
+    if (deepLinkChannelUsed || !enabled.length) return null;
+    deepLinkChannelUsed = true;
+    try {
+      const raw = new URLSearchParams(location.search).get('channel');
+      const n = Number(raw);
+      if (raw === null || !Number.isInteger(n) || n < 1) return null;
+      return enabled.find(ch => chNum(ch) === n) || null;
+    } catch (e) { return null; }
+  }
+
+  /** The channel a load opens on: the one a link names, else the last one watched when the switch is on and it is still
    *  there with the same id and name, else the first enabled channel, as before. */
   function channelToOpenOn() {
     const enabled = CHANNELS.filter(ch => ch.enabled);
+    const linked = channelFromLink(enabled);
+    if (linked) return linked;
     if (openLastChannelOn()) {
       let saved = null;
       try { saved = NostalgexLastChannel.parse(localStorage.getItem(NostalgexLastChannel.CHANNEL_KEY)); } catch (e) {}
@@ -5186,6 +5276,7 @@
     text('np-upnext', '');
     setInfoChannelTag(ch);
     setInfoPoster(null);
+    updateOpenInLink(null);
     text('info-title', WATERSHED_GUIDE_LABEL);
     text('info-episode-title', '');
     text('info-description', '');
@@ -5232,10 +5323,13 @@
   let guideFocusIndex = 0;
   // The cursor is on a promo row (support, info, the seasonal invite) instead of a channel: its data-promo.
   let guidePromoKey = null;
-  // The guide's time cursor (the Apple TV's slotOffset, I-089): Right and Left move the window later and earlier,
-  // one 30-minute slot a press, up to 44 slots, with the cursor staying on its row.
+  // The guide's window in time (the Apple TV's slotOffset, I-089): how many 30-minute slots it is moved later, up to 44. It moves
+  // only when the programme cursor would leave the view (scripts/nostalgex-guide-cursor.js).
   let guideSlotOffset = 0;
   const GUIDE_MAX_SLOTS = 44;
+  // The programme cursor (the Apple TV's GuideProgramCursor): a time on the focused row, in Unix seconds, or null on the live
+  // programme. Left and Right move it a programme at a time, Up and Down keep it, and the cell it is on is highlighted.
+  let guideCursorTime = null;
   let configFocusIndex = 0;
   let connectFocusIndex = 0;
   let overlayTimeout = null;
@@ -5713,6 +5807,11 @@
       headline: "Can't reach your server",
       detail: `Nothing answered at the address saved for your ${server} server. Check it's awake and on the same network.`,
     };
+    if (e.dolbyVision5) return {
+      kind: 'dolbyVision5', serverSide: false,
+      headline: `${server} can't play this one in a browser`,
+      detail: `This file is Dolby Vision profile 5, a colour format ${server} couldn't convert for a browser. The Nostalgex app on a TV or box that plays Dolby Vision can.`,
+    };
     if (e.noSource) return {
       kind: 'noPlayableSource', serverSide: true,
       headline: 'Nothing to play for this title',
@@ -5855,14 +5954,16 @@
 
   /**
    * AppState.advanceToNextItem's pick. When a programme ends on its own, the next one from
-   * its start: the one after it, or what is on now if the clock has moved past it. After a
+   * its start (or from where the clock is, when the guide is 10 s or more in): the one after it, or what is on now if the clock has moved past it. After a
    * stall or a failure, what is on now from where it is now. Never the title another channel
    * has on at that moment: the one after it, from the start. No schedule: anything in the pool.
+   * One rule on top of the Apple TV's pick (#315, `catchUp`): the next file takes a second or two to load, which the clock
+   * keeps counting, so once the guide is 10 s or more into the programme a natural end starts, it joins where the clock is.
    */
   function nextAfterEnd(channel, endedItem, fromNaturalEnd) {
     const pool = getTimeFilteredPool(channel);
     const pick = NostalgexDailyManifest.advancePick(channel, pool, endedItem ? endedItem.ratingKey : null,
-      Date.now() / 1000, guideLineup(), manifestServerKey(), fromNaturalEnd);
+      Date.now() / 1000, guideLineup(), manifestServerKey(), fromNaturalEnd, true);
     if (pick) return { ...pick.item, offsetSeconds: pick.seekSeconds };
     return pool.length ? { ...pool[Math.floor(Math.random() * pool.length)], offsetSeconds: 0 } : null;
   }
@@ -6004,8 +6105,9 @@
           ch, items, nowMs, manifestServerKey()
         );
 
-        // ProgramRowLayout.segments: a cursor walk, so the row is never wider than the window. An airing
-        // that runs past local midnight overlaps the next day's first one; that one is trimmed at its start.
+        // ProgramRowLayout.segments: a cursor walk, so the row is never wider than the window. Since #315 an airing that
+        // runs past midnight is followed by the next day's first one with no overlap; the trim of an overlapping one at its
+        // start stays as a guard for a day stored before yesterday's was.
         const segs = NostalgexProgramRowLayout.segments(blocks, windowStartSec, windowDuration);
         const PROGRAM_SLIVER = 0.08;   // of the window: 9.6 min, where 16px of padding is more than the block's share on a phone
         for (const seg of segs) {
@@ -6038,6 +6140,8 @@
           const displayTitle = itemGuideTitle(item);
           prog.textContent = displayTitle;
           prog.title = displayTitle;
+          prog.dataset.start = block.startSec;
+          prog.dataset.end = block.endSec;
           progsCol.appendChild(prog);
         }
       } else if (isWatershedHold(ch)) {
@@ -6068,6 +6172,7 @@
     });
     gridBody.appendChild(fragment);
     addStripeCells(gridBody);
+    applyGuideCursor();
   }
 
   let renderGuideTimer = null;
@@ -6433,7 +6538,8 @@
   function makePlaybackTracker(item, initialOptions = { nowPlaying: nowPlayingReportingEnabled, markWatched }, scope = reportingScope) {
     const WS = window.NostalgexWatchState;
     const queue = WS.sharedQueue;
-    const totalSec = (item.duration || 0) * 60;
+    // The programme's length as the guide has it: the file's runtime, so the 75% watched mark and the reported length agree with the Apple TV (#315).
+    const totalSec = NostalgexDailyManifest.slotSeconds(item);
     const seekOffset = Math.floor(item.offsetSeconds || 0);
     const rk = item.ratingKey;
     const serverUrl = item.serverUrl || plexServerUrl;
@@ -6762,7 +6868,10 @@
       const subtitleBurned = !!(subtitlePick && !subtitlePick.external);
       request.burnedSubtitleIndex = subtitleBurned ? subtitlePick.index : null;
 
+      // The file's codecs too (#326): an MP4 holding HEVC or AC-3 plays in some browsers and not in others, so a browser that cannot decode
+      // them goes to the server's stream at once instead of failing first. A library saved before codecs were kept has none: the container decides, as before.
       canDirectPlay = !item._forceTranscode && item.partKey && ['mp4', 'webm', 'mov'].includes(item.container)
+        && NostalgexDirectPlay.codecsOK(item, directPlayProbe) !== false
         && !audioNeedsServer && !subtitleBurned
         && NostalgexStreamQuality.directPlayAllowed(effectiveQualityFor(item), item.bitrate);
       beginInfoAttempt();
@@ -6842,11 +6951,12 @@
           try { thisInstance.destroy(); } catch (e) {}
           if (hlsInstance === thisInstance) hlsInstance = null;
           const code = data.response && data.response.code;
-          failCurrentItem(channel, item, classifyPlaybackFailure({
+          const payload = {
             httpStatus: code,
             network: !code && data.type === Hls.ErrorTypes.NETWORK_ERROR,
             decodedAFrame: video.currentTime > 0.5,
-          }));
+          };
+          explainedFailure(item, streamUrl, payload, request.controller.signal).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
           return;
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !networkRetried) {
@@ -6868,14 +6978,14 @@
         try { thisInstance.destroy(); } catch (e) {}
         if (hlsInstance === thisInstance) hlsInstance = null;
         const code = data.response && data.response.code;
-        failCurrentItem(channel, item, classifyPlaybackFailure({
+        explainedFailure(item, streamUrl, {
           httpStatus: code,
           network: !code && data.type === Hls.ErrorTypes.NETWORK_ERROR,
           // bufferStalledError after a picture is the server falling behind, not a codec
           tooSlow: data.details === 'bufferStalledError' || data.details === 'bufferNudgeOnStall',
           mediaError: data.type === Hls.ErrorTypes.MEDIA_ERROR,
           decodedAFrame: video.currentTime > 0.5,
-        }));
+        }, request.controller.signal).then((failure) => { if (ownsPlaybackRequest(request)) failCurrentItem(channel, item, failure); });
       });
     } else if (isHLS && video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
@@ -6996,6 +7106,48 @@
     return true;
   }
 
+  // A Plex transcode the server refuses with HTTP 400 says why when asked (#324): the same request to /decision answers with the reason in words. A file in
+  // Dolby Vision profile 5 reads "DoVi (Profile 5) color space is not supported". The server is asked first and not second-guessed: a Plex that can convert
+  // profile 5 simply streams it, and a browser that plays a profile 5 MP4 as it is does so. Null when the server will not say. The question gets 5 seconds:
+  // a /decision that never answers must not leave the channel black with no card, so a timeout is the same as a server that will not say. The fetch also
+  // ends when the playback request does (a channel change), and the timer is always cleared.
+  const PLEX_DECISION_TIMEOUT_MS = 5000;
+  async function plexRefusalReason(streamUrl, parentSignal) {
+    let timer = null, onParentAbort = null;
+    try {
+      if (!/\/video\/:\/transcode\/universal\/start\.m3u8\?/.test(streamUrl)) return null;
+      const url = streamUrl.replace('/start.m3u8?', '/decision?') + '&directPlay=0&directStream=1';
+      const ctl = new AbortController();
+      timer = setTimeout(() => ctl.abort(), PLEX_DECISION_TIMEOUT_MS);
+      if (parentSignal) {
+        if (parentSignal.aborted) ctl.abort();
+        else { onParentAbort = () => ctl.abort(); parentSignal.addEventListener('abort', onParentAbort); }
+      }
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
+      if (!res.ok) return null;
+      const mc = (await res.json()).MediaContainer || {};
+      return `${mc.transcodeDecisionText || ''} ${mc.generalDecisionText || ''}`.trim() || null;
+    } catch (e) { return null; }
+    finally {
+      if (timer) clearTimeout(timer);
+      if (parentSignal && onParentAbort) parentSignal.removeEventListener('abort', onParentAbort);
+    }
+  }
+  /** The failure for a stream the server answered with `payload`.httpStatus: a Plex 400 is explained by the server before it is blamed. */
+  async function explainedFailure(item, streamUrl, payload, signal) {
+    // Asked once per programme: the capped retry that follows a 400 is a copy of the item and carries the flag, so a server that did not answer
+    // (or answered with another reason) is not waited on a second time before the card.
+    if (payload.httpStatus === 400 && mediaBackend === 'plex' && !item._refusalAsked) {
+      item._refusalAsked = true;
+      const why = await plexRefusalReason(streamUrl, signal);
+      if (why && /DoVi \(Profile 5\)/i.test(why)) {
+        item._cappedRetry = true;   // no smaller stream will do either
+        return classifyPlaybackFailure({ dolbyVision5: true });
+      }
+    }
+    return classifyPlaybackFailure(payload);
+  }
+
   function failCurrentItem(channel, item, failure) {
     const request = activePlaybackRequest;
     if (!ownsPlaybackRequest(request) || request.item !== item) return;
@@ -7071,15 +7223,17 @@
     const ch = focusedCh && focusedCh.schedule && focusedCh.schedule[0] ? focusedCh : playingCh;
     if (!ch || !ch.schedule[0]) return;
 
+    // A later programme the cursor is on (the Apple TV's previewEntry): shown with its time range where the progress bar is, and
+    // the programme after it as UP NEXT.
     let preview = null;
-    if (guideSlotOffset > 0 && ch._manifestBlocks) {
-      const t = (Math.floor(Date.now() / 1800000) * 1800000 + guideSlotOffset * 1800000) / 1000;
-      const blocks = ch._manifestBlocks;
-      const i = blocks.findIndex(b => b.startSec <= t && t < b.endSec);
-      if (i >= 0 && blocks[i].startSec > Date.now() / 1000) preview = { entry: blocks[i], next: blocks[i + 1] };
+    if (guideCursorTime !== null && ch._manifestBlocks) {
+      const GC = NostalgexGuideCursor;
+      const cur = GC.current(ch._manifestBlocks, guideCursorTime, Date.now() / 1000);
+      if (cur && cur.startSec > Date.now() / 1000) preview = { entry: cur, next: GC.entryAfter(ch._manifestBlocks, cur) };
     }
     const now = preview ? { progress: 0 } : ch.schedule[0];
     const next = preview ? (preview.next ? preview.next.item : null) : ch.schedule[1];
+    const nextStartSec = preview ? (preview.next ? preview.next.startSec : null) : (ch.schedule[1] ? ch.schedule[1].startSec : null);
     // InfoPanelView: the details are what the player is playing (`playingItem`), which can run
     // a little behind the clock after a programme overruns its slot; the progress is the
     // schedule's.
@@ -7088,6 +7242,7 @@
 
     setInfoChannelTag(ch);
     setInfoPoster(shown);
+    updateOpenInLink(shown);
     const MB = globalThis.NostalgexMusicBrainz;
     const isMusic = MB && MB.isMusicVideoItem(shown);
     document.getElementById('info-title').textContent = shown.title;
@@ -7097,16 +7252,28 @@
       ? (shown.artist || '')
       : (shown.episodeTitle || '');
     document.getElementById('info-progress').style.width = (now.progress || 0) + '%';
+    // A later programme shows its time range where the progress bar is (the bar has nothing to show yet).
+    document.querySelector('.info-progress-bar').classList.toggle('previewing', !!preview);
     document.getElementById('info-progress').style.background = ch.color;
     document.getElementById('info-time').textContent = preview
-      ? 'STARTS ' + new Date(preview.entry.startSec * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      ? [preview.entry.startSec, preview.entry.endSec].map(s => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })).join(' - ')
       : `${now.position || '0:00'} / ${now.total || ''}`;
 
-    // Up next: one plain line, "Up next in 44 min: the title" (minutes first, then the title). While the guide is moved later the
-    // clock says nothing about the programme shown, so it is just "Up next: the title".
-    const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
-    const upNextLead = upNextSeconds === null ? 'Up next' : (t => t.charAt(0) + t.slice(1).toLowerCase())(NostalgexUpNext.label(upNextSeconds));
-    document.getElementById('info-upnext').textContent = next ? `${upNextLead}: ${itemGuideTitle(next)}` : '';
+    // UP NEXT: one plain line, as on the Apple TV (all platforms, Chad 2026-11-15): the programme's title in a highlight colour, two
+    // spaces, then "UP NEXT IN 24 MIN". Whole minutes from now to the next programme's start, rounded down, "UP NEXT IN LESS THAN 1
+    // MIN" under a minute (scripts/nostalgex-up-next.js). A long title is cut with an ellipsis before the label is.
+    const upNextSeconds = nextStartSec !== null ? nextStartSec - Date.now() / 1000 : (now && now.endSec ? now.endSec - Date.now() / 1000 : 0);
+    const upNextEl = document.getElementById('info-upnext');
+    upNextEl.textContent = '';
+    if (next) {
+      const titleEl = document.createElement('span');
+      titleEl.className = 'info-upnext-title';
+      titleEl.textContent = itemGuideTitle(next);
+      const labelEl = document.createElement('span');
+      labelEl.className = 'info-upnext-label';
+      labelEl.textContent = NostalgexUpNext.label(upNextSeconds);
+      upNextEl.append(titleEl, '  ', labelEl);
+    }
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -7129,51 +7296,100 @@
     tag.style.color = String(ch.color || '#fff');
   }
 
-  // The poster, Plex only, as on the Apple TV (its thumbnail URL carries the token). Hidden when there is none or it fails.
-  function infoPosterUrl(item) {
-    if (!item || mediaBackend !== 'plex' || !item.thumb) return '';
-    const server = item.serverUrl || plexServerUrl;
+  // The poster, on every server, as on the Apple TV (Chad 2026-11-15: parity on Plex, Jellyfin and Emby): a TV episode's season
+  // poster, then its series', then the episode's own image; a film's own. The first image that loads wins, and every one failing leaves
+  // an empty frame (the space is always reserved, so the text never moves). Plex's URL carries its token as its other image requests do
+  // (an <img> cannot send a header); Jellyfin and Emby images are asked for without one, as on the Apple TV.
+  //   Plex:             /library/metadata/{season}/thumb, then /library/metadata/{show}/thumb, then the item's thumb
+  //   Jellyfin, Emby:   /Items/{SeasonId}/Images/Primary, then {SeriesId}, then {ItemId}, each with ?maxWidth=300
+  function infoPosterUrls(item) {
+    if (!item) return [];
+    const server = String((item.serverUrl || plexServerUrl) || '').replace(/\/+$/, '');
     const token = item.serverToken || plexToken;
-    if (!server || !token) return '';
-    return `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(item.thumb)}&X-Plex-Token=${encodeURIComponent(token)}`;
+    if (!server || !token) return [];
+    const episode = item.type === 'episode';
+    const urls = [];
+    if (mediaBackend === 'plex') {
+      const via = (path) => `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(path)}&X-Plex-Token=${encodeURIComponent(token)}`;
+      if (episode && item.seasonKey) urls.push(via(`/library/metadata/${item.seasonKey}/thumb`));
+      if (episode && item.showKey) urls.push(via(`/library/metadata/${item.showKey}/thumb`));
+      if (item.thumb) urls.push(via(item.thumb));
+    } else {
+      // No sign-in in the URL: the Apple TV asks for these images without one, and a token in an image address lands in access logs.
+      const primary = (id) => `${server}/Items/${encodeURIComponent(id)}/Images/Primary?maxWidth=300`;
+      if (episode && item.seasonKey) urls.push(primary(item.seasonKey));
+      if (episode && item.showKey) urls.push(primary(item.showKey));
+      if (item.ratingKey) urls.push(primary(item.ratingKey));
+    }
+    return urls.filter((u, i) => urls.indexOf(u) === i);
   }
   function setInfoPoster(item) {
     const img = document.getElementById('info-poster');
     if (!img) return;
-    const url = infoPosterUrl(item);
-    if (!url) { img.hidden = true; img.removeAttribute('src'); delete img.dataset.src; return; }
-    img.onerror = () => { img.hidden = true; };
-    if (img.dataset.src !== url) { img.dataset.src = url; img.src = url; }
-    img.hidden = false;
+    const urls = infoPosterUrls(item);
+    const key = urls.join('|');
+    if (img.dataset.key === key) return;   // the same programme: its picture stays
+    img.dataset.key = key;
+    let at = 0;
+    const next = () => {
+      if (at >= urls.length) { img.removeAttribute('src'); img.classList.add('info-poster--empty'); return; }
+      img.classList.remove('info-poster--empty');
+      img.src = urls[at++];
+    };
+    img.onerror = next;
+    next();
   }
 
-  // The hint line under the details: what the control the viewer is on does, in the Apple TV's words where it has them.
-  (function wireRailHints() {
-    const rail = document.getElementById('v-toolbar');
-    const hint = document.getElementById('info-hint');
-    if (!rail || !hint) return;
-    const HINTS = {
-      'SOUND': 'Turn the sound on or off for this channel',
-      'FULLSCREEN': 'Show this channel without the guide',
-      'RETRO': 'CRT scanlines, vignette, flicker, 4:3 aspect ratio',
-      'SLEEP': 'Stop playing after a set time',
-      'INFO': 'How this program is playing, and why',
-      'QUALITY': 'Lower this when your connection is slow or shared',
-      'SETTINGS': 'Bundles, servers, language and the rest',
-      'APPLE TV': 'Nostalgex for Apple TV, from the App Store',
-    };
-    const show = (e) => {
-      const btn = e.target.closest && e.target.closest('.v-btn');
-      const label = btn && btn.querySelector('.v-btn-label');
-      const key = label ? label.textContent.split('[')[0].trim().toUpperCase() : '';
-      hint.textContent = HINTS[key] || '';
-    };
-    const clear = () => { hint.textContent = ''; };
-    rail.addEventListener('focusin', show);
-    rail.addEventListener('mouseover', show);
-    rail.addEventListener('focusout', clear);
-    rail.addEventListener('mouseleave', clear);
-  })();
+  // OPEN IN PLEX / JELLYFIN / EMBY: a link to the item in the server's own web app, in a new tab (Chad 2026-11-15: the same as the
+  // Apple TV's OPEN IN PLEX, on every server). Jellyfin and Emby ask for the server's id, which their public info answers; until it
+  // has, the link is made without it (both web apps open the item on the server they are served from).
+  //   Plex:     https://app.plex.tv/desktop/#!/server/{machineIdentifier}/details?key=/library/metadata/{id}
+  //   Jellyfin: {server}/web/#/details?id={id}&serverId={serverId}
+  //   Emby:     {server}/web/index.html#!/item?id={id}&serverId={serverId}   (Emby's router takes the #! form: checked on 4.10.1.0)
+  let mediaServerId = null;          // the id of the server mediaServerIdFor names
+  let mediaServerIdFor = '';
+  let mediaServerIdAskedAt = 0;      // when the id was last asked for (once a minute at most, so a server that is down is not asked every second)
+  function ensureMediaServerId() {
+    if (!isMediaBrowserBackend(mediaBackend) || !plexServerUrl) return;
+    const url = plexServerUrl;
+    if (mediaServerIdFor === url) return;
+    if (mediaServerId !== null) mediaServerId = null;   // an id from another server is never used
+    const now = Date.now();
+    if (mediaServerIdAskedAt && now - mediaServerIdAskedAt < 60000) return;
+    mediaServerIdAskedAt = now;
+    fetch(`${url}/System/Info/Public`, { headers: { 'Accept': 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.Id && url === plexServerUrl) { mediaServerId = String(d.Id); mediaServerIdFor = url; updateOpenInLink(shownInfoItem); } })
+      .catch(() => {});
+  }
+  function openInTarget(item) {
+    if (!item || !item.ratingKey) return null;
+    const id = encodeURIComponent(String(item.ratingKey));
+    if (mediaBackend === 'plex') {
+      const server = item.serverUrl ? selectedServers.find((s) => s.url === item.serverUrl) : selectedServers[0];
+      const machine = server && server.machineIdentifier;
+      if (!machine) return null;
+      return { label: 'OPEN IN PLEX', url: `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(machine)}/details?key=${encodeURIComponent('/library/metadata/' + item.ratingKey)}` };
+    }
+    const server = String(plexServerUrl || '').replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(server)) return null;
+    const sid = mediaServerId && mediaServerIdFor === plexServerUrl ? `&serverId=${encodeURIComponent(mediaServerId)}` : '';
+    if (mediaBackend === 'emby') return { label: 'OPEN IN EMBY', url: `${server}/web/index.html#!/item?id=${id}${sid}` };
+    return { label: 'OPEN IN JELLYFIN', url: `${server}/web/#/details?id=${id}${sid}` };
+  }
+  let shownInfoItem = null;
+  function updateOpenInLink(item) {
+    shownInfoItem = item;
+    const a = document.getElementById('info-open-in');
+    if (!a) return;
+    ensureMediaServerId();
+    const t = openInTarget(item);
+    if (!t) { a.hidden = true; a.removeAttribute('href'); return; }
+    a.textContent = t.label;
+    a.href = t.url;
+    a.hidden = false;
+  }
+
 
   function getEnabledChannels() {
     return CHANNELS.filter(ch => ch.enabled);
@@ -7210,7 +7426,7 @@
     if (guideVisible) return;
     guideVisible = true;
     guidePromoKey = null;
-    guideSlotOffset = 0;
+    resetGuideCursor();
     guideStripeMode = false;
 
     // Pre-select current channel in guide
@@ -7268,12 +7484,65 @@
     updateGuideFocus(wrapped);
   }
 
-  function moveGuideTime(step) {
-    const to = Math.min(Math.max(guideSlotOffset + step, 0), GUIDE_MAX_SLOTS);
-    if (to === guideSlotOffset) return;
-    guideSlotOffset = to;
-    renderGrid();
+  // ── The programme cursor (NostalgexGuideCursor, the Apple TV's GuideProgramCursor) ──
+  /** Back on the live programme, the window at its start: where the guide is on opening and after a tune. */
+  function resetGuideCursor() {
+    guideCursorTime = null;
+    guideSlotOffset = 0;
+  }
+
+  /** The focused channel's blocks, the programmes its row is drawn from. */
+  function focusedGuideEntries() {
+    if (guidePromoKey) return null;
+    const ch = getEnabledChannels()[guideFocusIndex];
+    return ch && ch._manifestBlocks ? ch._manifestBlocks : null;
+  }
+
+  /** Marks the cell the cursor is on, on the focused row only: the programme covering the cursor's time (the live one on null). */
+  function applyGuideCursor() {
+    for (const el of document.querySelectorAll('.grid-program--cursor')) el.classList.remove('grid-program--cursor');
+    for (const el of document.querySelectorAll('.grid-row--has-cursor')) el.classList.remove('grid-row--has-cursor');
+    const entries = focusedGuideEntries();
+    if (!entries || !guideVisible || guideStripeMode) return;
+    const row = document.querySelector('.grid-row.focused:not(.grid-row--promo)');
+    if (!row) return;
+    const cur = NostalgexGuideCursor.current(entries, guideCursorTime, Date.now() / 1000);
+    const cell = cur ? [...row.querySelectorAll('.grid-program')].find((c) => Number(c.dataset.start) === cur.startSec) : null;
+    if (cell) cell.classList.add('grid-program--cursor');
+    row.classList.toggle('grid-row--has-cursor', !!cell);
+  }
+
+  /**
+   * Left or Right on a row: the cursor to the previous or next programme, and the window along when that programme would leave the
+   * view. False when there is nowhere to go (Left from the live programme, so Left can go on to the stripe).
+   */
+  function moveGuideCursor(forward) {
+    const entries = focusedGuideEntries();
+    if (!entries) return false;
+    const GC = NostalgexGuideCursor;
+    const nowSec = Date.now() / 1000;
+    const target = forward ? GC.next(entries, guideCursorTime, nowSec) : GC.previous(entries, guideCursorTime, nowSec);
+    if (!target) return false;
+    guideCursorTime = GC.cursorFor(target, nowSec);
+    const windowStartSec = Math.floor(nowSec / 1800) * 1800;
+    const offset = GC.windowOffset(target, guideSlotOffset, windowStartSec, nowSec, GUIDE_MAX_SLOTS);
+    if (offset !== guideSlotOffset) {
+      guideSlotOffset = offset;
+      renderGrid();
+    }
     updateGuideFocus();
+    return true;
+  }
+
+  /** The cursor back on the live programme, and the focus on the playing channel's row. */
+  function jumpGuideToLive() {
+    resetGuideCursor();
+    guidePromoKey = null;
+    const enabled = getEnabledChannels();
+    const idx = currentChannel !== null ? enabled.findIndex(c => c.id === currentChannel) : -1;
+    if (idx >= 0) guideFocusIndex = idx;
+    renderGrid();
+    updateGuideFocus(true);
   }
 
   function updateGuideFocus(wrapped = false) {
@@ -7309,8 +7578,9 @@
       // the guide again, seasonal invite included, the way Apple TV centers its rows.
       focusedRow.scrollIntoView({ behavior: 'smooth', block: wrapped ? 'center' : 'nearest' });
     }
-    // The info panel follows the cursor (the Apple TV previews the focused channel, and the programme at the
-    // window's left edge once the cursor is later than now).
+    // The cell the cursor is on follows the row (Up and Down keep the time), and the info panel follows the cursor: the focused
+    // channel, and a later programme with its time range once the cursor is later than now.
+    applyGuideCursor();
     updateInfoPanel();
   }
 
@@ -7717,6 +7987,13 @@
     if (document.fullscreenElement) return true;
     const video = document.getElementById('plex-video');
     return !!(video && video.webkitDisplayingFullscreen);
+  }
+
+  // What this browser decodes beyond the codecs every one does (scripts/nostalgex-direct-play.js).
+  let directPlayProbeFn = null;
+  function directPlayProbe(name) {
+    if (!directPlayProbeFn) directPlayProbeFn = NostalgexDirectPlay.browserProbe(() => document.createElement('video'));
+    return directPlayProbeFn(name);
   }
 
   function toggleFullscreen() {
@@ -8285,7 +8562,7 @@
   // nothing; after the sleep timer stopped it, it starts that channel again. Nothing in
   // the background goes through here, so a library refresh never restarts playback.
   function tuneFromGuide(channelId) {
-    guideSlotOffset = 0;
+    resetGuideCursor();
     if (sleepStoppedPlayback && channelId === currentChannel) currentChannel = null;
     switchChannel(channelId, true);
   }
@@ -8371,19 +8648,23 @@
   }
 
   // ── GUIDE TEXT SIZE ─────────────────────────────────────────────────────
-  // NORMAL or LARGE, saved as 'normal' / 'large' under the Apple TV's own key. Nothing saved,
-  // or anything else, is NORMAL (GuideTextSize.init(stored:), NxGuideTextFrom). The sizes are
-  // CSS (body.guide-text-large); this only keeps the class and the buttons in step. Kept per
-  // browser: the web has no settings sync.
+  // SMALLER, DEFAULT or LARGER, saved as 'small' / 'normal' / 'large' under the Apple TV's own key (the middle step keeps the
+  // raw value 'normal' and 'large' is what LARGE always was). Nothing saved, or anything unknown, is DEFAULT
+  // (GuideTextSize.init(stored:)). The sizes are CSS (body.guide-text-small, body.guide-text-large); this only keeps the class and
+  // the buttons in step. Kept per browser: the web has no settings sync.
   const GUIDE_TEXT_KEY = 'nostalgex_guide_text_size';
 
   function guideTextSize() {
-    try { return localStorage.getItem(GUIDE_TEXT_KEY) === 'large' ? 'large' : 'normal'; } catch (e) { return 'normal'; }
+    try {
+      const saved = localStorage.getItem(GUIDE_TEXT_KEY);
+      return saved === 'large' || saved === 'small' ? saved : 'normal';
+    } catch (e) { return 'normal'; }
   }
 
   /** The class and the buttons show what is saved, so a write storage refused reads as unchanged. */
   function applyGuideTextSize() {
     const size = guideTextSize();
+    document.body.classList.toggle('guide-text-small', size === 'small');
     document.body.classList.toggle('guide-text-large', size === 'large');
     for (const b of document.querySelectorAll('#cfg-guide-text-chips .sleep-chip')) {
       const active = b.dataset.size === size;
@@ -8457,7 +8738,7 @@
   renderGuideTimeoutChips();
 
   function setGuideTextSize(size) {
-    lsSet(GUIDE_TEXT_KEY, size === 'large' ? 'large' : 'normal');
+    lsSet(GUIDE_TEXT_KEY, size === 'large' || size === 'small' ? size : 'normal');
     applyGuideTextSize();
   }
 
@@ -9304,7 +9585,7 @@
     });
   }
 
-  // Mirrors the MY COLLECTIONS rows in BundleManagerView.swift: one switch per server
+  // Mirrors the MY COLLECTIONS rows in SettingsChannelsView.swift: one switch per server
   // collection, "N movies" / "N shows · E episodes" or the duplicate warning underneath.
   function renderCollectionList() {
     const container = document.getElementById('collection-list');
@@ -10780,8 +11061,11 @@
   // 24 hours (the Apple TV's scanFieldsVersion). 2: Jellyfin and Emby ratings (#204), no playlists
   // or other non-video items, and the count of titles skipped for no runtime. Without it a
   // library saved before this release would keep a playlist on the guide and every Emby title
-  // unrated until the day was up.
-  const LIBRARY_SCAN_REVISION = 2;
+  // unrated until the day was up. 3: every title also carries its real runtime in seconds
+  // (exactDurationSeconds), which the schedule gives a programme as its slot, so a file plays to its
+  // own end (#315). A library saved before that has none: it still plays (the slot is the floored
+  // minutes) and is read again once behind the guide.
+  const LIBRARY_SCAN_REVISION = 3;
 
   // IndexedDB (scripts/nostalgex-storage.js), not localStorage and not sessionStorage.
   //
@@ -10920,7 +11204,9 @@
 
     allItemsCache = allItems;
     if (!options.skipCacheSave) saveLibraryCache(allItems);
-    if (!options.skipManifestClear) NostalgexDailyManifest.clearManifests(manifestServerKey());
+    // Yesterday's stored day stays: the programme running over midnight is on air from it, and a refresh just after midnight
+    // must not blank it (#315). Today is packed again from the new pool, starting when that programme ends.
+    if (!options.skipManifestClear) NostalgexDailyManifest.clearManifests(manifestServerKey(), { keepDayKey: NostalgexDailyManifest.previousLocalDayKey(Date.now()) });
 
     // Collection and found-franchise channels have no rules; their pool is their members.
     const targets = allChannelsUnfiltered.filter(ch => poolIDs.has(ch.id) && !isRuntimeChannel(ch));
@@ -11549,49 +11835,92 @@
     // answer unless Fields asks for them (Jellyfin sends them either way), and every rating
     // rule reads them: contentRatings allow-lists, the kids gate, the 9 PM hold, WATERSHED
     // and ratingMin (GitHub #204).
-    async function fetchItems(parentId, includeItemTypes) {
-      let collected = [], start = 0;
-      while (true) {
-        const url = `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
-          + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
-          + `&IncludeItemTypes=${includeItemTypes}`
-          + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
-          + `&StartIndex=${start}&Limit=200&SortBy=SortName`;
+    //
+    // A big library (tens of thousands of titles) is read in two ways that a small one never notices:
+    //  - `onPage(items)` hands each page over as it is read, in order, so the caller can turn it into
+    //    its own shape and let the raw answers go (the call then returns []). Without it every raw answer
+    //    of the library is held until the library is read.
+    //  - with `onPage`, once the first page has shown the server honours the page size, the next
+    //    ITEM_PAGES_AHEAD pages are asked for while the one before is still being read, and are still
+    //    handed over in order. A server that takes a second or two to build 200 titles was a
+    //    one-page-at-a-time wait. The per-show episode reads (no `onPage`) stay one page at a time:
+    //    five shows are already in flight, and a show rarely has a second page.
+    // A page that fails ends the read where it stands: the pages before it are kept. (A request that
+    // throws mid-read used to lose the whole library's pages; the ones already handed over are now kept
+    // and the library is still reported as not whole, so it is not cached.)
+    const ITEM_PAGE = 200;
+    const ITEM_PAGES_AHEAD = 3;   // only for a read with onPage
+    async function fetchItems(parentId, includeItemTypes, onPage) {
+      const kept = [];
+      let read = 0;   // rows the server sent
+      const pageUrl = (start) => `${plexServerUrl}/Items?userId=${encodeURIComponent(jellyfinUserId)}`
+        + `&ParentId=${encodeURIComponent(parentId)}&Recursive=true`
+        + `&IncludeItemTypes=${includeItemTypes}`
+        + `&Fields=ProviderIds,Overview,Genres,Studios,MediaSources,ProductionYear,PremiereDate,DateCreated,UserData,OfficialRating,CommunityRating`
+        + `&StartIndex=${start}&Limit=${ITEM_PAGE}&SortBy=SortName`;
+      // One page: { items, total }, or { thrown } / { status } for a page that did not come. Never rejects.
+      const getPage = async (start) => {
         let r, d;
         try {
-          r = await fetch(url, { headers, signal: scanSignal() });
+          r = await fetch(pageUrl(start), { headers, signal: scanSignal() });
           noteScanAnswer();
           if (r.ok) d = await r.json();
-        } catch (err) {
+        } catch (err) { return { thrown: err }; }
+        if (!r.ok) return { status: r.status };
+        return { items: (d && d.Items) || [], total: d && d.TotalRecordCount };
+      };
+      // Takes a page in. Returns true when the read is over (the last page, or a page that did not come).
+      const take = (res) => {
+        if (res.thrown) {
           // STOP WAITING, or 3 min 30 s of silence: keep the pages already read, as for any other
           // page that fails, and say this library is not whole.
-          if (!scanIsAbandoned()) throw err;
+          if (!scanIsAbandoned()) throw res.thrown;
           const e = abandonedScanError();
-          if (collected.length === 0) throw e;
+          if (read === 0) throw e;
           lostViews.push(scanningViewName);
           lastViewError = e;
-          break;
+          return true;
         }
-        if (!r.ok) {
+        if (res.status) {
           // A refused sign-in ends the scan, as it does on Plex. Any other failure loses the
           // library; pages already read are kept, as the Apple TV keeps them.
-          const e = new Error(`HTTP ${r.status} from ${scanningViewName}`);
-          if (r.status === 401 || r.status === 403) { e.plexStatus = r.status; throw e; }
-          if (collected.length === 0) throw e;
+          const e = new Error(`HTTP ${res.status} from ${scanningViewName}`);
+          if (res.status === 401 || res.status === 403) { e.plexStatus = res.status; throw e; }
+          if (read === 0) throw e;
           lostViews.push(scanningViewName);
           lastViewError = e;
-          break;
+          return true;
         }
-        const items = d.Items || [];
-        collected.push(...items);
-        const total = d.TotalRecordCount ?? collected.length;
-        start += items.length;
-        if (items.length === 0 || collected.length >= total) break;
+        // Only the types that were asked for. A server may answer with more (the Playlists view
+        // always answers with playlists, whatever the request says), and a playlist or a song is
+        // not a programme. Paging counts the rows the server sent, so the count comes from `items`.
+        const asked = res.items.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
+        if (onPage) { if (asked.length) onPage(asked); } else kept.push(...asked);
+        read += res.items.length;
+        const total = res.total ?? read;
+        return res.items.length === 0 || read >= total;
+      };
+      const first = await getPage(0);
+      if (take(first)) return kept;
+      const total = first.total ?? read;
+      if (first.items.length === ITEM_PAGE && onPage) {
+        // The server honours the page size: the rest are at known offsets.
+        const starts = [];
+        for (let s = ITEM_PAGE; s < total; s += ITEM_PAGE) starts.push(s);
+        const ahead = [];
+        let launched = 0;
+        const launch = () => { while (ahead.length < ITEM_PAGES_AHEAD && launched < starts.length) ahead.push(getPage(starts[launched++])); };
+        launch();
+        while (ahead.length) {
+          if (take(await ahead.shift())) return kept;
+          launch();
+        }
+        return kept;
       }
-      // Only the types that were asked for. A server may answer with more (the Playlists view
-      // always answers with playlists, whatever the request says), and a playlist or a song is
-      // not a programme. Paging above counts the rows the server sent, so this comes last.
-      return collected.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
+      // A server that answered with fewer rows than asked for: one page at a time, from where it stopped.
+      while (true) {
+        if (take(await getPage(read))) return kept;
+      }
     }
 
     function tmdbFromProviderIds(ids) {
@@ -11703,6 +12032,8 @@
                     })(),
                     contentRating: show.OfficialRating || ep.OfficialRating || '',
                     duration: durationMin,
+                    // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+                    exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromTicks(ep.RunTimeTicks),
                     ratingKey: ep.Id,
                     partKey: mi.msid,
                     container: mi.container,
@@ -11716,6 +12047,7 @@
                     // The series id, which a BoxSet of shows lists in place of its
                     // episodes. NostalgexCollections.indexLibrary expands it.
                     showKey: String(show.Id),
+                    seasonKey: (ep.SeasonId || ep.ParentId) ? String(ep.SeasonId || ep.ParentId) : undefined,
                     thumb: null,
                     art: null,
                     viewCount: (ep.UserData && ep.UserData.PlayCount) || 0,
@@ -11740,8 +12072,8 @@
           // for Movie alone returned nothing and HIGH ROTATION stayed empty (I-067). Ask for
           // both there, since a few libraries file clips as Movie. Every other library keeps
           // asking for Movie only.
-          const items = await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type));
-          items.forEach(jf => {
+          let moviesRead = 0;
+          await fetchItems(view.Id, NostalgexJellyfinUrls.itemTypes(type), (page) => { page.forEach(jf => {
             const genres = jf.Genres || [];
             if (isMusicVideoSection && !genres.some(g => /music/i.test(g))) genres.push('Music Video');
             genres.forEach(g => { discoveredGenres[g] = (discoveredGenres[g] || 0) + 1; });
@@ -11772,6 +12104,8 @@
               year,
               contentRating: jf.OfficialRating || '',
               duration: durationMin,
+              // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+              exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromTicks(jf.RunTimeTicks),
               ratingKey: jf.Id,
               partKey: mi.msid,
               container: mi.container,
@@ -11794,7 +12128,10 @@
               doviProfile: mi.doviProfile,
             });
           });
+          moviesRead += page.length;
           LL.state.scanItemsFound = allItems.length;
+          LL.setPhase('scanningLibrary', `${view.Name} · ${moviesRead} titles`);
+          });
         }
       } catch (err) {
         console.warn(`Failed to fetch Jellyfin view ${view.Name}:`, err);
@@ -12070,8 +12407,7 @@
                     let partKey = null;
                     let container = null;
                     const epMedia = pickBestVersion(ep.Media, m => m.bitrate, m => resolutionHeight(m.videoResolution));
-                    // Codecs only feed PLAYBACK INFORMATION; Plex's direct play choice still
-                    // goes by container alone.
+                    // The codecs feed PLAYBACK INFORMATION and the direct play choice (scripts/nostalgex-direct-play.js).
                     const epVideoCodec = epMedia && epMedia.videoCodec ? String(epMedia.videoCodec).toLowerCase() : null;
                     const epAudioCodec = epMedia && epMedia.audioCodec ? String(epMedia.audioCodec).toLowerCase() : null;
                     if (epMedia) {
@@ -12099,6 +12435,8 @@
                       originallyAvailableAt: ep.originallyAvailableAt || show.originallyAvailableAt || null,
                       contentRating: show.contentRating || ep.contentRating || '',
                       duration: durationMin,
+                      // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+                      exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromPlexMs(ep.duration),
                       ratingKey: ep.ratingKey,
                       partKey: partKey,
                       container: container,
@@ -12112,6 +12450,7 @@
                       // The show's key (episode grandparentRatingKey), which a collection
                       // of shows lists. NostalgexCollections.indexLibrary expands it.
                       showKey: String(show.ratingKey),
+                      seasonKey: ep.parentRatingKey ? String(ep.parentRatingKey) : undefined,
                       thumb: ep.thumb || show.thumb,
                       art: show.art,
                       viewCount: ep.viewCount || 0,
@@ -12198,6 +12537,8 @@
             year: item.year || '',
             contentRating: item.contentRating || '',
             duration: durationMin,
+            // The file's real runtime in seconds, kept next to the floored minutes: the schedule's slot (#315).
+            exactDurationSeconds: NostalgexDailyManifest.exactSecondsFromPlexMs(item.duration),
             ratingKey: item.ratingKey,
             partKey: partKey,
             container: container,
@@ -12700,9 +13041,17 @@
       // Left and Right move the guide's time cursor, as on the Apple TV. Full screen has no guide: there they
       // still change channel (the player branch below).
       if ((key === 'ArrowLeft' || key === 'ArrowRight') && !isVideoFullscreen()) {
-        // Left at the start of the guide goes to the package stripe (or the list, with no packages), as the Apple TV does.
-        if (key === 'ArrowLeft' && guideSlotOffset === 0) { if (guideHasPackages()) enterStripe(); else openPackageList(); e.preventDefault(); return; }
-        moveGuideTime(key === 'ArrowRight' ? 1 : -1);
+        // The cursor goes a programme at a time. Left from the live programme (nowhere to go) goes to the package stripe (or the
+        // list, with no packages), as the Apple TV does.
+        if (moveGuideCursor(key === 'ArrowRight')) { e.preventDefault(); return; }
+        if (key === 'ArrowLeft') { if (guideHasPackages()) enterStripe(); else openPackageList(); }
+        e.preventDefault();
+        return;
+      }
+      // Back (Menu on the Apple TV) puts the cursor back on the live programme of the playing channel; with the cursor already
+      // there it does what it always did.
+      if ((key === 'Escape' || key === 'Backspace') && !isVideoFullscreen() && (guideCursorTime !== null || guideSlotOffset > 0)) {
+        jumpGuideToLive();
         e.preventDefault();
         return;
       }
@@ -12716,7 +13065,9 @@
         if (key === ' ' && appState !== 'guide' && !(guideVisible && appState === 'player')) return;
         const enabled = getEnabledChannels();
         const ch = enabled[guideFocusIndex];
-        // Enter on a row tunes it; Enter on the row that is already playing goes full screen.
+        // Enter on a row tunes it; Enter on the row that is already playing goes full screen. Either way the cursor is back on the live
+        // programme (the Apple TV resets it before both).
+        resetGuideCursor();
         if (ch && ch.id === currentChannel && !sleepStoppedPlayback && !isVideoFullscreen()) toggleFullscreen();
         else if (ch) tuneFromGuide(ch.id);
         e.preventDefault();
@@ -12955,7 +13306,12 @@
     const groups = guideStripeGroups();
     let i = guideStripeGroup + step;
     while (i >= 0 && i < groups.length && !groups[i].pkg) i += step;
-    if (i < 0 || i >= groups.length) return;
+    if (i < 0 || i >= groups.length) {
+      // Past the last bundle goes to the first and past the first to the last, as the channel rows wrap (Chad 2026-11-15).
+      const bundled = groups.map((g, k) => (g.pkg ? k : -1)).filter((k) => k >= 0);
+      if (!bundled.length) return;
+      i = step > 0 ? bundled[0] : bundled[bundled.length - 1];
+    }
     guideStripeGroup = i; guideStripeJumped = true;
     const rows = [...document.querySelectorAll('#grid-body > .grid-row[data-channel-id]')];
     const body = document.getElementById('grid-body');

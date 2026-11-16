@@ -46,6 +46,10 @@ const plexFilm = (n, container, kbps) => ({
   Genre: [{ tag: "Action" }],
   Media: [{ container, videoResolution: "720", bitrate: kbps, videoCodec: "h264", audioCodec: "aac", Part: [{ key: `/library/parts/${n}/file.${container}` }] }],
 });
+const dv5Keys = new Set();   // files this Plex refuses to convert: Dolby Vision profile 5 (start.m3u8 answers 400, /decision says why)
+const otherRefusalKeys = new Set();   // files whose start.m3u8 answers 400 and whose /decision gives a reason that is not profile 5
+const hangKeys = new Set();           // files whose start.m3u8 answers 400 and whose /decision never answers
+const hungDecisions = [];             // { res, closedAt }: the /decision requests held open, so the smoke can see when the page gave up on them
 const plexFilms = [plexFilm(1, "mkv", 8000), plexFilm(2, "mp4", 20000), plexFilm(3, "mp4", 3000), plexFilm(4, "mkv", 8000), plexFilm(5, "mkv", 8000), plexFilm(6, "mkv", 8000)];
 
 function readBody(req) {
@@ -72,6 +76,22 @@ const plex = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   log.push({ server: "plex", method: req.method, url: req.url, body: "" });
   const path = req.url.split("?")[0];
+  if (path === "/video/:/transcode/universal/decision") {
+    const k = /\/library\/metadata\/(\d+)/.exec(new URL(req.url, "http://x").searchParams.get("path") || "");
+    const refused = k && dv5Keys.has(k[1]);
+    if (k && hangKeys.has(k[1])) { const held = { res, closedAt: 0 }; hungDecisions.push(held); req.on("close", () => { held.closedAt = Date.now(); }); return; }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    if (k && otherRefusalKeys.has(k[1])) return res.end(JSON.stringify({ MediaContainer: { generalDecisionCode: 2000, generalDecisionText: "Neither direct play nor conversion is available.", transcodeDecisionCode: 2001, transcodeDecisionText: "Not enough bandwidth to convert this file." } }));
+    return res.end(JSON.stringify({ MediaContainer: refused
+      ? { generalDecisionCode: 2000, generalDecisionText: "Neither direct play nor conversion is available.", transcodeDecisionCode: 2003, transcodeDecisionText: "File is unplayable. DoVi (Profile 5) color space is not supported." }
+      : { generalDecisionCode: 1000, generalDecisionText: "Direct play not available; Conversion OK.", transcodeDecisionCode: 1001, transcodeDecisionText: "Direct play not available; Conversion OK." } }));
+  }
+  if (path === "/video/:/transcode/universal/start.m3u8") {
+    const k = /\/library\/metadata\/(\d+)/.exec(new URL(req.url, "http://x").searchParams.get("path") || "");
+    if (k && (dv5Keys.has(k[1]) || otherRefusalKeys.has(k[1]) || hangKeys.has(k[1]))) { res.writeHead(400, { "Content-Type": "text/html" }); return res.end("<html><head><title>Bad Request</title></head><body><h1>400 Bad Request</h1></body></html>"); }
+    res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
+    return res.end("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.0,\nseg0.ts\n#EXT-X-ENDLIST\n");
+  }
   if (path.startsWith("/video/") || path.startsWith("/library/parts/")) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { "Content-Type": "application/json" });
   if (path === "/identity") return res.end(JSON.stringify({ MediaContainer: { machineIdentifier: "lab-plex" } }));
@@ -87,7 +107,8 @@ const files = http.createServer((req, res) => {
   let body = readFileSync(p);
   // hls.js is stubbed (the page then sets the stream URL on the <video> itself, which is the request we read).
   if (p.endsWith("plex-tuner.html")) {
-    let text = body.toString().replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/hls\.js[^>]*><\/script>/, "<script>window.Hls = { isSupported: () => false };</script>");
+    // ?realhls: the real hls.js (the same 1.5.17 the page loads from the CDN), for the case under test that needs its error events.
+    let text = body.toString().replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/hls\.js[^>]*><\/script>/, req.url.includes("realhls") ? '<script src="/node_modules/hls.js/dist/hls.min.js"></script>' : "<script>window.Hls = { isSupported: () => false };</script>");
     // ?nocap: the quality module answering as if no level were capped, for the negative control.
     if (req.url.includes("nocap")) {
       const stripped = text.replace('<script src="scripts/nostalgex-stream-quality.js"></script>', "");
@@ -197,6 +218,105 @@ for (const [level, expect20, expect3] of [["auto", true, true], ["maximum", true
   const r3 = await start(px.page, "plex", "103", level);
   check(`plex ${level}: a 3 Mbps MP4 ${expect3 ? "direct plays" : "is transcoded"}`, expect3 ? plexDirect(r3) && !plexTranscode(r3) : plexTranscode(r3) && !plexDirect(r3), r3.map((r) => r.url.slice(0, 60)).join(" | "));
 }
+// The Plex direct play decision reads the file's codecs (#326): an MP4 holding HEVC or AC-3 goes to the server's stream where the
+// browser cannot decode it, and a file with no codecs kept (a library saved before) is decided by its container as before.
+await px.page.evaluate(() => { HTMLMediaElement.prototype.canPlayType = () => ""; });   // a browser that decodes neither HEVC nor AC-3
+const startPatched = async (patch) => {
+  await px.page.evaluate((l) => localStorage.setItem("nostalgex_stream_quality", l), "auto");
+  log.length = 0;
+  await px.page.evaluate((p) => {
+    const item = allItemsCache.find((i) => i.ratingKey === "102");
+    const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0];
+    playCurrentItem({ ...item, ...p, offsetSeconds: 0 }, channel);
+  }, patch);
+  await px.page.waitForTimeout(1200);
+  return log.filter((r) => r.server === "plex");
+};
+let rc = await startPatched({ videoCodec: "h264", audioCodec: "aac" });
+check("plex #326: an MP4 with H.264 and AAC direct plays", plexDirect(rc) && !plexTranscode(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "hevc", audioCodec: "aac" });
+check("plex #326: an MP4 holding HEVC goes to the server's stream where the browser cannot decode it", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "h264", audioCodec: "ac3" });
+check("plex #326: an MP4 with AC-3 audio goes to the server's stream", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: "h264", audioCodec: "dca" });
+check("plex #326: DTS audio goes to the server's stream", plexTranscode(rc) && !plexDirect(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+rc = await startPatched({ videoCodec: null, audioCodec: null });
+check("plex #326: no codecs kept (a library saved before): the container decides, as before: direct play", plexDirect(rc) && !plexTranscode(rc), rc.map((r) => r.url.slice(0, 60)).join(" | "));
+// Dolby Vision profile 5 (#324), with the real hls.js: Plex's transcoder refuses the file (start.m3u8 answers HTTP 400), the page asks the server why
+// (/decision: "DoVi (Profile 5) color space is not supported") and shows that, not "your server wouldn't start this one". Nothing is blocked
+// beforehand: a profile 8 file and a plain HEVC file stream as any other does, and a profile 5 MP4 that direct plays still direct plays.
+const pxr = await open("plex", "?realhls");
+dv5Keys.add("104"); dv5Keys.add("102");
+const startReal = async (key, patch = {}) => {
+  await pxr.page.evaluate((l) => localStorage.setItem("nostalgex_stream_quality", l), "auto");
+  log.length = 0;
+  await pxr.page.evaluate(([k, p]) => {
+    const item = allItemsCache.find((i) => i.ratingKey === k);
+    const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0];
+    playCurrentItem({ ...item, ...p, offsetSeconds: 0 }, channel);
+  }, [key, patch]);
+  await pxr.page.waitForTimeout(2500);
+  return { reqs: log.filter((r) => r.server === "plex"), card: await pxr.page.evaluate(() => { const st = document.getElementById("display-status"); return { text: st.textContent, visible: st.classList.contains("visible") }; }) };
+};
+let dv = await startReal("104");   // an MKV, always the server's transcoder
+check("plex #324: a profile 5 file gets a 400 from the server's transcoder", dv.reqs.some((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+check("plex #324: the page then asks the server why (/decision)", dv.reqs.some((r) => /\/transcode\/universal\/decision/.test(r.url)));
+check("plex #324: and shows the Dolby Vision card, not the server-blaming one", dv.card.visible && /Dolby Vision profile 5/.test(dv.card.text) && /The Nostalgex app on a TV or box that plays Dolby Vision can\./.test(dv.card.text) && !/answered HTTP/.test(dv.card.text), dv.card.text);
+check("plex #324: one stream request, no retry at a smaller size", dv.reqs.filter((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)).length === 1, String(dv.reqs.filter((r) => /start\.m3u8/.test(r.url)).length));
+dv = await startReal("102");   // an MP4 holding H.264 and AAC: it direct plays, nothing is asked of the transcoder
+check("plex #324: a profile 5 MP4 that direct plays still direct plays first (the mock 404s the file, and the page's own recovery then goes to the server)", plexDirect(dv.reqs) && !plexTranscode(dv.reqs), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+dv = await startReal("105");   // profile 8: the server converts it
+check("plex #324: a profile 8 file streams", dv.reqs.some((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)) && !dv.reqs.some((r) => /\/decision/.test(r.url)) && !/Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+dv = await startReal("106", { videoCodec: "hevc", audioCodec: "aac", container: "mkv" });   // a plain HEVC file
+check("plex #324: a plain HEVC file streams", dv.reqs.some((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)) && !/Dolby Vision profile 5/.test(dv.card.text), dv.reqs.map((r) => r.url.slice(0, 70)).join(" | "));
+// A 400 whose /decision reason is something else: the page asks, reads no profile 5, and builds the failure it built before (the server answered HTTP 400).
+otherRefusalKeys.add("105");
+dv = await startReal("105");
+check("plex #324: a 400 with another reason still asks the server why", dv.reqs.some((r) => /\/transcode\/universal\/decision/.test(r.url)));
+check("plex #324: a 400 with another reason takes the old failure path (server-blaming card, no Dolby Vision card)", dv.card.visible && /answered HTTP 400/.test(dv.card.text) && !/Dolby Vision/.test(dv.card.text), dv.card.text);
+otherRefusalKeys.clear();
+// A /decision that never answers: the page waits 5 seconds, then falls back to the plain failure (the same card), and the channel moves on after its usual
+// five seconds. Nothing is shown before the timeout, and the held request is dropped by the page (aborted), not left open.
+hangKeys.add("106");
+hungDecisions.length = 0;
+log.length = 0;
+await pxr.page.evaluate(() => { consecutivePlaybackFailures = 0; });   // the failures above would otherwise park the channel instead of moving it on
+const hangStart = Date.now();
+await pxr.page.evaluate(() => { const item = allItemsCache.find((i) => i.ratingKey === "106"); const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+const cardNow = () => pxr.page.evaluate(() => { const st = document.getElementById("display-status"); return { text: st.textContent, visible: st.classList.contains("visible") }; });
+await pxr.page.waitForTimeout(3000);
+let hc = await cardNow();
+check("plex #324: while /decision has not answered, no card yet (the page is still waiting)", !(hc.visible && /answered HTTP/.test(hc.text)) && hungDecisions.length === 1 && !hungDecisions[0].closedAt, `${hungDecisions.length} ${hc.text}`);
+await pxr.page.waitForFunction(() => { const st = document.getElementById("display-status"); return st.classList.contains("visible") && /answered HTTP 400/.test(st.textContent); }, null, { timeout: 8000 }).catch(() => {});
+const hangElapsed = Date.now() - hangStart;
+hc = await cardNow();
+check("plex #324: a /decision that never answers falls back to the plain failure card", hc.visible && /answered HTTP 400/.test(hc.text) && !/Dolby Vision/.test(hc.text), hc.text);
+check("plex #324: and does so at the 5 second timeout, not before and not long after", hangElapsed >= 4800 && hangElapsed <= 7500, `${hangElapsed} ms`);
+check("plex #324: the capped retry that follows does not ask (and wait) a second time", hungDecisions.length === 1 && log.filter((r) => /\/transcode\/universal\/decision/.test(r.url)).length === 1 && log.filter((r) => /\/transcode\/universal\/start\.m3u8/.test(r.url)).length === 2, `${hungDecisions.length} decisions, ${log.filter((r) => /start\.m3u8/.test(r.url)).length} starts`);
+check("plex #324: the held /decision request was aborted by the page", hungDecisions.length === 1 && hungDecisions[0].closedAt > 0 && hungDecisions[0].closedAt - hangStart <= 7500, JSON.stringify(hungDecisions.map((h) => h.closedAt && h.closedAt - hangStart)));
+log.length = 0;
+await pxr.page.waitForTimeout(6500);
+check("plex #324: the channel moves on after the card, as it does for any failure (the next programme is started)", log.some((r) => r.server === "plex" && /\/transcode\/universal\/start\.m3u8|\/library\/parts\//.test(r.url)), log.map((r) => r.url.slice(0, 70)).join(" | "));
+await pxr.page.evaluate(() => stopVideo());
+await pxr.page.waitForTimeout(300);
+hangKeys.clear();
+// A channel change while /decision is held: the question is dropped at once and nothing from the old programme fires afterwards.
+hangKeys.add("106");
+hungDecisions.length = 0;
+await pxr.page.evaluate(() => { const item = { ...allItemsCache.find((i) => i.ratingKey === "106") }; delete item._refusalAsked; delete item._cappedRetry; const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+await pxr.page.waitForTimeout(1500);
+const heldBefore = hungDecisions.length;
+const changeAt = Date.now();
+await pxr.page.evaluate(() => { const item = allItemsCache.find((i) => i.ratingKey === "101"); const channel = CHANNELS.find((c) => c.enabled) || CHANNELS[0]; playCurrentItem({ ...item, offsetSeconds: 0 }, channel); });
+await pxr.page.waitForTimeout(1000);
+check("plex #324: a channel change drops the held /decision at once", heldBefore === 1 && hungDecisions[0].closedAt >= changeAt && hungDecisions[0].closedAt - changeAt < 1500, `${heldBefore} ${hungDecisions.map((h) => h.closedAt && h.closedAt - changeAt)}`);
+await pxr.page.waitForTimeout(5500);
+hc = await cardNow();
+check("plex #324: and no card for the old programme appears after the timeout would have fired", !(hc.visible && /answered HTTP 400/.test(hc.text)), hc.text);
+hangKeys.clear();
+check("plex #324: no page errors", pxr.errors.length === 0, pxr.errors.join(" | "));
+dv5Keys.clear();
+await pxr.ctx.close();
 check("plex: no page errors", px.errors.length === 0, px.errors.join(" | "));
 await jf.ctx.close();
 await px.ctx.close();
@@ -279,6 +399,7 @@ for (const backend of ["jellyfin", "plex"]) {
 }
 
 await browser.close();
+for (const h of hungDecisions) { try { h.res.destroy(); } catch {} }
 for (const s of [jellyfin, plex, files]) s.close();
 if (failures.length) {
   console.error(`stream-quality browser smoke: ${failures.length} failed, ${passed} passed`);

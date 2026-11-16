@@ -135,9 +135,35 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
       : { Items: [{ Id: "m200" }], TotalRecordCount: 201 };
   };
   const out = await C.fetchBoxSetCollections("jellyfin", "u 1", getJSON);
-  check("boxset: listing call", calls[0], "/Items?userId=u%201&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName");
+  check("boxset: listing call", calls[0], "/Items?userId=u%201&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName&StartIndex=0&Limit=500");
   check("boxset: children call", calls[1], "/Items?userId=u%201&ParentId=b1&Recursive=true&IncludeItemTypes=Movie,Series&StartIndex=0&Limit=200&SortBy=SortName");
   check("boxset: deduped, paged", [out.length, out[0].childKeys.length, out[0].id], [1, 201, "jellyfin:b1"]);
+}
+
+{
+  // A server with 1,200 collections answers 500 at a time; the list is read in pages and each collection once.
+  const calls = [];
+  const getJSON = async (p) => {
+    calls.push(p);
+    if (p.includes("IncludeItemTypes=BoxSet")) {
+      const start = Number(p.match(/StartIndex=(\d+)/)[1]), limit = Number(p.match(/Limit=(\d+)/)[1]);
+      return { Items: Array.from({ length: Math.max(0, Math.min(limit, 1200 - start)) }, (_, i) => ({ Id: `b${start + i}`, Name: `Box ${start + i}` })), TotalRecordCount: 1200 };
+    }
+    return { Items: [{ Id: "m1" }], TotalRecordCount: 1 };
+  };
+  const out = await C.fetchBoxSetCollections("jellyfin", "u", getJSON);
+  check("boxset: 1,200 collections are listed in three pages", calls.filter((c) => c.includes("IncludeItemTypes=BoxSet")).map((c) => c.match(/StartIndex=(\d+)/)[1]), ["0", "500", "1000"]);
+  check("boxset: each one is read once", [out.length, new Set(out.map((o) => o.id)).size], [1200, 1200]);
+}
+{
+  // A server that ignores StartIndex and answers the same page: the read ends instead of looping.
+  let listings = 0;
+  const getJSON = async (p) => {
+    if (p.includes("IncludeItemTypes=BoxSet")) { listings++; return { Items: [{ Id: "b1", Name: "Box" }], TotalRecordCount: 9999 }; }
+    return { Items: [{ Id: "m1" }], TotalRecordCount: 1 };
+  };
+  const out = await C.fetchBoxSetCollections("jellyfin", "u", getJSON);
+  check("boxset: a server that ignores the page start does not loop", [listings, out.length], [2, 1]);
 }
 
 // ---- Collections holding shows (CollectionShowsTests.swift) ----

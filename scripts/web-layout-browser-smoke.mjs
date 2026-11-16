@@ -242,7 +242,7 @@ for (const [w, h] of SIZES) {
   check(`${key}: the channel line is in the channel's colour, not white`, !!L.tagColor && L.tagColor !== "rgb(255, 255, 255)", L.tagColor);
   check(`${key}: top to bottom: title, meta, description, progress, up next`, L.tops.every((t, i) => t != null && (i === 0 || t > L.tops[i - 1])), JSON.stringify(L.tops));
   check(`${key}: the progress line has the elapsed and total time`, /\d+:\d\d \/ \d+:\d\d/.test(L.time || ""), L.time);
-  check(`${key}: UP NEXT is one plain line "Up next in 44 min: the title": no pill, capsule, border or background`, /^Up next in (\d+|less than 1) min: .+/.test(L.upnext || "") && L.upnextChildren === 0 && L.upnextRadius === "0px" && L.upnextBorder === "0px" && L.upnextBg === "rgba(0, 0, 0, 0)", JSON.stringify(L));
+  check(`${key}: UP NEXT is one plain line, the title in a highlight colour and then "UP NEXT IN 44 MIN" (all platforms): no pill, capsule, border or background`, /^\S.* {2}UP NEXT IN (\d+|LESS THAN 1) MIN$/.test(L.upnext || "") && L.upnextChildren === 2 && L.upnextRadius === "0px" && L.upnextBorder === "0px" && L.upnextBg === "rgba(0, 0, 0, 0)", JSON.stringify(L));
   check(`${key}: a very long episode string stops at two lines (the title and the description are clamped too)`, L.episodeClamp === "2/hidden", L.episodeClamp);
   const F = m.fonts;
   check(`${key}: the 8-bit faces are loaded (VT323 and Press Start 2P)`, F.vt323 && F.pressStart, JSON.stringify({ vt: F.vt323, ps: F.pressStart }));

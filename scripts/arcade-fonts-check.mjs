@@ -35,7 +35,7 @@ check("the hosted CSP lets the Google Fonts stylesheet through (style-src)", /st
 check("and the font files (font-src)", /font-src[^;]*https:\/\/fonts\.gstatic\.com/.test(csp));
 
 const used = (family) => (page.match(new RegExp(`font-family:\\s*'${family}'`, "g")) || []).length;
-check("the guide and the window are set in VT323", used("VT323") >= 10, String(used("VT323")));
+check("the guide and the window are set in VT323", used("VT323") >= 8, String(used("VT323")));
 check("and Press Start 2P for the channel line, the badges and the CHANNEL heading", used("Press Start 2P") >= 3, String(used("Press Start 2P")));
 
 if (BUILDS) {

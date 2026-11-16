@@ -252,6 +252,7 @@ function tunerFixture({ channel = 7, fullscreen = false, transform = (src) => sr
     currentChannel: channel, guideVisible: false, sleepStoppedPlayback: false, playbackInfo: null,
     stopVideo: () => { calls.stopVideo++; }, showGuide: () => { calls.showGuide++; context.guideVisible = true; },
     switchChannel: (id) => { calls.switched.push({ id, from: context.currentChannel, stopped: context.sleepStoppedPlayback }); },
+    resetGuideCursor: () => {},
     playbackInfoRows: () => [],
   };
   context.window = context;

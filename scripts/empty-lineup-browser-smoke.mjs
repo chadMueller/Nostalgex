@@ -7,7 +7,8 @@
  * opened on a blank screen. This loads the real plex-tuner.html, headless, against a
  * Jellyfin-shaped server holding a library of a given shape:
  *   - 20 documentary films (the lab "docs" user): no NOSTALGEX channel fills, ESSENTIALS has one;
- *   - 2 documentary films (the lab "nofit" user): the same, with only just enough;
+ *   - 3 documentary films (the lab "nofit" user): the same, with only just enough (PREMIERES needs 3 since channels.json v50;
+ *     the case was 2 films while it needed 1, and went red on main when that minimum moved);
  *   - 6 films from 1985 to 1995: VHS VAULT fills on its own, so nothing else is switched on;
  *   - one film nothing matches: no package has content, so nothing is switched on.
  * Negative control: the same page with the fallback call taken out, which must leave the 20-film
@@ -34,7 +35,7 @@ const film = (n, name, year, genres, rating, added = new Date().toISOString()) =
 });
 const libraries = {
   twenty: Array.from({ length: 20 }, (_, i) => film(i, `Case File ${i + 1}`, 1991 + (i % 20), ["Documentary", "Crime"], "TV-14")),
-  two: [film(1, "Lonely Reel", 2001, ["Documentary"]), film(2, "Second Reel", 2001, ["Documentary"])],
+  three: [film(1, "Lonely Reel", 2001, ["Documentary"]), film(2, "Second Reel", 2001, ["Documentary"]), film(3, "Third Reel", 2001, ["Documentary"])],
   vhs: Array.from({ length: 6 }, (_, i) => film(i, `Tape ${i + 1}`, 1985 + i * 2, ["Action"], "R")),
   nothing: [film(1, "Odd One", 2023, ["Western"], null, "2020-01-01T00:00:00.0000000Z")],
 };
@@ -115,9 +116,9 @@ check("20 films: only packages with content were added", twenty.state.bundlesOn.
 check("20 films: no seasonal package is switched on", !twenty.state.bundlesOn.some((id) => ["seasonal", "tis-the-season"].includes(id)), JSON.stringify(twenty.state.bundlesOn));
 check("20 films: no page errors", twenty.errors.length === 0, twenty.errors.join(" | "));
 
-const two = await load(libraries.two);
-check("2 films: a channel is built", two.state.withContent >= 1, JSON.stringify(two.state));
-check("2 films: ESSENTIALS is switched on", two.state.bundlesOn.includes("essentials"), JSON.stringify(two.state));
+const three = await load(libraries.three);
+check("3 films: a channel is built", three.state.withContent >= 1, JSON.stringify(three.state));
+check("3 films: ESSENTIALS is switched on", three.state.bundlesOn.includes("essentials"), JSON.stringify(three.state));
 
 const vhs = await load(libraries.vhs);
 check("6 films that fill VHS VAULT: a channel is built", vhs.state.withContent >= 1, JSON.stringify(vhs.state));
@@ -137,4 +138,4 @@ if (failures.length) {
   for (const f of failures) console.error(`  FAIL ${f}`);
   process.exit(1);
 }
-console.log(`empty-lineup smoke: ${passed} checks passed (20, 2 and 6 film libraries, one nothing matches, and the negative control)`);
+console.log(`empty-lineup smoke: ${passed} checks passed (20, 3 and 6 film libraries, one nothing matches, and the negative control)`);
