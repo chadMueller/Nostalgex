@@ -521,7 +521,15 @@ sub bigTemp(parent as Object, value as String, x as Float, baseline as Float, si
     if ulbl <> invalid then ulbl.translation = [rx + ring + gap, ulbl.translation[1]]
 end sub
 
-sub icon(parent as Object, name as String, x as Float, y as Float, size as Integer)
+' An icon in the slot the web draws a 336, 192 or 168 icon in (the web's numbers), 15% smaller (288, 168, 144: whole
+' pixel cells, so it stays crisp), centred in the old slot.
+sub icon(parent as Object, name as String, x as Float, y as Float, slot as Integer)
+    size = 288
+    if slot = 192 then size = 168
+    if slot = 168 then size = 144
+    off = (slot - size) / 2
+    x = x + off
+    y = y + off
     p = CreateObject("roSGNode", "Poster")
     p.uri = "pkg:/images/weather/" + name + "-" + size.ToStr() + ".png"
     p.translation = [x, y]

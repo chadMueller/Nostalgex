@@ -37,7 +37,7 @@ function png(w, h, rgba) {
 
 let n = 0;
 for (const [name, grid] of Object.entries(screens.ICON_GRIDS)) {
-  for (const size of [336, 192, 168]) {
+  for (const size of [288, 168, 144]) {
     const cell = size / 24;
     const px = Buffer.alloc(size * size * 4);
     for (let r = 0; r < 24; r++) for (let c = 0; c < 24; c++) {
