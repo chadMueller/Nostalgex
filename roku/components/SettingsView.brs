@@ -189,9 +189,12 @@ sub open(unused = invalid as Dynamic)
     m.serversChanged = false
     ' The library sections the last scan or the picker saw, and the ones turned
     ' off (I-092); a visit that changes them reads the library again on the way out.
+    ' The old single hidden switch is carried over once the hidden libraries are known (N-016).
+    NxCarryOverHiddenSwitch(reg, NxHiddenLibrariesRegistry())
     m.libs = NxSavedSections(reg)
     m.libOff = NxDeselectedSections(reg)
-    m.libOffAtOpen = FormatJson(m.libOff)
+    m.libIncl = NxIncludedHiddenSections(reg)
+    m.libOffAtOpen = FormatJson(m.libOff) + FormatJson(m.libIncl)
     m.libsChanged = false
     ' Which MY COLLECTIONS categories are open, by category.
     m.collectionsOpen = {}
@@ -308,16 +311,13 @@ sub buildRows()
         add({ kind: "server", index: i })
     end for
     ' LIBRARIES (I-092): one row per library section, on or off, when there is
-    ' more than one to choose between.
-    if m.libs.Count() > 1 then
+    ' more than one to choose between, or a hidden Jellyfin one (N-016).
+    if NxPickerWanted(m.libs) then
         add({ kind: "subheader", text: "LIBRARIES" }, "servers")
         for i = 0 to m.libs.Count() - 1
             add({ kind: "library", index: i })
         end for
     end if
-    ' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231), with the servers, where the
-    ' Apple TV lists its libraries. On a Jellyfin sign-in only.
-    if NxSignedInKind() = "jellyfin" then add({ kind: "includeHidden" })
     ' Upstream's RESCAN LIBRARY, after the servers.
     add({ kind: "rescan" })
     add({ kind: "signOut" })
@@ -541,7 +541,7 @@ function rowHeight(row as Object) as Integer
         return 74 + 28 * n
     end if
     ' Upstream's subtitle in two lines.
-    if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" or row.kind = "includeHidden" then return 100
+    if row.kind = "reportNowPlaying" or row.kind = "reportMarkWatched" then return 100
     return 74
 end function
 
@@ -1006,10 +1006,10 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
         detail = NxSectionSubtitle(sec, multi)
         state = "OFF"
         stateColor = m.t2
-        if NxSectionIsOn(m.libOff, sec.serverId, sec.key) then
+        if NxSectionRowOn(sec, m.libOff, m.libIncl) then
             state = "ON"
             stateColor = m.accent + "FF"
-            if NxSectionsOnCount(m.libs, m.libOff) <= 1 then
+            if NxSectionsOnCount(m.libs, m.libOff, m.libIncl) <= 1 then
                 detail = detail + " · only library on"
                 state = ""
             end if
@@ -1061,19 +1061,6 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
-    else if row.kind = "includeHidden" then
-        ' The web tuner's row and line (plex-tuner.html).
-        label = "INCLUDE LIBRARIES HIDDEN ON JELLYFIN"
-        detail = "Jellyfin lets you hide a library from your home screen."
-        extra = ["Off keeps those out of your channels."]
-        state = "OFF"
-        stateColor = m.t2
-        if NxIncludeHidden(NxHiddenLibrariesRegistry()) then
-            state = "ON"
-            stateColor = m.accent + "FF"
-        end if
-        ' The library is read again after a press; no second press meanwhile.
-        if m.top.rescanning then state = "UPDATING…"
     else if row.kind = "lastChannel" then
         label = "OPEN ON LAST CHANNEL"
         detail = "Start on the channel you were last watching"
@@ -1444,29 +1431,14 @@ sub pressRow()
     else if row.kind = "library" then
         ' The last library on stays on, as the last server does.
         sec = m.libs[row.index]
-        key = NxSectionKey(sec.serverId, sec.key)
-        if m.libOff[key] = true then
-            m.libOff.Delete(key)
-            m.libsChanged = true
-            render()
-        else if NxSectionsOnCount(m.libs, m.libOff) > 1 then
-            m.libOff[key] = true
+        ' Only the library's own id moves, a hidden Jellyfin one in its own list.
+        if not NxSectionRowOn(sec, m.libOff, m.libIncl) or NxSectionsOnCount(m.libs, m.libOff, m.libIncl) > 1 then
+            NxSectionRowToggle(sec, m.libOff, m.libIncl)
             m.libsChanged = true
             render()
         end if
     else if row.kind = "rescan" then
         if not m.top.rescanning then m.top.rescan = true
-    else if row.kind = "includeHidden" then
-        ' Saved, then the library is read again in the background, as RESCAN
-        ' LIBRARY does: the scan reads the switch (NxScanServerFor). A press
-        ' while a load runs does nothing, as on RESCAN LIBRARY, so the load on
-        ' its way is never for the other position.
-        if not m.top.rescanning then
-            NxSaveIncludeHidden(NxHiddenLibrariesRegistry(), not NxIncludeHidden(NxHiddenLibrariesRegistry()))
-            print "settings: include libraries hidden on Jellyfin "; NxIncludeHidden(NxHiddenLibrariesRegistry())
-            render()
-            m.top.rescan = true
-        end if
     else if row.kind = "reportNowPlaying" then
         m.report.nowPlaying = not (m.report.nowPlaying = true)
         NxSaveReportPrefs(m.report)
@@ -1563,10 +1535,11 @@ sub leave()
     end if
     ' Libraries turned off or on: saved, and read again behind the guide, as
     ' RESCAN LIBRARY does (the scan leaves the ones that are off alone).
-    if m.libsChanged then m.libsChanged = FormatJson(m.libOff) <> m.libOffAtOpen
+    if m.libsChanged then m.libsChanged = FormatJson(m.libOff) + FormatJson(m.libIncl) <> m.libOffAtOpen
     if m.libsChanged then
         NxSaveDeselectedSections(NxPlexRegistry(), m.libOff)
-        print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff); " of "; m.libs.Count(); " on, reading the library again"
+        NxSaveIncludedHiddenSections(NxPlexRegistry(), m.libIncl)
+        print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff, m.libIncl); " of "; m.libs.Count(); " on, reading the library again"
         if not m.top.rescanning then m.top.rescan = true
     end if
     if m.franchisesChanged or m.collectionsChanged then

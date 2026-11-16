@@ -41,6 +41,8 @@ function NxRunLibrarySectionsTests() as Integer
     NxCheck(r, "picker: none, none to choose", NxToStr(NxPickerWanted([])), "false")
     NxCheck(r, "picker: one, none to choose", NxToStr(NxPickerWanted([{}])), "false")
     NxCheck(r, "picker: two", NxToStr(NxPickerWanted([{}, {}])), "true")
+    NxCheck(r, "picker: one hidden library (it starts off, so the screen offers it)", NxToStr(NxPickerWanted([{ hidden: true }])), "true")
+    NxCheck(r, "picker: one library that is not hidden", NxToStr(NxPickerWanted([{ hidden: false }])), "false")
 
     ' Plex sections: movie and show sections only.
     server = { machineIdentifier: "srv1", name: "Home" }
@@ -52,9 +54,10 @@ function NxRunLibrarySectionsTests() as Integer
     refs = NxMbSectionRefs(server, views, { d: true })
     NxCheck(r, "jellyfin: libraries with videos, playlists left out", NxToStr(refs.Count()) + " " + refs[0].key + refs[1].key + refs[2].key, "3 abd")
     NxCheck(r, "jellyfin: the hidden one is marked", NxToStr(refs[2].hidden) + NxToStr(refs[0].hidden), "truefalse")
-    NxCheck(r, "hidden on: none turned off", NxToStr(NxAnyHiddenOn(refs, {})), "true")
-    NxCheck(r, "hidden off: turned off", NxToStr(NxAnyHiddenOn(refs, { "srv1::d": true })), "false")
-    NxCheck(r, "sections on count", NxToStr(NxSectionsOnCount(refs, { "srv1::a": true })), "2")
+    NxCheck(r, "hidden off: none switched on", NxToStr(NxAnyHiddenOn(refs, {})), "false")
+    NxCheck(r, "hidden on: switched on", NxToStr(NxAnyHiddenOn(refs, { "srv1::d": true })), "true")
+    NxCheck(r, "sections on count: the hidden one starts off", NxToStr(NxSectionsOnCount(refs, { "srv1::a": true }, {})), "1")
+    NxCheck(r, "sections on count: the hidden one switched on", NxToStr(NxSectionsOnCount(refs, { "srv1::a": true }, { "srv1::d": true })), "2")
 
     ' What a load saves.
     old = [{ serverId: "s1", key: "d", title: "Secret", type: "movie", hidden: true }, { serverId: "s2", key: "1", title: "Other", type: "movie", hidden: false }]
@@ -75,6 +78,12 @@ function NxRunLibrarySectionsTests() as Integer
     NxCheck(r, "scan: a library turned off is never asked for", NxToStr(some.Count()) + " " + NxToStr(fetcher.asked.Count()) + " " + fetcher.asked[0], "2 1 lib2")
     NxCheck(r, "scan: it still lists it for Settings", NxToStr(NxScanSections().Count()), "2")
     NxCheck(r, "the same set on another server leaves it on", NxToStr(NxMbScanServer(NxMbSectionFetcher(), "jellyfin", "u", 0, invalid, false, { "s1::lib1": true }, "s2").Count()), "4")
+    ' A scan leaves a saved hidden library alone unless it is switched on.
+    scanReg = NxFakeRegistry()
+    NxSaveSections(scanReg, [{ serverId: "s1", key: "lib1", title: "A", type: "movie", hidden: false }, { serverId: "s1", key: "lib2", title: "B", type: "movie", hidden: true }])
+    NxCheck(r, "scan set: a saved hidden library is left out", NxToStr(NxScanOffSet(scanReg).Count()) + NxToStr(NxScanOffSet(scanReg).DoesExist("s1::lib2")), "1true")
+    NxSaveIncludedHiddenSections(scanReg, { "s1::lib2": true })
+    NxCheck(r, "scan set: switched on, it is read", NxToStr(NxScanOffSet(scanReg).Count()), "0")
     kept = NxSectionsKept([{ key: "1" }, { key: "2" }, { key: "3" }], { "srv::2": true }, "srv", "key")
     NxCheck(r, "plex: the section list without the turned off one", NxToStr(kept.Count()) + kept[0].key + kept[1].key, "213")
 
