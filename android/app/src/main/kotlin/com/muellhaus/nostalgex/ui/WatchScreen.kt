@@ -374,7 +374,11 @@ private fun FullScreen(
                     // (LOCAL WEATHER plays no programme, so there is no Now Playing to open.)
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (!down && model.item != null) onOverlay(Overlay.PANEL); true }
                     // OK flashes the OSD (live TV: nothing to pause).
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> { if (!down) onFlash(); true }
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> {
+                        // LOCAL WEATHER with no location: OK is the card's SET LOCATION, and opens the same page as Settings.
+                        if (!down) { if (model.channel?.weather == true && model.weather.place == null) model.openWeatherSettings() else onFlash() }
+                        true
+                    }
                     else -> false
                 }
             },
@@ -645,8 +649,12 @@ private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, pla
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            // LOCAL WEATHER is always live: no progress bar, no times.
+            // LOCAL WEATHER is always live: a full bar and LIVE, no times.
             InfoPanelSection.PROGRESS -> if (isLoop) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10)), modifier = Modifier.padding(bottom = sectionGap)) {
+                    Box(Modifier.weight(1f).height(u(4)).clip(RoundedCornerShape(u(2))).background(color))
+                    Text("LIVE", style = font(VT323, 24, Color.White.copy(alpha = 0.55f)))
+                }
             } else if (preview != null) {
                 // When it is on, where the progress bar is.
                 Text(
@@ -1160,6 +1168,8 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                                 when {
                                     isCursor -> Color.Transparent
                                     // Kept at 25% when focused: white titles stay at 4.5:1 on a bright channel colour.
+                                    // LOCAL WEATHER's bar is the row colour at 13% (the web tuner's): it is always on, so it is the quietest fill.
+                                    e.isNowPlaying && e.item.librarySource == "weather" -> color.copy(alpha = 0.13f)
                                     e.isNowPlaying -> color.copy(alpha = 0.25f)
                                     isPast -> Color.White.copy(alpha = 0.02f)
                                     else -> Color.Transparent

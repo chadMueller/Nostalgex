@@ -824,6 +824,17 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
+    /** SET LOCATION on the weather channel's card: Settings, CHANNELS & BUNDLES, LOCAL WEATHER, with focus on LOCATION. Back returns to the guide. */
+    fun openWeatherSettings() {
+        fullScreen = false
+        openSettings()
+        settingsCategory = SettingsCategory.CHANNELS
+        paneSwapping = true
+        channelsPage = "weather"
+        settingsOnRail = false
+        focusPane("weather_place")
+    }
+
     fun chooseWeatherPlace(p: Weather.Place) { weather.choosePlace(p); weatherChanged() }
     fun clearWeatherPlace() { weather.clearPlace(); weatherChanged() }
     fun chooseWeatherUnits(setting: String) { weather.chooseUnits(setting); weatherChanged() }
