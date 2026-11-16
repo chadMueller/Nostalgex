@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -12,12 +13,29 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import com.muellhaus.nostalgex.engine.AudioPick
+import com.muellhaus.nostalgex.engine.BackgroundPass
+import com.muellhaus.nostalgex.engine.GuideLoad
+import com.muellhaus.nostalgex.engine.HeaderNotice
+import com.muellhaus.nostalgex.engine.LibraryLoadCommit
+import com.muellhaus.nostalgex.engine.LibraryRefresh
+import com.muellhaus.nostalgex.engine.LoadCommitEffects
+import com.muellhaus.nostalgex.engine.LoadCrashMark
+import com.muellhaus.nostalgex.engine.LoadMarkStore
+import com.muellhaus.nostalgex.engine.LoadResult
+import com.muellhaus.nostalgex.engine.LoadNotice
+import com.muellhaus.nostalgex.engine.RefreshResult
+import com.muellhaus.nostalgex.engine.readyAfter
+import com.muellhaus.nostalgex.engine.RefreshEffects
+import com.muellhaus.nostalgex.engine.RefreshRead
 import com.muellhaus.nostalgex.engine.DailyRefresh
 import com.muellhaus.nostalgex.engine.DeepLink
 import com.muellhaus.nostalgex.engine.ServerTokens
 import com.muellhaus.nostalgex.engine.EveryLibraryFailed
 import com.muellhaus.nostalgex.engine.GuideTimeout
+import com.muellhaus.nostalgex.engine.GuideTextSize
+import com.muellhaus.nostalgex.engine.MusicEnrichmentService
 import com.muellhaus.nostalgex.engine.NaturalEnd
+import com.muellhaus.nostalgex.engine.RatingNudgePolicy
 import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
@@ -183,8 +201,11 @@ class AppModel(private val context: Context) : Playback.Listener {
     var fullScreen: Boolean
         get() = fullScreenState
         set(value) {
+            val wasFullScreen = fullScreenState
             fullScreenState = value
             applySubtitles()
+            // The one moment the rating banner is considered: the viewer has just left full screen for the guide.
+            if (wasFullScreen && !value) ratingNudgeGuideDidReturn()
         }
     private var fullScreenState by mutableStateOf(false)
 
@@ -223,13 +244,24 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    /** GUIDE TEXT SIZE: NORMAL, the guide as it was, or LARGE for a couch further away (I-060). */
-    var guideTextLarge by mutableStateOf(prefs.guideTextLarge)
+    /** SYNC WITH MY OTHER ANDROID TVS: whether this TV's settings are mirrored for Android's backup (SettingsBackup). Off by default. */
+    var settingsBackup by mutableStateOf(prefs.settingsBackup)
         private set
 
-    fun toggleGuideTextSize() {
-        guideTextLarge = !guideTextLarge
-        prefs.guideTextLarge = guideTextLarge
+    fun toggleSettingsBackup() {
+        settingsBackup = !settingsBackup
+        prefs.settingsBackup = settingsBackup
+        SettingsBackup.mirror(context)
+    }
+
+    /** GUIDE TEXT SIZE: SMALLER, DEFAULT or LARGER for a couch nearer or further away (I-060); the guide, the bundle list and Now Playing follow it. */
+    var guideTextSize by mutableStateOf(prefs.guideTextSize)
+        private set
+
+    /** SMALLER > DEFAULT > LARGER > SMALLER, what select does on the Settings row. */
+    fun cycleGuideTextSize() {
+        guideTextSize = guideTextSize.next
+        prefs.guideTextSize = guideTextSize
     }
 
     /** STREAM QUALITY: read as each programme starts, so a change reaches the next one. */
@@ -463,6 +495,113 @@ class AppModel(private val context: Context) : Playback.Listener {
     /** An answer to "STILL WATCHING?": keep playing, the timer is used up. */
     fun keepAwake() = cancelSleepTimer()
 
+    // ── The rating banner (the Apple TV's AppState+RatingNudge, rules in RatingNudgePolicy) ──────────────
+
+    var ratingNudgeVisible by mutableStateOf(false)
+        private set
+    /** RATE was pressed on the banner or in Settings: the banner never shows again and the Settings row says thanks. */
+    var hasTappedRate by mutableStateOf(prefs.nudgeRated)
+        private set
+    private var nudgeLaunch = RatingNudgePolicy.Launch(appVersion = versionName, isFirstLaunch = prefs.consumeFirstLaunch())
+    /** When the programme now playing first showed a picture, for counting a viewing session. */
+    private var watchStartMs: Long? = null
+    private var watchKey: String? = null
+    private var watchCounted = false
+
+    private fun noteWatchStarted(item: MediaItem) {
+        if (watchKey != item.ratingKey) { watchKey = item.ratingKey; watchStartMs = System.currentTimeMillis(); watchCounted = false }
+    }
+
+    private fun countViewingSessionIfQualifies() {
+        val start = watchStartMs ?: return
+        if (watchCounted || !RatingNudgePolicy.countsAsViewingSession((System.currentTimeMillis() - start) / 1000.0)) return
+        watchCounted = true
+        prefs.nudgeSessions = prefs.nudgeSessions + 1
+        Log.i(TAG, "RATING viewing session counted, total ${prefs.nudgeSessions}")
+    }
+
+    private fun ratingNudgeGuideDidReturn() {
+        // Playback carries on in the guide's preview, so the watch that just ended in full screen has not stopped: count it now.
+        countViewingSessionIfQualifies()
+        val persisted = RatingNudgePolicy.Persisted(prefs.nudgeSessions, prefs.nudgeShownVersion, prefs.nudgeRated)
+        if (!RatingNudgePolicy.shouldShow(persisted, nudgeLaunch)) return
+        nudgeLaunch = nudgeLaunch.copy(shownThisLaunch = true)
+        prefs.nudgeShownVersion = nudgeLaunch.appVersion   // recorded on appearance, so it never repeats this version
+        Log.i(TAG, "RATING banner shown (sessions ${persisted.qualifyingSessions}, version ${nudgeLaunch.appVersion})")
+        ratingNudgeVisible = true
+    }
+
+    /** NOT NOW, Up, Back, the timeout: every way out ends here. */
+    fun dismissRatingNudge() { ratingNudgeVisible = false }
+
+    /** RATE, on the banner or in Settings: opens the Play listing, never asks again. */
+    fun rate() {
+        prefs.nudgeRated = true
+        hasTappedRate = true
+        dismissRatingNudge()
+        val id = context.packageName
+        val opened = runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+        }.getOrDefault(false)
+        if (!opened) runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        Log.i(TAG, "RATING RATE pressed, opened=$opened")
+    }
+
+    // ── OPEN IN PLEX (the Apple TV's AppState.canOpenCurrentItemInPlex and openCurrentItemInPlex) ──────────
+
+    /** Whether something on this TV handles a `plex://` link, asked once. */
+    private val plexLinkHandled: Boolean by lazy {
+        runCatching { context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("plex://")), 0) != null }.getOrDefault(false)
+    }
+
+    /** Whether the guide's info panel keeps room for a poster: on Plex, Jellyfin and Emby alike (outside demo mode), art or not, so its text never moves from one programme to the next. */
+    val postersAvailable: Boolean get() = !demoMode
+
+    /**
+     * OPEN IN PLEX and OPEN IN JELLYFIN: the app on this TV that can show the programme on the server it came from, and only
+     * when it is installed. Plex: a `plex://preplay` link, as the Apple TV's. Jellyfin: the Jellyfin app for Android TV
+     * (org.jellyfin.androidtv), whose startup activity opens an item's details for an `ItemId` extra (read from its source,
+     * StartupActivity.EXTRA_ITEM_ID). Emby has none: the Emby apps have no item deep link. The name is Plex or Jellyfin, null when
+     * there is nothing to offer.
+     */
+    val openInName: String?
+        get() = when {
+            demoMode || channel == null -> null
+            mbServer == null -> "PLEX".takeIf { plexLinkHandled }
+            mbServer?.kind == "jellyfin" -> "JELLYFIN".takeIf { jellyfinAppInstalled }
+            else -> null
+        }
+
+    private val jellyfinAppInstalled: Boolean by lazy {
+        runCatching { context.packageManager.getLaunchIntentForPackage(JELLYFIN_PACKAGE) != null }.getOrDefault(false)
+    }
+
+    /** False when nothing took the link, so the row can say so instead of failing silently. */
+    fun openInApp(item: MediaItem): Boolean = when (openInName) {
+        "PLEX" -> openInPlex(item)
+        "JELLYFIN" -> openInJellyfin(item)
+        else -> false
+    }
+
+    private fun openInPlex(item: MediaItem): Boolean {
+        val machineID = selectedServers.firstOrNull { it.url == item.serverUrl }?.machineIdentifier
+            ?: selectedServers.firstOrNull()?.machineIdentifier ?: ""
+        val uri = Uri.Builder().scheme("plex").authority("preplay").path("/")
+            .appendQueryParameter("metadataKey", "/library/metadata/${item.ratingKey}")
+            .appendQueryParameter("server", machineID).build()
+        return runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    }
+
+    private fun openInJellyfin(item: MediaItem): Boolean {
+        val intent = context.packageManager.getLaunchIntentForPackage(JELLYFIN_PACKAGE) ?: return false
+        // Jellyfin ids are 32 hex digits; the app reads them as UUIDs.
+        val id = item.ratingKey.takeIf { it.length == 32 && it.all { c -> c.isDigit() || c in 'a'..'f' || c in 'A'..'F' } }
+            ?.let { "${it.substring(0, 8)}-${it.substring(8, 12)}-${it.substring(12, 16)}-${it.substring(16, 20)}-${it.substring(20)}" } ?: item.ratingKey
+        return runCatching { context.startActivity(intent.putExtra("ItemId", id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    }
+
     // ── Posters (PlexAPIService.thumbnailURL, 300 wide) ──────────────────
 
     private val posters = object : LinkedHashMap<String, ImageBitmap>(16, 0.75f, true) {
@@ -470,25 +609,38 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     suspend fun poster(item: MediaItem): ImageBitmap? {
-        // Plex only, as on the Apple TV.
-        if (mbServer != null) return null
-        val thumb = item.thumb ?: return null
-        val server = item.serverUrl ?: return null
-        val url = Uri.parse("$server/photo/:/transcode").buildUpon()
-            .appendQueryParameter("url", thumb)
-            .appendQueryParameter("width", "300")
-            .appendQueryParameter("height", "450")
-            .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
-            .build().toString()
-        posters[url]?.let { return it }
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                plex.http.newCall(Request.Builder().url(url).build()).execute().use { res ->
-                    if (!res.isSuccessful) return@use null
-                    BitmapFactory.decodeStream(res.body.byteStream())?.asImageBitmap()
-                }
-            }.getOrNull()
-        }?.also { posters[url] = it }
+        val server = item.serverUrl ?: mbServer?.url ?: return null
+        val mb = mbServer
+        // The season's poster, then the series', then the episode's own frame (#312), a film's poster: the same chain on Plex, Jellyfin
+        // and Emby. A copy saved before the chain was kept has only its thumb (Plex).
+        for (thumb in item.posterThumbs.ifEmpty { listOfNotNull(item.thumb) }) {
+            val request = if (mb != null) {
+                // Jellyfin and Emby: the item's Primary image, signed in as the other requests are.
+                val url = Uri.parse("$server$thumb").buildUpon().appendQueryParameter("maxWidth", "300").build().toString()
+                Request.Builder().url(url).header("Authorization", mediaBrowser.authHeader(item.serverToken ?: mb.token))
+            } else {
+                val url = Uri.parse("$server/photo/:/transcode").buildUpon()
+                    .appendQueryParameter("url", thumb)
+                    .appendQueryParameter("width", "300")
+                    .appendQueryParameter("height", "450")
+                    .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
+                    .build().toString()
+                Request.Builder().url(url)
+            }
+            val built = request.build()
+            val cacheKey = built.url.toString().substringBefore("X-Plex-Token")
+            posters[cacheKey]?.let { return it }
+            val got = withContext(Dispatchers.IO) {
+                runCatching {
+                    plex.http.newCall(built).execute().use { res ->
+                        if (!res.isSuccessful) return@use null
+                        BitmapFactory.decodeStream(res.body.byteStream())?.asImageBitmap()
+                    }
+                }.getOrNull()
+            }
+            if (got != null) { posters[cacheKey] = got; return got }
+        }
+        return null
     }
     /** Bumped on each tune, so the channel banner shows again. */
     var tuneCount by mutableStateOf(0)
@@ -532,6 +684,64 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** TMDB and OMDb, in a build that turned them on (EnrichmentSetup); null otherwise. */
     private val enrichment = EnrichmentSetup.create(context)
+
+    // Music video genres from MusicBrainz and Deezer (#319), resolved in the background and kept on the TV.
+    private val music by lazy { newMusicEnrichment(context, versionName) }
+    /** Ends with the library it started on: signOut, a server or backend switch and every library load call [endBackgroundWork]. */
+    private val musicPass = BackgroundPass(scope)
+
+    /** The refresh behind the guide (LibraryRefresh), ended the same way. */
+    private val refreshPass = BackgroundPass(scope)
+
+    /** The library load (loadLibrary): ended the same way, so a load the viewer signed out of mid-way saves and shows nothing. */
+    private val loadPass = BackgroundPass(scope)
+
+    /**
+     * The library is about to change (signed out, another server or backend, a new load): the music lookups and the refresh stop, and
+     * nothing either has read but not yet written is kept. Called first, before the new state is set.
+     */
+    private fun endBackgroundWork() {
+        musicPass.invalidate()
+        refreshPass.invalidate()
+        loadPass.invalidate()
+        // A load ended from outside leaves its marker behind (its own cleanup no longer runs for a library that is gone).
+        loadMark.loadAbandoned()
+        refreshing = false
+        loadingLibrary = false
+        guideLoad = null
+        showHeader(null)
+    }
+
+    /**
+     * The loading pattern (Chad, 2026-11-15). A library read in front of a guide that is up (a server or library switch from Settings)
+     * says so in the empty guide area: this is that block's state, null when none is. The full screen is for a load with no guide yet.
+     */
+    var guideLoad: GuideLoad? by mutableStateOf(null)
+        private set
+
+    /** UPDATING LIBRARY while a refresh reads behind the guide, then GUIDE READY for [LoadNotice.READY_MS]: the header's line. */
+    var headerNotice: HeaderNotice? by mutableStateOf(null)
+        private set
+    private var readyJob: Job? = null
+
+    /** Counts the guides brought up after an empty one (a switch's load ends): the screen asks focus to go to the new live row. */
+    var guideEpoch by mutableIntStateOf(0)
+        private set
+
+    private fun showHeader(notice: HeaderNotice?) {
+        readyJob?.cancel()
+        headerNotice = notice
+        if (notice is HeaderNotice.Ready) readyJob = scope.launch {
+            delay(LoadNotice.READY_MS)
+            if (headerNotice === notice) headerNotice = null
+        }
+    }
+
+    /** The library is read and the guide is up: say so, with how many titles it holds. */
+    private fun guideReady() {
+        if (!demoMode) showHeader(HeaderNotice.Ready(libraryItems.size))
+    }
+    private suspend fun musicApplied(items: List<MediaItem>): List<MediaItem> = withContext(Dispatchers.Default) { music.first.apply(items) }
     val enrichmentOn: Boolean get() = enrichment != null
 
     /**
@@ -567,6 +777,11 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private val launchGuard = LaunchGuard(context)
+    private val loadMark = LoadCrashMark(object : LoadMarkStore {
+        override fun set() = launchGuard.loadStarted()
+        override fun clear(resetCount: Boolean) = launchGuard.loadEnded(resetCount)
+        override fun resetCount() = launchGuard.resetUnfinishedLoads()
+    })
 
     fun start() {
         // Once per process: an activity recreated mid-load must not count that load as unfinished.
@@ -596,9 +811,10 @@ class AppModel(private val context: Context) : Playback.Listener {
      * finish loading is never the only way forward.
      */
     fun startOver() {
-        loadJob?.cancel()
-        launchGuard.loadEnded()
+        // signOut ends the load (endBackgroundWork), as it does for every other library change.
         Log.i(TAG, "START OVER")
+        // A fresh start by choice: the loads that never finished (the question that led here) are forgotten.
+        loadMark.startedOver()
         signOut()
     }
 
@@ -630,6 +846,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     delay(PlexPinWait.POLL_MS)
                     val token = runCatching { plex.pollPin(pin) }.getOrNull()
                     if (token != null) {
+                        endBackgroundWork()
                         mbServer = null
                         screen = Screen.Loading("FINDING YOUR SERVERS")
                         // Every reachable server, shared ones too, as the Apple TV finds them: with
@@ -638,6 +855,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                             plex.discoverServers(token, includeShared = true)
                         } catch (e: Exception) {
                             Log.w(TAG, "Server discovery failed", e)
+                            nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
                             screen = Screen.Failed("Signed in, but couldn't reach plex.tv to find your servers. Check your connection and Retry.")
                             return@launch
                         }
@@ -730,6 +948,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun signOut() {
+        endBackgroundWork()
         closeSettings()
         stopDailyRefresh()
         playback.stop()
@@ -741,6 +960,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         libraryStore.clear()
         sectionStore.clear()
         lineup = null
+        guideLoad = null
         showPicker()
     }
 
@@ -886,6 +1106,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     private fun finishSignIn(server: MediaBrowserServer) {
+        endBackgroundWork()
         forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.serverId, server.url)))
         prefs.signOut()
         libraryStore.clear()
@@ -967,7 +1188,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         libraryStore.clear()
         closeSettings()
         playback.stop()
-        loadLibrary()
+        loadLibrary(afterSwitch = true)
     }
 
     private fun refreshSections() {
@@ -1226,7 +1447,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         prefs.servers = if (included) current.filterNot { it.machineIdentifier == server.machineIdentifier } else current + server
         closeSettings()
         playback.stop()
-        loadLibrary()
+        loadLibrary(afterSwitch = true)
     }
 
     /** RESCAN LIBRARY: read every server again behind the guide, as the launch refresh does. */
@@ -1306,39 +1527,63 @@ class AppModel(private val context: Context) : Playback.Listener {
      * library changed: the Roku port's start-up. With nothing saved, the first read happens
      * in front of a loading screen.
      */
-    private var loadJob: Job? = null
 
-    private fun loadLibrary() {
+    /** `afterSwitch`: the load follows a server or library switch in Settings, so the empty guide says the guide is changing. */
+    private fun loadLibrary(afterSwitch: Boolean = false) {
+        endBackgroundWork()
+        // A guide is up behind this load (a switch from Settings): the read shows in the guide's empty area, not on a full screen.
+        val inGuide = screen == Screen.Watching
         loadingLibrary = true
-        loadJob = scope.launch {
+        loadPass.start { current ->
             // Set until the load ends any way the process lives to see (LaunchGuard).
-            launchGuard.loadStarted()
+            loadMark.loadStarted()
             var fullLoad = false
             try {
                 val servers = selectedServers
                 val t0 = SystemClock.elapsedRealtime()
                 val saved = withContext(Dispatchers.IO) { libraryStore.load(servers) }
+                // Signed out or switched while the saved library was read: nothing of it is held or shown.
+                if (!current()) return@start
                 if (saved != null) {
                     Log.i(TAG, "SAVED LIBRARY ${saved.items.size} items and ${saved.collections.size} collections read in ${SystemClock.elapsedRealtime() - t0} ms")
                     prefs.initialLoadComplete = true
                     scannedItems = saved.items
                     serverCollections = saved.collections
-                    // The local enrichment cache only: the network waits for the refresh behind the guide.
-                    libraryItems = enrich(saved.items, remote = false)
                     libraryUpdatedMs = libraryStore.savedAtMs()
-                    if (!show(buildLineup(libraryItems, "saved"))) return@launch
+                    val effects = object : LoadCommitEffects<Lineup> {
+                        override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {}
+                        // The local enrichment cache only: the network waits for the refresh behind the guide.
+                        override suspend fun enrich(items: List<MediaItem>, remote: Boolean) = this@AppModel.enrich(items, remote).also { libraryItems = it }
+                        override suspend fun build(items: List<MediaItem>) = buildLineup(items, "saved")
+                        override suspend fun show(built: Lineup) = this@AppModel.show(built)
+                    }
+                    if (LibraryLoadCommit(current, effects).runSaved(saved.items) != LoadResult.SHOWN) return@start
                     refreshInBackground(servers, saved.items)
                 } else {
                     fullLoad = true
                     val firstRun = !prefs.initialLoadComplete
-                    fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
-                        screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
+                    var phaseNow = LoadPhase.PREPARING
+                    if (inGuide) {
+                        // The old guide goes, and the empty guide says why (the loading pattern); the old server's schedules must not show.
+                        lineup = null
+                        guideLoad = GuideLoad(afterSwitch)
                     }
+                    /** What the loading pattern's block says under the count while a step that has no count of its own runs. */
+                    fun inGuideDetail(headline: String, caption: String) = (caption.ifEmpty { headline }).uppercase()
+                    fun step(phase: LoadPhase, headline: String = phase.headline(), detail: String = "", progress: Float? = null, caption: String = "") {
+                        // A load the viewer left (signed out, another server) draws nothing: its steps must not bring a loading screen back.
+                        if (!current()) return
+                        phaseNow = phase
+                        if (inGuide) guideLoad = (guideLoad ?: GuideLoad(afterSwitch)).copy(detail = inGuideDetail(headline, caption))
+                        else screen = Screen.LibraryLoad(phase, headline, detail, progress, caption, firstRun)
+                    }
+                    /** A step's progress lines arriving after the step moved on, or after the load was left, are dropped. */
+                    fun onScreenFor(phase: LoadPhase) = current() && phaseNow == phase && (inGuide && guideLoad != null || (screen as? Screen.LibraryLoad)?.phase == phase)
                     step(LoadPhase.PREPARING, LoadPhase.PREPARING.headline(if (firstRun) "First setup" else "Updating lineup"), LoadPhase.PREPARING.hint.uppercase())
                     step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("Connecting to $backendName"), LoadPhase.SCANNING.hint.uppercase())
                     val scanned = scan(servers) { p, serverName ->
                         // Posted from the scan's threads: one arriving after the scan moved on is dropped.
-                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.SCANNING) return@scan
+                        if (!onScreenFor(LoadPhase.SCANNING)) return@scan
                         // AppState+Library's scan events: the kind of library as the headline, the section under it.
                         val label = when (p.type) {
                             "show" -> "TV shows"
@@ -1349,6 +1594,14 @@ class AppModel(private val context: Context) : Playback.Listener {
                         }
                         val prefix = if (servers.size > 1) "$serverName · " else ""
                         val section = "Section ${p.section + 1}/${maxOf(p.sections, 1)}"
+                        if (inGuide) {
+                            // The block: titles read so far, and the library being read with how far through it when the server said.
+                            guideLoad = (guideLoad ?: GuideLoad(afterSwitch)).copy(
+                                read = p.itemsSoFar,
+                                detail = LoadNotice.scanLine(p, label, serverName.takeIf { servers.size > 1 }),
+                            )
+                            return@scan
+                        }
                         if (p.showsDone != null && p.showsTotal != null) {
                             step(LoadPhase.SCANNING, LoadPhase.SCANNING.headline("$label ${p.showsDone}/${p.showsTotal}"),
                                 "$prefix$section · ${p.showsDone}/${p.showsTotal} shows".uppercase(),
@@ -1367,47 +1620,80 @@ class AppModel(private val context: Context) : Playback.Listener {
                     step(LoadPhase.COLLECTIONS, LoadPhase.COLLECTIONS.headline(), LoadPhase.COLLECTIONS.hint.uppercase())
                     // Not after an abandoned scan: the server just went quiet, and the viewer has
                     // stopped waiting on it. The next refresh reads them with the rest.
-                    serverCollections = if (scanned.abandoned) {
+                    val collections = if (scanned.abandoned) {
                         Log.i(TAG, "COLLECTIONS skipped: the scan was abandoned")
                         emptyList()
                     } else readCollections(servers)
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
-                    // The whole library is read and saved: the kept sections have done their job (#288).
-                    if (!scanned.abandoned) sectionStore.clear()
-                    scannedItems = items
-                    libraryUpdatedMs = System.currentTimeMillis()
-                    markLoaded(scanned.abandoned)
-                    skippedNoRuntime = scanned.skippedNoRuntime
-                    if (enrichment != null) {
-                        val titles = items.count { it.tmdbID != null }
-                        step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
+                    val effects = object : LoadCommitEffects<Lineup> {
+                        override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {
+                            serverCollections = collections
+                            withContext(Dispatchers.IO) { libraryStore.save(servers, items, serverCollections) }
+                            // The whole library is read and saved: the kept sections have done their job (#288).
+                            if (!scanned.abandoned) sectionStore.clear()
+                            scannedItems = items
+                            libraryUpdatedMs = System.currentTimeMillis()
+                            markLoaded(scanned.abandoned)
+                            skippedNoRuntime = scanned.skippedNoRuntime
+                        }
+                        override suspend fun enrich(items: List<MediaItem>, remote: Boolean): List<MediaItem> {
+                            if (enrichment != null) {
+                                val titles = items.count { it.tmdbID != null }
+                                step(LoadPhase.METADATA, LoadPhase.METADATA.headline("$titles titles"), LoadPhase.METADATA.hint.uppercase())
+                            }
+                            libraryItems = this@AppModel.enrich(items, remote = remote) { status, done, total ->
+                                if (!onScreenFor(LoadPhase.METADATA)) return@enrich
+                                if (inGuide) {
+                                    guideLoad = guideLoad?.copy(detail = if (total > 0 && done >= 0) "METADATA $done/$total" else status.uppercase())
+                                    return@enrich
+                                }
+                                val now = screen as Screen.LibraryLoad
+                                screen = now.copy(
+                                    detail = status.uppercase(),
+                                    progress = if (total > 0 && done >= 0) done.toFloat() / total else null,
+                                    caption = if (total > 0 && done >= 0) "Metadata $done/$total" else "",
+                                )
+                            }
+                            return libraryItems
+                        }
+                        override suspend fun build(items: List<MediaItem>): Lineup {
+                            step(LoadPhase.BUILDING)
+                            return buildLineup(items, "read") { done, total ->
+                                if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
+                            }
+                        }
+                        override suspend fun show(built: Lineup): Boolean {
+                            step(LoadPhase.FINISHING)
+                            prefs.initialLoadComplete = true
+                            guideLoad = null
+                            if (inGuide) guideEpoch++
+                            return this@AppModel.show(built)
+                        }
                     }
-                    libraryItems = enrich(items, remote = true) { status, done, total ->
-                        if ((screen as? Screen.LibraryLoad)?.phase != LoadPhase.METADATA) return@enrich
-                        val current = screen as Screen.LibraryLoad
-                        screen = current.copy(
-                            detail = status.uppercase(),
-                            progress = if (total > 0 && done >= 0) done.toFloat() / total else null,
-                            caption = if (total > 0 && done >= 0) "Metadata $done/$total" else "",
-                        )
+                    // Asked before the library store is written and before the guide is shown (LibraryLoadCommit).
+                    if (LibraryLoadCommit(current, effects).run(items, collections) == LoadResult.SHOWN) {
+                        // The read is done and the guide is up: say so (the loading pattern's GUIDE READY), and start the music lookups,
+                        // which a first full load has no refresh to start (the Apple TV's startDeferredMusicEnrichmentIfNeeded).
+                        guideReady()
+                        startMusicEnrichment()
                     }
-                    step(LoadPhase.BUILDING)
-                    val built = buildLineup(libraryItems, "read") { done, total ->
-                        if ((screen as? Screen.LibraryLoad)?.phase == LoadPhase.BUILDING) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
-                    }
-                    step(LoadPhase.FINISHING)
-                    prefs.initialLoadComplete = true
-                    show(built)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Library load failed", e)
-                screen = Screen.Failed(connectionFailure(e))
+                // A load the viewer left (signed out, another server) has no say over the screen.
+                if (current()) {
+                    nudgeLaunch = nudgeLaunch.copy(hadConnectError = true)
+                    screen = Screen.Failed(connectionFailure(e))
+                }
             } finally {
                 // Reading the saved library proves nothing about whether a full load can finish.
-                launchGuard.loadEnded(resetCount = fullLoad)
-                loadingLibrary = false
+                loadMark.loadEnded(current(), resetCount = fullLoad)
+                // A load that was ended left these to whoever ended it (endBackgroundWork): a newer load may own them.
+                if (current()) {
+                    loadingLibrary = false
+                    guideLoad = null
+                }
             }
         }
     }
@@ -1553,67 +1839,70 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     /** `alwaysSave` saves what it read even when nothing changed, for a library store that was just cleared. */
     private fun refreshInBackground(servers: List<PlexServer>, saved: List<MediaItem>, alwaysSave: Boolean = false) {
-        scope.launch {
+        // Ends with the library it began on (LibraryRefresh): signOut, a server or backend switch and every library load stop it.
+        refreshPass.start { current ->
             refreshing = true
+            // The guide stays up while the library is read again: the header says so, with a count, and then GUIDE READY.
+            if (!demoMode) showHeader(HeaderNotice.Updating(null))
             try {
-                val t0 = SystemClock.elapsedRealtime()
-                val scanned = scan(servers, foreground = false) { _, _ -> }
-                // An abandoned refresh is a subset of what is on screen: keep the guide (isLibraryStale).
-                if (scanned.abandoned) {
-                    Log.i(TAG, "REFRESH abandoned mid-scan; keeping the loaded lineup")
-                    markLoaded(abandoned = true)
-                    return@launch
+                var skipped = 0
+                val effects = object : RefreshEffects {
+                    override val savedItems get() = saved
+                    override val heldCollections get() = serverCollections
+                    override val currentItems get() = libraryItems
+                    override suspend fun scan(): RefreshRead {
+                        val t0 = SystemClock.elapsedRealtime()
+                        val scanned = scan(servers, foreground = false) { p, _ -> if (current() && !demoMode) showHeader(HeaderNotice.Updating(p.itemsSoFar)) }
+                        skipped = scanned.skippedNoRuntime
+                        return RefreshRead(scanned.items, scanned.abandoned, SystemClock.elapsedRealtime() - t0)
+                    }
+                    override suspend fun markLoaded(abandoned: Boolean) = this@AppModel.markLoaded(abandoned)
+                    override suspend fun readComplete(read: RefreshRead) {
+                        // A whole library read: the kept sections have done their job (#288).
+                        sectionStore.clear()
+                        skippedNoRuntime = skipped
+                        libraryUpdatedMs = System.currentTimeMillis()
+                    }
+                    override suspend fun readCollections() = this@AppModel.readCollections(servers)
+                    override suspend fun save(items: List<MediaItem>, collections: List<ServerCollection>) {
+                        scannedItems = items
+                        serverCollections = collections
+                        withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
+                    }
+                    override suspend fun enrich(items: List<MediaItem>) = this@AppModel.enrich(items, remote = true)
+                    override fun note(line: String) { Log.i(TAG, line) }
+                    override suspend fun adopt(enriched: List<MediaItem>) {
+                        libraryItems = enriched
+                        val fresh = buildLineup(enriched, "refreshed")
+                        if (fresh.channels.isEmpty() || !current()) return
+                        // From NO CHANNELS FOUND, a rescan that finds channels brings the guide up, as a
+                        // package switch does (#198).
+                        if (screen == Screen.NoChannels) {
+                            closeSettings()
+                            show(fresh)
+                            return
+                        }
+                        // What is on keeps playing; the channel now airs from its new pool from the next programme.
+                        val id = channel?.id
+                        lineup = fresh
+                        channel = fresh.channels.firstOrNull { it.id == id } ?: channel
+                        scheduleTick++
+                    }
                 }
-                val items = scanned.items
-                markLoaded(abandoned = false)
-                // A whole library read: the kept sections have done their job (#288).
-                sectionStore.clear()
-                skippedNoRuntime = scanned.skippedNoRuntime
-                val took = SystemClock.elapsedRealtime() - t0
-                libraryUpdatedMs = System.currentTimeMillis()
-                val collections = readCollections(servers)
-                // Members in a new order (a smart collection after a play) are saved, so the next
-                // build follows the server's order, but don't rebuild the guide: the stored day
-                // stays put either way.
-                val collectionsChanged = !Collections.sameMembers(collections, serverCollections)
-                val reordered = !collectionsChanged && collections != serverCollections
-                val scanChanged = items != saved || collections != serverCollections
-                if (scanChanged || alwaysSave) {
-                    scannedItems = items
-                    serverCollections = collections
-                    withContext(Dispatchers.IO) { libraryStore.save(servers, items, collections) }
-                }
-                val enriched = enrich(items, remote = true)
-                if (enriched == libraryItems && !collectionsChanged) {
-                    Log.i(TAG, "REFRESH ${items.size} items read in $took ms; unchanged" +
-                        if (reordered) " (collection members in a new order, saved)" else "")
-                    return@launch
-                }
-                libraryItems = enriched
-                Log.i(TAG, "REFRESH ${items.size} items read in $took ms; " +
-                    (when {
-                    items != saved -> "library changed (was ${saved.size})"
-                    collectionsChanged -> "collections changed"
-                    else -> "enrichment changed"
-                }) + ", rebuilding")
-                val fresh = buildLineup(enriched, "refreshed")
-                if (fresh.channels.isEmpty()) return@launch
-                // From NO CHANNELS FOUND, a rescan that finds channels brings the guide up, as a
-                // package switch does (#198).
-                if (screen == Screen.NoChannels) {
-                    closeSettings()
-                    show(fresh)
-                    return@launch
-                }
-                // What is on keeps playing; the channel now airs from its new pool from the next programme.
-                val id = channel?.id
-                lineup = fresh
-                channel = fresh.channels.firstOrNull { it.id == id } ?: channel
-                scheduleTick++
+                val result = LibraryRefresh(current, effects, alwaysSave).run()
+                // A refresh replaced by a new load leaves the header to it; one cut short keeps the old guide and says nothing.
+                if (readyAfter(result)) guideReady() else if (result != RefreshResult.STALE) showHeader(null)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Background refresh failed; keeping the saved library", e)
+                if (current()) showHeader(null)
             } finally {
-                refreshing = false
+                // A refresh that was ended (endBackgroundWork) left `refreshing` alone: a newer one may own it.
+                if (current()) {
+                    refreshing = false
+                    startMusicEnrichment()
+                }
             }
         }
     }
@@ -1625,7 +1914,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      * Without enrichment, the items as they came.
      */
     private suspend fun enrich(items: List<MediaItem>, remote: Boolean, onStatus: (String, Int, Int) -> Unit = { _, _, _ -> }): List<MediaItem> {
-        val service = enrichment ?: return items
+        val service = enrichment ?: return musicApplied(items)
         val rules = channelData.await().first.channels.map { it.rules }
         val t0 = SystemClock.elapsedRealtime()
         val result = withContext(Dispatchers.IO) {
@@ -1635,7 +1924,41 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
         }
         Log.i(TAG, "ENRICHMENT (${if (remote) "full" else "local"}) ${result.stats} in ${SystemClock.elapsedRealtime() - t0} ms")
-        return withContext(Dispatchers.Default) { EnrichmentService.attach(items, result.records) }
+        return musicApplied(withContext(Dispatchers.Default) { EnrichmentService.attach(items, result.records) })
+    }
+
+    /**
+     * Asks MusicBrainz and then Deezer for the music videos that have no genre yet, once the guide is up and behind it (the Apple TV
+     * waits until after the first tune-in too). When it has something new the lineup is built again, so the channels that match on
+     * genre take the videos in. One run at a time; a stopped run keeps what it did (the cache is saved as it grows).
+     */
+    private fun startMusicEnrichment() {
+        if (demoMode || musicPass.running) return
+        val items = libraryItems
+        if (items.none(MusicEnrichmentService::isMusicVideo)) return
+        musicPass.start { current ->
+            try {
+                val changed = withContext(Dispatchers.IO) {
+                    music.first.enrich(items, { System.currentTimeMillis() }, { music.second.save(it) }, current)
+                }
+                // The lookups take minutes: the library they read may be gone (signed out, another server, a new load).
+                if (!changed || !current()) return@start
+                val applied = musicApplied(libraryItems)
+                if (applied == libraryItems || !current()) return@start
+                libraryItems = applied
+                Log.i(TAG, "MUSIC genres resolved, rebuilding")
+                val fresh = buildLineup(applied, "music")
+                if (fresh.channels.isEmpty() || !current()) return@start
+                val id = channel?.id
+                lineup = fresh
+                channel = fresh.channels.firstOrNull { it.id == id } ?: channel
+                scheduleTick++
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Music genre lookups failed; keeping what the guide has", e)
+            }
+        }
     }
 
     private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
@@ -1817,7 +2140,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             }
             return
         }
-        if (demoMode) demoBlockEndSec = System.currentTimeMillis() / 1000.0 - pick.seekSeconds + pick.item.duration * 60L
+        if (demoMode) demoBlockEndSec = System.currentTimeMillis() / 1000.0 - pick.seekSeconds + pick.item.slotSeconds.toLong()
         watchReporter.begin(pick.item, pick.seekSeconds, reportServer(pick.item))
         playback.play(pick.item, pick.seekSeconds)
     }
@@ -1970,6 +2293,7 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     override fun onPicture(item: MediaItem) {
         failureRun.reset()
+        noteWatchStarted(item)
     }
 
     override fun onEnded(item: MediaItem) {
@@ -1977,8 +2301,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         // Demo mode: the clip running out says nothing about the schedule. Stay on the block
         // that is on, at the clock's position (advanceToNextItem's demo branch).
         if (demoMode) return play(lineup?.tune(ch))
-        // Held to the guide's clock: a file that ran past its slot joins the next programme
-        // where the guide is, not at 0 s (#293, NaturalEnd).
+        // A file plays to its end (#315): the schedule gives it its real runtime, so the next programme
+        // starts at 0, and joins where the guide is only once the guide is 10 s or more into it (NaturalEnd).
         val guide = lineup?.tune(ch)
         val next = NaturalEnd.pick(item.ratingKey, lineup?.next(ch, item, fromNaturalEnd = true), guide)
         play(next)
@@ -2014,6 +2338,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     override fun onFailed(item: MediaItem, failure: PlaybackFailure) {
+        nudgeLaunch = nudgeLaunch.copy(hadPlaybackFailure = true)
         val ch = channel ?: return
         skipJob?.cancel()
         recordVerdict(failure.diagnosticSummary, item.title, failure.headline)
@@ -2100,6 +2425,9 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
 
     fun release() {
+        // A load the scope's cancel ends no longer clears its own mark (it is not current): clear it here, so Back during a long load
+        // is not counted as an unfinished load at the next cold start.
+        loadMark.released()
         scope.cancel()
         watchReporter.stop()
         playback.release()
@@ -2107,6 +2435,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     companion object {
         private const val TAG = "Nostalgex"
+        private const val JELLYFIN_PACKAGE = "org.jellyfin.androidtv"
         /** LaunchGuard reads the last launch's marker once per process. */
         private var launchRecorded = false
     }

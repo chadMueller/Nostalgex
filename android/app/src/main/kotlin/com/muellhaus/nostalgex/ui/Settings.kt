@@ -324,15 +324,15 @@ private fun PlaybackRows(model: AppModel) {
             on = model.retroMode,
             modifier = Modifier.paneRow(model, "retro_mode"),
         ) { model.toggleRetroMode() }
-        // Two built-in sizes; OK switches between them.
+        // Three built-in steps, SMALLER, DEFAULT and LARGER; OK moves to the next.
         ToggleRow(
             title = "GUIDE TEXT SIZE",
-            subtitle = "Bigger program titles, times and channel names in the guide",
-            detail = if (model.guideTextLarge) "LARGE" else "NORMAL",
+            subtitle = "Size of the text in the guide, the bundle list and Now Playing",
+            detail = model.guideTextSize.label,
             on = true,
             showToggle = false,
             modifier = Modifier.paneRow(model, "guide_text_size"),
-        ) { model.toggleGuideTextSize() }
+        ) { model.cycleGuideTextSize() }
         // OFF, 5 MIN, 15 MIN; select moves to the next (#290, the Apple TV's row).
         ToggleRow(
             title = "GUIDE TIMEOUT",
@@ -678,6 +678,15 @@ private fun ServerRows(model: AppModel) {
     // The coverage line is counted when this page opens, and again when the lineup changes.
     LaunchedEffect(model.lineup) { model.ensureLibraryCoverage() }
     Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
+        // At the top, where the Apple TV puts its iCloud row. Off by default and per TV: on, this TV's settings (never a server, a token
+        // or the library) are held for Android's backup and come back on a new TV signed in to the same Google account.
+        ToggleRow(
+            title = "SYNC WITH MY OTHER ANDROID TVS",
+            subtitle = if (model.settingsBackup) "This Android TV's settings are saved to your Google account through Android backup."
+                else "Turn on to bring your settings to your other Android TVs through Android backup. Servers and sign-in stay on each TV.",
+            on = model.settingsBackup,
+            modifier = Modifier.paneRow(model, "backup_sync"),
+        ) { model.toggleSettingsBackup() }
         Subheader("SERVERS")
         val selected = model.selectedServers
         for (server in model.serversForSettings) {
@@ -754,6 +763,15 @@ private fun AboutRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "about_version"),
         ) {}
+        // RATE, as the Apple TV's Settings tile: opens the Play listing, and says thanks once pressed (the banner never shows again).
+        ToggleRow(
+            title = "RATE NOSTALGEX",
+            subtitle = if (model.hasTappedRate) "Thank you. A star rating helps other people find it." else "A star rating helps other people find it",
+            detail = if (model.hasTappedRate) "THANKS" else "RATE",
+            on = true,
+            showToggle = false,
+            modifier = Modifier.paneRow(model, "about_rate"),
+        ) { model.rate() }
         Box(Modifier.padding(top = u(24))) { SectionHeader("LINKS", null) }
         // AboutLinks.all, as the Apple TV's SettingsAboutView: a line to read and open on a phone or
         // computer, not a button that opens anything.

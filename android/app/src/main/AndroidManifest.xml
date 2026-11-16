@@ -11,8 +11,20 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- OPEN IN PLEX asks whether anything handles a plex:// link before it shows the row (package visibility). -->
+    <queries>
+        <!-- OPEN IN JELLYFIN: the Jellyfin app for Android TV, whose startup activity opens an item given as the ItemId extra. -->
+        <package android:name="org.jellyfin.androidtv" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="plex" />
+        </intent>
+    </queries>
+
     <application
-        android:allowBackup="false"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:largeHeap="true"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"

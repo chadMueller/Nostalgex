@@ -239,6 +239,18 @@ class Lineup(
             .map { it.first to it.second }
     }
 
+    /**
+     * Channel id to the bundle the guide's stripe names it by (GuideStripes.membership). FRANCHISES is one
+     * bundle: the stock classics, the franchises found in the library and the server's franchise collections,
+     * as in [jumpTargets]; the other collections are in no bundle, so they get a plain stripe.
+     */
+    fun stripeMembership(enabledBundles: Set<String>): Map<Int, GuideStripes.GuideBundle> =
+        GuideStripes.membership(
+            config.bundles, enabledBundles,
+            runtime.filter { it.def.category == CollectionCategory.FRANCHISES.wire }.map { it.id },
+            FRANCHISES_BUNDLE, FRANCHISE_COLLECTIONS_BUNDLE,
+        )
+
     private fun filter(
         items: List<MediaItem>,
         defs: List<ChannelConfig.StockChannel>,
@@ -356,5 +368,7 @@ class Lineup(
         const val FRANCHISES_BUNDLE = "franchises"
         /** The sidebar's entry for the other collections (CollectionCategory.custom's bundle). */
         const val OTHER_COLLECTIONS_BUNDLE = "collections-custom"
+        /** The server's franchise collections, which the stripe names with FRANCHISES when that package is on. */
+        const val FRANCHISE_COLLECTIONS_BUNDLE = "collections-franchises"
     }
 }

@@ -55,6 +55,8 @@ object DesignTokens {
         const val CYAN = 0x00D4FF
         /** Live status only (the sleep countdown). */
         const val YELLOW = 0xFFE500
+        /** The next programme's title on the UP NEXT line (Chad 2026-11-15), the Apple TV's value (13e6e643). */
+        const val UP_NEXT_TITLE = 0xFFE500
         /** Warnings that need attention. */
         const val AMBER = 0xFFB020
         /** Danger as text. */
@@ -80,6 +82,35 @@ object DesignTokens {
     }
 
     /** Row geometry, in points. */
+    /**
+     * The guide's cursor cell, the programme Left and Right have reached (Chad 2026-11-15: "the active state needs to be way more
+     * obvious"), the Apple TV's round 3 values (appletv/guide-text-three-steps 13e6e643): a fill of cyan at 30% over the row, a 3 pt
+     * cyan ring inset 2 with corners of 6, and two cyan glow layers. The glow stays inside the programme area.
+     */
+    object Cursor {
+        const val FILL_ALPHA = 0.30f
+        const val RING = 3
+        const val RING_INSET = 2
+        const val CORNER = 6
+        const val GLOW_OUTER_RADIUS = 18
+        const val GLOW_OUTER_ALPHA = 0.9f
+        const val GLOW_INNER_RADIUS = 6
+        const val GLOW_INNER_ALPHA = 1.0f
+    }
+
+    /**
+     * The guide row's own focus. While a programme cell has the cursor it steps back (an outline of 2 pt in the channel colour at
+     * 55% and a glow of radius 6 at 25%); with no cell on the row it stays as it was (3 pt cyan, glow of radius 14 at 70%).
+     */
+    object RowFocus {
+        const val STEPPED_BACK_OUTLINE = 2
+        const val STEPPED_BACK_OUTLINE_ALPHA = 0.55f
+        const val STEPPED_BACK_GLOW_RADIUS = 6
+        const val STEPPED_BACK_GLOW_ALPHA = 0.25f
+        const val GLOW_RADIUS = 14
+        const val GLOW_ALPHA = 0.7f
+    }
+
     object Row {
         const val CORNER = 12
         const val RESTING_OUTLINE = 1.5f

@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -78,9 +80,9 @@ private fun Modifier.onSelect(action: () -> Unit) = onKeyEvent { e ->
 
 // ── The mini channel strip ───────────────────────────────────────────────
 
-/** Every channel as a card along the bottom, opened with Up; focus starts on the one on. */
+/** Every channel as a card along the bottom, opened with Up and closed with Down; focus starts on the one on. */
 @Composable
-internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit) {
+internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit, onDismiss: () -> Unit = {}) {
     val lineup = model.lineup ?: return
     val channels = lineup.channels
     val current = model.channel?.id
@@ -89,7 +91,17 @@ internal fun MiniChannelStrip(model: AppModel, onSelect: (GuideChannel) -> Unit)
     var focusedId by remember { mutableStateOf(current) }
     val first = remember { FocusRequester() }
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+    Box(
+        Modifier.fillMaxSize()
+            // The reverse of what opened it: the strip comes up with Up, so Down closes it (the Apple TV's
+            // MiniChannelStrip). Left and Right are not handled here, so they keep moving along the strip.
+            .onKeyEvent { e ->
+                if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_DOWN) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyDown) onDismiss()
+                true
+            },
+        contentAlignment = Alignment.BottomStart,
+    ) {
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(u(12)),
@@ -167,6 +179,7 @@ internal enum class PanelPicker(val title: String) {
     PLAYBACK_INFORMATION("PLAYBACK INFORMATION"),
     SUBTITLE_LANGUAGE("SUBTITLE LANGUAGE"),
     AUDIO_LANGUAGE("AUDIO LANGUAGE"),
+    SLEEP_TIMER("SLEEP TIMER"),
 }
 
 /**
@@ -234,7 +247,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                     // The language preferences only where their effect can be seen or heard.
                     if (model.hasSubtitleTracks) {
                         ControlRow(
-                            label = "SUBTITLE LANGUAGE", value = LanguageChoice.shortLabel(model.subtitleLanguage), color = color, active = false, disabled = false,
+                            label = "SUBTITLE LANGUAGE", value = LanguageChoice.shortLabel(model.subtitleLanguage), chevron = true, color = color, active = false, disabled = false,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.SUBTITLE_LANGUAGE)),
                         ) { onPicker(PanelPicker.SUBTITLE_LANGUAGE) }
                         ControlRow(
@@ -254,9 +267,18 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                             }
                         }
                         ControlRow(
-                            label = "AUDIO LANGUAGE", value = LanguageChoice.shortLabel(model.audioLanguage), color = color, active = false, disabled = false,
+                            label = "AUDIO LANGUAGE", value = LanguageChoice.shortLabel(model.audioLanguage), chevron = true, color = color, active = false, disabled = false,
                             modifier = Modifier.focusRequester(owners.getValue(PanelPicker.AUDIO_LANGUAGE)),
                         ) { onPicker(PanelPicker.AUDIO_LANGUAGE) }
+                    }
+                    // Plex or Jellyfin, and only with that app installed: hands this title to it (the Apple TV's row, at the foot of the
+                    // left column). Says so when nothing took the link. Emby has no item link, so no row.
+                    model.openInName?.let { app ->
+                        var openFailed by remember(item.ratingKey) { mutableStateOf(false) }
+                        ControlRow(
+                            label = "OPEN IN $app", value = if (openFailed) "COULDN'T OPEN" else null, color = color, active = false, disabled = false,
+                            note = "Leaves Nostalgex and opens this title in the ${app.lowercase().replaceFirstChar { it.uppercase() }} app.",
+                        ) { openFailed = !model.openInApp(item) }
                     }
                 }
                 // What the device is doing.
@@ -266,30 +288,25 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                     // Shown for every program: nothing says whether this one is transcoded, and the
                     // note says the part that matters.
                     ControlRow(
-                        label = "STREAM QUALITY", value = model.streamQuality.displayName.uppercase(), color = color, active = false, disabled = false,
+                        label = "STREAM QUALITY", value = model.streamQuality.displayName.uppercase(), chevron = true, color = color, active = false, disabled = false,
                         note = "Takes effect on the next program.",
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.STREAM_QUALITY)),
                     ) { onPicker(PanelPicker.STREAM_QUALITY) }
-                    ControlHeader("SLEEP TIMER")
-                    val armed = model.sleepEndMs
-                    ControlRow(label = "OFF", value = if (armed == null) "ACTIVE" else null, color = color, active = armed == null, disabled = false) {
-                        model.cancelSleepTimer()
-                    }
-                    for (minutes in offeredSleepMinutes(model.sleepMinutes)) {
-                        val selected = armed != null && model.sleepMinutes == minutes
-                        val remaining = if (armed != null && selected) maxOf(0.0, armed / 1000.0 - now) else 0.0
-                        ControlRow(
-                            label = sleepLabel(minutes),
-                            value = if (selected) countdownLabel(remaining) else null,
-                            color = color,
-                            active = selected,
-                            disabled = false,
-                        ) { model.startSleepTimer(minutes) }
-                    }
                     ControlRow(
-                        label = "PLAYBACK INFORMATION", value = "VIEW", color = color, active = false, disabled = false,
+                        label = "PLAYBACK INFORMATION", value = "VIEW", chevron = true, color = color, active = false, disabled = false,
                         modifier = Modifier.focusRequester(owners.getValue(PanelPicker.PLAYBACK_INFORMATION)),
                     ) { onPicker(PanelPicker.PLAYBACK_INFORMATION) }
+                    // One row that reads OFF, or the countdown in yellow while one runs, so OFF can never look
+                    // like ON; select opens the list (the Apple TV's collapsed SLEEP TIMER row).
+                    val armed = model.sleepEndMs
+                    ControlRow(
+                        label = "SLEEP TIMER",
+                        value = if (armed == null) "OFF" else countdownLabel(maxOf(0.0, armed / 1000.0 - now)),
+                        valueColor = if (armed == null) null else Tokens.Yellow,
+                        chevron = true, color = color, active = armed != null, disabled = false,
+                        note = "Stops playback after the time you pick. A still-watching prompt comes first.",
+                        modifier = Modifier.focusRequester(owners.getValue(PanelPicker.SLEEP_TIMER)),
+                    ) { onPicker(PanelPicker.SLEEP_TIMER) }
                 }
                 LaunchedEffect(Unit) {
                     val target = returnTo?.let(owners::getValue) ?: cc
@@ -298,14 +315,7 @@ internal fun NowPlayingPanel(model: AppModel, ch: GuideChannel, item: MediaItem,
                 }
             }
         }
-        // One hint line under the columns, two lines tall at a fixed height so rows never jump.
-        Text(
-            hint ?: "",
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.End).padding(top = u(16)).width(u(440 * 2 + 28)).height(u(DesignTokens.PanelSize.TEXT * 2 + 12)),
-        )
+        // No help line under the rows (Chad 2026-11-15: "it feels so out of place there", as on the Apple TV).
         }
         }
     }
@@ -330,23 +340,27 @@ private fun UpNextLine(model: AppModel, ch: GuideChannel) {
     }
     model.scheduleTick
     val next = model.lineup?.schedules?.get(ch.id)?.upNext ?: return
-    Row(Modifier.padding(top = u(22)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(14))) {
+    // One plain line, the title first in the highlight colour and then the minutes: "Varsity Blues  UP NEXT IN 24 MIN" (Chad
+    // 2026-11-15, across all platforms). No pill, no border. The title ends in an ellipsis before the label ever shrinks.
+    val upNextTitle = if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title
+    Row(
+        Modifier.padding(top = u(22)).semantics(mergeDescendants = true) { contentDescription = UpNextLabel.line(upNextTitle, next.startSec - nowSec) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            if (next.item.isMusicVideo) next.item.musicDisplayLine else next.item.title,
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text),
+            upNextTitle,
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.UpNextTitle),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
+        // Two spaces of the title's face (a monospace character is 0.6 of its size).
+        Spacer(Modifier.width(u(LocalGuideText.current.panelText * 1.2f)))
         Text(
             UpNextLabel.text(next.startSec - nowSec),
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Cyan),
+            style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
             maxLines = 1,
-            modifier = Modifier
-                .clip(RoundedCornerShape(u(6)))
-                .background(Tokens.SelectedRow)
-                .border(u(1.5), Tokens.Cyan, RoundedCornerShape(u(6)))
-                .padding(horizontal = u(10), vertical = u(4)),
+            softWrap = false,
         )
     }
 }
@@ -357,26 +371,25 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
     val selected = remember { FocusRequester() }
     Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
         ControlHeader(picker.title)
-        Text(
-            when (picker) {
-                PanelPicker.PLAYBACK_INFORMATION -> PlaybackInfo.EVIDENCE_NOTE
-                PanelPicker.STREAM_QUALITY -> "Lower this when your connection is slow or shared. Takes effect on the next program."
-                PanelPicker.SUBTITLE_LANGUAGE -> "Choose which subtitle track to prefer when multiple are available."
-                PanelPicker.AUDIO_LANGUAGE -> "Choose which audio track to prefer when multiple are available."
-            },
-            style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2),
-            modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
-        )
+        // No help line under a list either; PLAYBACK INFORMATION keeps its note, which is what the list is about (how this
+        // program reaches the screen), not help.
+        if (picker == PanelPicker.PLAYBACK_INFORMATION) {
+            Text(
+                PlaybackInfo.EVIDENCE_NOTE,
+                style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2),
+                modifier = Modifier.widthIn(max = u(908)).padding(bottom = u(2)),
+            )
+        }
         when (picker) {
             PanelPicker.PLAYBACK_INFORMATION -> Column(Modifier.width(u(880)), verticalArrangement = Arrangement.spacedBy(u(10))) {
                 val rows = model.playbackInfo?.rows(model.videoSize?.first, model.videoSize?.second)
                 Column(verticalArrangement = Arrangement.spacedBy(u(8))) {
                     if (rows == null) {
-                        Text("Playback information is unavailable.", style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2))
+                        Text("Playback information is unavailable.", style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2))
                     } else for (r in rows) {
                         Row(Modifier.padding(vertical = u(3)), horizontalArrangement = Arrangement.spacedBy(u(16))) {
-                            Text(r.label, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2), modifier = Modifier.width(u(260)))
-                            Text(r.value, style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text))
+                            Text(r.label, style = font(DMMonoMedium, LocalGuideText.current.panelText, Tokens.Text2), modifier = Modifier.width(u(260)))
+                            Text(r.value, style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text))
                         }
                     }
                 }
@@ -389,6 +402,23 @@ private fun PickerZone(model: AppModel, picker: PanelPicker, color: Color, onDon
                         label = q.displayName.uppercase(), value = if (on) "ACTIVE" else null, color = color, active = on, disabled = false, note = q.detail,
                         modifier = if (on) Modifier.focusRequester(selected) else Modifier,
                     ) { model.chooseStreamQuality(q); onDone() }
+                }
+            }
+            PanelPicker.SLEEP_TIMER -> Column(Modifier.width(u(560)), verticalArrangement = Arrangement.spacedBy(u(10))) {
+                val armed = model.sleepEndMs
+                val now = ticking()
+                ControlRow(
+                    label = "OFF", value = if (armed == null) "ACTIVE" else null, color = color, active = armed == null, disabled = false,
+                    modifier = if (armed == null) Modifier.focusRequester(selected) else Modifier,
+                ) { model.cancelSleepTimer(); onDone() }
+                for (minutes in offeredSleepMinutes(model.sleepMinutes)) {
+                    val on = armed != null && model.sleepMinutes == minutes
+                    ControlRow(
+                        label = sleepLabel(minutes),
+                        value = if (on) countdownLabel(maxOf(0.0, armed!! / 1000.0 - now)) else null,
+                        color = color, active = on, disabled = false,
+                        modifier = if (on) Modifier.focusRequester(selected) else Modifier,
+                    ) { model.startSleepTimer(minutes); onDone() }
                 }
             }
             PanelPicker.SUBTITLE_LANGUAGE, PanelPicker.AUDIO_LANGUAGE -> {
@@ -439,18 +469,18 @@ private fun InfoZone(model: AppModel, ch: GuideChannel, item: MediaItem, color: 
         Column(verticalArrangement = Arrangement.spacedBy(u(12))) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(12))) {
                 Box(Modifier.size(u(8), u(24)).background(color))
-                Text("CH ${ch.number}", style = font(VT323, DesignTokens.PanelSize.TAG, Tokens.Text))
-                Text(ch.name.uppercase(), style = font(DMMono, DesignTokens.PanelSize.TEXT, Tokens.Text2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("CH ${ch.number}", style = font(VT323, LocalGuideText.current.panelTag, Tokens.Text))
+                Text(ch.name.uppercase(), style = font(DMMono, LocalGuideText.current.panelText, Tokens.Text2), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             val line = if (item.isMusicVideo) item.musicDisplayLine else item.title + (item.year?.let { "  $it" } ?: "")
-            Text(line, style = font(DMMonoMedium, DesignTokens.PanelSize.ITEM_TITLE, Tokens.Text), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(line, style = font(DMMonoMedium, LocalGuideText.current.panelTitle, Tokens.Text), maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun ControlHeader(text: String) {
-    Text(text, style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, Tokens.Text2, tracking = 1.5))
+    Text(text, style = font(DMMonoMedium, LocalGuideText.current.panelText, Tokens.Text2, tracking = 1.5))
 }
 
 /**
@@ -468,6 +498,10 @@ private fun ControlRow(
     modifier: Modifier = Modifier,
     focusable: Boolean = true,
     note: String? = null,
+    /** A row that opens a list shows a chevron after its value. */
+    chevron: Boolean = false,
+    /** The value's colour when it is not the active cyan: the running sleep timer's yellow. */
+    valueColor: Color? = null,
     onClick: () -> Unit = {},
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -489,13 +523,16 @@ private fun ControlRow(
     ) {
         Text(
             label,
-            style = font(DMMonoMedium, DesignTokens.PanelSize.TEXT, if (disabled) Tokens.Text2 else Tokens.Text),
+            style = font(DMMonoMedium, LocalGuideText.current.panelText, if (disabled) Tokens.Text2 else Tokens.Text),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (value != null) {
-            Text(value, style = font(DMMono, DesignTokens.PanelSize.TEXT, if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
+            Text(value, style = font(DMMono, LocalGuideText.current.panelText, valueColor ?: if (active) Tokens.Cyan else Tokens.Text2), maxLines = 1)
+        }
+        if (chevron) {
+            Text("\u203A", style = font(DMMonoMedium, LocalGuideText.current.panelText, if (focused) Tokens.Cyan else Tokens.Text2), modifier = Modifier.padding(start = u(10)))
         }
     }
 }

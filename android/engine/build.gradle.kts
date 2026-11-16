@@ -23,6 +23,8 @@ java {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+    // The music lookups are suspend functions that wait on the network (MusicEnrichment).
+    implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit)
 }
 

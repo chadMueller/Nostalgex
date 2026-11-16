@@ -190,7 +190,7 @@ class WatchReporter(private val plexHeaders: Map<String, String>, private val me
     // ── One programme (makePlaybackTracker) ────────────────────────────────────
 
     private inner class Tracker(val item: MediaItem, val seekOffset: Long, val server: Server) {
-        private val totalSec = item.duration.toLong() * 60
+        private val totalSec = item.slotSeconds.toLong()
         private val isPlex = server is Server.Plex
         private val eligibleEntry = WatchState.eligibleEntry(seekOffset, totalSec)
         private val backoff = WatchState.PulseBackoff()

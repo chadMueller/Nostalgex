@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older Auto Backup: only the preferences mirror file, nothing else (SettingsBackup). Naming an include
+     excludes everything else, so the saved library, the sign-in, the server addresses and every cache stay on the TV. -->
+<full-backup-content>
+    <include domain="sharedpref" path="nostalgex_backup.xml" />
+</full-backup-content>

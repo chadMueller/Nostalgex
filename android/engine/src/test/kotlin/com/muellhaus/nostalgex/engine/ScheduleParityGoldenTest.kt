@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -36,7 +37,9 @@ class ScheduleParityGoldenTest {
         spec["compact"]?.let { c ->
             val a = c.jsonArray
             val key = a[0].jsonPrimitive.content
-            return key to MediaItem(key, a[1].jsonPrimitive.content, a[2].jsonPrimitive.content, a[3].jsonPrimitive.int, a[4].jsonPrimitive.long)
+            // An optional `exact` runtime in seconds beside the minutes: the slot's fallback cases (#315).
+            val exact = (spec["exact"] as? JsonPrimitive)?.doubleOrNull
+            return key to MediaItem(key, a[1].jsonPrimitive.content, a[2].jsonPrimitive.content, a[3].jsonPrimitive.int, a[4].jsonPrimitive.long, exactDurationSeconds = exact)
         }
         val backend = spec["backend"]!!.jsonPrimitive.content
         val kind = spec["kind"]!!.jsonPrimitive.content
@@ -49,14 +52,16 @@ class ScheduleParityGoldenTest {
                 val minutes = DailyManifest.minutesFromPlexMs((raw["duration"] as? JsonPrimitive)?.longOrNull)
                 if (minutes <= 0) return key to null
                 val title = if (kind == "episode") str(show, "title") ?: "" else str(raw, "title") ?: ""
-                key to MediaItem(key, title, kind, minutes, (raw["addedAt"] as? JsonPrimitive)?.longOrNull ?: 0)
+                key to MediaItem(key, title, kind, minutes, (raw["addedAt"] as? JsonPrimitive)?.longOrNull ?: 0,
+                    exactDurationSeconds = DailyManifest.secondsFromPlexMs((raw["duration"] as? JsonPrimitive)?.longOrNull))
             }
             "jellyfin", "emby" -> {
                 val key = raw["Id"]!!.jsonPrimitive.content
                 val minutes = DailyManifest.minutesFromTicks((raw["RunTimeTicks"] as? JsonPrimitive)?.longOrNull)
                 if (minutes <= 0) return key to null
                 val title = if (kind == "episode") str(show, "Name") ?: str(raw, "SeriesName") ?: "" else str(raw, "Name") ?: ""
-                key to MediaItem(key, title, kind, minutes, DailyManifest.unixSecondsFromISO(str(raw, "DateCreated")))
+                key to MediaItem(key, title, kind, minutes, DailyManifest.unixSecondsFromISO(str(raw, "DateCreated")),
+                    exactDurationSeconds = DailyManifest.secondsFromTicks((raw["RunTimeTicks"] as? JsonPrimitive)?.longOrNull))
             }
             else -> error("unknown item $backend $kind")
         }

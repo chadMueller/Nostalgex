@@ -5,13 +5,24 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #293: the Apple TV's NaturalEndDriftTests idea, over a model of whole-minute slots and longer files. */
+/** #315: the Apple TV's natural-end rule (a file plays to its end; the next one catches up to the clock at 10 s or more). */
 class NaturalEndTest {
     private fun item(k: String) = MediaItem(ratingKey = k, title = k)
 
     @Test fun theGuideHasMovedOnSoThePlayerJoinsAtTheClock() {
         val b = item("b")
         assertEquals(Pick(b, 51), NaturalEnd.pick("a", Pick(b, 0), Pick(b, 51)))
+    }
+
+    /** Less than the catch-up behind the guide: the next programme starts at 0, whole. */
+    @Test fun underTheCatchUpTheNextStartsAtZero() {
+        val next = Pick(item("b"), 0)
+        assertSame(next, NaturalEnd.pick("a", next, Pick(item("b"), NaturalEnd.CATCH_UP_SECONDS - 1L)))
+    }
+
+    @Test fun atTheCatchUpThePlayerJoinsAtTheClock() {
+        val b = item("b")
+        assertEquals(Pick(b, 10), NaturalEnd.pick("a", Pick(b, 0), Pick(b, 10)))
     }
 
     /** The file ended inside its slot: the guide still shows it, and the next one starts at 0. */
@@ -60,6 +71,7 @@ class NaturalEndTest {
 
         val before = run(hold = false)
         assertTrue("the model drifts without the fix: $before", before.max() >= 50)
-        assertEquals("held to the clock: $before", List(20) { 0L }, run(hold = true))
+        val held = run(hold = true)
+        assertTrue("never the catch-up behind: $held", held.all { it < NaturalEnd.CATCH_UP_SECONDS })
     }
 }

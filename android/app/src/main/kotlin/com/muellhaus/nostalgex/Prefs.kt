@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex
 
 import android.content.Context
 import com.muellhaus.nostalgex.engine.ChannelConfig
+import com.muellhaus.nostalgex.engine.GuideTextSize
 import com.muellhaus.nostalgex.engine.GuideTimeout
 import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.LibrarySection
@@ -118,10 +119,36 @@ class Prefs(context: Context) {
     fun flag(key: String) = prefs.getBoolean(key, false)
     fun setFlag(key: String) = prefs.edit().putBoolean(key, true).apply()
 
-    /** GUIDE TEXT SIZE: "large", or anything else for NORMAL, under the Apple TV's key. */
-    var guideTextLarge: Boolean
-        get() = prefs.getString("nostalgex_guide_text_size", null) == "large"
-        set(value) = prefs.edit().putString("nostalgex_guide_text_size", if (value) "large" else "normal").apply()
+    /** GUIDE TEXT SIZE: "small", "normal" or "large" under the Apple TV's key; nothing saved or anything else is DEFAULT. */
+    var guideTextSize: GuideTextSize
+        get() = GuideTextSize.fromStored(prefs.getString(GuideTextSize.STORAGE_KEY, null))
+        set(value) = prefs.edit().putString(GuideTextSize.STORAGE_KEY, value.raw).apply()
+
+    /**
+     * SYNC WITH MY OTHER ANDROID TVS (Settings > SERVERS & ACCOUNTS, the Apple TV's iCloud row): per TV, off by default, and never
+     * itself synced. Off, nothing is mirrored for the backup; on, the 13 settings in SyncedPreferences are (SettingsBackup).
+     */
+    var settingsBackup: Boolean
+        get() = prefs.getBoolean(SettingsBackup.ENABLED_KEY, false)
+        set(value) = prefs.edit().putBoolean(SettingsBackup.ENABLED_KEY, value).apply()
+
+    /** The rating banner's counters, under the Apple TV's keys (RatingNudgeStore). */
+    var nudgeSessions: Int
+        get() = prefs.getInt("nostalgex_rating_nudge_sessions", 0)
+        set(value) = prefs.edit().putInt("nostalgex_rating_nudge_sessions", value).apply()
+    var nudgeShownVersion: String?
+        get() = prefs.getString("nostalgex_rating_nudge_shown_version", null)
+        set(value) = prefs.edit().putString("nostalgex_rating_nudge_shown_version", value).apply()
+    var nudgeRated: Boolean
+        get() = prefs.getBoolean("nostalgex_rating_nudge_rated", false)
+        set(value) = prefs.edit().putBoolean("nostalgex_rating_nudge_rated", value).apply()
+
+    /** Once per process: whether this is the first launch ever, recorded as it is asked. */
+    fun consumeFirstLaunch(): Boolean {
+        val seenBefore = prefs.getBoolean("nostalgex_rating_nudge_has_launched", false)
+        prefs.edit().putBoolean("nostalgex_rating_nudge_has_launched", true).apply()
+        return !seenBefore
+    }
 
     /** WATERSHED (Settings > SCHEDULE), off unless switched on, under the Apple TV's key. */
     var watershed: Boolean

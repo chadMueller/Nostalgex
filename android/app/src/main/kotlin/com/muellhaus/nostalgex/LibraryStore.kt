@@ -54,6 +54,6 @@ class LibraryStore(context: Context) {
 
     companion object {
         /** Bump when MediaItem or what the scan fills in changes, so an old copy is read again. */
-        private const val FORMAT = 8 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size; 7: audio tracks keep their own title (#286); 8: items no longer carry the server token
+        private const val FORMAT = 10 // 2: episodes carry seTag; 3: items carry thumb; 4: and bitrate; 5: episodes carry showKey; 6: audio tracks and frame size; 7: audio tracks keep their own title (#286); 8: items no longer carry the server token; 9: items carry their real runtime in seconds (#315); 10: items carry their poster chain (#312)
     }
 }

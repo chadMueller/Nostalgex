@@ -20,4 +20,10 @@ class UpNextLabelTest {
         assertEquals("UP NEXT IN LESS THAN 1 MIN", UpNextLabel.text(0.0))
         assertEquals("UP NEXT IN LESS THAN 1 MIN", UpNextLabel.text(-5.0))
     }
+
+    @Test fun theLineIsTheTitleTwoSpacesAndThenTheLabel() {
+        assertEquals("Varsity Blues  UP NEXT IN 24 MIN", UpNextLabel.line("Varsity Blues", 24 * 60 + 59.0))
+        assertEquals("Heat  UP NEXT IN LESS THAN 1 MIN", UpNextLabel.line("Heat", 59.0))
+        assertEquals("Heat  UP NEXT IN 84 MIN", UpNextLabel.line("Heat", 84 * 60.0))
+    }
 }

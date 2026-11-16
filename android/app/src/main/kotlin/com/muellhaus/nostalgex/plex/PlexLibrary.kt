@@ -81,8 +81,9 @@ class PlexLibrary(private val client: PlexClient) {
                 continue
             }
             try {
-                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, _ ->
-                    progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded))
+                val items = fetchSectionPaged(server, section.str("key")!!) { loaded, total ->
+                    progress.update(ScanProgress(index, sections.size, title, type, baseCount + out.size + if (type == "show") 0 else loaded,
+                        sectionTotal = total.takeIf { type != "show" }, sectionDone = loaded.takeIf { type != "show" }))
                 }
                 val isMusicVideoSection = MUSIC_VIDEO_SECTION.containsMatchIn(title.trim())
                 if (type == "show") {
@@ -145,6 +146,8 @@ class PlexLibrary(private val client: PlexClient) {
                     title = show.str("title") ?: "Unknown",
                     type = "episode",
                     duration = minutes,
+                    // The real runtime next to the floored minutes: the schedule's slot (#315).
+                    exactDurationSeconds = DailyManifest.secondsFromPlexMs(ep.long("duration")),
                     addedAt = ep.long("addedAt") ?: 0,
                     episodeTitle = ep.str("title") ?: "",
                     seTag = seTag(ep),
@@ -171,6 +174,9 @@ class PlexLibrary(private val client: PlexClient) {
                     serverUrl = server.url,
                     serverToken = server.token,
                     thumb = ep.str("thumb") ?: show.str("thumb"),
+                    // The season's poster, then the series', then the episode's own frame (#312).
+                    posterThumbs = listOfNotNull(ep.str("parentThumb"), ep.str("grandparentThumb") ?: show.str("thumb"), ep.str("thumb"))
+                        .filter { it.isNotEmpty() }.distinct(),
                 )
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -200,6 +206,7 @@ class PlexLibrary(private val client: PlexClient) {
             artist = artist,
             type = if (sectionType == "show") "episode" else sectionType,
             duration = minutes,
+            exactDurationSeconds = DailyManifest.secondsFromPlexMs(item.long("duration")),
             addedAt = item.long("addedAt") ?: 0,
             summary = item.str("summary") ?: "",
             year = item.long("year")?.toInt(),
@@ -222,6 +229,7 @@ class PlexLibrary(private val client: PlexClient) {
             serverUrl = server.url,
             serverToken = server.token,
             thumb = item.str("thumb"),
+            posterThumbs = listOfNotNull(item.str("thumb")).filter { it.isNotEmpty() },
         )
     }
 

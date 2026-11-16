@@ -69,4 +69,8 @@ data class ScanProgress(
     val itemsSoFar: Int,
     val showsDone: Int? = null,
     val showsTotal: Int? = null,
+    /** How many items the server says the library under way holds, when it said (Plex's totalSize); null when it did not. */
+    val sectionTotal: Int? = null,
+    /** ...and how many of them are read so far (with [sectionTotal]). */
+    val sectionDone: Int? = null,
 )
