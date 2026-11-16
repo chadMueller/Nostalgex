@@ -11311,7 +11311,7 @@
   }
 
   async function repopulateChannelsFromLibrary(allItems, options = {}) {
-    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const buildAll = options.buildAllChannels ?? LL.isFirstLibraryLoad();
     const poolIDs = LL.staticChannelIDsForPoolBuild({
       buildAll,
@@ -11945,7 +11945,7 @@
     try { return await fetchJellyfinLibraryScan(options); } finally { endScanWatch(); }
   }
   async function fetchJellyfinLibraryScan(options = {}) {
-    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
@@ -12792,7 +12792,7 @@
   }
 
   async function fetchPlexLibraryFromServer(options = {}) {
-    const LL = loadUIFor(options);   // an overtaken read writes nowhere the new read's block can show
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
