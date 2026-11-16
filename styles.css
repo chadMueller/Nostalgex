@@ -1630,6 +1630,7 @@ a { color: inherit; }
 }
 .changelog__entry li { margin-bottom: 8px; }
 .changelog__entry li::marker { color: var(--pink); }
+.changelog__entry .changelog__section { margin: 18px 0 8px; font-size: 16px; }
 
 /* ---------- Reveal on scroll ---------- */
 .reveal {

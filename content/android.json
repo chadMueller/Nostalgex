@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "The Android TV section of the site, switched off.",
+    "",
+    "playLive: false until Google Play shows the Nostalgex listing (Chad confirms by opening the",
+    "public Play page). The Android beta and the review are not a reason to flip it: nothing can",
+    "be joined yet and the site makes no promise about it. While it is false the page is not built,",
+    "not linked, not in the sitemap and not in llms.txt, and `npm test` (android:check) fails if any",
+    "of those have crept in.",
+    "",
+    "playUrl: null until then. It is the public Play listing link, nothing else. No beta or join link.",
+    "",
+    "Switching it on, in order:",
+    "1. Marketing fills every TODO(marketing) in content/android/android.html.",
+    "2. Move that file to android.html at the repo root, set its robots meta to index, follow, and",
+    "   replace PLAY_URL with playUrl.",
+    "3. vite.config.js: add 'android' to the site inputs. vercel.json: add the /android rewrite.",
+    "4. Add <a href=\"/android\">Android TV</a> after Roku in every footer (grep 'href=\"/roku\">Roku</a>')",
+    "   and in scripts/site-chrome.mjs. Add the home tile and hero button if marketing wants them.",
+    "5. public/sitemap.xml and public/llms.txt: one line each. README: an Android TV column in the table",
+    "   and a heading with the live version, once readme-versions-check has a rule for it.",
+    "6. Set playLive true and playUrl, then update scripts/android-section-check.mjs (it flips from",
+    "   'nothing public' to 'page, link and sitemap line all present').",
+    "No contributor names anywhere on the site (Chad, 2026-11-11). Credit is GitHub and Discord only."
+  ],
+  "playLive": false,
+  "playUrl": null
+}

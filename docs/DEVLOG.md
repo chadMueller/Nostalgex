@@ -4,6 +4,26 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-16 (site: ready for the Apple TV 1.0.33, Roku 1.0.13 and Android TV releases)
+
+**State.** Branch `site/platform-releases-nov16` off main `affe3481`. Not merged, not pushed. Two flips wait on their own branches, built on top of it.
+
+**Why.** The site speaks only about what people can install today, and three platforms are about to move. The base branch carries everything that is true now, and each flip is one commit that is applied when its platform is public.
+
+**Changed on this branch (nothing visible on the live pages).**
+- `content/changelog.json`: the 1.0.33 entry now holds the App Store text in its three sections. `bullets` is WHAT'S NEW, with the new `newChannels` and `fixes` lists beside it. It stays `released: false`, so the home page does not show it yet. The renderer (`scripts/render-changelog.mjs`) and the Discord post script print the two extra lists when an entry has them; older entries render as before. The channel update line says the app checks when it opens and about once a day, not hourly.
+- `scripts/store-gate.mjs` (`npm run store:gate -- appletv 1.0.33`): exits 0 only when the public App Store lookup shows that version. Nothing else decides the Apple TV flip.
+- `content/android.json`, `content/android/android.html` and `scripts/android-section-check.mjs`: the Android TV page as an unbuilt scaffold with slots for the words, a switch that is off, and a check in `npm test` that fails if anything public points at it. The checklist to switch it on is in the JSON file.
+- `THIRD-PARTY-LICENSES.md` said the weather channel is CH 600; it is CH 299.
+
+**Half-done.**
+- `site/flip-appletv-1.0.33`: changelog entry `released: true`, README heading and What's new, the weather line on `/apple-tv`. Apply it when `npm run store:gate -- appletv 1.0.33` passes.
+- `site/flip-roku-1.0.13`: README heading and the weather line on `/roku`. Apply it when the Roku Channel Store shows the new version. There is no script for this one; Chad confirms it by eye.
+- Web tuner and Docker 1.0.23 are live, and their notes are on the GitHub release `tuner-v1.0.23`. The site has no page for web or Docker release notes, so none was added.
+
+**Next.** Marketing fills the slots marked `TODO(marketing)` (the 1.0.33 entry title, the Android page). The Android page does not go out until Google Play shows the app.
+
+
 ## 2026-11-16 (web tuner: a server switch stays in Settings, and CH 299 over a playing channel)
 
 **State.** Branch `web/settings-server-progress` off main `39c0b2a5`. Not merged, not pushed.

@@ -6,16 +6,29 @@
       "released": false,
       "title": "Programmes play to their own end, the guide cursor moves a programme at a time, and loading keeps the guide up",
       "bullets": [
-        "A file plays to its own end. The channel's schedule uses the file's real length, so a programme no longer stops a few seconds early or runs into the next one.",
-        "In the guide, Left and Right move a programme at a time, with the programme's own cell highlighted.",
-        "GUIDE TEXT SIZE has three steps: SMALLER, DEFAULT and LARGER.",
-        "UP NEXT is one line: the title in yellow, then the minutes left.",
-        "The guide info panel shows the poster beside its text, on Plex, Jellyfin and Emby.",
-        "The bundle stripe wraps around at both ends.",
-        "Switching server or library and RESCAN LIBRARY keep the guide on screen and say what is happening in its empty area, with STOP WAITING inside it.",
-        "Big Jellyfin and Emby collection lists load in pages of 500 instead of one large request.",
-        "OPEN IN JELLYFIN shows on Now Playing when Swiftfin is installed.",
-        "Searching for a server that finds only Emby, or only Jellyfin, names it and offers to switch."
+        "LOCAL WEATHER, channel 299: a weather channel that loops current conditions, today's forecast, a 5-day forecast and radar, with its own music. Set your city or postcode in Settings, Channels & Bundles, Local Weather, and pick Fahrenheit or Celsius or leave it on Auto. It sits in the guide as one long bar. Radar covers the United States, Canada and Germany.",
+        "Channel updates arrive without a new app version. Nostalgex checks for new channel rules when it opens and about once a day, and uses them the next time the guide is rebuilt, never in the middle of a programme.",
+        "Select on the bundle strip in the guide jumps to the first channel of that bundle. Left from the strip opens the bundle list.",
+        "Every show, film and music video now plays to its very end. The guide gives each one its real running time, down to the second, so nothing gets cut off in the last minute.",
+        "Moving left and right in the guide now steps one programme at a time, with the programme you are on lit up. The panel at the top shows that programme, even if it starts later.",
+        "Switching servers or libraries, or rescanning, now keeps the guide on screen and says what is happening in its empty area, with STOP WAITING if it stalls.",
+        "GUIDE TEXT SIZE has three steps: SMALLER, DEFAULT and LARGER. DEFAULT is a little smaller than before, and LARGER now makes the rows taller as well.",
+        "Posters in the guide's info panel, on Plex, Jellyfin and Emby. Now Playing shows posters on Jellyfin and Emby too.",
+        "UP NEXT now shows the next title first, then how many minutes until it starts.",
+        "OPEN IN JELLYFIN, when the Jellyfin app is installed on your Apple TV.",
+        "Picked Jellyfin but your server is Emby, or the other way round? Nostalgex now says which one it found and takes you to that sign-in.",
+        "Sync with your other Apple TVs now sits at the top of Servers & Accounts."
+      ],
+      "newChannels": [
+        "LOCAL WEATHER, channel 299. It shows in the guide until you switch it off under Settings, Channels & Bundles, Local Weather."
+      ],
+      "fixes": [
+        "A programme that runs past midnight now plays to its end.",
+        "A library update just after midnight no longer leaves Now Playing and Up Next empty.",
+        "Plex libraries list only movie and show libraries, and switching a library ends a scan that is still running.",
+        "The bundle strip in the guide now loops from the last bundle back to the first, like the channels do.",
+        "The Now Playing panel no longer shows a line of help text under its settings.",
+        "Jellyfin and Emby servers with very many collections now load them in parts."
       ]
     },
     {
