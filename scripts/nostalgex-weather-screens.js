@@ -217,7 +217,7 @@
     ctx.fillRect(x, y + 12, 10, h - 24);
     const blink = Math.floor(st.nowMs / 1000) % 2 === 0;
     text(ctx, blink ? '●' : '○', x + 34, y + 52, pixel(40), C.cyan, 'left');
-    text(ctx, `CH ${st.channelNumber || 600}`, x + 72, y + 51, pixel(40), C.cyan, 'left');
+    text(ctx, `CH ${st.channelNumber || NW().CHANNEL_NUMBER}`, x + 72, y + 51, pixel(40), C.cyan, 'left');
     text(ctx, title, x + 190, y + 51, mono(40, 500), C.text, 'left');
     // Right: the place and the local time.
     const tz = st.place && st.place.tz ? st.place.tz : null;
@@ -559,13 +559,13 @@
    * Recolors a radar image's pixels from the source's colours to our five bands (cyan, yellow, amber, red,
    * pink), in place. Anything that is not an echo becomes clear. `imageData` is an ImageData.
    */
-  function recolorRadar(imageData) {
+  function recolorRadar(imageData, ignoreBands) {
     const d = imageData.data;
     const rgb = C_BANDS();
     for (let i = 0; i < d.length; i += 4) {
       if (d[i + 3] < 40) { d[i + 3] = 0; continue; }
       const band = NW().radarBand(d[i], d[i + 1], d[i + 2]);
-      if (band < 0) { d[i + 3] = 0; continue; }
+      if (band < 0 || (ignoreBands && ignoreBands.includes(band))) { d[i + 3] = 0; continue; }
       d[i] = rgb[band][0]; d[i + 1] = rgb[band][1]; d[i + 2] = rgb[band][2]; d[i + 3] = 235;
     }
     return imageData;

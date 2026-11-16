@@ -13,8 +13,10 @@
 //              (api/weather.js). CC BY 4.0. Credit on screen: DATA FROM MET NORWAY.
 //   Places     GeoNames (CC BY 4.0), built into static files by scripts/build-weather-data.mjs and served
 //              from /weather/places/ (and shipped inside the Docker image).
-//   Radar      NOAA MRMS composites for the United States, Environment Canada GeoMet for Canada. Nowhere
-//              else yet: RADAR NOT AVAILABLE IN YOUR AREA.
+//   Radar      NOAA MRMS composites for the United States, Environment Canada GeoMet for Canada, DWD for Germany.
+//              Nowhere else yet: RADAR NOT AVAILABLE IN YOUR AREA.
+//   Music      one bundled, original loop (weather/music/local-forecast.m4a and .mp3, see THIRD-PARTY-LICENSES.md),
+//              played quietly under the screens and muted with the page's SOUND control.
 //
 // USAGE (browser: plain <script>; node: import it)
 //   const W = globalThis.NostalgexWeather;
@@ -24,12 +26,13 @@
   'use strict';
 
   // ── The channel ────────────────────────────────────────────────────────────
-  // CH 600: no id or number in channels.json (ids 1-425, numbers 1-513), none in the runtime
-  // blocks (franchises 310-399, collections 400-499), and clear of HIGH ROTATION's 500s, which
-  // channels.json can still grow. The id sits in the next free dynamic block (found franchises
-  // 1,000,000, franchise collections 1,010,000, collections 1,020,000), so a channel the viewer
-  // makes later (the next id is the highest plus one) can never take it.
-  const CHANNEL_NUMBER = 600;
+  // CH 299, just before the FRANCHISES package (300-309), the franchise and collection blocks (310-499) and HIGH ROTATION (500-519):
+  // the closest number below the music videos that nothing owns. channels.json uses ids 1-425 and numbers 1-513 (id and number differ
+  // for 123 channels), the Apple TV reserves packages 1-199, FRANCHISES 300-309, found franchises 310-399, other collections 400-499
+  // and HIGH ROTATION 500-519, and 200-299 is unused. The id sits in the next free dynamic block (found franchises 1,000,000,
+  // franchise collections 1,010,000, collections 1,020,000), so a channel the viewer makes later (the next id is the highest plus one)
+  // can never take it.
+  const CHANNEL_NUMBER = 299;
   const CHANNEL_ID = 1030000;
   const CHANNEL_NAME = 'LOCAL WEATHER';
   const CHANNEL_COLOR = '#00D4FF';
@@ -310,12 +313,14 @@
 
   // ── Radar ──────────────────────────────────────────────────────────────────
   // Region-limited on purpose: no open source covers the world and allows commercial use without a key.
+  //   DE   DWD Niederschlagsradar (maps.dwd.de), CC BY 4.0 with a source note: see the provider below.
   //   US   NOAA MRMS base reflectivity composites, https://opengeo.ncep.noaa.gov/geoserver/www/index.html
   //        (public domain: weather.gov/disclaimer). CONUS, Alaska, Hawaii, the Caribbean and Guam.
   //   CA   Environment and Climate Change Canada GeoMet, RADAR_1KM_RRAI (rain) and RADAR_1KM_RSNO (snow)
   //        (a licence that allows commercial use, credit "Data Source: Environment and Climate Change Canada").
   const NOAA_HOST = 'https://opengeo.ncep.noaa.gov/geoserver';
   const ECCC_HOST = 'https://geo.weather.gc.ca/geomet';
+  const DWD_HOST = 'https://maps.dwd.de/geoserver/dwd';
 
   function noaaLayer(lat, lon) {
     if (lon >= 140 && lon <= 150 && lat >= 10 && lat <= 22) return 'guam';
@@ -352,6 +357,24 @@
         mapUrl: (lyr, bbox, w, h, time) => `${ECCC_HOST}?service=WMS&version=1.3.0&request=GetMap&layers=${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(time)}` : ''}`,
       };
     }
+    if (cc === 'DE') {
+      // DWD's precipitation radar composite, one layer, a 5 minute step. Its capabilities for this layer alone are 41 KB (the whole server's
+      // is 983 KB). The time range runs past now (nowcast), so frames stop `lagMinutes` short of the clock. The style paints the area with no
+      // echo white, outside the radars grey, and the edge of the radar coverage in magenta, which is the colour of our EXTREME band, so that
+      // band is dropped: a real extreme echo shows as SEVERE.
+      return {
+        id: 'dwd',
+        // DWD's own wording for changed data (vorlagen_quellenangabe): the picture is the radar raster in our colours.
+        credit: 'Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben',
+        layers: ['Niederschlagsradar'],
+        stepMinutes: 10,
+        frames: 8,
+        lagMinutes: 10,
+        ignoreBands: [4],
+        capabilitiesUrl: () => `${DWD_HOST}/Niederschlagsradar/wms?service=WMS&version=1.3.0&request=GetCapabilities`,
+        mapUrl: (lyr, bbox, w, h, time) => `${DWD_HOST}/wms?service=WMS&version=1.3.0&request=GetMap&layers=dwd:${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(time)}` : ''}`,
+      };
+    }
     return null;
   }
 
@@ -386,8 +409,9 @@
     return text.split(',').map((s) => s.trim()).filter((s) => Number.isFinite(Date.parse(s))).map((s) => new Date(Date.parse(s)).toISOString());
   }
 
-  /** `count` frames ending at the newest time, about `stepMinutes` apart, oldest first. */
-  function pickFrameTimes(times, count, stepMinutes) {
+  /** `count` frames ending at the newest time, about `stepMinutes` apart, oldest first. Times after `notAfterMs` (when given) are not used. */
+  function pickFrameTimes(allTimes, count, stepMinutes, notAfterMs) {
+    const times = Number.isFinite(notAfterMs) ? allTimes.filter((t) => Date.parse(t) <= notAfterMs) : allTimes;
     if (!times.length) return [];
     const ms = times.map((t) => Date.parse(t));
     const out = [times[times.length - 1]];
@@ -575,29 +599,6 @@
     return { text: `UPDATED ${fmtClock(updatedMs, tz)}`, stale };
   }
 
-  // ── Music under the loop ───────────────────────────────────────────────────
-  // From the viewer's own library, and only if it has music videos. The picture stays the weather;
-  // the video's sound plays under it. One rule: a shuffled bag. Every music video once, in random
-  // order, before any plays again; the bag refills when empty. Items longer than 10 minutes (live sets,
-  // compilations) and shorter than 60 seconds are left out. Nothing to play: silence.
-  const MUSIC_MIN_SECONDS = 60;
-  const MUSIC_MAX_SECONDS = 600;
-  function musicPool(items) {
-    return (items || []).filter((it) => it && it.librarySource === 'musicVideo' && it.type !== 'episode' && it.ratingKey
-      && (!it.duration || (it.duration >= MUSIC_MIN_SECONDS && it.duration <= MUSIC_MAX_SECONDS)));
-  }
-  /** The next track: { item, bag } where bag is the keys still to play. Pass the returned bag back in. */
-  function nextTrack(pool, bag, rand) {
-    if (!pool.length) return { item: null, bag: [] };
-    const keyOf = (it) => `${it.serverId || ''}|${it.ratingKey}`;
-    const byKey = new Map(pool.map((it) => [keyOf(it), it]));
-    let rest = (bag || []).filter((k) => byKey.has(k));
-    if (!rest.length) rest = [...byKey.keys()];
-    const i = Math.floor((rand || Math.random)() * rest.length);
-    const k = rest[i];
-    return { item: byKey.get(k), bag: rest.filter((_, j) => j !== i) };
-  }
-
   // ── The guide row and the info panel ───────────────────────────────────────
   /** Hour-long guide blocks for the channel's row, `hours` of them from the top of the hour before now. */
   function guideBlocks(placeName, nowMs, hours) {
@@ -637,7 +638,6 @@
     radarProvider, radarBBox, parseTimeDimension, pickFrameTimes, radarBand, RADAR_BANDS,
     createPlaceIndex, postcodeLookup, normalizePlace, placeLabel,
     forecastUrl, forecastDue, forecastAge,
-    musicPool, nextTrack,
     guideBlocks, infoSummary,
   };
 

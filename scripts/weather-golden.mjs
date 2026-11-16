@@ -94,6 +94,8 @@ export function buildGolden(metPath) {
   const frames = {
     times: ['2026-11-15T15:00:00Z', '2026-11-15T15:10:00Z', '2026-11-15T15:20:00Z', '2026-11-15T15:30:00Z', '2026-11-15T15:40:00Z', '2026-11-15T15:50:00Z', '2026-11-15T16:00:00Z'],
     pick: W.pickFrameTimes(['2026-11-15T15:00:00Z', '2026-11-15T15:10:00Z', '2026-11-15T15:20:00Z', '2026-11-15T15:30:00Z', '2026-11-15T15:40:00Z', '2026-11-15T15:50:00Z', '2026-11-15T16:00:00Z'], 4, 10),
+    // Times after the cutoff (DWD's range runs past now) are not used.
+    pickNotAfter: W.pickFrameTimes(['2026-11-15T15:00:00Z', '2026-11-15T15:10:00Z', '2026-11-15T15:20:00Z', '2026-11-15T15:30:00Z', '2026-11-15T15:40:00Z', '2026-11-15T15:50:00Z', '2026-11-15T16:00:00Z'], 3, 10, Date.parse('2026-11-15T15:35:00Z')),
     range: W.parseTimeDimension('<Dimension name="time" units="ISO8601" default="2026-11-15T17:24:00Z" nearestValue="0">2026-11-15T16:48:00Z/2026-11-15T17:24:00Z/PT6M</Dimension>'),
     list: W.parseTimeDimension('<Dimension name="time" default="x" units="ISO8601" nearestValue="1">2026-11-15T15:24:06.000Z,2026-11-15T15:25:58.000Z</Dimension>'),
   }
@@ -101,7 +103,7 @@ export function buildGolden(metPath) {
   const providers = [
     { cc: 'US', lat: 40.71, lon: -74.0 }, { cc: 'US', lat: 64.84, lon: -147.72 }, { cc: 'US', lat: 21.3, lon: -157.86 }, { cc: 'US', lat: 18.4, lon: -66.1 },
     { cc: 'US', lat: 13.47, lon: 144.75 }, { cc: 'CA', lat: 43.65, lon: -79.38 }, { cc: 'GB', lat: 51.5, lon: -0.13 }, { cc: 'DE', lat: 52.5, lon: 13.4 },
-  ].map((p) => { const pr = W.radarProvider(p); return { ...p, provider: pr && pr.id, layers: pr && pr.layers, credit: pr && pr.credit, frames: pr && pr.frames, stepMinutes: pr && pr.stepMinutes } })
+  ].map((p) => { const pr = W.radarProvider(p); return { ...p, provider: pr && pr.id, layers: pr && pr.layers, credit: pr && pr.credit, frames: pr && pr.frames, stepMinutes: pr && pr.stepMinutes, lagMinutes: pr && (pr.lagMinutes || 0), ignoreBands: pr && (pr.ignoreBands || []) } })
   const postcode = [['US', '90210'], ['US', '902'], ['US', '9021'], ['DE', '10115'], ['AU', '2000'], ['CA', 'M5V 3L9'], ['CA', 'm5v'], ['GB', 'SW1A 1AA'], ['GB', 'SW1A1AA'], ['GB', 'sw1a'], ['GB', 'EC1'], ['GB', '90210'], ['US', 'toronto']]
     .map(([cc, text]) => ({ cc, text, key: W.postcodeLookup(cc, text) }))
 

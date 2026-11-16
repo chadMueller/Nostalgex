@@ -84,7 +84,7 @@ for (const line of unzipText(join(SRC, 'cities5000.zip'), 'cities5000.txt').spli
   if (key.length < 2) continue
   cityRows.push({ key, pop: Number(pop) || 0, cc, tz, lat: Number(lat), lon: Number(lon),
     row: [name, cc, regionFor(cc, a1), r2(lat), r2(lon), tzId(tz)] })
-  if ((cc === 'US' || cc === 'CA' || cc === 'MX' || cc === 'BS' || cc === 'CU') && Number(pop) >= 150000) bigCities.push([name, r2(lat), r2(lon), Number(pop)])
+  if (['US', 'CA', 'MX', 'BS', 'CU', 'DE', 'AT', 'CH', 'NL', 'BE', 'LU', 'FR', 'PL', 'CZ', 'DK'].includes(cc) && Number(pop) >= 150000) bigCities.push([name, r2(lat), r2(lon), Number(pop)])
 }
 cityRows.sort((a, b) => b.pop - a.pop)
 
@@ -186,9 +186,9 @@ writeFileSync(join(OUT, 'places', 'meta.json'), JSON.stringify({
 }))
 
 // ── Basemap ─────────────────────────────────────────────────────────────────
-// Only North America is drawn: that is where the radar sources are (NOAA covers the United States,
-// Alaska, Hawaii, the Caribbean and Guam; Environment Canada covers Canada).
-const REGIONS = [[-180, 5, -50, 85], [140, 10, 150, 22]]   // [minLon, minLat, maxLon, maxLat]
+// Only where there is radar is drawn: NOAA covers the United States, Alaska, Hawaii, the Caribbean and Guam;
+// Environment Canada covers Canada; DWD covers Germany.
+const REGIONS = [[-180, 5, -50, 85], [140, 10, 150, 22], [0, 44, 26, 58]]   // [minLon, minLat, maxLon, maxLat]: the Americas, Guam, Germany and its neighbours
 const inRegion = (lon, lat) => REGIONS.some(([a, b, c, d]) => lon >= a && lon <= c && lat >= b && lat <= d)
 const UNIT = 1000
 const TOLERANCE = 0.003   // degrees, about 300 m
@@ -270,7 +270,7 @@ const layers = {
 }
 bigCities.sort((a, b) => b[3] - a[3])
 writeFileSync(join(OUT, 'basemap.json'), JSON.stringify({
-  v: 1, unit: UNIT, layers, cities: bigCities.slice(0, 400).map(([n, la, lo]) => [n, la, lo]),
+  v: 1, unit: UNIT, layers, cities: bigCities.slice(0, 600).map(([n, la, lo]) => [n, la, lo]),
 }))
 
 // ── Report ──────────────────────────────────────────────────────────────────

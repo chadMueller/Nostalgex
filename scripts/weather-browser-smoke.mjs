@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /**
- * The weather channel (CH 600, LOCAL WEATHER) in the real plex-tuner.html, headless, against a Plex-shaped stub, a stub relay
+ * The weather channel (CH 299, LOCAL WEATHER) in the real plex-tuner.html, headless, against a Plex-shaped stub, a stub relay
  * (the golden MET document), and stub radar servers (NOAA and Environment Canada) that answer with generated pictures.
  *
  * At 1920x1080, 1280x720 and a phone (390x844) it tunes the channel and, for each of the four screens (CURRENT CONDITIONS, TODAY'S
  * FORECAST, 5-DAY FORECAST, RADAR), checks what is drawn (every fillText is recorded) and saves a screenshot. It also walks the
  * rest of the feature:
  *
- *   - the guide row (CH 600, LOCAL WEATHER, a programme) and the info panel (the place and a one-line summary);
+ *   - the guide row (CH 299, LOCAL WEATHER, a programme) and the info panel (the place and a one-line summary);
  *   - no location: the SET YOUR LOCATION IN SETTINGS card and its button; Settings > WEATHER: typing a city, picking a match,
  *     the units (AUTO is Fahrenheit for a US place, Celsius elsewhere) and the show/hide switch;
  *   - privacy: nothing but the page's own server, the relay and the two radar hosts is asked, and the only place that leaves the
  *     browser is the rounded one (2 decimals), to the relay, with the client header and no cookies;
- *   - radar: CA on Environment Canada (rain and snow layers), US on NOAA, a place with none gets RADAR NOT AVAILABLE IN YOUR AREA;
+ *   - radar: CA on Environment Canada (rain and snow layers), US on NOAA, Germany on DWD (its own source note, frames that stop before the clock,
+ *     the magenta coverage edge dropped), a place with none gets RADAR NOT AVAILABLE IN YOUR AREA;
  *   - credits: DATA FROM MET NORWAY on every screen, the radar source's on the radar, the licence line in Settings;
  *   - GUIDE TEXT SIZE LARGE makes the drawn text bigger and never moves the layout;
- *   - the music: a music video from the library plays under the loop (no Now Playing report, no failure card), none means silence;
+ *   - the music: one bundled loop (m4a and mp3 sources), fetched only when the channel is tuned, on the SOUND control, stopped with the channel;
  *   - a relay that fails: FORECAST UNAVAILABLE RIGHT NOW, and it recovers.
  *
  * SHOTS=/dir saves the screenshots. Needs Playwright (not a dependency): PLAYWRIGHT=/path/to/playwright/index.mjs, or a resolvable
@@ -58,6 +59,19 @@ function radarPng(w, h, time) {
   });
 }
 
+// DWD's picture: opaque. White where there is no echo, grey outside the radars, the edge of the coverage drawn in magenta, echoes in between.
+function dwdPng(w, h, time) {
+  const minutes = Math.floor(Date.parse(time) / 60000) % 60;
+  const cx = 150 + minutes * 2, cy = 90;
+  return png(w, h, (x, y) => {
+    if (x < 12) return [190, 190, 190, 255];
+    if (x < 14) return [230, 50, 230, 255];
+    const d = Math.hypot(x - cx, (y - cy) * 1.2);
+    if (d < 36) return [...RINGS[Math.min(RINGS.length - 2, Math.floor((1 - d / 36) * (RINGS.length - 1)))], 255];
+    return [255, 255, 255, 255];
+  });
+}
+
 const GENRES = ["Action", "Comedy", "Drama", "Family"];
 const media = (i) => [{ container: "mp4", videoResolution: "720", bitrate: 2000, videoCodec: "h264", audioCodec: "aac", Part: [{ key: `/library/parts/${i}/file.mp4` }] }];
 const film = (i) => ({ ratingKey: String(1000 + i), title: `Family Day ${i}`, summary: `Film ${i}.`, year: 1980 + (i % 30), duration: (84 + (i % 40)) * 60000, type: "movie", addedAt: 1600000000 + i, contentRating: "PG", rating: 7, Genre: [{ tag: GENRES[i % 4] }, { tag: "Family" }], Guid: [{ id: `tmdb://${5000 + i}` }], Media: media(i), thumb: `/library/metadata/${1000 + i}/thumb/1` });
@@ -91,7 +105,9 @@ for (const pkg of ["vt323", "press-start-2p", "silkscreen"]) {
   const f = join(NODE_MODULES, "@fontsource", pkg, "400.css");
   if (existsSync(f)) fontCss += readFileSync(f, "utf8").replace(/url\(\.\/files\/([^)]+)\)/g, (m, name) => `url(__FONTS__/${pkg}/${name})`) + "\n";
 }
+const fileLog = [];
 const files = http.createServer((req, res) => {
+  fileLog.push(req.url.split("?")[0]);
   const fm = /^\/__fonts\/([a-z0-9-]+)\/([^/?]+)$/.exec(req.url.split("?")[0]);
   if (fm) {
     const f = join(NODE_MODULES, "@fontsource", fm[1], "files", fm[2]);
@@ -134,7 +150,7 @@ async function open({ width, height, mobile = false, place = TORONTO, relay = "o
   const radarCalls = [];
   let relayMode = relay;
   await ctx.route(/fonts\.googleapis\.com\/css2/, (route) => route.fulfill({ contentType: "text/css", headers: { "access-control-allow-origin": "*" }, body: fontCss.replaceAll("__FONTS__", `${base}/__fonts`) }));
-  await ctx.route((u) => !/^127\.0\.0\.1$/.test(u.hostname) && !/^(fonts\.googleapis\.com|opengeo\.ncep\.noaa\.gov|geo\.weather\.gc\.ca|www\.nostalgex\.app)$/.test(u.hostname), (route) => { seen.push(route.request().url()); return route.abort(); });
+  await ctx.route((u) => !/^127\.0\.0\.1$/.test(u.hostname) && !/^(fonts\.googleapis\.com|opengeo\.ncep\.noaa\.gov|geo\.weather\.gc\.ca|maps\.dwd\.de|www\.nostalgex\.app)$/.test(u.hostname), (route) => { seen.push(route.request().url()); return route.abort(); });
   await ctx.route(/\/api\/weather/, async (route) => {
     // A self-hosted tuner asks the site from another origin: the browser sends a preflight first, and the relay answers it.
     if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "x-nostalgex-client", "access-control-allow-methods": "GET, OPTIONS" } });
@@ -142,11 +158,19 @@ async function open({ width, height, mobile = false, place = TORONTO, relay = "o
     if (relayMode === "fail") return route.fulfill({ status: 502, contentType: "application/json", body: '{"error":"Forecast unavailable"}' });
     return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(golden.met) });
   });
-  await ctx.route(/opengeo\.ncep\.noaa\.gov|geo\.weather\.gc\.ca/, (route) => {
+  await ctx.route(/opengeo\.ncep\.noaa\.gov|geo\.weather\.gc\.ca|maps\.dwd\.de/, (route) => {
     const u = new URL(route.request().url());
     radarCalls.push(route.request().url());
     const q = u.searchParams;
     const cors = { "access-control-allow-origin": "*" };
+    if (u.hostname.includes("dwd")) {
+      if ((q.get("request") || "").toLowerCase() === "getcapabilities") {
+        // DWD's range runs two hours past now (nowcast); the second dimension is the long list the layer-only capabilities also carry.
+        const dim = `<Dimension name="time" default="current" units="ISO8601">${new Date(NOW - 3 * 86400000).toISOString()}/${new Date(Math.floor((NOW + 2 * 3600000) / 300000) * 300000).toISOString()}/PT5M</Dimension><Dimension name="REFERENCE_TIME" default="x" units="ISO8601">2026-11-12T00:00:00.000Z,2026-11-12T00:05:00.000Z</Dimension>`;
+        return route.fulfill({ status: 200, contentType: "text/xml", headers: cors, body: `<WMS_Capabilities>${dim}</WMS_Capabilities>` });
+      }
+      return route.fulfill({ status: 200, contentType: "image/png", headers: cors, body: dwdPng(Number(q.get("width")), Number(q.get("height")), q.get("time") || new Date(NOW).toISOString()) });
+    }
     if ((q.get("request") || "").toLowerCase() === "getcapabilities") {
       const dim = u.hostname.includes("noaa")
         ? `<Dimension name="time" default="x" units="ISO8601" nearestValue="1">${Array.from({ length: 40 }, (_, i) => new Date(NOW - 8 * 60000 - (39 - i) * 2 * 60000).toISOString()).join(",")}</Dimension>`
@@ -220,7 +244,7 @@ for (const [tag, w, h, mobile] of SIZES) {
     const strings = text.map((t) => t[0]);
     results[`${tag}/${id}`] = strings;
     check(`${tag} ${id}: the screen's title`, strings.includes(TITLES[id]), JSON.stringify(strings.slice(0, 8)));
-    check(`${tag} ${id}: DATA FROM MET NORWAY`, strings.includes("DATA FROM MET NORWAY"));
+    check(`${tag} ${id}: DATA FROM MET NORWAY, and CH 299`, strings.includes("DATA FROM MET NORWAY") && strings.includes("CH 299"));
     check(`${tag} ${id}: the place and the clock in the header`, strings.includes("TORONTO, ON") && strings.some((t) => /^\d{1,2}:\d{2} [AP]M$/.test(t)));
     check(`${tag} ${id}: drawn with DM Mono and VT323`, text.some((t) => /DM Mono/.test(t[1])) && text.some((t) => /VT323/.test(t[1])));
     check(`${tag} ${id}: the canvas holds a picture`, (await canvasInk(page)) > 8);
@@ -247,9 +271,9 @@ for (const [tag, w, h, mobile] of SIZES) {
       const r = document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`);
       return r ? { num: r.querySelector(".grid-ch-num").textContent.trim(), name: r.querySelector(".grid-ch-name").textContent.trim(), prog: [...r.querySelectorAll(".grid-program")].map((p) => p.textContent.trim()), active: r.classList.contains("active") } : null;
     }, CH_ID);
-    check("guide: CH 600 LOCAL WEATHER with a programme, and it is the one playing", row && row.num === "600" && row.name === "LOCAL WEATHER" && row.prog.length >= 1 && /LOCAL WEATHER/.test(row.prog[0]) && row.active, JSON.stringify(row));
+    check("guide: CH 299 LOCAL WEATHER with a programme, and it is the one playing", row && row.num === "299" && row.name === "LOCAL WEATHER" && row.prog.length >= 1 && /LOCAL WEATHER/.test(row.prog[0]) && row.active, JSON.stringify(row));
     const info = await page.evaluate(() => ({ tag: document.getElementById("info-channel-tag").textContent, title: document.getElementById("info-title").textContent, ep: document.getElementById("info-episode-title").textContent, desc: document.getElementById("info-description").textContent }));
-    check("info panel: the channel, the place, a summary", /CH 600 - LOCAL WEATHER/.test(info.tag) && info.title === "LOCAL WEATHER" && info.ep === "TORONTO, ON, CA" && /^Cloudy, 6°C\./.test(info.desc), JSON.stringify(info));
+    check("info panel: the channel, the place, a summary", /CH 299 - LOCAL WEATHER/.test(info.tag) && info.title === "LOCAL WEATHER" && info.ep === "TORONTO, ON, CA" && /^Cloudy, 6°C\./.test(info.desc), JSON.stringify(info));
     await page.evaluate((id) => { const r = document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`); if (r) r.scrollIntoView({ block: "center" }); }, CH_ID);
     await page.waitForTimeout(300);
     await shot(page, "guide-with-weather-1920x1080");
@@ -381,32 +405,76 @@ for (const [tag, w, h, mobile] of SIZES) {
   await b.ctx.close();
 }
 
-// ═══ 5. The music: the viewer's own music videos, else silence ═══
+// ═══ 5. The music: one bundled loop, on the SOUND control ═══
 {
+  const asked = () => fileLog.filter((u) => /local-forecast/.test(u)).length;
+  const was = asked();
   const s = await open({ width: 1920, height: 1080 });
   const { page } = s;
-  const none = await page.evaluate((id) => { switchChannel(id, true); return { item: WX.musicItem, src: document.getElementById("plex-video").getAttribute("src") }; }, CH_ID);
-  check("no music videos in the library: silence (no source on the video)", none.item === null && !none.src, JSON.stringify(none));
+  const before = asked() - was;   // loading the tuner and its guide fetches none of it
+  const el = await page.evaluate(() => { const a = document.getElementById("weather-music"); return { loop: a.loop, preload: a.preload, paused: a.paused, src: a.getAttribute("src"), sources: a.querySelectorAll("source").length }; });
+  check("the loop is an audio element that loops, with no source and nothing fetched before the channel is tuned", el.loop && el.preload === "none" && el.paused && el.src === null && el.sources === 0 && before === 0, JSON.stringify([el, before]));
   await page.evaluate(() => {
-    const other = CHANNELS.find((c) => !c.weather && c.enabled);
-    switchChannel(other.id, true);
-    for (let i = 0; i < 3; i++) allItemsCache.push({ librarySource: "musicVideo", type: "movie", ratingKey: `m${i}`, title: `Song ${i}`, artist: `Band ${i}`, duration: 210, container: "mp4", videoCodec: "h264", audioCodec: "aac", serverUrl: undefined, partKey: `/library/parts/m${i}/file.mp4`, year: 1991 });
+    // Music videos in the library are not used for the channel any more.
+    allItemsCache.push({ librarySource: "musicVideo", type: "movie", ratingKey: "m1", title: "Song", artist: "Band", duration: 210, container: "mp4", videoCodec: "h264", audioCodec: "aac", year: 1991 });
   });
-  await page.waitForTimeout(300);
   await tune(page);
-  await page.waitForFunction(() => WX.musicItem && document.getElementById("plex-video").getAttribute("src"), null, { timeout: 10000 });
-  const m = await page.evaluate(() => ({ item: WX.musicItem.title, src: document.getElementById("plex-video").getAttribute("src"), tracker: playbackTracker, upnext: document.getElementById("info-upnext").textContent }));
-  check("a music video plays under the loop (the stub server is asked for one of the three)", /library(%2F|\/)(metadata%2Fm|parts\/m)\d/.test(m.src) && /^Song \d$/.test(m.item), JSON.stringify(m));
-  check("the music is never reported as watched (no tracker)", m.tracker === null);
-  check("the info panel names the track", /^♪ Band \d · Song \d$/.test(m.upnext), m.upnext);
-  await page.waitForTimeout(1500);
-  const fail = await page.evaluate(() => ({ active: document.getElementById("channel-display").classList.contains("has-failure"), status: document.getElementById("display-status").textContent }));
-  check("a track the server cannot play shows no failure card over the weather", !fail.active && fail.status === "", JSON.stringify(fail));
-  const keys = await page.evaluate(() => { const seen = new Set(); for (let i = 0; i < 4; i++) { const r = WXE.nextTrack(WXE.musicPool(allItemsCache), WX.musicBag, Math.random); WX.musicBag = r.bag; seen.add(r.item.ratingKey); } return [...seen].length; });
-  check("the bag picks different tracks", keys >= 2);
-  await page.evaluate((id) => { const other = CHANNELS.find((c) => !c.weather && c.enabled); switchChannel(other.id, true); }, CH_ID);
-  check("leaving the channel ends the weather screen", await page.evaluate(() => !document.getElementById("weather-screen").classList.contains("on") && WX.timer === null));
+  await page.waitForFunction(() => document.getElementById("weather-screen").classList.contains("on") && !document.getElementById("weather-music").paused, null, { timeout: 10000 });
+  const on = await page.evaluate(() => { const a = document.getElementById("weather-music"); return { paused: a.paused, muted: a.muted, videoSrc: document.getElementById("plex-video").getAttribute("src"), tracker: playbackTracker, up: document.getElementById("info-upnext").textContent, volume: a.volume }; });
+  check("tuned: the m4a (or the mp3 where AAC is not played) is the source", await page.evaluate(() => /^weather\/music\/local-forecast\.(m4a|mp3)$/.test(document.getElementById("weather-music").getAttribute("src"))));
+  check("tuned: the loop plays, muted like the page until SOUND is turned on, no video under it, no watch report", !on.paused && on.muted === true && !on.videoSrc && on.tracker === null, JSON.stringify(on));
+  check("tuned: the page's own file (weather/music/) is asked for, now", asked() - was >= 1 && fileLog.slice(-20).some((u) => /\/weather\/music\/local-forecast\.(m4a|mp3)$/.test(u)), JSON.stringify(fileLog.filter((u) => /music/.test(u))));
+  check("no music video from the library is played or named", !on.up && !(await page.evaluate(() => /Band|Song/.test(document.getElementById("info-panel").textContent))));
+  await page.evaluate(() => toggleMute());
+  check("SOUND on: the loop is audible", await page.evaluate(() => document.getElementById("weather-music").muted === false && videoMuted === false));
+  await page.evaluate(() => toggleMute());
+  check("SOUND off: the loop is muted again", await page.evaluate(() => document.getElementById("weather-music").muted === true));
+  const meta = await page.evaluate(() => new Promise((resolve) => {
+    const a = document.getElementById("weather-music");
+    if (a.readyState >= 1) return resolve({ d: a.duration, ok: true });
+    const t = setTimeout(() => resolve({ d: null, ok: !!(a.canPlayType("audio/mpeg") || a.canPlayType("audio/mp4")) }), 6000);
+    a.addEventListener("loadedmetadata", () => { clearTimeout(t); resolve({ d: a.duration, ok: true }); }, { once: true });
+  }));
+  check("the loop is 2 to 4 minutes long (when this browser can decode it)", meta.d === null ? !meta.ok : (meta.d > 120 && meta.d < 240), JSON.stringify(meta));
+  await page.evaluate(() => { stopVideo(); });
+  check("the sleep timer's stop (stopVideo) stops the loop", await page.evaluate(() => document.getElementById("weather-music").paused));
+  await page.evaluate((id) => { currentChannel = null; switchChannel(id, true); }, CH_ID);
+  await page.waitForFunction(() => !document.getElementById("weather-music").paused, null, { timeout: 5000 });
+  await page.evaluate(() => { const other = CHANNELS.find((c) => !c.weather && c.enabled); switchChannel(other.id, true); });
+  check("leaving the channel stops the loop and the weather screen", await page.evaluate(() => document.getElementById("weather-music").paused && !document.getElementById("weather-screen").classList.contains("on") && WX.timer === null));
   check("music: no errors", s.errors.length === 0, s.errors.join(" | "));
+  await s.ctx.close();
+}
+
+// ═══ 5a. Germany: DWD radar ═══
+{
+  const BERLIN = { name: "Berlin", region: "Land Berlin", cc: "DE", lat: 52.52, lon: 13.41, tz: "Europe/Berlin", kind: "city" };
+  const s = await open({ width: 1920, height: 1080, place: BERLIN });
+  const { page } = s;
+  await tune(page);
+  await page.waitForFunction(() => document.getElementById("weather-screen").classList.contains("on") && WX.model && WX.fonts, null, { timeout: 15000 });
+  await setClock(page, at(3));
+  await page.waitForFunction(() => WX.radar.status === "ready" && WX.radar.frames.length >= 4, null, { timeout: 15000 });
+  const clock = at(3);
+  const strings = (await drawn(page)).map((t) => t[0]);
+  check("Germany: DWD's own source note, in its wording, on the radar", strings.includes("Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben") && strings.includes("DATA FROM MET NORWAY") && !strings.includes("RADAR NOT AVAILABLE IN YOUR AREA"), JSON.stringify(strings));
+  const caps = s.radarCalls.filter((u) => /GetCapabilities/i.test(u));
+  check("Germany: only the one layer's capabilities are asked for (not the whole server's)", caps.length === 1 && caps[0].startsWith("https://maps.dwd.de/geoserver/dwd/Niederschlagsradar/wms?"), JSON.stringify(caps));
+  const maps = s.radarCalls.filter((u) => /GetMap/i.test(u));
+  const times = maps.map((u) => Date.parse(decodeURIComponent(/time=([^&]+)/.exec(u)[1])));
+  check("Germany: eight frames of the one layer, a 10 minute step, none after the clock minus 10 minutes (the range runs into the nowcast)", maps.length === 8 && maps.every((u) => /layers=dwd:Niederschlagsradar/.test(u)) && times.every((t) => t <= clock - 10 * 60000) && times.every((t, i) => i === 0 || Math.abs(t - times[i - 1] - 600000) < 6 * 60000), JSON.stringify(times.map((t) => new Date(t).toISOString())));
+  const px = await page.evaluate(() => {
+    const f = WX.radar.frames[0].canvas, g = f.getContext("2d");
+    const at = (x, y) => Array.from(g.getImageData(x, y, 1, 1).data);
+    let echo = 0, extreme = 0;
+    const d = g.getImageData(0, 0, f.width, f.height).data;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0) { echo++; if (d[i] === 255 && d[i + 1] === 45 && d[i + 2] === 180) extreme++; }
+    return { grey: at(5, 50), edge: at(12, 50), edge2: at(13, 50), white: at(300, 10), echo, extreme };
+  });
+  check("Germany: grey outside the radars, white without echo and the magenta coverage edge are clear; echoes are drawn", px.grey[3] === 0 && px.white[3] === 0 && px.edge[3] === 0 && px.edge2[3] === 0 && px.echo > 200, JSON.stringify(px));
+  check("Germany: the EXTREME band is not drawn (the style's edge colour is its colour)", px.extreme === 0, String(px.extreme));
+  await shot(page, "weather-radar-germany-1920x1080");
+  check("Germany: no errors", s.errors.length === 0, s.errors.join(" | "));
   await s.ctx.close();
 }
 

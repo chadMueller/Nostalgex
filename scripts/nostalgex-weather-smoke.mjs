@@ -54,6 +54,7 @@ await check("golden: every derived table still matches the engine", () => {
     assert.ok(Math.abs(r.elapsed - a.elapsed) < 1e-9);
   }
   assert.deepEqual(W.pickFrameTimes(golden.frames.times, 4, 10), golden.frames.pick);
+  assert.deepEqual(W.pickFrameTimes(golden.frames.times, 3, 10, Date.parse('2026-11-15T15:35:00Z')), golden.frames.pickNotAfter);
   for (const b of golden.bbox) assert.deepEqual(W.radarBBox(b.lat, b.lon, b.aspect, b.span), b.bbox);
   for (const p of golden.providers) {
     const pr = W.radarProvider({ cc: p.cc, lat: p.lat, lon: p.lon });
@@ -153,16 +154,23 @@ await check("units: F in the US, C elsewhere, a setting wins", () => {
 });
 
 // ── 3. Radar rules ──
-await check("radar: United States on NOAA, Canada on Environment Canada, nowhere else yet", () => {
+await check("radar: United States on NOAA, Canada on Environment Canada, Germany on DWD, nowhere else yet", () => {
   assert.equal(W.radarProvider({ cc: "US", lat: 40, lon: -74 }).id, "noaa");
   assert.equal(W.radarProvider({ cc: "CA", lat: 43, lon: -79 }).id, "eccc");
-  for (const cc of ["GB", "DE", "AU", "FR", "MX", ""]) assert.equal(W.radarProvider({ cc, lat: 50, lon: 0 }), null, cc);
+  for (const cc of ["GB", "AU", "FR", "MX", ""]) assert.equal(W.radarProvider({ cc, lat: 50, lon: 0 }), null, cc);
   assert.equal(W.radarProvider(null), null);
   const url = W.radarProvider({ cc: "US", lat: 40, lon: -74 }).mapUrl("conus_bref_qcd", [-80, 37, -68, 43], 480, 270, "2026-11-15T17:00:00Z");
   assert.ok(url.startsWith("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?"));
   assert.ok(url.includes("crs=CRS:84") && url.includes("bbox=-80,37,-68,43") && url.includes("time=2026-11-15T17%3A00%3A00Z"));
   assert.ok(W.radarProvider({ cc: "CA", lat: 43, lon: -79 }).mapUrl("RADAR_1KM_RRAI", [1, 2, 3, 4], 10, 10).startsWith("https://geo.weather.gc.ca/geomet?"));
   assert.equal(W.radarProvider({ cc: "CA", lat: 43, lon: -79 }).credit, "DATA SOURCE: ENVIRONMENT AND CLIMATE CHANGE CANADA");
+  const de = W.radarProvider({ cc: "DE", lat: 52.5, lon: 13.4 });
+  assert.equal(de.id, "dwd");
+  assert.equal(de.credit, "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben", "DWD's own wording for changed data");
+  assert.deepEqual([de.layers, de.stepMinutes, de.frames, de.lagMinutes, de.ignoreBands], [["Niederschlagsradar"], 10, 8, 10, [4]]);
+  assert.ok(de.capabilitiesUrl().startsWith("https://maps.dwd.de/geoserver/dwd/Niederschlagsradar/wms?"), "the one layer's capabilities, not the whole server's (983 KB)");
+  const u = de.mapUrl("Niederschlagsradar", [5, 50, 15, 55], 435, 175, "2026-11-15T17:00:00.000Z");
+  assert.ok(u.startsWith("https://maps.dwd.de/geoserver/dwd/wms?") && u.includes("layers=dwd:Niederschlagsradar") && u.includes("crs=CRS:84") && u.includes("bbox=5,50,15,55"));
 });
 await check("radar map window: a degree of longitude is drawn cos(lat) as wide", () => {
   for (const lat of [10, 43.65, 64.84]) {
@@ -250,23 +258,6 @@ await check("never asked again before Expires, not more often than the window", 
   assert.deepEqual(a, { text: "UPDATED 8:19 AM", stale: false });
   assert.equal(W.forecastAge(Date.parse("2026-11-15T01:00:00Z"), Date.parse("2026-11-15T14:00:00Z"), "UTC").stale, true);
 });
-await check("music: a shuffled bag of the viewer's own music videos", () => {
-  const mv = (n, extra = {}) => ({ librarySource: "musicVideo", ratingKey: String(n), serverId: "s", duration: 200, ...extra });
-  const items = [mv(1), mv(2), mv(3), mv(4, { duration: 30 }), mv(5, { duration: 3600 }), { librarySource: "movie", ratingKey: "9", duration: 200 }, mv(6, { ratingKey: "" })];
-  const pool = W.musicPool(items);
-  assert.deepEqual(pool.map((i) => i.ratingKey), ["1", "2", "3"]);
-  assert.deepEqual(W.nextTrack([], [], Math.random), { item: null, bag: [] });
-  let seq = [0.99, 0.0, 0.5, 0.2];
-  const rand = () => seq.shift();
-  let bag = [];
-  const played = [];
-  for (let i = 0; i < 3; i++) { const r = W.nextTrack(pool, bag, rand); played.push(r.item.ratingKey); bag = r.bag; }
-  assert.deepEqual([...played].sort(), ["1", "2", "3"], "every track once before any repeats");
-  assert.equal(bag.length, 0);
-  const again = W.nextTrack(pool, bag, rand);
-  assert.ok(again.item && again.bag.length === 2, "the bag refills");
-  assert.deepEqual(W.musicPool(null), []);
-});
 await check("guide blocks: hour-long, contiguous, cover now", () => {
   const now = Date.parse("2026-11-15T18:20:00Z");
   const b = W.guideBlocks("TORONTO", now, 26);
@@ -276,17 +267,40 @@ await check("guide blocks: hour-long, contiguous, cover now", () => {
 });
 
 // ── 6. The channel's rules ──
-await check("CH 600 clashes with no channel id or number", () => {
+await check("CH 299 clashes with no channel id or number, and is the closest free number below the music videos", () => {
   const data = JSON.parse(read("channels.json"));
   const ids = new Set(data.channels.map((c) => c.id));
   const numbers = new Set(data.channels.map((c) => c.number));
+  assert.equal(W.CHANNEL_NUMBER, 299);
   assert.ok(!ids.has(W.CHANNEL_ID) && !numbers.has(W.CHANNEL_ID));
-  assert.ok(!ids.has(W.CHANNEL_NUMBER) && !numbers.has(W.CHANNEL_NUMBER));
-  assert.ok(W.CHANNEL_NUMBER >= 514, "past HIGH ROTATION's block");
-  assert.ok(!(W.CHANNEL_NUMBER >= 300 && W.CHANNEL_NUMBER <= 499), "outside the franchise and collection blocks");
+  assert.ok(!ids.has(W.CHANNEL_NUMBER) && !numbers.has(W.CHANNEL_NUMBER), "not an id or a number in channels.json");
+  // What the Apple TV reserves (Channel.swift): packages 1-199, FRANCHISES 300-309, found franchises and franchise collections 310-399,
+  // other collections 400-499, HIGH ROTATION 500-519. 299 is the highest number under all of them that nothing owns.
+  const reserved = (n) => n <= 199 || (n >= 300 && n <= 519);
+  assert.ok(!reserved(W.CHANNEL_NUMBER));
+  for (let n = W.CHANNEL_NUMBER + 1; n < 520; n++) assert.ok(reserved(n) || numbers.has(n) || ids.has(n), `${n} is free and closer to the music videos`);
   // The dynamic id blocks: found franchises 1,000,000, franchise collections 1,010,000, collections 1,020,000 (100 each).
   assert.ok(W.CHANNEL_ID >= 1030000);
   assert.equal(W.CHANNEL_NAME, "LOCAL WEATHER");
+});
+await check("the music is ours: the MIDI source, the sound set's licence, files under 2 MB, no music video path", () => {
+  const dir = new URL("../public/weather/music/", import.meta.url);
+  for (const f of ["local-forecast.m4a", "local-forecast.mp3"]) {
+    const size = readFileSync(new URL(f, dir)).length;
+    assert.ok(size > 500_000 && size < 2_000_000, `${f} is ${size} bytes`);
+  }
+  assert.ok(readFileSync(new URL("local-forecast.mp3", dir)).subarray(0, 3).toString("latin1") === "ID3" || readFileSync(new URL("local-forecast.mp3", dir))[0] === 0xff, "an mp3");
+  assert.ok(readFileSync(new URL("local-forecast.m4a", dir)).subarray(4, 8).toString("latin1") === "ftyp", "an m4a");
+  const lic = readFileSync(new URL("LICENSE-FluidR3_GM.txt", dir), "utf8");
+  assert.ok(/Frank Wen/.test(lic) && /License: MIT/.test(lic) && /Permission is hereby granted, free of charge/.test(lic));
+  const mid = readFileSync(new URL("../scripts/weather-music/local-forecast.mid", import.meta.url));
+  assert.equal(mid.subarray(0, 4).toString("latin1"), "MThd");
+  assert.ok(existsSync(root + "scripts/weather-music/compose.py") && existsSync(root + "scripts/weather-music/render.sh"));
+  const third = read("THIRD-PARTY-LICENSES.md");
+  assert.ok(/FluidR3_GM/.test(third) && /Frank Wen/.test(third) && /local-forecast/.test(third) && /Deutscher Wetterdienst/.test(third));
+  const page = read("plex-tuner.html");
+  assert.ok(!/musicPool|nextTrack|_weatherBed|wxMusicLine/.test(page + read("scripts/nostalgex-weather.js")), "the library music video path is gone");
+  assert.ok(page.includes('id="weather-music"') && /local-forecast\.\$\{/.test(page) && /'m4a' : 'mp3'/.test(page), "the loop's source is set when the channel is tuned");
 });
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const sources = ["scripts/nostalgex-weather.js", "scripts/nostalgex-weather-screens.js"].filter((p) => existsSync(root + p)).map((p) => [p, strip(read(p))]);

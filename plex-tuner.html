@@ -3907,9 +3907,11 @@
            channel loads; this tells it there is nothing to draw. -->
       <video id="plex-video" autoplay muted playsinline webkit-playsinline poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
 
-      <!-- The weather channel (CH 600): drawn by the page, over the video. See WEATHER CHANNEL in the script. -->
+      <!-- The weather channel (CH 299): drawn by the page, over the video. See WEATHER CHANNEL in the script. -->
       <canvas id="weather-screen" width="1920" height="1080" role="img" aria-label="Local weather: current conditions, today's forecast, the 5-day forecast and radar"></canvas>
       <div id="weather-actions"><button class="nx-btn" type="button" onclick="wxOpenSettings()">SET LOCATION</button></div>
+      <!-- The weather channel's music: one original loop, quiet, on the SOUND control. Nothing is fetched until the channel is tuned. -->
+      <audio id="weather-music" loop preload="none"></audio>
 
       <!-- Unmute button -->
       <button class="unmute-btn" id="unmute-btn">CLICK TO UNMUTE &nbsp;/&nbsp; M KEY</button>
@@ -4326,7 +4328,7 @@
         </div>
       </div>
       <div class="config-section-label" id="wx-section" style="margin-top: 28px;">WEATHER</div>
-      <!-- LOCAL WEATHER, CH 600: a loop of current conditions, today's forecast, the 5-day forecast and radar. Real buttons and a text box,
+      <!-- LOCAL WEATHER, CH 299: a loop of current conditions, today's forecast, the 5-day forecast and radar. Real buttons and a text box,
            so a TV browser with no keys can set it up. -->
       <div class="cfg-row cfg-row--wrap">
         <div>
@@ -4357,11 +4359,11 @@
       <div class="cfg-row">
         <div>
           <div class="cfg-row-title">Show the weather channel</div>
-          <div class="cfg-row-desc">LOCAL WEATHER, channel 600, in the guide. Off takes it out.</div>
+          <div class="cfg-row-desc">LOCAL WEATHER, channel 299, in the guide. Off takes it out.</div>
         </div>
         <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
       </div>
-      <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service and Environment and Climate Change Canada. Map outlines from Natural Earth. To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
+      <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service, Environment and Climate Change Canada and the Deutscher Wetterdienst (Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben, CC BY 4.0). Map outlines from Natural Earth. Music: an original loop played with the FluidR3_GM sound set (MIT). To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
     </div>
 
     <div id="config-tab-server" style="display:none" tabindex="-1">
@@ -4826,7 +4828,7 @@
   // ══════════════════════════════════════
   // WEATHER CHANNEL (Trello I-016)
   // ══════════════════════════════════════
-  // CH 600, LOCAL WEATHER: a 24/7 local-forecast loop the page draws itself on a canvas over the video
+  // CH 299, LOCAL WEATHER: a 24/7 local-forecast loop the page draws itself on a canvas over the video
   // (scripts/nostalgex-weather-screens.js). CURRENT CONDITIONS, TODAY'S FORECAST, the 5-DAY FORECAST, RADAR.
   // The rules and the numbers are scripts/nostalgex-weather.js, the reference the Apple TV, Roku and Android
   // ports follow (scripts/weather-golden.json holds them to it).
@@ -4836,7 +4838,7 @@
   // Data: the forecast through the site's relay (api/weather.js, MET Norway), the place from the viewer's own
   // typing (static GeoNames files under weather/places/), radar from NOAA (US) or Environment Canada (Canada).
   // Nothing leaves the browser until the forecast call, and that call carries the town rounded to 2 decimals.
-  // Music under the loop: one of the viewer's own music videos, if the library has any, else silence.
+  // Music under the loop: one bundled, original loop (weather/music/local-forecast.m4a and .mp3), on the page's own SOUND control.
   // A page whose helper scripts did not load (a stale cache, a test that runs the page in a bare VM) simply has no weather channel.
   const WXE = globalThis.NostalgexWeather || null;
   const WXS = globalThis.NostalgexWeatherScreens || null;
@@ -4850,7 +4852,6 @@
     met: null, metKey: '', savedMs: 0, expiresMs: 0, loading: false, failedMs: 0, model: null, status: 'noplace',
     radar: { status: 'none', key: '', frames: [], provider: null, base: null, loadedMs: 0, loading: false },
     basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false,
-    musicBag: [], musicItem: null,
     index: null, results: [], searchSeq: 0, searchTimer: null,
   };
   function wxStored(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -4992,7 +4993,8 @@
       const w = Math.round(WXS.MAP.w / 4), h = Math.round(WXS.MAP.h / 4);
       const capsRes = await fetch(provider.capabilitiesUrl(provider.layers[0]));
       if (!capsRes.ok) throw new Error(`capabilities ${capsRes.status}`);
-      const stamps = WXE.pickFrameTimes(WXE.parseTimeDimension(await capsRes.text()), provider.frames, provider.stepMinutes);
+      // Frames end `lagMinutes` before the clock: DWD's time range runs past now (nowcast), and the newest observation is minutes behind.
+      const stamps = WXE.pickFrameTimes(WXE.parseTimeDimension(await capsRes.text()), provider.frames, provider.stepMinutes, Date.now() - (provider.lagMinutes || 0) * 60000);
       if (!stamps.length) throw new Error('no frames');
       const frames = await Promise.all(stamps.map(async (t) => {
         const c = document.createElement('canvas');
@@ -5006,7 +5008,7 @@
             tmp.width = w; tmp.height = h;
             const tx = tmp.getContext('2d', { willReadFrequently: true });
             tx.drawImage(img, 0, 0, w, h);
-            try { tx.putImageData(WXS.recolorRadar(tx.getImageData(0, 0, w, h)), 0, 0); } catch (e) { /* a picture the browser will not let us read is drawn as it came */ }
+            try { tx.putImageData(WXS.recolorRadar(tx.getImageData(0, 0, w, h), provider.ignoreBands), 0, 0); } catch (e) { /* a picture the browser will not let us read is drawn as it came */ }
             cx.drawImage(tmp, 0, 0);
             any = true;
           } catch (e) { /* this layer's frame is missing; the other may be there */ }
@@ -5078,7 +5080,8 @@
       if (wxActive() && !WX.timer) wxTick();
     });
     wxEnsureForecast(false).then(() => { if (wxActive()) { renderActiveGuide(); updateInfoPanel(); } });
-    wxStartMusic();
+    stopVideo();   // what the last channel was playing ends; the loop starts
+    wxSyncMusic();
   }
   /** Left the channel (or hid it). */
   function hideWeatherScreen() {
@@ -5087,22 +5090,23 @@
     const el = document.getElementById('weather-actions');
     if (el) el.classList.remove('on');
     if (WX.timer) { clearTimeout(WX.timer); WX.timer = null; }
-    WX.musicItem = null;
+    wxStopMusic();
   }
 
-  // The music: the viewer's own music videos, a shuffled bag, only while the channel is up. See WXE.musicPool.
-  function wxStartMusic() {
-    const pool = plexConnected ? WXE.musicPool(allItemsCache) : [];
-    if (!pool.length) { WX.musicItem = null; stopVideo(); return; }
-    const r = WXE.nextTrack(pool, WX.musicBag, Math.random);
-    WX.musicBag = r.bag;
-    WX.musicItem = r.item;
-    if (r.item) playCurrentItem({ ...r.item, offsetSeconds: 0, _weatherBed: true }, WX_CHANNEL);
+  // The music: one bundled loop (weather/music/, original, see THIRD-PARTY-LICENSES.md) under the screens. It follows the page's SOUND
+  // control (muted until the viewer turns sound on, as a video is), plays only while the channel is up, and stops with the sleep timer.
+  function wxSyncMusic() {
+    const a = document.getElementById('weather-music');
+    if (!a || !WXE) return;
+    a.muted = videoMuted;
+    // The m4a where the browser plays AAC (gapless in Safari and Chrome), the mp3 elsewhere. Set here, not in the markup, so nothing is asked for before the channel is tuned.
+    if (!a.getAttribute('src') && wxActive()) a.src = `weather/music/local-forecast.${a.canPlayType('audio/mp4; codecs="mp4a.40.2"') ? 'm4a' : 'mp3'}`;
+    if (wxActive()) { if (a.paused) { const p = a.play(); if (p && p.catch) p.catch(() => {}); } }
+    else if (!a.paused) a.pause();
   }
-  function wxMusicLine() {
-    const it = WX.musicItem;
-    if (!it) return '';
-    return `♪ ${it.artist ? `${it.artist} · ` : ''}${it.title || ''}`;
+  function wxStopMusic() {
+    const a = document.getElementById('weather-music');
+    if (a && !a.paused) a.pause();
   }
 
   // The guide row and the info panel: hour-long blocks, and a summary of what the channel says now.
@@ -6245,7 +6249,6 @@
   }
 
   function showPlaybackFailure(failure, willSkip) {
-    if (wxActive()) return;   // a music video that will not play under the weather is skipped without a word
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
     display.classList.add('active', 'has-failure');
@@ -6265,7 +6268,6 @@
   }
 
   function showVideoError(message) {
-    if (wxActive()) return;
     const display = document.getElementById('channel-display');
     const status = document.getElementById('display-status');
     display.classList.add('active', 'has-failure');
@@ -7317,7 +7319,7 @@
 
     // Track the live program even with both reporting choices off, so an explicit
     // opt-in can take effect without restarting the live stream.
-    playbackTracker = item._weatherBed ? null : makePlaybackTracker(item);   // the music under the weather is never reported as watched
+    playbackTracker = makePlaybackTracker(item);
 
     // Check if it's an HLS stream
     const isHLS = streamUrl.includes('.m3u8');
@@ -7534,7 +7536,6 @@
   // A programme ended: on its own (`fromNaturalEnd`), or skipped after a stall or a failure.
   // What plays next is the Apple TV's pick (nextAfterEnd), not simply what the clock says.
   function onItemEnded(channel, endedItem, fromNaturalEnd = false) {
-    if (channel && channel.weather) { if (currentChannel === channel.id) wxStartMusic(); return; }   // the next music video
     buildChannelSchedule(channel);
     const next = nextAfterEnd(channel, endedItem, fromNaturalEnd);
     if (next && next.ratingKey) {
@@ -7566,6 +7567,7 @@
     }
     stopActiveTranscode();
     document.getElementById('unmute-btn').style.display = 'none';
+    if (typeof wxStopMusic === 'function') wxStopMusic();   // the weather channel's loop goes with it (the sleep timer, a channel change)
   }
 
   function showNowPlaying() {
@@ -7624,7 +7626,7 @@
     const upNextSeconds = !preview && now && now.endSec ? now.endSec - Date.now() / 1000 : null;
     const upNextLead = upNextSeconds === null ? 'Up next' : (t => t.charAt(0) + t.slice(1).toLowerCase())(NostalgexUpNext.label(upNextSeconds));
     document.getElementById('info-upnext').textContent = next ? `${upNextLead}: ${itemGuideTitle(next)}` : '';
-    if (ch.weather) document.getElementById('info-upnext').textContent = wxMusicLine();   // the music under the loop, if there is any
+    if (ch.weather) document.getElementById('info-upnext').textContent = '';   // the loop has no "up next"
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -8320,6 +8322,7 @@
       el.textContent = videoMuted ? 'OFF' : 'ON';
       el.classList.toggle('off', videoMuted);
     }
+    if (typeof wxSyncMusic === 'function') wxSyncMusic();   // the weather channel's loop follows SOUND
   }
 
   /* ══════════════════════════════════════

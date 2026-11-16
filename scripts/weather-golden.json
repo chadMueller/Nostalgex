@@ -4679,6 +4679,11 @@
    "2026-11-15T15:50:00Z",
    "2026-11-15T16:00:00Z"
   ],
+  "pickNotAfter": [
+   "2026-11-15T15:10:00Z",
+   "2026-11-15T15:20:00Z",
+   "2026-11-15T15:30:00Z"
+  ],
   "range": [
    "2026-11-15T16:48:00.000Z",
    "2026-11-15T16:54:00.000Z",
@@ -4730,7 +4735,9 @@
    ],
    "credit": "RADAR: NOAA NATIONAL WEATHER SERVICE",
    "frames": 8,
-   "stepMinutes": 10
+   "stepMinutes": 10,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "US",
@@ -4742,7 +4749,9 @@
    ],
    "credit": "RADAR: NOAA NATIONAL WEATHER SERVICE",
    "frames": 8,
-   "stepMinutes": 10
+   "stepMinutes": 10,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "US",
@@ -4754,7 +4763,9 @@
    ],
    "credit": "RADAR: NOAA NATIONAL WEATHER SERVICE",
    "frames": 8,
-   "stepMinutes": 10
+   "stepMinutes": 10,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "US",
@@ -4766,7 +4777,9 @@
    ],
    "credit": "RADAR: NOAA NATIONAL WEATHER SERVICE",
    "frames": 8,
-   "stepMinutes": 10
+   "stepMinutes": 10,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "US",
@@ -4778,7 +4791,9 @@
    ],
    "credit": "RADAR: NOAA NATIONAL WEATHER SERVICE",
    "frames": 8,
-   "stepMinutes": 10
+   "stepMinutes": 10,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "CA",
@@ -4791,7 +4806,9 @@
    ],
    "credit": "DATA SOURCE: ENVIRONMENT AND CLIMATE CHANGE CANADA",
    "frames": 6,
-   "stepMinutes": 6
+   "stepMinutes": 6,
+   "lagMinutes": 0,
+   "ignoreBands": []
   },
   {
    "cc": "GB",
@@ -4801,17 +4818,25 @@
    "layers": null,
    "credit": null,
    "frames": null,
-   "stepMinutes": null
+   "stepMinutes": null,
+   "lagMinutes": null,
+   "ignoreBands": null
   },
   {
    "cc": "DE",
    "lat": 52.5,
    "lon": 13.4,
-   "provider": null,
-   "layers": null,
-   "credit": null,
-   "frames": null,
-   "stepMinutes": null
+   "provider": "dwd",
+   "layers": [
+    "Niederschlagsradar"
+   ],
+   "credit": "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben",
+   "frames": 8,
+   "stepMinutes": 10,
+   "lagMinutes": 10,
+   "ignoreBands": [
+    4
+   ]
   }
  ],
  "postcode": [

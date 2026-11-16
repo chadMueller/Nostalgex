@@ -34,6 +34,8 @@ The LOCAL WEATHER channel (CH 600) draws its own screens and uses these data sou
 | Natural Earth (naturalearthdata.com), 1:50m coastline, lakes and boundary lines | The map drawn under the radar (`weather/basemap.json`) | Public domain. |
 | US National Weather Service, MRMS composite reflectivity (opengeo.ncep.noaa.gov) | Radar for the United States | Public domain (weather.gov/disclaimer). Not presented as official NWS material. |
 | Environment and Climate Change Canada, GeoMet (geo.weather.gc.ca), RADAR_1KM_RRAI and RADAR_1KM_RSNO | Radar for Canada | ECCC data licence, commercial use allowed. "Data Source: Environment and Climate Change Canada." |
+| Deutscher Wetterdienst, Niederschlagsradar (maps.dwd.de) | Radar for Germany | CC BY 4.0 for DWD's freely accessible geodata and geodata services, with a source note (https://www.dwd.de/DE/service/rechtliche_hinweise/rechtliche_hinweise_node.html). Shown as DWD's own wording for changed data: "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben" (https://www.dwd.de/DE/service/rechtliche_hinweise/vorlagen_quellenangabe.html). Recolored to our five bands. |
+| The weather channel's music, `public/weather/music/local-forecast.m4a` and `.mp3` | A quiet loop under the screens | Original: composed for Nostalgex as MIDI (`scripts/weather-music/compose.py`, MIT like the rest of the repo) and rendered with the FluidR3_GM sound set (Frank Wen 2000-2002, Toby Smithe 2008, MIT; notice in `public/weather/music/LICENSE-FluidR3_GM.txt`; `scripts/weather-music/render.sh`). The sound set itself is not shipped. No recording, score or melody of anyone else is used. |
 
 The Yr name and logo are not used, and the channel does not copy the look of Yr or of any other weather service.
 
