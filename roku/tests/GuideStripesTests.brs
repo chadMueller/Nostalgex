@@ -19,7 +19,12 @@ function NxRunGuideStripesTests(configPath as String, goldenPath as String) as I
     if golden = invalid then
         print "FAIL cannot read "; goldenPath
         r.fail = r.fail + 1
-        print "guide stripes tests: "; r.pass; " passed, "; r.fail; " failed"
+        ' OK on a bundle's stripe goes to that bundle's first channel, as the Apple TV's BundleJumpSidebar does.
+    runs = [{ name: invalid, firstRow: 0, rowCount: 2 }, { name: "PRIME TIME", firstRow: 2, rowCount: 5 }, { name: invalid, firstRow: 7, rowCount: 1 }, { name: "MARQUEE", firstRow: 8, rowCount: 4 }]
+    NxCheck(r, "jump: a bundle's first channel", NxStripeJumpRow(runs, 1).ToStr() + " " + NxStripeJumpRow(runs, 3).ToStr(), "2 8")
+    NxCheck(r, "jump: a run with no bundle, or none, goes nowhere", NxStripeJumpRow(runs, 0).ToStr() + " " + NxStripeJumpRow(runs, 2).ToStr() + " " + NxStripeJumpRow(runs, -1).ToStr() + " " + NxStripeJumpRow(runs, 9).ToStr(), "-1 -1 -1 -1")
+    NxCheck(r, "jump: the strip wraps at both ends, so Down past the last and Up past the first land on a bundle", NxStripeNeighbour(runs, 3, 1).ToStr() + " " + NxStripeNeighbour(runs, 1, -1).ToStr(), "1 3")
+    print "guide stripes tests: "; r.pass; " passed, "; r.fail; " failed"
         return r.fail
     end if
     want = golden.names

@@ -73,9 +73,11 @@ function NxRunSettingsChannelsTests(configPath as String) as Integer
     NxCheck(r, "gate: the FRANCHISES switch does", NxSettingsFirstFocusable(gatedRows).ToStr(), "0")
 
     ' ── ChannelsHomePage: the link rows and their values ────────────────────
-    NxCheck(r, "links: the three pages, in the list's order", NxPageIds(NxChannelsPages()), "packages|franchises|collections")
-    NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL BUNDLES|FRANCHISES|MY COLLECTIONS")
+    NxCheck(r, "links: the four pages, in the list's order", NxPageIds(NxChannelsPages()), "packages|franchises|collections|weather")
+    NxCheck(r, "links: their titles", NxPageTitles(NxChannelsPages()), "CHANNEL BUNDLES|FRANCHISES|MY COLLECTIONS|LOCAL WEATHER")
     n = { packagesOn: 3, franchisesOn: true, franchiseRowsOn: 5, franchiseCollectionsOn: 2, collectionsOn: 4 }
+    NxCheck(r, "links: LOCAL WEATHER, not set", NxWeatherLinkValue("", true), "NOT SET")
+    NxCheck(r, "links: LOCAL WEATHER, a place", NxWeatherLinkValue("BUFFALO, NY", true) + "|" + NxWeatherLinkValue("BUFFALO, NY", false), "BUFFALO, NY " + Chr(183) + " ON|BUFFALO, NY " + Chr(183) + " OFF")
     NxCheck(r, "links: CHANNEL PACKAGES counts the packages on", NxChannelsLinkValue("packages", n), "3 ON")
     NxCheck(r, "links: FRANCHISES counts franchise rows and franchise collections", NxChannelsLinkValue("franchises", n), "7 ON")
     NxCheck(r, "links: MY COLLECTIONS counts the viewer's own on", NxChannelsLinkValue("collections", n), "4 ON")

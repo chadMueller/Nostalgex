@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fetches the live channels.json (source/util/LiveChannels.brs) behind the guide
+     and keeps it as the cached copy when it is good. It changes nothing on
+     screen: a guide build reads the cache (NxChannelsConfig). -->
+<component name="LiveChannelsTask" extends="Task">
+  <interface>
+    <!-- "stored 51", or "rejected: why", or "failed: HTTP 404", when it is done. -->
+    <field id="result" type="string" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LiveChannels.brs" />
+  <script type="text/brightscript" uri="pkg:/components/LiveChannelsTask.brs" />
+</component>

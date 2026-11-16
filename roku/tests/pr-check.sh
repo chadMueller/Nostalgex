@@ -116,6 +116,7 @@ runcheck testlists "$ntests test files, each listed once in deploy.sh and run.sh
 runcheck includes "every Nx function a component calls is in a script it includes" python3 "$tools/check-includes.py" "$T"
 runcheck uninit "no condition reads a name its branch never assigned" python3 "$tools/check-uninit.py" "$T"
 runcheck dupkeys "no associative-array literal repeats a key" python3 "$tools/check-dupkeys.py" "$T"
+runcheck observers "no observer callback reads a node its component clears" python3 "$tools/check-observers.py" "$T"
 runcheck guards "no secret in a print, saved data only through NxRegSection/NxCacheRoot, no m or run variable" bash "$tools/check-guards.sh" "$T"
 
 # ---- the package carries nothing from tests/ --------------------------------

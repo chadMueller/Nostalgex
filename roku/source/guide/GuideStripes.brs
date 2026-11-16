@@ -206,3 +206,11 @@ function NxStripeHasBundles(groups as Object) as Boolean
     end for
     return false
 end function
+
+' Where OK on a bundle's stripe takes the guide: that bundle's first channel, as the Apple TV's BundleJumpSidebar
+' does (focus on that row, the window scrolled to it), or -1 when no bundle is on the stripe.
+function NxStripeJumpRow(groups as Object, index as Integer) as Integer
+    if index < 0 or index >= groups.Count() then return -1
+    if groups[index].name = invalid then return -1
+    return groups[index].firstRow
+end function

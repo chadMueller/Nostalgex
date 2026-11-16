@@ -45,6 +45,7 @@
     <function name="setBuilding" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LiveChannels.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/QrCode.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/StreamQuality.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/AppVersion.brs" />
@@ -71,6 +72,9 @@
   <script type="text/brightscript" uri="pkg:/source/collections/CollectionChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/HiddenLibraries.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherZones.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/Weather.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherStore.brs" />
   <script type="text/brightscript" uri="pkg:/components/SettingsView.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0B0B1CFF" />

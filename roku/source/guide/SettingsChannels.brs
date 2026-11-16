@@ -226,14 +226,16 @@ function NxChannelsPages() as Object
     return [
         { id: "packages", title: "CHANNEL BUNDLES" },
         { id: "franchises", title: "FRANCHISES" },
-        { id: "collections", title: "MY COLLECTIONS" }
+        { id: "collections", title: "MY COLLECTIONS" },
+        { id: "weather", title: "LOCAL WEATHER" }
     ]
 end function
 
 ' The value on a link row's right (ChannelsHomePage): CHANNEL PACKAGES and MY
 ' COLLECTIONS read "n ON"; FRANCHISES reads OFF while its switch is off, when
 ' none of its collections airs either (FranchisesPageGate.onCount), and
-' otherwise counts the franchise rows and franchise collections switched on.
+' otherwise counts the franchise rows and franchise collections switched on. LOCAL
+' WEATHER reads its place and switch (NxWeatherLinkValue).
 ' `n` holds the counts: packagesOn, franchisesOn (the switch), franchiseRowsOn,
 ' franchiseCollectionsOn, collectionsOn. The Apple TV's SCANNING on MY
 ' COLLECTIONS doesn't apply: the Roku reads collections with the library.
@@ -246,6 +248,8 @@ function NxChannelsLinkValue(page as String, n as Object) as String
         return (NxNumberOr0(n.franchiseRowsOn) + NxNumberOr0(n.franchiseCollectionsOn)).ToStr() + " ON"
     end if
     if page = "collections" then return NxNumberOr0(n.collectionsOn).ToStr() + " ON"
+    ' LOCAL WEATHER: the place and the channel's switch, or NOT SET (the line is built in SettingsView).
+    if page = "weather" then return NxToStr(n.weather)
     return ""
 end function
 
@@ -254,4 +258,12 @@ end function
 function NxChannelsPageParent(page as String) as String
     if page = "missing" then return "packages"
     return ""
+end function
+
+' LOCAL WEATHER's link value: NOT SET until a place is chosen, then the place and ON, or OFF
+' when its switch in the guide is off ("BUFFALO, NY · ON").
+function NxWeatherLinkValue(placeTitle as String, channelOn as Boolean) as String
+    if placeTitle = "" then return "NOT SET"
+    if channelOn then return placeTitle + " " + Chr(183) + " ON"
+    return placeTitle + " " + Chr(183) + " OFF"
 end function

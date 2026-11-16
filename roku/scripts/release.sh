@@ -163,6 +163,7 @@ printf '{"supabaseURL":"%s","anonKey":"%s"}\n' "$supabase_url" "$supabase_key" >
 # keeps the registry and cachefs: names every installed copy already has.
 build=$(scripts/stamp-manifest.sh "$stage")
 if grep -q '^nx_data_ns=' "$stage"/manifest; then die "the staged manifest has nx_data_ns, a test build's data space; a release must not"; fi
+if grep -q '^nx_weather_base=' "$stage"/manifest; then die "the staged manifest has nx_weather_base, a stand-in weather server; a release must not"; fi
 (cd "$stage" && zip -qr ../"$(basename "$zip")" .)
 echo "build: $build ($(find "$stage" -type f | wc -l | tr -d ' ') files, $(($(wc -c <"$zip") / 1024)) KB zipped)"
 

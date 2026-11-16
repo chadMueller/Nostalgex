@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The weather channel's network and picture work, off the render thread (source/weather/):
+       op "forecast"  the relay's MET Norway forecast for args.place, trimmed, with its Expires
+       op "search"    args.query against the place files on nostalgex.app
+       op "basemap"   the coastlines, lakes and borders for args.place's radar window, drawn to a PNG
+       op "radar"     the radar frames of the last hour, recoloured to our five bands, one PNG each
+     One run per node. The answer is `result`; `ok` says whether there is one. -->
+<component name="WeatherTask" extends="Task">
+  <interface>
+    <field id="op" type="string" />
+    <field id="args" type="assocarray" />
+    <field id="result" type="assocarray" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherZones.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/Weather.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherStore.brs" />
+  <script type="text/brightscript" uri="pkg:/components/WeatherTask.brs" />
+</component>
