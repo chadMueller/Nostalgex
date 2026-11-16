@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
+
+**Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.
+
+**Changed.**
+- A first load with no guide keeps the full-screen loading view.
+- A server or library switch from Settings (CHANNEL GUIDE IS CHANGING) and RESCAN LIBRARY (LOADING YOUR LIBRARY) keep the guide on screen with the video playing; the guide area holds one centred block: the yellow title, READ n TITLES in text-2, the library being read ("TV SHOWS: 1,200 OF 1,450", OF only when the server gave a total; then COLLECTIONS, METADATA, CHANNELS), and a cyan bar that moves (`GuideLoadBlock`).
+- A stalled read shows its notice and STOP WAITING inside that block, focused, never over the video.
+- The top bar, between the wordmark and SETTINGS: UPDATING LIBRARY: n TITLES READ while a refresh reads behind the guide, then GUIDE READY: n TITLES in yellow for 4 s after any read that came back whole. Nothing after a read that was cut short (STOP WAITING, a stall) or failed.
+- Disconnect mid-load ends the block at once; the load itself was already dropped by `librarySessionGeneration` before it saves or shows anything, and a test now holds that for a load in front of the guide.
+
+**Tested.** `LoadNoticeTests` (the wording), `BackendSwitchScheduleTests` (Disconnect during RESCAN LIBRARY lands nothing, saves nothing, says no GUIDE READY; left alone it ends with GUIDE READY and the count). Simulator walk with `-uiTestGuideLoadFixture`: screenshots in nostalgex-internal `docs/roku-shots/appletv-loading-pattern-2026-11-15/`.
+
 ## 2026-11-15 (Apple TV: a programme ends where Emby's file ends, not where its playlist says, #315)
 
 **State.** On `appletv/315-play-to-end`, on top of the play-to-end change below. Not pushed, not merged.

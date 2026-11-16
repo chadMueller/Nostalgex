@@ -15,6 +15,72 @@ extension AppState {
         AppDefaults.standard.set(true, forKey: Self.initialLoadCompleteKey)
     }
 
+    // MARK: - Loading pattern (LoadNotice)
+
+    /// A switch or RESCAN LIBRARY with a guide on screen: the guide stays up and its empty
+    /// area says what is happening. With no guide yet the full-screen loading view stays.
+    func beginLoadInPlace(_ kind: GuideLoadKind) {
+        guard !channels.isEmpty else { return }
+        guideLoadInPlace = kind
+        guideLoadDetail = ""
+        clearGuideReady()
+    }
+
+    /// The load has ended. GUIDE READY only for a read that came back whole.
+    func endLoadInPlace(readWhole: Bool) {
+        guideLoadInPlace = nil
+        guideLoadDetail = ""
+        if readWhole, !isDemoMode { showGuideReady(allItems.count) } else { clearGuideReady() }
+    }
+
+    func showGuideReady(_ titles: Int) {
+        guideReadyTask?.cancel()
+        guideReadyTitles = titles
+        guideReadyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(LoadNotice.readySeconds))
+            guard !Task.isCancelled, let self, self.guideReadyTitles == titles else { return }
+            self.guideReadyTitles = nil
+        }
+    }
+
+    func clearGuideReady() {
+        guideReadyTask?.cancel()
+        guideReadyTask = nil
+        guideReadyTitles = nil
+    }
+
+    #if DEBUG
+    /// Test-only: `-uiTestGuideLoadFixture <changing|loading|stalled|updating|ready>` puts demo mode's guide in one
+    /// state of the loading pattern for screenshots. Never set in a shipping run.
+    func applyGuideLoadFixtureIfRequested() {
+        let args = ProcessInfo.processInfo.arguments
+        guard isDemoMode, let i = args.firstIndex(of: "-uiTestGuideLoadFixture"), i + 1 < args.count else { return }
+        switch args[i + 1] {
+        case "changing", "loading", "stalled":
+            guideLoadInPlace = args[i + 1] == "changing" ? .changing : .loading
+            isLoading = true
+            libraryLoadPhase = .scanningLibrary
+            scanItemsFound = 4210
+            guideLoadDetail = LoadNotice.libraryLine("TV shows", done: 1200, total: 1450)
+            isLoadStalling = args[i + 1] == "stalled"
+        case "updating":
+            isBackgroundRefreshing = true
+            scanItemsFound = 4210
+        case "ready":
+            guideReadyTitles = 4210   // held, not timed, so the screenshot can find it
+        default:
+            break
+        }
+    }
+    #endif
+
+    /// The header's line between the wordmark and SETTINGS, if any.
+    var headerLoadNotice: (text: String, isReady: Bool)? {
+        if isBackgroundRefreshing { return (LoadNotice.updatingLine(read: scanItemsFound), false) }
+        if let n = guideReadyTitles { return (LoadNotice.readyLine(n), true) }
+        return nil
+    }
+
     func setLibraryPhase(_ phase: LibraryLoadPhase, detail: String = "") {
         libraryLoadPhase = phase
         libraryLoadDetail = detail
@@ -111,6 +177,7 @@ extension AppState {
             if !background { isLoading = true; loadingMessage = "FINDING YOUR SERVERS..." }
             guard await recoverPlexServersIfNeeded() else {
                 isLoading = false
+                endLoadInPlace(readWhole: false)
                 return
             }
         }
@@ -287,6 +354,7 @@ extension AppState {
                                     default: label = "Library"
                                     }
                                     let prefix = multiServer ? "\(serverLabel) · " : ""
+                                    self.guideLoadDetail = LoadNotice.libraryLine(prefix + label, done: event.showsCompleted, total: event.totalShows)
                                     if let done = event.showsCompleted, let total = event.totalShows {
                                         self.libraryLoadDetail = "\(prefix)Section \(event.sectionIndex + 1)/\(event.totalSections) · \(done)/\(total) shows"
                                         self.loadingMessage = self.libraryLoadPhase.headline(
@@ -369,6 +437,7 @@ extension AppState {
                 print("[Plex90] LOAD: background refresh abandoned mid-scan, keeping the loaded lineup")
                 isBackgroundRefreshing = false
                 isLibraryStale = true
+                endLoadInPlace(readWhole: false)
                 return
             }
 
@@ -471,6 +540,8 @@ extension AppState {
             isLoading = false
             isBackgroundRefreshing = false
             isLibraryStale = scanWasAbandoned
+            // Said once the guide is built; a read cut short (STOP WAITING, a stall) says nothing.
+            endLoadInPlace(readWhole: !scanWasAbandoned)
             LibraryLoadProbe.mark("guideVisible")
 
             // Library refresh: only purge the manifests older than yesterday's. Today's schedule is
@@ -538,6 +609,7 @@ extension AppState {
             isLoading = false
             isBackgroundRefreshing = false
             isLoadStalling = false
+            endLoadInPlace(readWhole: false)
             print("[Plex90] loadLibrary failed: \(api)")
             let reason = String(describing: api)
             if isBackground {
@@ -555,11 +627,13 @@ extension AppState {
             isLoading = false
             isBackgroundRefreshing = false
             isLoadStalling = false
+            endLoadInPlace(readWhole: false)
             errorMessage = nil
         } catch {
             isLoading = false
             isBackgroundRefreshing = false
             isLoadStalling = false
+            endLoadInPlace(readWhole: false)
             print("[Plex90] loadLibrary failed: \(error)")
             let reason = Self.analyticsReason(for: error)
             if isBackground {

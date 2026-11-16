@@ -318,6 +318,7 @@ extension AppState {
         // to see how often the row is used; the machine identifier is not analytics data.
         Analytics.track(.settingChanged(key: "server", value: wasIncluded ? "false" : "true"))
         LibrarySnapshotStore.clear()
+        beginLoadInPlace(.changing)
         Task { await loadLibrary() }
     }
 
@@ -426,6 +427,7 @@ extension AppState {
         }
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
+        beginLoadInPlace(.changing)
         Task { await loadLibrary() }
     }
 
@@ -894,6 +896,7 @@ extension AppState {
         Analytics.track(.settingChanged(key: "rescan", value: "tapped"))
         LibrarySnapshotStore.clear()
         DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
+        beginLoadInPlace(.loading)
         await loadLibrary()
     }
 
@@ -945,6 +948,10 @@ extension AppState {
         // Today's schedules for the outgoing sign-in go with it. Computed before
         // clearCredentials resets the backend, or this would name the wrong directory.
         DailyManifestStore.clearAll(credentialFingerprint: scheduleCredentialFingerprint)
+        // A load running in front of the guide belonged to the sign-in that just ended.
+        guideLoadInPlace = nil
+        guideLoadDetail = ""
+        clearGuideReady()
         clearCredentials()
         serverName = ""
         isConnected = false

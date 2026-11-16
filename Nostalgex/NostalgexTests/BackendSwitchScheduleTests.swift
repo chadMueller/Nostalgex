@@ -277,6 +277,55 @@ final class BackendSwitchScheduleTests: XCTestCase {
         assertOnlyEmbyIsServable(state)
     }
 
+    // MARK: - The loading pattern: a load in front of the guide
+
+    /// RESCAN LIBRARY keeps the guide up (LOADING YOUR LIBRARY in its empty area), which leaves Settings and
+    /// Disconnect in reach while the read is out. On Android that let a load carry on after Disconnect, save
+    /// the old library and tune back in. Here Disconnect must end it before it saves or shows anything.
+    func testDisconnectDuringALoadInFrontOfTheGuideSavesAndShowsNothing() async {
+        let plexGate = Gate()
+        let plex = FakeBackend(serverID: Self.plexServerID, items: plexItems(), gate: plexGate)
+        let emby = FakeBackend(serverID: Self.embyServerID, items: embyItems())
+        let seedPlex = FakeBackend(serverID: Self.plexServerID, items: plexItems())
+        let state = await makePlexSession(plexBackend: seedPlex, embyBackend: emby)
+        state.backendOverride = { server in
+            server?.machineIdentifier == Self.plexServerID ? plex : emby
+        }
+        state.clearGuideReady()
+
+        let rescan = Task { await state.rescanLibrary() }
+        await plexGate.waitUntilEntered()
+        XCTAssertEqual(state.guideLoadInPlace, .loading)
+        XCTAssertTrue(state.isLoadingInPlace, "the guide stays up while the library is read again")
+
+        let plexIdentity = state.snapshotIdentitySeed
+        state.disconnect()
+        XCTAssertNil(state.guideLoadInPlace, "Disconnect ends the block at once")
+
+        await plexGate.open()
+        await rescan.value
+
+        XCTAssertTrue(state.allItems.isEmpty, "the ended read landed \(state.allItems.count) item(s)")
+        XCTAssertTrue(state.channels.isEmpty, "the ended read built channels")
+        XCTAssertNil(state.guideReadyTitles, "GUIDE READY for a sign-in that has ended")
+        XCTAssertNil(state.guideLoadInPlace)
+        LibrarySnapshotStore.waitForPendingSaves()
+        let saved = (try? LibrarySnapshotStore.loadSnapshot(identity: plexIdentity)) ?? nil
+        XCTAssertNil(saved, "the ended read saved a snapshot")
+    }
+
+    /// The other side: the same read left alone ends the block and says GUIDE READY with the count.
+    func testALoadInFrontOfTheGuideEndsWithGuideReady() async {
+        let plex = FakeBackend(serverID: Self.plexServerID, items: plexItems())
+        let emby = FakeBackend(serverID: Self.embyServerID, items: embyItems())
+        let state = await makePlexSession(plexBackend: plex, embyBackend: emby)
+        await state.rescanLibrary()
+        XCTAssertNil(state.guideLoadInPlace)
+        XCTAssertEqual(state.guideReadyTitles, state.allItems.count)
+        XCTAssertEqual(state.headerLoadNotice?.text, LoadNotice.readyLine(state.allItems.count))
+        state.clearGuideReady()
+    }
+
     // MARK: - Belt and braces: items from a server that is not signed in
 
     func testAnItemFromAServerThatIsNotSignedInIsRefused() {
