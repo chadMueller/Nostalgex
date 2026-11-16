@@ -1275,3 +1275,14 @@ function NxWxChannelIndex(channels as Object) as Integer
     end for
     return -1
 end function
+
+' A new array with `item` put at index `at` (an roArray has no Insert method): the others keep their order.
+function NxWxInsertAt(list as Object, at as Integer, item as Object) as Object
+    out = []
+    for i = 0 to list.Count() - 1
+        if i = at then out.Push(item)
+        out.Push(list[i])
+    end for
+    if at >= list.Count() then out.Push(item)
+    return out
+end function

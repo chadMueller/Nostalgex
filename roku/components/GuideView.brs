@@ -3518,8 +3518,7 @@ function withWeather(list as Dynamic) as Object
     end for
     if out.Count() = 0 or not NxWxChannelOn() then return out
     ' Where its number puts it: before the FRANCHISES block, not at the end.
-    out.Insert(NxWxInsertIndex(out), weatherChannel())
-    return out
+    return NxWxInsertAt(out, NxWxInsertIndex(out), weatherChannel())
 end function
 
 function weatherChannel() as Object
@@ -3620,7 +3619,7 @@ sub refreshWeatherRow()
     m.stripeStale = true
     if want then
         at = NxWxInsertIndex(m.channels)
-        m.channels.Insert(at, weatherChannel())
+        m.channels = NxWxInsertAt(m.channels, at, weatherChannel())
         ' The rows after it moved down one: the tuned channel and the focus stay on what they were on.
         if m.tuned >= at then m.tuned = m.tuned + 1
         if m.focus >= at then m.focus = m.focus + 1

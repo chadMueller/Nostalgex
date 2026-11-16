@@ -419,6 +419,9 @@ sub NxWxGuideChecks(r as Object, g as Object)
     NxCheck(r, "order: only franchises, the front", NxWxInsertIndex([{ number: 300 }]).ToStr(), "0")
     NxCheck(r, "order: nothing in the guide", NxWxInsertIndex([]).ToStr(), "0")
     NxCheck(r, "order: found where it is", NxWxChannelIndex([{ number: 3, weather: invalid }, { number: 299, weather: true }, { number: 300 }]).ToStr() + " " + NxWxChannelIndex([{ number: 3 }]).ToStr(), "1 -1")
+    here = NxWxInsertAt([{ number: 3 }, { number: 61 }, { number: 300 }], 2, { number: 299 })
+    NxCheck(r, "insert: in the middle, the others keep their order", here[0].number.ToStr() + " " + here[1].number.ToStr() + " " + here[2].number.ToStr() + " " + here[3].number.ToStr(), "3 61 299 300")
+    NxCheck(r, "insert: at the end, at the front and into nothing", NxWxInsertAt([{ number: 3 }], 1, { number: 9 }).Count().ToStr() + NxWxInsertAt([{ number: 3 }], 0, { number: 9 })[0].number.ToStr() + NxWxInsertAt([], 0, { number: 9 }).Count().ToStr(), "291")
     NxCheck(r, "guide: the channel", NxToStr(NxWxChannel().number) + " " + NxToStr(NxWxChannel().id) + " " + NxWxChannel().name, "299 1030000 LOCAL WEATHER")
 end sub
 
