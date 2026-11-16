@@ -120,6 +120,7 @@ tasks.test {
         rootDir.parentFile.resolve("scripts/channel-requirements-golden.json"),
         rootDir.parentFile.resolve("scripts/audio-pick-golden.json"),
         rootDir.parentFile.resolve("scripts/jellyfin-library-golden.json"),
+        rootDir.parentFile.resolve("scripts/library-picker-golden.json"),
         rootDir.parentFile.resolve("scripts/stream-quality-golden.json"),
         rootDir.parentFile.resolve("scripts/season-golden.json"),
         rootDir.parentFile.resolve("scripts/franchise-golden.json"),

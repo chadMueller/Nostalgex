@@ -17,6 +17,8 @@ import com.muellhaus.nostalgex.engine.BackgroundPass
 import com.muellhaus.nostalgex.engine.GuideLoad
 import com.muellhaus.nostalgex.engine.HeaderNotice
 import com.muellhaus.nostalgex.engine.LibraryLoadCommit
+import com.muellhaus.nostalgex.engine.LibraryPicker
+import com.muellhaus.nostalgex.engine.MediaBrowserLibrary
 import com.muellhaus.nostalgex.engine.LibraryRefresh
 import com.muellhaus.nostalgex.engine.LoadCommitEffects
 import com.muellhaus.nostalgex.engine.LoadCrashMark
@@ -1117,11 +1119,24 @@ class AppModel(private val context: Context) : Playback.Listener {
     // ── Libraries (library selection: AppState+Auth.swift, I-054) ────────
 
     /** The libraries switched off, as LibrarySection ids. A library never seen before is on. */
-    /** Whether a library is scanned: one switched off isn't. */
-    fun isSectionOn(section: LibrarySection) = section.id !in deselectedSections
+    /** Whether a library is scanned: one switched off isn't, and a hidden Jellyfin library is only while the viewer has switched it on (N-016). */
+    fun isSectionOn(section: LibrarySection) = LibraryPicker.isOn(section, pickerState)
 
     var deselectedSections by mutableStateOf(prefs.deselectedSections)
         private set
+
+    /** The hidden Jellyfin libraries switched on: each has its own row, off until switched on (N-016). */
+    var includedHidden by mutableStateOf(prefs.includedHiddenSections)
+        private set
+
+    private val pickerState get() = LibraryPicker.State(deselectedSections, includedHidden)
+
+    private fun saveChoices(state: LibraryPicker.State) {
+        deselectedSections = state.off
+        includedHidden = state.includedHidden
+        prefs.deselectedSections = state.off
+        prefs.includedHiddenSections = state.includedHidden
+    }
 
     /** Every library on the servers in use, for Settings' LIBRARIES list. */
     var availableSections: List<LibrarySection> by mutableStateOf(emptyList())
@@ -1129,7 +1144,10 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     private suspend fun loadAllSections(): List<LibrarySection> {
         mbServer?.let { mb ->
-            return runCatching { mediaBrowser.sections(mb, selectedServers.first().machineIdentifier, includeHiddenOn) }.getOrDefault(emptyList())
+            val listing = runCatching { mediaBrowser.listing(mb, selectedServers.first().machineIdentifier, askHidden = mb.kind == "jellyfin") }.getOrNull()
+            // The old single switch carries over once the hidden libraries are known (N-016).
+            if (listing != null) carryOverHiddenSwitch(mb, listing)
+            return listing?.sections ?: emptyList()
         }
         val library = PlexLibrary(plex)
         return prefs.servers.flatMap { server -> runCatching { library.sections(server) }.getOrDefault(emptyList()) }
@@ -1141,14 +1159,16 @@ class AppModel(private val context: Context) : Playback.Listener {
      * touches them. One library (or none readable: the scan reports its own error) scans at once.
      */
     private fun chooseLibrariesOrScan() {
-        deselectedSections = emptySet()
-        prefs.deselectedSections = emptySet()
+        // Every sign-in starts again (N-016 rule 9): every library on, every hidden one off, and the old single hidden switch gone.
+        saveChoices(LibraryPicker.afterSignIn())
+        prefs.clearLegacyHiddenSwitch()
         screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
         scope.launch {
             val sections = loadAllSections()
             availableSections = sections
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
-            if (sections.size > 1) screen = Screen.ChooseLibraries(sections) else loadLibrary()
+            // Offered only when there is something to choose: more than one library, or a hidden one (it starts off) (N-016 rule 8).
+            if (LibraryPicker.offersPicker(sections)) screen = Screen.ChooseLibraries(sections) else loadLibrary()
         }
     }
 
@@ -1170,8 +1190,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     fun confirmLibraries(included: Set<String>) {
         val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
         if (included.isEmpty()) return
-        deselectedSections = sections.filter { it.id !in included }.map { it.id }.toSet()
-        prefs.deselectedSections = deselectedSections
+        saveChoices(LibraryPicker.withOn(sections, included))
         Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
     }
@@ -1183,8 +1202,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (loadingLibrary || refreshing) return
         val on = isSectionOn(section)
         if (on && enabledSectionCount <= 1) return
-        deselectedSections = if (on) deselectedSections + section.id else deselectedSections - section.id
-        prefs.deselectedSections = deselectedSections
+        saveChoices(LibraryPicker.toggled(section, pickerState))
         libraryStore.clear()
         closeSettings()
         playback.stop()
@@ -1477,7 +1495,7 @@ class AppModel(private val context: Context) : Playback.Listener {
     private suspend fun readCollections(servers: List<PlexServer>): List<ServerCollection> {
         val t0 = SystemClock.elapsedRealtime()
         val out = mbServer?.let { mb -> runCatching { mediaBrowser.collections(mb) }.onFailure { Log.w(TAG, "Collections failed", it) }.getOrDefault(emptyList()) }
-            ?: servers.flatMap { server -> runCatching { plex.collections(server) }.onFailure { Log.w(TAG, "Collections on ${server.name} failed", it) }.getOrDefault(emptyList()) }
+            ?: servers.flatMap { server -> runCatching { plex.collections(server) { key -> LibrarySection.storageKey(server.machineIdentifier, key) !in deselectedSections } }.onFailure { Log.w(TAG, "Collections on ${server.name} failed", it) }.getOrDefault(emptyList()) }
         Log.i(TAG, "COLLECTIONS ${out.size} read in ${SystemClock.elapsedRealtime() - t0} ms")
         return out
     }
@@ -1752,10 +1770,13 @@ class AppModel(private val context: Context) : Playback.Listener {
             scope.launch { onProgress(p, name) }
         }
         mbServer?.let { mb ->
+            // The old single hidden switch carries over before the first read of a Jellyfin library (N-016).
+            carryOverHiddenSwitch(mb)
             val excluded = LibrarySection.excludedKeys(deselectedSections, servers.first().machineIdentifier)
+            val hiddenRead = LibrarySection.excludedKeys(includedHidden, servers.first().machineIdentifier)
             val skipped = java.util.concurrent.atomic.AtomicInteger()
             val (items, abandoned, _) = watched(foreground, mb.name) { onSection, cancelled ->
-                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, includeHiddenOn, { skipped.incrementAndGet() },
+                mediaBrowser.scan(mb, { p -> progress(p, mb.name) }, excluded, onSection, cancelled, mb.kind == "jellyfin", hiddenRead, { skipped.incrementAndGet() },
                     keepFor(mb.serverId.ifEmpty { mb.url }, servers.first(), stampRequired = false))
             }
             return ScanResult(items, abandoned, skipped.get())
@@ -2233,31 +2254,20 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#224): off unless the viewer turns it on. */
-    var includeHiddenLibraries by mutableStateOf(prefs.includeHiddenLibraries)
-        private set
-
-    /** Whether Settings offers the switch: Jellyfin only, since Emby's library list has no hidden ones to ask for. */
-    val offersIncludeHidden get() = mbServer?.kind == "jellyfin"
-
-    /** What the scan and the library list ask for: the switch, on Jellyfin. */
-    private val includeHiddenOn get() = offersIncludeHidden && includeHiddenLibraries
-
     /**
-     * The switch, as the web's toggleIncludeHiddenLibraries: the library is read again once, in
-     * the background, so the guide, the channel playing and Settings stay as they are. The saved
-     * library was read the other way, so it is dropped first: a read that fails isn't followed by
-     * a launch that restores a library the switch no longer describes. A press while a read is
-     * running does nothing.
+     * N-016: Jellyfin's hidden libraries have a row each (off until switched on), and the one switch for all of them is gone. A viewer who had
+     * it on keeps the same libraries on: once the hidden libraries are known, each one not turned off by hand goes into the included list, and
+     * the old switch is cleared. With them not yet known (the includeHidden ask failed) nothing changes and the switch waits for the next read.
      */
-    fun toggleIncludeHiddenLibraries() {
-        if (!offersIncludeHidden || loadingLibrary || refreshing) return
-        includeHiddenLibraries = !includeHiddenLibraries
-        prefs.includeHiddenLibraries = includeHiddenLibraries
-        Log.i(TAG, "INCLUDE HIDDEN LIBRARIES ${if (includeHiddenLibraries) "on" else "off"}; reading the library again")
-        libraryStore.clear()
-        refreshSections()
-        refreshInBackground(selectedServers, scannedItems, alwaysSave = true)
+    private suspend fun carryOverHiddenSwitch(mb: MediaBrowserServer, known: MediaBrowserLibrary.Listing? = null) {
+        if (!prefs.hasLegacyHiddenSwitch) return
+        val on = prefs.includeHiddenLibraries
+        val listing = if (on) known ?: runCatching { mediaBrowser.listing(mb, selectedServers.first().machineIdentifier, askHidden = true) }.getOrNull() else null
+        if (on && listing == null) return
+        val (state, done) = LibraryPicker.carryOverHiddenSwitch(on, listing?.hiddenKnown ?: true, listing?.sections ?: emptyList(), pickerState)
+        if (state != pickerState) saveChoices(state)
+        if (done) prefs.clearLegacyHiddenSwitch()
+        Log.i(TAG, "HIDDEN LIBRARIES the old switch was ${if (on) "on" else "off"}; ${if (done) "carried over: ${state.includedHidden.size} hidden library(ies) on" else "kept for the next read"}")
     }
 
     /**

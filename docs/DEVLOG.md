@@ -247,6 +247,21 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Next.** The web, Roku and Android ports of this engine change, against the regenerated golden.
 
+## 2026-11-15 (Android, N-016 option A: one rule set for which libraries are listed, on and read)
+
+**State.** Branch `android/n016-library-rules`, off `android/guide-stripes` (release 9), for release 10. The rules are the web tuner's `scripts/nostalgex-library-picker.js`, pinned by `scripts/library-picker-golden.json` (copied from `web/n016-library-rules` b663b9ae), which `LibraryPickerGoldenTest` reads (10 cases groups, one test each).
+
+**Changed.**
+1. **Plex lists and reads movie and show only** (`PlexLibrary.directories`, `LibraryPicker.plexListed`): a Music (artist) or Photo library is never listed and never asked for items or collections. A music video library is type movie in Plex, so it stays, found by its name.
+2. **Hidden Jellyfin libraries, one row each, off by default.** Jellyfin is always asked twice (`MediaBrowserLibrary.listing`: the plain list and the includeHidden list); a library only the second has is `hidden`, listed marked HIDDEN ON JELLYFIN, and read only while its id is in the new `nostalgex_included_hidden_library_sections` list (`Prefs.includedHiddenSections`). The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN row is gone from Settings. **The old Prefs switch carries over** (`carryOverHiddenSwitch`, the `hiddenSwitchUpgrade` cases): with it on and the hidden libraries known, each hidden library not turned off by hand goes into the included list once and the switch is cleared; with them not yet known the switch waits for the next read; off or never set is just cleared. It runs before the first Jellyfin scan and when the library list is read.
+3. **The collection sweep skips libraries that are off** (`Collections.fetchPlexCollections(isSectionOn)`, used by `readCollections` for Plex). Jellyfin and Emby BoxSets are one global list and the web tuner leaves them alone, so they are unchanged.
+4. **The picker shows only when there is something to choose** (`LibraryPicker.offersPicker`): more than one library across the chosen servers, or a hidden one (it starts off). One library that is not hidden just scans. The picker's rows start on except a hidden one; the server picker's default is `defaultServerIds` (the viewer's own, all when none is).
+5. **Choices reset at sign-in** (`chooseLibrariesOrScan`): both lists emptied and the old switch cleared. A choice made in Settings lasts until the next sign-in.
+
+**Tests.** `LibraryPickerGoldenTest` (the golden: Plex and Jellyfin/Emby listing, server defaults, reads, choices, the upgrade, the picker rule, the sign-in reset; plus the collection sweep and the picker's CONTINUE) and five more in `JellyfinHiddenLibrariesTest` (only the hidden libraries switched on are read; none until switched on; the listing says whether hidden ones are known; a failed second ask leaves the plain list; Emby never asks). 539 JVM tests, lint clean.
+
+**Seen** on the emulator against a stand-in Plex that lists two movie libraries, a Music and a Photos library (`android/emulator-2026-11-15/n016-plex-settings-libraries-no-music-no-photos.png`): the stub was asked for items and collections of libraries 1 and 2 only, never 8 or 9, and Settings lists only the two. **Not seen:** a real Jellyfin with hidden libraries and the sign-in picker (golden and engine tests only).
+
 ## 2026-11-15 (Android release 9: the full-screen poster, the Settings glow, the stripe above the rows, the loading pattern)
 
 **State.** Branch `android/guide-stripes`, for versionCode 9. Chad tested release 8 on the Google TV; this is what he found.

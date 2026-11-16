@@ -21,6 +21,9 @@ data class LibrarySection(
 ) {
     val id: String get() = storageKey(serverId, key)
 
+    /** Whether the library's items are music videos for HIGH ROTATION: a music video library, or a library whose name says so (N-016's `musicVideo`). */
+    val musicVideo: Boolean get() = type == "musicvideo" || MUSIC_VIDEO_TITLE.containsMatchIn(title.trim())
+
     /** The line under the library's name (LibrarySectionRef.subtitle): its kind, the server when more than one is in play, and [HIDDEN_MARK]. */
     fun subtitle(multiServer: Boolean): String {
         val base = if (multiServer) "$serverName · $typeLabel" else typeLabel
@@ -42,6 +45,9 @@ data class LibrarySection(
         /** The Apple TV's UserDefaults key for the libraries switched off. */
         const val STORAGE_KEY = "nostalgex_deselected_library_sections"
 
+        /** ...and for the hidden Jellyfin libraries switched on (N-016: a hidden library reads only this list). */
+        const val INCLUDED_HIDDEN_KEY = "nostalgex_included_hidden_library_sections"
+
         /** What Settings and the library picker call such a library. */
         const val HIDDEN_MARK = "HIDDEN ON JELLYFIN"
 
@@ -53,7 +59,7 @@ data class LibrarySection(
             return deselected.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
         }
 
-        private val MUSIC_VIDEO_TITLE = Regex("music.?video|^music$|^mvs?$", RegexOption.IGNORE_CASE)
+        internal val MUSIC_VIDEO_TITLE = Regex("music.?video|^music$|^mvs?$", RegexOption.IGNORE_CASE)
     }
 }
 
