@@ -3,6 +3,14 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-16 (web tuner: select on the bundle stripe jumps to the bundle)
+
+**State.** Branch `web/bundle-strip-jump` off main `250a6f13`. Not merged, not pushed.
+
+**Why.** Chad, on the Apple TV: "you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden", and this should be global.
+
+**Changed.** On the bundle stripe, select (Enter, Space, or a click on the bundle's name) now puts the cursor on the first channel of that bundle (`selectStripe`) and leaves the stripe; it used to go back to the row it came from. Left from the stripe opens the hidden bundle list, where selecting a bundle jumps and closes it and Esc closes it without a jump (as before). Up and Down still step through bundles and wrap. Right and Esc on the stripe still go back to the rows. The same page serves the Docker build. Tested in `scripts/guide-cursor-browser-smoke.mjs`.
+
 ## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
 
 **Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.

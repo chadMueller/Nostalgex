@@ -3840,6 +3840,7 @@
     font-family: 'VT323', monospace; font-weight: 400; font-size: max(14px, calc(var(--nx-fs) * 1.2)); letter-spacing: 0.08em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 0; box-sizing: border-box;
   }
+  .grid-stripe-label { pointer-events: auto; cursor: pointer; }
   .grid-stripe-label.focused { width: calc(var(--g-stripe) + 8px); outline: 3px solid var(--cyan); outline-offset: -1px; box-shadow: 0 0 14px rgba(0,196,255,0.9); border-radius: 8px; }
   .pkg-list {
     display: none; position: absolute; left: 0; top: 0; bottom: 0; z-index: 20;
@@ -13691,10 +13692,12 @@
 
     // Guide navigation (when guide is visible and focused)
     if (appState === 'guide' || (guideVisible && appState === 'player')) {
-      // On the package stripe: Up and Down jump between packages, Right (or Enter) goes back to the rows, Left opens the list.
+      // On the package stripe: Up and Down step between packages (wrapping), select (Enter or Space) jumps the guide to the first channel of
+      // the bundle the stripe is on, Right (or Esc) goes back to the rows, Left opens the hidden bundle list (Chad 2026-11-16, as on the Apple TV).
       if (guideStripeMode) {
         if (key === 'ArrowUp' || key === 'ArrowDown') { jumpPackage(key === 'ArrowDown' ? 1 : -1); e.preventDefault(); return; }
-        if (key === 'ArrowRight' || key === 'Enter' || key === ' ' || key === 'Escape') { returnFromStripe(); e.preventDefault(); return; }
+        if (key === 'Enter' || key === ' ') { selectStripe(); e.preventDefault(); return; }
+        if (key === 'ArrowRight' || key === 'Escape') { returnFromStripe(); e.preventDefault(); return; }
         if (key === 'ArrowLeft') { openPackageList(); e.preventDefault(); return; }
       }
       if (key === 'g' || key === 'G') {
@@ -13974,6 +13977,8 @@
       el.style.top = vt + 'px'; el.style.height = (vb - vt) + 'px';
       el.style.background = hex; el.style.color = stripeNameColor(hex);
       el.textContent = g.pkg.name;
+      // A click or a tap on a bundle's name selects it: the guide jumps to its first channel.
+      el.addEventListener('click', () => { guideStripeMode = true; guideStripeGroup = gi; selectStripe(); });
       overlay.appendChild(el);
     });
   }
@@ -14021,6 +14026,21 @@
     document.querySelectorAll('.grid-stripe-cell').forEach(c => { const g = groups[Number(c.dataset.group)]; c.style.setProperty('--stripe', g && g.pkg ? stripeHex(g.pkg.name) : 'rgba(255,255,255,0.10)'); });
     updateGuideFocus();
     updateStripeLabels();
+  }
+
+  /**
+   * Select on the stripe (Enter, Space or a click on a bundle's name): the guide goes to the first channel of that bundle, with the cursor
+   * on that row, and the stripe is left. The list is Left's now.
+   */
+  function selectStripe() {
+    const groups = guideStripeGroups();
+    const g = groups[guideStripeGroup];
+    if (!g || !g.pkg) { returnFromStripe(); return; }
+    guideStripeJumped = true;   // returnFromStripe puts the focus on the bundle's first channel
+    returnFromStripe();
+    const first = getEnabledChannels()[g.first];
+    const row = first ? document.querySelector('#grid-body > .grid-row[data-channel-id="' + first.id + '"]') : null;
+    if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   // ---- the package list ----
