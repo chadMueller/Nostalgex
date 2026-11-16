@@ -266,8 +266,17 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
 end function
 
 sub loadLibrary()
+    ' A task of its own for the library sections on the servers, asked for before the
+    ' first scan (I-092): mode "sections".
+    if m.top.mode = "sections" then
+        listSections()
+        return
+    end if
     ' The keys the saved guide and pools were last written or read under, and
     ' the pools' fingerprint, so a build that would write the same skips it.
+    ' Which load this is (source/util/LoadEpoch.brs): sign-out, a switch or a
+    ' newer load ends it, and then it saves and shows nothing more.
+    m.epoch = NxLoadEpoch()
     m.savedGuideKey = ""
     m.savedPoolsKey = ""
     m.savedPoolsFingerprint = ""
@@ -398,6 +407,7 @@ sub loadLibrary()
         end if
         return
     end if
+    NxScanSectionsReset()
     for i = 0 to servers.Count() - 1
         ' A server with no address is left out this time; it's tried again on
         ' the next load.
@@ -418,16 +428,25 @@ sub loadLibrary()
                 else
                     collections.failed = collections.failed + 1
                 end if
-                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt, skipped: NxNumberOr0(saved.entry.skipped) })
+                saves.Push({ index: i, key: keys[i], signature: saved.entry.signature, collections: saved.collections, savedAt: saved.entry.savedAt, skipped: NxNumberOr0(saved.entry.skipped), cutRead: NxNumberOr0(saved.entry.cutRead), cutOf: NxNumberOr0(saved.entry.cutOf) })
                 print "library: "; saved.items.Count(); " items from the saved library, server "; i
             else
                 m.top.progress = "Reading your library from " + NxToStr(servers[i].name) + "…"
                 info = { signature: invalid }
+                label = ""
+                if usable > 1 then label = UCase(NxToStr(servers[i].name))
+                NxScanBaseSet(items.Count(), label)
                 NxScanSkipsReset()
                 got = scanUnderWatch(servers[i], i, info)
+                if loadStale() then return
                 skipped = NxScanSkips()
+                cutRead = NxScanCapped()
+                cutOf = NxScanCapTotal()
+                if NxScanCapped() > 0 then m.top.incomplete = true
+                if NxScanCapped() > 0 then print "library: "; NxToStr(servers[i].name); " was read only to "; NxScanCapped(); " titles, the app's memory is the limit (the scan stops at "; NxScanMemoryCeiling(); "% of it)"
                 stopped = info.stopped
                 if stopped <> "" then
+                    m.top.incomplete = true
                     count = 0
                     if got <> invalid then count = got.Count()
                     print "library: stopped waiting on server "; i; " ("; stopped; ") with "; count; " items read"
@@ -444,6 +463,7 @@ sub loadLibrary()
                     end if
                     partial = true
                 else if got = invalid then
+                    m.top.incomplete = true
                     if shown then
                         print "library: background refresh couldn't read the library; keeping the saved guide"
                         keepSavedGuide()
@@ -454,7 +474,7 @@ sub loadLibrary()
                 end if
                 items.Append(got)
                 if stopped = "" then
-                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec&, skipped: skipped }
+                    s = { index: i, key: keys[i], signature: info.signature, collections: invalid, savedAt: nowSec&, skipped: skipped, cutRead: cutRead, cutOf: cutOf }
                     scanned.Push(s)
                     saves.Push(s)
                 end if
@@ -480,7 +500,16 @@ sub loadLibrary()
     for each s in scanned
         ' Plex collections, or Jellyfin and Emby BoxSets.
         if NxServerKind(servers[s.index]) = "plex" then
-            got = NxCollectionsFetchPlex(s.key, NxPlexCollectionsFetcher(servers[s.index]), m.top)
+            fetcher = NxPlexCollectionsFetcher(servers[s.index])
+            got = NxCollectionsFetchPlex(s.key, fetcher, m.top)
+            ' A server that stopped answering part way (I-068): none of its
+            ' collections this time, and no save that says it was read, so the
+            ' next launch reads them again.
+            if fetcher.dead then
+                print "library: server "; s.index; " stopped answering for its collections; leaving them out this time"
+                got = invalid
+                s.signature = invalid
+            end if
         else
             got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top)
         end if
@@ -559,13 +588,19 @@ sub loadLibrary()
     ' is dropped like one that read nothing: the guide on screen stays, and
     ' the saved library, guide and pools aren't replaced, so the next launch
     ' shows that guide too.
+    if NxTruthy(built.stale) then return
     if NxTruthy(built.kept) then
         keepSavedGuide()
         return
     end if
+    ' Ended while it read or built (sign-out, a switch): nothing it holds is saved.
+    if loadStale() then return
     timer.Mark()
     for each s in scanned
-        NxSnapshotSaveServer(snapDir, snap, s.key, items, s.index, s.collections, s.signature, nowSec&, s.skipped)
+        ' A rebuild cut for a full memory never replaces a whole saved copy that
+        ' holds more (NxSnapshotSaveScan): the guide shows what fit, the file keeps
+        ' the library.
+        if NxSnapshotSaveScan(snapDir, snap, s, items, nowSec&) = "kept" then print "library: server "; s.index; "'s rebuild was cut, the saved copy is kept"
     end for
     NxSnapshotForgetServers(snapDir, snap, keys)
     ' What Settings' RESCAN LIBRARY row says the app holds, and since when.
@@ -573,11 +608,16 @@ sub loadLibrary()
     ' no runtime, so the number survives a restart (#207).
     counts = NxLibraryCounts(items)
     counts.skipped = 0
+    counts.cutRead = 0
+    counts.cutOf = 0
     for each s in saves
         counts.skipped = counts.skipped + NxNumberOr0(s.skipped)
+        counts.cutRead = counts.cutRead + NxNumberOr0(s.cutRead)
+        counts.cutOf = counts.cutOf + NxNumberOr0(s.cutOf)
     end for
     NxSaveLibraryHeld(counts, nowSec&)
     reg = NxPlexRegistry()
+    if scanned.Count() > 0 and NxScanSections().Count() > 0 then NxSaveSections(reg, NxMergeSections(NxNameSections(NxScanSections(), ParseJson(reg.Read("servers"))), NxSavedSections(reg)))
     if reg.Read("librarySaved") <> "1" and (scanned.Count() > 0 or not m.top.firstRun) then
         reg.Write("librarySaved", "1")
         reg.Flush()
@@ -605,6 +645,7 @@ end sub
 ' some, and isn't saved; the result then also carries kept: true.
 function buildGuide(items as Object, config as Object, manifest as Object, collections as Object, shown as Boolean, reuse = invalid as Dynamic, keepShown = false as Boolean) as Object
     timer = CreateObject("roTimespan")
+    m.top.titleCount = items.Count()
     ' A library load clears the day schedules, as the web tuner's does. A
     ' package switch (reuse) keeps them, as the Apple TV's
     ' rebuildLineupAfterBundleChange does: a channel whose pool is unchanged
@@ -855,12 +896,16 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         ' stays, as when no server answers (loadLibrary).
         print "library: background refresh built no channels; the guide on screen stays"
         return { ordered: ordered, guide: guide, channels: channels, kept: true }
+    else if loadStale() then
+        print "library: this load was ended; its guide is not handed over"
+        return { ordered: ordered, guide: guide, channels: channels, stale: true }
     else
         m.top.fromCache = false
         m.top.guide = guide
         m.shownGuide = guide
         m.top.status = "ready"
     end if
+    if loadStale() then return { ordered: ordered, guide: guide, channels: channels, stale: true }
     print "library: compared and handed over in "; timer.TotalMilliseconds(); " ms"
     ' The saves, unless the file already holds this: a guide that matched the
     ' one on screen (so its packages, franchise and collection lists too) and
@@ -895,6 +940,7 @@ end function
 ' every 30 s, as upstream's rebuildAllSchedules runs): a time restriction
 ' lifting at 9 PM, or a new day, re-packs exactly as it would upstream.
 sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, lib as Object)
+    if loadStale() then return
     m.top.refreshed = true
     port = CreateObject("roMessagePort")
     m.top.ObserveField("reschedule", port)
@@ -923,6 +969,8 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
     lastHour = guideHourKey(guide)
     coverage = startCoverage(lib, builtChannels)
     while true
+        ' Ended (sign-out, a switch, a newer load): nothing more is handed over.
+        if loadStale() then return
         if coverage <> invalid and not coverage.reported then
             ' The count goes on between messages, a step at a time.
             msg = port.GetMessage()
@@ -1107,6 +1155,7 @@ end function
 ' switch needs the library, so it is answered "rebuild", and a new hour or
 ' day schedules from the saved pools, read the first time one is needed.
 sub keepSavedGuide()
+    if loadStale() then return
     m.top.refreshed = true
     m.top.matchCounts = { state: "none" }
     port = CreateObject("roMessagePort")
@@ -1211,7 +1260,7 @@ sub resaveClearedLibrary(lib as Object)
             ' Its first save time, so it still ages out a day after the scan.
             ' From JSON it may be an Integer or a Double.
             savedAt& = s.savedAt
-            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&, NxNumberOr0(s.skipped))
+            NxSnapshotSaveServer(snapDir, snap, s.key, lib.items, s.index, s.collections, s.signature, savedAt&, NxNumberOr0(s.skipped), NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
             print "library: saved server "; s.index; "'s library again in "; t.TotalMilliseconds(); " ms"
         end if
     end for
@@ -1280,6 +1329,9 @@ sub setPhase(phase as String)
     m.top.bar = -1
     m.top.barCaption = ""
     m.top.phase = phase
+    ' The block's line under the count says which step follows the read.
+    stepName = NxLoadStepName(phase)
+    if stepName <> "" then m.top.loadInfo = { titles: NxScanTitlesRead(), name: stepName, done: -1, total: 0 }
 end sub
 
 sub fail(message as String)
@@ -1287,3 +1339,56 @@ sub fail(message as String)
     m.top.status = "error"
     print "library: "; message
 end sub
+
+' The library sections on the signed-in servers, for the picker shown before the
+' first scan (LibraryPickerView, I-092). Never fails the sign-in: any trouble gives
+' an empty list, and the scan starts without the picker. A Plex server is checked
+' first, as the load does, and Jellyfin and Emby are asked twice, plain and with the
+' hidden libraries, so the ones the viewer hides on the server are marked.
+sub listSections()
+    reg = NxPlexRegistry()
+    servers = ParseJson(reg.Read("servers"))
+    out = []
+    if type(servers) = "roArray" and servers.Count() > 0 then
+        on = NxServersOn(servers, NxSavedServerChoices())
+        if NxSignedInKind() = "plex" then NxPlexResolveSaved(servers, on)
+        for i = 0 to servers.Count() - 1
+            s = servers[i]
+            if on[i] and NxToStr(s.uri) <> "" then
+                kind = NxServerKind(s)
+                if kind = "plex" then
+                    err = { auth: false }
+                    mc = NxPlexGetContainer(s, "/library/sections", err)
+                    if mc <> invalid then out.Append(NxPlexSectionRefs(s, mc.Directory))
+                else
+                    userId = NxToStr(s.userId)
+                    fetcher = NxMbFetcher(s)
+                    plain = fetcher.getJSON(NxMbViewsPath(kind, userId, false))
+                    all = fetcher.getJSON(NxMbViewsPath(kind, userId, true))
+                    if all = invalid then all = plain
+                    if all <> invalid then
+                        hidden = {}
+                        if plain <> invalid and kind <> "emby" then
+                            shown = {}
+                            for each v in NxList(plain.Items)
+                                shown[NxToStr(v.Id)] = true
+                            end for
+                            for each v in NxList(all.Items)
+                                if shown[NxToStr(v.Id)] <> true then hidden[NxToStr(v.Id)] = true
+                            end for
+                        end if
+                        out.Append(NxMbSectionRefs(s, all.Items, hidden))
+                    end if
+                end if
+            end if
+        end for
+    end if
+    print "sections: "; out.Count(); " library sections listed on "; NxPlexRegistry().Read("kind")
+    m.top.sections = out
+    m.top.status = "done"
+end sub
+
+' True when this load was ended (source/util/LoadEpoch.brs).
+function loadStale() as Boolean
+    return NxLoadStale(m.epoch)
+end function

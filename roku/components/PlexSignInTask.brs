@@ -159,6 +159,9 @@ sub finishSignIn(token as String, account as Dynamic, fresh as Boolean)
     end for
     reg = NxPlexRegistry()
     reg.Write("servers", FormatJson(found))
+    ' A new sign-in starts with every library on (I-092).
+    reg.Delete("deselectedSections")
+    reg.Delete("librarySections")
     ' More than one: the viewer picks which first (MainScene, ServerPickerView).
     ' Kept until they do, so quitting at the picker brings it back.
     if found.Count() > 1 then reg.Write("needsPick", "1")

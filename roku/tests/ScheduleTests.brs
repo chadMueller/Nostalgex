@@ -57,6 +57,19 @@ function NxRunScheduleTests(vectorsPath as String) as Integer
         NxCheck(r, "floor " + Str(c[0]).Trim(), NxFloorDouble(c[0]).ToStr(), c[1])
     end for
 
+    ' A programme's slot (#315): the file's real runtime in seconds, rounded up, with the minutes as the fallback.
+    NxCheck(r, "slot: minutes only", NxSlotSeconds({ duration: 95 }).ToStr(), "5700")
+    NxCheck(r, "slot: a runtime 61 s off is a bad value, the minutes", NxSlotSeconds({ duration: 90, exactDurationSeconds: 5461 }).ToStr(), "5400")
+    NxCheck(r, "slot: a runtime in range is rounded up", NxSlotSeconds({ duration: 90, exactDurationSeconds: 5460.4# }).ToStr(), "5461")
+    NxCheck(r, "slot: a runtime shorter than the minutes", NxSlotSeconds({ duration: 90, exactDurationSeconds: 5390 }).ToStr(), "5390")
+    NxCheck(r, "slot: an exact minute", NxSlotSeconds({ duration: 60, exactDurationSeconds: 3600 }).ToStr(), "3600")
+    NxCheck(r, "slot: 60 s off still counts", NxSlotSeconds({ duration: 90, exactDurationSeconds: 5459.5# }).ToStr(), "5460")
+    NxCheck(r, "slot: a runtime under a second is no runtime", NxSlotSeconds({ duration: 0, exactDurationSeconds: 0.5# }).ToStr(), "0")
+    NxCheck(r, "slot: no minutes, no slot", NxSlotSeconds({}).ToStr(), "0")
+    NxCheck(r, "loader: Plex keeps the milliseconds as seconds", NxToStr(NxPlexRuntimeSec(5460400)), "5460.4")
+    NxCheck(r, "loader: Plex has no runtime when none", NxToStr(NxPlexRuntimeSec(0)) + NxToStr(NxPlexRuntimeSec(invalid)), "")
+    NxCheck(r, "loader: Jellyfin ticks as seconds", NxToStr(NxMbRuntimeSec(54604000000#)), "5460.4")
+    NxCheck(r, "loader: Jellyfin has no runtime when none", NxToStr(NxMbRuntimeSec(0)) + NxToStr(NxMbRuntimeSec(invalid)), "")
     print "schedule vectors (upstream "; Left(v.upstream.commit, 7); "): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
 end function

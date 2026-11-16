@@ -62,6 +62,8 @@ sub NxParityCase(r as Object, name as String, fx as Object, want as Object, cove
         it = NxParityItem(spec, musicGenre)
         key = NxParitySpecKey(spec)
         if it <> invalid then byKey[key] = it
+        ' A compact item is built whole, not read through a loader: no answer is held for it.
+        if spec.compact <> invalid then continue for
         got = invalid
         if it <> invalid then
             added& = 0
@@ -193,6 +195,14 @@ end function
 
 ' A fixture item through the loader its server uses.
 function NxParityItem(spec as Object, musicGenre as Object) as Dynamic
+    ' A compact item: [key, title, type, minutes, addedAt], with `exact`, the file's real runtime in seconds,
+    ' when the fixture has one (the slot is then that, rounded up: NxSlotSeconds, #315).
+    if spec.compact <> invalid then
+        c = spec.compact
+        it = { ratingKey: NxToStr(c[0]), title: NxToStr(c[1]), type: NxToStr(c[2]), duration: c[3], addedAt: c[4] }
+        if spec.exact <> invalid then it.exactDurationSeconds = spec.exact
+        return it
+    end if
     raw = spec.raw
     show = spec.show
     if show = invalid then show = {}
@@ -205,6 +215,7 @@ function NxParityItem(spec as Object, musicGenre as Object) as Dynamic
 end function
 
 function NxParitySpecKey(spec as Object) as String
+    if spec.compact <> invalid then return NxToStr(spec.compact[0])
     if spec.backend = "plex" then return NxToStr(spec.raw.ratingKey)
     return NxToStr(spec.raw.Id)
 end function

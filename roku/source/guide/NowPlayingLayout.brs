@@ -41,21 +41,60 @@ function NxUpNextBadge(secondsAway as Dynamic) as String
 end function
 
 
-' The panel's measures, the Apple TV 1.0.32's NowPlayingMetrics.swift and
-' NowPlayingPanel.swift in px on the 1920 by 1080 canvas (#266): text 22, the
-' item title 29, the CH tag 28; a row 64 tall with 18 each side and 8 between
+' The colour the next programme's title is in on both panels' UP NEXT line
+' (Chad 2026-11-15: "highlight the movie title as a color"): #FFE500, the Apple
+' TV's round 3 value.
+function NxUpNextTitleColor() as String
+    return "0xFFE500FF"
+end function
+
+' The label's colour on the Now Playing panel (the guide's panel has white at
+' 50%): the Apple TV's round 3 values.
+function NxUpNextLabelColor() as String
+    return "0xB9C3DEFF"
+end function
+
+' The panel's measures, the Apple TV's NowPlayingMetrics.swift and
+' NowPlayingPanel.swift in px on the 1920 by 1080 canvas (#266): the item
+' title and the CH tag by GUIDE TEXT SIZE's step (the Apple TV's panelText,
+' panelTitle and panelTag: 17, 25 and 24 at SMALLER, 20, 29 and 28 at DEFAULT,
+' 22, 29 and 28 at LARGER); a row 64 tall with 18 each side and 8 between
 ' rows; two columns 440 wide, 28 apart; the poster 120 by 180 with 18 to the
 ' text beside it; 36 between the info zone and the controls; 90 and 60 from
 ' the sides and the top, 44 under the content.
 function NxPanelMetrics() as Object
+    ' The saved GUIDE TEXT SIZE (source/guide/GuideText.brs, whose own file the panel's components do not carry).
+    saved = NxRegSection("guide").Read("textSize")
+    level = "normal"
+    if saved = "small" or saved = "large" then level = saved
+    return NxPanelMetricsFor(level)
+end function
+
+function NxPanelMetricsFor(level as String) as Object
+    text = 20
+    title = 29
+    tag = 28
+    if level = "small" then
+        text = 17
+        title = 25
+        tag = 24
+    else if level = "large" then
+        text = 22
+    end if
     return {
-        text: 22, title: 29, tag: 28
+        text: text, title: title, tag: tag
         rowH: 64, padX: 18, rowGap: 8
         colW: 440, colGap: 28
         posterW: 120, posterH: 180, posterGap: 18
         zoneGap: 36, safeX: 90, safeY: 60, padBottom: 44
         hintH: 48
     }
+end function
+
+' The top of a line of panel text in a 64 px row (the line is about 1.3 times
+' its size tall), and a character's width in DM Mono (0.6 of its size).
+function NxPanelTextTop(pm as Object) as Integer
+    return Int((pm.rowH - pm.text * 1.3) / 2)
 end function
 
 ' The one line under the controls that says what the selected row does

@@ -151,6 +151,9 @@ function NxMbFetcher(server as Object) as Object
         base: NxToStr(server.uri),
         headers: NxMbHeaders(NxToStr(server.accessToken)),
         auth: false,
+        memoryPercent: function() as Integer
+            return CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent()
+        end function,
         getJSON: function(path as String) as Dynamic
             for attempt = 1 to 3
                 res = NxServerRequest("GET", m.base + path, m.headers, "", 30000)

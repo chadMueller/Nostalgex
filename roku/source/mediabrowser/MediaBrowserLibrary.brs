@@ -173,6 +173,15 @@ function NxMbMinutes(ticks as Dynamic) as Integer
     return NxFloorDouble(ticks / 600000000#)
 end function
 
+' RunTimeTicks (100 ns) in seconds with the fraction kept, or invalid when
+' there is none: the schedule's slot is this rounded up (NxSlotSeconds, #315),
+' where `duration` is floored to minutes.
+function NxMbRuntimeSec(ticks as Dynamic) as Dynamic
+    if not NxTruthy(ticks) or not NxIsNumber(ticks) then return invalid
+    if ticks <= 0 then return invalid
+    return ticks / 10000000#
+end function
+
 ' The first stream of a type in a source's MediaStreams, or invalid.
 function NxMbStream(source as Object, streamType as String) as Dynamic
     for each s in NxList(source.MediaStreams)
@@ -445,6 +454,7 @@ function NxMbMovieItem(jf as Object, isMusicVideoSection as Boolean, musicGenre 
         year: NxOr(jf.ProductionYear, ""),
         contentRating: NxOr(jf.OfficialRating, ""),
         duration: durationMin,
+        exactDurationSeconds: NxMbRuntimeSec(jf.RunTimeTicks),
         ratingKey: jf.Id,
         partKey: mi.msid,
         container: mi.container,
@@ -492,7 +502,12 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         originallyAvailableAt: NxMbAirDate(ep, show),
         contentRating: NxOr(show.OfficialRating, NxOr(ep.OfficialRating, "")),
         duration: durationMin,
+        exactDurationSeconds: NxMbRuntimeSec(ep.RunTimeTicks),
         ratingKey: ep.Id,
+        ' The episode's season (SeasonId), whose Primary image is its poster
+        ' before the series' (#312), as the Plex items keep parentRatingKey;
+        ' showKey, below, is the series'.
+        parentRatingKey: NxMbSeasonKey(ep),
         partKey: mi.msid,
         container: mi.container,
         videoCodec: mi.videoCodec,
@@ -508,7 +523,7 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         userRating: 0,
         type: "episode",
         ' The series id, which a collection of shows lists in place of its
-        ' episodes.
+        ' episodes, and whose Primary image is the poster after the season's.
         showKey: NxToStr(show.Id),
         thumb: invalid,
         art: invalid,
@@ -524,6 +539,33 @@ function NxMbEpisodeItem(ep as Object, show as Object, showGenres as Object, sho
         videoHeight: mi.videoHeight
     }
 end function
+
+' How many items of these types a parent holds, from a request for none
+' (the answer's TotalRecordCount), or 0 when the server won't say.
+function NxMbTotalOf(fetcher as Object, userId as String, parentId as String, types as String) as Integer
+    answer = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0).Replace("&Limit=200", "&Limit=0"))
+    if type(answer) = "roAssociativeArray" and NxIsNumber(answer.TotalRecordCount) then return answer.TotalRecordCount
+    return 0
+end function
+
+' A scan that stopped for a full memory says how far it got and how many titles
+' the server holds: what it has read, `leftHere` more in the library it stopped
+' in, and every library after it (I-091).
+sub NxMbNoteCut(fetcher as Object, userId as String, views as Object, at as Integer, out as Object, leftHere as Integer)
+    total = out.Count() + leftHere
+    for v = at + 1 to views.Count() - 1
+        if type(views[v]) = "roAssociativeArray" then
+            section = NxMbSectionType(views[v].CollectionType)
+            if section = "show" then
+                total = total + NxMbTotalOf(fetcher, userId, NxToStr(views[v].Id), "Episode")
+            else if section <> "" and section <> "other" then
+                total = total + NxMbTotalOf(fetcher, userId, NxToStr(views[v].Id), NxMbItemTypes(section))
+            end if
+        end if
+    end for
+    NxScanCapSet(out.Count(), total)
+    print "mediabrowser: memory is at "; NxScanMemoryCeiling(); "% of the limit, stopped at "; out.Count(); " of "; total; " titles"
+end sub
 
 ' The rest of a parent's items once its first page is in, page by page as
 ' fetchItems: it stops at TotalRecordCount, an empty page, or a page that
@@ -551,13 +593,20 @@ end function
 ' was rejected or the libraries list failed. A scan told to stop waiting
 ' (NxLoadStopped) returns what it has read, as NxPlexScanServer's does.
 ' `includeHidden` is the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (#231).
-function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean) as Dynamic
+' `deselected` (source/util/LibrarySections.brs) is the set of libraries the viewer
+' turned off, by serverId::Id; none of those is asked for items.
+function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean, deselected = invalid as Dynamic, serverId = "" as String) as Dynamic
     viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId, includeHidden))
     if viewsAnswer = invalid then return invalid
-    views = NxList(viewsAnswer.Items)
+    ' The libraries the viewer turned off are never read (I-092); sections() says which there were.
+    NxScanSectionsAdd(NxMbSectionRefs({ machineIdentifier: serverId, name: serverId }, viewsAnswer.Items, invalid))
+    views = NxSectionsKept(NxList(viewsAnswer.Items), deselected, serverId, "Id")
     musicGenre = CreateObject("roRegex", "music", "i")
     out = []
-    for each view in views
+    for viewAt = 0 to views.Count() - 1
+        view = views[viewAt]
+        ' A full memory ends the scan: no library after the one it stopped in (I-091).
+        if NxScanCapped() > 0 then exit for
         section = ""
         if type(view) = "roAssociativeArray" then section = NxMbSectionType(view.CollectionType)
         ' A library with no videos in it is never asked for items (#205).
@@ -565,6 +614,8 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
             name = NxToStr(NxOr(view.Name, "Library"))
             isMusicVideoSection = section = "musicvideo"
             parentId = NxToStr(view.Id)
+            libStart = out.Count()
+            NxScanReport(progress, out.Count(), name)
             if section = "show" then
                 series = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, "Series", fetcher.getJSON(NxMbItemsPath(userId, parentId, "Series", 0))), "Series")
                 ' Five shows at a time, as upstream's BATCH_SIZE, kept in
@@ -593,6 +644,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         end for
                     end for
                     answers = invalid
+                    NxScanReport(progress, out.Count(), name, NxMinInt(b + batch, series.Count()), series.Count())
                     if progress <> invalid then
                         done = NxMinInt(b + batch, series.Count())
                         progress.progress = name + ": " + done.ToStr() + " of " + series.Count().ToStr() + " shows"
@@ -600,21 +652,50 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         progress.barCaption = done.ToStr() + " of " + series.Count().ToStr() + " shows"
                     end if
                     if NxLoadStopped() then exit for
+                    if NxScanMemoryFull(fetcher) and b + batch < series.Count() then
+                        leftHere = NxMbTotalOf(fetcher, userId, parentId, "Episode") - (out.Count() - libStart)
+                        if leftHere < 0 then leftHere = 0
+                        NxMbNoteCut(fetcher, userId, views, viewAt, out, leftHere)
+                        exit for
+                    end if
                 end for
             else
                 types = NxMbItemTypes(section)
-                items = NxMbAskedOnly(NxMbMorePages(fetcher, userId, parentId, types, fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0))), types)
-                for each raw in items
-                    if type(raw) = "roAssociativeArray" then
-                        it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)
-                        if it <> invalid then
-                            it.serverIndex = serverIndex
-                            out.Push(it)
+                ' Page by page, each page made into records and dropped (a whole
+                ' library of raw answers held at once is most of a big scan's
+                ' peak), stopping at TotalRecordCount, an empty page, a page
+                ' that failed (keeping what came before) or a full memory.
+                page = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, 0))
+                seen = 0
+                while page <> invalid
+                    rows = NxList(page.Items)
+                    for each raw in NxMbAskedOnly(rows, types)
+                        if type(raw) = "roAssociativeArray" then
+                            it = NxMbMovieItem(raw, isMusicVideoSection, musicGenre)
+                            if it <> invalid then
+                                it.serverIndex = serverIndex
+                                out.Push(it)
+                            end if
                         end if
+                    end for
+                    seen = seen + rows.Count()
+                    total = seen
+                    if NxIsNumber(page.TotalRecordCount) then total = page.TotalRecordCount
+                    ' How far through this library, when the server said.
+                    if NxIsNumber(page.TotalRecordCount) then
+                        NxScanReport(progress, out.Count(), name, NxMinInt(seen, total), total)
+                    else
+                        NxScanReport(progress, out.Count(), name)
                     end if
-                end for
+                    if rows.Count() = 0 or seen >= total then exit while
+                    if NxScanMemoryFull(fetcher) then
+                        NxMbNoteCut(fetcher, userId, views, viewAt, out, total - seen)
+                        exit while
+                    end if
+                    page = fetcher.getJSON(NxMbItemsPath(userId, parentId, types, seen))
+                end while
                 if progress <> invalid then
-                    progress.progress = name + ": " + items.Count().ToStr() + " items"
+                    progress.progress = name + ": " + seen.ToStr() + " items"
                     progress.bar = -1
                 end if
             end if
@@ -638,7 +719,40 @@ end function
 ' A server's items (NxPlexScanServer or NxMbScanServer), or invalid.
 function NxScanServerFor(server as Object, serverIndex as Integer, progress as Dynamic, info as Object) as Dynamic
     kind = NxServerKind(server)
-    if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info)
+    if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info, NxDeselectedSections(NxPlexRegistry()))
     info.signature = invalid
-    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxIncludeHidden(NxHiddenLibrariesRegistry()))
+    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxScanIncludesHidden(), NxDeselectedSections(NxPlexRegistry()), NxToStr(server.machineIdentifier))
+end function
+
+' The Jellyfin or Emby libraries that hold videos (the scan's own test:
+' NxMbSectionType), `hiddenIds` the ids the plain list leaves out.
+function NxMbSectionRefs(server as Object, views as Dynamic, hiddenIds as Dynamic) as Object
+    out = []
+    for each v in NxList(views)
+        if type(v) = "roAssociativeArray" then
+            kind = NxMbSectionType(v.CollectionType)
+            if kind <> "" and kind <> "other" then
+                hidden = false
+                if type(hiddenIds) = "roAssociativeArray" then hidden = hiddenIds[NxToStr(v.Id)] = true
+                out.Push({ serverId: NxToStr(server.machineIdentifier), serverName: NxToStr(server.name), key: NxToStr(v.Id), title: NxToStr(v.Name), type: kind, hidden: hidden })
+            end if
+        end if
+    end for
+    return out
+end function
+
+' Whether a scan asks the server for the libraries a viewer hides from the
+' Jellyfin home screen: the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch, or a
+' hidden library the viewer turned on in the library picker.
+function NxScanIncludesHidden() as Boolean
+    if NxIncludeHidden(NxHiddenLibrariesRegistry()) then return true
+    reg = NxPlexRegistry()
+    return NxAnyHiddenOn(NxSavedSections(reg), NxDeselectedSections(reg))
+end function
+
+' The episode's season id when the server names one, else invalid.
+function NxMbSeasonKey(ep as Object) as Dynamic
+    key = NxToStr(ep.SeasonId)
+    if key = "" or key = "invalid" then return invalid
+    return key
 end function

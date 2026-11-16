@@ -353,6 +353,154 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Next.** Nothing needed in the app from these runs.
 
+## 2026-11-15 (Roku 1.0.13 v15: the loading pattern, the block in the empty guide and the header's notices)
+
+**State.** Branch `roku/1.0.13-candidate-v13`, v15 on top of v14 `154d3fab`. Chad: "when switching servers in the settings screen - we should show some sort of loader ... there is nice empty state that should display that", "went to click settings and this message appeared but again - why there? just put it in the empty guide state", "i have no way of finding out if the library is finished loading or not?". The same pattern on every platform (Android built it first, `0c5e9e01`, for the words).
+
+**Changed.**
+- **The block in the empty guide area** (`loadBlock` in `GuideView`, words and rules in `source/guide/LoadState.brs`): a yellow title (CHANNEL GUIDE IS CHANGING after a server or library switch, LOADING YOUR LIBRARY otherwise), "READ 4,210 TITLES" in text2, the library being read under it ("MOVIES: 40 OF 40", with OF n only when the server gave a total; the server's name first when more than one is read), the step after the read (collections, metadata, building channels), and a cyan bar that slides. With the cold-boot seed's one channel up, the block sits under its row.
+- **A server or library switch no longer drops the guide.** `MainScene.onGuideAction` used to call `dropGuide()` and put the full-screen loading view up; it now calls `GuideView.enterChanging` (rows, stripes, video, failure card and info panel go) and starts the load behind it. The rebuilt guide opens on the channel that was on (`resumeId` is kept by the guide itself). A failed switch puts the reason in the block, with OK for Settings.
+- **Every still-loading notice is in the block.** SETTINGS opened on a seed guide or during a switch showed a red `STILL LOADING YOUR LIBRARY` over the video; it is now `SETTINGS OPENS WHEN IT FINISHES` in the block (`seedWait`).
+- **The header, between the wordmark and SETTINGS:** `UPDATING LIBRARY: n TITLES READ` while a load runs behind a guide that has rows, then `GUIDE READY: n TITLES` in yellow for 4 s. Nothing after a read that was cut short (STOP WAITING, a stall, a full memory) or failed (`LibraryTask.incomplete`).
+- **The first load, with no guide yet, keeps the full-screen loading screen.**
+- **A load that was ended saves and shows nothing** (`source/util/LoadEpoch.brs`): sign-out, a switch and a newer load end the running one (`releaseLibrary` bumps a count in the registry), and the task compares the count it began under before it saves a server's library, writes the guide or pools cache, hands over a guide or says it is done. Settings stays reachable behind a guide that is loading, so sign-out mid-load was possible; the Android reviewer found the old load saving the old server's library and tuning the viewer back to it.
+- **Scanners report** through `NxScanReport` (Jellyfin and Emby by page and by batch of shows, Plex by section and batch); `LibraryTask` carries `loadInfo`, `titleCount` and `incomplete`.
+
+**Tests.** `tests/LoadStateTests.brs` (the words, the library line, which state shows, the header's line, the epoch). The stick walks are in `docs/roku-shots/v15-2026-11-15/`.
+
+**Checked on the stick.** A server switched on in Settings (stand-in Jellyfin B, 12,000 movies and 400 shows, slowed so the read can be watched): the guide stays, the rows go, and the block counts up ("READ 11,400 TITLES", "STAND-IN B · MOVIES: 5,400 OF 12,000", then "SHOWS: 400 OF 400") until the new guide arrives. A RESCAN LIBRARY behind a guide with rows reads "UPDATING LIBRARY: 200 TITLES READ" in the header, and on a real library the launch refresh went "UPDATING LIBRARY" with a count, then "GUIDE READY" with the total in yellow (those two shots are kept out of the repo). SIGN OUT pressed 18 s into a rescan: the connect screen came up, the server's request count stopped at once and stayed stopped for 100 s, and the console shows no save or hand-over after it. Shots in `docs/roku-shots/v15-2026-11-15/`. Not done: the first load with no guide is still the full-screen loading view (by design, Android and Chad's rule); a stopped read keeps no header line.
+
+**Emby end of stream (the #315 port's check).** Roku asks both Jellyfin and Emby for TS segments (`SegmentContainer=ts`, 2 s), never fMP4, so the Apple TV's freeze on an fMP4 playlist that claims more than the file does not apply. On a stub (real h264/aac TS, 10 segments, 19 s) the Video node reaches `finished` and the guide moves on in all three cases: an honest playlist (at the last frame), a last segment declared 6.0 s instead of 1.0 s (Emby's overrun: a short re-buffer, then `finished` about 4 s after the file's end, inside the 20 s picture deadline), and a playlist with a whole extra segment that does not exist (it buffers about 21 s, then closes and advances). No end rule ported.
+
+## 2026-11-15 (Roku 1.0.13 v14: the reviewer's five)
+
+**State.** Branch `roku/1.0.13-candidate-v13` (the same branch, v14 on top of `448b1102`). The reviewer passed v13; these are what it found.
+
+**Changed.**
+- **A cut rebuild no longer shrinks a whole saved library** (I-091): a rebuild runs with the guide's memory held, so it is cut about 3,200 titles sooner than first setup, and saving it replaced a complete copy with a smaller one, a little more each daily rebuild. `NxSnapshotSaveScan` keeps the saved copy when the scan was cut and the copy is whole and holds more (`NxSnapshotKeepSaved`); the guide shows what fit, the file keeps the library. The new `SnapshotTests` cases fail without it.
+- **The WATERSHED hold clip stops after three failed tries** (`NxKeepAliveAction`): `onKeepState` restarted a clip that errored for ever. A finished clip still loops; the third error stops it until a channel starts.
+- **The guide panel's poster waits 250 ms** after the cursor moves and the stale fetch is stopped, so moving across a row is not a request a programme.
+- **The old format's chunk files are deleted** when the saved library's format changes (`NxSnapshotReadMeta` clears the folder): the format 11 bump had left the format 10 files in cachefs:.
+- **`NxGuideTextSizes(large)` is back in the shape `scripts/guide-text-smoke.mjs` reads** (the locals 20, 22, 36 and 29, 29, 54 and the record built from them), with SMALLER in `NxGuideTextSizesSmall`, so the shared check holds the Roku to the Apple TV's table: SMALLER 31 box, 17 and 19; DEFAULT 36, 20 and 22; LARGER 54, 29 and 29.
+
+## 2026-11-15 (Roku: the poster is on every backend, Jellyfin and Emby too, #312)
+
+**State.** Branch `roku/1.0.13-candidate-v13`. Chad's standing rule: "doesnt matter the platform, jellyfin, emby, plex - the user interface should be parity unless absolute tech restrictions."
+
+**Changed.** `NxPosterRef` now answers for Jellyfin and Emby: the Primary image of the item (`/Items/<id>/Images/Primary?maxWidth=300&quality=90`), and for an episode its season's, then its series', then its own, as on Plex. The Jellyfin and Emby scan keeps an episode's `parentRatingKey` (SeasonId) and `showKey` (SeriesId), which the guide's block carries; the saved library's format is 11, so a Jellyfin or Emby library is read again once to gain them. `PosterTask` asks the right address for the kind (Plex's thumbnail transcode, or the server's image with the sign-in's token in the usual header) and tries the paths in order, a 404 being the cue for the next. The column is reserved on every backend in both panels.
+
+**Audit.** The poster was the only Plex-only condition in the guide's info panel and the Now Playing panel (`NxSignedInKind() = "plex"` was the whole test); the rest of what the panels read (year, rating, stars, runtime, genres, the episode line, UP NEXT) comes from fields all three scans fill. OPEN IN PLEX is inherently Plex's (see the deep-link question to the coordinator).
+
+**Tests.** `PosterTests`: a Jellyfin and an Emby movie, an episode's season/series/own paths, an episode with no season id, the ref's kind; `MediaBrowserTests` allows the two new item fields.
+
+## 2026-11-15 (Roku: the Apple TV's basement batch, `appletv/integration-1115` `e20ebec0`: programme cursor, rows by text step, the info panel's poster, plain UP NEXT, no help line)
+
+**State.** Branch `roku/1.0.13-candidate-v13` (off candidate v12 `dbe433fc`). Written off the stick while Chad tests v12; not run on a device, not merged, not pushed.
+
+**Why.** Chad's look at the Apple TV in the basement (2026-11-15), with Apple TV commits `1286669b`, `81176b97` and `340c6eb4`; reference shots in `roku-shots/appletv-basement-batch-2026-11-15/`.
+
+**Changed.**
+- **Rows follow GUIDE TEXT SIZE** (`NxGuideGeometryFor`): SMALLER and DEFAULT keep the 64 px row and 58 px header, LARGER is 76 and 66, so 29 px text keeps the room 20 px has in 64. The number box stays 31, 36, 54 and the column and half-hour width do not move. `applyGuideText` sets the row, pitch, view height, header and the rows' clip, and the bundle list's rows follow; the Now Playing panel's rows stay 64.
+- **UP NEXT is one plain line in both panels, title first**: "{Title}  UP NEXT IN {n} MIN", two spaces, n whole minutes rounded down; "UP NEXT IN LESS THAN 1 MIN" under a minute; the title in #FFE500, the label #B9C3DE on Now Playing and white at 50% on the guide panel (the Apple TV's round 3 values); a long title gets the ellipsis and the label never truncates. No pill. The guide panel had no minutes before; they are from now, as the Apple TV counts them, also for a programme the cursor is on.
+- **No help sentence under the Now Playing lists** (STREAM QUALITY, SLEEP TIMER, AUDIO, AUDIO LANGUAGE, SUBTITLE LANGUAGE); PLAYBACK INFORMATION keeps its note. The rows already had none.
+- **The guide's programme cursor** (`GuideProgramCursor`, in `source/guide/GuideTimeCursor.brs`): focus stays on the row and the cursor is a time on it. Right goes to the next programme whatever its length, over a gap too; Left to the previous one that has not ended, and from the live programme to the bundle stripe as before; Up and Down keep the time. The two-hour window moves only when the target starts before the view, past it, or in its last 15 minutes, to the half hour its start is in (`NxGuideWindowOffset`). The cursor's programme gets the selected fill and a cyan ring and glow inside the row's own focus. The info panel follows the cursor (a later programme shows its time range where the progress bar is). Menu, Back from full screen, selecting a row and Back all return it to live.
+- **The cursor's cell**, the Apple TV's round 3 values (`appletv/guide-text-three-steps` `13e6e643`): a fill of #00D4FF at 30% over the row; a ring of 3 pt #00D4FF, inset 2, corner radius 6; a glow of two cyan layers, radius 18 at 90% and radius 6 at 100%. The Roku does not blur, so the ring and both glow layers are baked into `images/look/cursor.9.png` (`scripts/look-images.py`), and the cell clips them to its own area: the glow never reaches the channel column, the stripe or the rows above and below. While a cell has the cursor the row's own focus steps back to a 2 pt outline (`focus2.9.png`) at 55%; with no cell (a gap) it stays 3 pt at 100%.
+- **The bundle stripe wraps** (Chad: "reaching the bottom should take you back to the top like it does for the channels"): Down on the last bundle goes to the first, Up on the first to the last, over plain runs (`NxStripeNeighbour`). One bundle alone stays put.
+- **The guide's info panel has the poster** (the Apple TV's Variant A, 120 by 180, the channel line on top, the progress bar and UP NEXT full width under both): beside the title, badges and description, on Plex only, its column always there on Plex whether the art has arrived or not. Same poster chain as the Now Playing panel. This needed the season and series keys on an episode's block (`NxGuideBlock`): without them the #312 chain in v12 only ever had the episode's own frame for the Now Playing panel too, so v12's season poster is fixed here as well.
+
+**Tests.** `GuideTimeCursorTests` holds the Swift `GuideProgramCursorTests` case for case plus the window clamps (34 checks); `GuideNavTests` the row and header by step and the new LARGER tops; `PosterTests` the block's keys and the chain from a block.
+
+**Seen on the stick** (test-data build against stand-in Jellyfin and Plex servers, and the real build on Chad's Plex for the film poster and the reversed UP NEXT): the poster column with a Jellyfin film's and episode's Primary images (the season's green, a series' blue, a frame's red, with a 404 season falling through), Right and Left across a row with the programme's own cell and the info panel's time range, LARGER rows (76 and 66) with the bundle list, the stripe wrapping at both ends, the reversed UP NEXT line. Screenshots in `roku-shots/v13-2026-11-15/`.
+
+## 2026-11-15 (Roku: a TV episode's Now Playing poster is its season's, then its series', then its own frame, #312)
+
+**State.** Branch `roku/s-episode-poster-chain` (off `roku/s-info-panel-order`). Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV's `appletv/312-episode-poster` (`PlexPosterChain`): a Plex episode's own `thumb` is a frame grabbed from the episode, landscape and arbitrary, which is not a poster. The panel asked for it first.
+
+**Changed.** `NxPosterRef` (`source/plex/PlexPoster.brs`) now carries `paths`, in the Apple TV's order: the season's poster (`/library/metadata/<parentRatingKey>/thumb`), the series' (`showKey`), then the item's own thumb. A film has just its own. The Plex scan keeps the season's key on an episode only when that season has a poster of its own (`NxPosterSeasonKey`, from `parentThumb`), so the panel never asks for one that is not there; an item read back from a library saved before this has no season key and gets the shorter list. `PosterTask` tries the paths in order and shows the first that answers 200. Plex only, as the poster itself is.
+
+**Tests.** `PosterTests`: the order for an episode with and without a season poster, an episode from an older library, a show key never kept, a film, and the season key rule.
+
+**Not seen on a stick.** No Plex stand-in server: the paths and the fetch loop are held by the interpreter tests only. The first check on a real Plex is an episode of a show with season posters (the panel should show the season's), then a library saved before this build (the series').
+
+## 2026-11-15 (Roku: the guide's info panel puts the description after the badges, the Apple TV's order)
+
+**State.** Branch `roku/s-info-panel-order` (off `roku/i092-library-picker`). Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV's change of 2026-11-14 (`InfoPanelLayout`, reference main `106e8dda` `InfoPanelView.swift`): the description sat between the rule and the badges and took no room when a programme had none, so everything under it moved from one programme to the next. It now comes after the badges and always holds two lines.
+
+**Changed.** `GuideView.renderInfo` draws, top to bottom: the channel tag, the title, artist and genres (music videos), the episode line, the rule, the badges (year, rating, star; left out when a programme has none), the description (always two lines of room, empty or not, ending in an ellipsis when longer), the progress row (the bar and the time, or a later programme's time range) and UP NEXT. The badges and the progress bar were one row on the Roku; they are two rows now, as on the Apple TV (`progressRow` in `GuideView.xml`). Sections are 10 apart (the Apple TV's `sectionGap`), where the Roku had 20 in places, so the panel's 351 px still holds an episode line.
+
+**Seen on the stick** (stand-in Jellyfin): a film (badges, a two line description, the bar, UP NEXT) and an episode (S01E02 line as well): `roku-shots/info-panel-order-2026-11-15/`. With an episode line, UP NEXT sits on the panel's bottom edge, as tight as the Apple TV's clipped panel is for its longest cases.
+
+**Not tested** off the TV: the panel is SceneGraph drawing, with no logic of its own to hold in the interpreter.
+
+## 2026-11-15 (Roku: library selection, the Apple TV's per-library picker, I-092)
+
+**State.** Branch `roku/i092-library-picker` (off `roku/i091-scan-memory-guard`). Not merged, not in a build, not pushed.
+
+**Why.** The real answer to a very large library (I-091): let the viewer leave a library out before the first scan ever reads it. The Apple TV's `LibrarySectionRef` and `LibrarySectionSelectionStore` (docs/LIBRARY-SELECTION.md, I-054): one row per library section, on or off, every one on to start with (opting out, so nobody lands on an empty guide), shown before the first scan and again in Settings.
+
+**Changed.**
+- `source/util/LibrarySections.brs`: the saved set of sections turned off (`deselectedSections`, "serverID::sectionKey"), the sections the last scan or the picker saw (`librarySections`), the Apple TV's type labels and subtitles (a library the viewer hides on Jellyfin reads HIDDEN ON JELLYFIN), and the lists that leave a turned-off section out.
+- Both scans leave a turned-off section alone before they ask it for anything: Plex through its section list, Jellyfin and Emby through their views. Each scan saves the sections it saw with the library (hidden marks kept), so Settings lists them without asking the server.
+- `LibraryPickerView` (CHOOSE YOUR LIBRARIES, cloned from the server picker's look: Movies, TV Shows and so on, each ON or OFF, CONTINUE on top of the choice). `MainScene.afterSignIn` asks for the sections (`LibraryTask` in its new `sections` mode, which resolves a Plex server first) after sign-in and after the Plex server picker, and shows the picker only when there is more than one section. Any trouble listing them starts the scan as before. A Jellyfin library the viewer hides starts off unless INCLUDE LIBRARIES HIDDEN ON JELLYFIN is on; turning one on in the picker makes the scan ask for hidden libraries.
+- Settings, SERVERS & ACCOUNTS: a LIBRARIES list under the servers, a row each, ON or OFF, the last one on stays on. Leaving Settings with a change saves it and reads the library again behind the guide, as RESCAN LIBRARY does. A new sign-in or a sign-out starts with every library on.
+
+**Seen on the stick** (test-data build, stand-in Jellyfin with a Movies and a Shows library, a hook that walks the picker as a first sign-in does): the picker lists Movies and Shows, both ON, focus on CONTINUE; Up and OK turned Shows OFF; CONTINUE read 600 items in 1 s and never asked the server for the Shows library; Settings listed MOVIES ("only library on") and SHOWS (OFF); turning Shows ON and leaving Settings read the library again, 700 items. Screenshots in `projects/nostalgex-internal/docs/roku-shots/i092-2026-11-15/`.
+
+**Tests.** `LibrarySectionsTests` (33 checks: the saved set, the labels, the section lists for Plex and Jellyfin, the merge, and a scan that never asks for a library that is off). pr-check passes.
+
+**Not done.** A Plex library on a stick: the section list and the scan filter are written the same way but no Plex stand-in exists, so it is untested on a device. A Jellyfin library the viewer hides, as the picker marks it, is not seen on a stick either. The sections task lists only the servers that are on; a server turned on in Settings has its sections after the next scan.
+
+## 2026-11-15 (Roku: a very large Jellyfin or Emby library no longer quits the app at the end of first setup, I-091)
+
+**State.** Branch `roku/i091-scan-memory-guard` (off candidate v11). Not merged, not in a build, not pushed.
+
+**Why.** Two Discord users: the app on a Streaming Stick HD quits at the end of the first setup, after the enrichment step, with a Jellyfin library of about 20 TB. Reproduced on a Streaming Stick Plus (limit 513,802,240 bytes) against a stand-in Jellyfin of 12,000 films and 60,000 episodes: the scan read all 72,000 titles in 276 s and left the app at 80% of its limit (a title costs 6 to 9 KB); the channel build and schedule took it to 518 MB; the OS ended the app, `EXIT_CHANNEL_MEM_LIMIT_FG`, at 701 s, right after "scheduled in 131 s". 12,000 films alone read in 18 s and sat at about 166 MB. A smaller stick has a lower limit, so it fails with fewer titles.
+
+**Changed.**
+- A Jellyfin or Emby scan stops reading when the app is past 55% of its own memory limit (`NxScanMemoryCeiling`, `NxScanMemoryFull`; the fetcher answers `memoryPercent()` from `roAppMemoryMonitor`). It keeps what it read, reads no later library, and counts how many titles the server holds in all with a request for none (`NxMbTotalOf`, `Limit=0`).
+- Films are made into records one page at a time; the old scan held every raw answer of a library before it made any.
+- RESCAN LIBRARY says so under the counts: READ 56,000 OF 72,000 TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT. (`NxCutLine`, `source/util/RescanInfo.brs`; the wording is a default for Chad to change.) The two numbers are kept with the saved library (`cutRead` and `cutOf` in its meta entry, and in the library-held record), so they survive a restart.
+
+**Measured** (same stand-in library, same stick, enrichment off): first setup with nothing saved stopped at 59,200 of 72,000 titles after 194 s, peaked at 433 MB (84% of the limit), finished the build, schedule, hand-over and saves, and settled at 63%; a rebuild behind a saved guide stopped at 56,000, peaked at 426 MB and settled at 61%. The app stayed up in both.
+
+**Tests.** `MediaBrowserTests` (the guard: no reading and a low reading read everything, a full memory stops after the page, a later library is counted and never read, the total, the page it stops on), `CoverageTests` (the line), `SnapshotTests` (the meta fields). A test's fetcher has no `memoryPercent`, so it is never full.
+
+**Not done.** Plex: its scan keeps the raw answers of a whole section before it makes records, so it is not the same shape, and there is no stand-in Plex to measure against. A per-library choice (I-092) is the real answer for a big library; the line says "turn off a library" before there is a switch for it.
+
+## 2026-11-14 (Roku: GUIDE TEXT SIZE has three steps, SMALLER, DEFAULT and LARGER)
+
+**State.** Branch `roku/guide-text-three-steps`. Not merged, not in a build, not pushed. Chad: "make sure roku and android both have the small, normal, large text changes."
+
+**Why.** The Apple TV's `appletv/guide-text-three-steps` (`db43276f`): the middle step is labelled DEFAULT and keeps the raw value "normal", "large" is the old LARGE's value, "small" is new, anything unknown reads as "normal". The Roku had two steps and sizes 22 and 25 for its normal.
+
+**Changed.** `source/guide/GuideText.brs`: `NxGuideTextStep` and `NxGuideTextStepFrom` (the saved value), `NxGuideTextNext` (SMALLER, DEFAULT, LARGER and round), `NxGuideTextLabel`, `NxSaveGuideTextStep`, and `NxGuideTextSizesFor(level)`. Sizes in px on the 1920 by 1080 canvas: program title, number and name 17, 20, 29; times, CHANNEL heading and the WATERSHED placeholder 19, 22, 29; the number box 31, 36, 54; the bundle list's rows 17, 20, 22 and its BUNDLES heading 19, 22, 25. SMALLER's three numbers are the named constants `NxGuideSmallerText`, `NxGuideSmallerTime` and `NxGuideSmallerNumW`, awaiting Chad's pick (18, 20 and 33 is the fallback). The Now Playing panel's text follows too (`NxPanelMetricsFor`): 17, 20, 22, the item title 25, 29, 29 and the CH tag 24, 28, 28. A row is still 64 px, the header 58 and the channel column 340 at every step. The Settings row cycles the three; the sync key and the raw values are unchanged. `NxGuideTextSizes(large)` and `NxGuideTextLarge` stay as the two-step calls.
+
+**Checks.** `GuideNavTests` and `SleepTimerTests` (every size, the fits, the cycle, the read), and `scripts/guide-text-smoke.mjs`, which now reads the Roku's three steps (its own commit, built on the web branch's version `e22b7eb6`).
+## 2026-11-14 (Roku: the guide's stripe colours are held to the shared golden, GuideStripesTests)
+
+**State.** Branch `roku/stripe-golden`. Not merged, not in a build, not pushed.
+
+**Why.** The Apple TV wrote `scripts/guide-stripe-colours-golden.json` (from `android/guide-stripes` `5aeb38a0`): the ten palette colours and the palette index of 22 names (the 14 shipped bundle names, a pinned name in two cases, the empty name, a long one, accents, CJK, a sharp s). Android reads it; the Roku's test held a hand-copied list of the 14 names.
+
+**Changed.** `GuideStripesTests.brs` reads the golden (via `tests/gen-vectors.mjs`, which copies it to `tests/vectors/`) and asserts the ten hex colours, every name's index, and that every bundle name in `channels.json` is in the file. `NxStripeIndex` no longer leans on `UCase` and `FromAsciiString`, whose handling of a non-ASCII name is the firmware's: it upper-cases by code point as Swift's `uppercased()` does (ASCII, Latin-1 with sharp s as SS, Latin Extended-A, Greek, Cyrillic) and writes the UTF-8 bytes itself. All 22 names match off-device with the old and the new hash (the interpreter is not the firmware); the stick's golden run is the check on the device.
+## 2026-11-14 (Roku: a file plays to its end, the Apple TV's play-to-end schedule, 315)
+
+**State.** Branch `roku/315-play-to-end`. Not merged, not in a build, not pushed. A separate branch from the 1.0.13 line on purpose; the candidate v10 takes it with the rest.
+
+**Why.** Chad: "the file should play till the end always." The Apple TV's `appletv/315-play-to-end` (golden `scripts/schedule-parity-golden.json` at `b282b946`) gives each programme its real runtime as its slot, so a 4:11 video plays 4:11 and the next one starts as it ends, not at the rounded-up minute. The Roku followed the old rounding (whole minutes), so a file ended before its slot or was cut by the next.
+
+**Changed (a port of the Swift, nothing improved).**
+- `NxSlotSeconds` (`source/schedule/DailyManifest.brs`): the slot is the real runtime in seconds rounded up, and the minutes the engine always had when the runtime is absent or differs from them by 61 s or more. The loaders keep it: `runtimeSec` on Plex items (`NxPlexRuntimeSec`) and on Jellyfin and Emby items (`NxMbRuntimeSec`, ticks over 10,000,000); the saved library format is 10.
+- `NxPackDay`: the day starts after a programme that ran over midnight (`runsOverUntil`), the filler loop plays whole programmes (no clip at midnight, no cycle cap), and the guide window includes yesterday's run-over block (`NxRunOverBlocks`, `NxChannelSchedule`).
+- `NxNaturalEndCatchUpSec` is 10: a programme that ended on its own and the next one is already 10 s or more in, the player seeks to where the schedule is (the Apple TV's `naturalEndCatchUpSeconds`). The filler cycle offset and the promotion offset stay in minutes, as in Swift.
+- `scripts/nostalgex-daily-manifest.js` (the JS engine) takes the same rules so the vectors the Roku tests read are generated from it; the golden file is the Apple TV's.
+
+**Checks.** The golden's cases (with the exact-seconds field) pass in `ScheduleParityGoldenTests`; the DST, lineup, cross-channel and advance suites and the new `ScheduleTests` cases pass. The web tuner's smoke against the same golden fails until its loaders pass exact seconds (the web agent's half; this branch carries the JS hunk, which overlaps theirs).
+
 ## 2026-11-13 (merge main into the Tunarr vs ErsatzTV refresh)
 
 **Why.** PR #313 landed the Jellyfin and Emby live TV on Roku post and also wrote `public/sitemap.xml` and `docs/DEVLOG.md`, so #314 conflicted with main.
@@ -392,6 +540,24 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 **Half-done.** None.
 
 **Next.** None for this post.
+
+## 2026-11-13 (Roku: the schedule re-check catches up when the app wakes, #190)
+
+**Why.** WATERSHED's 9 PM opening did not happen on the stick on 2026-11-12 and 2026-11-13. Measured: with no video
+playing and no key for about ten minutes (a held channel after its film), the stick stopped running the app: the
+30 s re-check, the console and the memory figure all went quiet (the last ask logged 9 min 51 s after the video
+stopped, then 18 minutes of nothing), so the hour that came meanwhile was never seen. Last night's exit at 01:44 was
+the stick rebooting for an update (uptime 67,522 s at 20:30, OS now 16.0.4). The re-check path itself is the v2
+code and fired correctly whenever the app was running (midnight re-pack at 00:00:03, and a shifted-clock run).
+
+**Changed.** `NxTickGapDue` (source/guide/GuideTimeout.brs, a script `GuideView` includes): the one-second tick, or a key, arriving more than
+90 s after the last tick asks for the re-check at once (`catchUpSchedule` in `GuideView`, which sets the guide's
+`reschedule` field as Settings does). A viewer coming back to the stick sees the gate as it is.
+
+**Not changed, not provable here.** An unattended stick still does not re-pack at 9 PM: the OS stops the app, and
+the guide changes when someone presses a key or the app is next woken.
+
+**Tests.** `watershed-gate` suite 26 checks, nine for the gap rule including a gap across 9 PM.
 
 ## 2026-11-12 (Web tuner: the now-playing window has its synopsis and details back, the rail its old controls, and the guide reads at the Apple TV's size)
 
@@ -3063,6 +3229,33 @@ RECONNECT link is made, and only the Plex button is hidden, not the container th
 Smoke: 43 checks, Jellyfin and Emby at 960x540 and a phone, Plex through plex.tv, and a negative control with the 401 handling
 taken out. Not done: a revoked login while a cached library is showing still plays the cached guide and fails at playback
 with the existing "sign in again" card.
+
+## 2026-11-09 (Roku: a server that stops answering for its collections no longer holds the first launch, I-068)
+
+**Why.** captamajora's first launch (Discussion #8: Plex 1.43.5, 318 collections, 4,535 movies, 399 shows) sat on
+DISCOVERING COLLECTIONS. They never retested, so what their server did is not known. What main already does was tried
+against a model of that library (`NxClSyntheticPlexCases`, the real fetcher and `NxCollectionsFetchPlex`, a clock in
+place of the network): the collections lists and each collection's children go out in sized windows (#189, #212), none
+refused at 1000 and 120, all 318 read, every child key a title in the library. So the Container-Size warning and the
+paging are not the hang. What the model does show: the collections step runs after the scan's stall watch has ended
+(`scanning` is false by then), and a server that answers the lists but not a collection's children costs the
+five-at-a-time read 15 s and then three tries of 15 s on each of the 318, 14,505 s, 4 hours, on one screen with no
+STOP WAITING.
+
+**Changed.** `NxPlexCollectionsFetcher` counts reads on their own that got no answer at all (a timeout, not an error
+status). After 3 in a row it gives up on the rest, and `LibraryTask` drops that server's collections for this load and
+leaves its save without a fresh signature, so the next launch reads them again. 3 in a row is 135 s at most; the
+model's silent server now ends at 150 s. An answer of any status starts the count over, so a few collections that time
+out among many that answer, ten error statuses in a row, and a server that only times out under five requests at once
+(the batch fails, the one-on-one reads answer) all read every collection they can. `NxPlexGetContainer` sets `err.code`
+to the last status so the fetcher can tell silence from an error.
+
+**Not changed.** The paging, the windows, the collections the guide builds, the scan and its stall watch. The other
+list reads with no size (`/library/sections`, each show's `allLeaves`) are not touched: nobody has measured what 1.43.5
+does with them.
+
+**Test.** `tests/run.sh` collections suite, 1,709 passed, 0 failed (17 of them new). Off the TV only: no stick, no Plex
+server. The hang itself is not reproduced on a real server.
 
 ## 2026-11-09 (Apple TV: a stronger stripe hover, the info panel follows the guide through time, silent UI tests)
 

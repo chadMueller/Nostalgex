@@ -187,6 +187,12 @@ sub open(unused = invalid as Dynamic)
     ' way out compares with this rather than counting presses.
     m.serversOnAtOpen = FormatJson(m.serversOn)
     m.serversChanged = false
+    ' The library sections the last scan or the picker saw, and the ones turned
+    ' off (I-092); a visit that changes them reads the library again on the way out.
+    m.libs = NxSavedSections(reg)
+    m.libOff = NxDeselectedSections(reg)
+    m.libOffAtOpen = FormatJson(m.libOff)
+    m.libsChanged = false
     ' Which MY COLLECTIONS categories are open, by category.
     m.collectionsOpen = {}
     m.languageOpen = ""
@@ -261,7 +267,7 @@ sub buildRows()
     end for
 
     m.addPage = "packages"
-    add({ kind: "header", title: "CHANNEL PACKAGES", subtitle: "Toggle packages to customize your lineup" }, "channels")
+    add({ kind: "header", title: "CHANNEL BUNDLES", subtitle: "Toggle bundles to customize your lineup" }, "channels")
     franchisesAt = -1
     for i = 0 to m.top.bundles.Count() - 1
         if m.top.bundles[i].id = NxFranchisesBundleID() then
@@ -301,6 +307,14 @@ sub buildRows()
     for i = 0 to m.servers.Count() - 1
         add({ kind: "server", index: i })
     end for
+    ' LIBRARIES (I-092): one row per library section, on or off, when there is
+    ' more than one to choose between.
+    if m.libs.Count() > 1 then
+        add({ kind: "subheader", text: "LIBRARIES" }, "servers")
+        for i = 0 to m.libs.Count() - 1
+            add({ kind: "library", index: i })
+        end for
+    end if
     ' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231), with the servers, where the
     ' Apple TV lists its libraries. On a Jellyfin sign-in only.
     if NxSignedInKind() = "jellyfin" then add({ kind: "includeHidden" })
@@ -791,7 +805,7 @@ sub renderPane()
                 ' Read-only but focusable, as the Apple TV's, so focus has
                 ' somewhere to be on the page.
                 if i = m.focus and m.where = "rows" then page.AppendChild(newRect(0, y, m.rowW, 54, "0xFFFFFF12"))
-                page.AppendChild(newLabel("Every channel in your packages is on air.", m.tk.font.text, m.sz.body, m.t2, 20, y + 10))
+                page.AppendChild(newLabel("Every channel in your bundles is on air.", m.tk.font.text, m.sz.body, m.t2, 20, y + 10))
             else
                 drawRow(page, i, row, y)
             end if
@@ -980,6 +994,26 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
                 state = ""
             end if
         end if
+    else if row.kind = "library" then
+        ' The library picker's rows (source/util/LibrarySections.brs): ON or OFF,
+        ' and none on the only library that is on.
+        sec = m.libs[row.index]
+        label = UCase(NxToStr(sec.title))
+        multi = false
+        for each o in m.libs
+            if o.serverId <> m.libs[0].serverId then multi = true
+        end for
+        detail = NxSectionSubtitle(sec, multi)
+        state = "OFF"
+        stateColor = m.t2
+        if NxSectionIsOn(m.libOff, sec.serverId, sec.key) then
+            state = "ON"
+            stateColor = m.accent + "FF"
+            if NxSectionsOnCount(m.libs, m.libOff) <= 1 then
+                detail = detail + " · only library on"
+                state = ""
+            end if
+        end if
     else if row.kind = "rescan" then
         ' Upstream's subtitle, a line each: what the app holds, when it last
         ' loaded and what the row does, then the last playback failure.
@@ -1061,13 +1095,11 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
     else if row.kind = "guideText" then
         ' Roku only (I-060): the guide's text, built-in sizes.
         label = "GUIDE TEXT SIZE"
-        detail = "Bigger program titles and channel names in the guide"
-        state = "NORMAL"
+        detail = "Size of the text in the guide"
+        level = NxGuideTextStep()
+        state = NxGuideTextLabel(level)
         stateColor = m.t2
-        if NxGuideTextLarge() then
-            state = "LARGE"
-            stateColor = m.accent + "FF"
-        end if
+        if level <> "normal" then stateColor = m.accent + "FF"
     else if row.kind = "guideTimeout" then
         ' The Apple TV's GUIDE TIMEOUT (#274): OFF, 5 MIN, 15 MIN; OK moves to the next.
         label = "GUIDE TIMEOUT"
@@ -1409,6 +1441,19 @@ sub pressRow()
             m.serversChanged = true
             render()
         end if
+    else if row.kind = "library" then
+        ' The last library on stays on, as the last server does.
+        sec = m.libs[row.index]
+        key = NxSectionKey(sec.serverId, sec.key)
+        if m.libOff[key] = true then
+            m.libOff.Delete(key)
+            m.libsChanged = true
+            render()
+        else if NxSectionsOnCount(m.libs, m.libOff) > 1 then
+            m.libOff[key] = true
+            m.libsChanged = true
+            render()
+        end if
     else if row.kind = "rescan" then
         if not m.top.rescanning then m.top.rescan = true
     else if row.kind = "includeHidden" then
@@ -1448,8 +1493,8 @@ sub pressRow()
         print "settings: watershed "; NxWatershedOn()
         render()
     else if row.kind = "guideText" then
-        NxSaveGuideTextLarge(not NxGuideTextLarge())
-        print "settings: guide text size "; NxGuideTextLarge()
+        NxSaveGuideTextStep(NxGuideTextNext(NxGuideTextStep()))
+        print "settings: guide text size "; NxGuideTextLabel(NxGuideTextStep())
         render()
     else if row.kind = "guideTimeout" then
         NxSaveGuideTimeout(NxGuideTimeoutNext(NxGuideTimeoutRead()))
@@ -1515,6 +1560,14 @@ sub leave()
         plex = NxPlexRegistry()
         plex.Write("serverChoices", FormatJson(choices))
         plex.Flush()
+    end if
+    ' Libraries turned off or on: saved, and read again behind the guide, as
+    ' RESCAN LIBRARY does (the scan leaves the ones that are off alone).
+    if m.libsChanged then m.libsChanged = FormatJson(m.libOff) <> m.libOffAtOpen
+    if m.libsChanged then
+        NxSaveDeselectedSections(NxPlexRegistry(), m.libOff)
+        print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff); " of "; m.libs.Count(); " on, reading the library again"
+        if not m.top.rescanning then m.top.rescan = true
     end if
     if m.franchisesChanged or m.collectionsChanged then
         reg = NxRegSection("guide")

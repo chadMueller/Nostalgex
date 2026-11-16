@@ -14,7 +14,7 @@ function NxRunSettingsRailTests() as Integer
     NxCheck(r, "tabs: SUPPORT NOSTALGEX is the one pinned above the divider", NxRailPinned(tabs), "support")
     NxCheck(r, "tabs: the titles", NxRailTitles(tabs), "SUPPORT NOSTALGEX|PLAYBACK & PICTURE|CHANNELS & BUNDLES|SERVERS & ACCOUNTS|ABOUT")
     NxCheck(r, "tabs: PLAYBACK & PICTURE's line, word for word", tabs[1].line, "Picture, quality, subtitles and audio")
-    NxCheck(r, "tabs: CHANNELS & BUNDLES's line", tabs[2].line, "Packages, franchises, collections and the schedule")
+    NxCheck(r, "tabs: CHANNELS & BUNDLES's line", tabs[2].line, "Bundles, franchises, collections and the schedule")
     NxCheck(r, "tabs: SERVERS & ACCOUNTS's line", tabs[3].line, "Servers, libraries, rescans and sign out")
     NxCheck(r, "tabs: ABOUT's line", tabs[4].line, "Version and links")
     NxCheck(r, "tabs: SUPPORT NOSTALGEX keeps the Roku's own line", tabs[0].line, "News, help and the Apple TV app are on its site")

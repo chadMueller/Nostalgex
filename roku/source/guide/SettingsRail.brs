@@ -22,7 +22,7 @@ function NxSettingsTabs() as Object
     return [
         { id: "support", title: "SUPPORT NOSTALGEX", line: "News, help and the Apple TV app are on its site", hero: "support", pinned: true },
         { id: "playback", title: "PLAYBACK & PICTURE", line: "Picture, quality, subtitles and audio", hero: "playback", pinned: false },
-        { id: "channels", title: "CHANNELS & BUNDLES", line: "Packages, franchises, collections and the schedule", hero: "channels", pinned: false },
+        { id: "channels", title: "CHANNELS & BUNDLES", line: "Bundles, franchises, collections and the schedule", hero: "channels", pinned: false },
         { id: "servers", title: "SERVERS & ACCOUNTS", line: "Servers, libraries, rescans and sign out", hero: "servers", pinned: false },
         { id: "about", title: "ABOUT", line: "Version and links", hero: "about", pinned: false }
     ]
@@ -37,7 +37,7 @@ function NxSettingsTabOf(kind as String) as String
     ' listed here before that row exists, so neither pull request has to land
     ' first: a kind missing from these lists is in no tab and never shows.
     channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone"]
-    servers = ["server", "includeHidden", "rescan", "signOut"]
+    servers = ["server", "library", "includeHidden", "rescan", "signOut"]
     about = ["version", "aboutLink"]
     if kind = "support" then return "support"
     if NxHasValue(playback, kind) then return "playback"

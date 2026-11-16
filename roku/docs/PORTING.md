@@ -262,7 +262,7 @@ franchise collections are in the FRANCHISES section, not under MY COLLECTIONS:
 WHY ARE SOME CHANNELS MISSING? (I-004, #227) is the page the amber count points
 to, `ChannelsMissingPage` as the Apple TV has it (`source/guide/ChannelsMissing.brs`,
 cases in `tests/ChannelsMissingTests.brs`): a link row after the packages on
-CHANNEL PACKAGES, reading "n CH" and shown only while a channel is missing, opens
+CHANNEL BUNDLES, reading "n CH" and shown only while a channel is missing, opens
 MISSING CHANNELS one level down, where Back returns to the link row. The page
 lists, under each package's name, the channels of every package that is on,
 built and not building that aren't on air, each as a card: its colour and name,
@@ -270,7 +270,7 @@ built and not building that aren't on air, each as a card: its colour and name,
 words them (the same fields, order and text; the Swift tests' cases are ported
 one for one, and since #280 every channel's lines are held to
 `scripts/channel-requirements-golden.json`, with the amber line held to the web module's
-`needsLine`, so a change to a channel's rules turns the suite red until the Roku follows). With none missing it says "Every channel in your packages is on
+`needsLine`, so a change to a channel's rules turns the suite red until the Roku follows). With none missing it says "Every channel in your bundles is on
 air." Differences:
 
 - **When the count is made.** The Apple TV filters the library for the page's
@@ -322,7 +322,7 @@ draws them.
   building reads BUILDING when its tab is opened again; each tab opens scrolled
   to the top.
 - **CHANNELS & BUNDLES** (`SettingsChannelsView`): a list of three link rows,
-  CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS, each with its value on the
+  CHANNEL BUNDLES, FRANCHISES and MY COLLECTIONS, each with its value on the
   right (`NxChannelsLinkValue` in `source/guide/SettingsChannels.brs`: "n ON",
   and FRANCHISES OFF while its switch is off), then WATERSHED. OK on a link
   opens its page in the pane, scrolled to the top on its first row, under the
@@ -331,7 +331,7 @@ draws them.
   into it; picking another tab puts the tab back on its list. The values count
   this visit's switches, as the Apple TV's list reads its live state. A page
   holds its section's rows from when the tab was one scroll, headings and
-  notes included: CHANNEL PACKAGES every package but FRANCHISES, with the amber
+  notes included: CHANNEL BUNDLES every bundle but FRANCHISES, with the amber
   counts; FRANCHISES the switch, its notes, ADD ALL / REMOVE ALL and the one A
   to Z list; MY COLLECTIONS its note and the OTHER COLLECTIONS fold-out. Before
   any collection is read MY COLLECTIONS has only its note, so focus has no row

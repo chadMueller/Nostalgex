@@ -9,11 +9,36 @@ function NxRunPosterTests() as Integer
     ref = NxPosterRef(movie, "plex")
     NxCheck(r, "plex movie: its thumb", ref.path, "/library/metadata/123/thumb/1700000000")
     NxCheck(r, "plex movie: its server", ref.serverIndex.ToStr(), "0")
-    NxCheck(r, "jellyfin: none, as upstream", FormatJson(NxPosterRef(movie, "jellyfin")), "null")
-    NxCheck(r, "emby: none, as upstream", FormatJson(NxPosterRef(movie, "emby")), "null")
+    ' Every backend has a poster (Chad 2026-11-15, parity unless a tech restriction): Jellyfin and Emby ask for the item's Primary image.
+    NxCheck(r, "jellyfin movie: its Primary image", NxPosterRef(movie, "jellyfin").path, "/Items/123/Images/Primary?maxWidth=300")
+    NxCheck(r, "emby movie: the same", FormatJson(NxPosterRef(movie, "emby").paths), "[""/Items/123/Images/Primary?maxWidth=300""]")
+    NxCheck(r, "an unknown kind has none", FormatJson(NxPosterRef(movie, "kodi")), "null")
+    mbEp = { ratingKey: "e1", type: "episode", showKey: "show9", parentRatingKey: "season4", serverIndex: 0 }
+    NxCheck(r, "jellyfin episode: season, series, its own", FormatJson(NxPosterRef(mbEp, "jellyfin").paths), "[""/Items/season4/Images/Primary?maxWidth=300"",""/Items/show9/Images/Primary?maxWidth=300"",""/Items/e1/Images/Primary?maxWidth=300""]")
+    mbEp.parentRatingKey = invalid
+    NxCheck(r, "jellyfin episode with no season id: series then its own", NxPosterRef(mbEp, "jellyfin").paths.Count().ToStr(), "2")
+    NxCheck(r, "the ref says its kind", NxPosterRef(mbEp, "emby").kind + NxPosterRef(movie, "plex").kind, "embyplex")
     NxCheck(r, "nothing playing", FormatJson(NxPosterRef(invalid, "plex")), "null")
     saved = { ratingKey: "456", serverIndex: 1 }
     NxCheck(r, "read back from the saved library: the item's own thumb", NxPosterRef(saved, "plex").path, "/library/metadata/456/thumb")
+    ' #312: an episode's poster is its season's, then its series', then its own frame.
+    ep = { ratingKey: "900", type: "episode", showKey: "50", parentRatingKey: "60", thumb: "/library/metadata/900/thumb/1", serverIndex: 0 }
+    NxCheck(r, "episode: season, series, then its frame", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/60/thumb"",""/library/metadata/50/thumb"",""/library/metadata/900/thumb/1""]")
+    NxCheck(r, "episode: the first path is the season's", NxPosterRef(ep, "plex").path, "/library/metadata/60/thumb")
+    ep.parentRatingKey = invalid
+    NxCheck(r, "episode with no season poster: the series, then its frame", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/50/thumb"",""/library/metadata/900/thumb/1""]")
+    older = { ratingKey: "901", type: "episode", serverIndex: 0 }
+    NxCheck(r, "episode read back from an older library: its own thumb", FormatJson(NxPosterRef(older, "plex").paths), "[""/library/metadata/901/thumb""]")
+    ep.showKey = "invalid"
+    NxCheck(r, "a show key that was never kept is not asked for", FormatJson(NxPosterRef(ep, "plex").paths), "[""/library/metadata/900/thumb/1""]")
+    NxCheck(r, "a movie has one path", FormatJson(NxPosterRef(movie, "plex").paths), "[""/library/metadata/123/thumb/1700000000""]")
+    NxCheck(r, "season key: kept only with a season poster", FormatJson([NxPosterSeasonKey({ parentRatingKey: "60", parentThumb: "/x" }), NxPosterSeasonKey({ parentRatingKey: "60" }), NxPosterSeasonKey({ parentThumb: "/x" })]), "[""60"",null,null]")
+    ' The guide's block carries the season and series keys of an episode, so the poster chain is real on a screen.
+    blk = NxGuideBlock({ item: { ratingKey: "900", type: "episode", title: "Show", episodeTitle: "Ep", showKey: "50", parentRatingKey: "60", serverIndex: 0, duration: 30, summary: "", year: "" }, startSec: 0, endSec: 1800 })
+    NxCheck(r, "a block keeps an episode's season and series keys", blk.parentRatingKey + "," + blk.showKey, "60,50")
+    NxCheck(r, "and the chain from the block is season, series, its own", FormatJson(NxPosterRef(blk, "plex").paths), "[""/library/metadata/60/thumb"",""/library/metadata/50/thumb"",""/library/metadata/900/thumb""]")
+    mov = NxGuideBlock({ item: { ratingKey: "7", type: "movie", title: "Film", showKey: "50", serverIndex: 0, duration: 90, summary: "", year: "" }, startSec: 0, endSec: 5400 })
+    NxCheck(r, "a film's block keeps no show key", FormatJson(mov.DoesExist("showKey")), "false")
     NxCheck(r, "no rating key", FormatJson(NxPosterRef({ serverIndex: 0 }, "plex")), "null")
     NxCheck(r, "no server", FormatJson(NxPosterRef({ ratingKey: "1" }, "plex")), "null")
 

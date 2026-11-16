@@ -31,3 +31,20 @@ function NxWatershedCard() as Object
         nextStep: "Turn off Watershed in Settings to watch now."
     }
 end function
+
+' What the hold clip's Video does on a state change while it keeps the app awake
+' (#190): "play" restarts it (a finished clip loops, a failed one is tried again),
+' "giveup" stops it for good after the third failure, and "" does nothing. A clip
+' that cannot play must not be restarted forever: `errors` counts this one.
+function NxKeepAliveAction(state as String, errors as Integer) as String
+    if state = "finished" then return "play"
+    if state = "error" then
+        if errors >= 3 then return "giveup"
+        return "play"
+    end if
+    return ""
+end function
+
+function NxKeepAliveTries() as Integer
+    return 3
+end function

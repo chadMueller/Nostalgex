@@ -11,6 +11,19 @@
 
 sub init()
     m.seeded = false
+    ' The loading pattern (source/guide/LoadState.brs).
+    m.changing = false
+    m.switching = false
+    m.loadErr = ""
+    m.waitNote = false
+    m.loadTitles = 0
+    m.loadDone = -1
+    m.loadTotal = 0
+    m.loadName = ""
+    m.readyTitles = 0
+    m.readyUntil = 0
+    m.readyTimer = m.top.FindNode("readyTimer")
+    m.readyTimer.ObserveField("fire", "onReadyDone")
     ' The grid's shape (NxGuideGeometry, #263): a row and the 1 px rule under it
     ' make a row's pitch, and the rows show below the header and its rule.
     geo = NxGuideGeometry()
@@ -45,6 +58,9 @@ sub init()
     m.piAttempt = invalid
     m.stopped = false
     m.slotOffset = 0
+    ' The programme cursor (NxGuideCursorNext and the others, source/guide/GuideTimeCursor.brs):
+    ' a time on the focused row, invalid for the live programme.
+    m.cursor = invalid
     m.playing = invalid
     m.fullscreen = false
     ' Bundle stripes (#276): a 28 px column at the guide's left edge.
@@ -77,6 +93,11 @@ sub init()
     applyGuideText()
     styleLabel("hazeText", "DMMono-Medium", 26, "0xFFFFFF6B")
     styleLabel("notice", "DMMono-Regular", 20, "0xFF6B6BFF")
+    styleLabel("loadTitle", "DMMono-Medium", 40, "0xFFE500FF")
+    styleLabel("loadLine", "DMMono-Regular", 24, NxTokens().color.text2)
+    styleLabel("loadLib", "DMMono-Regular", 22, "0xB9C3DEB3")
+    styleLabel("loadNote", "DMMono-Regular", 20, "0x00D4FFFF")
+    styleLabel("headerNote", "DMMono-Medium", 20, "0x00D4FFFF")
     styleLabel("ccToast", "VT323-Regular", 48, "0xFFFFFFFF")
     m.deadlineTimer = newTimer(15, false, "onDeadline")
     m.cardTimer = newTimer(5, false, "onCardDone")
@@ -92,6 +113,12 @@ sub init()
     m.reportClock = CreateObject("roTimespan")
 
     m.video = m.top.FindNode("video")
+    m.keepVideo = m.top.FindNode("keepVideo")
+    m.keepVideo.mute = true
+    m.keepVideo.ObserveField("state", "onKeepState")
+    m.keepAlive = false
+    m.infoPosterTimer = m.top.FindNode("infoPosterTimer")
+    m.infoPosterTimer.ObserveField("fire", "onInfoPosterTimer")
     m.video.ObserveField("state", "onVideoState")
     m.video.ObserveField("bufferingStatus", "onBuffering")
     m.video.ObserveField("availableSubtitleTracks", "applySubtitles")
@@ -162,13 +189,23 @@ end sub
 ' choice, and the CHANNEL heading set to match. True when the sizes changed,
 ' so the grid wants drawing again.
 function applyGuideText() as Boolean
-    large = NxGuideTextLarge()
-    ' Never compare invalid to a Boolean: the first call has no choice yet.
+    level = NxGuideTextStep()
+    ' Never compare invalid to a String: the first call has no choice yet.
     if m.guideText <> invalid then
-        if m.guideTextLarge = large then return false
+        if m.guideTextStep = level then return false
     end if
-    m.guideTextLarge = large
-    m.guideText = NxGuideTextSizes(large)
+    m.guideTextStep = level
+    m.guideText = NxGuideTextSizesFor(level)
+    ' The row and the header follow the step (NxGuideGeometryFor): LARGER's are
+    ' 76 and 66, the others' 64 and 58.
+    m.rowH = m.guideText.rowH
+    m.rowPitch = m.guideText.rowH + 1
+    m.viewHeight = 525 - (m.guideText.headerH + 1)
+    m.top.FindNode("headerBg").height = m.guideText.headerH
+    m.top.FindNode("headerRule").translation = [0, m.guideText.headerH]
+    rowsNode = m.top.FindNode("rows")
+    rowsNode.translation = [0, m.guideText.headerH + 1]
+    rowsNode.clippingRect = [0, 0, 1920, m.viewHeight]
     styleLabel("channelHead", "DMMono-Medium", m.guideText.head, NxTokens().color.text2)
     m.top.FindNode("channelHead").translation = [12, m.guideText.headY]
     return true
@@ -207,18 +244,29 @@ sub onGuide()
     ' One channel from the cold-boot seed while the library loads (#155):
     ' no packages behind it, so SETTINGS and the sidebar wait for the guide.
     m.seeded = NxTruthy(m.top.guide.seed)
-    if not m.seeded and m.top.FindNode("notice").text = NxSeedWaitNote() then m.top.FindNode("notice").text = ""
+    ' Whatever arrives ends a switch's CHANGING state: channels fill the guide, or
+    ' none came and NO CHANNELS FOUND is the answer.
+    m.changing = false
+    m.loadErr = ""
+    ' The switch is over once a full guide is here, not the one-channel seed.
+    if not m.seeded then
+        m.switching = false
+        m.waitNote = false
+    end if
+    m.top.FindNode("info").visible = true
     ' No channel at all (libraries that build none): the time header and
     ' ChannelGuideView's NO CHANNELS AVAILABLE, and Up still reaches SETTINGS.
     ' Nothing reads a channel while the list is empty (#93).
     if m.channels = invalid then m.channels = []
     if m.channels.Count() = 0 then
         ' Upstream's NO CHANNELS FOUND, with OK for its OPEN SETTINGS (#60).
-        m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which packages your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
+        m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
         keepFocusVisible()
         renderGrid()
+        renderLoad()
         return
     end if
+    renderLoad()
     refreshOffer()
     refreshSettings()
     ' An empty guide that now has channels starts as a first one: the clock
@@ -438,6 +486,9 @@ sub renderGrid()
         m.gaveWay = NxGaveWay(m.channels, t)
         m.gaveWayAt = t
     end if
+    ' The programme the cursor is on, on the focused row (the live one at rest).
+    m.cursorBlock = invalid
+    if m.nav = "grid" and m.focus >= 0 and m.focus < m.channels.Count() then m.cursorBlock = NxGuideCursorCurrent(m.channels[m.focus].blocks, m.cursor, t)
     for idx = 0 to m.channels.Count() - 1
         y = m.scrollY + (idx + lead) * m.rowPitch
         if y > -m.rowPitch and y < m.viewHeight then rows.AppendChild(renderRow(idx, y, t, wStart&, wEnd&, scale))
@@ -450,7 +501,37 @@ sub renderGrid()
         ' glow is cut at the stripe slot so the bundle name stays whole.
         cut = CreateObject("roSGNode", "Group")
         cut.clippingRect = [m.stripeW, -4000, 4000, 8000]
-        cut.AppendChild(newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF")))
+        ' With a cell under the cursor the row's own focus steps back to a 2 pt
+        ' outline in the channel colour at 55%; with none (a gap) it stays 3 pt at 100%.
+        cb = m.cursorBlock
+        style = NxGuideCursorStyle()
+        rowOutline = newOutline("focus", y, colorOf(m.channels[m.focus].color, "FF"))
+        if cb <> invalid and cb.endSec > wStart& and cb.startSec < wEnd& then
+            rowOutline = newOutline("focus2", y, colorOf(m.channels[m.focus].color, "FF"))
+            rowOutline.opacity = style.rowOpacity
+        end if
+        cut.AppendChild(rowOutline)
+        ' The programme's own highlight inside the row's: the ring and its glow
+        ' (cursor.9.png), clipped to the cell so the halo never reaches the channel
+        ' column, the stripe or the rows above and below; its fill is drawn with the row.
+        if cb <> invalid and cb.endSec > wStart& and cb.startSec < wEnd& then
+            cs& = cb.startSec
+            if cs& < wStart& then cs& = wStart&
+            ce& = cb.endSec
+            if ce& > wEnd& then ce& = wEnd&
+            cw = (ce& - cs&) * scale
+            cell = CreateObject("roSGNode", "Group")
+            cell.translation = [m.colX + 1 + (cs& - wStart&) * scale, y]
+            cell.clippingRect = [0, 0, cw, m.rowH]
+            ring = CreateObject("roSGNode", "Poster")
+            ring.uri = "pkg:/images/look/cursor.9.png"
+            ring.translation = [-style.margin, -style.margin]
+            ring.width = cw + 2 * style.margin
+            ring.height = m.rowH + 2 * style.margin
+            ring.blendColor = style.ring
+            cell.AppendChild(ring)
+            cut.AppendChild(cell)
+        end if
         rows.AppendChild(cut)
     end if
     if lead > 0 and m.scrollY > -m.rowPitch then rows.AppendChild(renderInvite(m.scrollY))
@@ -528,6 +609,10 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
                 row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
             else if past then
                 row.AppendChild(newRect(x, 0, w, m.rowH, gc.past))
+            end if
+            ' The cursor's programme on the focused row: the selected fill.
+            if focused and m.cursorBlock <> invalid then
+                if b.startSec = m.cursorBlock.startSec and b.ratingKey = m.cursorBlock.ratingKey then row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideCursorStyle().fill))
             end if
             row.AppendChild(newRect(x, 0, 1, m.rowH, "0xFFFFFF1F"))
             ' The title runs to the block's edge, 15 in from its start: white
@@ -755,7 +840,7 @@ function renderInvite(y as Integer) as Object
     head = newLabel(NxSeasonalHeadline(m.offer, NxSeasonNow()), "DMMono-Medium", 22, hc, 20, NxGuideLineTop(m.rowH, 22), 0)
     row.AppendChild(head)
     px = 20 + head.boundingRect().width + 14
-    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " PACKAGE", "DMMono-Medium", 14, "0x000000FF", px + 11, (m.rowH - 28) \ 2 + 5, 0)
+    cta = newLabel("PRESS TO ADD THE " + UCase(NxToStr(m.offer.name)) + " BUNDLE", "DMMono-Medium", 14, "0x000000FF", px + 11, (m.rowH - 28) \ 2 + 5, 0)
     if focused then cta.color = "0x000000A6"
     pill = CreateObject("roSGNode", "Poster")
     pill.uri = "pkg:/images/look/capsule.9.png"
@@ -798,6 +883,58 @@ end function
 
 ' ── Info panel: follows focus; for the tuned channel, what is playing ───────
 
+' The guide info panel's poster for `ref` (NxPosterRef), fetched again only when
+' the paths change: the dark column stands in until it arrives, and when the
+' programme has none to ask for (not Plex) there is no column.
+sub showInfoPoster(ref as Dynamic)
+    key = ""
+    if ref <> invalid then key = FormatJson(ref.paths)
+    p = m.top.FindNode("poster")
+    back = m.top.FindNode("posterBack")
+    back.visible = ref <> invalid
+    ' If every picture fails, an empty frame in the row's colour stays.
+    if m.channels <> invalid and m.focus >= 0 and m.focus < m.channels.Count() then back.color = NxGuideFocusFill(m.channels[m.focus].color)
+    if key = NxToStr(m.infoPosterKey) then
+        p.visible = ref <> invalid and m.infoPosterShown = true
+        return
+    end if
+    m.infoPosterKey = key
+    m.infoPosterShown = false
+    p.visible = false
+    ' The stale fetch is stopped, and the next waits 250 ms: Right, Left, Up and Down
+    ' move the cursor faster than a poster arrives, and a fetch for every programme it
+    ' passes is a request each (the reviewer's find).
+    if m.infoPosterTask <> invalid then
+        m.infoPosterTask.UnobserveField("file")
+        m.infoPosterTask.control = "stop"
+        m.infoPosterTask = invalid
+    end if
+    m.infoPosterTimer.control = "stop"
+    m.infoPosterRef = ref
+    if ref = invalid then return
+    m.infoPosterTimer.control = "start"
+end sub
+
+' The cursor has rested on a programme for 250 ms: its poster is fetched.
+sub onInfoPosterTimer()
+    ref = m.infoPosterRef
+    if ref = invalid then return
+    m.infoPosterTask = CreateObject("roSGNode", "PosterTask")
+    m.infoPosterTask.ObserveField("file", "onInfoPosterFile")
+    m.infoPosterTask.ref = ref
+    m.infoPosterTask.control = "run"
+end sub
+
+sub onInfoPosterFile()
+    if m.infoPosterTask = invalid then return
+    file = m.infoPosterTask.file
+    if file = "" then return
+    p = m.top.FindNode("poster")
+    p.uri = file
+    m.infoPosterShown = true
+    p.visible = true
+end sub
+
 sub renderInfo()
     if m.channels = invalid or m.channels.Count() = 0 then return
     ch = m.channels[m.focus]
@@ -805,9 +942,16 @@ sub renderInfo()
     ' Moved later than now, the panel shows the programme at the window's left
     ' edge (#275, the Apple TV's GuideTimeCursor); a gap there shows nothing
     ' scheduled, and at the start it is what is on now.
-    cursor = NxGuidePreviewTime(m.slotOffset, (t \ 1800) * 1800, t)
+    ' The info panel follows the cursor: on a later programme it shows that
+    ' one (invalid in a gap, which shows the tag alone), with its time range
+    ' where the progress bar is.
+    cursor = m.cursor
     if cursor <> invalid then
-        b = NxGuideBlockCovering(ch.blocks, cursor)
+        c& = cursor
+        if c& <= t then cursor = invalid
+    end if
+    if cursor <> invalid then
+        b = NxGuideCursorCurrent(ch.blocks, cursor, t)
     else
         b = blockAt(ch, t)
         if m.focus = m.tuned and m.playing <> invalid then b = m.playing
@@ -820,19 +964,36 @@ sub renderInfo()
     m.top.FindNode("progressFill").color = color
 
     title = m.top.FindNode("title")
-    names = ["artist", "genres", "subtitle", "rule", "summary", "meta", "upNextLabel", "upNext"]
+    names = ["artist", "genres", "subtitle", "rule", "summary", "meta", "progressRow", "upNextLabel", "upNext"]
     if b = invalid then
         ' The tag alone, as InfoPanelView shows with nothing scheduled.
         title.text = ""
         for each n in names
             m.top.FindNode(n).visible = false
         end for
+        showInfoPoster(invalid)
         return
     end if
     for each n in names
         m.top.FindNode(n).visible = true
     end for
     title.text = b.title
+
+    ' The poster beside the title, badges and description (the Apple TV's Variant A,
+    ' 120 by 180, the channel line above and the progress bar and UP NEXT full width
+    ' under both). Plex only, where the posters come from; its column is always
+    ' there on Plex, art or not, so the text never moves (Chad 2026-11-15).
+    ref = NxPosterRef(b, NxSignedInKind())
+    showInfoPoster(ref)
+    lx = 0
+    if ref <> invalid then lx = 120 + 18
+    textW = 1100 - lx
+    title.translation = [lx, 56]
+    title.width = textW
+    for each n in ["artist", "genres", "subtitle", "summary"]
+        m.top.FindNode(n).width = textW
+    end for
+    m.top.FindNode("rule").width = textW
 
     ' The stack, 10 apart (Spacing.innerGap): title, artist and genres for a
     ' music video, the episode line, then the rule.
@@ -841,7 +1002,7 @@ sub renderInfo()
     artist.visible = NxTruthy(b.music) and NxToStr(b.artist) <> ""
     if artist.visible then
         artist.text = b.artist
-        artist.translation = [0, y]
+        artist.translation = [lx, y]
         y = y + artist.boundingRect().height + 10
     end if
     genres = m.top.FindNode("genres")
@@ -849,7 +1010,7 @@ sub renderInfo()
     if genres.visible then
         genres.text = b.genreLine
         genres.color = colorOf(ch.color, "BF")
-        genres.translation = [0, y]
+        genres.translation = [lx, y]
         y = y + genres.boundingRect().height + 10
     end if
     subtitle = m.top.FindNode("subtitle")
@@ -857,20 +1018,20 @@ sub renderInfo()
     subtitle.visible = subLine <> ""
     if subtitle.visible then
         subtitle.text = subLine
-        subtitle.translation = [0, y]
+        subtitle.translation = [lx, y]
         y = y + subtitle.boundingRect().height + 10
     end if
-    m.top.FindNode("rule").translation = [0, y]
-    y = y + 1 + 20
-    summary = m.top.FindNode("summary")
-    summary.text = b.summary
-    summary.translation = [0, y]
-    if b.summary <> "" then y = y + summary.boundingRect().height + 20
+    ' The Apple TV's InfoPanelLayout order (appletv 2026-11-14, "the description
+    ' where the design says"): the rule, the badges (year, rating, star), the
+    ' description, always two lines tall so nothing under it moves from one
+    ' programme to the next, then the progress row and UP NEXT. Sections are
+    ' 10 apart (Spacing.sectionGap).
+    m.top.FindNode("rule").translation = [lx, y]
+    y = y + 1 + 10
 
-    ' Meta row: year and content rating badges, the star rating, then the
-    ' progress bar, which takes what the time leaves.
+    ' The badges row, which a programme with no year, rating or stars leaves out.
     meta = m.top.FindNode("meta")
-    meta.translation = [0, y]
+    meta.translation = [lx, y]
     badges = m.top.FindNode("badges")
     key = b.year + "|" + NxToStr(b.contentRating) + "|" + NxToStr(b.rating)
     if m.badgesKey <> key then
@@ -909,14 +1070,30 @@ sub renderInfo()
         end if
         m.badgesWidth = x
     end if
-    x = m.badgesWidth
+    meta.visible = m.badgesWidth > 0
+    if meta.visible then y = y + 34 + 10
+
+    ' The description: two lines of room, empty or not (InfoPanelLayout.descriptionLines).
+    summary = m.top.FindNode("summary")
+    summary.text = "A" + Chr(10) + "A"
+    room = summary.boundingRect().height
+    summary.text = b.summary
+    summary.translation = [lx, y]
+    y = y + room + 10
+    ' The progress row and UP NEXT run the panel's full width, under the poster too.
+    if ref <> invalid and y < 56 + 180 + 10 then y = 56 + 180 + 10
+
+    ' The progress row: the bar and the time, or a later programme's time range.
+    row = m.top.FindNode("progressRow")
+    row.translation = [0, y]
     clock = m.top.FindNode("clock")
     track = m.top.FindNode("progressTrack")
     fill = m.top.FindNode("progressFill")
+    t = nowSec()
     if cursor <> invalid then
         ' A programme ahead has no progress: its time range takes the bar's place.
         clock.text = NxGuideTimeRange(localTimeLabel(b.startSec), localTimeLabel(b.endSec))
-        clock.translation = [x, 5]
+        clock.translation = [0, 5]
         track.visible = false
         fill.visible = false
     else
@@ -927,11 +1104,11 @@ sub renderInfo()
         clock.text = hms(pos&) + " / " + hms(dur&)
         cw = clock.boundingRect().width
         clock.translation = [1100 - cw, 5]
-        barW = 1100 - cw - 10 - x
+        barW = 1100 - cw - 10
         if barW < 0 then barW = 0
-        track.translation = [x, 15]
+        track.translation = [0, 15]
         track.width = barW
-        fill.translation = [x, 15]
+        fill.translation = [0, 15]
         ' Past the slot while the file finishes, the bar stays full.
         if pos& > dur& then
             fill.width = barW
@@ -942,16 +1119,28 @@ sub renderInfo()
         end if
     end if
 
-    y = y + 34 + 20
+    y = y + 34 + 10
     n = blockAfter(ch, b)
     m.top.FindNode("upNextLabel").visible = n <> invalid
     up = m.top.FindNode("upNext")
     up.visible = n <> invalid
     if n <> invalid then
-        lw = setTracked("upNextLabel", "UP NEXT", "VT323-Regular", 24, "0xFFFFFF80", 3)
-        m.top.FindNode("upNextLabel").translation = [0, y]
-        up.translation = [lw + 10, y]
+        ' One plain line, title first (Chad 2026-11-15, reversing the earlier order
+        ' globally): the title in a highlight colour, two spaces, then UP NEXT IN
+        ' 24 MIN (LESS THAN 1 MIN under a minute). The title is cut with an
+        ' ellipsis before the label is. Minutes from now, as the Apple TV counts them.
         up.text = musicLine(n)
+        up.color = NxUpNextTitleColor()
+        up.width = 0
+        natural = up.boundingRect().width
+        lw = setTracked("upNextLabel", NxUpNextBadge(n.startSec - t), "VT323-Regular", 24, "0xFFFFFF80", 3)
+        avail = 1100 - lw - 20
+        tw = natural
+        if tw > avail then tw = avail
+        if tw < 0 then tw = 0
+        up.width = tw
+        up.translation = [0, y]
+        m.top.FindNode("upNextLabel").translation = [tw + 20, y]
     end if
 end sub
 
@@ -982,7 +1171,19 @@ function musicLine(b as Object) as String
     return NxToStr(b.title)
 end function
 
+' The tick is back after a gap (the OS stopped the app, see NxTickGapDue):
+' the schedule re-check runs now, not in 30 s, so a viewer coming back sees
+' the gate as it is (#190).
+sub catchUpSchedule(t as LongInteger)
+    if not NxTickGapDue(m.lastTickAt, t) then return
+    print "guide: back after "; (t - m.lastTickAt); " s without a tick; checking the schedule at once"
+    m.lastTickAt = t
+    m.top.reschedule = true
+end sub
+
 sub onTick()
+    catchUpSchedule(nowSec())
+    m.lastTickAt = nowSec()
     checkSleep()
     if m.np <> invalid and (m.sleepEnd <> invalid or m.np.infoOpen = true or nowSec() mod 15 = 0) then m.np.state = npState()
     renderInfo()
@@ -1107,6 +1308,22 @@ end sub
 ' A tune the viewer asked for: the count of failures starts again, and a
 ' channel that stopped trying tries again (ChannelFailureRun.reset in
 ' AppState.selectChannel).
+' The cursor back on the live programme, the window at now.
+sub resetCursor()
+    m.cursor = invalid
+    m.slotOffset = 0
+end sub
+
+' The cursor on a programme of the focused row: where it stands, and the window
+' moves only when the programme would leave the view (NxGuideWindowOffset).
+sub moveCursorTo(b as Object)
+    t = nowSec()
+    m.cursor = NxGuideCursorFor(b, t)
+    m.slotOffset = NxGuideWindowOffset(b, m.slotOffset, (t \ 1800) * 1800, t, 44)
+    renderGrid()
+    renderInfo()
+end sub
+
 sub pressTune(idx as Integer)
     NxFailureReset(m.failRun)
     m.stopped = false
@@ -1165,6 +1382,7 @@ sub startTune(idx as Integer)
         if ch.held = true then
             print "player: nothing airs, WATERSHED holds channel "; ch.id
             showCard(NxWatershedCard())
+            startKeepAlive()
         end if
         return
     end if
@@ -1197,6 +1415,8 @@ sub startTune(idx as Integer)
     m.stopServer = b.serverIndex
     rememberStop()
     NxApplyStreamAuth(m.video, b)
+    ' Only one video plays on the stick: the hold clip goes before the channel starts (#190).
+    stopKeepAlive()
     m.video.content = stream.content
     m.video.control = "play"
     m.tuneFormat = stream.content.streamFormat
@@ -1395,8 +1615,53 @@ sub rememberStop()
     reg.Flush()
 end sub
 
+' While WATERSHED holds the tuned channel and nothing plays, the stick would stop
+' running the app after about ten minutes (timers, console and the 9 PM re-check
+' go quiet, measured 2026-11-13), so a muted 4 px black clip plays on its own
+' Video node, looping, until a channel starts or another tune begins (#190).
+sub startKeepAlive()
+    if m.keepAlive or m.keepGaveUp = true then return
+    m.keepErrors = 0
+    content = CreateObject("roSGNode", "ContentNode")
+    content.url = "pkg:/videos/hold.mp4"
+    content.streamFormat = "mp4"
+    m.keepVideo.content = content
+    m.keepVideo.mute = true
+    m.keepVideo.control = "play"
+    m.keepAlive = true
+    print "keepalive: playing the hold clip, so the stick keeps the app running"
+end sub
+
+sub stopKeepAlive()
+    ' A channel starting is a new hold's start: a clip given up on is tried again then.
+    m.keepGaveUp = false
+    if not m.keepAlive then return
+    m.keepAlive = false
+    m.keepVideo.control = "stop"
+    print "keepalive: stopped, a channel is starting"
+end sub
+
+sub onKeepState()
+    state = m.keepVideo.state
+    print "keepalive: clip "; state
+    if not m.keepAlive then return
+    if state = "error" then m.keepErrors = NxNumberOr0(m.keepErrors) + 1
+    action = NxKeepAliveAction(state, NxNumberOr0(m.keepErrors))
+    if action = "play" then
+        m.keepVideo.control = "stop"
+        m.keepVideo.control = "play"
+    else if action = "giveup" then
+        ' The clip cannot play: three tries, then it stays stopped until a channel starts.
+        m.keepAlive = false
+        m.keepGaveUp = true
+        m.keepVideo.control = "stop"
+        print "keepalive: the hold clip failed "; NxKeepAliveTries(); " times, stopped"
+    end if
+end sub
+
 sub onVideoState()
     state = m.video.state
+    if state = "buffering" or state = "playing" then stopKeepAlive()
     print "player: "; state
     reportPlayerState(state)
     if state = "playing" then
@@ -1725,6 +1990,8 @@ sub setFullscreen(on as Boolean)
         closeNowPlaying()
     end if
     m.fullscreen = on
+    ' Back from full screen has the cursor on the live programme.
+    if not on then resetCursor()
     m.lastActivity = nowSec()
     m.top.FindNode("panel").visible = not on
     m.top.FindNode("grid").visible = not on
@@ -2435,16 +2702,19 @@ end sub
 sub renderSidebar()
     ' The bundle list on the Apple TV 1.0.32's footing (#264, issue #262's
     ' tokens): a 380 px panel in the panel colour, a 25 px text-2 heading, rows
-    ' 64 px high with 22 px names that do not follow GUIDE TEXT SIZE, a bundle's
+    ' 64 px high with names at GUIDE TEXT SIZE's list step (17, 20 or 22), a bundle's
     ' colour only in the row's left bar, and the selected row in the
     ' selected-row fill with the cyan outline and glow.
     tk = NxTokens()
-    rowH = tk.compactRow.height
+    ' The rows follow GUIDE TEXT SIZE's row (64, or 76 at LARGER).
+    rowH = m.rowH
     side = m.top.FindNode("sidebar")
     side.RemoveChildrenIndex(side.GetChildCount(), 0)
     side.AppendChild(newRect(0, 0, 380, 525, tk.color.panel))
     side.AppendChild(newRect(380, 0, 1, 525, "0xFFFFFF1A"))
-    side.AppendChild(newLabel("PACKAGES", tk.font.label, tk.compactSize.body, tk.color.text2, 24, 16, 0))
+    gt = m.guideText
+    if gt = invalid then gt = NxGuideTextSizesFor(NxGuideTextStep())
+    side.AppendChild(newLabel("BUNDLES", tk.font.label, gt.pkgHead, tk.color.text2, 24, NxGuideLineTop(62, gt.pkgHead), 0))
     first = m.sideFocus - 4
     if first < 0 then first = 0
     y = 62
@@ -2484,7 +2754,7 @@ sub renderSidebar()
             side.AppendChild(gear)
             x = x + 26 + 14
         end if
-        side.AppendChild(newLabel(t.name, tk.font.label, tk.guideRow, tc, x, y + (rowH - 29) \ 2, 360 - x))
+        side.AppendChild(newLabel(t.name, tk.font.label, gt.pkgRow, tc, x, y + NxGuideLineTop(rowH, gt.pkgRow), 360 - x))
         y = y + rowH + 4
         if i = 0 then
             side.AppendChild(newRect(16, y + 1, 348, 1, "0xFFFFFF1A"))
@@ -2538,10 +2808,135 @@ end sub
 ' On a guide from the cold-boot seed there are no packages, franchises or
 ' collections to show yet: SETTINGS and the sidebar say so and wait.
 function seedWait() as Boolean
-    if not m.seeded then return false
-    m.top.FindNode("notice").text = NxSeedWaitNote()
+    if not (m.seeded or (m.changing and m.loadErr = "")) then return false
+    ' The notice goes in the loading block, never over the video.
+    m.waitNote = true
+    renderLoad()
     return true
 end function
+
+' ── The loading pattern (source/guide/LoadState.brs) ────────────────────────
+
+' A server or library switch: the rows go, the video stops, and the guide area
+' says CHANNEL GUIDE IS CHANGING with how far the new library has been read. The
+' channel that was on is kept by id for when the new guide arrives (resumeId).
+sub enterChanging(unused = invalid as Dynamic)
+    m.top.resumeId = tunedChannelId()
+    m.changing = true
+    m.switching = true
+    m.loadErr = ""
+    m.waitNote = false
+    m.loadTitles = 0
+    m.loadDone = -1
+    m.loadTotal = 0
+    m.loadName = ""
+    m.readyUntil = 0
+    if m.fullscreen = true then setFullscreen(false)
+    closeStrip()
+    if m.sidebarOpen = true then closeSidebar()
+    m.video.control = "stop"
+    m.playing = invalid
+    m.channels = []
+    m.tuned = -1
+    m.focus = 0
+    m.cursor = invalid
+    m.top.FindNode("notice").text = ""
+    m.top.FindNode("info").visible = false
+    ' What the last channel left on screen goes with it: its failure card, its haze.
+    hideCard()
+    hideHaze()
+    m.stripeStale = true
+    setNav("grid")
+    renderGrid()
+    renderLoad()
+end sub
+
+sub onLoadInfo()
+    info = m.top.loadInfo
+    if info = invalid then return
+    m.loadTitles = NxNumberOr0(info.titles)
+    m.loadDone = -1
+    if info.done <> invalid then m.loadDone = NxNumberOr0(info.done)
+    m.loadTotal = NxNumberOr0(info.total)
+    m.loadName = NxToStr(info.name)
+    renderLoad()
+end sub
+
+sub onLoadError()
+    if not m.changing then return
+    m.loadErr = m.top.loadError
+    renderLoad()
+end sub
+
+' A load finished: GUIDE READY: n TITLES in the header for a few seconds.
+sub onReadyTitles()
+    if m.top.readyTitles <= 0 then return
+    m.readyTitles = m.top.readyTitles
+    m.readyUntil = nowSec() + NxReadyShowSec()
+    m.readyTimer.control = "stop"
+    m.readyTimer.duration = NxReadyShowSec()
+    m.readyTimer.control = "start"
+    renderLoad()
+end sub
+
+sub onReadyDone()
+    renderLoad()
+end sub
+
+' Draws whichever of the block and the header's line applies now.
+sub renderLoad()
+    rows = 0
+    if m.channels <> invalid then rows = m.channels.Count()
+    busy = m.top.libraryBusy
+    kind = NxLoadKind(m.changing, m.loadErr <> "", m.seeded = true, busy, rows)
+    block = m.top.FindNode("loadBlock")
+    if kind = "" then
+        block.visible = false
+        m.top.FindNode("loadSlide").control = "stop"
+        m.waitNote = false
+    else
+        titleKind = kind
+        ' The seed's one channel under the block is still the switch's load.
+        if kind = "load" and m.switching then titleKind = "changing"
+        m.top.FindNode("loadTitle").text = NxLoadTitle(titleKind)
+        if kind = "error" then
+            m.top.FindNode("loadLine").text = m.loadErr
+            m.top.FindNode("loadLib").text = ""
+            m.top.FindNode("loadNote").text = "OK  OPEN SETTINGS"
+        else
+            m.top.FindNode("loadLine").text = NxLoadProgressLine(m.loadTitles)
+            libLine = ""
+            if m.loadName <> "" then libLine = NxLoadLibraryLine(m.loadName, m.loadDone, m.loadTotal)
+            m.top.FindNode("loadLib").text = libLine
+            note = ""
+            if m.waitNote then note = NxLoadNote()
+            m.top.FindNode("loadNote").text = note
+        end if
+        ' With the seed's one channel showing, the block sits under its row.
+        y = 59
+        if rows > 0 then y = 59 + 70
+        block.translation = [0, y]
+        m.top.FindNode("loadBg").height = 466 - (y - 59)
+        block.visible = true
+        if kind = "error" then
+            m.top.FindNode("loadSlide").control = "stop"
+            m.top.FindNode("loadInd").visible = false
+        else
+            m.top.FindNode("loadInd").visible = true
+            m.top.FindNode("loadSlide").control = "start"
+        end if
+    end if
+    note = m.top.FindNode("headerNote")
+    text = NxHeaderNote(kind, busy, rows, m.loadTitles, m.readyTitles, m.readyUntil, nowSec())
+    note.text = text
+    note.visible = text <> ""
+    ' GUIDE READY in yellow; UPDATING LIBRARY in text2.
+    if Left(text, 5) = "GUIDE" then
+        note.color = "0xFFE500FF"
+    else
+        note.color = NxTokens().color.text2
+    end if
+end sub
 
 sub openSettings()
     if seedWait() then return
@@ -2620,7 +3015,7 @@ sub renderBuildNotice()
     if names.Count() = 1 then
         label.text = "BUILDING " + names[0] + " · ITS CHANNELS SHOW UP WHEN READY"
     else
-        label.text = "BUILDING " + m.building.Count().ToStr() + " PACKAGES · THEIR CHANNELS SHOW UP WHEN READY"
+        label.text = "BUILDING " + m.building.Count().ToStr() + " BUNDLES · THEIR CHANNELS SHOW UP WHEN READY"
     end if
     label.visible = true
 end sub
@@ -2642,6 +3037,16 @@ sub onSettingsRescan()
 end sub
 
 sub onLibraryBusy()
+    ' A new load starts counting from nothing, and the last GUIDE READY is over.
+    if not m.top.libraryBusy then m.switching = false
+    if m.top.libraryBusy then
+        m.loadTitles = 0
+        m.loadDone = -1
+        m.loadTotal = 0
+        m.loadName = ""
+        m.readyUntil = 0
+    end if
+    renderLoad()
     if m.settings <> invalid then m.settings.rescanning = m.top.libraryBusy
 end sub
 
@@ -2665,7 +3070,10 @@ sub onSettingsResult()
     applySubtitles()
     applyRetro()
     applyReportPrefs()
-    if applyGuideText() and m.channels <> invalid then renderGrid()
+    if applyGuideText() and m.channels <> invalid then
+        keepFocusVisible()
+        renderGrid()
+    end if
     if result = "rebuild" or result = "signOut" then
         NxTuneDrop(m.tuneQueue)
         stopTracker()
@@ -2703,7 +3111,7 @@ sub applyDeepLink()
     if idx < 0 then return
     if m.sidebarOpen = true then closeSidebar()
     m.focus = idx
-    m.slotOffset = 0
+    resetCursor()
     setNav("grid")
     if idx <> m.tuned then pressTune(idx)
     setFullscreen(true)
@@ -2750,6 +3158,7 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press or m.channels = invalid then return false
     m.lastActivity = nowSec()
+    catchUpSchedule(m.lastActivity)
     ' Leaving once the stream's stop answers: Back again leaves at once, and
     ' nothing else acts meanwhile.
     if m.leaving = true then return key <> "back"
@@ -2801,7 +3210,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return false
     end if
     if key = "options" then
-        ' Never passed up to MainScene, where it signs out.
+        ' Never passed up to MainScene, where it signs out. On the grid Menu
+        ' puts the cursor back on the live programme (Chad 2026-11-15).
+        if m.nav = "grid" and (m.cursor <> invalid or m.slotOffset > 0) then
+            resetCursor()
+            renderGrid()
+            renderInfo()
+        end if
         return true
     end if
     ' Above the grid: the invite row, then SETTINGS, as ChannelGuideView
@@ -2839,20 +3254,19 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         renderInfo()
         return true
     end if
-    if key = "right" and m.slotOffset < 44 then
-        m.slotOffset = m.slotOffset + 1
-        renderGrid()
-        renderInfo()
-        return true
-    end if
-    if key = "left" and m.slotOffset > 0 then
-        m.slotOffset = m.slotOffset - 1
-        renderGrid()
-        renderInfo()
+    ' Right and Left move the programme cursor a programme at a time, whatever its
+    ' length and over a gap, with focus staying on the row (Chad 2026-11-15, the
+    ' Apple TV's GuideProgramCursor). Left from the programme on now goes to the
+    ' bundle stripe, as it did from the window's start.
+    if key = "right" and m.channels.Count() > 0 then
+        nx = NxGuideCursorNext(m.channels[m.focus].blocks, m.cursor, nowSec())
+        if nx <> invalid then moveCursorTo(nx)
         return true
     end if
     if key = "left" then
-        enterStripe()
+        pv = invalid
+        if m.channels.Count() > 0 then pv = NxGuideCursorPrevious(m.channels[m.focus].blocks, m.cursor, nowSec())
+        if pv <> invalid then moveCursorTo(pv) else enterStripe()
         return true
     end if
     ' With no channel there is nothing to tune or fill the screen with.
@@ -2867,6 +3281,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if m.channels.Count() = 0 and key = "play" then return true
     if key = "OK" then
+        ' Selecting a row puts the cursor back on the live programme.
+        resetCursor()
         ' A channel the sleep timer stopped starts again, and one that
         ' stopped trying tries again.
         if m.focus = m.tuned and m.playing <> invalid and not m.stopped then setFullscreen(true) else viewerTune(m.focus)
@@ -2881,10 +3297,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' stop already out for a channel change counts: leaving now would
         ' cut it off.
         stopping = m.tuneQueue.stopping = true
-        action = NxGuideBack(m.focus, m.tuned, m.slotOffset, stopping or (m.stopUrl <> invalid and m.stopUrl <> ""))
+        offsetNow = m.slotOffset
+        if m.cursor <> invalid and offsetNow = 0 then offsetNow = 1
+        action = NxGuideBack(m.focus, m.tuned, offsetNow, stopping or (m.stopUrl <> invalid and m.stopUrl <> ""))
         if action = "live" then
             m.focus = m.tuned
-            m.slotOffset = 0
+            resetCursor()
             keepFocusVisible()
             renderGrid()
             renderInfo()

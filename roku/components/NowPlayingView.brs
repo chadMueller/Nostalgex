@@ -294,7 +294,7 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
     right = x + w - pm.padX
     opens = e.id <> invalid and (Left(NxToStr(e.id), 5) = "pick:" or e.id = "info")
     if opens then
-        chev = newLabel(">", tk.font.label, pm.text, tk.color.text2, right - 20, y + 17, 20)
+        chev = newLabel(">", tk.font.label, pm.text, tk.color.text2, right - 20, y + NxPanelTextTop(pm), 20)
         if focused then chev.color = tk.color.cyan
         chev.horizAlign = "right"
         g.AppendChild(chev)
@@ -322,12 +322,12 @@ function drawRow(g as Object, x as Float, y as Float, e as Object, focused as Bo
             valueColor = tk.color.cyan
             font = tk.font.label
         end if
-        v = newLabel(e.value, font, pm.text, valueColor, x + pm.padX, y + 17, right - x - pm.padX)
+        v = newLabel(e.value, font, pm.text, valueColor, x + pm.padX, y + NxPanelTextTop(pm), right - x - pm.padX)
         v.horizAlign = "right"
         g.AppendChild(v)
-        valueW = Len(e.value) * 13.2 + 12
+        valueW = Len(e.value) * pm.text * 0.6 + 12
     end if
-    g.AppendChild(newLabel(e.label, tk.font.label, pm.text, labelColor, x + pm.padX, y + 17, right - x - pm.padX - valueW))
+    g.AppendChild(newLabel(e.label, tk.font.label, pm.text, labelColor, x + pm.padX, y + NxPanelTextTop(pm), right - x - pm.padX - valueW))
     return h
 end function
 
@@ -342,31 +342,24 @@ function renderList(g as Object, s as Object) as Integer
     if m.picker = "streamQuality" or m.picker = "sleep" or m.picker = "audioTracks" then
         items = singleItems(s)
         title = "STREAM QUALITY"
-        note = "Lower this when your connection is slow or shared. Takes effect on the next program."
         if m.picker = "sleep" then
             title = "SLEEP TIMER"
-            note = "Back returns to the panel. Pick OFF to cancel a running timer."
         else if m.picker = "audioTracks" then
             title = "AUDIO"
-            note = NxPanelHint("pick:audioTracks")
         end if
         y = pm.safeY + drawHeader(g, x, pm.safeY, title, wide)
-        y = y + noteLine(g, note, x, y, wide)
         for i = 0 to items.Count() - 1
             y = y + drawRow(g, x, y, items[i], i = m.pickIdx, pm.colW) + pm.rowGap
         end for
         return y
     end if
     title = "AUDIO LANGUAGE"
-    note = "Choose which audio track to prefer when multiple are available."
     saved = NxToStr(s.audioLanguage)
     if m.picker = "subsLanguage" then
         title = "SUBTITLE LANGUAGE"
-        note = "Choose which subtitle track to prefer when multiple are available."
         saved = NxToStr(s.subsLanguage)
     end if
     top = pm.safeY + drawHeader(g, x, pm.safeY, title, wide)
-    top = top + noteLine(g, note, x, top, wide)
     langs = NxList(s.languages)
     split = (langs.Count() + 1) \ 2
     bottom = top
@@ -385,16 +378,6 @@ function renderList(g as Object, s as Object) as Integer
         if y + pm.rowH + pm.rowGap > bottom then bottom = y + pm.rowH + pm.rowGap
     end for
     return bottom
-end function
-
-' The words under a list's title, in text-2; returns the height they take.
-function noteLine(g as Object, text as String, x as Float, y as Float, w as Float) as Integer
-    pm = NxPanelMetrics()
-    lbl = newLabel(text, m.tk.font.text, pm.text, m.tk.color.text2, x, y, w)
-    lbl.wrap = true
-    lbl.maxLines = 2
-    g.AppendChild(lbl)
-    return 76
 end function
 
 ' The rows of a one-column list: STREAM QUALITY's levels with their detail
@@ -612,37 +595,36 @@ function renderInfo(s as Object) as Integer
     tag = newLabel("CH " + NxToStr(s.number), tk.font.tag, pm.tag, tk.color.text, x + 18, y, 0)
     g.AppendChild(tag)
     nameX = x + 18 + tag.boundingRect().width + 14
-    g.AppendChild(newLabel(UCase(NxToStr(s.name)), tk.font.label, pm.text, tk.color.text2, nameX, y + 3, x + w - nameX))
+    g.AppendChild(newLabel(UCase(NxToStr(s.name)), tk.font.label, pm.text, tk.color.text2, nameX, y + 3 + (22 - pm.text) \ 2, x + w - nameX))
     y = y + 44
     title = newLabel(NxToStr(s.title), tk.font.label, pm.title, tk.color.text, x, y, w)
     title.wrap = true
     title.maxLines = 3
     g.AppendChild(title)
     y = y + title.boundingRect().height
-    ' UP NEXT under the poster, left-aligned with it (Chad's call, 2026-11-12):
-    ' the next title and, straight after it, the cyan capsule with the minutes.
+    ' UP NEXT under the poster, left-aligned with it: one plain line, title first
+    ' (Chad 2026-11-15, reversing the earlier order globally): the title in a
+    ' highlight colour, two spaces, then UP NEXT IN 24 MIN, with no pill and no
+    ' border. LESS THAN 1 MIN under a minute. The title is cut with an ellipsis
+    ' before the label is.
     top = y + 12
     if NxToStr(m.posterPath) <> "" and top < pm.safeY + pm.posterH + 12 then top = pm.safeY + pm.posterH + 12
     y = top
     if NxToStr(s.upNext) <> "" then
         ux = pm.safeX
         uw = m.colX[0] - pm.zoneGap - ux
-        badgeText = NxUpNextBadge(s.upNextIn)
-        chipW = Len(badgeText) * 13.2 + 28
-        ' The title takes what the capsule leaves and is cut with an ellipsis; the capsule is always whole.
-        nextLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, tk.color.text, ux, y + 5, uw - chipW - 14)
-        g.AppendChild(nextLbl)
-        ' The label is as wide as the room it may take, so its text's own width is
-        ' counted (DM Mono at 22 is 13.2 px a character), not its box.
-        textW = Len(NxToStr(s.upNext)) * 13.2
-        if textW > uw - chipW - 14 then textW = uw - chipW - 14
-        chipX = ux + textW + 14
-        g.AppendChild(newCapsule(chipX, y, chipW, 36, tk.color.cyan))
-        g.AppendChild(newCapsule(chipX + 2, y + 2, chipW - 4, 32, tk.color.selectedRow))
-        chip = newLabel(badgeText, tk.font.label, pm.text, tk.color.cyan, chipX, y + 5, chipW)
-        chip.horizAlign = "center"
-        g.AppendChild(chip)
-        y = y + 36
+        titleLbl = newLabel(NxToStr(s.upNext), tk.font.label, pm.text, NxUpNextTitleColor(), ux, y, 0)
+        badge = newLabel(NxUpNextBadge(s.upNextIn), tk.font.label, pm.text, NxUpNextLabelColor(), ux, y, 0)
+        gap = Int(2 * pm.text * 0.6 + 0.5)
+        tw = titleLbl.boundingRect().width
+        bw = badge.boundingRect().width
+        if tw > uw - bw - gap then tw = uw - bw - gap
+        if tw < 0 then tw = 0
+        titleLbl.width = tw
+        badge.translation = [ux + tw + gap, y]
+        g.AppendChild(titleLbl)
+        g.AppendChild(badge)
+        y = y + Int(pm.text * 1.3 + 0.5)
     end if
     bottom = pm.safeY + pm.posterH
     if y > bottom then bottom = y

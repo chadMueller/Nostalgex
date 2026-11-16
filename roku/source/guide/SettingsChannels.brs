@@ -224,7 +224,7 @@ end function
 ' PACKAGES (source/guide/ChannelsMissing.brs).
 function NxChannelsPages() as Object
     return [
-        { id: "packages", title: "CHANNEL PACKAGES" },
+        { id: "packages", title: "CHANNEL BUNDLES" },
         { id: "franchises", title: "FRANCHISES" },
         { id: "collections", title: "MY COLLECTIONS" }
     ]

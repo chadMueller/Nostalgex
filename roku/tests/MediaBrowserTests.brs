@@ -40,7 +40,7 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
         NxCheck(r, "requests", gotRequests.Join(" | "), NxList(v.requests).Join(" | "))
         NxCheck(r, "item count", gotItems.Count().ToStr(), NxList(v.items).Count().ToStr())
         ' Port-only fields: none reaches the filter or schedule.
-        extras = { serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
+        extras = { parentRatingKey: true, exactDurationSeconds: true, serverIndex: true, seasonNumber: true, episodeNumber: true, videoProfile: true, audioChannels: true, bitrate: true, videoWidth: true, videoHeight: true, audioTracks: true, forcedSubs: true, fullSubs: true }
         n = NxMinInt(gotItems.Count(), NxList(v.items).Count())
         several = 0
         for i = 0 to n - 1
@@ -112,6 +112,32 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
             end if
         end for
     end if
+
+    ' I-091: a scan stops reading once the app is past its memory ceiling, keeps
+    ' what it has, and reads no further library. A fetcher that cannot say how full
+    ' the memory is (every test's, and the one above) reads it all.
+    NxScanCapSet(0)
+    all = NxMbScanServer(NxMbGuardFetcher(1000, 0), "jellyfin", "u", 0)
+    NxCheck(r, "guard: no memory reading reads every title", NxToStr(all.Count()) + "," + NxToStr(NxScanCapped()), "2000,0")
+    NxScanCapSet(0)
+    low = NxMbScanServer(NxMbGuardFetcher(1000, 10), "jellyfin", "u", 0)
+    NxCheck(r, "guard: memory below the ceiling reads every title", NxToStr(low.Count()) + "," + NxToStr(NxScanCapped()), "2000,0")
+    NxScanCapSet(0)
+    fetcher = NxMbGuardFetcher(1000, 60)
+    capped = NxMbScanServer(fetcher, "jellyfin", "u", 0)
+    NxCheck(r, "guard: memory past the ceiling stops after the first page", NxToStr(capped.Count()) + "," + NxToStr(NxScanCapped()), "200,200")
+    NxCheck(r, "guard: the second library is counted, never read", NxToStr(fetcher.askedSecond), "false")
+    NxCheck(r, "guard: the server's total is the titles in every library", NxToStr(NxScanCapTotal()), "2000")
+    NxScanCapSet(0)
+    fetcher = NxMbGuardFetcher(1000, 10)
+    fetcher.fullAfter = 2
+    capped = NxMbScanServer(fetcher, "jellyfin", "u", 0)
+    NxCheck(r, "guard: it stops on the page that finds memory full, keeping the pages before", NxToStr(capped.Count()) + "," + NxToStr(NxScanCapped()), "400,400")
+    NxCheck(r, "guard: and says how many it holds", NxToStr(NxScanCapTotal()), "2000")
+    NxCheck(r, "guard: the ceiling is a percent of the app's own limit", NxToStr(NxScanMemoryCeiling()), "55")
+    NxScanCapSet(0)
+    NxScanSkipsReset()
+    NxCheck(r, "guard: a new scan starts with no cap", NxToStr(NxScanCapped()), "0")
 
     ' A rejected token fails the scan.
     denied = NxMbFixtureFetcher(fx)
@@ -1095,4 +1121,44 @@ function NxMbValueText(v as Dynamic, depth as Integer) as String
     end if
     if v = invalid then return "invalid"
     return NxToStr(v)
+end function
+
+' A server of two movie libraries each holding `total` titles, 200 a page (its
+' answers ignore the parent). memoryPercent answers `percent` (none when 0), and
+' `percent` once `fullAfter` pages are in if that is set: 60 from then on.
+function NxMbGuardFetcher(total as Integer, percent as Integer) as Object
+    f = {
+        total: total, percent: percent, fullAfter: 0, calls: 0, askedSecond: false, auth: false,
+        getJSON: function(path as String) as Dynamic
+            if Instr(1, path, "/UserViews") > 0 then
+                return { Items: [{ Name: "Films", Id: "lib1", CollectionType: "movies" }, { Name: "More", Id: "lib2", CollectionType: "movies" }] }
+            end if
+            if Instr(1, path, "ParentId=lib2") > 0 and Instr(1, path, "Limit=0") = 0 then m.askedSecond = true
+            at = Instr(1, path, "StartIndex=")
+            start = Val(Mid(path, at + 11))
+            items = []
+            for i = start to NxMinInt(start + 199, m.total - 1)
+                items.Push({ Id: "m" + i.ToStr(), Name: "Film " + i.ToStr(), Type: "Movie", RunTimeTicks: 54000000000#, ProductionYear: 2000, Genres: [], MediaSources: [] })
+            end for
+            return { Items: items, TotalRecordCount: m.total, StartIndex: start }
+        end function,
+        getMany: function(paths as Object) as Object
+            out = []
+            for each p in paths
+                out.Push(m.getJSON(p))
+            end for
+            return out
+        end function
+    }
+    if percent > 0 then
+        f.memoryPercent = function() as Integer
+            m.calls = m.calls + 1
+            if m.fullAfter > 0 then
+                if m.calls >= m.fullAfter then return 60
+                return m.percent
+            end if
+            return m.percent
+        end function
+    end if
+    return f
 end function

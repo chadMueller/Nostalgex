@@ -122,7 +122,7 @@ sub onConnectDone()
         if NxPlexRegistry().Read("needsPick") <> "" then
             showPicker()
         else if m.library = invalid then
-            startLibrary(true)
+            afterSignIn()
         end if
         return
     end if
@@ -133,7 +133,7 @@ sub onConnectDone()
     m.signedInClock = CreateObject("roTimespan")
     m.prompt.text = "Connecting to " + NxKindName(done) + "…"
     m.hint.text = ""
-    startLibrary(true)
+    afterSignIn()
 end sub
 
 ' CANCEL on the Plex code: the connect screen is back on its first choices,
@@ -192,7 +192,7 @@ sub onSignInState()
         if NxPlexRegistry().Read("needsPick") <> "" then
             showPicker()
         else if m.library = invalid then
-            startLibrary(true)
+            afterSignIn()
         end if
     else if state = "error" and m.connect <> invalid then
         ' From the Plex code: back to the first choices with the reason in
@@ -235,7 +235,71 @@ sub onPicked()
     print "library: libraries picked after "; m.pickerClock.TotalMilliseconds(); " ms at the picker; the sign-in clock starts again here"
     if m.signedInClock <> invalid then m.signedInClock = CreateObject("roTimespan")
     m.prompt.text = "Connecting to your servers…"
+    afterSignIn()
+end sub
+
+' Signed in, servers chosen: before the first scan, the library sections on
+' them are asked for (LibrarySectionsTask), and when there is more than one
+' the viewer picks which to read (LibraryPickerView, I-092). Never blocks the
+' load: with nothing listed, or one section, the scan starts as before.
+sub afterSignIn()
+    if m.sectionsTask <> invalid or m.libPicker <> invalid then return
+    m.prompt.text = "Finding your libraries…"
+    m.sectionsTask = CreateObject("roSGNode", "LibraryTask")
+    m.sectionsTask.mode = "sections"
+    m.sectionsTask.ObserveField("status", "onSections")
+    m.sectionsTask.control = "run"
+end sub
+
+sub onSections()
+    if m.sectionsTask = invalid then return
+    if m.sectionsTask.status <> "done" then return
+    sections = m.sectionsTask.sections
+    m.sectionsTask = invalid
+    NxSaveSections(NxPlexRegistry(), sections)
+    if NxPickerWanted(sections) then
+        m.libPickerClock = CreateObject("roTimespan")
+        m.libPicker = CreateObject("roSGNode", "LibraryPickerView")
+        m.libPicker.ObserveField("choices", "onLibrariesPicked")
+        m.top.AppendChild(m.libPicker)
+        ' A library the viewer hides on Jellyfin starts off, unless INCLUDE LIBRARIES HIDDEN ON JELLYFIN is on.
+        off = {}
+        if not NxIncludeHidden(NxHiddenLibrariesRegistry()) then
+            for each s in sections
+                if s.hidden = true then off[NxSectionKey(s.serverId, s.key)] = true
+            end for
+        end if
+        m.libPicker.off = off
+        m.libPicker.sections = sections
+        launchComplete()
+    else
+        print "library: "; sections.Count(); " library section(s), no picker"
+        startLibrary(true)
+    end if
+end sub
+
+' What was turned off is saved as Settings saves it, and only what is left on
+' is then read.
+sub onLibrariesPicked()
+    if m.libPicker = invalid then return
+    NxSaveDeselectedSections(NxPlexRegistry(), m.libPicker.choices)
+    print "library: libraries picked after "; m.libPickerClock.TotalMilliseconds(); " ms at the library picker, "; m.libPicker.choices.Count(); " turned off"
+    closeLibPicker()
+    if m.signedInClock <> invalid then m.signedInClock = CreateObject("roTimespan")
+    m.prompt.text = "Connecting to your servers…"
     startLibrary(true)
+end sub
+
+sub closeLibPicker()
+    if m.sectionsTask <> invalid then
+        m.sectionsTask.UnobserveField("status")
+        m.sectionsTask.control = "stop"
+        m.sectionsTask = invalid
+    end if
+    if m.libPicker = invalid then return
+    m.top.RemoveChild(m.libPicker)
+    m.libPicker = invalid
+    m.top.SetFocus(true)
 end sub
 
 sub closePicker()
@@ -283,6 +347,7 @@ sub startLibrary(useCache = false as Boolean, rebuild = false as Boolean, rescan
     m.library.rebuild = rebuild
     m.library.rescan = rescan
     m.library.ObserveField("refreshed", "onLibraryRefreshed")
+    m.library.ObserveField("loadInfo", "onLoadInfo")
     setLibraryBusy(true)
     m.library.ObserveField("phase", "onLibraryPhase")
     m.library.ObserveField("status", "onLibraryStatus")
@@ -375,7 +440,11 @@ sub onLibraryStatus()
         setLibraryBusy(false)
         ' A seed's channel isn't a guide to keep: the load was a first one,
         ' and its error is what to show.
-        if m.guide <> invalid and not m.seeded then return
+        if m.guide <> invalid and not m.seeded then
+            ' A switch left the guide with no rows: the reason goes in its block.
+            m.guide.loadError = NxLoadErrorText(m.library.message)
+            return
+        end if
         if m.seeded then removeSeedGuide()
         closeLoading()
         m.signedInClock = invalid
@@ -415,6 +484,7 @@ sub onLibraryStatus()
             m.guide.ObserveField("rescanRequest", "onRescanRequest")
             m.guide.ObserveField("seedEnded", "onSeedEnded")
             m.guide.libraryBusy = m.libraryBusy
+            if m.library <> invalid and m.library.loadInfo <> invalid then m.guide.loadInfo = m.library.loadInfo
             if m.library <> invalid and m.library.matchCounts <> invalid then m.guide.matchCounts = m.library.matchCounts
             if m.pendingLink <> invalid then m.guide.deepLink = m.pendingLink
             m.pendingLink = invalid
@@ -533,6 +603,9 @@ end sub
 ' Stops the library task and stops listening to it: a task told to stop can
 ' still report once more, and its handlers read m.library.
 sub releaseLibrary()
+    ' A load still running is over: it saves nothing and shows nothing more
+    ' (source/util/LoadEpoch.brs), whether sign-out, a switch or a new load ends it.
+    NxLoadEpochBump()
     if m.library = invalid then return
     m.library.UnobserveField("bundleBuilt")
     m.library.UnobserveField("matchCounts")
@@ -540,6 +613,7 @@ sub releaseLibrary()
     m.library.UnobserveField("status")
     m.library.UnobserveField("scanning")
     m.library.UnobserveField("refreshed")
+    m.library.UnobserveField("loadInfo")
     stopStallWatch()
     m.library.control = "stop"
     m.library = invalid
@@ -575,6 +649,14 @@ end sub
 sub onLibraryRefreshed()
     NxLoadEnded(NxLaunchGuardRegistry())
     setLibraryBusy(false)
+    ' The load is done: GUIDE READY: n TITLES in the guide's header.
+    ' Not after a read that was cut short or could not finish: that says nothing.
+    if m.guide <> invalid and m.library <> invalid and not m.library.incomplete then m.guide.readyTitles = m.library.titleCount
+end sub
+
+' How far the scan has read, for the loading block in the guide area.
+sub onLoadInfo()
+    if m.guide <> invalid and m.library <> invalid then m.guide.loadInfo = m.library.loadInfo
 end sub
 
 ' Whether a library load is running, for the RESCAN LIBRARY row.
@@ -585,15 +667,19 @@ end sub
 
 sub onGuideAction()
     action = m.guide.action
-    ' The rebuilt guide opens on the same channel, not the top row.
+    if action = "rebuild" then
+        ' The guide stays where it is and says CHANNEL GUIDE IS CHANGING in its
+        ' own empty area, with how far the new library has been read; the
+        ' rebuilt guide opens on the same channel (enterChanging keeps it).
+        m.guide.callFunc("enterChanging", invalid)
+        startLibrary(true, true)
+        return
+    end if
     m.resumeId = m.guide.callFunc("tunedChannelId", invalid)
     dropGuide()
     if action = "signOut" then
         m.resumeId = ""
         signOut()
-    else if action = "rebuild" then
-        m.prompt.text = "Rebuilding your channels…"
-        startLibrary(true, true)
     end if
 end sub
 
@@ -607,6 +693,7 @@ sub signOut()
         m.mbCheck = invalid
     end if
     closePicker()
+    closeLibPicker()
     dropGuide()
     closeConnect()
     NxPlexClearAuth()

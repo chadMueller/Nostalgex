@@ -14,33 +14,49 @@ sub fetchPoster()
             if ref.serverIndex >= 0 and ref.serverIndex < servers.Count() then s = servers[ref.serverIndex]
         end if
     end if
-    if s = invalid or NxServerKind(s) <> "plex" then
+    if s = invalid then
         m.top.file = ""
         return
     end if
+    kind = NxServerKind(s)
     ' The same address rule as every other Plex request (NxServerTransfer):
     ' HTTPS, or plain HTTP to a home-network address. The token is a header.
-    xfer = NxPlexTransfer(NxPlexPosterUrl(NxToStr(s.uri), ref.path, 300), NxToStr(s.accessToken))
-    if xfer = invalid then
-        m.top.file = ""
-        return
-    end if
-    out = NxPosterFile(NxToStr(ref.path))
+    ' The paths are tried in order until one answers (an episode's season, then
+    ' its series, then its own frame, #312); an older ref has just `path`.
+    paths = ref.paths
+    if type(paths) <> "roArray" or paths.Count() = 0 then paths = [ref.path]
     for each f in ListDir("tmp:/")
         if Left(f, 10) = "nx-poster-" then DeleteFile("tmp:/" + f)
     end for
-    port = CreateObject("roMessagePort")
-    xfer.SetMessagePort(port)
-    code = -1
-    if xfer.AsyncGetToFile(out) then
-        msg = Wait(10000, port)
-        if type(msg) = "roUrlEvent" then
-            code = msg.GetResponseCode()
+    m.top.file = ""
+    for each path in paths
+        ' Plex asks its thumbnail transcode; Jellyfin and Emby the item's Primary
+        ' image, with the sign-in's token in the usual header.
+        xfer = invalid
+        if kind = "plex" then
+            xfer = NxPlexTransfer(NxPlexPosterUrl(NxToStr(s.uri), NxToStr(path), 300), NxToStr(s.accessToken))
         else
-            xfer.AsyncCancel()
-            code = -28
+            xfer = NxServerTransfer(NxToStr(s.uri) + NxToStr(path), { "Authorization": NxMbAuthHeader(NxToStr(s.accessToken)) })
         end if
-    end if
-    print "nowplaying: poster answered "; code
-    if code = 200 then m.top.file = out else m.top.file = ""
+        if xfer <> invalid then
+            out = NxPosterFile(NxToStr(path))
+            port = CreateObject("roMessagePort")
+            xfer.SetMessagePort(port)
+            code = -1
+            if xfer.AsyncGetToFile(out) then
+                msg = Wait(10000, port)
+                if type(msg) = "roUrlEvent" then
+                    code = msg.GetResponseCode()
+                else
+                    xfer.AsyncCancel()
+                    code = -28
+                end if
+            end if
+            print "nowplaying: poster "; path; " answered "; code
+            if code = 200 then
+                m.top.file = out
+                return
+            end if
+        end if
+    end for
 end sub

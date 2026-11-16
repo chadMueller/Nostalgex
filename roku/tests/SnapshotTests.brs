@@ -64,7 +64,9 @@ function NxRunSnapshotTests() as Integer
 
     ' Servers the account no longer has are dropped.
     meta = NxSnapshotReadMeta(dir)
-    NxSnapshotSaveServer(dir, meta, "def", items, 1, [], "s", 6000)
+    NxSnapshotSaveServer(dir, meta, "def", items, 1, [], "s", 6000, 0, 56000, 72000)
+    NxCheck(r, "snapshot: a cut scan keeps how far it got and the server's total", NxToStr(meta.servers["def"].cutRead) + "/" + NxToStr(meta.servers["def"].cutOf), "56000/72000")
+    NxCheck(r, "snapshot: a whole scan keeps no cut", NxToStr(meta.servers["abc"].DoesExist("cutRead")), "false")
     NxSnapshotForgetServers(dir, meta, ["def"])
     meta = NxSnapshotReadMeta(dir)
     NxSnapCheck(r, "gone server forgotten", meta.servers.DoesExist("abc"), false)
@@ -150,6 +152,39 @@ function NxRunSnapshotTests() as Integer
     DeleteDirectory("cachefs:/nxunittest")
     g.nxDataSpace = keepSpace
     g.nxCacheRootMade = keepMade
+
+    ' ── A rebuild cut for a full memory keeps a whole saved copy (I-091, the reviewer's find) ──
+    cdir = "tmp:/nx-snapshot-cut-test"
+    NxSnapshotClear(cdir)
+    cmeta = NxSnapshotReadMeta(cdir)
+    whole = []
+    for i = 1 to 100
+        whole.Push({ ratingKey: "w" + i.ToStr(), title: "T" + i.ToStr(), serverIndex: 0, duration: 90 })
+    end for
+    NxCheck(r, "cut: a whole first save", NxSnapshotSaveScan(cdir, cmeta, { key: "srv", index: 0, collections: [], signature: invalid, skipped: 0 }, whole, 5000), "saved")
+    part = []
+    for i = 1 to 90
+        part.Push(whole[i - 1])
+    end for
+    NxCheck(r, "cut: a rebuild cut at 90 of 100 keeps the saved copy", NxSnapshotSaveScan(cdir, cmeta, { key: "srv", index: 0, collections: [], signature: invalid, skipped: 0, cutRead: 90, cutOf: 100 }, part, 6000), "kept")
+    back = NxSnapshotLoadServer(cdir, NxSnapshotReadMeta(cdir), "srv", 0)
+    NxCheck(r, "cut: the saved library still holds all 100", NxToStr(back.items.Count()), "100")
+    NxCheck(r, "cut: a rebuild that read everything is saved", NxSnapshotSaveScan(cdir, cmeta, { key: "srv", index: 0, collections: [], signature: invalid, skipped: 0 }, part, 7000), "saved")
+    NxCheck(r, "cut: and then holds 90", NxToStr(NxSnapshotLoadServer(cdir, NxSnapshotReadMeta(cdir), "srv", 0).items.Count()), "90")
+    NxCheck(r, "cut: a copy that was itself cut is replaced by a larger cut", NxToStr(NxSnapshotKeepSaved({ count: 50, cutRead: 50 }, 60, 60)), "false")
+    NxCheck(r, "cut: nothing saved yet is no copy to keep", NxToStr(NxSnapshotKeepSaved(invalid, 60, 60)), "false")
+    NxCheck(r, "cut: a smaller cut than a whole copy keeps it, an equal one does not", NxToStr(NxSnapshotKeepSaved({ count: 100 }, 99, 99)) + NxToStr(NxSnapshotKeepSaved({ count: 100 }, 100, 100)), "truefalse")
+    NxSnapshotClear(cdir)
+
+    ' ── The old format's files go (the format 11 bump) ──
+    odir = "tmp:/nx-snapshot-oldformat-test"
+    NxSnapshotClear(odir)
+    CreateDirectory(odir)
+    WriteAsciiFile(odir + "/meta.json", FormatJson({ format: NxSnapshotFormat() - 1, servers: { srv: { gen: 1, chunks: 1, count: 1 } } }))
+    WriteAsciiFile(odir + "/srv-g1-0000.json", "[{""ratingKey"":""1""}]")
+    NxCheck(r, "old format: the meta reads empty", NxToStr(NxSnapshotReadMeta(odir).servers.Count()), "0")
+    NxCheck(r, "old format: its chunk files are deleted", NxToStr(ListDir(odir).Count()), "0")
+    NxSnapshotClear(odir)
 
     print "snapshot cases: "; r.pass; " passed,"; r.fail; " failed"
     return r.fail

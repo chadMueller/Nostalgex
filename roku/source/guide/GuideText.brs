@@ -1,35 +1,94 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
-' GUIDE TEXT SIZE (I-060), a Roku-only display choice in Settings: NORMAL, the
-' Apple TV's sizes, or LARGE, for a couch further from the screen. Built in,
-' two sizes and no choice of fonts. It sizes what the grid draws: the time
-' header, the CHANNEL heading, each row's number and name, and the program
-' titles. The panel above the grid stays as it is, its text is already laid out
-' to fill 555 px.
+' GUIDE TEXT SIZE (I-060), a Settings choice with three steps, as the Apple TV's
+' GuideTextSize (appletv/guide-text-three-steps): SMALLER, DEFAULT and LARGER,
+' for a couch nearer or further from the screen. Built in, no choice of fonts.
+' It sizes what the grid draws: the time header, the CHANNEL heading, each
+' row's number and name, and the program titles. The panel above the grid stays
+' as it is, its text is already laid out to fill 555 px.
 '
-' The saved choice is "large" under the guide's registry section; anything
-' else, and a TV that never chose, is NORMAL.
+' The saved choice is "small", "normal" or "large" under the guide's registry
+' section: the middle step is labelled DEFAULT but keeps the raw value
+' "normal", "large" is the old LARGE's value, and anything else (nothing saved,
+' an unknown word) is "normal", so a TV that never chose draws the default.
+' The Apple TV's sync carries the same three raw values.
 
+' The saved step: "small", "normal" or "large".
+function NxGuideTextStep() as String
+    return NxGuideTextStepFrom(NxRegSection("guide").Read("textSize"))
+end function
+
+' From the saved value: "small" and "large" as they are, anything else normal.
+function NxGuideTextStepFrom(saved as String) as String
+    if saved = "small" or saved = "large" then return saved
+    return "normal"
+end function
+
+' True when the saved step is LARGER (what the two-step setting called LARGE).
 function NxGuideTextLarge() as Boolean
-    return NxGuideTextFrom(NxRegSection("guide").Read("textSize"))
+    return NxGuideTextStep() = "large"
 end function
 
-' From the saved value: only "large" is LARGE.
 function NxGuideTextFrom(saved as String) as Boolean
-    return saved = "large"
+    return NxGuideTextStepFrom(saved) = "large"
 end function
 
-sub NxSaveGuideTextLarge(on as Boolean)
+' SMALLER > DEFAULT > LARGER > SMALLER, what OK does on the Settings row.
+function NxGuideTextNext(level as String) as String
+    if level = "small" then return "normal"
+    if level = "normal" then return "large"
+    return "small"
+end function
+
+' What the Settings row shows.
+function NxGuideTextLabel(level as String) as String
+    if level = "small" then return "SMALLER"
+    if level = "large" then return "LARGER"
+    return "DEFAULT"
+end function
+
+sub NxSaveGuideTextStep(level as String)
     reg = NxRegSection("guide")
-    if on then reg.Write("textSize", "large") else reg.Write("textSize", "normal")
+    reg.Write("textSize", NxGuideTextStepFrom(level))
     reg.Flush()
 end sub
+
+' SMALLER's two numbers (the Apple TV's GuideTextMetrics.small, Chad 2026-11-14,
+' "the smaller should be smaller"): row text 17 and the times, heading and
+' placeholder 19, in a number box 31 wide. 18 and 20 (box 33) is the fallback if
+' 17 and 19 read too thin from the couch: change these three and nothing else.
+function NxGuideSmallerText() as Integer
+    return 17
+end function
+
+function NxGuideSmallerTime() as Integer
+    return 19
+end function
+
+function NxGuideSmallerNumW() as Integer
+    return 31
+end function
 
 ' The grid's shape (#263, the Apple TV 1.0.32's guide): rows 64 px tall, the
 ' time header 58, the channel column 340 wide and 395 px per 30 minutes, so
 ' four half hours fill the 1580 px after the column.
 function NxGuideGeometry() as Object
     return { rowH: 64, headerH: 58, colX: 340, slotWidth: 395 }
+end function
+
+' The same by GUIDE TEXT SIZE step (Chad 2026-11-15, the Apple TV's
+' integration-1115): LARGER grows the row to 76 and the time header to 66 with
+' its 29 px text, so the text keeps the room 20 px has in 64 (about 23 above and
+' below); SMALLER and DEFAULT keep 64 and 58. The channel column and the
+' half-hour width do not move. The bundle list's rows follow the row; the Now
+' Playing panel's rows stay 64 (NxPanelMetrics).
+function NxGuideGeometryFor(level as String) as Object
+    g = NxGuideGeometry()
+    if level = "large" then
+        g.rowH = 76
+        g.headerH = 66
+    end if
+    return g
 end function
 
 ' The top of a line of text `size` px tall, centred in a space `height` px
@@ -39,28 +98,42 @@ function NxGuideLineTop(height as Integer, size as Integer) as Integer
 end function
 
 ' The grid's type sizes and where each line sits, computed from the row and
-' header heights (NxGuideGeometry), so the tops move with them. #263's sizes:
-' NORMAL has titles, numbers and names at 22 and the times, the CHANNEL
-' heading and the WATERSHED placeholder at 25; LARGE has them all at 29. The
-' number box is three digits wide, 40 and 54. LARGE never moves a row or the
-' column.
+' header heights (NxGuideGeometry), so the tops move with them. The Apple TV's
+' three steps (px at 1080p, DM Mono Medium):
+'                         SMALLER  DEFAULT  LARGER
+'   title, number, name      17       20       29
+'   times, heading, held     19       22       29
+'   number box (3 digits)    31       36       54
+' Only LARGER moves a row (76) and the header (66); the column does not move and LARGER gives the name fewer characters.
 '   slot, slotY, slotH: a time label, and the rule beside it
 '   title, titleY: a program's title
 '   num, numW, numY: a channel's number, its width (three digits) and top
 '   name, nameY, nameGap: the name, its top, and its start from the number's
 '   head, headY: the CHANNEL heading
 '   held, heldY: WATERSHED's placeholder (BROADCASTS RESUME AT 9 PM)
+'   pkgRow, pkgHead: the bundle list's rows and its BUNDLES heading
 function NxGuideTextSizes(large as Boolean) as Object
-    g = NxGuideGeometry()
-    text = 22
-    time = 25
-    numW = 40
+    ' DEFAULT (20 and 22, a 36 px box, the bundle list at 20 and 22) and LARGER
+    ' (29 and 29, 54, 22 and 25). SMALLER is NxGuideTextSizesSmall. The numbers sit in
+    ' these locals so scripts/guide-text-smoke.mjs reads them against the Apple TV's.
+    text = 20
+    time = 22
+    numW = 36
+    pkgRow = 20
+    pkgHead = 22
+    level = "normal"
     if large then
         text = 29
         time = 29
         numW = 54
+        pkgRow = 22
+        pkgHead = 25
+        level = "large"
     end if
+    g = NxGuideGeometryFor(level)
     return {
+        rowH: g.rowH, headerH: g.headerH,
+        pkgRow: pkgRow, pkgHead: pkgHead,
         slot: time, slotY: NxGuideLineTop(g.headerH, time), slotH: Int(time * 1.3 + 0.5),
         title: text, titleY: NxGuideLineTop(g.rowH, text),
         num: text, numW: numW, numY: NxGuideLineTop(g.rowH, text),
@@ -70,6 +143,32 @@ function NxGuideTextSizes(large as Boolean) as Object
     }
 end function
 
+' SMALLER (the Apple TV's .small: 17 and 19, a 31 px box), its numbers the named
+' constants above.
+function NxGuideTextSizesSmall() as Object
+    text = NxGuideSmallerText()
+    time = NxGuideSmallerTime()
+    numW = NxGuideSmallerNumW()
+    pkgRow = text
+    pkgHead = time
+    g = NxGuideGeometryFor("small")
+    return {
+        rowH: g.rowH, headerH: g.headerH,
+        pkgRow: pkgRow, pkgHead: pkgHead,
+        slot: time, slotY: NxGuideLineTop(g.headerH, time), slotH: Int(time * 1.3 + 0.5),
+        title: text, titleY: NxGuideLineTop(g.rowH, text),
+        num: text, numW: numW, numY: NxGuideLineTop(g.rowH, text),
+        name: text, nameY: NxGuideLineTop(g.rowH, text), nameGap: numW + 8,
+        head: time, headY: NxGuideLineTop(g.headerH, time),
+        held: time, heldY: NxGuideLineTop(g.rowH, time)
+    }
+end function
+
+function NxGuideTextSizesFor(level as String) as Object
+    if level = "small" then return NxGuideTextSizesSmall()
+    return NxGuideTextSizes(level = "large")
+end function
+
 ' The grid's surfaces, as GuideView draws them: the grid under its rows, the
 ' header, an even row's stripe, a past programme's tint and the alpha of a
 ' live programme's cell in the channel's colour. The lightest background an
@@ -77,6 +176,20 @@ end function
 ' (NxGuideLightestTitleBg), which tests/GuideLookTests.brs holds textDim to.
 function NxGuideColors() as Object
     return { grid: "0x0D0D1FFF", header: "0x0A0A14FF", stripe: "0xFFFFFF08", past: "0xFFFFFF05", liveAlpha: "40" }
+end function
+
+' The focused programme's cell on the focused row (the programme cursor, Chad
+' 2026-11-15: "the active state needs to be way more obvious, can we have a
+' glow"), the Apple TV's round 3 values (appletv/guide-text-three-steps
+' 13e6e643): the fill is #00D4FF at 30% over the row; the ring 3 pt #00D4FF,
+' inset 2, corner radius 6; the glow two cyan layers, radius 18 at 90% and
+' radius 6 at 100% (both baked into images/look/cursor.9.png by
+' scripts/look-images.py, since the Roku does not blur), kept inside the
+' programme's own area by clipping to the cell. While a cell has the cursor the
+' row's own focus steps back to a 2 pt outline in the channel colour at 55%;
+' with no cell (a gap) it stays 3 pt at 100%.
+function NxGuideCursorStyle() as Object
+    return { fill: "0x00D4FF4D", ring: "0x00D4FFFF", ringWidth: 3, inset: 2, radius: 6, glowRadii: [18, 6], glowAlphas: [0.9, 1.0], rowStroke: 2, rowOpacity: 0.55, margin: 20 }
 end function
 
 function NxGuideLightestTitleBg() as String

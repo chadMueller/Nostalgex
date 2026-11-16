@@ -32,11 +32,13 @@ end function
 ' 7: and forcedSubs, a file's forced text subtitle tracks (NxMbForcedSubs).
 ' 8: a Jellyfin or Emby item's bitrate is in kbps, not bits per second (NxMbBitrateKbps).
 ' 9: and fullSubs, a file's other text subtitle tracks, one per language (NxMbFullSubs).
+' 10: and exactDurationSeconds, the file's real runtime in seconds, which a programme's slot is (NxSlotSeconds, #315).
+' 11: and an episode's showKey and parentRatingKey on Jellyfin and Emby, for the poster (#312).
 ' Plex items gained bitrate (STREAM QUALITY's remote ceiling) with no bump:
 ' one saved before has none, which direct plays as it did, until its server
 ' is next scanned, as a save over a day old always is (NxSnapshotFresh).
 function NxSnapshotFormat() as Integer
-    return 9
+    return 11
 end function
 
 ' Items per chunk file: about 1 MB of JSON, so a read or write never holds
@@ -70,7 +72,14 @@ function NxSnapshotReadMeta(dir as String) as Object
     if text = "" then return empty
     meta = ParseJson(text)
     if type(meta) <> "roAssociativeArray" then return empty
-    if meta.format <> NxSnapshotFormat() or type(meta.servers) <> "roAssociativeArray" then return empty
+    ' Another format: the saved library is ignored, and its chunk files, which no
+    ' meta will ever name again, are deleted rather than left filling cachefs:
+    ' (the format 11 bump left the format 10 files behind).
+    if meta.format <> NxSnapshotFormat() then
+        NxSnapshotClear(dir)
+        return empty
+    end if
+    if type(meta.servers) <> "roAssociativeArray" then return empty
     return meta
 end function
 
@@ -125,10 +134,44 @@ function NxSnapshotFindItem(dir as String, meta as Object, keys as Object, ratin
     return invalid
 end function
 
+' Whether a scan that was cut for a full memory (I-091) must not replace the
+' saved copy: the copy is whole (no cut of its own) and holds more titles than
+' this scan read. A rebuild runs with the guide's own memory held, so it is cut
+' about 3,200 titles sooner than first setup was; saving it would shrink a
+' library that fit, a little more every daily rebuild. `old` is the saved entry,
+' `read` the titles this scan has for the server, `cutRead` the cut it made (0
+' when it read everything).
+function NxSnapshotKeepSaved(old as Dynamic, read as Integer, cutRead as Integer) as Boolean
+    if cutRead <= 0 then return false
+    if type(old) <> "roAssociativeArray" or not NxIsNumber(old.count) then return false
+    if NxNumberOr0(old.cutRead) > 0 then return false
+    return old.count > read
+end function
+
+' How many of `items` belong to the server with this index.
+function NxSnapshotCountServer(items as Object, serverIndex as Integer) as Integer
+    n = 0
+    for each it in items
+        if it.serverIndex = serverIndex then n = n + 1
+    end for
+    return n
+end function
+
+' What a load does to a server's saved copy after a scan of it: saves what was read,
+' or keeps the saved copy when this scan was cut for a full memory and the copy is
+' whole and larger (NxSnapshotKeepSaved). `s` is the scan's record { key, index,
+' collections, signature, skipped, cutRead, cutOf }. Returns "saved" or "kept".
+function NxSnapshotSaveScan(dir as String, meta as Object, s as Object, items as Object, nowSec as LongInteger) as String
+    read = NxSnapshotCountServer(items, s.index)
+    if NxSnapshotKeepSaved(meta.servers[s.key], read, NxNumberOr0(s.cutRead)) then return "kept"
+    NxSnapshotSaveServer(dir, meta, s.key, items, s.index, s.collections, s.signature, nowSec, NxNumberOr0(s.skipped), NxNumberOr0(s.cutRead), NxNumberOr0(s.cutOf))
+    return "saved"
+end function
+
 ' Saves one server's items (only those with this serverIndex) and
 ' collections under a new generation, then the meta, then drops the old
 ' generation's chunks. `collections` may be invalid when they couldn't be read.
-sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger, skipped = 0 as Integer)
+sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as Object, serverIndex as Integer, collections as Dynamic, signature as Dynamic, nowSec as LongInteger, skipped = 0 as Integer, cutRead = 0 as Integer, cutOf = 0 as Integer)
     CreateDirectory(dir)
     old = meta.servers[key]
     gen = 1
@@ -158,6 +201,11 @@ sub NxSnapshotSaveServer(dir as String, meta as Object, key as String, items as 
         chunks = chunks + 1
     end if
     meta.servers[key] = { gen: gen, chunks: chunks, count: count, savedAt: nowSec, signature: signature, collections: collections, skipped: skipped }
+    ' A scan that stopped for a full memory (I-091): how far it got, and how many titles the server holds.
+    if cutRead > 0 then
+        meta.servers[key].cutRead = cutRead
+        meta.servers[key].cutOf = cutOf
+    end if
     NxSnapshotWriteMeta(dir, meta)
     if type(old) = "roAssociativeArray" and NxIsNumber(old.chunks) then
         for c = 0 to old.chunks - 1

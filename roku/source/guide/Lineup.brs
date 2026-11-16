@@ -182,11 +182,16 @@ end function
 
 ' ── Schedule ────────────────────────────────────────────────────────────────
 
-' Mirrors poolFingerprint: a 32-bit string hash of the sorted ratingKeys.
+' Mirrors poolFingerprint: a 32-bit string hash of the sorted ratingKeys, then
+' "r" and how many of the pool's items carry a usable runtime (a slot that is
+' not just their minutes, or an exact runtime at all), so a day packed while
+' the library had no runtimes is packed again once they arrive.
 function NxPoolFingerprint(pool as Object) as String
     keys = []
+    withRuntime = 0
     for each it in pool
         keys.Push(NxToStr(it.ratingKey))
+        if NxSlotSeconds(it) <> NxDuration(it) * 60 or NxIsNumber(it.exactDurationSeconds) then withRuntime = withRuntime + 1
     end for
     keys.Sort()
     ' Over the bytes, in one pass: Mid() on a long string is slow enough that a
@@ -201,7 +206,7 @@ function NxPoolFingerprint(pool as Object) as String
     for each c in bytes
         h& = (h& * 31 + c) mod 4294967296&
     end for
-    return NxToInt32(h&).ToStr()
+    return NxToInt32(h&).ToStr() + "r" + withRuntime.ToStr()
 end function
 
 ' The session's schedule cache: channelId_dayKey -> { fp, blocks }.
@@ -308,6 +313,29 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
     return out
 end function
 
+' The programme running over midnight from yesterday: on air until it ends,
+' and today's day starts after it (NxPackDay's runsOverUntil). Without it the
+' guide would show today's first programme under a file that is still playing
+' its last minutes. Yesterday's stored day only; a day never packed has no such
+' programme. [{ item, startSec, endSec }] for those ending after the guide
+' window's start (the half hour before atSec), in start order, items resolved from `pool` (#315). Mirrors the yesterday rows in
+' DailyManifestScheduler.blocks(from:to:).
+function NxRunOverBlocks(channel as Object, pool as Object, atSec as LongInteger, memo = invalid as Dynamic) as Object
+    out = []
+    cache = NxManifestCache()
+    prev = NxStoredBlocks(cache, channel.id, NxPreviousLocalDayKey(NxLocalDay(atSec).dayStartSec))
+    if prev.Count() = 0 then return out
+    prepared = NxPoolPrepare(pool, memo)
+    fromSec& = (atSec \ 1800) * 1800
+    for each b in prev
+        if b.endSec > fromSec& then
+            it = prepared.lookup[b.ratingKey]
+            if it <> invalid then out.Push({ item: it, startSec: b.startSec, endSec: b.endSec })
+        end if
+    end for
+    return out
+end function
+
 ' The order channels claim programmes in: channels whose pool changes with the
 ' hour (timeRestrictions) last, so the others' days never depend on when a device
 ' first built them; then by channel id, so the lowest keeps a title, as
@@ -408,7 +436,16 @@ function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as 
             aired[b.ratingKey] = true
         end for
         if prev.Count() > 0 then last = prev.Peek().ratingKey
-        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy, NxIsGated(channel))
+        ' When yesterday's last programme ends (it may run past midnight): today's day starts then (#315).
+        over = invalid
+        for each b in prev
+            if over = invalid then
+                over = b.endSec
+            else if b.endSec > over then
+                over = b.endSec
+            end if
+        end for
+        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy, NxIsGated(channel), over)
         cache[channel.id.ToStr() + "_" + day.dayKey] = { fp: entry.fp, blocks: packed }
         packedBy[channel.id.ToStr()] = packed
         if extra = invalid or channel.id <> extra.channel.id then

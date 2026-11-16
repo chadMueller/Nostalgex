@@ -20,36 +20,50 @@ function NxRunGuideNavTests() as Integer
     NxCheck(r, "back on live stops an encode", NxGuideBack(2, 2, 0, true), "stop")
     NxCheck(r, "back on live, direct play, leaves", NxGuideBack(2, 2, 0, false), "leave")
 
-    ' GUIDE TEXT SIZE (I-060). #263 replaced both sizes with the Apple TV
-    ' 1.0.32's: NORMAL titles, numbers and names 22, times and the heading 25,
-    ' a 40 px number box; LARGE all 29 and a 54 px box. The tops are computed
-    ' from the 64 px row and 58 px header.
-    n = NxGuideTextSizes(false)
-    l = NxGuideTextSizes(true)
-    NxCheck(r, "text: normal is #263's", FormatJson([n.slot, n.slotY, n.slotH, n.title, n.titleY, n.num, n.numW, n.numY, n.name, n.nameY, n.nameGap, n.head, n.headY, n.held, n.heldY]), "[25,13,33,22,18,22,40,18,22,18,48,25,13,25,16]")
-    NxCheck(r, "text: large is #263's", FormatJson([l.slot, l.slotY, l.slotH, l.title, l.titleY, l.num, l.numW, l.numY, l.name, l.nameY, l.nameGap, l.head, l.headY, l.held, l.heldY]), "[29,10,38,29,13,29,54,13,29,13,62,29,10,29,13]")
-    NxCheck(r, "text: never chosen is normal", NxGuideTextFrom("").ToStr(), "false")
-    NxCheck(r, "text: large is read", NxGuideTextFrom("large").ToStr(), "true")
-    NxCheck(r, "text: normal is read", NxGuideTextFrom("normal").ToStr(), "false")
-    NxCheck(r, "text: anything else is normal", NxGuideTextFrom("huge").ToStr(), "false")
-    for each k in ["slot", "title", "num", "name", "head"]
-        NxCheck(r, "text: large " + k + " is bigger", NxGuideTextBigger(l[k], n[k]).ToStr(), "true")
+    ' GUIDE TEXT SIZE (I-060), the Apple TV's three steps (appletv/guide-text-three-steps):
+    ' DEFAULT (raw "normal") titles, numbers and names 20, times and the heading
+    ' 22, a 36 px number box; LARGER (raw "large") all 29 and a 54 px box;
+    ' SMALLER (raw "small") 17 and 19 and a 31 px box. The tops are computed from
+    ' the 64 px row and 58 px header.
+    n = NxGuideTextSizesFor("normal")
+    l = NxGuideTextSizesFor("large")
+    s = NxGuideTextSizesFor("small")
+    NxCheck(r, "text: the two-level call is DEFAULT and LARGER", FormatJson([NxGuideTextSizes(false), NxGuideTextSizes(true)]), FormatJson([n, l]))
+    NxCheck(r, "text: DEFAULT is the Apple TV's", FormatJson([n.slot, n.slotY, n.slotH, n.title, n.titleY, n.num, n.numW, n.numY, n.name, n.nameY, n.nameGap, n.head, n.headY, n.held, n.heldY]), "[22,15,29,20,19,20,36,19,20,19,44,22,15,22,18]")
+    NxCheck(r, "text: LARGER is the old LARGE, in a 76 px row and a 66 px header", FormatJson([l.slot, l.slotY, l.slotH, l.title, l.titleY, l.num, l.numW, l.numY, l.name, l.nameY, l.nameGap, l.head, l.headY, l.held, l.heldY]), "[29,14,38,29,19,29,54,19,29,19,62,29,14,29,19]")
+    NxCheck(r, "text: SMALLER is 17 and 19", FormatJson([s.slot, s.slotY, s.slotH, s.title, s.titleY, s.num, s.numW, s.numY, s.name, s.nameY, s.nameGap, s.head, s.headY, s.held, s.heldY]), "[19,17,25,17,21,17,31,21,17,21,39,19,17,19,20]")
+    NxCheck(r, "text: the bundle list rows and heading follow the level", FormatJson([s.pkgRow, s.pkgHead, n.pkgRow, n.pkgHead, l.pkgRow, l.pkgHead]), "[17,19,20,22,22,25]")
+    NxCheck(r, "text: the row and the header by step (integration-1115): 64 and 58, 64 and 58, 76 and 66", FormatJson([s.rowH, s.headerH, n.rowH, n.headerH, l.rowH, l.headerH]), "[64,58,64,58,76,66]")
+    NxCheck(r, "text: the geometry's other numbers do not move", FormatJson([NxGuideGeometryFor("large").colX, NxGuideGeometryFor("large").slotWidth, NxGuideGeometryFor("small").colX]), "[340,395,340]")
+    NxCheck(r, "text: the default geometry is DEFAULT's", FormatJson(NxGuideGeometry()), FormatJson(NxGuideGeometryFor("normal")))
+    NxCheck(r, "text: SMALLER's constants", FormatJson([NxGuideSmallerText(), NxGuideSmallerTime(), NxGuideSmallerNumW()]), "[17,19,31]")
+    ' The saved value: nothing, or anything unknown, is DEFAULT.
+    NxCheck(r, "text: never chosen is normal", NxGuideTextStepFrom(""), "normal")
+    NxCheck(r, "text: large is read", NxGuideTextStepFrom("large"), "large")
+    NxCheck(r, "text: small is read", NxGuideTextStepFrom("small"), "small")
+    NxCheck(r, "text: normal is read", NxGuideTextStepFrom("normal"), "normal")
+    NxCheck(r, "text: anything else is normal", NxGuideTextStepFrom("huge"), "normal")
+    NxCheck(r, "text: a wrong case is normal", NxGuideTextStepFrom("Large"), "normal")
+    NxCheck(r, "text: the two-level read still says large", NxGuideTextFrom("large").ToStr() + NxGuideTextFrom("small").ToStr() + NxGuideTextFrom("").ToStr(), "truefalsefalse")
+    NxCheck(r, "text: the cycle is SMALLER, DEFAULT, LARGER and round", NxGuideTextNext("small") + NxGuideTextNext("normal") + NxGuideTextNext("large"), "normallargesmall")
+    NxCheck(r, "text: the labels", NxGuideTextLabel("small") + "," + NxGuideTextLabel("normal") + "," + NxGuideTextLabel("large"), "SMALLER,DEFAULT,LARGER")
+    ' Each step is at least as big as the one below it, in everything the grid draws.
+    for each k in ["slot", "title", "num", "name", "head", "held", "numW", "pkgRow", "pkgHead"]
+        NxCheck(r, "text: DEFAULT " + k + " is bigger than SMALLER", NxGuideTextBigger(n[k], s[k]).ToStr(), "true")
+        NxCheck(r, "text: LARGER " + k + " is bigger than DEFAULT", NxGuideTextBigger(l[k], n[k]).ToStr(), "true")
     end for
     ' Every line sits inside its 64 px row (the header's inside 58), a line
     ' being about 1.3 times its size tall.
-    for each k in [["title", "titleY"], ["num", "numY"], ["name", "nameY"], ["held", "heldY"]]
-        for each big in [false, true]
-            z = NxGuideTextSizes(big)
-            NxCheck(r, "text: " + k[0] + " fits the row, large " + FormatJson(big), NxGuideTextFits(z[k[0]], z[k[1]], 64).ToStr(), "true")
+    for each level in ["small", "normal", "large"]
+        z = NxGuideTextSizesFor(level)
+        for each k in [["title", "titleY"], ["num", "numY"], ["name", "nameY"], ["held", "heldY"]]
+            NxCheck(r, "text: " + k[0] + " fits the row, " + level, NxGuideTextFits(z[k[0]], z[k[1]], z.rowH).ToStr(), "true")
         end for
-    end for
-    for each big in [false, true]
-        z = NxGuideTextSizes(big)
-        NxCheck(r, "text: time label fits the header, large " + FormatJson(big), NxGuideTextFits(z.slot, z.slotY, 58).ToStr(), "true")
-        NxCheck(r, "text: heading fits the header, large " + FormatJson(big), NxGuideTextFits(z.head, z.headY, 58).ToStr(), "true")
+        NxCheck(r, "text: time label fits the header, " + level, NxGuideTextFits(z.slot, z.slotY, z.headerH).ToStr(), "true")
+        NxCheck(r, "text: heading fits the header, " + level, NxGuideTextFits(z.head, z.headY, z.headerH).ToStr(), "true")
         ' A three-digit number (up to 216) in DM Mono, about 0.6 of its size wide.
-        NxCheck(r, "text: three digits fit the number box, large " + FormatJson(big), NxGuideTextAtLeast(z.numW, Int(z.num * 0.6 * 3)).ToStr(), "true")
-        NxCheck(r, "text: the name starts past the number box, large " + FormatJson(big), NxGuideTextBigger(z.nameGap, z.numW).ToStr(), "true")
+        NxCheck(r, "text: three digits fit the number box, " + level, NxGuideTextAtLeast(z.numW, Int(z.num * 0.6 * 3)).ToStr(), "true")
+        NxCheck(r, "text: the name starts past the number box, " + level, NxGuideTextBigger(z.nameGap, z.numW).ToStr(), "true")
     end for
 
     ' ── The packages sidebar (bundleJumpTargets): guide order, one FRANCHISES ──

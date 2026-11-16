@@ -36,9 +36,19 @@
     <field id="seedEnded" type="boolean" alwaysNotify="true" />
     <!-- The id of the channel tuned, as a string, or "" (resumeId's source). -->
     <function name="tunedChannelId" />
+    <!-- The loading pattern (source/guide/LoadState.brs). loadInfo is what the
+         scan has read so far ({ titles, of, name }); readyTitles is set when a
+         load finished (GUIDE READY: n TITLES); loadError is why a switch could
+         not read the library. enterChanging clears the rows for a server or
+         library switch and shows CHANNEL GUIDE IS CHANGING in their place. -->
+    <field id="loadInfo" type="assocarray" onChange="onLoadInfo" />
+    <field id="readyTitles" type="integer" value="0" alwaysNotify="true" onChange="onReadyTitles" />
+    <field id="loadError" type="string" value="" onChange="onLoadError" />
+    <function name="enterChanging" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/ColdBootSeed.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/LoadState.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/StreamQuality.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideNav.brs" />
@@ -77,6 +87,9 @@
     <Rectangle id="screen" width="1920" height="1080" color="0x000000FF" />
     <Rectangle id="videoBg" translation="[1180,0]" width="740" height="555" color="0x05050DFF" />
     <Video id="video" translation="[1180,0]" width="740" height="555" />
+    <!-- WATERSHED hold keep-alive (#190): a 4 px black clip, muted and looping, only while a held channel has
+         nothing airing, so the stick keeps running the app (it stops one that plays no video for ~10 minutes). -->
+    <Video id="keepVideo" translation="[0,0]" width="4" height="4" />
     <!-- A forced subtitle line the app draws itself (#237, drawForcedSub): under
          the CRT overlay, as part of the picture. The dark copy behind is its edge. -->
     <Group id="forcedSub" visible="false">
@@ -94,6 +107,12 @@
       <Poster id="snow" uri="pkg:/images/look/snow_0.png" translation="[1180,0]" width="740" height="556" opacity="0.32" />
       <Label id="hazeText" translation="[1180,261]" width="740" horizAlign="center" />
     </Group>
+    <Timer id="infoPosterTimer" repeat="false" duration="0.25" />
+    <Timer id="readyTimer" repeat="false" duration="4" />
+    <!-- The loading block's indicator: a cyan bar sliding back and forth. -->
+    <Animation id="loadSlide" duration="1.4" repeat="true" easeFunction="inOutQuad">
+      <Vector2DFieldInterpolator key="[0.0, 0.5, 1.0]" keyValue="[[0.0, 0.0], [240.0, 0.0], [0.0, 0.0]]" fieldToInterp="loadBar.translation" />
+    </Animation>
     <Animation id="hazeIn" duration="0.35" repeat="false" easeFunction="linear">
       <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="haze.opacity" />
     </Animation>
@@ -106,12 +125,16 @@
       <Poster id="logo" uri="pkg:/images/logo.png" translation="[40,54]" width="363" height="48" />
       <!-- TunerView's nav item: Up from the top row focuses it. -->
       <Label id="navSettings" text="SETTINGS" translation="[924,64]" width="200" horizAlign="right" />
+      <!-- UPDATING LIBRARY and GUIDE READY, in the header beside the logo. -->
+      <Label id="headerNote" text="" translation="[440,66]" width="470" visible="false" />
       <!-- While a package switched on in Settings is still building: its
            channels are on the way (Discussion #8). -->
       <Label id="buildNotice" text="" translation="[40,128]" width="1100" visible="false" />
       <Group id="info" translation="[40,204]">
         <!-- Letter-spaced text is a Label per character (VT323 is monospace). -->
         <Group id="tag" />
+        <Rectangle id="posterBack" translation="[0,56]" width="120" height="180" color="0xFFFFFF0A" visible="false" />
+        <Poster id="poster" translation="[0,56]" width="120" height="180" loadDisplayMode="scaleToFill" visible="false" />
         <Label id="title" translation="[0,56]" width="1100" wrap="true" maxLines="2" lineSpacing="2" />
         <Label id="artist" width="1100" />
         <Label id="genres" width="1100" wrap="true" maxLines="2" />
@@ -120,6 +143,8 @@
         <Label id="summary" width="1100" wrap="true" maxLines="2" lineSpacing="4" />
         <Group id="meta">
           <Group id="badges" />
+        </Group>
+        <Group id="progressRow">
           <Rectangle id="progressTrack" height="4" color="0xFFFFFF14" />
           <Rectangle id="progressFill" height="4" />
           <Label id="clock" />
@@ -130,12 +155,27 @@
     </Group>
     <Group id="grid" translation="[0,555]">
       <Rectangle width="1920" height="525" color="0x0D0D1FFF" />
-      <Rectangle width="1920" height="58" color="0x0A0A14FF" />
+      <Rectangle id="headerBg" width="1920" height="58" color="0x0A0A14FF" />
       <Label id="channelHead" text="CHANNEL" translation="[12,18]" />
       <Group id="slots" />
-      <Rectangle translation="[0,58]" width="1920" height="1" color="0xFFFFFF40" />
+      <Rectangle id="headerRule" translation="[0,58]" width="1920" height="1" color="0xFFFFFF40" />
       <Group id="rows" translation="[0,59]" clippingRect="[0,0,1920,466]" />
       <Rectangle id="nowLine" width="2" height="525" color="0x00D4FFFF" />
+      <!-- The empty guide area's one block while the library loads or the
+           guide is changing: title, progress, indicator, and the Settings note. -->
+      <Group id="loadBlock" translation="[0,59]" visible="false">
+        <Rectangle id="loadBg" width="1920" height="466" color="0x0D0D1FFF" />
+        <Label id="loadTitle" text="" translation="[160,110]" width="1600" horizAlign="center" />
+        <Label id="loadLine" text="" translation="[360,166]" width="1200" horizAlign="center" wrap="true" maxLines="3" lineSpacing="4" />
+        <Label id="loadLib" text="" translation="[360,202]" width="1200" horizAlign="center" />
+        <Group id="loadInd" translation="[780,250]">
+          <Rectangle id="loadTrack" width="360" height="4" color="0xFFFFFF14" />
+          <Group id="loadClip" clippingRect="[0,0,360,4]">
+            <Rectangle id="loadBar" width="120" height="4" color="0x00D4FFFF" />
+          </Group>
+        </Group>
+        <Label id="loadNote" text="" translation="[360,276]" width="1200" horizAlign="center" />
+      </Group>
     </Group>
     <Group id="sidebar" translation="[0,555]" visible="false" />
     <!-- Full screen's channel OSD (PlayerView ChannelOSD), bottom left. -->
