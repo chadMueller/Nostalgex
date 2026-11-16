@@ -117,7 +117,7 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
     nextAfterEnd: channel => (channel.schedule && channel.schedule[0]) || null,
     showNowPlaying() {}, updateInfoPanel() {}, showGuide() {}, renderActiveGuide() {}, updateFsOverlay() {},
     // Watershed's card and hold test: no channel here is held (scripts/watershed-browser-smoke.mjs drives the real ones).
-    hideWatershedCard() {}, holdForWatershed() {}, isWatershedHold: () => false,
+    hideWatershedCard() {}, hideWeatherScreen() {}, startWeatherScreen() {}, holdForWatershed() {}, isWatershedHold: () => false,
     // Open on last channel: remembering the tuned channel is storage, driven for real by scripts/open-last-channel-browser-smoke.mjs.
     rememberLastChannel() {},
     buildSubtitleUrl: item => `https://fixture.invalid/subtitles/${item.ratingKey}`,

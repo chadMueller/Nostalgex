@@ -382,6 +382,26 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Half-done.** Demo mode has one bundle, so Up and Down between bundles were not seen on a device, only in the unit tests. The info panel was not put beside the Apple TV's screenshots, and nothing was run on the real TV. The seasonal invite row has no stripe cell. A preview programme in the info panel (I-089) is not ported.
 
+## 2026-11-15 (web tuner: the weather channel, first version, Trello I-016)
+
+**State.** Branch `web/weather-channel` off main `eaf4443e`. Not merged, not pushed, not deployed. A push to main ships the page and the relay together.
+
+**Why.** Chad wants a 24/7 local weather channel: current conditions, today's forecast, a 5-day forecast and radar, in the app's look. The web tuner goes first and is the reference the Apple TV, Roku and Android ports copy.
+
+**Changed.**
+- CH 299, LOCAL WEATHER. Not in channels.json and in no bundle: the page adds it to the guide while its switch in Settings is on. Chad found CH 600 too deep in the guide and asked for a number before the music videos. Everything from 300 to 519 is reserved (the stock FRANCHISES package 300-309, found franchises 310-399, collections 400-499, HIGH ROTATION 500-519), so 299 is the closest number that clashes with nothing. Its id is 1,030,000 (the next free dynamic block), so a channel the viewer makes later cannot take it.
+- The picture is a 1920x1080 canvas the page draws (`scripts/nostalgex-weather-screens.js`): four screens on a 65 second loop that follows the wall clock. The rules are `scripts/nostalgex-weather.js`; `scripts/weather-golden.json` holds the Apple TV, Roku and Android ports to the same answers.
+- Forecast: MET Norway Locationforecast 2.0 through a new relay, `api/weather.js`, next to `api/tmdb.js`. It identifies itself, rounds to 2 decimals, never asks MET before its Expires, uses If-Modified-Since after it, and holds an answer at the edge 3 hours (30 minutes in the Nordics). The Docker tuner calls the same relay with `X-Nostalgex-Client: selfhost`.
+- Places: a viewer types a city or postcode (Settings > PLAYBACK & PICTURE > WEATHER). GeoNames files, built by `scripts/build-weather-data.mjs` into `public/weather/places/` (70,042 cities, 112,451 postcodes in US, CA, GB, AU, DE; GB and CA keep only the outward part). The Docker image copies them (`selfhost-build.mjs`). No IP lookup.
+- Radar: NOAA MRMS (US), Environment Canada GeoMet (Canada) and DWD (Germany) over a map the page draws itself from Natural Earth outlines (`public/weather/basemap.json`). Elsewhere the card says RADAR NOT AVAILABLE IN YOUR AREA. Echo colours are mapped to the app's five (cyan, yellow, amber, red, pink). DWD: the one layer `Niederschlagsradar` with its own 41 KB capabilities (the whole server's is 983 KB); its time range runs into the nowcast, so frames stop 10 minutes before the clock; its style paints the edge of the radar coverage in magenta, which is our EXTREME colour, so that band is not drawn for Germany. Source note in DWD's own wording for changed data, "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben"; DWD's legal page now says CC BY 4.0 for its free geodata services.
+- Music: one bundled, original loop (2:47, `public/weather/music/local-forecast.m4a` 1.66 MB and `.mp3` 1.67 MB, -27 LUFS). Composed as MIDI in `scripts/weather-music/compose.py` (Eb major smooth-jazz changes, electric piano, warm pad, fretless bass, vibes, flute, soprano sax, a very quiet kit) and rendered with FluidR3_GM (MIT, notice shipped beside the files) by `scripts/weather-music/render.sh`, with the end's reverb tail mixed onto the start so it loops without a seam. It follows the page's SOUND control and stops with the channel or the sleep timer. The library music video path is removed.
+- Units: Fahrenheit where the place's country is the US, Celsius elsewhere, a setting to change it.
+- Tests: `npm run test:weather` and `test:weather-proxy` are in `npm test`; `test:weather:browser` (headless, 140 checks, three sizes) is run by hand like the other browser smokes. `test:season` and `test:web-tune-ownership` run slices of the page; the second needed two stubs.
+
+**Half-done.** Radar for countries outside the US, Canada and Germany. No alerts. The loop's gapless play depends on the browser honouring the encoder delay in the m4a or mp3 (not measured on a TV browser). Apple TV, Roku and Android have not ported it.
+
+**Next.** Chad's go to push (a push to main ships the page and the relay); the privacy page line (approved, not added); the Apple TV, Roku and Android ports.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.

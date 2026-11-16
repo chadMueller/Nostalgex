@@ -18,6 +18,8 @@ public/*
 !public/channels.json
 !public/channels-memberships.json
 !public/franchises.json
+# The weather channel's place list and map outlines (the image carries them).
+!public/weather/
 !scripts/
 !docker/
 scripts/devtools/
