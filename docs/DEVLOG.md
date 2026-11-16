@@ -162,6 +162,22 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Tested.** `GuideStripeSelectTargetTests` (3) and `GuideStripesTests`; `GuideStripeFocusTests` (3 UI tests on the simulator, including Select landing on channel 7 with its row at the top of the guide, Left from the stripe opening the list and Menu closing it). Not tried on a TV.
 
+## 2026-11-16 (Apple TV: a new channels.json reaches a TV within the hour, N-074)
+
+**State.** Branch `appletv/live-channels-faster` off `appletv/1.0.33-weather` (`ded0ffc0`). Not pushed, not archived; the build number is untouched. Chad: "i would want it to be sooner than 24 hours - if that is going to make it unstable i dont want to, but the idea is to push something easily and quickly."
+
+**Changed.**
+- Check: at launch (after a snapshot restore), when the app returns to the foreground and from the 15 minute background loop, but never more than once in `ChannelConfigStore.checkInterval` (3600 s, the one constant). The request is conditional (ETag), so an unchanged file is a 304; a failed check also waits the hour.
+- Apply: a newer valid `version` is applied by `rebuildChannelsFromLoadedLibrary` (AppState+LiveChannels): every enabled channel's pool is filtered again from the library in memory, no server scan, then the franchises and collections and the lineup are rebuilt. Rules in `LiveChannelRules`: only when the kept `version` is newer than the one the guide was built from (`nostalgex_channels_applied_version`, set by every full load and every apply; absent means the bundled copy's), never while a programme is full screen or a load or rebuild is running, only when the guide is the front screen (TunerView says so, so not under Settings) or at launch before anything plays. Whatever is playing keeps playing: its channel is swapped for the rebuilt one with no reload. The header says UPDATING LIBRARY while it runs and GUIDE READY after, as the loading pattern does, and the snapshot is saved so the next launch starts from the new rules.
+- A same, older or invalid file never reaches this: `ChannelConfigStore.store` refuses it, so the kept version does not move.
+- Not re-run on this path: enrichment (it needs the network); titles that a new rule needs OMDb data for get it at the next full load.
+
+**Measured.** 30,000 titles (3,000 movies, 18,000 episodes of 297 shows, 9,000 music videos), a fresh AppState restored from the snapshot, then the rebuild, on the tvOS simulator on a Mac under heavy load (load average 20 and up, other work running): the rebuild took 5.3 s, peak memory 167 MB against 123 MB before (+44 MB), and the longest main-thread block was 64 ms. The first version took 2,055 ms on the main thread, from the franchise builder; it now uses the existing off-main builder. Not measured on an Apple TV; the Mac is faster than the device, so expect the wall time to be longer there, with the main thread free. Result: applying while the app is open is on (`LiveChannelRules.appliesWhileRunning`); set it false and a new copy waits for the next launch.
+
+**Rollback.** The apps accept a channels.json only if its `version` is at least the one they hold (and its `formatVersion` is at most 1). So a rollback is the old content published under a HIGHER `version`; republishing the old file with its old number is ignored. Do not edit a published `version` downward.
+
+**Tested.** `LiveChannelRulesTests` (9): unchanged and older do nothing, newer applies on the guide, nothing applies during playback or a load or under Settings, it waits for the next time on the guide, a newer one applies at launch, applying-while-running off waits for launch, an invalid download leaves nothing to apply and a rollback under a higher version does, the check is due once an hour, the applied version starts as the bundled one. Measurement: `BigLibraryHarness.testLiveRulesRebuildFromSnapshot` (`TEST_RUNNER_NOSTALGEX_BIGLIB_N=30000`). 76 tests of the changed and neighbouring classes pass. No device run.
+
 ## 2026-11-16 (Apple TV 1.0.33 (58): Chad's weather changes)
 
 **State.** On `appletv/1.0.33-weather`, still build 58. Not pushed.

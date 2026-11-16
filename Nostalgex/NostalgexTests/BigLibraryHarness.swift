@@ -505,4 +505,84 @@ final class BigLibraryHarness: XCTestCase {
         XCTAssertEqual(itemCount, n)
         if !legacyMode { XCTAssertTrue(restored) }
     }
+
+    /// N-074, faster: what applying a new live channels.json costs on a big library. A library of N titles is loaded
+    /// and saved, a fresh AppState restores it from the snapshot (the next launch), then
+    /// `rebuildChannelsFromLoadedLibrary` rebuilds every enabled channel from those titles with no server scan.
+    /// Records time, peak memory and the longest main-thread block of just that rebuild.
+    ///
+    ///     TEST_RUNNER_NOSTALGEX_BIGLIB_N=30000 xcodebuild test ... -only-testing:NostalgexTests/BigLibraryHarness/testLiveRulesRebuildFromSnapshot
+    func testLiveRulesRebuildFromSnapshot() async throws {
+        guard let raw = ProcessInfo.processInfo.environment["NOSTALGEX_BIGLIB_N"], let n = Int(raw), n > 0 else {
+            throw XCTSkip("set TEST_RUNNER_NOSTALGEX_BIGLIB_N to run the big-library harness")
+        }
+        let isolation = HarnessScope.begin("testLiveRulesRebuildFromSnapshot")
+        defer { isolation.end() }
+        let serverID = "4f0c2b9e8a7d6c5b4a39281706f5e4d3c2b1a090"
+        let server = AppState.ServerRef(machineIdentifier: serverID, name: "Vault", baseURL: "http://127.0.0.1:9", owned: true, token: "srv")
+        LibrarySnapshotStore.clear()
+        DailyManifestStore.clearAll()
+        DailyManifestScheduler.invalidateMemo()
+        AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        AppDefaults.standard.removeObject(forKey: "nostalgex_enabled_bundles")
+        defer {
+            LibrarySnapshotStore.clear()
+            DailyManifestStore.clearAll()
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        }
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer { UIApplication.shared.isIdleTimerDisabled = false }
+
+        var fixture: (items: [PlexMediaItem], mix: String)? = Self.makeLibrary(count: n, serverID: serverID)
+        let mix = fixture!.mix
+        let backend = FixtureBackend(serverID: serverID, items: fixture!.items)
+        fixture = nil
+        let store = InMemoryStore()
+        var state: AppState? = AppState(credentialStore: store)
+        state!.backendOverride = { _ in backend }
+        state!.completePlexSignIn(token: "plex-account-token", servers: [server])
+        await state!.loadLibrary()
+        await Task.detached { LibrarySnapshotStore.waitForPendingSaves() }.value
+        state?.backendOverride = nil
+        state = nil
+        DailyManifestScheduler.invalidateMemo()
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        // The next launch: restore from the snapshot, no scan.
+        let launch = AppState(credentialStore: store)
+        launch.backendOverride = { _ in backend }
+        launch.completePlexSignIn(token: "plex-account-token", servers: [server])
+        let restored = await launch.restoreLibraryFromSnapshotIfNeeded()
+        XCTAssertTrue(restored)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        let before = (items: launch.allItems.count, allChannels: launch.allChannels.count, guide: launch.channels.count,
+                      pool: launch.allChannels.reduce(0) { $0 + $1.itemPool.count })
+
+        let rec = Recorder()
+        rec.mark("baseline")
+        let config = ChannelConfigStore.active().result
+        let t0 = CFAbsoluteTimeGetCurrent()
+        await launch.rebuildChannelsFromLoadedLibrary(config: config, version: ChannelConfigStore.version(of: ChannelConfigStore.bundledData()) + 1)
+        let wall = CFAbsoluteTimeGetCurrent() - t0
+        rec.mark("rebuild")
+        await Task.detached { LibrarySnapshotStore.waitForPendingSaves() }.value
+        rec.mark("snapshot.saved")
+        rec.stop()
+        let after = (allChannels: launch.allChannels.count, guide: launch.channels.count, pool: launch.allChannels.reduce(0) { $0 + $1.itemPool.count })
+
+        var out: [String] = ["N=\(n) \(mix)",
+                             "before: items=\(before.items) allChannels=\(before.allChannels) guide=\(before.guide) poolEntries=\(before.pool)",
+                             "after:  allChannels=\(after.allChannels) guide=\(after.guide) poolEntries=\(after.pool)",
+                             String(format: "REBUILD wall=%.0f ms", wall * 1000)]
+        for (row, block) in rec.report() where row.stage != "baseline" {
+            out.append("\(row.stage): \(Int((row.end - row.start) * 1000)) ms, peak footprint \(Self.mb(row.peakFoot)) MB (end \(Self.mb(row.endFoot)) MB), longest main-thread block \(Int(block * 1000)) ms")
+        }
+        let base = rec.report().first { $0.row.stage == "baseline" }
+        out.append("footprint before the rebuild \(Self.mb(base?.row.endFoot ?? 0)) MB, overall peak \(Self.mb(rec.overallPeakFoot)) MB")
+        for line in out { print("[LIVERULES] \(line)") }
+        if let path = ProcessInfo.processInfo.environment["NOSTALGEX_BIGLIB_OUT"] {
+            try? out.map { "[LIVERULES] \($0)" }.joined(separator: "\n").appending("\n").write(toFile: path, atomically: true, encoding: .utf8)
+        }
+        XCTAssertEqual(after.allChannels > 0, true)
+    }
 }

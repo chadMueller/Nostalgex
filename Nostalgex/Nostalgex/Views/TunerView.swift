@@ -116,6 +116,7 @@ struct TunerView: View {
             #endif
             RemoteActivityMonitor.install()
             RemoteActivityMonitor.noteActivity()
+            appState.noteGuideOnScreen(navigationPath.isEmpty && !appState.isFullScreen)
             buildAllSchedules()
             // Resume playback if player exists but isn't playing (e.g., returning from Settings)
             if let player = appState.player,
@@ -147,8 +148,11 @@ struct TunerView: View {
         .onChange(of: navigationPath.isEmpty) { _, isEmpty in
             // Back from Settings: the guide gets the full timeout again.
             if isEmpty { RemoteActivityMonitor.noteActivity() }
+            appState.noteGuideOnScreen(isEmpty && !appState.isFullScreen)
         }
+        .onDisappear { appState.noteGuideOnScreen(false) }
         .onChange(of: appState.isFullScreen) { _, isFullScreen in
+            appState.noteGuideOnScreen(!isFullScreen && navigationPath.isEmpty)
             // When fullscreen cover is presented, this view can stop receiving the 30s timer.
             // Rebuild immediately on return so the guide header + grid window stay aligned.
             if !isFullScreen {

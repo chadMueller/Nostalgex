@@ -294,6 +294,10 @@ class AppState {
     /// the viewer declined it.
     var seasonalPromptRevision: Int = 0
     var isBackgroundRefreshing: Bool = false
+    /// A live channels.json is being applied (AppState+LiveChannels). Not shown anywhere.
+    @ObservationIgnored var isApplyingLiveRules = false
+    /// The guide is the front screen: not full screen, not under Settings (TunerView tells us).
+    @ObservationIgnored var guideIsOnScreen = false
     var isLibraryStale: Bool = false
     /// Change signature of the library as of the last full scan; nil when unknown.
     var librarySignature: String?

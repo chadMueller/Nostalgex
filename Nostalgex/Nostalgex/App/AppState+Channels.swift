@@ -25,6 +25,8 @@ extension AppState {
             }
         }
         let active = ChannelConfigStore.active()
+        // The guide about to be built is made from this one.
+        ChannelConfigStore.recordApplied(version: active.version)
         if let data = active.data {
             print("[Plex90] CONFIG: \(active.source) — \(Self.configDiagnostic(from: data))")
         } else {

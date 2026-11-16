@@ -66,6 +66,10 @@ struct RootView: View {
             PlayerView()
                 .environment(appState)
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // Live channel rules (N-074): a check on return to the foreground, at most once an hour.
+            Task { await appState.checkLiveChannelRules() }
+        }
         .onChange(of: appState.keepsScreenAwake, initial: true) { _, keep in
             // tvOS's screensaver and sleep timer, held while video plays and while the viewer
             // waits on the loading screen (a first load or a RESCAN). One write from one
@@ -150,6 +154,9 @@ struct RootView: View {
             if restored, appState.isLibraryStale {
                 Task { await appState.refreshLibraryIfChanged() }
             }
+            // Live channel rules (N-074): a check at launch; a newer copy than the snapshot's guide is applied now,
+            // before anything plays.
+            if restored { Task { await appState.checkLiveChannelRules(atLaunch: true) } }
             appState.startDailyRefresh()
         }
     }
