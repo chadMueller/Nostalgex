@@ -14,6 +14,14 @@
 ' picker saw as "librarySections" (a JSON array), so Settings can list them
 ' without asking the server.
 '
+' N-016 option A (scripts/library-picker-golden.json, tests/LibraryPickerGoldenTests.brs):
+' a library is on or off by two saved lists, the Apple TV's two sets.
+'   "deselectedSections"       ids switched OFF; every library but a hidden one reads it.
+'   "includedHiddenSections"   ids of hidden Jellyfin libraries switched ON; a hidden library reads only this.
+' Everything starts on except a hidden Jellyfin library, one row each. The old
+' single switch (INCLUDE LIBRARIES HIDDEN ON JELLYFIN) is carried over once
+' (NxCarryOverHiddenSwitch) and every sign-in starts again (NxResetLibraryChoices).
+'
 ' The functions take the registry section, so the tests run on a stand-in.
 
 ' "serverID::sectionKey", as the Apple TV's LibrarySectionRef.storageKey.
@@ -51,11 +59,21 @@ function NxSectionIsOn(set as Object, serverId as Dynamic, sectionKey as Dynamic
     return set[NxSectionKey(serverId, sectionKey)] <> true
 end function
 
+' Whether a section is read: not in the set of those switched off. `set` may be
+' invalid (nothing is off).
+function NxSectionKept(set as Dynamic, serverId as Dynamic, sectionKey as Dynamic) as Boolean
+    if type(set) <> "roAssociativeArray" then return true
+    return NxSectionIsOn(set, serverId, sectionKey)
+end function
+
 ' The sections the last scan or the picker saw: [{ serverId, serverName, key,
 ' title, type, hidden }].
 function NxSavedSections(reg as Dynamic) as Object
     if reg = invalid then return []
-    list = ParseJson(reg.Read("librarySections"))
+    ' An empty read isn't handed to ParseJson, which logs an error for it.
+    raw = reg.Read("librarySections")
+    if raw = "" then return []
+    list = ParseJson(raw)
     if type(list) <> "roArray" then return []
     return list
 end function
@@ -90,24 +108,129 @@ function NxSectionsKept(list as Object, deselected as Dynamic, serverId as Dynam
     return out
 end function
 
-' Whether any library the viewer hides on Jellyfin is turned on, so a scan has
-' to ask for the hidden ones (the picker lists them off to start with; turning
-' one on is the choice to read it, as INCLUDE LIBRARIES HIDDEN ON JELLYFIN is
-' for all of them).
-function NxAnyHiddenOn(sections as Object, set as Object) as Boolean
+' The hidden Jellyfin libraries the viewer switched on, as a set (the Apple
+' TV's nostalgex_included_hidden_library_sections).
+function NxIncludedHiddenSections(reg as Dynamic) as Object
+    out = {}
+    if reg = invalid then return out
+    raw = reg.Read("includedHiddenSections")
+    if raw = "" then return out
+    list = ParseJson(raw)
+    if type(list) <> "roArray" then return out
+    for each k in list
+        if NxIsString(k) and k <> "" then out[k] = true
+    end for
+    return out
+end function
+
+sub NxSaveIncludedHiddenSections(reg as Dynamic, set as Object)
+    if reg = invalid then return
+    keys = []
+    for each k in set
+        if set[k] = true then keys.Push(k)
+    end for
+    keys.Sort()
+    reg.Write("includedHiddenSections", FormatJson(keys))
+    reg.Flush()
+end sub
+
+' Whether a library is on under the two lists: a hidden one follows `included`
+' only, every other follows `off`. A section is { serverId, key, hidden }.
+function NxSectionRowOn(section as Object, off as Object, included as Object) as Boolean
+    id = NxSectionKey(section.serverId, section.key)
+    if section.hidden = true then return included[id] = true
+    return off[id] <> true
+end function
+
+' The two lists after the viewer switches one library, changed in place: only
+' its own id moves, every other saved id stays.
+sub NxSectionRowToggle(section as Object, off as Object, included as Object)
+    id = NxSectionKey(section.serverId, section.key)
+    if NxSectionRowOn(section, off, included) then
+        if section.hidden = true then included.Delete(id) else off[id] = true
+    else
+        if section.hidden = true then included[id] = true else off.Delete(id)
+    end if
+end sub
+
+' The ids a scan reads, in listed order.
+function NxSectionsRead(sections as Object, off as Object, included as Object) as Object
+    out = []
     for each s in sections
-        if s.hidden = true and NxSectionIsOn(set, s.serverId, s.key) then return true
+        if NxSectionRowOn(s, off, included) then out.Push(NxSectionKey(s.serverId, s.key))
+    end for
+    return out
+end function
+
+' Whether any hidden Jellyfin library is switched on, so a scan has to ask for
+' the hidden ones.
+function NxAnyHiddenOn(sections as Object, included as Object) as Boolean
+    for each s in sections
+        if s.hidden = true and included[NxSectionKey(s.serverId, s.key)] = true then return true
     end for
     return false
 end function
 
 ' How many of `sections` are on.
-function NxSectionsOnCount(sections as Object, set as Object) as Integer
-    n = 0
-    for each s in sections
-        if NxSectionIsOn(set, s.serverId, s.key) then n = n + 1
+function NxSectionsOnCount(sections as Object, off as Object, included as Object) as Integer
+    return NxSectionsRead(sections, off, included).Count()
+end function
+
+' What a scan leaves alone: the libraries switched off, and every saved hidden
+' library not switched on (a scan asks once and cannot tell which are hidden,
+' so it goes by the saved list). A set for NxSectionsKept.
+function NxScanOffSet(reg as Dynamic) as Object
+    out = NxDeselectedSections(reg)
+    included = NxIncludedHiddenSections(reg)
+    for each s in NxSavedSections(reg)
+        if s.hidden = true and included[NxSectionKey(s.serverId, s.key)] <> true then out[NxSectionKey(s.serverId, s.key)] = true
     end for
-    return n
+    return out
+end function
+
+' UPGRADE from the one switch (INCLUDE LIBRARIES HIDDEN ON JELLYFIN, stored "1"
+' or "0" under includeHiddenLibraries in `switchReg`). On, with the hidden
+' libraries known (the saved list is there), each hidden library not switched
+' off goes into the included list once and the switch is cleared. With them not
+' known yet nothing changes and the switch stays (returns false). Off or never
+' set: nothing to carry. Returns whether the switch is settled.
+function NxCarryOverHiddenSwitch(reg as Dynamic, switchReg as Dynamic) as Boolean
+    if reg = invalid or switchReg = invalid then return true
+    stored = switchReg.Read("includeHiddenLibraries")
+    if stored = "" then return true
+    if stored = "1" then
+        saved = NxSavedSections(reg)
+        if saved.Count() = 0 then return false
+        off = NxDeselectedSections(reg)
+        included = NxIncludedHiddenSections(reg)
+        for each s in saved
+            if s.hidden = true and off[NxSectionKey(s.serverId, s.key)] <> true then included[NxSectionKey(s.serverId, s.key)] = true
+        end for
+        NxSaveIncludedHiddenSections(reg, included)
+    end if
+    switchReg.Delete("includeHiddenLibraries")
+    switchReg.Flush()
+    return true
+end function
+
+' Every sign-in starts again: both lists are emptied, the sections the last
+' scan saw are forgotten and the old single switch is cleared.
+sub NxResetLibraryChoices(reg as Dynamic, switchReg as Dynamic)
+    if reg <> invalid then
+        reg.Delete("deselectedSections")
+        reg.Delete("includedHiddenSections")
+        reg.Delete("librarySections")
+        reg.Flush()
+    end if
+    if switchReg <> invalid then
+        switchReg.Delete("includeHiddenLibraries")
+        switchReg.Flush()
+    end if
+end sub
+
+' A Plex library whose name says it holds music videos (HIGH ROTATION's name rule).
+function NxIsMusicVideoName(title as Dynamic) as Boolean
+    return CreateObject("roRegex", "music.?video|^music$|^mv[s]?$", "i").IsMatch(NxToStr(title).Trim())
 end function
 
 ' Short label for a section's content type, as the Apple TV's typeLabel:
@@ -120,7 +243,7 @@ function NxSectionTypeLabel(kind as Dynamic, title as Dynamic) as String
     if k = "artist" then return "Music"
     if k = "photo" then return "Photos"
     if k = "movie" then
-        if CreateObject("roRegex", "music.?video|^music$|^mv[s]?$", "i").IsMatch(NxToStr(title).Trim()) then return "Music Videos"
+        if NxIsMusicVideoName(title) then return "Music Videos"
         return "Movies"
     end if
     return "Library"
@@ -137,9 +260,14 @@ function NxSectionSubtitle(section as Object, multiServer as Boolean) as String
 end function
 
 ' Whether the picker is worth showing: only when there is something to choose,
-' as the Apple TV skips it for a backend with exactly one section.
+' more than one library, or a hidden one (it starts off, so without the screen
+' nothing would offer it).
 function NxPickerWanted(sections as Object) as Boolean
-    return sections.Count() > 1
+    if sections.Count() > 1 then return true
+    for each s in sections
+        if s.hidden = true then return true
+    end for
+    return false
 end function
 
 ' ── The sections a scan saw ────────────────────────────────────────────────

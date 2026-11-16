@@ -501,7 +501,7 @@ sub loadLibrary()
         ' Plex collections, or Jellyfin and Emby BoxSets.
         if NxServerKind(servers[s.index]) = "plex" then
             fetcher = NxPlexCollectionsFetcher(servers[s.index])
-            got = NxCollectionsFetchPlex(s.key, fetcher, m.top)
+            got = NxCollectionsFetchPlex(s.key, fetcher, m.top, NxDeselectedSections(NxPlexRegistry()))
             ' A server that stopped answering part way (I-068): none of its
             ' collections this time, and no save that says it was read, so the
             ' next launch reads them again.
@@ -1343,8 +1343,8 @@ end sub
 ' The library sections on the signed-in servers, for the picker shown before the
 ' first scan (LibraryPickerView, I-092). Never fails the sign-in: any trouble gives
 ' an empty list, and the scan starts without the picker. A Plex server is checked
-' first, as the load does, and Jellyfin and Emby are asked twice, plain and with the
-' hidden libraries, so the ones the viewer hides on the server are marked.
+' first, as the load does, and Jellyfin is asked twice, plain and with the hidden
+' libraries, so the ones the viewer hides on the server are marked (Emby once).
 sub listSections()
     reg = NxPlexRegistry()
     servers = ParseJson(reg.Read("servers"))
@@ -1364,21 +1364,14 @@ sub listSections()
                     userId = NxToStr(s.userId)
                     fetcher = NxMbFetcher(s)
                     plain = fetcher.getJSON(NxMbViewsPath(kind, userId, false))
-                    all = fetcher.getJSON(NxMbViewsPath(kind, userId, true))
-                    if all = invalid then all = plain
-                    if all <> invalid then
-                        hidden = {}
-                        if plain <> invalid and kind <> "emby" then
-                            shown = {}
-                            for each v in NxList(plain.Items)
-                                shown[NxToStr(v.Id)] = true
-                            end for
-                            for each v in NxList(all.Items)
-                                if shown[NxToStr(v.Id)] <> true then hidden[NxToStr(v.Id)] = true
-                            end for
-                        end if
-                        out.Append(NxMbSectionRefs(s, all.Items, hidden))
-                    end if
+                    ' Emby has no includeHidden and no hidden libraries: one ask.
+                    all = invalid
+                    if kind <> "emby" then all = fetcher.getJSON(NxMbViewsPath(kind, userId, true))
+                    shown = invalid
+                    if plain <> invalid then shown = plain.Items
+                    hiddenList = invalid
+                    if all <> invalid then hiddenList = all.Items
+                    if shown <> invalid or hiddenList <> invalid then out.Append(NxMbListSections(s, shown, hiddenList))
                 end if
             end if
         end for

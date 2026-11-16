@@ -45,10 +45,12 @@ code path.
 
 - The libraries come from `/UserViews?userId=` on Jellyfin and
   `/Users/{id}/Views` on Emby. Emby answers 404 to the first.
-  With INCLUDE LIBRARIES HIDDEN ON JELLYFIN on (#231, SERVERS & ACCOUNTS, off
-  by default, `source/mediabrowser/HiddenLibraries.brs`), Jellyfin's request
-  ends `&includeHidden=true` and lists the libraries the user hides from the
-  home screen; a library the user has no access to is in neither answer.
+  Jellyfin's request ends `&includeHidden=true` when a library the user hides
+  from the home screen is switched on (N-016: each hidden library is its own
+  row in CHOOSE YOUR LIBRARIES and SERVERS & ACCOUNTS, marked HIDDEN ON
+  JELLYFIN and off to start with; the old single switch of #231 is carried over
+  once, `source/mediabrowser/HiddenLibraries.brs`); a library the user has no
+  access to is in neither answer.
   Emby's request is the same either way. Pressed on the 55R617
   (2026-11-10) against the lab Jellyfin 12.2.0, a user hiding Shows: 834
   items off, 5,589 on, 834 off again; a library the user can't open was read

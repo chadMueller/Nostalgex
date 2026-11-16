@@ -262,14 +262,6 @@ sub onSections()
         m.libPicker = CreateObject("roSGNode", "LibraryPickerView")
         m.libPicker.ObserveField("choices", "onLibrariesPicked")
         m.top.AppendChild(m.libPicker)
-        ' A library the viewer hides on Jellyfin starts off, unless INCLUDE LIBRARIES HIDDEN ON JELLYFIN is on.
-        off = {}
-        if not NxIncludeHidden(NxHiddenLibrariesRegistry()) then
-            for each s in sections
-                if s.hidden = true then off[NxSectionKey(s.serverId, s.key)] = true
-            end for
-        end if
-        m.libPicker.off = off
         m.libPicker.sections = sections
         launchComplete()
     else
@@ -278,12 +270,14 @@ sub onSections()
     end if
 end sub
 
-' What was turned off is saved as Settings saves it, and only what is left on
-' is then read.
+' What was turned off, and the hidden Jellyfin libraries turned on, are saved as
+' Settings saves them, and only what is left on is then read.
 sub onLibrariesPicked()
     if m.libPicker = invalid then return
-    NxSaveDeselectedSections(NxPlexRegistry(), m.libPicker.choices)
-    print "library: libraries picked after "; m.libPickerClock.TotalMilliseconds(); " ms at the library picker, "; m.libPicker.choices.Count(); " turned off"
+    choices = m.libPicker.choices
+    NxSaveDeselectedSections(NxPlexRegistry(), choices.off)
+    NxSaveIncludedHiddenSections(NxPlexRegistry(), choices.included)
+    print "library: libraries picked after "; m.libPickerClock.TotalMilliseconds(); " ms at the library picker, "; choices.off.Count(); " turned off, "; choices.included.Count(); " hidden turned on"
     closeLibPicker()
     if m.signedInClock <> invalid then m.signedInClock = CreateObject("roTimespan")
     m.prompt.text = "Connecting to your servers…"

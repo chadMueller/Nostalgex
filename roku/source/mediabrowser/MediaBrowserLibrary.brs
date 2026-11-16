@@ -592,9 +592,10 @@ end function
 ' `barCaption` as NxPlexScanServer's does. Returns invalid when the token
 ' was rejected or the libraries list failed. A scan told to stop waiting
 ' (NxLoadStopped) returns what it has read, as NxPlexScanServer's does.
-' `includeHidden` is the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch (#231).
-' `deselected` (source/util/LibrarySections.brs) is the set of libraries the viewer
-' turned off, by serverId::Id; none of those is asked for items.
+' `includeHidden` asks Jellyfin for the libraries the viewer hides (#231).
+' `deselected` (source/util/LibrarySections.brs) is the set of libraries not
+' read, by serverId::Id (NxScanOffSet: the ones switched off, and the hidden
+' ones not switched on); none of those is asked for items.
 function NxMbScanServer(fetcher as Object, kind as String, userId as String, serverIndex as Integer, progress = invalid as Dynamic, includeHidden = false as Boolean, deselected = invalid as Dynamic, serverId = "" as String) as Dynamic
     viewsAnswer = fetcher.getJSON(NxMbViewsPath(kind, userId, includeHidden))
     if viewsAnswer = invalid then return invalid
@@ -721,7 +722,7 @@ function NxScanServerFor(server as Object, serverIndex as Integer, progress as D
     kind = NxServerKind(server)
     if kind = "plex" then return NxPlexScanServer(server, serverIndex, progress, info, NxDeselectedSections(NxPlexRegistry()))
     info.signature = invalid
-    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxScanIncludesHidden(), NxDeselectedSections(NxPlexRegistry()), NxToStr(server.machineIdentifier))
+    return NxMbScanServer(NxMbFetcher(server), kind, NxToStr(server.userId), serverIndex, progress, NxScanIncludesHidden(), NxScanOffSet(NxPlexRegistry()), NxToStr(server.machineIdentifier))
 end function
 
 ' The Jellyfin or Emby libraries that hold videos (the scan's own test:
@@ -741,13 +742,46 @@ function NxMbSectionRefs(server as Object, views as Dynamic, hiddenIds as Dynami
     return out
 end function
 
+' One Jellyfin or Emby user's views as sections (the golden's mediaBrowserListing).
+' `shown` is the plain /UserViews list (Emby's /Views), `all` the
+' includeHidden=true list (invalid when it was not asked or failed). A view only
+' in `all` is hidden; one only in `shown` is kept, after the others; a view that
+' holds no videos is never listed. `server` is { machineIdentifier, name }.
+function NxMbListSections(server as Object, shown as Dynamic, all as Dynamic) as Object
+    first = NxList(shown)
+    shownIds = {}
+    for each v in first
+        if type(v) = "roAssociativeArray" then shownIds[NxToStr(v.Id)] = true
+    end for
+    views = first
+    hidden = {}
+    if all <> invalid then
+        views = []
+        seen = {}
+        for each v in NxList(all)
+            if type(v) = "roAssociativeArray" then
+                seen[NxToStr(v.Id)] = true
+                views.Push(v)
+                if shown <> invalid and shownIds[NxToStr(v.Id)] <> true then hidden[NxToStr(v.Id)] = true
+            end if
+        end for
+        for each v in first
+            if type(v) = "roAssociativeArray" then
+                if seen[NxToStr(v.Id)] <> true then views.Push(v)
+            end if
+        end for
+    end if
+    return NxMbSectionRefs(server, views, hidden)
+end function
+
 ' Whether a scan asks the server for the libraries a viewer hides from the
-' Jellyfin home screen: the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch, or a
-' hidden library the viewer turned on in the library picker.
+' Jellyfin home screen: a hidden library the viewer switched on (the picker or
+' Settings), or the old single switch while it is not yet carried over.
 function NxScanIncludesHidden() as Boolean
-    if NxIncludeHidden(NxHiddenLibrariesRegistry()) then return true
     reg = NxPlexRegistry()
-    return NxAnyHiddenOn(NxSavedSections(reg), NxDeselectedSections(reg))
+    NxCarryOverHiddenSwitch(reg, NxHiddenLibrariesRegistry())
+    if NxIncludeHidden(NxHiddenLibrariesRegistry()) then return true
+    return NxAnyHiddenOn(NxSavedSections(reg), NxIncludedHiddenSections(reg))
 end function
 
 ' The episode's season id when the server names one, else invalid.

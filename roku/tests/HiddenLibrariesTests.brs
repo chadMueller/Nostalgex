@@ -1,7 +1,8 @@
 ' Copyright (c) 2026 nostalgex-roku contributors, MIT License.
 '
-' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231): the switch
-' (source/mediabrowser/HiddenLibraries.brs) on a stand-in registry, and a scan
+' INCLUDE LIBRARIES HIDDEN ON JELLYFIN (#231): the old single switch
+' (source/mediabrowser/HiddenLibraries.brs, kept to carry its value over to the
+' per-library rows, N-016) on a stand-in registry, and a scan
 ' against a stub that lists a hidden library only when asked with
 ' includeHidden=true, as Jellyfin's /UserViews does and as the web tuner's
 ' nostalgex-jellyfin-library-smoke.mjs stubs it. The request paths themselves
@@ -27,7 +28,7 @@ function NxRunHiddenLibrariesTests(fixturePath as String) as Integer
     NxCheck(r, "switched off is off", NxIncludeHidden(reg).ToStr(), "false")
     reg.Write("includeHiddenLibraries", "yes")
     NxCheck(r, "anything else stored is the default", NxIncludeHidden(reg).ToStr(), "false")
-    NxCheck(r, "the row's tab", NxSettingsTabOf("includeHidden"), "servers")
+    NxCheck(r, "the single switch has no row any more, each hidden library has its own", NxSettingsTabOf("includeHidden"), "")
 
     ' The shared fixture's libraries, plus two the user hides from the home
     ' screen (films, and a show with its episodes) and one the user has no
