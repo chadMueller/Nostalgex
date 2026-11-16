@@ -24,12 +24,19 @@ import kotlinx.serialization.json.jsonObject
 class LiveChannels(
     private val bundledText: () -> String,
     private val cache: Cache,
-    private val fetch: (url: String) -> String?,
+    /** One GET of the url, sent with `If-None-Match: etag` when there is one. Null when nothing answered. */
+    private val fetch: (url: String, etag: String?) -> Fetched?,
 ) {
+    /** An answer: its status (200 or 304 are the ones used), the body of a 200, and the ETag it came with. */
+    class Fetched(val code: Int, val body: String?, val etag: String?)
+
     /** The last good copy, as text (the app keeps it in its files, written whole and renamed). */
     interface Cache {
         fun read(): String?
         fun write(text: String)
+        /** The ETag of the kept copy, or null. Kept with the copy: written after it, gone with it. */
+        fun readEtag(): String? = null
+        fun writeEtag(etag: String?) {}
     }
 
     sealed class Verdict {
@@ -49,27 +56,41 @@ class LiveChannels(
         class Kept(val reason: String) : Refresh()
     }
 
+    /** The bundled copy's version, read once. */
+    private val bundledVersion: Int? by lazy { versionOf(bundledText()) }
+
     /** The cache if it holds a good copy no older than the bundled one, else the bundled copy. Reads files only. */
     fun load(): Loaded {
-        val bundled = bundledText()
         val kept = cache.read()
         if (kept != null) {
-            val floor = versionOf(bundled)
-            val v = validate(kept, floor)
+            val v = validate(kept, bundledVersion)
             if (v is Verdict.Accepted) return Loaded(v.config, "cache")
         }
-        return Loaded(ChannelConfig(Json.parseToJsonElement(bundled).jsonObject), "bundled")
+        return Loaded(ChannelConfig(Json.parseToJsonElement(bundledText()).jsonObject), "bundled")
     }
 
-    /** One fetch, on the caller's thread. Writes the cache only for a copy that passes [validate] and differs from the one kept. */
+    /**
+     * One fetch, on the caller's thread, conditional: with a copy kept the request carries its ETag, and a 304 ends it with nothing downloaded or
+     * parsed. A 200 is taken only if it passes [validate] and differs from the copy kept. A copy the same as the bundled one is kept (so the
+     * next fetch can be a 304) but is no update.
+     */
     fun refresh(): Refresh {
-        val text = runCatching { fetch(URL) }.getOrNull() ?: return Refresh.Kept("no answer")
-        val verdict = validate(text, versionOf(bundledText()))
+        val kept = cache.read()
+        val etag = if (kept != null) cache.readEtag() else null
+        val answer = runCatching { fetch(URL, etag) }.getOrNull() ?: return Refresh.Kept("no answer")
+        if (answer.code == 304) return if (kept != null) Refresh.Unchanged else Refresh.Kept("304 with no copy kept")
+        val text = answer.body
+        if (answer.code !in 200..299 || text == null) return Refresh.Kept("HTTP ${answer.code}")
+        val verdict = validate(text, bundledVersion)
         if (verdict is Verdict.Rejected) return Refresh.Kept(verdict.reason)
         verdict as Verdict.Accepted
-        if (text == cache.read()) return Refresh.Unchanged
-        runCatching { cache.write(text) }.onFailure { return Refresh.Kept("could not keep the copy: ${it.message}") }
-        return Refresh.Updated(verdict.config)
+        if (text == kept) {
+            // The same copy with a new tag (or none yet): remember the tag.
+            if (answer.etag != etag) runCatching { cache.writeEtag(answer.etag) }
+            return Refresh.Unchanged
+        }
+        runCatching { cache.write(text); cache.writeEtag(answer.etag) }.onFailure { return Refresh.Kept("could not keep the copy: ${it.message}") }
+        return if (text == bundledText()) Refresh.Unchanged else Refresh.Updated(verdict.config)
     }
 
     companion object {
@@ -83,8 +104,12 @@ class LiveChannels(
         /** A channels.json is 130 KB today. Anything near this is not one. */
         const val MAX_CHARS = 4_000_000
 
+        private val VERSION_AT_TOP = Regex("^\\s*\\{\\s*\"version\"\\s*:\\s*(\\d+)\\s*,")
+
+        /** The `version` of a channels.json: read off its first line when the file starts with it (it does), else by parsing it. Launch pays no parse for it. */
         private fun versionOf(text: String): Int? =
-            runCatching { (Json.parseToJsonElement(text).jsonObject["version"] as? JsonPrimitive)?.intOrNull }.getOrNull()
+            VERSION_AT_TOP.find(text.take(200))?.groupValues?.get(1)?.toIntOrNull()
+                ?: runCatching { (Json.parseToJsonElement(text).jsonObject["version"] as? JsonPrimitive)?.intOrNull }.getOrNull()
 
         /** Whether `text` is a channels.json this build may use, given the bundled copy's version. */
         fun validate(text: String, bundledVersion: Int?): Verdict {

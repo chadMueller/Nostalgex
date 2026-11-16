@@ -10,16 +10,18 @@ class LiveChannelsTest {
     private val bundled = File(System.getProperty("nostalgex.repoRoot") ?: "..").resolve("channels.json").readText()
     private val bundledVersion = ChannelConfig(kotlinx.serialization.json.Json.parseToJsonElement(bundled) as kotlinx.serialization.json.JsonObject).version!!
 
-    private class MemCache(var text: String? = null, var writes: Int = 0) : LiveChannels.Cache {
+    private class MemCache(var text: String? = null, var writes: Int = 0, var etag: String? = null) : LiveChannels.Cache {
         override fun read() = text
         override fun write(text: String) { this.text = text; writes++ }
+        override fun readEtag() = etag
+        override fun writeEtag(etag: String?) { this.etag = etag }
     }
 
     /** The bundled file with its version changed (and anything else done to it), as a fetched copy. */
     private fun copy(version: Int = bundledVersion + 1, edit: (String) -> String = { it }) =
         edit(bundled.replaceFirst(Regex("\"version\"\\s*:\\s*\\d+"), "\"version\": $version"))
 
-    private fun live(cache: MemCache, answer: String?) = LiveChannels({ bundled }, cache) { answer }
+    private fun live(cache: MemCache, answer: String?) = LiveChannels({ bundled }, cache) { _, _ -> answer?.let { LiveChannels.Fetched(200, it, null) } }
 
     @Test fun aLaunchWithNothingKeptReadsTheBundledCopy() {
         val l = live(MemCache(), null).load()
@@ -70,7 +72,7 @@ class LiveChannelsTest {
         assertEquals(0, cache.writes)
         // A fetch that fails outright keeps it too, and so does a fetch that throws.
         assertTrue(live(cache, null).refresh() is LiveChannels.Refresh.Kept)
-        assertTrue(LiveChannels({ bundled }, cache) { error("offline") }.refresh() is LiveChannels.Refresh.Kept)
+        assertTrue(LiveChannels({ bundled }, cache) { _, _ -> error("offline") }.refresh() is LiveChannels.Refresh.Kept)
         // And the next launch still reads it.
         assertEquals("cache", live(cache, null).load().source)
     }
@@ -99,7 +101,53 @@ class LiveChannelsTest {
             override fun read() = null
             override fun write(text: String) = throw java.io.IOException("disk full")
         }
-        val r = LiveChannels({ bundled }, cache) { copy() }.refresh()
+        val r = LiveChannels({ bundled }, cache) { _, _ -> LiveChannels.Fetched(200, copy(), null) }.refresh()
         assertTrue(r is LiveChannels.Refresh.Kept)
+    }
+
+    // ── Conditional requests ──
+
+    @Test fun aKeptCopySendsItsEtagAndA304DownloadsAndParsesNothing() {
+        val sent = ArrayList<String?>()
+        val cache = MemCache()
+        val text = copy()
+        // First fetch: nothing kept, no tag sent; the 200 is kept with its tag.
+        val first = LiveChannels({ bundled }, cache) { _, etag -> sent += etag; LiveChannels.Fetched(200, text, "\"abc\"") }
+        assertTrue(first.refresh() is LiveChannels.Refresh.Updated)
+        assertEquals("\"abc\"", cache.etag)
+        // Second: the tag goes out, a 304 comes back, and nothing is written.
+        val second = LiveChannels({ bundled }, cache) { _, etag -> sent += etag; LiveChannels.Fetched(304, null, etag) }
+        assertTrue(second.refresh() is LiveChannels.Refresh.Unchanged)
+        assertEquals(listOf(null, "\"abc\""), sent)
+        assertEquals(1, cache.writes)
+        assertEquals(text, cache.text)
+    }
+
+    @Test fun aTagWithNoCopyIsNotSentAndA304WithNoCopyIsNotTrusted() {
+        val sent = ArrayList<String?>()
+        val cache = MemCache(text = null, etag = "\"stale\"")
+        val r = LiveChannels({ bundled }, cache) { _, etag -> sent += etag; LiveChannels.Fetched(304, null, etag) }.refresh()
+        assertEquals(listOf<String?>(null), sent)
+        assertTrue(r is LiveChannels.Refresh.Kept)
+    }
+
+    @Test fun aRejectedFileKeepsTheOldTagAndCopy() {
+        val good = copy(bundledVersion + 1)
+        val cache = MemCache(good, etag = "\"good\"")
+        val r = LiveChannels({ bundled }, cache) { _, _ -> LiveChannels.Fetched(200, "<html>oops</html>", "\"bad\"") }.refresh()
+        assertTrue(r is LiveChannels.Refresh.Kept)
+        assertEquals("\"good\"", cache.etag)
+        assertEquals(good, cache.text)
+        // An error status keeps them too.
+        assertTrue(LiveChannels({ bundled }, cache) { _, _ -> LiveChannels.Fetched(503, null, null) }.refresh() is LiveChannels.Refresh.Kept)
+        assertEquals("\"good\"", cache.etag)
+    }
+
+    @Test fun theSameCopyAsTheBundledOneIsKeptForItsTagButIsNoUpdate() {
+        val cache = MemCache()
+        val r = LiveChannels({ bundled }, cache) { _, _ -> LiveChannels.Fetched(200, bundled, "\"b\"") }.refresh()
+        assertTrue(r is LiveChannels.Refresh.Unchanged)
+        assertEquals("\"b\"", cache.etag)
+        assertEquals(bundled, cache.text)
     }
 }

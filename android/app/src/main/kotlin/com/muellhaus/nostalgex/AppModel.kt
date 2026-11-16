@@ -844,7 +844,9 @@ class AppModel(private val context: Context) : Playback.Listener {
      */
     private val liveChannelsJob = scope.launch(Dispatchers.IO) {
         while (isActive) {
+            val t0 = SystemClock.elapsedRealtime()
             val r = liveChannels.refresh()
+            Log.i(TAG, "CONFIG live channels.json checked in ${SystemClock.elapsedRealtime() - t0} ms")
             when (r) {
                 is LiveChannels.Refresh.Updated -> { pendingChannels = r.config; Log.i(TAG, "CONFIG live channels.json v${r.config.version} kept, applies at the next guide rebuild") }
                 is LiveChannels.Refresh.Unchanged -> Log.i(TAG, "CONFIG live channels.json unchanged")
