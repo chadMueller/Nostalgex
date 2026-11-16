@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-15 (Apple TV: one library rule set, N-016 option A)
+
+**State.** Branch `appletv/n016-library-rules` off main, for the next build. Not pushed.
+
+**Why.** N-016: every platform lists, starts on and reads the same libraries (scripts/library-picker-golden.json, the web tuner's contract), and a library switched off while a scan was out could still land the old set.
+
+**Changed.**
+- Plex lists and reads movie and show libraries only (`PlexAPIService.readableSections`, in `loadSections` and the scan). A Music (artist) or Photos library is never offered and never read; a music video library (Other Videos, type movie, or kept as TV shows) stays, marked by its name as before.
+- Switching a library in Settings bumps `librarySessionGeneration`, so a scan already running (an earlier switch's, or a refresh) discards its results instead of landing or saving the old set.
+
+**Tested.** `LibraryPickerGoldenTests` reads the golden's `plexListing` cases (ids, kind label, subtitle with the server name when more than one server answered, the music video name rule) and checks the switch bumps the generation. Not covered here: on the Apple TV the name rule marks a movie-typed music video library's items for HIGH ROTATION; a show-typed one is listed with the mark in the golden, but its episodes are read as TV, as before.
+
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 
 **State.** Branch `appletv/info-panel-description-order` off main `f76c021f`. Not merged, not in a build, not pushed.
