@@ -3,6 +3,17 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-16 (Android release 11: the weather channel as Chad asked, live channels.json conditional, I-057)
+
+**State.** Branch `android/release-11`, off `android/release-10` (`8caa025e`). Not on main, no AAB, not uploaded.
+
+**Changed.**
+1. **CH 299 is one full-width bar** (Chad: "1 full width bar ... no scheduled sections because it's an unlimited loop channel"). One schedule entry spans all of time and is on now, so the guide draws one bar at the row colour at 13%, reading `LOCAL WEATHER  <temp>`; the cursor has nowhere to step; no UP NEXT; the info panel shows a full bar and LIVE. `WeatherLineupTest` holds it.
+2. **Weather screens.** The credits and UPDATED line are one small stack at the bottom left (16 px, lines 22 apart, text2 at 70%); the icons draw 15% smaller in whole-pixel cells (12, 7 and 6 in the 336, 192 and 168 slots), centred in their slots. The numbers are the web's (`web/weather-full-bar`).
+3. **Settings.** The WEATHER section left PLAYBACK & PICTURE: CHANNELS & BUNDLES has one LOCAL WEATHER link row (status `PLACE · ON` or `NOT SET`) that opens LOCATION, UNITS (AUTO, °F, °C) and SHOW LOCAL WEATHER. OK on the no-location card opens that page.
+4. **Live channels.json is conditional**: `If-None-Match` with the kept copy's ETag (the site answers ETag and 304), a 304 downloads and parses nothing, the bundled version is read off the first line instead of a second parse, and the check's time is logged. A new copy never triggers a rebuild; it is taken at the next one the app makes. Measured: the parse is 26 ms cold and 1 ms warm on the JVM, about 350 KB held per config (the old one is dropped on the swap); on the arm64 emulator a 304 check took 264 to 378 ms off the main thread.
+5. **I-057, LOCAL SERVER (NO PLEX.TV)** (the Apple TV's `appletv/i057-local-plex`): a button beside CANCEL on the Plex code screen opens an address page; the address gets :32400 when no port is typed; `/identity`, then `/library/sections` with no token; signed in with an empty token and a saved `plexNoPlexTv` flag that sign-out clears; server refresh never calls plex.tv for it; a 401 or 403 says to add the network to Plex's "List of IP addresses and networks that are allowed without auth"; X-Plex-Token is left out of every header and URL when empty (library, collections, metadata, posters, direct play and transcode URLs, timeline reports, stop). Tests: `PlexLocalTest` (6) and `LocalPlexSignInTest` (12: saved flag and relaunch, sign-out, account sign-in after it, the address check against a local server, 401 and 403, not Plex, 500, nothing answering, no token header or query on any call). Walked on the emulator against a stand-in (`android/emulator-2026-11-15/i057-*.png`, `i057-stub.py`): every stub request logged `TOKEN none`.
+
 ## 2026-11-15 (Android release 10: LOCAL WEATHER at CH 299, and a live channels.json)
 
 **State.** Branch `android/release-10`, off `android/n016-library-rules` (release 9 plus N-016 option A), versionCode 10. Not on main, not uploaded. Chad asked for the weather channel on all platforms ("you can work towards a lot of these things for the releases including the weather channel for all platforms") and live channel updates before release.
