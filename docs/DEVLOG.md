@@ -43,6 +43,16 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Half-done.** A 1.0.33 changelog entry (none exists yet), THIRD-PARTY-LICENSES.md lines for the app (the web branch adds the weather section; adding it here too would clash on merge).
 
+## 2026-11-16 (a pre-deploy check on channels.json)
+
+**State.** Branch `web/channels-json-check` off main `7d4b3c71`. Not merged, not pushed.
+
+**Why.** The Apple TV, Roku and Android apps and the web tuner now fetch `https://www.nostalgex.app/channels.json`, so a bad file pushed to main would reach every device on its next fetch.
+
+**Changed.** `scripts/channels-json-check.mjs` (`npm run channels:json:check`, in `npm test` and the CI channel-engine job): the file parses; every channel has its fields of the right kind; ids are unique and numbers are unique, each on its own (a channel's id is not always its number); every bundle has its fields and real channel ids, and a channel's category is a bundle (or franchise); every rule key a channel uses, and every key in `exclusiveRules`, appears in the Swift `Channel.swift`, the JS filter, the Roku `ChannelFilter.brs` and the Android `ChannelFilter.kt`; the optional channel and bundle fields are in all four loaders' sources; `version` is a whole number not lower than the deployed copy; `formatVersion`, when present, is 1 or less. CI sets `NX_CHANNELS_REQUIRE_PREVIOUS=1`, so an unreadable deployed copy fails there; a laptop offline skips only the version comparison and says so. `scripts/channels-json-check-smoke.mjs` (`npm run test:channels-json`, 21 checks): the real file passes and each of 17 bad copies fails with its own message.
+
+**Found.** `exclusiveRules[1]` lists channel id 32, which no channel has. The loaders skip it, so it is a note, not a failure. Not put on `npm run build`: a hosted or Docker build should not depend on the network, and a deploy gate there can be added if Chad wants it.
+
 ## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
 
 **Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.
