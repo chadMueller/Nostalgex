@@ -67,6 +67,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.muellhaus.nostalgex.engine.ChannelConfig
+import com.muellhaus.nostalgex.engine.LiveChannels
 import com.muellhaus.nostalgex.engine.GuideChannel
 import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.DailyManifest
@@ -92,6 +93,7 @@ import com.muellhaus.nostalgex.plex.PlexHttpException
 import com.muellhaus.nostalgex.plex.PlexLibrary
 import com.muellhaus.nostalgex.plex.PlexPin
 import com.muellhaus.nostalgex.plex.PlexServer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -750,12 +752,42 @@ class AppModel(private val context: Context) : Playback.Listener {
      * channels.json and channels-memberships.json (1.3 MB), parsed once per launch and started
      * at once, so the parse overlaps the library read instead of following it.
      */
-    private val channelData: Deferred<Pair<ChannelConfig, JsonObject?>> = scope.async(Dispatchers.Default) {
+    private val liveChannels = LiveChannelsSetup.create(context)
+    @Volatile private var channelData: Deferred<Pair<ChannelConfig, JsonObject?>> = scope.async(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
-        val config = ChannelConfig(Json.parseToJsonElement(asset("channels.json")).jsonObject)
+        // N-074: the last good copy fetched from nostalgex.app, else the bundled one. Files only, no network on this path.
+        val loaded = liveChannels.load()
+        val config = loaded.config
         val memberships = runCatching { Json.parseToJsonElement(asset("channels-memberships.json")).jsonObject }.getOrNull()
-        Log.i(TAG, "CONFIG channels.json v${config.version} and memberships parsed in ${SystemClock.elapsedRealtime() - t0} ms")
+        Log.i(TAG, "CONFIG channels.json v${config.version} (${loaded.source}) and memberships parsed in ${SystemClock.elapsedRealtime() - t0} ms")
         config to memberships
+    }
+    /** A copy fetched from nostalgex.app that passed the checks, waiting for the next guide rebuild (N-074). Never applied under a playing guide on its own. */
+    @Volatile private var pendingChannels: ChannelConfig? = null
+
+    /** The guide is about to be rebuilt anyway (a library load, a refresh, the music pass): take the waiting copy. */
+    private suspend fun adoptPendingChannels() {
+        val fresh = pendingChannels ?: return
+        pendingChannels = null
+        val memberships = channelData.await().second
+        Log.i(TAG, "CONFIG channels.json v${fresh.version} applied at this guide rebuild")
+        channelData = CompletableDeferred(fresh to memberships)
+    }
+
+    /**
+     * At launch and about every 24 hours while the app runs, ask the site for channels.json, behind everything else (its own thread, an 8 second
+     * limit). A copy that fails the checks is thrown away and the one in use stays (LiveChannels).
+     */
+    private val liveChannelsJob = scope.launch(Dispatchers.IO) {
+        while (isActive) {
+            val r = liveChannels.refresh()
+            when (r) {
+                is LiveChannels.Refresh.Updated -> { pendingChannels = r.config; Log.i(TAG, "CONFIG live channels.json v${r.config.version} kept, applies at the next guide rebuild") }
+                is LiveChannels.Refresh.Unchanged -> Log.i(TAG, "CONFIG live channels.json unchanged")
+                is LiveChannels.Refresh.Kept -> Log.i(TAG, "CONFIG live channels.json not used (${r.reason}); keeping the copy in use")
+            }
+            delay(LiveChannels.REFRESH_MS)
+        }
     }
     /** franchises.json: the dictionary the franchise builder and the fold read. */
     private val franchiseDefinitions: Deferred<List<FranchiseDefinition>> = scope.async(Dispatchers.Default) {
@@ -1984,6 +2016,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
+        adoptPendingChannels()
         val (config, memberships) = channelData.await()
         withContext(Dispatchers.Main) { bundles = config.bundles }
         // Only the wait: the parse itself runs while the library is read.
