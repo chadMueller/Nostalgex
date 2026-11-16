@@ -11,6 +11,8 @@
  *   - Down and Up keep the time: the cursor is on the programme of the new row at that time;
  *   - Left goes back programme by programme and stops at the live one, where one more Left goes to the bundle stripe (or the list);
  *   - Back (Escape) and select put the cursor back on the live programme and the window at its start;
+ *   - on the bundle stripe, select (Enter, or a click on the bundle's name) jumps the guide to that bundle's first channel; Left opens the hidden
+ *     bundle list, where selecting a bundle jumps and closes it, and Esc closes it without a jump; Up and Down step through bundles and wrap;
  *   - at every size, phone, tablet, desktop and 960x540 (a TV browser: clicks only, no key reaches the page, so the cursor is a
  *     desktop and keyboard feature there as it was).
  *
@@ -269,6 +271,56 @@ for (const name of Object.keys(viewports)) {
   });
   check(`${name}: bundle stripe: Down on the last bundle goes to the first, Up on the first to the last`, wrap.downFromLast === 0 && wrap.upFromFirst === 2, JSON.stringify(wrap));
   check(`${name}: bundle stripe: inside the list Up and Down move one bundle, and a single bundle stays`, wrap.downInside === 2 && wrap.upInside === 0 && wrap.onlyOne === 0, JSON.stringify(wrap));
+
+  // ── Select on the bundle stripe jumps to the bundle's first channel; Left opens the hidden list; Esc closes it without a jump (Chad 2026-11-16) ──
+  await page.evaluate(() => { resetGuideCursor(); guidePromoKey = null; guideStripeMode = false; closePackageList(); guideFocusIndex = 0; renderGrid(); updateGuideFocus(); });
+  await key(page, "ArrowDown"); await key(page, "ArrowDown"); await key(page, "ArrowDown");
+  const lower = await page.evaluate(() => guideFocusIndex);
+  await key(page, "ArrowLeft");
+  let st = await state(page);
+  check(`${name}: stripe: Left from a lower row (the cursor live) goes onto the stripe`, st.stripe && !st.list && lower >= 1, JSON.stringify([st.stripe, st.list, lower]));
+  await shot("s1-on-stripe");
+  await key(page, "Enter", 400);
+  const sel = await page.evaluate(() => { const g = guideStripeGroups(), f = getEnabledChannels()[guideFocusIndex], r = document.querySelector(".grid-row.focused:not(.grid-row--promo)"); return { stripe: guideStripeMode, list: isPackageListOpen(), focus: guideFocusIndex, first: g.find((x) => x.pkg).first, row: r ? Number(r.dataset.channelId) : null, id: f ? f.id : null }; });
+  check(`${name}: stripe: select (Enter) jumps the guide to the bundle's first channel, with the cursor on that row, and leaves the stripe`, !sel.stripe && !sel.list && sel.focus === sel.first && sel.row === sel.id, JSON.stringify(sel));
+  await shot("s2-selected-first-channel");
+  // Several bundles (the stub the wrap check uses): Down steps to the next, select goes to that one's first channel.
+  const multi = await page.evaluate(() => {
+    const saved = guideStripeGroups;
+    const n = getEnabledChannels().length;
+    guideStripeGroups = () => [{ pkg: { name: "A" }, first: 0, count: 2 }, { pkg: { name: "B" }, first: 2, count: 2 }, { pkg: { name: "C" }, first: Math.min(4, n - 1), count: 1 }];
+    const out = {};
+    guideStripeMode = true; guideStripeGroup = 0; guideStripeReturn = 1; guideStripeJumped = false;
+    jumpPackage(1); out.group = guideStripeGroup;
+    selectStripe(); out.focusB = guideFocusIndex; out.stripeB = guideStripeMode;
+    guideStripeMode = true; guideStripeGroup = 2; jumpPackage(1); out.wrapped = guideStripeGroup;
+    selectStripe(); out.focusA = guideFocusIndex;
+    guideStripeMode = true; guideStripeGroup = 1; guideStripeJumped = false; guideStripeReturn = 0; returnFromStripe(); out.rightWithoutJump = guideFocusIndex;
+    guideStripeGroups = saved;
+    return out;
+  });
+  check(`${name}: stripe: Down steps to the next bundle, select goes to its first channel, the wrap at the end reaches the first bundle, Right alone does not jump`, multi.group === 1 && multi.focusB === 2 && !multi.stripeB && multi.wrapped === 0 && multi.focusA === 0 && multi.rightWithoutJump === 0, JSON.stringify(multi));
+  await page.evaluate(() => { guideFocusIndex = 3; renderGrid(); updateGuideFocus(); });
+  // Left from the stripe opens the list; Esc closes it without a jump; a click on a bundle in it jumps and closes it.
+  await key(page, "ArrowLeft");
+  await key(page, "ArrowLeft");
+  st = await state(page);
+  check(`${name}: stripe: Left from the stripe opens the hidden bundle list`, !st.stripe && st.list, JSON.stringify([st.stripe, st.list]));
+  const beforeList = await page.evaluate(() => guideFocusIndex);
+  await shot("s3-bundle-list");
+  await key(page, "Escape");
+  st = await state(page);
+  check(`${name}: list: Esc closes it without jumping`, !st.stripe && !st.list && st.focus === beforeList, JSON.stringify([st.stripe, st.list, st.focus, beforeList]));
+  await key(page, "ArrowLeft"); await key(page, "ArrowLeft");
+  const target = await page.evaluate(() => { const b = document.querySelector("#pkg-list .pkg-row[data-channel]"); return b ? Number(b.dataset.channel) : null; });
+  await page.click("#pkg-list .pkg-row[data-channel]");
+  await page.waitForTimeout(300);
+  const picked = await page.evaluate(() => ({ list: isPackageListOpen(), stripe: guideStripeMode, id: getEnabledChannels()[guideFocusIndex].id }));
+  check(`${name}: list: selecting a bundle jumps to it and closes the list`, !picked.list && !picked.stripe && picked.id === target, JSON.stringify([picked, target]));
+  // A click or tap on a bundle's name on the stripe selects it.
+  await page.evaluate(() => { guideFocusIndex = 3; renderGrid(); updateGuideFocus(); });
+  const labelClick = await page.evaluate(() => { const l = document.querySelector(".grid-stripe-label"); if (!l) return null; l.click(); return { stripe: guideStripeMode, focus: guideFocusIndex, first: guideStripeGroups().find((x) => x.pkg).first }; });
+  check(`${name}: stripe: a click on a bundle's name jumps to its first channel`, labelClick && !labelClick.stripe && labelClick.focus === labelClick.first, JSON.stringify(labelClick));
 
   check(`${name}: not in browser full screen`, await page.evaluate(() => !document.fullscreenElement));
   check(`${name}: no page errors`, errors.length === 0, errors.join(" | "));
