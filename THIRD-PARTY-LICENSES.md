@@ -80,3 +80,7 @@ Its libraries, fetched by Gradle and compiled into the APK:
 | Package | License |
 |---|---|
 | TelemetryDeck SwiftSDK (github.com/TelemetryDeck/SwiftSDK) | MIT |
+
+## Android app: the weather channel
+
+The Android TV app (`android/`) ships the same weather data files as the web tuner (`public/weather/`: GeoNames place lists, the Natural Earth map outlines and the original music loop), copied into its assets at build time, and draws the LOCAL WEATHER channel (CH 299) from the same sources. The credits, licences and wording are the table under "Weather channel (web tuner and Docker image)" above; they show in the app under Settings, ABOUT, WEATHER CREDITS.

@@ -25,6 +25,15 @@ invited testers.
   While the guide is up it reads them again every 6 hours, as the Apple TV
   does; on Plex a library whose sections haven't changed is skipped until its
   last scan is a day old.
+- LOCAL WEATHER, CH 299 (I-016): a loop of current conditions, today's forecast, the
+  5-day forecast and radar, drawn by the app, with an original music track. The forecast comes
+  from nostalgex.app/api/weather (MET Norway) only while the channel is on screen; the place is
+  typed in Settings (PLAYBACK & PICTURE, WEATHER) and found in place lists bundled in the app;
+  radar for the US, Canada and Germany. The rules are `engine/Weather.kt`, held to
+  `scripts/weather-golden.json`.
+- The channel list is the root's `channels.json`, refreshed from nostalgex.app at launch and
+  about daily (a copy that is invalid, older than the bundled one or in a newer format is
+  ignored; the last good one is kept), applied at the next guide rebuild.
 - Builds the channels from the root's `channels.json` and
   `channels-memberships.json` (symlinked into `app/src/main/assets/`), with
   the bundle you had on, or the bundles with content if that one fills
