@@ -34,6 +34,12 @@ struct PlayerView: View {
                 .ignoresSafeArea()
             }
 
+            // CH 299, LOCAL WEATHER: the app draws the picture (WeatherChannelView).
+            if appState.currentChannel?.isWeather == true {
+                WeatherChannelView()
+                    .ignoresSafeArea()
+            }
+
             // CRT overlay, scanlines included (RetroLook)
             if appState.retroMode {
                 CRTOverlayView()
@@ -279,6 +285,8 @@ struct PlayerView: View {
     // MARK: - Now Playing panel
 
     private func showNowPlayingPanel() {
+        // Nothing to show on CH 299 (weather has no programme), and an empty panel would hold the remote.
+        guard appState.currentItem != nil else { return }
         withAnimation(.easeOut(duration: 0.25)) { showNowPlaying = true }
     }
 

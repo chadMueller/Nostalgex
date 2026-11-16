@@ -22,6 +22,8 @@ extension AppState {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(900)) // check every 15 min
                 guard !Task.isCancelled else { break }
+                // Live channel rules (N-074): about once a day, the file only. The next rebuild uses it.
+                if ChannelConfigStore.isDue() { await ChannelConfigStore.refresh() }
                 let now = Int(Date().timeIntervalSince1970)
                 let lastLoad = self?.lastLoadAtUnix ?? 0
                 let lastCheck = self?.lastLibraryCheckAtUnix ?? 0
@@ -44,6 +46,14 @@ extension AppState {
         // A channel that stopped after repeated failures gets a fresh run whenever it is
         // chosen again: by the viewer, on foreground return, or after a library reload.
         channelFailureRun.reset()
+        // CH 299 is drawn by the app: no pool, no schedule, no server (AppState+Weather.swift).
+        if channel.isWeather {
+            print("[Plex90] SELECT CH \(channel.number) \(channel.name) (weather)")
+            currentPartIndex = 0
+            currentChannel = channel
+            startWeatherChannel()
+            return
+        }
         let pool = channel.filteredPool()
         print("[Plex90] SELECT CH \(channel.number) \(channel.name) (pool: \(pool.count) items)")
         currentPartIndex = 0
@@ -131,7 +141,7 @@ extension AppState {
         let api = apiForServer(selectedServers.first)
         var entries: [TopShelfSnapshot.Entry] = []
 
-        for channel in channels.prefix(20) {
+        for channel in channels.filter({ !$0.isWeather }).prefix(20) {
             guard let schedule = ChannelScheduleBuilder.buildSchedule(
                 for: channel,
                 credentialFingerprint: scheduleCredentialFingerprint

@@ -508,6 +508,7 @@ extension AppState {
     /// Lightweight stop: pause the stream, drop the transcode, return to the guide.
     /// Deliberately NOT `disconnect()` — that would drop server credentials.
     private func expireSleepTimer() {
+        WeatherController.shared.stopMusicForSleep()
         emitPlaybackStoppedForActiveSession()
         player?.pause()
         isVideoPlaying = false

@@ -782,9 +782,9 @@ extension AppState {
     /// Takes the snapshot inout so its item array can be released as soon as the
     /// deduplicated copy exists, instead of both living until the restore returns.
     private func applyLibrarySnapshot(_ snap: inout LibrarySnapshotV1) {
-        // The rows carry the numbers of the build that saved them; this build's channels.json
-        // decides. Only differs after an update that renumbered the lineup.
-        let bundledNumbers = Dictionary(ChannelConfigLoader.loadBundled().channels.map { ($0.id, $0.number) },
+        // The rows carry the numbers of the build that saved them; the channels.json the guide is built
+        // from now (the kept live copy, else this build's, N-074) decides. Only differs after a renumbering.
+        let bundledNumbers = Dictionary(ChannelConfigStore.active().result.channels.map { ($0.id, $0.number) },
                                         uniquingKeysWith: { first, _ in first })
         let renumbered = snap.renumberChannels(bundledNumbers)
         if renumbered > 0 {
