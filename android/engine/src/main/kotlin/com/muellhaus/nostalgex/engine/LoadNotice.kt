@@ -67,6 +67,27 @@ sealed interface HeaderNotice {
     }
 }
 
+/**
+ * What the SERVERS & ACCOUNTS page says while a server or library change is read and built, with Settings left open (Chad, 2026-11-16: "you
+ * should see some sort of progress on the server saying building channels or building schedule"). The wording is the loading pattern's: the title,
+ * READ n TITLES, the library or step under it, then GUIDE READY: n TITLES for [LoadNotice.READY_MS].
+ */
+object SettingsLoadStatus {
+    const val TITLE = "BUILDING CHANNELS"
+    /** The step after the channels are matched: the schedules are packed across the lineup. */
+    const val SCHEDULE = "BUILDING SCHEDULE"
+
+    data class Lines(val title: String, val count: String?, val detail: String?, val ready: Boolean)
+
+    /** Null when there is nothing to say: no load running and no GUIDE READY or UPDATING LIBRARY in the header. */
+    fun lines(load: GuideLoad?, header: HeaderNotice?): Lines? = when {
+        load != null -> Lines(TITLE, load.readLine, load.detail.ifEmpty { null }, ready = false)
+        header is HeaderNotice.Ready -> Lines(header.line, null, null, ready = true)
+        header is HeaderNotice.Updating -> Lines(header.line, null, null, ready = false)
+        else -> null
+    }
+}
+
 /** What the empty guide area shows while a library is read in front of it. */
 data class GuideLoad(
     val afterSwitch: Boolean,

@@ -43,6 +43,7 @@ import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
 import com.muellhaus.nostalgex.engine.ServerScan
 import com.muellhaus.nostalgex.engine.PlexLocal
+import com.muellhaus.nostalgex.engine.SettingsLoadStatus
 import com.muellhaus.nostalgex.engine.ServerSharing
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
@@ -1373,7 +1374,6 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (on && enabledSectionCount <= 1) return
         saveChoices(LibraryPicker.toggled(section, pickerState))
         libraryStore.clear()
-        closeSettings()
         playback.stop()
         loadLibrary(afterSwitch = true)
     }
@@ -1636,7 +1636,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val included = current.any { it.machineIdentifier == server.machineIdentifier }
         if (included && current.size <= 1) return
         prefs.servers = if (included) current.filterNot { it.machineIdentifier == server.machineIdentifier } else current + server
-        closeSettings()
+        // Settings stays open: the progress shows on this page (SettingsLoadStatus), and the guide shows its own block if the viewer leaves.
         playback.stop()
         loadLibrary(afterSwitch = true)
     }
@@ -1848,9 +1848,12 @@ class AppModel(private val context: Context) : Playback.Listener {
                         }
                         override suspend fun build(items: List<MediaItem>): Lineup {
                             step(LoadPhase.BUILDING)
-                            return buildLineup(items, "read") { done, total ->
+                            return buildLineup(items, "read", { done, total ->
                                 if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
-                            }
+                            }, onSchedule = {
+                                // The channels are matched; the schedules are packed next (the Settings page says so).
+                                if (inGuide && current()) guideLoad = guideLoad?.copy(detail = SettingsLoadStatus.SCHEDULE)
+                            })
                         }
                         override suspend fun show(built: Lineup): Boolean {
                             step(LoadPhase.FINISHING)
@@ -2157,7 +2160,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
+    private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }, onSchedule: () -> Unit = {}): Lineup = withContext(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
         adoptPendingChannels()
         val (config, memberships) = channelData.await()
@@ -2187,6 +2190,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 "${f.found.count { it.isCovered }} on classics; ${f.channels.size} runtime channel(s)")
         }
         val tFilter = SystemClock.elapsedRealtime()
+        onSchedule()
         lineup.rebuildSchedules()
         Log.i(TAG, "LINEUP ($source) ${items.size} items; $built channels in ${tFilter - t0} ms (config ${configMs}, item facts ${lineup.prepareMs}, filter ${tFilter - t0 - configMs - lineup.prepareMs}); " +
             "${lineup.channels.size} in the guide; schedules in ${SystemClock.elapsedRealtime() - tFilter} ms; " +

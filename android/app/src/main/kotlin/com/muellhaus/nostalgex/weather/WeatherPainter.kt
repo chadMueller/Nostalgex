@@ -139,11 +139,13 @@ class WeatherPainter(context: Context) {
     }
 
     // ── Frame: the header strip and the footer ──
+    /** The background has a paint of its own, fully opaque: it used to share the text paint, whose last colour (the credits, at 70%) leaked into the gradient's alpha and let the last channel's picture show through (Chad, 2026-11-16). */
+    private val backgroundPaint = Paint().apply { style = Paint.Style.FILL; alpha = 255 }
+
     private fun background(c: Canvas) {
-        paint.shader = LinearGradient(0f, 0f, W, H, BG0, BG1, Shader.TileMode.CLAMP)
-        paint.style = Paint.Style.FILL
-        c.drawRect(0f, 0f, W, H, paint)
-        paint.shader = null
+        backgroundPaint.shader = LinearGradient(0f, 0f, W, H, BG0, BG1, Shader.TileMode.CLAMP)
+        backgroundPaint.alpha = 255
+        c.drawRect(0f, 0f, W, H, backgroundPaint)
     }
 
     private fun placeTitle(p: Weather.Place): String {
@@ -434,6 +436,8 @@ class WeatherPainter(context: Context) {
         var elapsed = at.elapsed
         if (st.screenId != null) { index = Weather.SCREENS.indexOfFirst { it.id == st.screenId }.coerceAtLeast(0); elapsed = st.elapsedOverride ?: 4.0 }
         val screen = Weather.SCREENS[index]
+        // The whole box is the channel's, letterbox bars included: opaque, so nothing of what was playing shows around the 16:9 picture.
+        c.drawColor(BG0)
         c.save()
         val k = Math.min(width / W, height / H)
         c.translate((width - W * k) / 2, (height - H * k) / 2)

@@ -302,7 +302,11 @@ fun WatchScreen(model: AppModel) {
                         )
                     }
                     // LOCAL WEATHER (CH 299) has no programme: the app draws the loop over the empty player.
-                    if (model.channel?.weather == true) WeatherScreen(model, Modifier.fillMaxSize())
+                    // Opaque first, so the last programme's picture (a surface keeps its last frame) never shows through.
+                    if (model.channel?.weather == true) {
+                        Box(Modifier.fillMaxSize().background(Color(0xFF0A0A1A)))
+                        WeatherScreen(model, Modifier.fillMaxSize())
+                    }
                     // RETRO MODE's CRT look over the picture, then the tuning card on a slow start.
                     if (model.retroMode) CrtOverlay()
                     TuningOverlay(

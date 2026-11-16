@@ -70,7 +70,9 @@ import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.Season
 import com.muellhaus.nostalgex.engine.StreamQuality
+import com.muellhaus.nostalgex.engine.SettingsLoadStatus
 import com.muellhaus.nostalgex.engine.Weather
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -294,7 +296,9 @@ private fun Pane(model: AppModel) {
             Image(ImageBitmap.imageResource(category.icon), contentDescription = null, filterQuality = FilterQuality.None, modifier = Modifier.size(u(96)))
             Column(verticalArrangement = Arrangement.spacedBy(u(6))) {
                 Text(category.title, style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, Tokens.Text), maxLines = 1)
-                Text(category.subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
+                val status = if (category == SettingsCategory.SERVERS) SettingsLoadStatus.lines(model.guideLoad, model.headerNotice) else null
+                if (status == null) Text(category.subtitle, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
+                else LoadStatusBlock(status)
             }
         }
         Box(Modifier.padding(horizontal = u(80)).fillMaxWidth().height(u(1)).background(Color.White.copy(alpha = 0.06f)))
@@ -428,6 +432,16 @@ private fun PlaybackRows(model: AppModel) {
 }
 
 // ── WEATHER (I-016): LOCAL WEATHER, CH 299 ──
+
+/** The build's progress, pinned under the page's title so it shows wherever the rows are scrolled to. */
+@Composable
+private fun LoadStatusBlock(s: SettingsLoadStatus.Lines) {
+    Column(verticalArrangement = Arrangement.spacedBy(u(2))) {
+        Text(s.title, style = font(DMMonoMedium, DesignTokens.Size.CAPTION, if (s.ready) Tokens.Yellow else Tokens.Yellow), maxLines = 1)
+        s.count?.let { Text(it, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2), maxLines = 1) }
+        s.detail?.let { Text(it, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2.copy(alpha = 0.7f)), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
+}
 
 /** What the LOCAL WEATHER row on the Channels list says: the place and whether the channel is in the guide, or NOT SET. */
 private fun weatherStatus(model: AppModel): String {
