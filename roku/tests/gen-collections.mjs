@@ -312,7 +312,9 @@ export async function collectionsVectors(upstream) {
     boxSetCases.push({ name, docs, calls: [...calls].sort(), out });
   };
   const uid = encodeURIComponent("u 1/2");
-  const list = `/Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName`;
+  const listAt = (start) => `/Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName`
+    + `&StartIndex=${start}&Limit=500`;
+  const list = listAt(0);
   const page = (id, start) => `/Items?userId=${uid}&ParentId=${encodeURIComponent(id)}&Recursive=true`
     + `&IncludeItemTypes=Movie,Series&StartIndex=${start}&Limit=200&SortBy=SortName`;
   await boxSet("smoke: films and series ids, deduped, a failed BoxSet dropped", {
@@ -339,6 +341,22 @@ export async function collectionsVectors(upstream) {
     [list]: { Items: [{ Id: "half", Name: "Half" }, { Id: "ok", Name: "Ok" }] },
     [page("half", 0)]: { Items: [{ Id: "a" }], TotalRecordCount: 2 },
     [page("ok", 0)]: { Items: [{ Id: "z" }], TotalRecordCount: 1 },
+  });
+  await boxSet("the collection list pages until TotalRecordCount", {
+    [list]: { Items: [{ Id: "p1", Name: "One" }, { Id: "p2", Name: "Two" }], TotalRecordCount: 3 },
+    [listAt(2)]: { Items: [{ Id: "p3", Name: "Three" }], TotalRecordCount: 3 },
+    [page("p1", 0)]: { Items: [{ Id: "a" }], TotalRecordCount: 1 },
+    [page("p2", 0)]: { Items: [{ Id: "b" }], TotalRecordCount: 1 },
+    [page("p3", 0)]: { Items: [{ Id: "c" }], TotalRecordCount: 1 },
+  });
+  await boxSet("a list page that adds nothing new ends it (a server that ignores StartIndex)", {
+    [list]: { Items: [{ Id: "r1", Name: "Repeat" }], TotalRecordCount: 9 },
+    [listAt(1)]: { Items: [{ Id: "r1", Name: "Repeat" }], TotalRecordCount: 9 },
+    [page("r1", 0)]: { Items: [{ Id: "a" }], TotalRecordCount: 1 },
+  });
+  await boxSet("a later list page that fails throws", {
+    [list]: { Items: [{ Id: "f1", Name: "First" }], TotalRecordCount: 2 },
+    [page("f1", 0)]: { Items: [{ Id: "a" }], TotalRecordCount: 1 },
   });
   await boxSet("odd rows and titles", {
     [list]: { Items: [null, { Name: "No id" }, { Id: "", Name: "Empty id" }, { Id: 7, Name: "" }, { Id: "u", Name: null }, { Id: "w/ slash", Name: "Ünïcode Set" }] },

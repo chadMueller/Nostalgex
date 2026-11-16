@@ -757,24 +757,39 @@ end function
 ' pages one by one, so the requests are the same but not in the same order.
 function NxCollectionsFetchBoxSets(serverKey as String, userId as String, fetcher as Object, progress = invalid as Dynamic) as Dynamic
     uid = NxUrlEncode(userId)
-    listing = fetcher.getJSON("/Items?userId=" + uid + "&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName")
-    if listing = invalid then return invalid
-    rows = []
-    if type(listing) = "roAssociativeArray" then rows = NxList(listing.Items)
+    ' The list of collections is paged, 500 a time (#318, as scripts/nostalgex-collections.js): a server with an
+    ' auto-collections plugin can hold thousands. A page that fails fails the read, and a page that adds no
+    ' collection not seen before ends it (a server that ignores StartIndex would answer the same page for ever).
     boxSets = []
     seen = {}
     seen.SetModeCaseSensitive()
-    for each b in rows
-        if type(b) = "roAssociativeArray" then
-            if NxTruthy(b.Id) then
-                k = NxToStr(b.Id)
-                if not seen.DoesExist(k) then
-                    seen[k] = true
-                    boxSets.Push(b)
+    start = 0
+    rowsRead = 0
+    while true
+        listing = fetcher.getJSON("/Items?userId=" + uid + "&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName&StartIndex=" + start.ToStr() + "&Limit=500")
+        if listing = invalid then return invalid
+        rows = []
+        if type(listing) = "roAssociativeArray" then rows = NxList(listing.Items)
+        before = boxSets.Count()
+        for each b in rows
+            if type(b) = "roAssociativeArray" then
+                if NxTruthy(b.Id) then
+                    k = NxToStr(b.Id)
+                    if not seen.DoesExist(k) then
+                        seen[k] = true
+                        boxSets.Push(b)
+                    end if
                 end if
             end if
+        end for
+        start = start + rows.Count()
+        rowsRead = rowsRead + rows.Count()
+        total = rowsRead
+        if type(listing) = "roAssociativeArray" then
+            if NxIsNumber(listing.TotalRecordCount) then total = listing.TotalRecordCount
         end if
-    end for
+        if rows.Count() = 0 or rowsRead >= total or boxSets.Count() = before then exit while
+    end while
     out = []
     batch = 25
     firsts = []
