@@ -54,14 +54,23 @@ function NxRunHiddenLibrariesTests(fixturePath as String) as Integer
     off = NxMbFixtureFetcher(fx)
     gotOff = NxMbScanServer(off, "jellyfin", fx.userId, 0)
     NxCheck(r, "off: the libraries are asked for as before", off.requests[0], "/UserViews?userId=" + NxUrlEncode(fx.userId))
+    NxCheck(r, "every Jellyfin scan also asks for the hidden list, as the web tuner and Android do", off.requests[1], "/UserViews?userId=" + NxUrlEncode(fx.userId) + "&includeHidden=true")
     NxCheck(r, "off: no hidden library is asked for items", NxHiddenAsked(off.requests, "v-hidden").ToStr(), "0")
     NxCheck(r, "off: no hidden title is scanned", NxHiddenTitles(gotOff), "")
 
-    ' Switch on: the hidden libraries' films and episodes are scanned too,
-    ' and everything the scan read with it off is still there.
+    ' Switched on (each hidden library has its own row now): the hidden libraries'
+    ' films and episodes are scanned too, and everything the scan read with them
+    ' off is still there.
     on = NxMbFixtureFetcher(fx)
-    gotOn = NxMbScanServer(on, "jellyfin", fx.userId, 0, invalid, true)
-    NxCheck(r, "on: the libraries are asked for with includeHidden", on.requests[0], "/UserViews?userId=" + NxUrlEncode(fx.userId) + "&includeHidden=true")
+    gotOn = NxMbScanServer(on, "jellyfin", fx.userId, 0, invalid, false, invalid, "srv", { "srv::v-hidden-films": true, "srv::v-hidden-tv": true })
+    NxCheck(r, "on: the libraries are asked for both ways", on.requests[0] + " " + on.requests[1], "/UserViews?userId=" + NxUrlEncode(fx.userId) + " /UserViews?userId=" + NxUrlEncode(fx.userId) + "&includeHidden=true")
+    ' The old single switch, not yet carried over, reads them too, unless one is off.
+    legacy = NxMbScanServer(NxMbFixtureFetcher(fx), "jellyfin", fx.userId, 0, invalid, true, invalid, "srv")
+    NxCheck(r, "the old switch on: the hidden libraries are read", (legacy.Count() - gotOff.Count()).ToStr(), "4")
+    legacyOff = NxMbScanServer(NxMbFixtureFetcher(fx), "jellyfin", fx.userId, 0, invalid, true, { "srv::v-hidden-tv": true }, "srv")
+    NxCheck(r, "the old switch on, one hidden library off: it stays off", (legacyOff.Count() - gotOff.Count()).ToStr(), "2")
+    ' A second ask that fails leaves the plain list: nothing hidden, nothing extra.
+    NxCheck(r, "hidden libraries not switched on are never read", (NxMbScanServer(NxMbFixtureFetcher(fx), "jellyfin", fx.userId, 0, invalid, false, invalid, "srv", {}).Count() - gotOff.Count()).ToStr(), "0")
     ' An episode's title is its show's name, as the scan has always kept it.
     NxCheck(r, "on: the hidden films and both episodes are scanned", NxHiddenTitles(gotOn), "Hidden Film One|Hidden Film Two|Hidden Show|Hidden Show")
     NxCheck(r, "on: the rest of the library is as it was", (gotOn.Count() - gotOff.Count()).ToStr(), "4")
@@ -76,6 +85,7 @@ function NxRunHiddenLibrariesTests(fixturePath as String) as Integer
     gotEmbyOff = NxMbScanServer(embyOff, "emby", fx.userId, 0)
     embyOn = NxMbFixtureFetcher(fx)
     gotEmbyOn = NxMbScanServer(embyOn, "emby", fx.userId, 0, invalid, true)
+    NxCheck(r, "emby: one ask for the libraries, no hidden list", NxToStr(embyOff.requests.Count() < 2 or Instr(1, embyOff.requests[1], "includeHidden") = 0), "true")
     NxCheck(r, "emby: the same request with the switch on", embyOn.requests[0], embyOff.requests[0])
     NxCheck(r, "emby: the same request as always", embyOff.requests[0], "/Users/" + NxUrlEncode(fx.userId) + "/Views")
     NxCheck(r, "emby: the same scan either way", gotEmbyOn.Count().ToStr(), gotEmbyOff.Count().ToStr())
