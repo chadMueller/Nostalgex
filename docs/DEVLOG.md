@@ -382,6 +382,17 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Half-done.** Demo mode has one bundle, so Up and Down between bundles were not seen on a device, only in the unit tests. The info panel was not put beside the Apple TV's screenshots, and nothing was run on the real TV. The seasonal invite row has no stripe cell. A preview programme in the info panel (I-089) is not ported.
 
+## 2026-11-16 (web tuner: the weather channel's guide bar, credits, icons and settings page)
+
+**State.** Branch `web/weather-full-bar` off main `7d4b3c71`. Not merged, not pushed.
+
+**Changed** (all Chad's, 2026-11-16).
+- Guide: CH 299 is one full-width bar, "LOCAL WEATHER" and the temperature ("LOCAL WEATHER  6\u00B0C"), no 30 minute blocks, no times, on now at every time position. It has no schedule blocks, so Left and Right step nothing on it, the info panel shows LIVE and no UP NEXT. The schedule is `WXE.guideItem` (one always-live item).
+- Credits: DATA FROM MET NORWAY, the radar source's credit (radar screen) and UPDATED hh:mm are one stack at the bottom left, 16 px, text2 at 70%, 22 px apart (`FOOTER` in `scripts/nostalgex-weather-screens.js`). The loop's pips stay bottom right.
+- Icons: 15% smaller in whole-pixel cells, centred in their old slots: CURRENT 14 to 12, TODAY 8 to 7, 5-DAY 7 to 6 (`ICON`).
+- Settings: the WEATHER section is out of PLAYBACK & PICTURE. CHANNELS & BUNDLES has one link row, LOCAL WEATHER, saying the place and ON or OFF ("BUFFALO, NY \u00B7 ON") or NOT SET. It opens a page with LOCATION, UNITS and SHOW LOCAL WEATHER; Back returns to the row. Up and Down on that page walk its controls by focus.
+- Tests: the weather smokes are updated (36 and 185 checks).
+
 ## 2026-11-15 (web tuner: the weather channel, first version, Trello I-016)
 
 **State.** Branch `web/weather-channel` off main `eaf4443e`. Not merged, not pushed, not deployed. A push to main ships the page and the relay together.

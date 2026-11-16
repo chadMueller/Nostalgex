@@ -606,21 +606,24 @@
   }
 
   // ── The guide row and the info panel ───────────────────────────────────────
-  /** Hour-long guide blocks for the channel's row, `hours` of them from the top of the hour before now. */
-  function guideBlocks(placeName, nowMs, hours) {
-    const hourMs = 3600000;
-    const start = Math.floor(nowMs / hourMs) * hourMs - hourMs;
-    const out = [];
-    for (let i = 0; i < (hours || 26); i++) {
-      const s = start + i * hourMs;
-      out.push({ startSec: s / 1000, endSec: (s + hourMs) / 1000, item: {
-        title: CHANNEL_NAME,
-        episodeTitle: placeName || '',
-        summary: 'Current conditions, today\u2019s forecast, the 5-day forecast and radar, in a loop.',
-        ratingKey: null, duration: 3600,
-      } });
-    }
-    return out;
+  /**
+   * The channel's one programme, for the guide row and the info panel. LOCAL WEATHER is an endless loop: it has no start and no end,
+   * so the guide draws it as one bar across the whole row (no 30 minute blocks, no times), it is on now at every time position, and
+   * it has nothing "up next". `live` is that mark for the ports.
+   */
+  function guideItem(placeName, summary) {
+    return {
+      title: CHANNEL_NAME,
+      episodeTitle: placeName || '',
+      summary: summary || 'Current conditions, today\u2019s forecast, the 5-day forecast and radar, in a loop.',
+      ratingKey: null,
+      live: true,
+    };
+  }
+  /** The text on the guide's bar: LOCAL WEATHER, and the temperature once there is a forecast ("LOCAL WEATHER  6\u00B0C"). */
+  function guideBarText(model, units) {
+    if (!model || !model.current || model.current.tempC == null) return CHANNEL_NAME;
+    return `${CHANNEL_NAME}  ${fmtTemp(model.current.tempC, units)}\u00B0${units}`;
   }
   /** The line the info panel shows under the place: "Cloudy, 6\u00B0C. Feels like 3\u00B0. High 7\u00B0, low 5\u00B0. Wind NNW 17 km/h." */
   function infoSummary(model, units) {
@@ -644,7 +647,7 @@
     radarProvider, radarBBox, parseTimeDimension, pickFrameTimes, radarBand, RADAR_BANDS,
     createPlaceIndex, postcodeLookup, normalizePlace, placeLabel,
     forecastUrl, forecastDue, forecastAge,
-    guideBlocks, infoSummary,
+    guideItem, guideBarText, infoSummary,
   };
 
   global.NostalgexWeather = api;

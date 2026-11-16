@@ -4343,6 +4343,44 @@
         </div>
       </div>
 
+      <div id="channels-page-weather" data-page="weather" hidden>
+        <div class="chan-note">LOCAL WEATHER is channel 299: a loop of current conditions, today's forecast, the 5-day forecast and radar, with quiet music. Real buttons and a text box, so a TV browser with no keys can set it up.</div>
+        <div class="cfg-row cfg-row--wrap">
+          <div>
+            <div class="cfg-row-title">Location</div>
+            <div class="cfg-row-desc" id="wx-place-desc">Type a city or a postcode, then pick it from the matches.</div>
+          </div>
+          <div class="wx-actions">
+            <button class="plex-btn" id="wx-change-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxOpenSearch()">SET LOCATION</button>
+            <button class="plex-btn" id="wx-remove-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxClearPlace()" hidden>REMOVE</button>
+          </div>
+        </div>
+        <div class="wx-search" id="wx-search" hidden>
+          <input class="wx-input" id="wx-input" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="City or postcode" aria-label="City or postcode" oninput="wxSearchInput(this.value)" onkeydown="wxSearchKey(event)">
+          <div class="wx-hint" id="wx-hint" role="status"></div>
+          <div class="wx-results" id="wx-results" role="listbox" aria-label="Matching places"></div>
+        </div>
+        <div class="cfg-row cfg-row--wrap">
+          <div>
+            <div class="cfg-row-title">Units</div>
+            <div class="cfg-row-desc">AUTO uses Fahrenheit in the United States and Celsius everywhere else. <span id="wx-units-note"></span></div>
+          </div>
+          <div class="sleep-chips" id="wx-units-chips" role="group" aria-label="Weather units">
+            <button class="sleep-chip" type="button" data-units="auto" onclick="wxSetUnits('auto')" aria-pressed="true">AUTO</button>
+            <button class="sleep-chip" type="button" data-units="F" onclick="wxSetUnits('F')" aria-pressed="false">&deg;F</button>
+            <button class="sleep-chip" type="button" data-units="C" onclick="wxSetUnits('C')" aria-pressed="false">&deg;C</button>
+          </div>
+        </div>
+        <div class="cfg-row">
+          <div>
+            <div class="cfg-row-title">Show the weather channel</div>
+            <div class="cfg-row-desc">LOCAL WEATHER, channel 299, in the guide. Off takes it out.</div>
+          </div>
+          <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
+        </div>
+        <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service, Environment and Climate Change Canada and the Deutscher Wetterdienst (Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben, CC BY 4.0). Map outlines from Natural Earth. Music: an original loop played with the FluidR3_GM sound set (MIT). To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
+      </div>
+
       <div id="channels-page-collections" data-page="collections" hidden>
         <div class="chan-note">Collections on your server with 3 or more movies or episodes that are not movie series. Switch one on and it airs from CH 400. Movie series are under FRANCHISES.</div>
         <div id="collections-status" class="chan-note" style="margin-bottom: 12px;"></div>
@@ -4516,43 +4554,6 @@
           <button class="plex-btn plex-btn--toggle" id="cfg-auto-subs" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleAutoSubsForeignAudio()">ON</button>
         </div>
       </div>
-      <div class="config-section-label" id="wx-section" style="margin-top: 28px;">WEATHER</div>
-      <!-- LOCAL WEATHER, CH 299: a loop of current conditions, today's forecast, the 5-day forecast and radar. Real buttons and a text box,
-           so a TV browser with no keys can set it up. -->
-      <div class="cfg-row cfg-row--wrap">
-        <div>
-          <div class="cfg-row-title">Location</div>
-          <div class="cfg-row-desc" id="wx-place-desc">Type a city or a postcode, then pick it from the matches.</div>
-        </div>
-        <div class="wx-actions">
-          <button class="plex-btn" id="wx-change-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxOpenSearch()">SET LOCATION</button>
-          <button class="plex-btn" id="wx-remove-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxClearPlace()" hidden>REMOVE</button>
-        </div>
-      </div>
-      <div class="wx-search" id="wx-search" hidden>
-        <input class="wx-input" id="wx-input" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="City or postcode" aria-label="City or postcode" oninput="wxSearchInput(this.value)" onkeydown="wxSearchKey(event)">
-        <div class="wx-hint" id="wx-hint" role="status"></div>
-        <div class="wx-results" id="wx-results" role="listbox" aria-label="Matching places"></div>
-      </div>
-      <div class="cfg-row cfg-row--wrap">
-        <div>
-          <div class="cfg-row-title">Units</div>
-          <div class="cfg-row-desc">AUTO uses Fahrenheit in the United States and Celsius everywhere else. <span id="wx-units-note"></span></div>
-        </div>
-        <div class="sleep-chips" id="wx-units-chips" role="group" aria-label="Weather units">
-          <button class="sleep-chip" type="button" data-units="auto" onclick="wxSetUnits('auto')" aria-pressed="true">AUTO</button>
-          <button class="sleep-chip" type="button" data-units="F" onclick="wxSetUnits('F')" aria-pressed="false">&deg;F</button>
-          <button class="sleep-chip" type="button" data-units="C" onclick="wxSetUnits('C')" aria-pressed="false">&deg;C</button>
-        </div>
-      </div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Show the weather channel</div>
-          <div class="cfg-row-desc">LOCAL WEATHER, channel 299, in the guide. Off takes it out.</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
-      </div>
-      <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service, Environment and Climate Change Canada and the Deutscher Wetterdienst (Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben, CC BY 4.0). Map outlines from Natural Earth. Music: an original loop played with the FluidR3_GM sound set (MIT). To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
     </div>
 
     <div id="config-tab-server" style="display:none" tabindex="-1">
@@ -5040,7 +5041,7 @@
     place: null, units: 'auto', channelOn: !!WXE,
     met: null, metKey: '', savedMs: 0, expiresMs: 0, loading: false, failedMs: 0, model: null, status: 'noplace',
     radar: { status: 'none', key: '', frames: [], provider: null, base: null, loadedMs: 0, loading: false },
-    basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false,
+    basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false, guideLabel: '',
     index: null, results: [], searchSeq: 0, searchTimer: null,
   };
   function wxStored(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -5099,6 +5100,9 @@
       WX.expiresMs = 0;
     }
     if (wxActive()) buildChannelSchedule(WX_CHANNEL);
+    // The bar in the guide carries the temperature: draw it again when that text changes.
+    const label = wxGuideLabel();
+    if (label !== WX.guideLabel) { WX.guideLabel = label; if (guideVisible) renderActiveGuide(); }
   }
   async function wxEnsureForecast(force) {
     if (!WX.place) { WX.status = 'noplace'; WX.model = null; return; }
@@ -5298,28 +5302,18 @@
     if (a && !a.paused) a.pause();
   }
 
-  // The guide row and the info panel: hour-long blocks, and a summary of what the channel says now.
+  // The guide row and the info panel. LOCAL WEATHER is an endless loop (Chad, 2026-11-16: "1 full width bar, no scheduled sections"): one
+  // item that is always live. No blocks and no times, so the guide's programme cursor has nothing to step through (_manifestBlocks is
+  // null: Left and Right do not move on it), the row is one bar at every time position, and there is no UP NEXT.
   function buildWeatherSchedule(ch, nowSec = Date.now() / 1000) {
-    const blocks = WXE.guideBlocks(wxPlaceTitle(), nowSec * 1000, 26);
     const summary = WX.model ? WXE.infoSummary(WX.model, wxUnits()) : (WX.place ? '' : 'Set your location in Settings to see the forecast.');
-    blocks.forEach((b) => { if (summary) b.item.summary = summary; });
     ch._live = null;
     ch._guide = null;
-    ch._manifestBlocks = blocks;
-    const i = blocks.findIndex((b) => nowSec >= b.startSec && nowSec < b.endSec);
-    const rows = blocks.slice(Math.max(i, 0), Math.max(i, 0) + 4);
-    ch.schedule = rows.map((b, j) => {
-      const item = { ...b.item, startSec: b.startSec, endSec: b.endSec };
-      if (j === 0) {
-        const span = b.endSec - b.startSec;
-        item.progress = ((nowSec - b.startSec) / span) * 100;
-        item.position = formatTime(nowSec - b.startSec);
-        item.total = formatTime(span);
-        item.offsetSeconds = 0;
-      }
-      return item;
-    });
+    ch._manifestBlocks = null;
+    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary), progress: 100, position: '', total: '' }];
   }
+  /** What the guide's bar says. */
+  function wxGuideLabel() { return WXE.guideBarText(WX.model, wxUnits()); }
 
   // Settings: LOCATION, UNITS, and the channel's switch.
   function wxPlaceIndex() {
@@ -5447,14 +5441,21 @@
     }
     if (guideVisible) renderActiveGuide();
   }
+  /** What the LOCAL WEATHER row in CHANNELS & BUNDLES says: the place and whether the channel is on ("BUFFALO, NY \u00B7 ON"), or NOT SET. */
+  function wxStatusText() {
+    if (!WXE || !WX.place) return 'NOT SET';
+    const p = WX.place;
+    const where = [p.name, (p.cc === 'US' || p.cc === 'CA' || p.cc === 'AU') && p.region ? p.region : p.cc].filter(Boolean).join(', ').toUpperCase();
+    return `${where} \u00B7 ${WX.channelOn ? 'ON' : 'OFF'}`;
+  }
   /** The button on the channel's own card: straight to the setting, for a TV browser with no keys. */
   function wxOpenSettings() {
     showConfig();
-    switchConfigTab('general');
-    const sec = document.getElementById('wx-section');
-    if (sec) sec.scrollIntoView({ block: 'start' });
+    switchConfigTab('bundles');
+    bundleFocusIndex = channelsListRowsModel().findIndex((r) => r.page === 'weather');
+    openChannelsPage('weather');
     wxOpenSearch();
-    // Settings moves focus into itself as it opens; the box takes it back once that is done.
+    // The page moves focus into itself as it opens; the box takes it back once that is done.
     setTimeout(() => { const i = document.getElementById('wx-input'); if (i && !document.getElementById('wx-search').hidden) i.focus({ preventScroll: true }); }, 150);
   }
   // The text size can change under a drawn channel.
@@ -6727,8 +6728,17 @@
       const progsCol = document.createElement('div');
       progsCol.className = 'grid-row-programs';
 
-      if (ch.weather || (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0)) {
-        const items = ch.weather ? [] : getTimeFilteredPool(ch);
+      if (ch.weather) {
+        // One bar across the whole row: no blocks, no times, on now at every position of the guide's window.
+        const bar = document.createElement('div');
+        bar.className = 'grid-program grid-program--live now-playing';
+        bar.style.width = '100%';
+        bar.style.background = `${ch.colorHex}22`;
+        bar.textContent = wxGuideLabel();
+        bar.title = bar.textContent;
+        progsCol.appendChild(bar);
+      } else if (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0) {
+        const items = getTimeFilteredPool(ch);
         const nowSec = nowMs / 1000;
         const windowStartSec = windowStartMs / 1000;
 
@@ -6995,7 +7005,7 @@
     document.getElementById('np-meta').textContent = now.meta || '';
     document.getElementById('np-progress').style.width = (now.progress || 0) + '%';
     document.getElementById('np-progress').style.background = ch.color;
-    document.getElementById('np-time').textContent = `${now.position || '0:00'} / ${now.total || ''}`;
+    document.getElementById('np-time').textContent = ch.weather ? 'LIVE' : `${now.position || '0:00'} / ${now.total || ''}`;
     document.getElementById('np-upnext').innerHTML = next
       ? `<strong>UP NEXT</strong> ${escapeHtml(itemGuideTitle(next))}`
       : '';
@@ -7909,7 +7919,12 @@
       labelEl.textContent = NostalgexUpNext.label(upNextSeconds);
       upNextEl.append(titleEl, '  ', labelEl);
     }
-    if (ch.weather) upNextEl.textContent = '';   // the loop has no "up next"
+    if (ch.weather) {
+      // An endless loop: always live, no times, nothing up next.
+      upNextEl.textContent = '';
+      document.getElementById('info-time').textContent = 'LIVE';
+      document.getElementById('info-progress').style.width = '100%';
+    }
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -8139,6 +8154,13 @@
     for (const el of document.querySelectorAll('.grid-program--cursor')) el.classList.remove('grid-program--cursor');
     for (const el of document.querySelectorAll('.grid-row--has-cursor')) el.classList.remove('grid-row--has-cursor');
     const entries = focusedGuideEntries();
+    if (guideVisible && !guideStripeMode && !guidePromoKey) {
+      // The weather channel's one bar is always the cursor's cell on its row, whatever time the cursor is at.
+      const fch = getEnabledChannels()[guideFocusIndex];
+      const wrow = fch && fch.weather ? document.querySelector('.grid-row.focused:not(.grid-row--promo)') : null;
+      const bar = wrow ? wrow.querySelector('.grid-program--live') : null;
+      if (bar) { bar.classList.add('grid-program--cursor'); wrow.classList.add('grid-row--has-cursor'); return; }
+    }
     if (!entries || !guideVisible || guideStripeMode) return;
     const row = document.querySelector('.grid-row.focused:not(.grid-row--promo)');
     if (!row) return;
@@ -9788,6 +9810,7 @@
     bundles:     { title: 'CHANNEL BUNDLES', sub: 'Each bundle adds a set of channels', parent: 'list' },
     franchises:  { title: 'FRANCHISES', sub: 'The classics, the series in your library and your server\'s movie-series collections', parent: 'list' },
     collections: { title: 'MY COLLECTIONS', sub: 'Turn your server\'s collections into channels', parent: 'list' },
+    weather:     { title: 'LOCAL WEATHER', sub: 'The weather channel, CH 299: where, in what units, and whether it is in the guide', parent: 'list' },
     missing:     { title: 'MISSING CHANNELS', sub: 'A channel goes on air once your library has enough titles that fit it', parent: 'bundles' },
   };
 
@@ -9816,6 +9839,8 @@
   function openChannelsPage(page) {
     channelsReturnIndex[channelsPage] = bundleFocusIndex;
     showChannelsPage(page);
+    // LOCAL WEATHER's page is controls, not rows: the cursor starts on LOCATION.
+    if (page === 'weather') setTimeout(() => { const b = document.getElementById('wx-change-btn'); if (b && channelsPage === 'weather') b.focus({ preventScroll: true }); }, 0);
   }
   /** Back a page. False when already at the list (the caller then leaves the category as before). */
   function channelsGoBack() {
@@ -9838,6 +9863,7 @@
       { page: 'bundles', title: 'CHANNEL BUNDLES', value: `${on} ON` },
       { page: 'franchises', title: 'FRANCHISES', value: franchisePackageOn() ? `${fOn} ON` : 'OFF' },
       { page: 'collections', title: 'MY COLLECTIONS', value: `${cOn} ON` },
+      { page: 'weather', title: 'LOCAL WEATHER', value: wxStatusText() },
     ];
   }
   function renderChannelsList() {
@@ -9934,6 +9960,7 @@
     if (bundleFocusIndex >= model.total) bundleFocusIndex = Math.max(0, model.total - 1);
     if (channelsPage === 'list') { renderChannelsList(); return; }
     if (channelsPage === 'missing') { renderMissingCards(); return; }
+    if (channelsPage === 'weather') { wxRenderSettings(); return; }
     if (channelsPage === 'franchises') { renderFranchiseList(model); return; }
     if (channelsPage === 'collections') { renderCollectionList(); return; }
     container.innerHTML = '';
@@ -9957,6 +9984,7 @@
     if (channelsPage === 'list') total = channelsListRowsModel().length + 1;                          // the three links and WATERSHED
     else if (channelsPage === 'bundles' && missingCountOf(missingChannelGroups()) > 0) total += 1;   // WHY ARE SOME CHANNELS MISSING?
     else if (channelsPage === 'missing') total = missingCountOf(missingChannelGroups());
+    else if (channelsPage === 'weather') total = 1;   // its controls are walked by focus (wxPageKeys), not by row index
     return { packages, franchises, collections, total };
   }
 
@@ -13557,7 +13585,7 @@
 
     // Always update progress bar and time (cheap DOM writes)
     document.getElementById('np-progress').style.width = (now.progress || 0) + '%';
-    document.getElementById('np-time').textContent = `${now.position || '0:00'} / ${now.total || ''}`;
+    document.getElementById('np-time').textContent = ch.weather ? 'LIVE' : `${now.position || '0:00'} / ${now.total || ''}`;
 
     updateInfoPanel();
   }
@@ -13669,6 +13697,11 @@
         return;
       }
       // Bundle tab keyboard navigation
+      if (configTab === 'bundles' && channelsPage === 'weather' && (key === 'ArrowDown' || key === 'ArrowUp')) {
+        moveConfigFocus(key === 'ArrowDown' ? 1 : -1);   // controls, not rows: LOCATION, the units, the switch, back
+        e.preventDefault();
+        return;
+      }
       if (configTab === 'bundles') {
         if (key === 'ArrowDown') {
           bundleFocusIndex = Math.min(bundleFocusIndex + 1, bundleTabModel().total - 1);
