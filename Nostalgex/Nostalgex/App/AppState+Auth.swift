@@ -427,6 +427,9 @@ extension AppState {
         }
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
+        // A different set of libraries is a different library: a scan already running (an
+        // earlier toggle's, or a refresh) must not land the old set or save it (N-016).
+        invalidateInFlightLibraryLoads()
         beginLoadInPlace(.changing)
         Task { await loadLibrary() }
     }
