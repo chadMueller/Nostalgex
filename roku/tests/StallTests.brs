@@ -88,7 +88,7 @@ function NxRunStallTests(fixturePath as String) as Integer
     got = NxMbScanServer(f, "jellyfin", fx.userId, 0)
     NxCheck(r, "stopped scan returns items", NxToStr(got <> invalid), "true")
     if got <> invalid then NxCheck(r, "the first library's items", got.Count().ToStr(), want.Count().ToStr())
-    NxCheck(r, "requests up to the stop", f.inner.requests.Count().ToStr(), "2")
+    NxCheck(r, "requests up to the stop (the libraries, the hidden list, the first library)", f.inner.requests.Count().ToStr(), "3")
 
     ' Stopped while reading shows: the batch in hand finishes, no more.
     m.nxLoadWatch = { stopWaiting: "", scanAnswers: 0 }
