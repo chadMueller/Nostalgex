@@ -173,7 +173,9 @@ function NxChannelsConfig(root as String, bundledPath as String) as Object
         cv = NxLiveVersionOf(cached)
         ' Equal to the bundled version is the same content: not worth parsing again.
         if cv > bundledVersion then
+            parse = CreateObject("roTimespan")
             res = NxLiveChannelsAccept(cached, bundledVersion)
+            print "channels: the saved live copy read and checked in "; parse.TotalMilliseconds(); " ms ("; Len(cached) \ 1024; " KB)"
             if res.ok then return { config: res.doc, source: "cache", version: res.version }
             print "channels: the saved live copy is not usable ("; res.reason; "); using the bundled one"
         end if

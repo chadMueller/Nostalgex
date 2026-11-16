@@ -615,6 +615,9 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
             ' (NxGuideFocusLiveFill). A past programme keeps its tint on both.
             if onNow and focused then
                 row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideFocusLiveFill(ch.color)))
+            else if onNow and ch.weather = true then
+                ' The weather bar: the row's colour at 13%.
+                row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, "21")))
             else if onNow then
                 row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
             else if past then
@@ -1096,8 +1099,7 @@ sub renderInfo()
     ' The progress row: the bar and the time, or a later programme's time range.
     row = m.top.FindNode("progressRow")
     row.translation = [0, y]
-    ' LOCAL WEATHER is a loop with no start or end: no bar, no times.
-    if ch.weather = true then row.visible = false
+
     clock = m.top.FindNode("clock")
     track = m.top.FindNode("progressTrack")
     fill = m.top.FindNode("progressFill")
@@ -1114,6 +1116,12 @@ sub renderInfo()
         dur& = b.endSec - b.startSec
         pos& = t - b.startSec
         clock.text = hms(pos&) + " / " + hms(dur&)
+        ' LOCAL WEATHER is a loop with no start or end: LIVE, with the bar full.
+        if ch.weather = true then
+            clock.text = "LIVE"
+            pos& = 1
+            dur& = 1
+        end if
         cw = clock.boundingRect().width
         clock.translation = [1100 - cw, 5]
         barW = 1100 - cw - 10

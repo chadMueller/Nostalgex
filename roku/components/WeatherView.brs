@@ -561,7 +561,7 @@ sub buildScreenNow(index as Integer)
     header(st, title, accent)
     extra = ""
     if m.status = "noplace" then
-        message(st, "SET YOUR LOCATION IN SETTINGS", "SETTINGS, PLAYBACK AND PICTURE, WEATHER, LOCATION", m.c.cyan)
+        message(st, "SET YOUR LOCATION IN SETTINGS", "SETTINGS, CHANNELS AND BUNDLES, LOCAL WEATHER, LOCATION", m.c.cyan)
     else if m.status = "loading" and m.model = invalid then
         message(st, "LOADING THE FORECAST", "", m.c.cyan)
     else if m.status = "error" and m.model = invalid then
@@ -638,10 +638,10 @@ sub footer(parent as Object, screenIndex as Integer, extraCredit as String)
             lines.Push({ text: age.text, color: "0xB9C3DEB3" })
         end if
     end if
-    y = base - (lines.Count() - 1) * 21
+    y = base - (lines.Count() - 1) * 22
     for each l in lines
         txt(parent, l.text, "DMMono-Regular", 16, l.color, m.safeX, y, "left", 800)
-        y = y + 21
+        y = y + 22
     end for
     ' The loop's pips on the right.
     pips = NxWxScreens().Count()
