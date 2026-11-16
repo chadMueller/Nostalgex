@@ -278,7 +278,19 @@ struct InfoPanelView: View {
 
     private func progressRow(item: PlexMediaItem) -> some View {
         Group {
-            if let previewEntry {
+            if item.isWeatherLoop {
+                // CH 299's loop never ends: a full bar and LIVE, no times (the web tuner's panel does the same).
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(channel.color)
+                        .frame(height: 4)
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                    Text("LIVE")
+                        .font(Typo.progressTime)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .accessibilityIdentifier("infoPanelLive")
+            } else if let previewEntry {
                 Text("\(Self.clock(previewEntry.startTime)) - \(Self.clock(previewEntry.endTime))")
                     .font(Typo.progressTime)
                     .foregroundStyle(channel.color)

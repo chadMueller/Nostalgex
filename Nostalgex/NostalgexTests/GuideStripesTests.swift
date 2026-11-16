@@ -334,3 +334,44 @@ final class GuideStripesTests: XCTestCase {
         XCTAssertEqual((headerWidth - (8 + channelColumn + 1 + programs)) / 2, 29.5, accuracy: 0.01)
     }
 }
+
+// MARK: - Select on the stripe
+
+/// Select on the stripe jumps to the first channel of its bundle (Chad, 2026-11-16).
+@MainActor
+final class GuideStripeSelectTargetTests: XCTestCase {
+    private func groups(_ spec: [(String?, Int)]) -> [GuideStripeGroup] {
+        var row = 0
+        return spec.map { name, count in
+            defer { row += count }
+            return GuideStripeGroup(package: name.map { GuidePackage(id: $0.lowercased(), name: $0) }, firstRow: row, rowCount: count)
+        }
+    }
+
+    func testSelectGoesToTheFirstRowOfTheBundleTheStripeIsOn() {
+        let g = groups([("RETRO ACTION", 6), ("LATE NIGHT", 6), ("TINY", 1), ("THE REST", 7)])
+        XCTAssertEqual(GuideStripes.selectTargetRow(groups: g, index: 0, channelCount: 20), 0)
+        XCTAssertEqual(GuideStripes.selectTargetRow(groups: g, index: 1, channelCount: 20), 6)
+        XCTAssertEqual(GuideStripes.selectTargetRow(groups: g, index: 2, channelCount: 20), 12)
+        XCTAssertEqual(GuideStripes.selectTargetRow(groups: g, index: 3, channelCount: 20), 13)
+    }
+
+    func testSelectOnARunThatIsNoBundleOrNoRunDoesNothing() {
+        let g = groups([(nil, 3), ("LATE NIGHT", 4)])
+        XCTAssertNil(GuideStripes.selectTargetRow(groups: g, index: 0, channelCount: 7), "a run with no package has nothing to jump to")
+        XCTAssertNil(GuideStripes.selectTargetRow(groups: g, index: nil, channelCount: 7))
+        XCTAssertNil(GuideStripes.selectTargetRow(groups: g, index: 5, channelCount: 7))
+        XCTAssertNil(GuideStripes.selectTargetRow(groups: g, index: 1, channelCount: 3), "a row the lineup no longer has")
+        XCTAssertEqual(GuideStripes.selectTargetRow(groups: g, index: 1, channelCount: 7), 3)
+    }
+
+    /// The same first channel the package list jumps to: the bundle's first row is that bundle's first channel.
+    func testItIsTheFirstChannelOfThePackageTheListWouldJumpTo() {
+        let channels = (1...8).map { Channel(id: $0, number: $0, name: "CH\($0)", color: .white, category: nil, rules: nil, timeRestrictions: nil, minItems: 0) }
+        let membership: [Int: GuidePackage] = [1: GuidePackage(id: "a", name: "A"), 2: GuidePackage(id: "a", name: "A"),
+                                               3: GuidePackage(id: "b", name: "B"), 4: GuidePackage(id: "b", name: "B")]
+        let g = GuideStripes.groups(channels: channels, membership: membership)
+        let row = GuideStripes.selectTargetRow(groups: g, index: g.firstIndex { $0.name == "B" }, channelCount: channels.count)
+        XCTAssertEqual(row.map { channels[$0].id }, 3)
+    }
+}

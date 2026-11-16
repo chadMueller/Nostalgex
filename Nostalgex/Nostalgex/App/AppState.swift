@@ -511,7 +511,8 @@ class AppState {
     /// fall behind a sign-in. If it ever did, the scheduler packs each channel on its own,
     /// as every build did before the lineup: duplicates come back, nothing breaks.
     func registerScheduleLineup() {
-        DailyManifestScheduler.setLineup(channels, credentialFingerprint: scheduleCredentialFingerprint)
+        // CH 299 (weather) has no pool and no schedule of its own; it is not part of the packing.
+        DailyManifestScheduler.setLineup(channels.filter { !$0.isWeather }, credentialFingerprint: scheduleCredentialFingerprint)
     }
     /// Full channel config from JSON (kept for re-filtering after enrichment)
     var channelConfigChannels: [Channel] = []

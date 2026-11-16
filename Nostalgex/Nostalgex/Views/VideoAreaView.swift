@@ -104,6 +104,11 @@ struct VideoAreaView: View {
                         }
                     }
 
+                    // CH 299, LOCAL WEATHER: drawn by the app in the picture's place.
+                    if currentChannel?.isWeather == true {
+                        WeatherChannelView()
+                    }
+
                     // CRT + VHS effects on top of video (retro mode only)
                     if retroMode {
                         CRTOverlayView()

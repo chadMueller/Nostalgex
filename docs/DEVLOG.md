@@ -3,6 +3,46 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+
+## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
+
+**Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
+
+**Changed.** Select on the stripe now scrolls the guide so the first channel of the stripe's bundle is at the top and puts focus on that row (`GuideStripes.selectTargetRow`, `ChannelGuideView.selectStripeBundle`); the stripe is drawn from the rows, so it stays where it was and Left puts the viewer back on it. Left from the stripe opens the hidden bundle list, where Select used to; Select in the list still jumps and closes it, Menu closes it without a jump, Up and Down on the stripe still step through bundles and wrap. A run that is no bundle has nothing to jump to and Select does nothing. Moving focus onto the row pulled the list back (measured on the simulator: the scroll offset ran 390 to 0 over a second), so the top position is set again 0.1 s and 0.4 s after focus lands.
+
+**Tested.** `GuideStripeSelectTargetTests` (3) and `GuideStripesTests`; `GuideStripeFocusTests` (3 UI tests on the simulator, including Select landing on channel 7 with its row at the top of the guide, Left from the stripe opening the list and Menu closing it). Not tried on a TV.
+
+## 2026-11-16 (Apple TV 1.0.33 (58): Chad's weather changes)
+
+**State.** On `appletv/1.0.33-weather`, still build 58. Not pushed.
+
+**Live channels.json, measured (Chad asked whether it costs anything).** The live file is 126,842 bytes, 22,402 gzipped, answered in 0.10 to 0.19 s from nostalgex.app; `loadConfig` parses it in 10 ms on a Mac simulator (not measured on a TV). A snapshot launch (the normal one) never calls the loader or the fetch: the guide comes from the snapshot rows. Only a full library load does, and it now waits for the fetch only when there is no kept copy (a first install) and then for at most 3 s (it was 10 s); with a kept copy it builds from it at once and checks for a new one behind it. The request is now conditional (`If-None-Match` with the kept copy's ETag, saved only for a copy that passed); nostalgex.app answers 304 with no body in 0.11 s. A fetch never rebuilds the guide: it only writes the file, and the next library load uses it, so a changed `version` lands at the next rebuild (a library change, or the 24 hour hard cap), never on every daily fetch.
+
+**Changed.**
+- CH 299 in the guide is one full-width bar ("it should have no scheduled sections because it's an unlimited loop channel"): one entry, always on now, running past both ends of the guide's 22-hour window, titled LOCAL WEATHER and the current temperature. No programme times, no UP NEXT, the programme cursor has nothing to step to, and the info panel shows it as one live item: LIVE and a full bar, no times.
+- The credits and the forecast's age are one small stack at the bottom left of every screen: the radar source's credit on the radar screen, DATA FROM MET NORWAY, UPDATED, at 16 px (the 25 they were, about 60%) in text-2 at 70% opacity, which still reads about 5.6:1 on the background, so the attribution stays legible.
+- Every weather icon is 15% smaller: whole-pixel cells of 12, 7 and 6 where they were 14, 8 and 7, centred in the same slots, so nothing else moves.
+- The weather settings moved from PLAYBACK & PICTURE to CHANNELS & BUNDLES: one LOCAL WEATHER row (its value is the place and ON or OFF, or NOT SET) that opens a page with LOCATION, UNITS and SHOW LOCAL WEATHER. The no-location card points there.
+
+## 2026-11-15, night (Apple TV 1.0.33 (58): CH 299 LOCAL WEATHER, live channel rules)
+
+**State.** Branch `appletv/1.0.33-weather` on `appletv/1.0.33` (`c0d3dc43`) with `appletv/n016-library-rules` merged in. Build number 58. Not pushed, not merged, not uploaded.
+
+**Why.** Chad wants the weather channel on every platform for the 2026-11-16 releases, and channel rule fixes to reach Apple TVs without an App Store build (Trello I-016, N-074).
+
+**Changed.**
+- CH 299, LOCAL WEATHER, a port of the web tuner's channel (`scripts/nostalgex-weather.js` and `nostalgex-weather-screens.js` are the reference). `Services/Weather/WeatherEngine.swift` holds the rules, `Views/Weather/WeatherChannelView.swift` draws the four screens (CURRENT CONDITIONS, TODAY'S FORECAST, 5-DAY FORECAST, RADAR) on a 1920 x 1080 picture with the web's layout numbers, DM Mono and VT323, on the same 65 second wall-clock loop. `WeatherGoldenTests` reads `scripts/weather-golden.json` (copied from the web branch unchanged) and matches every vector: the five forecast cases, symbols, units, formats, compass, the loop, radar bands, frame picking, the map window, the providers and the postcode keys. Numbers round the way JavaScript's `Math.round` does, so -2.5 is -2 on both.
+- Forecast through the relay `nostalgex.app/api/weather` with `X-Nostalgex-Client: tvos` and an identifying User-Agent, only while the channel is on screen (the one exception: picking a location asks once). The last answer is kept in Caches with its time; it is not asked again before 30 minutes.
+- Radar: NOAA (US), Environment Canada (Canada) and DWD (Germany), straight from the device as the web does, recoloured to the five bands, over the Natural Earth outlines (`Resources/Weather/weather-basemap.json`, shipped in the app). Elsewhere RADAR NOT AVAILABLE IN YOUR AREA. Environment Canada answers a time with milliseconds (`...:00.000Z`) with a NoMatch error, so the map request sends whole seconds; the web tuner builds the same string and probably has the same fault for Canada (not checked in a browser).
+- Music: the original loop `local-forecast.m4a` ships in the app and plays under the screens while the channel is up; it stops with the sleep timer and in the background.
+- Settings, WEATHER (since 2026-11-16 a LOCAL WEATHER page under CHANNELS & BUNDLES): LOCATION (type a city or postcode; the GeoNames files are read from `nostalgex.app/weather/places/` a few KB at a time, not bundled, because the 1,380 shard files would flatten into one bundle folder with clashing names), UNITS (AUTO, °F, °C), SHOW THE WEATHER CHANNEL (on by default). With no location the channel says SET YOUR LOCATION IN SETTINGS. ABOUT has a WEATHER CREDITS list: MET Norway, GeoNames, Natural Earth, NOAA, Environment Canada, DWD, the music.
+- In the guide CH 299 is in no bundle and joins only beside library channels, so an empty library still reads as empty. It is kept out of the scheduler's lineup, Top Shelf and the default launch channel; its guide row is hour blocks of the loop with no UP NEXT. Tuning it stops the video and asks nothing of the media server.
+- Live channels.json (N-074). `loadChannelConfig()` no longer asks the media server for channels.json (it never answered). `ChannelConfigStore` fetches `nostalgex.app/channels.json` at launch when the kept copy is missing or a day old, and about every 24 hours from the background refresh loop, with the old 10 second timeout. A download is kept only if the same `ChannelConfigLoader` parses it, it has channels, its optional `formatVersion` is at most 1 (missing counts as 1), and its content `version` is not below the bundled one (the rule Android set; Roku follows). A bad download never replaces the kept copy. The guide is built from the kept copy, else the bundled one, and only where the guide is rebuilt anyway (a library load, a snapshot restore), so a new copy never lands mid-programme. channels.json has no `formatVersion` today; it is read so a future format change can go to the site without breaking builds already out.
+
+**Tested.** `WeatherGoldenTests` (8), `WeatherChannelLineupTests` (3), `ChannelConfigStoreTests` (6: an invalid file is rejected and the kept copy stays; an older content version and a formatVersion above 1 are rejected; a good newer copy is kept and built from). Simulator walk, `NostalgexUITests/WeatherChannelWalkTests` in demo mode with `-uiTestWeatherInDemo` against a stand-in relay on the Mac (the site relay was not live yet): the guide with CH 299, the four screens full screen, radar for Toronto from Environment Canada, the no-location card, the WEATHER rows, and a postcode search (90210 to BEVERLY HILLS). Full NostalgexTests on the first commit: 1,508 tests, 1,461 passed, 13 failed, 34 skipped; all 13 were package-lineup tests that now saw CH 299 (exact lineups in BundleBuild, Franchise, PreferenceSync, Seasonal and BackendSwitch tests), so unit tests start with the weather switch off; those 7 classes and the new ones then passed, 93 of 93. Not tested: against the real relay, on a real Apple TV, a US or German radar on screen (NOAA and DWD map requests checked with curl only), the music on a TV.
+
+**Half-done.** A 1.0.33 changelog entry (none exists yet), THIRD-PARTY-LICENSES.md lines for the app (the web branch adds the weather section; adding it here too would clash on merge).
+
 ## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
 
 **Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.
@@ -436,6 +476,7 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 **Checked.** Music video libraries: Plex has no Music Videos library type. "Other Videos" is type `movie`, and the scan only produces items from a movie or show library (an artist library returns artists with no runtime), so a music video library that works today is a movie or show library and stays listed and read, found as music videos by name as before. Confirmed afterwards with one read of `/library/sections` on a real Plex server: its Music Videos library is type `movie`.
 
 **Not done.** The Apple TV, Roku and Android are not changed; they are to port to the golden file.
+
 
 ## 2026-11-15 (Apple TV: one library rule set, N-016 option A)
 

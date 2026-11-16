@@ -41,6 +41,22 @@ struct SettingsAboutView: View {
                 .settingsRow(link.rowID, focus: focus)
                 .accessibilityLabel("\(link.title.capitalized), \(link.address)")
             }
+
+            // The weather channel's sources (I-016). Their licences ask for the credit; the channel shows it too.
+            SettingsSectionHeader(title: "WEATHER CREDITS")
+                .padding(.top, 20)
+
+            ForEach(WeatherCredits.all, id: \.id) { credit in
+                SettingsToggleRow(
+                    title: credit.title,
+                    subtitle: credit.subtitle,
+                    detail: credit.address,
+                    isOn: true,
+                    isFocused: isFocused("about_credit_\(credit.id)"),
+                    showToggle: false
+                ) {}
+                .settingsRow("about_credit_\(credit.id)", focus: focus)
+            }
         }
     }
 

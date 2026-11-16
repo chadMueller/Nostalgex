@@ -560,7 +560,7 @@ extension AppState {
 
         let demoChannels = DemoData.channels()
         allChannels = demoChannels
-        channels = demoChannels
+        channels = WeatherChannel.lineup(demoChannels, on: weatherChannelApplies)
         allItems = demoChannels.flatMap { $0.itemPool }
         // `-uiTestGuideStripes` only: the demo channels in demo packages, for the guide's package stripes.
         if DemoData.guideStripesFixtureRequested {

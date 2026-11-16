@@ -85,6 +85,15 @@ enum GuideStripes {
         return groups
     }
 
+    /// Select on the stripe (Chad, 2026-11-16): the first row of the run the stripe is on, so the guide jumps to the
+    /// first channel of that bundle. Nil when the stripe is on a run that is no package (nothing named to jump to)
+    /// or on no run at all.
+    static func selectTargetRow(groups: [GuideStripeGroup], index: Int?, channelCount: Int) -> Int? {
+        guard let index, groups.indices.contains(index), groups[index].package != nil,
+              (0..<channelCount).contains(groups[index].firstRow) else { return nil }
+        return groups[index].firstRow
+    }
+
     /// The run the row `row` is in.
     static func groupIndex(containingRow row: Int, in groups: [GuideStripeGroup]) -> Int? {
         groups.firstIndex { $0.firstRow <= row && row <= $0.lastRow }
