@@ -465,7 +465,7 @@
     ctx.fillStyle = '#070C18';
     ctx.fillRect(MAP.x, MAP.y, MAP.w, MAP.h);
     if (R.status === 'none') {
-      message(ctx, 'RADAR NOT AVAILABLE IN YOUR AREA', 'RADAR COVERS THE UNITED STATES AND CANADA FOR NOW', C.amber);
+      message(ctx, 'RADAR NOT AVAILABLE IN YOUR AREA', 'RADAR COVERS THE UNITED STATES, CANADA AND GERMANY', C.amber);
       return null;
     }
     if (R.status === 'loading' && !(R.frames && R.frames.length)) { message(ctx, 'LOADING RADAR', 'THE MAP DRAWS AS SOON AS THE FRAMES ARRIVE', C.amber); return R.provider ? R.provider.credit : null; }

@@ -170,6 +170,11 @@ await check("radar: United States on NOAA, Canada on Environment Canada, Germany
   assert.deepEqual([de.layers, de.stepMinutes, de.frames, de.lagMinutes, de.ignoreBands], [["Niederschlagsradar"], 10, 8, 10, [4]]);
   assert.ok(de.capabilitiesUrl().startsWith("https://maps.dwd.de/geoserver/dwd/Niederschlagsradar/wms?"), "the one layer's capabilities, not the whole server's (983 KB)");
   const u = de.mapUrl("Niederschlagsradar", [5, 50, 15, 55], 435, 175, "2026-11-15T17:00:00.000Z");
+  assert.ok(u.includes("time=2026-11-15T17%3A00%3A00Z") && !u.includes(".000"), "a WMS TIME has whole seconds");
+  const ca = W.radarProvider({ cc: "CA", lat: 43, lon: -79 }).mapUrl("RADAR_1KM_RRAI", [1, 2, 3, 4], 10, 10, "2026-11-15T17:00:00.000Z");
+  assert.ok(ca.includes("time=2026-11-15T17%3A00%3A00Z") && !ca.includes(".000"), "Environment Canada rejects a fraction of a second in TIME");
+  const us = W.radarProvider({ cc: "US", lat: 40, lon: -74 }).mapUrl("conus_bref_qcd", [-80, 37, -68, 43], 480, 270, "2026-11-15T17:00:00.000Z");
+  assert.ok(us.includes("time=2026-11-15T17%3A00%3A00Z") && !us.includes(".000"));
   assert.ok(u.startsWith("https://maps.dwd.de/geoserver/dwd/wms?") && u.includes("layers=dwd:Niederschlagsradar") && u.includes("crs=CRS:84") && u.includes("bbox=5,50,15,55"));
 });
 await check("radar map window: a degree of longitude is drawn cos(lat) as wide", () => {

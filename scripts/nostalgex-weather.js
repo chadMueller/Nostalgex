@@ -343,7 +343,7 @@
         stepMinutes: 10,
         frames: 8,
         capabilitiesUrl: () => `${NOAA_HOST}/${ws}/${layer}/ows?service=WMS&version=1.3.0&request=GetCapabilities`,
-        mapUrl: (lyr, bbox, w, h, time) => `${NOAA_HOST}/${ws}/${lyr}/ows?service=WMS&version=1.3.0&request=GetMap&layers=${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(time)}` : ''}`,
+        mapUrl: (lyr, bbox, w, h, time) => `${NOAA_HOST}/${ws}/${lyr}/ows?service=WMS&version=1.3.0&request=GetMap&layers=${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(wmsTime(time))}` : ''}`,
       };
     }
     if (cc === 'CA') {
@@ -354,7 +354,7 @@
         stepMinutes: 6,
         frames: 6,
         capabilitiesUrl: (lyr) => `${ECCC_HOST}?service=WMS&version=1.3.0&request=GetCapabilities&layer=${lyr}`,
-        mapUrl: (lyr, bbox, w, h, time) => `${ECCC_HOST}?service=WMS&version=1.3.0&request=GetMap&layers=${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(time)}` : ''}`,
+        mapUrl: (lyr, bbox, w, h, time) => `${ECCC_HOST}?service=WMS&version=1.3.0&request=GetMap&layers=${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(wmsTime(time))}` : ''}`,
       };
     }
     if (cc === 'DE') {
@@ -372,7 +372,7 @@
         lagMinutes: 10,
         ignoreBands: [4],
         capabilitiesUrl: () => `${DWD_HOST}/Niederschlagsradar/wms?service=WMS&version=1.3.0&request=GetCapabilities`,
-        mapUrl: (lyr, bbox, w, h, time) => `${DWD_HOST}/wms?service=WMS&version=1.3.0&request=GetMap&layers=dwd:${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(time)}` : ''}`,
+        mapUrl: (lyr, bbox, w, h, time) => `${DWD_HOST}/wms?service=WMS&version=1.3.0&request=GetMap&layers=dwd:${lyr}&styles=&crs=CRS:84&bbox=${bbox.join(',')}&width=${w}&height=${h}&format=image/png&transparent=true${time ? `&time=${encodeURIComponent(wmsTime(time))}` : ''}`,
       };
     }
     return null;
@@ -388,6 +388,12 @@
     const spanLon = span * aspect / Math.max(0.2, Math.cos(lat * Math.PI / 180));
     const r = (n) => Math.round(n * 1000) / 1000;
     return [r(lon - spanLon / 2), r(lat - span / 2), r(lon + spanLon / 2), r(lat + span / 2)];
+  }
+
+  /** A time for a WMS TIME parameter: whole seconds, "2026-11-15T17:00:00Z", never "...:00.000Z". Environment Canada's server
+   *  rejects a fraction; the shared parser below writes toISOString, which always has one. */
+  function wmsTime(t) {
+    return String(t).replace(/\.\d+Z$/, 'Z');
   }
 
   /** The times inside a WMS time dimension: "a,b,c" or "start/end/PT6M". Newest last. */
