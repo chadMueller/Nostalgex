@@ -5,20 +5,19 @@ import Foundation
 ///
 /// - Fetched at launch (when the kept copy is missing or a day old) and about every 24 hours after.
 /// - Parsed by the same `ChannelConfigLoader` as the bundled file, and kept only when it passes `verdict`:
-///   it parses, it has channels, its format is one this build reads, and it is not older than the copy
-///   this build carries.
+///   it parses, it has channels, its optional `formatVersion` is at most 1 (missing counts as 1), and its
+///   content `version` is not older than the copy this build carries. The same rule as Android and Roku.
 /// - The last good copy is kept in the app's caches (`LocalStore`). A bad download never replaces it.
 /// - Built from: the kept copy if it still passes, else the bundled one.
 /// - Applied only where the guide is rebuilt anyway (`loadLibrary`, a snapshot restore); a fetch writes the
 ///   file and nothing else, so a new copy never lands mid-programme.
 ///
-/// The format checks: `schema` (absent means 1) must be one this build reads, and `minAppVersion` (absent
-/// means any) must not be newer than this build. channels.json has neither field today; they are read so a
-/// future format change can be shipped to the site without breaking the builds already out there.
+/// channels.json has no `formatVersion` today (live is content `version` 50). It is read so a future format
+/// change can go to the site without breaking the builds already out there.
 enum ChannelConfigStore {
     static let liveURL = URL(string: "https://www.nostalgex.app/channels.json")!
-    /// The channels.json formats this build reads.
-    static let supportedSchemas: ClosedRange<Int> = 1...1
+    /// The newest channels.json format this build reads.
+    static let maxFormatVersion = 1
     static let refreshAfter: TimeInterval = 24 * 3600
     /// The same short wait the old server lookup had: onboarding never waits longer than this.
     static let timeout: TimeInterval = 10
@@ -31,22 +30,19 @@ enum ChannelConfigStore {
         case invalid
         case noChannels
         case olderThanBundled(live: Int, bundled: Int)
-        case unsupportedSchema(Int)
-        case needsNewerApp(String)
+        case unsupportedFormat(Int)
     }
 
     private struct Header: Decodable {
         let version: Int?
-        let schema: Int?
-        let minAppVersion: String?
+        let formatVersion: Int?
     }
 
     /// Whether a downloaded or kept channels.json may be built from.
     static func verdict(for data: Data, bundledVersion: Int, appVersion: String) -> Verdict {
         guard let header = try? JSONDecoder().decode(Header.self, from: data), let version = header.version else { return .invalid }
-        let schema = header.schema ?? 1
-        guard supportedSchemas.contains(schema) else { return .unsupportedSchema(schema) }
-        if let min = header.minAppVersion, isVersion(min, newerThan: appVersion) { return .needsNewerApp(min) }
+        let format = header.formatVersion ?? 1
+        guard format <= maxFormatVersion else { return .unsupportedFormat(format) }
         guard let result = ChannelConfigLoader.loadConfig(from: data) else { return .invalid }
         guard !result.channels.isEmpty else { return .noChannels }
         guard version >= bundledVersion else { return .olderThanBundled(live: version, bundled: bundledVersion) }

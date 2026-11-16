@@ -123,7 +123,10 @@ final class WeatherController {
         }
         let u = d.string(forKey: Self.unitsKey)
         unitsSetting = (u == "F" || u == "C") ? u! : "auto"
-        channelOn = d.object(forKey: Self.channelKey) == nil ? true : d.bool(forKey: Self.channelKey)
+        // On by default. Unit tests start with it off: they assert exact package lineups, and CH 299 is no
+        // package's (WeatherChannelLineupTests covers the lineup rule itself).
+        let underUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        channelOn = d.object(forKey: Self.channelKey) == nil ? !underUnitTests : d.bool(forKey: Self.channelKey)
         #if DEBUG
         // `-uiTestWeatherPlace "Toronto|CA|ON|43.65|-79.38|America/Toronto"`: a place for the simulator walk, in memory
         // only (nothing is saved).

@@ -60,20 +60,21 @@ final class ChannelConfigStoreTests: XCTestCase {
         XCTAssertEqual(ChannelConfigStore.verdict(for: older, bundledVersion: bundledVersion, appVersion: "1.0.33"),
                        .olderThanBundled(live: bundledVersion - 1, bundled: bundledVersion))
 
-        let newerSchema = try shipped { $0["schema"] = 2 }
-        XCTAssertEqual(ChannelConfigStore.verdict(for: newerSchema, bundledVersion: bundledVersion, appVersion: "1.0.33"), .unsupportedSchema(2))
+        let newerFormat = try shipped { $0["formatVersion"] = 2 }
+        XCTAssertEqual(ChannelConfigStore.verdict(for: newerFormat, bundledVersion: bundledVersion, appVersion: "1.0.33"), .unsupportedFormat(2))
 
-        let olderSchema = try shipped { $0["schema"] = 0 }
-        XCTAssertEqual(ChannelConfigStore.verdict(for: olderSchema, bundledVersion: bundledVersion, appVersion: "1.0.33"), .unsupportedSchema(0))
-
-        let needsNewerApp = try shipped { $0["minAppVersion"] = "1.0.40" }
-        XCTAssertEqual(ChannelConfigStore.verdict(for: needsNewerApp, bundledVersion: bundledVersion, appVersion: "1.0.33"), .needsNewerApp("1.0.40"))
-        let fineForThisApp = try shipped { $0["minAppVersion"] = "1.0.33"; $0["schema"] = 1 }
-        XCTAssertEqual(ChannelConfigStore.verdict(for: fineForThisApp, bundledVersion: bundledVersion, appVersion: "1.0.33"),
+        // formatVersion 1, or missing (counts as 1), is read.
+        let formatOne = try shipped { $0["formatVersion"] = 1 }
+        XCTAssertEqual(ChannelConfigStore.verdict(for: formatOne, bundledVersion: bundledVersion, appVersion: "1.0.33"),
                        .accepted(version: bundledVersion))
 
-        // None of them is kept.
-        for data in [older, newerSchema, olderSchema, needsNewerApp] {
+        // A content version newer than the bundled one is fine.
+        let newerContent = try shipped { $0["version"] = self.bundledVersion + 5 }
+        XCTAssertEqual(ChannelConfigStore.verdict(for: newerContent, bundledVersion: bundledVersion, appVersion: "1.0.33"),
+                       .accepted(version: bundledVersion + 5))
+
+        // Neither rejected one is kept.
+        for data in [older, newerFormat] {
             ChannelConfigStore.store(downloaded: data, bundledVersion: bundledVersion, appVersion: "1.0.33", to: cache)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
