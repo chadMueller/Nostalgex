@@ -119,7 +119,9 @@ end function
 function basemapJob(args as Object) as Object
     place = args.place
     bbox = mapBBox(place)
+    clock = CreateObject("roTimespan")
     base = ParseJson(ReadAsciiFile("pkg:/weather/basemap.json"))
+    print "weather: the basemap file read in "; clock.TotalMilliseconds(); " ms"
     if type(base) <> "roAssociativeArray" or type(base.layers) <> "roAssociativeArray" then return { ok: false, why: "no basemap" }
     bw = 870
     bh = 350
@@ -138,8 +140,12 @@ function basemapJob(args as Object) as Object
     sy# = bh / (maxLat# - minLat#)
     ' [layer, colour, and whether to draw it thicker]: lakes, states, borders, coast, as the web draws them.
     styles = [["lakes", &h00D4FF73, false], ["states", &hB9C3DE61, false], ["borders", &hFF2DB4D9, true], ["coast", &h00D4FFF2, true]]
+    lineCount = 0
     for each style in styles
         for each flat in NxList(base.layers[style[0]])
+            ' The TV has little CPU to spare: a pause now and then gives the render thread (the clock, the icons) its turn.
+            lineCount = lineCount + 1
+            if lineCount mod 16 = 0 then Sleep(3)
             n = flat.Count()
             if n >= 4 then
                 x# = flat[0]
@@ -175,6 +181,7 @@ function basemapJob(args as Object) as Object
     if png = invalid then return { ok: false, why: "no png" }
     path = "tmp:/wx-base-" + NxToStr(args.gen) + ".png"
     if not png.WriteFile(path) then return { ok: false, why: "no file" }
+    print "weather: the basemap drawn in "; clock.TotalMilliseconds(); " ms"
     cities = []
     for each c in NxList(base.cities)
         if c[2] > minLon# and c[2] < maxLon# and c[1] > minLat# and c[1] < maxLat# then cities.Push({ name: c[0], lat: c[1], lon: c[2] })
@@ -210,6 +217,7 @@ function radarJob(args as Object) as Object
     colors = [&h00D4FFEB, &hFFE500EB, &hFFB020EB, &hFF2244EB, &hFF2DB4EB]
     files = []
     times = []
+    frameClock = CreateObject("roTimespan")
     for i = 0 to stamps.Count() - 1
         outBmp = CreateObject("roBitmap", { width: w, height: h, AlphaEnable: true })
         if outBmp = invalid then return { ok: false, why: "no bitmap" }
@@ -238,6 +246,7 @@ function radarJob(args as Object) as Object
             end if
         end if
         outBmp = invalid
+        print "weather: radar frame "; i + 1; " of "; stamps.Count(); " done at "; frameClock.TotalMilliseconds(); " ms"
     end for
     if files.Count() = 0 then return { ok: false, why: "no pictures" }
     return { ok: true, files: files, times: times, bbox: bbox, credit: provider.credit, w: w, h: h }
@@ -256,6 +265,8 @@ function recolorInto(outBmp as Object, src as Object, colors as Object, ignored 
         skip[b.ToStr()] = true
     end for
     for y = 0 to h - 1
+        ' A pause every few rows: this loop is most of a frame's work, and the render thread must not wait for it.
+        if y mod 4 = 3 then Sleep(4)
         runBand = -1
         runStart = 0
         rowAt = y * w * 4

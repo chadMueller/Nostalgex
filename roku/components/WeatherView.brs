@@ -8,12 +8,10 @@
 sub init()
     m.fonts = {}
     m.stage = m.top.FindNode("stage")
-    m.music = m.top.FindNode("music")
     m.tick = m.top.FindNode("tick")
     m.frames = m.top.FindNode("frames")
     m.tick.ObserveField("fire", "onTick")
     m.frames.ObserveField("fire", "onFrame")
-    m.music.ObserveField("state", "onMusicState")
 
     m.W = 1920
     m.H = 1080
@@ -62,13 +60,11 @@ sub onActive()
         m.dirty = true
         m.builtIndex = -1
         m.tick.control = "start"
-        startMusic()
         ensureForecast(false)
         onTick()
     else
         m.tick.control = "stop"
         m.frames.control = "stop"
-        stopMusic()
         ' Memory: the radar's pictures go when the channel does, and come again with it.
         clearRadar()
         removeStage()
@@ -123,12 +119,14 @@ sub publish()
     if m.place = invalid then
         m.top.placeLabel = ""
         m.top.summary = ""
+        m.top.tempLabel = ""
         return
     end if
     m.top.placeLabel = NxWxPlaceLabel(m.place)
     summary = ""
     if m.model <> invalid then summary = NxWxInfoSummary(m.model, unitsNow())
     m.top.summary = summary
+    m.top.tempLabel = NxWxTempLabel(m.model, unitsNow())
 end sub
 
 ' ── The forecast ─────────────────────────────────────────────────────────────
@@ -225,6 +223,11 @@ end sub
 
 sub onTick()
     if not m.top.active then return
+    if m.tickClock <> invalid then
+        gap = m.tickClock.TotalMilliseconds()
+        if gap > 1500 then print "weather: the render thread was held "; gap; " ms between ticks"
+    end if
+    m.tickClock = CreateObject("roTimespan")
     now = nowSec()
     at = NxWxScreenAt(now)
     if now - m.lastBuildSec >= 60 then rebuildModel()
@@ -233,7 +236,8 @@ sub onTick()
         ensureForecast(false)
     end if
     ' The radar frames load from the TODAY screen on, so they are there when the radar comes up.
-    if at.index >= 1 or m.builtIndex < 0 then ensureRadar()
+    ' Not at the first draw: the TV's CPU goes to the first screens, then the radar's work starts behind them.
+    if at.index >= 1 then ensureRadar()
     if m.dirty or at.index <> m.builtIndex then buildScreen(at.index)
     ' The header's clock and the blinking dot.
     if m.place <> invalid and m.clockLbl <> invalid then
@@ -268,32 +272,6 @@ sub showFrame(i as Integer)
         ago = (nowSec() - t) \ 60
         if ago < 0 then ago = 0
         m.agoLbl.text = NxWxFmtClock(t, m.place.tz) + "  " + ago.ToStr() + " MIN AGO"
-    end if
-end sub
-
-' ── Music ────────────────────────────────────────────────────────────────────
-
-sub startMusic()
-    content = CreateObject("roSGNode", "ContentNode")
-    content.url = "pkg:/weather/local-forecast.mp3"
-    content.streamFormat = "mp3"
-    m.music.content = content
-    if m.music.hasField("loop") then m.music.loop = true
-    m.music.control = "play"
-end sub
-
-sub stopMusic()
-    m.music.control = "stop"
-end sub
-
-' One original loop, over and over: where the player does not loop it, it starts again.
-sub onMusicState()
-    state = m.music.state
-    if state = "finished" and m.top.active then
-        m.music.control = "stop"
-        m.music.control = "play"
-    else if state = "error" then
-        print "weather: the music did not play"
     end if
 end sub
 
@@ -553,6 +531,12 @@ sub icon(parent as Object, name as String, x as Float, y as Float, size as Integ
 end sub
 
 sub buildScreen(index as Integer)
+    clock = CreateObject("roTimespan")
+    buildScreenNow(index)
+    print "weather: drew "; NxWxScreens()[index].id; " in "; clock.TotalMilliseconds(); " ms, "; m.stage.GetChildCount(); " nodes, memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "%"
+end sub
+
+sub buildScreenNow(index as Integer)
     removeStageKeepClock()
     m.dirty = false
     m.builtIndex = index
@@ -631,33 +615,38 @@ sub header(parent as Object, title as String, accent as String)
 end sub
 
 sub footer(parent as Object, screenIndex as Integer, extraCredit as String)
-    x = m.safeX
     base = m.H - m.safeY - 6
-    txt(parent, "DATA FROM MET NORWAY", "DMMono-Regular", 25, m.c.text2, x, base, "left", 0)
-    if extraCredit <> "" then txt(parent, extraCredit, "DMMono-Regular", 25, m.c.text2, x, base - 34, "left", 0)
-    ' Loop pips and the age of the forecast on the right.
+    ' The credits and the forecast's age are the least important things on screen: one small stack at the bottom
+    ' left, about 60% of the old size (16 against 25), dim but readable at TV distance, and never dropped (the data
+    ' sources require the credit).
+    lines = []
+    if extraCredit <> "" then lines.Push({ text: extraCredit, color: "0xB9C3DEB3" })
+    lines.Push({ text: "DATA FROM MET NORWAY", color: "0xB9C3DEB3" })
+    if m.model <> invalid and m.model.updatedSec <> invalid and m.place <> invalid then
+        age = NxWxForecastAge(m.model.updatedSec, nowSec(), m.place.tz)
+        if age.stale then
+            lines.Push({ text: "OLD FORECAST FROM " + Mid(age.text, 9), color: "0xFFB020B3" })
+        else
+            lines.Push({ text: age.text, color: "0xB9C3DEB3" })
+        end if
+    end if
+    y = base - (lines.Count() - 1) * 21
+    for each l in lines
+        txt(parent, l.text, "DMMono-Regular", 16, l.color, m.safeX, y, "left", 800)
+        y = y + 21
+    end for
+    ' The loop's pips on the right.
     pips = NxWxScreens().Count()
     pw = 44
     gap = 10
     ids = ["current", "today", "week", "radar"]
     px = m.W - m.safeX - (pips * pw + (pips - 1) * gap)
-    startX = px
     for i = 0 to pips - 1
         color = m.c.outline
         if i = screenIndex then color = m.accents[ids[i]]
         rect(parent, px, base - 12, pw, 10, color)
         px = px + pw + gap
     end for
-    if m.model <> invalid and m.model.updatedSec <> invalid and m.place <> invalid then
-        age = NxWxForecastAge(m.model.updatedSec, nowSec(), m.place.tz)
-        label = age.text
-        color = m.c.text2
-        if age.stale then
-            label = "OLD FORECAST FROM " + Mid(age.text, 9)
-            color = m.c.amber
-        end if
-        txt(parent, label, "DMMono-Regular", 25, color, startX - 36, base, "right", 700)
-    end if
 end sub
 
 ' Cards without data.

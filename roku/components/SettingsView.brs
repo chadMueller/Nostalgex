@@ -263,14 +263,6 @@ sub buildRows()
     add({ kind: "header", title: "WATCH HISTORY", subtitle: "What " + NxKindName(NxSignedInKind()) + " is told about what you watch" }, "playback")
     add({ kind: "reportNowPlaying" })
     add({ kind: "reportMarkWatched" })
-    ' LOCAL WEATHER (CH 299, I-016): the place, the units and the switch, then the data's credits (CC BY 4.0).
-    add({ kind: "header", title: "WEATHER", subtitle: "LOCAL WEATHER, channel 299" }, "playback")
-    add({ kind: "weatherPlace" })
-    add({ kind: "weatherUnits" })
-    add({ kind: "weatherChannel" })
-    add({ kind: "info", text: "Weather data from MET Norway (api.met.no), CC BY 4.0, rearranged for display." }, "playback")
-    add({ kind: "info", text: "Place names from GeoNames (geonames.org), CC BY 4.0." }, "playback")
-    add({ kind: "info", text: "Radar from NOAA (US), Environment Canada and the German Weather Service." }, "playback")
 
     ' The list: a link row for each page (ChannelsHomePage), then WATERSHED.
     for each p in NxChannelsPages()
@@ -308,6 +300,17 @@ sub buildRows()
             end for
         end if
     end if
+
+    ' LOCAL WEATHER (CH 299, I-016): one link row on the list and its page, like MY COLLECTIONS: the
+    ' place, the units and the switch, then the data's credits (CC BY 4.0).
+    m.addPage = "weather"
+    add({ kind: "header", title: "LOCAL WEATHER", subtitle: "Conditions, forecast and radar for your town, channel 299" }, "channels")
+    add({ kind: "weatherPlace" })
+    add({ kind: "weatherUnits" })
+    add({ kind: "weatherChannel" })
+    add({ kind: "info", text: "Weather data from MET Norway (api.met.no), CC BY 4.0, rearranged for display." }, "channels")
+    add({ kind: "info", text: "Place names from GeoNames (geonames.org), CC BY 4.0." }, "channels")
+    add({ kind: "info", text: "Radar from NOAA (US), Environment Canada and the German Weather Service." }, "channels")
 
     m.addPage = ""
     ' WATERSHED (#190) ends the CHANNELS & BUNDLES list, after the three links,
@@ -620,7 +623,11 @@ end function
 ' The counts behind the link rows' values (NxChannelsLinkValue), from this
 ' visit's switches, as the Apple TV's list reads its live state.
 function linkCounts() as Object
-    n = { packagesOn: 0, franchisesOn: false, franchiseRowsOn: 0, franchiseCollectionsOn: 0, collectionsOn: 0 }
+    n = { packagesOn: 0, franchisesOn: false, franchiseRowsOn: 0, franchiseCollectionsOn: 0, collectionsOn: 0, weather: "" }
+    place = NxWxReadPlace()
+    title = ""
+    if place <> invalid then title = NxWxPlaceTitle(place)
+    n.weather = NxWeatherLinkValue(title, NxWxChannelOn())
     for each b in m.top.bundles
         if NxHasValue(m.enabled, b.id) then
             if b.id = NxFranchisesBundleID() then n.franchisesOn = true else n.packagesOn = n.packagesOn + 1

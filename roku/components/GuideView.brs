@@ -117,9 +117,11 @@ sub init()
     m.weather = m.top.FindNode("weather")
     m.weather.ObserveField("summary", "onWeatherInfo")
     m.weather.ObserveField("placeLabel", "onWeatherInfo")
+    m.weather.ObserveField("tempLabel", "onWeatherInfo")
     m.weatherOn = false
     m.weatherSummary = ""
     m.weatherPlace = ""
+    m.weatherTemp = ""
     m.keepVideo = m.top.FindNode("keepVideo")
     m.keepVideo.mute = true
     m.keepVideo.ObserveField("state", "onKeepState")
@@ -1094,6 +1096,8 @@ sub renderInfo()
     ' The progress row: the bar and the time, or a later programme's time range.
     row = m.top.FindNode("progressRow")
     row.translation = [0, y]
+    ' LOCAL WEATHER is a loop with no start or end: no bar, no times.
+    if ch.weather = true then row.visible = false
     clock = m.top.FindNode("clock")
     track = m.top.FindNode("progressTrack")
     fill = m.top.FindNode("progressFill")
@@ -2594,7 +2598,7 @@ sub showOsd()
             if b.year <> "" then line = line + "  " + b.year
             lines.Push({ text: line, font: "DMMono-Regular", size: 24, color: "0xFFFFFFE6" })
         end if
-        lines.Push({ text: "", font: "DMMono-Regular", size: 18, color: "0x8E8E93FF", time: true })
+        if ch.weather <> true then lines.Push({ text: "", font: "DMMono-Regular", size: 18, color: "0x8E8E93FF", time: true })
     end if
     widest = 48
     for each l in lines
@@ -3505,13 +3509,14 @@ end function
 
 function weatherChannel() as Object
     c = NxWxChannel()
-    return { id: c.id, number: c.number, name: c.name, color: c.color, blocks: NxWxGuideBlocks(m.weatherPlace, nowSec(), 26, m.weatherSummary), watershed: false, held: false, weather: true }
+    return { id: c.id, number: c.number, name: c.name, color: c.color, blocks: NxWxGuideBlocks(m.weatherPlace, m.weatherSummary, m.weatherTemp), watershed: false, held: false, weather: true }
 end function
 
 ' The place's name or the line for the info panel changed: the guide's row says them.
 sub onWeatherInfo()
     m.weatherPlace = NxWxUpper(m.weather.placeLabel)
     m.weatherSummary = m.weather.summary
+    m.weatherTemp = m.weather.tempLabel
     if m.channels = invalid or m.channels.Count() = 0 then return
     last = m.channels.Count() - 1
     if m.channels[last].weather <> true then return
@@ -3546,6 +3551,7 @@ sub startWeather(idx as Integer)
     m.weatherOn = true
     m.weather.visible = true
     m.weather.active = true
+    startWeatherMusic()
     renderInfo()
     renderGrid()
 end sub
@@ -3556,6 +3562,25 @@ sub stopWeather()
     m.weatherOn = false
     m.weather.active = false
     m.weather.visible = false
+    stopKeepAlive()
+    m.keepVideo.mute = true
+end sub
+
+' The weather channel's music, on the hold clip's own Video node: the TV only keeps its screensaver off while
+' a video is playing, and the channel has none, so the music (one original loop) plays through a Video node,
+' audible, 4 px in the corner. The hold clip's own watch (onKeepState) starts it again when it ends and gives up
+' after three failures, as for the clip. Another channel starting stops it (stopKeepAlive in startTune).
+sub startWeatherMusic()
+    m.keepGaveUp = false
+    m.keepErrors = 0
+    content = CreateObject("roSGNode", "ContentNode")
+    content.url = "pkg:/weather/local-forecast.mp3"
+    content.streamFormat = "mp3"
+    m.keepVideo.content = content
+    m.keepVideo.mute = false
+    m.keepVideo.control = "play"
+    m.keepAlive = true
+    print "weather: music on the keep-awake player, so the screensaver stays off"
 end sub
 
 ' An hour's block over: the next one is what airs, with no stream to wait for.

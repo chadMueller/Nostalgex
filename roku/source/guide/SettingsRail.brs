@@ -32,11 +32,11 @@ end function
 ' to the section they head, so SettingsView gives them their tab itself; this
 ' returns "" for them and for a kind it doesn't know.
 function NxSettingsTabOf(kind as String) as String
-    playback = ["retro", "guideText", "guideTimeout", "quality", "qualityChoice", "subtitles", "language", "languageChoice", "lastChannel", "reportNowPlaying", "reportMarkWatched", "weatherPlace", "weatherUnits", "weatherChannel"]
+    playback = ["retro", "guideText", "guideTimeout", "quality", "qualityChoice", "subtitles", "language", "languageChoice", "lastChannel", "reportNowPlaying", "reportMarkWatched"]
     ' WATERSHED is #211's row (SettingsChannelsView on the Apple TV). It is
     ' listed here before that row exists, so neither pull request has to land
     ' first: a kind missing from these lists is in no tab and never shows.
-    channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone"]
+    channels = ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection", "watershed", "missingCard", "missingNone", "weatherPlace", "weatherUnits", "weatherChannel"]
     servers = ["server", "library", "rescan", "signOut"]
     about = ["version", "aboutLink"]
     if kind = "support" then return "support"

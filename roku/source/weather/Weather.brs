@@ -1200,27 +1200,29 @@ end function
 
 ' ── The guide row and the info panel ─────────────────────────────────────────
 
-' Hour-long guide blocks for the channel's row, hours of them from the top of the hour before now,
-' in the shape NxGuideBlock gives the guide's other airings.
-function NxWxGuideBlocks(placeName as String, nowSec as Integer, hours as Integer, summary as String) as Object
-    start = (nowSec \ 3600) * 3600 - 3600
+' The channel's row in the guide: one block that never starts or ends (an unlimited loop, so no
+' programme times), in the shape NxGuideBlock gives the guide's other airings. The row reads
+' "LOCAL WEATHER" and the current temperature when there is one ("LOCAL WEATHER  46" + degrees + "F").
+function NxWxGuideBlocks(placeName as String, summary as String, tempLabel as String) as Object
     line = "LOCAL WEATHER"
-    if placeName <> "" then line = line + ": " + placeName
+    if tempLabel <> "" then line = line + "  " + tempLabel
     text = summary
     if text = "" then text = "Current conditions, today" + Chr(8217) + "s forecast, the 5-day forecast and radar, in a loop."
-    out = []
-    for i = 0 to hours - 1
-        s = start + i * 3600
-        out.Push({
-            startSec: s, endSec: s + 3600, weather: true,
-            ratingKey: "", line: line, title: "LOCAL WEATHER", episodeTitle: placeName,
-            seasonNumber: invalid, episodeNumber: invalid, summary: text, year: "", partKey: invalid,
-            container: invalid, videoCodec: invalid, audioCodec: invalid, videoProfile: invalid, audioChannels: invalid,
-            bitrate: invalid, audioTracks: invalid, forcedSubs: invalid, fullSubs: invalid, duration: 60, exactDurationSeconds: 3600,
-            videoWidth: invalid, videoHeight: invalid, serverIndex: 0, contentRating: "", rating: 0, type: ""
-        })
-    end for
-    return out
+    return [{
+        startSec: 0, endSec: 2147483000, weather: true,
+        ratingKey: "", line: line, title: "LOCAL WEATHER", episodeTitle: placeName,
+        seasonNumber: invalid, episodeNumber: invalid, summary: text, year: "", partKey: invalid,
+        container: invalid, videoCodec: invalid, audioCodec: invalid, videoProfile: invalid, audioChannels: invalid,
+        bitrate: invalid, audioTracks: invalid, forcedSubs: invalid, fullSubs: invalid, duration: 60, exactDurationSeconds: 3600,
+        videoWidth: invalid, videoHeight: invalid, serverIndex: 0, contentRating: "", rating: 0, type: ""
+    }]
+end function
+
+' The current temperature for the row: "46" + degrees + "F", or "" with no forecast.
+function NxWxTempLabel(model as Dynamic, units as String) as String
+    if type(model) <> "roAssociativeArray" then return ""
+    if model.current.tempC = invalid then return ""
+    return NxWxFmtTemp(model.current.tempC, units) + Chr(176) + units
 end function
 
 ' The line the info panel shows under the place: "Cloudy, 6C. Feels like 3. High 7, low 5. Wind NNW 17 km/h."
