@@ -13296,10 +13296,14 @@
   // content, say so (issue #129). Without this the screen stayed black with nothing to press.
   const emptyGuideShown = () => document.getElementById('plex-empty').style.display === 'flex';
   function tuneFirstOrShowEmpty() {
+    // A load that ends while Settings is open (a server switch) leaves the viewer in Settings: the channel is tuned and the empty state is
+    // set behind it, but the app state stays 'config' (a tune sets it to 'player', and the keys read it), and closing Settings sets it right.
+    const inSettings = configVisible && appState === 'config';
     const firstEnabled = channelToOpenOn();
     if (firstEnabled) {
       hideEmptyGuideState();
       switchChannel(firstEnabled.id);
+      if (inSettings) appState = 'config';
       return;
     }
     // Never leave this behind browser full screen.
@@ -13308,7 +13312,7 @@
     document.getElementById('plex-actions').style.display = 'none';
     document.getElementById('plex-empty').style.display = 'flex';
     document.getElementById('plex-connect').style.display = 'grid';
-    appState = 'connect';
+    appState = inSettings ? 'config' : 'connect';
   }
   function hideEmptyGuideState() {
     document.getElementById('plex-empty').style.display = 'none';

@@ -4,6 +4,19 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-16 (web tuner: a server switch stays in Settings, and CH 299 over a playing channel)
+
+**State.** Branch `web/settings-server-progress` off main `39c0b2a5`. Not merged, not pushed.
+
+**Why.** Chad's Android test: a server switch in Settings booted him out, and tuning the weather drew its radar see-through over the last film.
+
+**Checked, no change needed.** Tuning CH 299 from a playing channel already stops the old video and sound (`startWeatherScreen` calls `stopVideo`, which invalidates a tune still in flight), the canvas is opaque (solid `#0a0a1a`, drawn to every corner) and covers the picture, and tuning away restores a normal channel. Covered now in `scripts/weather-browser-smoke.mjs`, including a tune overtaken by CH 299.
+
+**Changed.**
+- A load that ends while Settings is open (a server switch) used to tune a channel and set the app state to player (or show the empty state and set it to connect), so the keys left Settings. `tuneFirstOrShowEmpty` now keeps Settings and its keys; closing Settings sets the state right and shows the empty state if there is one. Settings already carried the progress (the same words as the guide's block); leaving Settings during the load shows the guide's block, as before.
+- The block's second line (Settings and the guide) follows the phase: READ n TITLES and the library being read, then BUILDING CHANNELS: i OF n, then BUILDING SCHEDULE. It used to keep saying MOVIES: 450 OF 450 through the whole build. GUIDE READY: n TITLES at the end.
+- `scripts/loading-state-browser-smoke.mjs`: a switch from Settings checks all of it; a check about a removed feature (the hidden-libraries switch) is dropped.
+
 ## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
 
 **Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
