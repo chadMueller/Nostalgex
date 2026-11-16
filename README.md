@@ -34,7 +34,7 @@ The best way to watch on a TV. Connect one or more servers, then flip channels w
 **Quick start:** install [Nostalgex from the App Store](https://apps.apple.com/app/id6762563534), connect your server, pick a channel.
 
 <a id="roku-app"></a>
-## <img src="https://unpkg.com/lucide-static@1.58.0/icons/tv.svg" alt="Roku app" height="28" align="center"> Roku app `1.0.12`
+## <img src="https://unpkg.com/lucide-static@1.58.0/icons/tv.svg" alt="Roku app" height="28" align="center"> Roku app `1.0.13`
 
 An app for Roku TVs and players. Connect one or more servers, then flip channels with the Roku remote. Works with Plex, Jellyfin and Emby.
 
