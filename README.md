@@ -27,7 +27,7 @@ All four are free. Not sure? Use the app on your TV and the web tuner everywhere
 
 <a id="tvos-nostalgex"></a>
 <a id="apple-tv-app"></a>
-## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.32`
+## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.33`
 
 The best way to watch on a TV. Connect one or more servers, then flip channels with the Siri Remote. Needs tvOS 18 or later.
 
@@ -64,18 +64,19 @@ Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker cont
 
 **Latest: `tuner-v1.0.23`.** The LOCAL WEATHER channel (CH 299) is one full-width bar in the guide with a WEATHER row under CHANNELS & BUNDLES in Settings, Select on a bundle stripe jumps to its first channel, a server switch stays in Settings with its progress shown there, and one set of rules picks your servers and libraries. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.23). Already running it? `docker compose pull && docker compose up -d`.
 
-<a id="whats-new-in-1032"></a>
-## What's new in 1.0.32
+<a id="whats-new-in-1033"></a>
+## What's new in 1.0.33
 
-[Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.32)
+[Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.33)
 
-- **The new NOSTALGEX logo** (the TV for the O) replaces the lightning bolt in the app icon, on the Top Shelf, at startup and in the guide.
-- **A new look.** The guide, Settings, the bundle list and Now Playing share one set of text sizes and colours, a step smaller so more fits on screen. Now Playing shows the next program on one line, like UP NEXT IN 84 MIN.
-- **Bundle stripes in the guide.** A coloured stripe down the left edge for each bundle, and CHANNEL BUNDLES in Settings lists the channels in each bundle. Packages are now called bundles everywhere.
-- **OPEN ON LAST CHANNEL is on by default.** Turn it off in Settings under PLAYBACK & PICTURE.
-- **GUIDE TIMEOUT.** A guide left alone goes full screen after 5 minutes, so it can't burn into an OLED.
-- **Library counts.** RESCAN LIBRARY in Settings shows how many titles are on a channel and how many are on none. On Jellyfin, libraries you hide from the home screen are listed and stay off until you switch them on.
-- **Fixes:** Now Playing no longer drifts behind the guide, kids channels on Emby stop airing adult titles, a 4K film from Jellyfin or Emby gets a longer wait before it is called stalled, opening the app after a week away no longer freezes it, and Retro mode no longer draws the white tracking line.
+- **LOCAL WEATHER, channel 299.** A weather channel that loops current conditions, today's forecast, a 5-day forecast and radar, with its own music. Set your city or postcode in Settings, Channels & Bundles, Local Weather, and pick Fahrenheit or Celsius or leave it on Auto. It sits in the guide as one long bar. Radar covers the United States, Canada and Germany.
+- **Channel updates without a new app version.** Nostalgex checks for new channel rules when it opens and about once a day, and uses them the next time the guide is rebuilt, never in the middle of a programme.
+- **Every show, film and music video plays to its very end.** The guide gives each one its real running time, down to the second, so nothing gets cut off in the last minute.
+- **The guide steps one programme at a time.** Left and Right move to the next programme, with the one you are on lit up. Select on the bundle strip jumps to the first channel of that bundle.
+- **Loading keeps the guide on screen.** Switching servers or libraries, or rescanning, says what is happening in the guide's empty area, with STOP WAITING if it stalls.
+- **GUIDE TEXT SIZE has three steps:** SMALLER, DEFAULT and LARGER. UP NEXT shows the title first, then the minutes until it starts.
+- **Posters in the guide's info panel** on Plex, Jellyfin and Emby, and OPEN IN JELLYFIN when the Jellyfin app is installed on your Apple TV.
+- **Fixes:** a programme that runs past midnight now plays to its end, a library update just after midnight no longer leaves Now Playing and Up Next empty, Plex lists only movie and show libraries, the bundle strip loops from the last bundle back to the first, and Jellyfin and Emby servers with very many collections load them in parts.
 
 ## Join in
 
@@ -246,7 +247,7 @@ Each film series in your library (Star Wars, Rocky, whatever you own) gets its o
 <a id="maintained"></a>
 Nostalgex has been on the App Store since April 19, 2026, and gets updates every month. I'm one person, and I read every issue.
 
-- **Releases:** 1.0.32 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
+- **Releases:** 1.0.33 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
 - **Dev log:** [docs/DEVLOG.md](docs/DEVLOG.md) explains why things changed and what's still half done.
 - **Outside contributors:** thank you to [@w6trp](https://github.com/w6trp) for #18, #19, #20 and #21 in 1.0.26, and to [@Gorbataras](https://github.com/Gorbataras) for [#5](https://github.com/chadMueller/Nostalgex/pull/5) and [#7](https://github.com/chadMueller/Nostalgex/pull/7) (Emby seek fix, and no more sound over a black picture on Jellyfin and Emby).
 - **Tests** run in CI on every push to `main` and on every pull request.

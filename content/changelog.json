@@ -3,7 +3,7 @@
     {
       "version": "1.0.33",
       "date": "NOV 2026",
-      "released": false,
+      "released": true,
       "title": "LOCAL WEATHER, channel 299, and channel updates without a new app version",
       "bullets": [
         "LOCAL WEATHER, channel 299: a weather channel that loops current conditions, today's forecast, a 5-day forecast and radar, with its own music. Set your city or postcode in Settings, Channels & Bundles, Local Weather, and pick Fahrenheit or Celsius or leave it on Auto. It sits in the guide as one long bar. Radar covers the United States, Canada and Germany.",
