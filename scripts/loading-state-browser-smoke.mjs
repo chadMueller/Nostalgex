@@ -225,7 +225,7 @@ check("switch: then GUIDE READY: 450 TITLES in the top bar and the block goes", 
 await sleep(4300);
 const src = readFileSync(join(root, "plex-tuner.html"), "utf8");
 check("switch: toggleServerInSettings reads with cause 'switch' and first stops the read that is running", /async function toggleServerInSettings[\s\S]*?supersedeLibraryLoads\(\);[\s\S]*?fetchLibraryFromServer\(\{ cause: 'switch' \}\)/.test(src));
-check("switch: a library switch (toggleLibrarySection) and the hidden-libraries switch read with cause 'switch'", /function toggleLibrarySection[\s\S]*?rescanLibrary\(\{ cause: 'switch' \}\)/.test(src) && /cause: 'switch' \}\);\s*\} catch \(err\) \{\s*console\.warn\('\[Nostalgex\] Library rescan after the hidden libraries switch/.test(src));
+check("switch: a library switch (toggleLibrarySection) reads with cause 'switch' (the hidden-libraries switch is gone, N-016: a hidden library is one more row)", /function toggleLibrarySection[\s\S]*?rescanLibrary\(\{ cause: 'switch' \}\)/.test(src));
 
 // ---- 3. RESCAN LIBRARY ----
 plan.gate = makeGate();

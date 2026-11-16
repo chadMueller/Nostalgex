@@ -183,15 +183,16 @@ for (const kind of BACKENDS) {
   if (!SCALE_ONLY) {
     const { ctx, page, errors } = await firstSetup(kind);
     const rows = await pickerRows(page);
-    check(`${kind}: CHOOSE YOUR LIBRARIES lists the video libraries, all on`, JSON.stringify(rows.map((r) => r.title)) === JSON.stringify(["Movies", "Kids Movies", "TV Shows"]) && rows.every((r) => r.on), JSON.stringify(rows));
+    // N-016: on Jellyfin the library the viewer hides from My Media is one more row, marked HIDDEN ON JELLYFIN, and off.
+    check(`${kind}: CHOOSE YOUR LIBRARIES lists the video libraries, all on (a hidden one listed, off)`, JSON.stringify(rows.map((r) => r.title)) === JSON.stringify(kind === "jellyfin" ? ["Movies", "Kids Movies", "TV Shows", "Hidden Films"] : ["Movies", "Kids Movies", "TV Shows"]) && rows.filter((r) => !/Hidden Films/.test(r.title)).every((r) => r.on) && rows.every((r) => !/Hidden Films/.test(r.title) || (!r.on && /HIDDEN ON JELLYFIN/.test(r.sub))), JSON.stringify(rows));
     check(`${kind}: it does not list the Playlists or Music views`, !rows.some((r) => /Playlists|Music/.test(r.title)));
     check(`${kind}: each row says what kind of library it is`, rows[0].sub === "Movies" && rows[2].sub === "TV Shows", JSON.stringify(rows.map((r) => r.sub)));
     check(`${kind}: no title has been asked for before CONTINUE`, itemRequests().length === 0, JSON.stringify(itemRequests().slice(0, 2)));
-    check(`${kind}: the library list is asked for the way ${kind} takes it`, viewPaths.length > 0 && viewPaths.every((v) => (kind === "emby" ? v === "/Users/uid1/Views" : /^\/UserViews\?userId=uid1$/.test(v))), viewPaths.join(" "));
+    check(`${kind}: the library list is asked for the way ${kind} takes it`, viewPaths.length > 0 && viewPaths.every((v) => (kind === "emby" ? v === "/Users/uid1/Views" : /^\/UserViews\?userId=uid1(&includeHidden=true)?$/.test(v))), viewPaths.join(" "));
     await page.click(`#library-picker .setup-row:has-text("Kids Movies")`);
     await page.click(`#library-picker .setup-row:has-text("TV Shows")`);
     const after = await pickerRows(page);
-    check(`${kind}: clicking a row switches it off`, after.filter((r) => !r.on).map((r) => r.title).join() === "Kids Movies,TV Shows", JSON.stringify(after));
+    check(`${kind}: clicking a row switches it off`, after.filter((r) => !r.on).map((r) => r.title).join() === (kind === "jellyfin" ? "Kids Movies,TV Shows,Hidden Films" : "Kids Movies,TV Shows"), JSON.stringify(after));
     await page.click(".library-continue");
     await toGuide(page);
     const parents = [...new Set(itemRequests().map((a) => a.parent))];
@@ -201,9 +202,10 @@ for (const kind of BACKENDS) {
     check(`${kind}: the guide holds only that library's titles`, lib.n === MOVIES && lib.types.join() === "movie", JSON.stringify(lib));
     // Settings: the libraries are rows, switching one on reads again with it.
     await page.evaluate(() => refreshLibraryRows());
-    await page.waitForFunction(() => document.querySelectorAll("#cfg-library-rows .cfg-row").length === 3, null, { timeout: 15000 });
+    await page.waitForFunction((n) => document.querySelectorAll("#cfg-library-rows .cfg-row").length === n, kind === "jellyfin" ? 4 : 3, { timeout: 15000 });
     const settingsRows = await page.evaluate(() => [...document.querySelectorAll("#cfg-library-rows .cfg-row")].map((r) => ({ title: r.querySelector(".cfg-row-title").textContent, on: r.getAttribute("aria-checked") === "true", desc: r.querySelector(".cfg-row-desc").textContent })));
-    check(`${kind}: Settings has a row per library with the same on and off`, settingsRows.map((r) => `${r.title}:${r.on}`).join() === "Movies:true,Kids Movies:false,TV Shows:false", JSON.stringify(settingsRows));
+    // N-016: a library the viewer hides on Jellyfin has its own row, marked, and is off until switched on.
+    check(`${kind}: Settings has a row per library with the same on and off`, settingsRows.map((r) => `${r.title}:${r.on}`).join() === (kind === "jellyfin" ? "Movies:true,Kids Movies:false,TV Shows:false,Hidden Films:false" : "Movies:true,Kids Movies:false,TV Shows:false"), JSON.stringify(settingsRows));
     check(`${kind}: the last library that is on is marked and cannot be switched off`, /only enabled library/.test(settingsRows[0].desc));
     await page.evaluate(() => document.querySelector('#cfg-library-rows .cfg-row').click());
     await page.waitForTimeout(300);
@@ -217,18 +219,15 @@ for (const kind of BACKENDS) {
     check(`${kind}: no page errors`, errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // ── Hidden libraries (Jellyfin only: Emby's list has no such switch) ──
+  // ── Hidden libraries (Jellyfin only; the rules are scripts/library-picker-golden.json, the picker smoke holds them) ──
+  // N-016: a library hidden from My Media is listed on its own row, marked, and off. It is asked for once it is switched on, which
+  // library-picker-browser-smoke.mjs walks; here the only check is that a read with it off never asks for its titles.
   if (kind === "jellyfin" && !SCALE_ONLY) {
     const off = await firstSetup(kind);
-    check(`${kind}: a library hidden from My Media is not listed while the switch is off`, !(await pickerRows(off.page)).some((r) => /Hidden Films/.test(r.title)));
+    await off.page.click(".library-continue");
+    await toGuide(off.page);
+    check(`${kind}: a library hidden from My Media is not read until it is switched on`, !itemRequests().some((a) => a.parent === "v-hidden"));
     await off.ctx.close();
-    const on = await firstSetup(kind, { hiddenSwitch: true });
-    const rows = await pickerRows(on.page);
-    check(`${kind}: with the switch on it is listed, with the others`, rows.some((r) => /Hidden Films/.test(r.title)), JSON.stringify(rows));
-    await on.page.click(".library-continue");
-    await toGuide(on.page);
-    check(`${kind}: and it is asked for like any other`, itemRequests().some((a) => a.parent === "v-hidden"));
-    await on.ctx.close();
   }
   // ── SCALE ──
   if (MEASURE) {
