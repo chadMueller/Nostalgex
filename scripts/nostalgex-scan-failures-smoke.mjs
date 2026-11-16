@@ -62,7 +62,7 @@ async function scan(serve) {
     },
     NostalgexLibraryLoad: {
       show() {}, hide() {}, refreshStepRail() {}, async pulsePhase() {}, setPhase() {},
-      isFirstLibraryLoad: () => false, state: {},
+      isFirstLibraryLoad: () => false, state: {}, session: {},
     },
     NostalgexMusicBrainz: globalThis.NostalgexMusicBrainz,
     finalizeLibraryWithMusicBrainz: async (list, opts) => { items = list; options = opts; return list; },

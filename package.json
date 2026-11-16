@@ -50,6 +50,7 @@
     "test:server-settings": "node scripts/nostalgex-server-settings-smoke.mjs",
     "test:shared-lineup": "node scripts/shared-lineup-browser-smoke.mjs",
     "test:music-title": "node scripts/nostalgex-music-title-smoke.mjs",
+    "test:loading-state": "node scripts/loading-state-browser-smoke.mjs",
     "test:stop-waiting": "node scripts/stop-waiting-browser-smoke.mjs",
     "test:empty-lineup": "node scripts/empty-lineup-browser-smoke.mjs",
     "test:utf8-repair": "node scripts/nostalgex-utf8-repair-smoke.mjs",

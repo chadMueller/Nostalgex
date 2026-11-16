@@ -104,6 +104,7 @@
     --fs-cap: max(calc(17px * var(--ts)), var(--nx-fs));
     --bg: #080810;
     --cyan: #00C4FF;
+    --text2: rgba(255,255,255,0.62);
     --magenta: #FF00FF;
     --yellow: #FFE500;
     --orange: #FF6600;
@@ -654,6 +655,106 @@
   .loading-library-start-over:hover,
   .loading-library-start-over:focus-visible { border-color: #fff; color: #fff; }
 
+  /* The loading pattern (scripts/nostalgex-library-load.js): one cyan animated bar, in the guide's empty area and in Settings. */
+  .gl-bar {
+    position: relative;
+    width: min(360px, 70%);
+    height: 6px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .gl-bar::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 35%;
+    background: var(--cyan);
+    border-radius: 3px;
+    animation: gl-sweep 1.4s ease-in-out infinite;
+  }
+  @keyframes gl-sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(290%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gl-bar::after { animation: none; width: 100%; opacity: 0.5; }
+  }
+  /* The guide's empty area while a load runs with the guide on screen. It sits over the rows, which stay hidden until it is done. The
+     guide's own faces: Press Start 2P for the title, VT323 for the lines. */
+  .guide-grid.loading-empty .grid-body,
+  .guide-grid.loading-empty .grid-stripe-overlay { visibility: hidden; }
+  .guide-loading {
+    display: none;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    top: calc(var(--g-head) * var(--gt-header));
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    background: #0a0a2a;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .guide-loading.on { display: flex; }
+  .guide-loading-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: max(14px, calc(30 * var(--pt)));
+    line-height: 1.4;
+    letter-spacing: 0.04em;
+    color: var(--yellow);
+  }
+  .guide-loading-read, .guide-loading-lib {
+    font-family: 'VT323', monospace;
+    font-size: max(22px, calc(44 * var(--pt)));
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    color: var(--text2);
+  }
+  .guide-loading-read:empty, .guide-loading-lib:empty { display: none; }
+  /* The top bar's notice, between the wordmark and SETTINGS: UPDATING LIBRARY, then GUIDE READY in yellow. */
+  .top-notice, .m-top-notice {
+    font-family: 'DM Mono', monospace;
+    font-size: max(16px, var(--nx-fs));
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    color: var(--cyan);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .top-notice[hidden], .m-top-notice[hidden] { display: none; }
+  .top-notice[data-kind="ready"], .m-top-notice[data-kind="ready"] { color: var(--yellow); }
+  .top-notice {
+    position: absolute;
+    top: 16px;
+    left: 230px;
+    max-width: 420px;   /* the page narrows it to the room between the wordmark and the rail (nostalgex-library-load.js) */
+    z-index: 45;
+  }
+  .m-top-notice { flex: 1 1 auto; min-width: 0; text-align: center; }
+  /* Settings covers the guide, so it carries the same words under its title. */
+  .cfg-load-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 20px;
+    padding: 14px 18px;
+    border: 1px solid rgba(255,229,0,0.35);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+  }
+  .cfg-load-status[hidden] { display: none; }
+  .cfg-load-status-title { font-family: 'DM Mono', monospace; font-size: max(18px, var(--nx-fs)); color: var(--yellow); }
+  .cfg-load-status-line { font-family: 'DM Mono', monospace; font-size: max(14px, var(--nx-fs)); color: var(--text2); }
+  .cfg-load-status-line:empty { display: none; }
+  .cfg-load-status[data-kind="ready"] .gl-bar { display: none; }
+  .cfg-load-status .gl-bar { width: min(280px, 60%); }
+
   /* Static noise overlay for channel switching */
   .static-overlay {
     position: absolute;
@@ -781,7 +882,7 @@
 
 
   /* GUIDE TIMEOUT: the picture alone. Everything else keeps its place (hidden, not removed), so coming back is instant. */
-  body.nx-idle .info-panel, body.nx-idle .v-toolbar, body.nx-idle .guide-grid, body.nx-idle .player-logo,
+  body.nx-idle .info-panel, body.nx-idle .v-toolbar, body.nx-idle .guide-grid, body.nx-idle .player-logo, body.nx-idle .top-notice,
   body.nx-idle .m-topbar, body.nx-idle .channel-display { visibility: hidden !important; }
   body.nx-idle #video-container {
     position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important;
@@ -3754,6 +3855,8 @@
   <div class="player-logo">
     <img src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
   </div>
+  <!-- The top bar's loading notice (UPDATING LIBRARY, GUIDE READY), between the wordmark and SETTINGS. A phone's own is in its top bar. -->
+  <div class="top-notice" id="top-notice" role="status" aria-live="polite" hidden></div>
 
   <!-- TOUCH TOP BAR (phones and tablets only; the corner logo is fixed and
        overlaps the channel tag once the info panel goes full width). The
@@ -3761,6 +3864,7 @@
        everything else is behind it in the drawer. -->
   <div class="m-topbar" id="m-topbar">
     <img class="m-topbar-logo" src="./tuner/logo/nostalgex-white.svg" alt="Nostalgex">
+    <div class="m-top-notice" id="m-top-notice" role="status" aria-live="polite" hidden></div>
     <button class="m-menu-btn" id="m-menu-btn" type="button" aria-label="Open controls"
             aria-haspopup="dialog" aria-expanded="false" aria-controls="m-drawer">
       <span class="m-menu-btn-label">MENU</span>
@@ -4118,6 +4222,13 @@
     <!-- The package list (the Apple TV's BundleJumpSidebar): Left at the start of the guide. -->
     <div class="pkg-list" id="pkg-list" role="dialog" aria-modal="true" aria-label="Bundles"></div>
     <div class="grid-body" id="grid-body" tabindex="0" aria-label="Channel guide. Up and Down browse, Enter tunes in."></div>
+    <!-- The empty guide area while a load runs with the guide on screen (scripts/nostalgex-library-load.js). -->
+    <div class="guide-loading" id="guide-loading" role="status" aria-live="polite">
+      <div class="guide-loading-title" id="guide-loading-title"></div>
+      <div class="guide-loading-read" id="guide-loading-read"></div>
+      <div class="guide-loading-lib" id="guide-loading-lib"></div>
+      <div class="gl-bar" aria-hidden="true"></div>
+    </div>
     <div class="grid-footer">
       <div class="grid-page-btns">
         <button class="grid-page" type="button" data-dir="-1" aria-label="Scroll the guide up">&#9650; UP</button>
@@ -4162,6 +4273,11 @@
     <div class="config-pane-head">
       <div class="config-pane-title" id="config-pane-title">CHANNELS &amp; BUNDLES</div>
       <div class="config-pane-sub" id="config-pane-sub">Bundles, franchises, collections and the schedule</div>
+    </div>
+    <div class="cfg-load-status" id="cfg-load-status" role="status" aria-live="polite" hidden>
+      <div class="cfg-load-status-title" id="cfg-load-status-title"></div>
+      <div class="cfg-load-status-line" id="cfg-load-status-line"></div>
+      <div class="gl-bar" aria-hidden="true"></div>
     </div>
 
     <div id="config-tab-support" style="display:none" tabindex="-1">
@@ -5165,7 +5281,7 @@
       // In the background, as the daily refresh reads: the guide stays up, the channel that is playing keeps
       // playing and Settings stays open. A foreground read ends by tuning the first channel (tuneFirstOrShowEmpty),
       // which would take a viewer on any other channel off it.
-      await fetchLibraryFromServer({ background: true, buildAllChannels: false });
+      await fetchLibraryFromServer({ background: true, buildAllChannels: false, cause: 'switch' });
     } catch (err) {
       console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
     } finally {
@@ -9912,7 +10028,7 @@
     if (!LSEL.setOff(sec.serverId, sec.key, wasOn)) return;
     clearLibraryCache();
     renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
-    rescanLibrary();
+    rescanLibrary({ cause: 'switch' });
   }
 
   // ══════════════════════════════════════
@@ -9971,7 +10087,7 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLibraryIfChanged(); });
 
   let rescanRunning = false, rescanQueued = false;
-  async function rescanLibrary() {
+  async function rescanLibrary({ cause = 'rescan' } = {}) {
     if (!plexConnected) return;
     if (rescanRunning) { rescanQueued = true; return; }
     const btn = document.getElementById('cfg-rescan-btn');
@@ -9982,7 +10098,7 @@
     if (desc) desc.textContent = 'Reading your library. The guide updates when it is done.';
     try {
       clearLibraryCache();
-      await fetchLibraryFromServer({ background: true, buildAllChannels: true });
+      await fetchLibraryFromServer({ background: true, buildAllChannels: true, cause });
       if (desc) desc.textContent = 'Done. ' + was;
     } catch (err) {
       console.warn('[Nostalgex] Library rescan failed:', err);
@@ -10856,7 +10972,7 @@
   }
   function stopWaitingForScan() { if (scanWatch) scanWatch.watch.stopWaiting(); }
   /** The signal the scan's requests carry, or undefined when nothing is watching. */
-  function scanSignal() { return scanWatch ? scanWatch.controller.signal : undefined; }
+  function scanSignal() { return scanWatch ? scanWatch.controller.signal : (readAbort ? readAbort.signal : undefined); }
   function scanIsAbandoned() { return !!(scanWatch && scanWatch.watch.abandoned); }
   /** A server answered something: the scan is moving, however slowly. */
   function noteScanAnswer() { if (scanWatch) scanWatch.answers++; }
@@ -10872,6 +10988,7 @@
     configVisible = false;
     sleepTimer.cancel();
     closePlaybackInfo();
+    supersedeLibraryLoads();   // a read still running for the account that left must not save or build
     endScanWatch();
 
     plexToken = null;
@@ -11038,10 +11155,11 @@
 
     ssSet('plex90_selected_servers', JSON.stringify(selectedServers));
     updateConfigPlexStatus();
+    supersedeLibraryLoads();   // a read of the old server set must not save or build
 
     // Rebuild library from updated server set
     try {
-      await fetchLibraryFromServer();
+      await fetchLibraryFromServer({ cause: 'switch' });
     } catch (err) {
       console.warn('[Nostalgex] Library rescan after server toggle failed:', err);
     }
@@ -11193,7 +11311,7 @@
   }
 
   async function repopulateChannelsFromLibrary(allItems, options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const buildAll = options.buildAllChannels ?? LL.isFirstLibraryLoad();
     const poolIDs = LL.staticChannelIDsForPoolBuild({
       buildAll,
@@ -11221,9 +11339,13 @@
       const matched = filterItems(allItems, ch.rules, ch.id, ch.category);
       setRulePool(ch, matched);
       ch.enabled = ch.itemPool.length >= (ch.minItems || 50);
-      if ((i + 1) % 5 === 0) await new Promise(r => setTimeout(r, 0));
+      if ((i + 1) % 5 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+        if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
+      }
     }
 
+    if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
     applyBundleFilter();
     CHANNELS.forEach(ch => {
       if (ch.itemPool && ch.itemPool.length >= (ch.minItems || 50)) {
@@ -11248,7 +11370,7 @@
     return MB.itemsWithDisplayMetadata(allItems);
   }
 
-  function startDeferredMusicEnrichmentIfNeeded(allItems) {
+  function startDeferredMusicEnrichmentIfNeeded(allItems, options = {}) {
     const LL = globalThis.NostalgexLibraryLoad;
     const MB = globalThis.NostalgexMusicBrainz;
     if (!MB || !LL.isMusicBundleEnabled(enabledBundleIDs)) return;
@@ -11259,6 +11381,9 @@
     console.log(`[Nostalgex] Deferring MusicBrainz for ${mvCount} music videos until after tune-in`);
     MB.loadDiskCache();
     MB.enrichMusicVideos([...allItems], () => {}).then(() => {
+      // The read that started this was overtaken while the lookups ran (a sign-out, a server change, a newer read): the library and the
+      // channel on screen are not its any more, and it must not retune them.
+      if (options.isCurrent && !options.isCurrent()) return;
       allItemsCache = MB.itemsWithDisplayMetadata(allItemsCache);
       allChannelsUnfiltered.forEach(ch => {
         if (!ch.itemPool?.length) return;
@@ -11281,9 +11406,12 @@
     // Everything in here works on items already in the browser, so a failure is never the
     // server's. The mark lets fetchPlexLibrary() say so (#152).
     try {
+      // A read that was overtaken (a sign-out, a server change, a newer read) saves nothing and builds nothing.
+      if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
       let working = applyMusicCacheToLibrary(allItems);
       await repopulateChannelsFromLibrary(working, options);
-      if (!options.background) startDeferredMusicEnrichmentIfNeeded(working);
+      if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
+      if (!options.background) startDeferredMusicEnrichmentIfNeeded(working, options);
       // Not awaited: the guide is built and tuned before any of this lands.
       startLibraryExtras(working);
       return working;
@@ -11753,9 +11881,60 @@
     return 0;
   }
 
+  // One place says a read began and how it ended (scripts/nostalgex-library-load.js, "the loading pattern"): `options.cause` is 'switch' after a
+  // server or library switch ("CHANNEL GUIDE IS CHANGING"), 'rescan' for RESCAN LIBRARY ("LOADING YOUR LIBRARY"), else a load or a refresh.
+  // A read that ends whole says GUIDE READY: n TITLES for a few seconds; one that fails, is cut short or is superseded says nothing.
+  //
+  // A load can be overtaken: with the guide kept up, Settings is reachable mid-load, so a sign-out or a server change can come while a read is
+  // still running. Each read holds the number it started under (libraryLoadGen); a sign-out, a server change or a newer read moves the number on,
+  // and a read that no longer holds it stops before it saves the library or builds the guide (`options.isCurrent`, checked where the library is
+  // saved and where the channels are built) and ends without a word, whatever it was in the middle of.
+  let libraryLoadGen = 0;
+  let readAbort = null;   // the running read's own controller: a background read has no scan watch, and still has to stop asking its server
+  function supersededLoad() { const e = new Error('library load superseded'); e.nxSuperseded = true; return e; }
+  /**
+   * The loader a read writes its progress to. A read that is no longer current (a sign-out, a server change or a newer read moved the
+   * number on) writes to a scratch object and moves nothing on screen, so the count the new read's block shows is never the old read's.
+   */
+  function loadUIFor(options) {
+    const real = globalThis.NostalgexLibraryLoad;
+    if (!options || !options.isCurrent) return real;
+    const MOVES_THE_SCREEN = new Set(['setPhase', 'pulsePhase', 'show', 'hide', 'refreshStepRail', 'render']);
+    return new Proxy(real, {
+      get(target, key) {
+        if (key === 'state') return options.isCurrent() ? target.state : {};
+        const value = target[key];
+        if (typeof value !== 'function' || !MOVES_THE_SCREEN.has(key)) return value;
+        return (...args) => (options.isCurrent() ? value.apply(target, args) : (key === 'pulsePhase' ? Promise.resolve() : undefined));
+      },
+    });
+  }
+  function supersedeLibraryLoads() {
+    libraryLoadGen++;
+    if (readAbort) readAbort.abort();             // any read, background included, stops asking its server
+    if (scanWatch) scanWatch.controller.abort();
+    const LL = globalThis.NostalgexLibraryLoad;
+    if (LL) { LL.hide(); LL.abort(); }
+  }
   async function fetchLibraryFromServer(options = {}) {
-    if (isMediaBrowserBackend(mediaBackend)) return fetchJellyfinLibraryFromServer(options);
-    return fetchPlexLibraryFromServer(options);
+    const LL = globalThis.NostalgexLibraryLoad;
+    const gen = ++libraryLoadGen;
+    const isCurrent = () => gen === libraryLoadGen;
+    if (readAbort) readAbort.abort();   // the read this one replaces
+    readAbort = new AbortController();
+    const opts = { ...options, isCurrent };
+    LL.begin({ cause: options.cause, background: options.background === true });
+    let done = false;
+    try {
+      const result = isMediaBrowserBackend(mediaBackend) ? await fetchJellyfinLibraryFromServer(opts) : await fetchPlexLibraryFromServer(opts);
+      done = true;
+      return result;
+    } catch (err) {
+      if (!isCurrent()) return undefined;
+      throw err;
+    } finally {
+      if (isCurrent()) { if (done) LL.finish({ titles: allItemsCache.length }); else LL.abort(); }
+    }
   }
 
   // Jellyfin and Emby library scan. Mirrors fetchPlexLibraryFromServer's orchestration but
@@ -11766,7 +11945,7 @@
     try { return await fetchJellyfinLibraryScan(options); } finally { endScanWatch(); }
   }
   async function fetchJellyfinLibraryScan(options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
@@ -11894,6 +12073,8 @@
         // Only the types that were asked for. A server may answer with more (the Playlists view
         // always answers with playlists, whatever the request says), and a playlist or a song is
         // not a programme. Paging counts the rows the server sent, so the count comes from `items`.
+        // How far through the library the server says it is: a read of titles (a read of shows has its own count).
+        if (onPage && res.total > 0) { LL.state.scanLibraryDone = read + res.items.length; LL.state.scanLibraryTotal = res.total; }
         const asked = res.items.filter(it => NostalgexJellyfinUrls.hasAskedType(it, includeItemTypes));
         if (onPage) { if (asked.length) onPage(asked); } else kept.push(...asked);
         read += res.items.length;
@@ -11994,6 +12175,9 @@
       scanningViewName = view.Name || 'Library';
       const isMusicVideoSection = type === 'musicvideo';
       LL.state.scanSectionIndex = vi;
+      LL.state.scanLibrary = view.Name || 'Library';
+      LL.state.scanLibraryDone = null;
+      LL.state.scanLibraryTotal = null;
       LL.setPhase('scanningLibrary', view.Name || 'Library');
 
       try {
@@ -12159,13 +12343,16 @@
     }
 
     librarySkippedNoRuntime = scanSkippedNoRuntime;
+    if ((scanWasAbandoned || lostViews.length) && (!options.isCurrent || options.isCurrent())) LL.session.cutShort = true;   // GUIDE READY is for a read that ended whole
     allItems = await finalizeLibraryWithMusicBrainz(allItems, {
+      isCurrent: options.isCurrent,
       buildAllChannels: buildAll,
       // A scan given up on is not the first load either (Apple TV): the next visit does it again.
       skipMarkComplete: background || scanWasAbandoned,
       // A library that lost a view is not saved as the whole library: the next visit reads it again.
       skipCacheSave: lostViews.length > 0,
     });
+    if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
 
     if (!background) {
       LL.hide();
@@ -12360,11 +12547,17 @@
     let serverItems = [];
     for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
       const section = sections[sectionIndex];
+      LL.state.scanLibrary = `${serverPrefix}${section.title}`;
+      LL.state.scanLibraryDone = null;
+      LL.state.scanLibraryTotal = null;
       try {
         const items = await fetchPlexSectionPaged(server, section, (loadedSoFar, total) => {
           // Report progress while a big section pages in, so a long scan reads as
           // moving rather than hung.
           LL.state.scanItemsFound = baseItemCount + serverItems.length + loadedSoFar;
+          LL.state.scanLibrary = `${serverPrefix}${section.title}`;
+          LL.state.scanLibraryDone = total ? loadedSoFar : null;
+          LL.state.scanLibraryTotal = total || null;
           const suffix = total ? ` (${loadedSoFar}/${total})` : ` (${loadedSoFar})`;
           LL.setPhase('scanningLibrary', `${serverPrefix}${section.title}${suffix}`);
         });
@@ -12599,7 +12792,7 @@
   }
 
   async function fetchPlexLibraryFromServer(options = {}) {
-    const LL = globalThis.NostalgexLibraryLoad;
+    const LL = options.isCurrent ? loadUIFor(options) : globalThis.NostalgexLibraryLoad;   // an overtaken read writes nowhere the new read's block can show
     const background = options.background === true;
     scanSkippedNoRuntime = 0;
     const buildAll = options.buildAllChannels ?? (background ? false : LL.isFirstLibraryLoad());
@@ -12642,13 +12835,17 @@
     }
 
     librarySkippedNoRuntime = scanSkippedNoRuntime;
+    if ((lostSections.length || lostSections.abandoned) && (!options.isCurrent || options.isCurrent())) LL.session.cutShort = true;   // GUIDE READY is for a read that ended whole
     let allItems = await finalizeLibraryWithMusicBrainz(merged, {
+      isCurrent: options.isCurrent,
       buildAllChannels: buildAll,
       // A scan given up on is not the first load either (Apple TV): the next visit does it again.
       skipMarkComplete: background || lostSections.abandoned === true,
       // A library that lost a section is not saved as the whole library: the next visit reads it again.
       skipCacheSave: lostSections.length > 0,
     });
+
+    if (options.isCurrent && !options.isCurrent()) throw supersededLoad();
 
     console.log('[Nostalgex] Channel population results:');
     CHANNELS.forEach(ch => {
