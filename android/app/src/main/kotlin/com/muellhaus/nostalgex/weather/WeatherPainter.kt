@@ -68,8 +68,9 @@ class WeatherPainter(context: Context) {
     }
 
     private fun drawIcon(c: Canvas, name: String, x: Float, y: Float, size: Float) {
-        // Whole-pixel cells: the 24 x 24 picture scaled up without smoothing.
-        val cell = Math.max(1, Math.round(size / 24))
+        // Whole-pixel cells: the 24 x 24 picture scaled up without smoothing, 15% smaller than its slot (Chad, 2026-11-16: 336 draws at 288,
+        // 192 at 168, 168 at 144), centred in the slot so nothing around it moves.
+        val cell = Math.max(1, Math.round(size * ICON_SCALE / 24))
         val ox = Math.round(x + (size - cell * 24) / 2).toFloat()
         val oy = Math.round(y + (size - cell * 24) / 2).toFloat()
         c.drawBitmap(icon(name), null, RectF(ox, oy, ox + cell * 24, oy + cell * 24), bitmapPaint)
@@ -484,6 +485,8 @@ class WeatherPainter(context: Context) {
         const val MAP_W = W - 2 * SAFE_X
         const val MAP_H = 700f
         const val MAP_ASPECT = MAP_W.toDouble() / MAP_H
+        /** Icons draw at about 85% of their slot. */
+        private const val ICON_SCALE = 0.85f
         private const val FRAME_MS = 450
         private const val HOLD_MS = 1500
         private const val WIPE = 0.4
