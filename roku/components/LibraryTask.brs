@@ -29,7 +29,8 @@ end function
 ' the version, and its channel data and filter may still have changed.
 function NxBuildKey() as String
     info = CreateObject("roAppInfo")
-    return info.GetVersion() + "+" + info.GetValue("nx_build")
+    ' And the live channels.json in use, so a new copy rebuilds the saved guide and pools.
+    return info.GetVersion() + "+" + info.GetValue("nx_build") + NxLiveChannelsKeyPart(NxRegSection("livechannels"))
 end function
 
 '' The viewer's franchise, collection and server switches, as part of a cache key.

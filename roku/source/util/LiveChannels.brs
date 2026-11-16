@@ -39,14 +39,20 @@ function NxLiveChannelsMaxBytes() as Integer
     return 2000000
 end function
 
-' The time between fetches on a TV left on, after one that worked, and after
-' one that didn't.
+' How often the app asks for a newer channels.json, at launch, when a link wakes it and on the
+' 15-minute check: at most this often, after a try that worked and after one that did not. The
+' one place to change it. The request is conditional (If-None-Match), so an unchanged file costs
+' a 304 with no body.
+function NxLiveChannelsIntervalSec() as Integer
+    return 3600
+end function
+
 function NxLiveChannelsEverySec() as Integer
-    return 86400
+    return NxLiveChannelsIntervalSec()
 end function
 
 function NxLiveChannelsRetrySec() as Integer
-    return 3600
+    return NxLiveChannelsIntervalSec()
 end function
 
 function NxLiveChannelsPath(root as String) as String
@@ -147,8 +153,8 @@ function NxLiveChannelsStore(body as Dynamic, root as String, store as Object, n
     return res
 end function
 
-' Whether a TV left on should fetch again: a day after the last try that worked,
-' an hour after one that didn't, at once with none. The launch fetch doesn't ask.
+' Whether the app should fetch again: NxLiveChannelsIntervalSec after the last try, at once with
+' none.
 function NxLiveChannelsDue(store as Object, nowSec as LongInteger) as Boolean
     if store = invalid then return true
     tried = Val(store.Read("tried"))
@@ -196,4 +202,33 @@ function NxLiveWriteFile(path as String, text as String) as Boolean
     bytes = CreateObject("roByteArray")
     bytes.FromAsciiString(text)
     return bytes.WriteFile(path)
+end function
+
+' What the cache keys carry of the live copy in use: its version when one is cached, so a new copy
+' makes the saved guide and pools another build's (they are rebuilt from the saved library), "" with
+' none. The registry stamp (version) is what a guide build reads the cache by.
+function NxLiveChannelsKeyPart(store as Dynamic) as String
+    if store = invalid then return ""
+    v = store.Read("version")
+    if v = "" then return ""
+    return "+c" + v
+end function
+
+' Whether a copy just stored is newer than the one a build uses: past the bundled copy and past the
+' version cached before it. A copy equal to what is in use changes nothing and rebuilds nothing.
+function NxLiveChannelsIsNew(version as Integer, previous as Integer, bundledVersion as Integer) as Boolean
+    use = previous
+    if bundledVersion > use then use = bundledVersion
+    return version > use
+end function
+
+' A library over this many titles is not rebuilt behind a running guide for a new channels.json: a rebuild
+' holds the saved library and the new pools at once, and the guide's memory is held for the same reason
+' (I-091: a rebuild is cut about 3,200 titles sooner than first setup). The next launch applies the new copy.
+function NxLiveRebuildMaxTitles() as Integer
+    return 3000
+end function
+
+function NxLiveRebuildNow(titles as Integer) as Boolean
+    return titles <= NxLiveRebuildMaxTitles()
 end function

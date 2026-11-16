@@ -53,13 +53,17 @@ sub fetchChannels()
         return
     end if
     clock.Mark()
+    previous = Val(store.Read("version")).ToStr().ToInt()
     res = NxLiveChannelsStore(msg.GetString(), NxCacheRoot(), store, now&, bundled)
     print "channels: checked and kept in "; clock.TotalMilliseconds(); " ms; memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "%"
     if res.stored and type(msg.GetResponseHeaders()) = "roAssociativeArray" then
         store.Write("etag", NxToStr(msg.GetResponseHeaders().etag))
         store.Flush()
     end if
-    if res.stored then
+    if res.stored and NxLiveChannelsIsNew(res.version, previous, bundled) then
+        ' A copy newer than the one in use: the guide builds from it at a safe point (MainScene).
+        m.top.result = "new " + res.version.ToStr()
+    else if res.stored then
         m.top.result = "stored " + res.version.ToStr()
     else
         m.top.result = "rejected: " + res.reason
