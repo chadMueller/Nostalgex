@@ -53,7 +53,7 @@ class Lineup(
     private val rulePools = HashMap<Int, List<MediaItem>>()
 
     /** What the weather channel shows in the guide: its row's channel, the place's name and the line the info panel reads. Null: the switch is off. */
-    class WeatherRow(val channel: GuideChannel, val place: () -> String, val summary: () -> String)
+    class WeatherRow(val channel: GuideChannel, val place: () -> String, val summary: () -> String, val temperature: () -> String = { "" })
 
     @Volatile private var weatherRow: WeatherRow? = null
     /** The packages at the last build or switch, so the weather switch can redo the guide on its own. */
@@ -347,28 +347,27 @@ class Lineup(
         val resolved = engine.resolveConflicts(raw)
         // LOCAL WEATHER's row: hour-long blocks of the loop, outside the engine's packing (it has no pool and no manifest).
         val wx = weatherRow?.takeIf { w -> channels.any { it.id == w.channel.id } }
-        schedules = if (wx == null) resolved else resolved + (wx.channel.id to weatherSchedule(wx, now))
+        schedules = if (wx == null) resolved else resolved + (wx.channel.id to weatherSchedule(wx))
         windowStartSec = Math.floorDiv(now.toEpochSecond(), 1800L) * 1800
         engine.pruneManifests(serverKey, now.toInstant().toEpochMilli())
     }
 
-    private fun weatherSchedule(w: WeatherRow, now: ZonedDateTime): Schedule {
-        val nowMs = now.toInstant().toEpochMilli()
-        val nowSec = nowMs / 1000.0
-        val entries = Weather.guideBlocks(w.place(), nowMs, 26, w.summary()).map { b ->
-            val key = "weather-${b.startSec}"
-            ScheduleEntry(
-                key,
-                MediaItem(
-                    ratingKey = key, title = b.title, type = "episode", duration = 60, episodeTitle = b.episodeTitle.ifEmpty { null },
-                    summary = b.summary, librarySource = "weather",
-                ),
-                b.startSec, b.endSec, isNowPlaying = nowSec >= b.startSec && nowSec < b.endSec, isConflict = false,
-            )
-        }
-        val np = entries.firstOrNull { it.isNowPlaying }
-        // The loop has no "up next".
-        return Schedule(entries, np, null, if (np == null) 0.0 else (nowSec - np.startSec) / (np.endSec - np.startSec), if (np == null) 0L else maxOf(0L, (nowSec - np.startSec).toLong()))
+    /**
+     * LOCAL WEATHER is an unlimited loop, not a run of programmes: its row is ONE entry that is on now at every time position, with no start
+     * or end that means anything ([Weather.LOOP_START_SEC] to [Weather.LOOP_END_SEC]). The guide draws it as one bar across the whole programme
+     * area, the cursor has no neighbour to step to, there is no UP NEXT, and the info panel shows no progress or times for it. Chad, 2026-11-16.
+     */
+    private fun weatherSchedule(w: WeatherRow): Schedule {
+        val key = "weather-loop"
+        val entry = ScheduleEntry(
+            key,
+            MediaItem(
+                ratingKey = key, title = Weather.CHANNEL_NAME, type = "episode", duration = 60, episodeTitle = w.place().ifEmpty { null },
+                seTag = w.temperature().ifEmpty { null }, summary = w.summary(), librarySource = "weather",
+            ),
+            Weather.LOOP_START_SEC, Weather.LOOP_END_SEC, isNowPlaying = true, isConflict = false,
+        )
+        return Schedule(listOf(entry), entry, null, 0.0, 0L)
     }
 
     /**

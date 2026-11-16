@@ -313,6 +313,7 @@ private fun Pane(model: AppModel) {
                             "missing" -> MissingPage(model)
                             "franchises" -> FranchisesPage(model)
                             "collections" -> CollectionsPage(model)
+                            "weather" -> WeatherPage(model)
                             else -> ChannelsList(model)
                         }
                         SettingsCategory.SERVERS -> ServerRows(model)
@@ -423,19 +424,25 @@ private fun PlaybackRows(model: AppModel) {
             on = model.markWatched,
             modifier = Modifier.paneRow(model, "mark_watched"),
         ) { model.toggleMarkWatched() }
-        WeatherRows(model)
     }
 }
 
 // ── WEATHER (I-016): LOCAL WEATHER, CH 299 ──
 
-/** LOCATION, UNITS and the channel's switch, under PLAYBACK & PICTURE as the web tuner's WEATHER row. */
+/** What the LOCAL WEATHER row on the Channels list says: the place and whether the channel is in the guide, or NOT SET. */
+private fun weatherStatus(model: AppModel): String {
+    val p = model.weather.place ?: return "NOT SET"
+    val where = (if (p.region.isNotEmpty() && (p.cc == "US" || p.cc == "CA" || p.cc == "AU")) "${p.name}, ${p.region}" else if (p.cc.isNotEmpty()) "${p.name}, ${p.cc}" else p.name).uppercase()
+    return "$where \u00B7 ${if (model.weather.channelOn) "ON" else "OFF"}"
+}
+
+/** LOCAL WEATHER's page, opened from the Channels list as the collections are: LOCATION, UNITS and SHOW LOCAL WEATHER. */
 @Composable
-private fun WeatherRows(model: AppModel) {
+private fun WeatherPage(model: AppModel) {
     val wx = model.weather
     val place = wx.place
-    Box(Modifier.padding(top = u(24))) { SectionHeader("WEATHER", "LOCAL WEATHER, channel ${Weather.CHANNEL_NUMBER}: the forecast and radar for one place") }
     Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
+        CapNote("LOCAL WEATHER, channel ${Weather.CHANNEL_NUMBER}: the forecast and radar for one place.")
         ToggleRow(
             title = "LOCATION",
             subtitle = place?.let { Weather.placeLabel(it) + (it.code?.let { c -> " ($c)" } ?: "") } ?: "Type a city or a postcode",
@@ -448,14 +455,14 @@ private fun WeatherRows(model: AppModel) {
             title = "UNITS",
             subtitle = if (place == null) "Fahrenheit in the United States, Celsius elsewhere, unless you choose" else
                 "Showing ${if (wx.units == "F") "degrees Fahrenheit, miles per hour and inches" else "degrees Celsius, kilometres per hour and millimetres"}",
-            detail = when (wx.unitsSetting) { "F" -> "FAHRENHEIT"; "C" -> "CELSIUS"; else -> "AUTO" },
+            detail = when (wx.unitsSetting) { "F" -> "\u00B0F"; "C" -> "\u00B0C"; else -> "AUTO" },
             on = true,
             showToggle = false,
             modifier = Modifier.paneRow(model, "weather_units"),
         ) { model.chooseWeatherUnits(when (wx.unitsSetting) { "auto" -> "F"; "F" -> "C"; else -> "auto" }) }
         ToggleRow(
-            title = "SHOW THE WEATHER CHANNEL",
-            subtitle = "LOCAL WEATHER, channel ${Weather.CHANNEL_NUMBER}, in the guide. Off takes it out",
+            title = "SHOW LOCAL WEATHER",
+            subtitle = "Channel ${Weather.CHANNEL_NUMBER}, in the guide. Off takes it out",
             on = wx.channelOn,
             modifier = Modifier.paneRow(model, "weather_channel"),
         ) { model.toggleWeatherChannel() }
@@ -605,7 +612,7 @@ private fun WeatherLocationPage(model: AppModel) {
  */
 private fun lineupPackages(model: AppModel) = model.bundles.filter { !it.id.startsWith("collections-") && it.id != Lineup.FRANCHISES_BUNDLE }
 
-/** The Channels list (ChannelsHomePage): CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS with how many are on, then WATERSHED. */
+/** The Channels list (ChannelsHomePage): CHANNEL PACKAGES, FRANCHISES and MY COLLECTIONS with how many are on, LOCAL WEATHER with its place, then WATERSHED. */
 @Composable
 private fun ChannelsList(model: AppModel) {
     Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
@@ -620,6 +627,7 @@ private fun ChannelsList(model: AppModel) {
         LinkRow("MY COLLECTIONS", "${otherCollections(model).count { it.enabled }} ON", Modifier.paneRow(model, "channels_collections")) {
             model.openChannelsPage("collections")
         }
+        LinkRow("LOCAL WEATHER", weatherStatus(model), Modifier.paneRow(model, "channels_weather")) { model.openChannelsPage("weather") }
         ToggleRow(
             title = "WATERSHED",
             subtitle = "18 and R-rated titles wait until 9 PM",

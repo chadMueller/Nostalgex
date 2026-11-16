@@ -37,6 +37,10 @@ object Weather {
     const val CHANNEL_NAME = "LOCAL WEATHER"
     const val CHANNEL_COLOR = "#00D4FF"
 
+    /** The guide row's one entry spans all of time (1970 to 2100): the channel is a loop with no schedule. */
+    const val LOOP_START_SEC = 0L
+    const val LOOP_END_SEC = 4_102_444_800L
+
     data class Screen(val id: String, val title: String, val seconds: Int)
 
     val SCREENS = listOf(

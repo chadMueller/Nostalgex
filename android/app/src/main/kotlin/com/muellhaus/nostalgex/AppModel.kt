@@ -795,6 +795,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         else Lineup.WeatherRow(
             weatherGuideChannel,
             place = { weather.place?.let(Weather::placeLabel).orEmpty() },
+            temperature = { weather.model?.let { "${Weather.fmtTemp(it.current.tempC, weather.units)}\u00B0${weather.units}" }.orEmpty() },
             summary = {
                 weather.model?.let { Weather.infoSummary(it, weather.units) }
                     ?: if (weather.place == null) Weather.NO_PLACE_SUMMARY else Weather.SUMMARY
@@ -1336,7 +1337,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** The category the pane shows. It follows focus on the rail, with no press. */
     var settingsCategory by mutableStateOf(SettingsCategory.PLAYBACK)
-    /** The CHANNELS & BUNDLES sub-page on show: "packages", "missing", or null for its list. */
+    /** The CHANNELS & BUNDLES sub-page on show: "packages", "missing", "franchises", "collections", "weather", or null for its list. */
     var channelsPage: String? by mutableStateOf(null)
     /** Whether focus is on the rail (true) or in the pane's rows. Set by the rail's rows. */
     var settingsOnRail by mutableStateOf(true)
@@ -1413,6 +1414,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             !settingsOnRail && channelsPage == "missing" -> { paneSwapping = true; channelsPage = "packages"; focusPane("channels_missing") }
             !settingsOnRail && channelsPage == "packages" -> { paneSwapping = true; channelsPage = null; focusPane("channels_packages") }
             !settingsOnRail && channelsPage == "franchises" -> { paneSwapping = true; channelsPage = null; focusPane("channels_franchises") }
+            !settingsOnRail && channelsPage == "weather" -> { paneSwapping = true; channelsPage = null; focusPane("channels_weather") }
             !settingsOnRail && channelsPage == "collections" -> { paneSwapping = true; channelsPage = null; focusPane("channels_collections") }
             !settingsOnRail -> focusRail()
             else -> { closeSettings(); return false }

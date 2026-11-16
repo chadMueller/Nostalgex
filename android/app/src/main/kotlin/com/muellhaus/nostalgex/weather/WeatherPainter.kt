@@ -170,12 +170,29 @@ class WeatherPainter(context: Context) {
         if (place.isNotEmpty()) text(c, place, x + w - 24 - clockW, y + 50, mono(30 * Math.min(1f, st.textScale), 500), WHITE, Paint.Align.RIGHT, maxPlace)
     }
 
+    /**
+     * The least important text on the screen, so the smallest (Chad, 2026-11-16): the source credits and the age of the forecast as one small
+     * stack at the bottom left, about 60% of the old size (15 on the 1080 canvas), text2 at lower contrast. The credit stays on every screen
+     * and stays readable (about 4.6:1 on the background), because MET Norway, GeoNames and the radar sources ask for attribution. The loop
+     * pips stay at the bottom right.
+     */
     private fun footer(c: Canvas, st: Frame, screenIndex: Int, extraCredit: String?) {
         val x = SAFE_X
         val base = H - SAFE_Y - 6
-        text(c, "DATA FROM MET NORWAY", x, base, mono(25), TEXT2)
-        if (extraCredit != null) text(c, extraCredit, x, base - 34, mono(25), TEXT2)
-        // Loop pips and the age of the forecast on the right.
+        val small = mono(15)
+        val dim = Color.argb(158, 185, 195, 222)
+        val lines = ArrayList<Pair<String, Int>>()
+        if (extraCredit != null) lines.add(extraCredit to dim)
+        lines.add("DATA FROM MET NORWAY" to dim)
+        val updated = st.model?.updatedMs
+        if (updated != null && st.place != null) {
+            val age = Weather.forecastAge(updated, st.nowMs, st.place.tz)
+            // An old forecast still says so, in amber: it is a warning, not a credit.
+            lines.add((if (age.stale) "OLD FORECAST FROM ${age.text.replace("UPDATED ", "")}" else age.text) to (if (age.stale) AMBER else dim))
+        }
+        var y = base - (lines.size - 1) * 21f
+        for ((t, color) in lines) { text(c, t, x, y, small, color); y += 21f }
+        // Loop pips on the right.
         val pips = Weather.SCREENS.size
         val pw = 44f; val gap = 10f
         var px = W - SAFE_X - (pips * pw + (pips - 1) * gap)
@@ -183,14 +200,6 @@ class WeatherPainter(context: Context) {
             fill.color = if (i == screenIndex) ACCENT.getValue(Weather.SCREENS[i].id) else OUTLINE
             c.drawRect(px, base - 12, px + pw, base - 2, fill)
             px += pw + gap
-        }
-        val updated = st.model?.updatedMs
-        if (updated != null && st.place != null) {
-            val age = Weather.forecastAge(updated, st.nowMs, st.place.tz)
-            text(
-                c, if (age.stale) "OLD FORECAST FROM ${age.text.replace("UPDATED ", "")}" else age.text,
-                W - SAFE_X - (pips * pw + (pips - 1) * gap) - 36, base, mono(25), if (age.stale) AMBER else TEXT2, Paint.Align.RIGHT,
-            )
         }
     }
 
@@ -436,7 +445,7 @@ class WeatherPainter(context: Context) {
         header(c, st, if (hasData) screen.title else Weather.CHANNEL_NAME, if (hasData) ACCENT.getValue(screen.id) else CYAN)
         var extra: String? = null
         when {
-            st.status == "noplace" -> message(c, "SET YOUR LOCATION IN SETTINGS", "SETTINGS, PLAYBACK AND PICTURE, WEATHER, LOCATION", CYAN)
+            st.status == "noplace" -> message(c, "SET YOUR LOCATION IN SETTINGS", "SETTINGS, CHANNELS & BUNDLES, LOCAL WEATHER, LOCATION", CYAN)
             m == null && st.status == "error" -> message(c, "FORECAST UNAVAILABLE RIGHT NOW", "TRYING AGAIN SOON", AMBER)
             m == null -> message(c, "LOADING THE FORECAST", null, CYAN)
             screen.id == "current" -> screenCurrent(c, st, m)

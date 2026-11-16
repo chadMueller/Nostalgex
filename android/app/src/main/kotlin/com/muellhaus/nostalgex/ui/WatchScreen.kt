@@ -600,7 +600,8 @@ private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, pla
         // the guide's cursor is on, not the live one, is shown as it is on the schedule, with its time range (I-089).
         val item = preview?.item ?: playingItem ?: np!!.item
         val next = if (preview != null) GuideCursor.after(schedule.entries, preview) else schedule.upNext
-        val episodeLine = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
+        val isLoop = item.librarySource == "weather"
+        val episodeLine = if (isLoop) item.episodeTitle.orEmpty() else if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
         val genres = item.musicGenreDisplay
         val sections = InfoPanelLayout.sections(
             hasArtist = !item.artist.isNullOrEmpty(),
@@ -644,7 +645,9 @@ private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, pla
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            InfoPanelSection.PROGRESS -> if (preview != null) {
+            // LOCAL WEATHER is always live: no progress bar, no times.
+            InfoPanelSection.PROGRESS -> if (isLoop) {
+            } else if (preview != null) {
                 // When it is on, where the progress bar is.
                 Text(
                     "${time(preview.startSec)} - ${time(preview.endSec)}",
@@ -1120,7 +1123,9 @@ private fun segments(entries: List<ScheduleEntry>, windowStart: Long, duration: 
 }
 
 private fun entryTitle(e: ScheduleEntry): String =
-    if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
+    // LOCAL WEATHER's bar: its name and the temperature now, not the place (the info panel has that).
+    if (e.item.librarySource == "weather") listOfNotNull(e.item.title, e.item.seTag).joinToString("  ")
+    else if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
 
 @Composable
 private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, cursorStart: Long?, programsWidth: Float, visibleStart: Long, now: Double) {

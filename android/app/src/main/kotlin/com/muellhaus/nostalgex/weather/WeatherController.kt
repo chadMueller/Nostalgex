@@ -48,7 +48,7 @@ class WeatherController(private val context: Context, private val scope: Corouti
     private val prefs = context.getSharedPreferences("nostalgex_weather", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
-    // ── What the viewer chose (Settings > PLAYBACK & PICTURE > WEATHER) ──
+    // ── What the viewer chose (Settings > CHANNELS & BUNDLES > LOCAL WEATHER) ──
     var place: Weather.Place? by mutableStateOf(readPlace())
         private set
     /** "auto" (F in the US, C elsewhere), "F" or "C". */
