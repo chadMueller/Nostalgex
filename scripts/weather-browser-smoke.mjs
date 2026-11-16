@@ -490,6 +490,41 @@ for (const [tag, w, h, mobile] of SIZES) {
   await s.ctx.close();
 }
 
+// ═══ 5c. CH 299 tuned from a playing channel (Android drew the radar see-through over the last film): the old picture and sound stop, the weather is opaque, tuning away restores a channel ═══
+{
+  const s = await open({ width: 1920, height: 1080 });
+  const { page } = s;
+  const oid = await page.evaluate(() => CHANNELS.find((c) => !c.weather && c.enabled).id);
+  await tune(page, oid);
+  await page.waitForFunction(() => document.getElementById("plex-video").getAttribute("src"), null, { timeout: 10000 });
+  check("before: a normal channel is playing (the video has a source)", await page.evaluate(() => !!document.getElementById("plex-video").getAttribute("src")));
+  await tune(page, CH_ID);
+  await page.waitForFunction(() => document.getElementById("weather-screen").classList.contains("on") && WX.fonts, null, { timeout: 10000 });
+  await page.waitForTimeout(700);
+  const on = await page.evaluate(() => {
+    const v = document.getElementById("plex-video"), c = document.getElementById("weather-screen"), cs = getComputedStyle(c), r = c.getBoundingClientRect(), vr = document.getElementById("video-container").getBoundingClientRect();
+    const px = (x, y) => Array.from(c.getContext("2d").getImageData(x, y, 1, 1).data);
+    return { src: v.getAttribute("src"), paused: v.paused, hls: typeof hlsInstance === "undefined" ? null : hlsInstance, tracker: playbackTracker, bg: cs.backgroundColor, opacity: cs.opacity, display: cs.display, z: cs.zIndex,
+      corners: [px(0, 0), px(c.width - 1, 0), px(0, c.height - 1), px(c.width - 1, c.height - 1), px(960, 540)], covers: Math.abs(r.width - vr.width) < 2 && Math.abs(r.height - vr.height) < 2 && Math.abs(r.left - vr.left) < 2 };
+  });
+  check("tuning CH 299 stops the previous channel's video and sound (no source, paused, no player, no watch session)", on.src === null && on.paused && !on.hls && on.tracker === null, JSON.stringify(on));
+  check("the weather view is opaque: a solid background, full opacity, every drawn corner and the centre at alpha 255", /^rgb\(10, 10, 26\)$/.test(on.bg) && on.opacity === "1" && on.display === "block" && on.corners.every((p) => p[3] === 255), JSON.stringify([on.bg, on.opacity, on.corners]));
+  check("the weather view covers the whole picture, above the video", on.covers && Number(on.z) >= 2, JSON.stringify([on.covers, on.z]));
+  // A tune that has not started playing yet (the stream lookup is still in flight) must not start under the weather afterwards.
+  await page.evaluate((ids) => { switchChannel(ids.o, true); switchChannel(ids.w, true); }, { o: oid, w: CH_ID });
+  await page.waitForTimeout(2500);
+  const late = await page.evaluate(() => ({ src: document.getElementById("plex-video").getAttribute("src"), paused: document.getElementById("plex-video").paused, on: document.getElementById("weather-screen").classList.contains("on"), cur: currentChannel }));
+  check("a tune of another channel overtaken by CH 299 never starts its video under the weather", late.src === null && late.paused && late.on && late.cur === CH_ID, JSON.stringify(late));
+  await tune(page, oid);
+  await page.waitForFunction(() => document.getElementById("plex-video").getAttribute("src"), null, { timeout: 10000 });
+  const back = await page.evaluate(() => ({ on: document.getElementById("weather-screen").classList.contains("on"), actions: document.getElementById("weather-actions").classList.contains("on"), music: document.getElementById("weather-music").paused, timer: WX.timer, app: appState,
+    failure: document.getElementById("channel-display").classList.contains("has-failure"), src: !!document.getElementById("plex-video").getAttribute("src"), cur: currentChannel }));
+  check("tuning away: the weather view, its button, its loop and its timer are gone, the channel plays, no failure card", !back.on && !back.actions && back.music && back.timer === null && back.src && !back.failure && back.cur === oid, JSON.stringify(back));
+  check("tuning back to CH 299 again works and is opaque again", await (async () => { await tune(page, CH_ID); await page.waitForTimeout(700); return page.evaluate(() => { const c = document.getElementById("weather-screen"); return c.classList.contains("on") && Array.from(c.getContext("2d").getImageData(5, 5, 1, 1).data)[3] === 255 && !document.getElementById("plex-video").getAttribute("src"); }); })());
+  check("CH 299 over a channel: no errors", s.errors.length === 0, s.errors.join(" | "));
+  await s.ctx.close();
+}
+
 // ═══ 6. A relay that fails ═══
 {
   const s = await open({ width: 1920, height: 1080, relay: "fail" });

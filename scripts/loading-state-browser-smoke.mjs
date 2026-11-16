@@ -225,7 +225,50 @@ check("switch: then GUIDE READY: 450 TITLES in the top bar and the block goes", 
 await sleep(4300);
 const src = readFileSync(join(root, "plex-tuner.html"), "utf8");
 check("switch: toggleServerInSettings reads with cause 'switch' and first stops the read that is running", /async function toggleServerInSettings[\s\S]*?supersedeLibraryLoads\(\);[\s\S]*?fetchLibraryFromServer\(\{ cause: 'switch' \}\)/.test(src));
-check("switch: a library switch (toggleLibrarySection) and the hidden-libraries switch read with cause 'switch'", /function toggleLibrarySection[\s\S]*?rescanLibrary\(\{ cause: 'switch' \}\)/.test(src) && /cause: 'switch' \}\);\s*\} catch \(err\) \{\s*console\.warn\('\[Nostalgex\] Library rescan after the hidden libraries switch/.test(src));
+check("switch: a library switch (toggleLibrarySection) reads with cause 'switch'", /function toggleLibrarySection[\s\S]*?rescanLibrary\(\{ cause: 'switch' \}\)/.test(src));
+
+// ---- 2b. A switch from Settings stays in Settings, with the progress there (Chad, 2026-11-16, Android's test) ----
+plan.gate = null;
+await openGuide(a.page);
+await a.page.evaluate(() => {
+  showConfig(); switchConfigTab("server");
+  // Settings' status, sampled at every phase change.
+  window.__cfgSeen = [];
+  const LL = NostalgexLibraryLoad, orig = LL.setPhase;
+  LL.setPhase = function (phase, detail) {
+    const r = orig.apply(this, arguments);
+    window.__cfgSeen.push([phase, document.getElementById("cfg-load-status-title").textContent, document.getElementById("cfg-load-status-line").textContent]);
+    return r;
+  };
+  window.__origSetPhase = orig;
+  currentChannel = null;   // the server changed: nothing is playing, so the end of the load tunes a channel (which sets appState to player)
+  window.__switch2 = fetchLibraryFromServer({ cause: "switch" }).catch((e) => console.warn(e));
+});
+await a.page.evaluate(() => window.__switch2);
+await sleep(300);
+const seen = await a.page.evaluate(() => { NostalgexLibraryLoad.setPhase = window.__origSetPhase; return window.__cfgSeen; });
+const lines = seen.map((x) => x[2]);
+check("switch from Settings: it says READ n TITLES and the library being read", lines.some((l) => /^READ \d+ (OF \d+ )?TITLES? · MOVIES: \d+ OF 450$/.test(l)), JSON.stringify(lines.slice(0, 12)));
+check("switch from Settings: it says BUILDING CHANNELS (and how far) while the channels are built", lines.some((l) => /BUILDING CHANNELS: \d+ OF \d+$/.test(l)) && !lines.filter((x, i) => seen[i][0] === "buildingChannels").some((l) => /MOVIES/.test(l)), JSON.stringify(seen.filter((x) => x[0] === "buildingChannels").slice(0, 3)));
+check("switch from Settings: it says BUILDING SCHEDULE at the end of the build", seen.some((x) => x[0] === "finishing" && /BUILDING SCHEDULE$/.test(x[2])), JSON.stringify(seen.filter((x) => x[0] === "finishing")));
+s = await read(a.page);
+const stay = await a.page.evaluate(() => ({ visible: configVisible, app: appState, open: document.getElementById("config-overlay").classList.contains("open"), tab: configTab, channel: currentChannel !== null }));
+check("switch from Settings: the load ends with Settings still open, on the same tab, with the keys still Settings' (appState config)", stay.visible && stay.app === "config" && stay.open && stay.tab === "server", JSON.stringify(stay));
+check("switch from Settings: ... and the channel is tuned behind it", stay.channel);
+check("switch from Settings: GUIDE READY: 450 TITLES in Settings", s.cfg.shown && s.cfg.title === "GUIDE READY: 450 TITLES" && s.cfg.kind === "ready", JSON.stringify(s.cfg));
+await shot(a.page, "2b-switch-ready-in-settings");
+const emptyCase = await a.page.evaluate(() => {
+  const was = channelToOpenOn; channelToOpenOn = () => null;
+  tuneFirstOrShowEmpty();
+  const inSettings = { app: appState, open: document.getElementById("config-overlay").classList.contains("open"), empty: emptyGuideShown() };
+  hideConfig();
+  const closed = { app: appState, empty: emptyGuideShown() };
+  channelToOpenOn = was;
+  return { inSettings, closed };
+});
+check("switch from Settings: a library with nothing on air sets the empty state behind Settings and keeps Settings; closing it shows the empty state", emptyCase.inSettings.app === "config" && emptyCase.inSettings.open && emptyCase.inSettings.empty && emptyCase.closed.app === "connect" && emptyCase.closed.empty, JSON.stringify(emptyCase));
+await a.page.evaluate(() => { hideEmptyGuideState(); document.getElementById("plex-connect").style.display = "none"; switchChannel(CHANNELS.find((c) => c.enabled).id); });
+await sleep(1500);   // the ready notice, if any, and the next section start clean
 
 // ---- 3. RESCAN LIBRARY ----
 plan.gate = makeGate();
