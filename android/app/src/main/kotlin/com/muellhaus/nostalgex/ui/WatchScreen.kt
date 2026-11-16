@@ -222,7 +222,8 @@ fun WatchScreen(model: AppModel) {
                     // Settings steps back one level at a time; from the rail it closes, back to the live row.
                     model.settingsOpen -> if (!model.settingsBack()) focusLive()
                     // The package sidebar closes back to the guide (BundleJumpSidebar's onExitCommand).
-                    sidebarOpen -> { sidebarOpen = false; focusLive() }
+                    // Back from the bundle list closes it where the guide was, without jumping to a bundle or to the live row.
+                    sidebarOpen -> { sidebarOpen = false; focusedId?.let { focusTarget = it; focusRequest++ } ?: focusLive() }
                     // An open picker first: dropping out of the panel from inside a list would lose it on a mis-press.
                     model.fullScreen && picker != null -> picker = null
                     model.fullScreen && overlay != Overlay.NONE -> overlay = Overlay.NONE
@@ -824,6 +825,16 @@ private fun Guide(
         target?.let(onFocusTarget)
     }
     fun openBundleList() { stripeMode = false; onSidebar(true) }
+    // Select on the stripe: the guide goes to the first channel of the bundle it is on, with focus on that row (the bundle list, on Left, is
+    // where select used to go).
+    fun selectBundle() {
+        val target = GuideStripes.jumpTargetRow(stripeGroupIndex, stripeGroups, channels.size) ?: return
+        val index = if (target == 0 && offer != null) 0 else target + lead
+        stripeMode = false
+        suppressFocusScroll = true
+        scope.launch { listState.animateScrollToItem(index); delay(400); suppressFocusScroll = false }
+        onFocusTarget(channels[target].id)
+    }
 
     BoxWithConstraints(
         Modifier
@@ -837,7 +848,7 @@ private fun Guide(
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (down) jumpBundle(1); true }
                         AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) returnFromStripe(); true }
                         AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) openBundleList(); true }
-                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> { if (e.type == KeyEventType.KeyUp) openBundleList(); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> { if (e.type == KeyEventType.KeyUp) selectBundle(); true }
                         else -> false
                     }
                 }

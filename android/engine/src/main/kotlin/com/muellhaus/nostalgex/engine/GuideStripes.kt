@@ -124,6 +124,16 @@ object GuideStripes {
         return target.takeIf { it != from }
     }
 
+    /**
+     * Select (OK) on the stripe: the guide row to jump to, the first channel of the bundle the stripe is on (Chad, 2026-11-16: "you should be able
+     * to select it and the guide should go to the first item in that bundle"). Null for a run in no bundle, or an index out of range: OK does
+     * nothing there.
+     */
+    fun jumpTargetRow(groupIndex: Int?, groups: List<Group>, rowCount: Int): Int? {
+        val g = groups.getOrNull(groupIndex ?: return null) ?: return null
+        return g.firstRow.takeIf { g.bundle != null && it in 0 until rowCount }
+    }
+
     /** Whether there is any bundle to move between. With none, Left goes to the bundle list as it always did. */
     fun hasBundles(groups: List<Group>): Boolean = groups.any { it.bundle != null }
 
