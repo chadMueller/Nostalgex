@@ -1,6 +1,24 @@
 {
   "entries": [
     {
+      "version": "1.0.33",
+      "date": "NOV 2026",
+      "released": false,
+      "title": "Programmes play to their own end, the guide cursor moves a programme at a time, and loading keeps the guide up",
+      "bullets": [
+        "A file plays to its own end. The channel's schedule uses the file's real length, so a programme no longer stops a few seconds early or runs into the next one.",
+        "In the guide, Left and Right move a programme at a time, with the programme's own cell highlighted.",
+        "GUIDE TEXT SIZE has three steps: SMALLER, DEFAULT and LARGER.",
+        "UP NEXT is one line: the title in yellow, then the minutes left.",
+        "The guide info panel shows the poster beside its text, on Plex, Jellyfin and Emby.",
+        "The bundle stripe wraps around at both ends.",
+        "Switching server or library and RESCAN LIBRARY keep the guide on screen and say what is happening in its empty area, with STOP WAITING inside it.",
+        "Big Jellyfin and Emby collection lists load in pages of 500 instead of one large request.",
+        "OPEN IN JELLYFIN shows on Now Playing when Swiftfin is installed.",
+        "Searching for a server that finds only Emby, or only Jellyfin, names it and offers to switch."
+      ]
+    },
+    {
       "version": "1.0.32",
       "date": "NOV 2026",
       "released": true,
