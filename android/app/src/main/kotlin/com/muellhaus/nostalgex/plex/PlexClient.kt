@@ -208,8 +208,8 @@ class PlexClient(private val clientId: String, versionName: String) {
      * fetchPlexCollections), each with its members' keys. The server key is its address, as
      * the library's items carry it (`serverUrl`), so members resolve against this server only.
      */
-    suspend fun collections(server: PlexServer): List<com.muellhaus.nostalgex.engine.ServerCollection> = withContext(Dispatchers.IO) {
-        com.muellhaus.nostalgex.engine.Collections.fetchPlexCollections(server.url, { path -> kotlinx.coroutines.runBlocking { get(server, path) } })
+    suspend fun collections(server: PlexServer, isSectionOn: ((String) -> Boolean)? = null): List<com.muellhaus.nostalgex.engine.ServerCollection> = withContext(Dispatchers.IO) {
+        com.muellhaus.nostalgex.engine.Collections.fetchPlexCollections(server.url, { path -> kotlinx.coroutines.runBlocking { get(server, path) } }, isSectionOn = isSectionOn)
     }
 
     /**

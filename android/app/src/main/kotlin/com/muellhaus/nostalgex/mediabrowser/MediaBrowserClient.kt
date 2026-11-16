@@ -246,14 +246,15 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
         excluded: Set<String> = emptySet(),
         onSection: (List<MediaItem>) -> Unit = {},
         cancelled: () -> Boolean = { false },
-        /** INCLUDE LIBRARIES HIDDEN ON JELLYFIN. */
+        /** Jellyfin: the includeHidden list is asked (N-016), and `hiddenRead` says which hidden libraries are read. */
         includeHidden: Boolean = false,
+        hiddenRead: Set<String>? = null,
         onSkippedNoRuntime: () -> Unit = {},
         /** Sections kept from a scan that didn't finish (#288); they hold no address or token. */
         keep: com.muellhaus.nostalgex.engine.SectionKeep = com.muellhaus.nostalgex.engine.SectionKeep.NONE,
     ): List<MediaItem> = withContext(Dispatchers.IO) {
         fun stamp(items: List<MediaItem>) = items.map { it.copy(serverUrl = server.url, serverToken = server.token) }
-        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includeHidden, onSkippedNoRuntime, keep).let(::stamp)
+        library(server, cancelled).scan(progress, excluded, { onSection(stamp(it)) }, includeHidden, hiddenRead, onSkippedNoRuntime, keep).let(::stamp)
     }
 
     /**
@@ -265,8 +266,11 @@ class MediaBrowserClient(val deviceId: String, private val versionName: String) 
     }
 
     /** Every library the user can see, for the library-selection screen and Settings. */
-    suspend fun sections(server: MediaBrowserServer, serverId: String, includeHidden: Boolean): List<LibrarySection> = withContext(Dispatchers.IO) {
-        library(server).sections(serverId, server.name, includeHidden)
+    suspend fun sections(server: MediaBrowserServer, serverId: String, includeHidden: Boolean): List<LibrarySection> = listing(server, serverId, includeHidden).sections
+
+    /** The same, with whether the hidden libraries are known (the includeHidden list was answered). */
+    suspend fun listing(server: MediaBrowserServer, serverId: String, askHidden: Boolean): MediaBrowserLibrary.Listing = withContext(Dispatchers.IO) {
+        library(server).listing(serverId, server.name, askHidden)
     }
 
     /** The engine's scan over this server. A refused or failed read throws. */
