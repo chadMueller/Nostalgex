@@ -6,8 +6,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
 
-/** A channel in the guide: its definition from channels.json and the pool it airs from. */
-class GuideChannel(val def: ChannelConfig.StockChannel, val pool: List<MediaItem>) {
+/**
+ * A channel in the guide: its definition from channels.json and the pool it airs from.
+ * `weather` is CH 299 LOCAL WEATHER (I-016): in no package and with no pool, the app draws it; it plays no programme.
+ */
+class GuideChannel(val def: ChannelConfig.StockChannel, val pool: List<MediaItem>, val weather: Boolean = false) {
     val id get() = def.id
     val number get() = def.number
     val name get() = def.name
@@ -48,6 +51,19 @@ class Lineup(
 
     /** The classics' pools as their rules built them, before what the franchises add. */
     private val rulePools = HashMap<Int, List<MediaItem>>()
+
+    /** What the weather channel shows in the guide: its row's channel, the place's name and the line the info panel reads. Null: the switch is off. */
+    class WeatherRow(val channel: GuideChannel, val place: () -> String, val summary: () -> String)
+
+    @Volatile private var weatherRow: WeatherRow? = null
+    /** The packages at the last build or switch, so the weather switch can redo the guide on its own. */
+    private var lastBundles: Set<String> = emptySet()
+
+    /** The weather channel in or out of the guide (Settings > WEATHER). It joins only a guide that has other channels. */
+    fun setWeather(row: WeatherRow?) {
+        weatherRow = row
+        channels = select(lastBundles)
+    }
 
     /** Runtime channels: found franchises and server collections, CH 310-499. */
     private var runtime: List<GuideChannel> = emptyList()
@@ -106,6 +122,7 @@ class Lineup(
             bundles = bundles + extra
         }
         applyFranchises(bundles)
+        lastBundles = bundles
         channels = select(bundles)
         return bundles - enabledBundles
     }
@@ -182,6 +199,7 @@ class Lineup(
     fun setFranchiseChoices(choices: FranchiseChoices, enabledBundles: Set<String>) {
         franchiseChoices = choices
         applyFranchises(enabledBundles)
+        lastBundles = enabledBundles
         channels = select(enabledBundles)
     }
 
@@ -194,6 +212,7 @@ class Lineup(
         val missing = bundleChannelIds(enabledBundles).filter { !pools.containsKey(it) }.toSet()
         filter(items, config.channels.filter { it.id in missing }, o, pools) { _, _ -> }
         applyFranchises(enabledBundles)
+        lastBundles = enabledBundles
         channels = select(enabledBundles)
     }
 
@@ -286,7 +305,9 @@ class Lineup(
             .map { GuideChannel(it, pools.getValue(it.id).filter { item -> item.duration > 0 }) }
         // Found franchises and franchise collections go with the package; other collections air when switched on.
         val dynamic = runtime.filter { it.def.category != CollectionCategory.FRANCHISES.wire || packageOn }
-        val rest = (picked.filter { it.id !in rank } + dynamic).sortedBy { it.number }
+        // LOCAL WEATHER, CH 299, is a guest of whatever else is on: it never makes a guide of its own.
+        val weather = if (picked.isNotEmpty() || dynamic.isNotEmpty()) listOfNotNull(weatherRow?.channel) else emptyList()
+        val rest = (picked.filter { it.id !in rank } + dynamic + weather).sortedBy { it.number }
         return picked.filter { it.id in rank }.sortedBy { rank.getValue(it.id) } + rest
     }
 
@@ -299,7 +320,7 @@ class Lineup(
     fun isWatershedHold(ch: GuideChannel, now: ZonedDateTime = ZonedDateTime.now()) =
         config.isWatershedHold(ch.def, ch.pool, now.hour, watershed)
 
-    private fun lineupNow(now: ZonedDateTime) = channels.map { it.ref to poolNow(it, now) }
+    private fun lineupNow(now: ZonedDateTime) = channels.filter { !it.weather }.map { it.ref to poolNow(it, now) }
 
     /** The instant the engine is being asked about, so the lineup's pools are read at the guide's hour. */
     @Volatile private var askedAt: ZonedDateTime = ZonedDateTime.now()
@@ -318,13 +339,36 @@ class Lineup(
         val nowSec = now.sec()
         val raw = LinkedHashMap<Int, Schedule>()
         for (ch in channels) {
+            if (ch.weather) continue
             val pool = poolNow(ch, now)
             if (pool.isEmpty()) continue
             engine.buildSchedule(ch.ref, pool, nowSec, serverKey)?.let { raw[ch.id] = it }
         }
-        schedules = engine.resolveConflicts(raw)
+        val resolved = engine.resolveConflicts(raw)
+        // LOCAL WEATHER's row: hour-long blocks of the loop, outside the engine's packing (it has no pool and no manifest).
+        val wx = weatherRow?.takeIf { w -> channels.any { it.id == w.channel.id } }
+        schedules = if (wx == null) resolved else resolved + (wx.channel.id to weatherSchedule(wx, now))
         windowStartSec = Math.floorDiv(now.toEpochSecond(), 1800L) * 1800
         engine.pruneManifests(serverKey, now.toInstant().toEpochMilli())
+    }
+
+    private fun weatherSchedule(w: WeatherRow, now: ZonedDateTime): Schedule {
+        val nowMs = now.toInstant().toEpochMilli()
+        val nowSec = nowMs / 1000.0
+        val entries = Weather.guideBlocks(w.place(), nowMs, 26, w.summary()).map { b ->
+            val key = "weather-${b.startSec}"
+            ScheduleEntry(
+                key,
+                MediaItem(
+                    ratingKey = key, title = b.title, type = "episode", duration = 60, episodeTitle = b.episodeTitle.ifEmpty { null },
+                    summary = b.summary, librarySource = "weather",
+                ),
+                b.startSec, b.endSec, isNowPlaying = nowSec >= b.startSec && nowSec < b.endSec, isConflict = false,
+            )
+        }
+        val np = entries.firstOrNull { it.isNowPlaying }
+        // The loop has no "up next".
+        return Schedule(entries, np, null, if (np == null) 0.0 else (nowSec - np.startSec) / (np.endSec - np.startSec), if (np == null) 0L else maxOf(0L, (nowSec - np.startSec).toLong()))
     }
 
     /**

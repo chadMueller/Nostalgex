@@ -70,6 +70,18 @@ import com.muellhaus.nostalgex.engine.LanguageChoice
 import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.Season
 import com.muellhaus.nostalgex.engine.StreamQuality
+import com.muellhaus.nostalgex.engine.Weather
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 
 // Settings as a rail plus a pane (SettingsContainerView, N-028), at the Apple TV's measurements.
@@ -106,6 +118,7 @@ internal fun SettingsPage(model: AppModel) {
             options = LanguageChoice.presets.map { Triple(it.code, it.label, null) },
             selected = model.audioLanguage,
         ) { model.chooseAudioLanguage(it); model.settingsPicker = null; model.focusPane("audio_lang") }
+        "weather_place" -> WeatherLocationPage(model)
         else -> RailAndPane(model)
     }
 }
@@ -410,6 +423,177 @@ private fun PlaybackRows(model: AppModel) {
             on = model.markWatched,
             modifier = Modifier.paneRow(model, "mark_watched"),
         ) { model.toggleMarkWatched() }
+        WeatherRows(model)
+    }
+}
+
+// ── WEATHER (I-016): LOCAL WEATHER, CH 299 ──
+
+/** LOCATION, UNITS and the channel's switch, under PLAYBACK & PICTURE as the web tuner's WEATHER row. */
+@Composable
+private fun WeatherRows(model: AppModel) {
+    val wx = model.weather
+    val place = wx.place
+    Box(Modifier.padding(top = u(24))) { SectionHeader("WEATHER", "LOCAL WEATHER, channel ${Weather.CHANNEL_NUMBER}: the forecast and radar for one place") }
+    Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
+        ToggleRow(
+            title = "LOCATION",
+            subtitle = place?.let { Weather.placeLabel(it) + (it.code?.let { c -> " ($c)" } ?: "") } ?: "Type a city or a postcode",
+            detail = if (place == null) "SET" else "CHANGE",
+            on = true,
+            showToggle = false,
+            modifier = Modifier.paneRow(model, "weather_place"),
+        ) { model.settingsPicker = "weather_place" }
+        ToggleRow(
+            title = "UNITS",
+            subtitle = if (place == null) "Fahrenheit in the United States, Celsius elsewhere, unless you choose" else
+                "Showing ${if (wx.units == "F") "degrees Fahrenheit, miles per hour and inches" else "degrees Celsius, kilometres per hour and millimetres"}",
+            detail = when (wx.unitsSetting) { "F" -> "FAHRENHEIT"; "C" -> "CELSIUS"; else -> "AUTO" },
+            on = true,
+            showToggle = false,
+            modifier = Modifier.paneRow(model, "weather_units"),
+        ) { model.chooseWeatherUnits(when (wx.unitsSetting) { "auto" -> "F"; "F" -> "C"; else -> "auto" }) }
+        ToggleRow(
+            title = "SHOW THE WEATHER CHANNEL",
+            subtitle = "LOCAL WEATHER, channel ${Weather.CHANNEL_NUMBER}, in the guide. Off takes it out",
+            on = wx.channelOn,
+            modifier = Modifier.paneRow(model, "weather_channel"),
+        ) { model.toggleWeatherChannel() }
+    }
+}
+
+/** The location page: a box to type a city or a postcode in, and the matches to pick from. OK on the box opens the keyboard. */
+@Composable
+private fun WeatherLocationPage(model: AppModel) {
+    var query by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf(false) }
+    var results by remember { mutableStateOf<List<Weather.Place>>(emptyList()) }
+    var hint by remember { mutableStateOf("Type at least 2 letters of a city, or a postcode.") }
+    val first = remember { FocusRequester() }
+    val input = remember { FocusRequester() }
+    val well = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.length < 2) { results = emptyList(); hint = "Type at least 2 letters of a city, or a postcode."; return@LaunchedEffect }
+        delay(140)
+        val r = withContext(Dispatchers.IO) { model.weatherPlaces.search(q) }
+        results = r.places
+        hint = if (r.places.isEmpty()) r.hint.ifEmpty { "NO MATCH. TRY THE CITY NAME OR A POSTCODE." } else "${r.places.size} ${if (r.places.size == 1) "match" else "matches"}. Pick one."
+    }
+    fun pick(p: Weather.Place) {
+        keyboard?.hide()
+        editing = false
+        model.chooseWeatherPlace(p)
+        model.settingsPicker = null
+        model.focusPane("weather_place")
+    }
+    DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.linearGradient(listOf(PageTop, PageBottom)))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = u(80), vertical = u(60)),
+        verticalArrangement = Arrangement.spacedBy(u(20)),
+    ) {
+        Text("WEATHER LOCATION", style = font(DMMonoMedium, DesignTokens.CompactSize.HEADING, Tokens.Text))
+        Text("Type a city or a postcode, then pick it from the matches. The place is kept on this TV.", style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
+        var wellFocused by remember { mutableStateOf(false) }
+        val shape = RoundedCornerShape(u(12))
+        val lit = wellFocused || editing
+        val box = Modifier
+            .fillMaxWidth()
+            .height(u(76))
+            .clip(shape)
+            .background(if (lit) Color(0.03f, 0.10f, 0.13f) else Color(0.06f, 0.06f, 0.06f))
+            .border(if (lit) u(3) else u(1.5), if (lit) Tokens.Cyan else Color.White.copy(alpha = 0.18f), shape)
+            .padding(horizontal = u(24))
+        if (editing) {
+            var inputFocused by remember { mutableStateOf(false) }
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = font(DMMono, 30, Color.White),
+                cursorBrush = SolidColor(Color.White.copy(alpha = 0.9f)),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search, autoCorrectEnabled = false),
+                keyboardActions = KeyboardActions(onAny = {
+                    keyboard?.hide()
+                    editing = false
+                    results.firstOrNull()?.let { pick(it) }
+                }),
+                modifier = box.focusRequester(input).onFocusChanged {
+                    if (it.isFocused) inputFocused = true
+                    else if (inputFocused) { inputFocused = false; keyboard?.hide(); editing = false }
+                },
+                decorationBox = { inner -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { inner() } },
+            )
+            LaunchedEffect(Unit) { runCatching { input.requestFocus() } }
+        } else {
+            Box(
+                box
+                    .focusRequester(well)
+                    .onFocusChanged { wellFocused = it.isFocused }
+                    .focusable()
+                    .onKeyEvent { e ->
+                        if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_ENTER) return@onKeyEvent false
+                        if (e.type == KeyEventType.KeyUp) editing = true
+                        true
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    query.ifEmpty { "Press to type" },
+                    style = font(DMMono, 30, if (query.isEmpty()) Color.White.copy(alpha = if (wellFocused) 0.6f else 0.48f) else Color.White.copy(alpha = if (wellFocused) 1f else 0.78f)),
+                    maxLines = 1,
+                )
+            }
+            LaunchedEffect(Unit) { runCatching { well.requestFocus() } }
+        }
+        Text(hint, style = font(DMMono, DesignTokens.Size.CAPTION, Tokens.Text2))
+        Column(verticalArrangement = Arrangement.spacedBy(u(10))) {
+            results.forEachIndexed { i, p ->
+                var focused by remember { mutableStateOf(false) }
+                val rowShape = RoundedCornerShape(u(10))
+                Row(
+                    (if (i == 0) Modifier.focusRequester(first) else Modifier)
+                        .fillMaxWidth()
+                        .onFocusChanged { focused = it.isFocused }
+                        .focusable()
+                        .onKeyEvent { e ->
+                            if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_ENTER) return@onKeyEvent false
+                            if (e.type == KeyEventType.KeyUp) pick(p)
+                            true
+                        }
+                        .settingsRow(focused, rowShape)
+                        .padding(horizontal = u(20), vertical = u(16)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(Weather.resultLabel(p), style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, Tokens.Text), maxLines = 1)
+                }
+            }
+            if (model.weather.place != null) {
+                var focused by remember { mutableStateOf(false) }
+                val rowShape = RoundedCornerShape(u(10))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focused = it.isFocused }
+                        .focusable()
+                        .onKeyEvent { e ->
+                            if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_ENTER) return@onKeyEvent false
+                            if (e.type == KeyEventType.KeyUp) { model.clearWeatherPlace(); model.settingsPicker = null; model.focusPane("weather_place") }
+                            true
+                        }
+                        .settingsRow(focused, rowShape)
+                        .padding(horizontal = u(20), vertical = u(16)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("REMOVE MY LOCATION", style = font(DMMonoMedium, DesignTokens.CompactSize.BODY, Tokens.Amber), maxLines = 1)
+                }
+            }
+        }
     }
 }
 
@@ -763,6 +947,20 @@ private fun AboutRows(model: AppModel) {
             showToggle = false,
             modifier = Modifier.paneRow(model, "about_rate"),
         ) { model.rate() }
+        Box(Modifier.padding(top = u(24))) { SectionHeader("WEATHER CREDITS", "The LOCAL WEATHER channel, CH ${Weather.CHANNEL_NUMBER}") }
+        // Read on the TV, not opened: each is a row so the remote can walk down them.
+        for ((i, c) in WEATHER_CREDITS.withIndex()) {
+            ToggleRow(
+                title = c.title,
+                subtitle = c.line,
+                detail = c.detail,
+                prominentDetail = true,
+                on = true,
+                showToggle = false,
+                subtitleLines = 4,
+                modifier = Modifier.paneRow(model, "about_weather_$i"),
+            ) {}
+        }
         Box(Modifier.padding(top = u(24))) { SectionHeader("LINKS", null) }
         // AboutLinks.all, as the Apple TV's SettingsAboutView: a line to read and open on a phone or
         // computer, not a button that opens anything.
@@ -779,6 +977,16 @@ private fun AboutRows(model: AppModel) {
         }
     }
 }
+
+/** The weather channel's credits (THIRD-PARTY-LICENSES.md, the web tuner's Settings): what each source asks for, in its own words where it asks. */
+private class WeatherCredit(val title: String, val line: String, val detail: String)
+private val WEATHER_CREDITS = listOf(
+    WeatherCredit("FORECAST", "Weather data from MET Norway (api.met.no), CC BY 4.0, rearranged for display. The place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.", "MET NORWAY"),
+    WeatherCredit("PLACE NAMES", "Place names from GeoNames (geonames.org), CC BY 4.0. The place list is on this TV, so a search sends nothing.", "GEONAMES"),
+    WeatherCredit("RADAR", "US National Weather Service. Data Source: Environment and Climate Change Canada. Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben (CC BY 4.0). Recolored to five bands.", "NOAA ECCC DWD"),
+    WeatherCredit("MAP OUTLINES", "Coastlines, lakes and borders from Natural Earth, public domain.", "NATURAL EARTH"),
+    WeatherCredit("MUSIC", "An original loop, played with the FluidR3_GM sound set (MIT).", "ORIGINAL"),
+)
 
 @Composable
 private fun SectionHeader(title: String, subtitle: String?) {

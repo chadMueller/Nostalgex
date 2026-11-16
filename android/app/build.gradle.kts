@@ -45,7 +45,7 @@ android {
         // The SHIELD runs Android 11 (API 30); 28 still covers older Android TV boxes.
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
+        versionCode = 10
         versionName = "1.0.0"
 
         val enrichmentOn = localProp("nostalgex.enrichment") == "on"
@@ -53,6 +53,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", quoted(if (enrichmentOn) localProp("nostalgex.supabaseUrl").trimEnd('/') else ""))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(if (enrichmentOn) localProp("nostalgex.supabaseAnonKey") else ""))
         buildConfigField("String", "RELAY_URL", quoted(if (enrichmentOn) localProp("nostalgex.relayUrl") else ""))
+        // The weather channel's relay, for testing against a local stand-in only (default: nostalgex.app's own).
+        buildConfigField("String", "WEATHER_RELAY_URL", quoted(localProp("nostalgex.weatherRelayUrl")))
     }
 
     signingConfigs {
@@ -92,6 +94,15 @@ android {
 kotlin {
     jvmToolchain(21)
 }
+
+// The weather channel's place shards, basemap and music are the web tuner's files (public/weather at the repo root), copied into the
+// assets at build time so the repo holds one copy. The mp3 twin of the music and the sound set's licence text stay out: Android plays the m4a.
+val weatherAssets = tasks.register<Sync>("weatherAssets") {
+    from(rootDir.parentFile.resolve("public/weather")) { exclude("music/*.mp3", "music/LICENSE*") }
+    into(layout.buildDirectory.dir("generated/weatherAssets/weather"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/weatherAssets").get().asFile)
+tasks.matching { (it.name.startsWith("merge") && it.name.endsWith("Assets")) || it.name.contains("Lint") || it.name.startsWith("lint") }.configureEach { dependsOn(weatherAssets) }
 
 dependencies {
     testImplementation(libs.junit)

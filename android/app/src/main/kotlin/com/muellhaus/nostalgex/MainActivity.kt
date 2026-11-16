@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
         // its watch state back (PlaybackTracker.onBackground); coming back tunes in again.
         model.watchReporter.stop()
         model.playback.stop()
+        // LOCAL WEATHER fetches and plays only while it is on screen.
+        model.weather.deactivate()
         // Keep the backup's settings file current, so whenever Android backs up it carries today's choices.
         SettingsBackup.mirror(applicationContext)
         // The daily refresh waits too: nobody is watching the guide it would rebuild.

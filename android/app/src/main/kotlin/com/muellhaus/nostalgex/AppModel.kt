@@ -68,6 +68,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.LiveChannels
+import com.muellhaus.nostalgex.engine.Weather
+import com.muellhaus.nostalgex.weather.WeatherController
 import com.muellhaus.nostalgex.engine.GuideChannel
 import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.DailyManifest
@@ -170,6 +172,8 @@ sealed interface Discovery {
 
 /** Everything the screens show, and every action the remote takes. One per activity. */
 class AppModel(private val context: Context) : Playback.Listener {
+    /** The application context, for the pieces that draw or play from the app's own resources (the weather channel). */
+    val appContext: Context get() = context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = Prefs(context)
     private val versionName = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
@@ -483,6 +487,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             // AppState.expireSleepTimer: pause, drop the transcode, back to the guide; the sign-in stays.
             playback.pause()
             watchReporter.onPause()
+            weather.deactivate()
             cancelSleepTimer()
             fullScreen = false
         }
@@ -764,6 +769,53 @@ class AppModel(private val context: Context) : Playback.Listener {
     }
     /** A copy fetched from nostalgex.app that passed the checks, waiting for the next guide rebuild (N-074). Never applied under a playing guide on its own. */
     @Volatile private var pendingChannels: ChannelConfig? = null
+
+    // ── LOCAL WEATHER, CH 299 (I-016) ──
+
+    val weather = WeatherController(context, scope)
+    private val weatherGuideChannel = GuideChannel(
+        ChannelConfig.StockChannel(Weather.CHANNEL_ID, Weather.CHANNEL_NUMBER, Weather.CHANNEL_NAME, Weather.CHANNEL_COLOR, "weather", 0, null, null, false),
+        emptyList(), weather = true,
+    )
+
+    /** The channel's row in the guide while its switch in Settings is on; never in demo mode. */
+    private fun weatherRow(): Lineup.WeatherRow? =
+        if (!weather.channelOn || demoMode) null
+        else Lineup.WeatherRow(
+            weatherGuideChannel,
+            place = { weather.place?.let(Weather::placeLabel).orEmpty() },
+            summary = {
+                weather.model?.let { Weather.infoSummary(it, weather.units) }
+                    ?: if (weather.place == null) Weather.NO_PLACE_SUMMARY else Weather.SUMMARY
+            },
+        )
+
+    /** The switch, the place or the units changed: the guide's row and the info panel say so, and the channel leaves the air if it was switched off. */
+    fun weatherChanged() {
+        val l = lineup ?: return
+        scope.launch {
+            withContext(Dispatchers.Default) {
+                l.setWeather(weatherRow())
+                l.rebuildSchedules()
+            }
+            // Switched off while it is on: the guide has nothing at this number, so the first channel is tuned.
+            val on = channel
+            if (on != null && on.weather && l.channels.none { it.id == on.id }) l.channels.firstOrNull()?.let { tuneFromViewer(it) }
+            scheduleTick++
+        }
+    }
+
+    /** The place finder over the shards in the app's assets (weather/places): nothing is asked of the network. */
+    val weatherPlaces: Weather.PlaceIndex by lazy {
+        Weather.PlaceIndex { path ->
+            runCatching { Json.parseToJsonElement(context.assets.open("weather/$path").bufferedReader().use { it.readText() }) }.getOrNull()
+        }
+    }
+
+    fun chooseWeatherPlace(p: Weather.Place) { weather.choosePlace(p); weatherChanged() }
+    fun clearWeatherPlace() { weather.clearPlace(); weatherChanged() }
+    fun chooseWeatherUnits(setting: String) { weather.chooseUnits(setting); weatherChanged() }
+    fun toggleWeatherChannel() { weather.switchChannel(!weather.channelOn); weatherChanged() }
 
     /** The guide is about to be rebuilt anyway (a library load, a refresh, the music pass): take the waiting copy. */
     private suspend fun adoptPendingChannels() {
@@ -1305,6 +1357,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         paneSwapping = false
         paneTickHandled = paneFocusTick
         playback.player.volume = 0f
+        weather.mute(true)
         refreshServers()
         refreshSections()
     }
@@ -1315,6 +1368,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         noteRemoteActivity()
         settingsPicker = null
         playback.player.volume = 1f
+        weather.mute(false)
     }
 
     /** Right or OK on the rail, or a link row: focus a pane row (`key`), or its first. */
@@ -2026,6 +2080,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex", franchiseDefinitions.await())
         lineup.watershed = prefs.watershed
         lineup.franchiseChoices = franchiseChoices()
+        lineup.setWeather(weatherRow())
         var built = 0
         val switchedOn = lineup.build(items, prefs.enabledBundles, serverCollections) { done, total ->
             built = maxOf(built, done)
@@ -2071,7 +2126,9 @@ class AppModel(private val context: Context) : Playback.Listener {
             return true
         }
         if (link != null) Log.i(TAG, "LINK channel $link names no channel in the guide; opening as usual")
-        tune(LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!)
+        // LOCAL WEATHER is a guest in the guide: a launch opens on it only when it was the last channel watched and OPEN ON LAST CHANNEL is on.
+        val first = LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!
+        tune(if (first.weather && !(prefs.openOnLastChannel && prefs.lastWatchedChannel?.id == first.id)) built.channels.firstOrNull { !it.weather } ?: first else first)
         return true
     }
 
@@ -2168,7 +2225,23 @@ class AppModel(private val context: Context) : Playback.Listener {
         failureRun.reset()
         skipsInRow = 0
         tuneCount++
+        if (ch.weather) return tuneWeather()
+        weather.deactivate()
         play(l.tune(ch))
+    }
+
+    /** LOCAL WEATHER: no programme. What was playing stops, and the app draws the loop and plays its own music. */
+    private fun tuneWeather() {
+        audioChosenFor = null
+        lastTracks = null
+        skipJob?.cancel()
+        failure = null
+        watershedHold = false
+        item = null
+        delivery = null
+        watchReporter.stop()
+        playback.stop()
+        weather.activate()
     }
 
     private fun play(pick: Pick?) {
@@ -2472,6 +2545,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         // is not counted as an unfinished load at the next cold start.
         loadMark.released()
         scope.cancel()
+        weather.release()
         watchReporter.stop()
         playback.release()
     }

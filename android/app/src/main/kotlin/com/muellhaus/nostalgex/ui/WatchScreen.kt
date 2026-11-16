@@ -300,6 +300,8 @@ fun WatchScreen(model: AppModel) {
                             modifier = Modifier.fillMaxSize().clipToBounds(),
                         )
                     }
+                    // LOCAL WEATHER (CH 299) has no programme: the app draws the loop over the empty player.
+                    if (model.channel?.weather == true) WeatherScreen(model, Modifier.fillMaxSize())
                     // RETRO MODE's CRT look over the picture, then the tuning card on a slow start.
                     if (model.retroMode) CrtOverlay()
                     TuningOverlay(
@@ -369,7 +371,8 @@ private fun FullScreen(
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> { if (down) { model.previousChannel(); onFlash() }; true }
                     // Up: the mini channel strip, from the bottom. Down: Now Playing, from the top.
                     AndroidKeyEvent.KEYCODE_DPAD_UP -> { if (!down) onOverlay(Overlay.STRIP); true }
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (!down) onOverlay(Overlay.PANEL); true }
+                    // (LOCAL WEATHER plays no programme, so there is no Now Playing to open.)
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (!down && model.item != null) onOverlay(Overlay.PANEL); true }
                     // OK flashes the OSD (live TV: nothing to pause).
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> { if (!down) onFlash(); true }
                     else -> false
