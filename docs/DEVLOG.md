@@ -3,6 +3,14 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
+
+**Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
+
+**Changed.** Select on the stripe now scrolls the guide so the first channel of the stripe's bundle is at the top and puts focus on that row (`GuideStripes.selectTargetRow`, `ChannelGuideView.selectStripeBundle`); the stripe is drawn from the rows, so it stays where it was and Left puts the viewer back on it. Left from the stripe opens the hidden bundle list, where Select used to; Select in the list still jumps and closes it, Menu closes it without a jump, Up and Down on the stripe still step through bundles and wrap. A run that is no bundle has nothing to jump to and Select does nothing. Moving focus onto the row pulled the list back (measured on the simulator: the scroll offset ran 390 to 0 over a second), so the top position is set again 0.1 s and 0.4 s after focus lands.
+
+**Tested.** `GuideStripeSelectTargetTests` (3) and `GuideStripesTests`; `GuideStripeFocusTests` (3 UI tests on the simulator, including Select landing on channel 7 with its row at the top of the guide, Left from the stripe opening the list and Menu closing it). Not tried on a TV.
+
 ## 2026-11-16 (Apple TV 1.0.33 (58): Chad's weather changes)
 
 **State.** On `appletv/1.0.33-weather`, still build 58. Not pushed.

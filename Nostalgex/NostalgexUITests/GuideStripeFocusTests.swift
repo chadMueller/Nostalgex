@@ -2,8 +2,9 @@ import XCTest
 
 /// The guide's package stripe (the coloured band down the left edge, with the package name written up it) and
 /// the way into it: Left from the rows focuses it, Up and Down jump to the previous and next package (the
-/// guide scrolls so that package's first channel is at the top), Right returns to the rows, Select opens the
-/// package list, and Left again does too. It is never where first focus goes.
+/// guide scrolls so that package's first channel is at the top), Right returns to the rows, Select jumps to
+/// the first channel of the stripe's bundle (Chad, 2026-11-16), and Left again opens the package list. It is
+/// never where first focus goes.
 ///
 /// Demo mode with `-uiTestGuideStripes`: twenty demo channels in four demo packages (RETRO ACTION 1 to 6,
 /// LATE NIGHT 7 to 12, TINY 13, THE REST OF THE DEMO 14 to 20). Storage is isolated (`isolatedApp`).
@@ -158,14 +159,31 @@ final class GuideStripeFocusTests: XCTestCase {
         XCTAssertTrue(focused().label.hasPrefix("Channel 1,"), focusText())
     }
 
-    func testSelectOnTheStripeOpensThePackageList() {
+    /// Select on the stripe: the guide goes to the first channel of the bundle the stripe is on, focus on that row,
+    /// and no package list. Left from the stripe still opens the list, and Menu closes it without a jump.
+    func testSelectOnTheStripeJumpsToItsBundle() {
         launchGuide()
         press(.left)
         XCTAssertTrue(stripeIsFocused, focusText())
-        press(.select, 1.5)
+        press(.down, 1.3)
+        XCTAssertEqual(stripeLabel, "Bundle LATE NIGHT")
+        print("STRIPE after down: listTop=\(listTop) row7=\(String(describing: rowTop(7))) row1=\(String(describing: rowTop(1)))")
+        press(.select, 1.6)
         log("select")
-        XCTAssertTrue(app.staticTexts["BUNDLES"].waitForExistence(timeout: 5), "the package list did not open")
-        shot("5-package-list-from-select")
+        print("STRIPE after select: listTop=\(listTop) row7=\(String(describing: rowTop(7))) row1=\(String(describing: rowTop(1)))")
+        if let top = rowTop(7) { XCTAssertEqual(top, listTop, accuracy: 6, "the bundle's first channel is at the top of the guide") }
+        XCTAssertFalse(app.staticTexts["BUNDLES"].exists, "Select opened the package list")
+        XCTAssertFalse(stripeIsFocused, "focus stayed on the stripe: \(focusText())")
+        XCTAssertTrue(focused().label.hasPrefix("Channel 7,"), "Select landed on \(focusText()), not channel 7")
+        shot("5-select-on-the-stripe-jumped-to-the-bundle")
+
+        // Left twice: the stripe, then the list. Menu closes the list and stays on the row.
+        press(.left, 1.6)
+        XCTAssertTrue(stripeIsFocused, focusText())
+        press(.left, 1.6)
+        XCTAssertTrue(app.staticTexts["BUNDLES"].waitForExistence(timeout: 5), "Left from the stripe did not open the list")
+        press(.menu, 1.4)
+        XCTAssertFalse(app.staticTexts["BUNDLES"].exists, "Menu did not close the list")
     }
 
     func testLeftAgainFromTheStripeOpensThePackageList() {
