@@ -1691,8 +1691,8 @@ sub startPlaceSearch(query as String)
     m.wxTask.control = "run"
 end sub
 
-sub onPlaceSearch()
-    res = m.wxTask.result
+sub onPlaceSearch(ev as Object)
+    res = ev.GetData()
     m.wxTask = invalid
     if m.wxDialog = invalid then return
     closeWxDialog()

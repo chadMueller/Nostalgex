@@ -176,8 +176,11 @@ sub ensureForecast(force as Boolean)
     if m.model = invalid then rebuildModel()
 end sub
 
-sub onForecast()
-    res = m.fcTask.result
+' The answers come with the event, never by reading m.<task>: leaving the channel clears those (clearRadar) while
+' a task may still be running, and its late answer then found m.radarTask invalid and stopped the app in the
+' debugger (2026-11-16, on Chad's stick, while he browsed the guide).
+sub onForecast(ev as Object)
+    res = ev.GetData()
     m.loading = false
     m.fcTask = invalid
     if res = invalid then return
@@ -344,10 +347,10 @@ sub startRadarTask()
     m.radarTask.control = "run"
 end sub
 
-sub onBasemap()
-    res = m.baseTask.result
+sub onBasemap(ev as Object)
+    res = ev.GetData()
     m.baseTask = invalid
-    if m.place = invalid or NxWxPlaceKey(m.place) <> m.radar.key then
+    if not m.top.active or m.place = invalid or NxWxPlaceKey(m.place) <> m.radar.key then
         m.radar.loading = false
         return
     end if
@@ -361,12 +364,13 @@ sub onBasemap()
     startRadarTask()
 end sub
 
-sub onRadar()
-    res = m.radarTask.result
+sub onRadar(ev as Object)
+    res = ev.GetData()
     m.radarTask = invalid
     R = m.radar
     R.loading = false
     R.loadedSec = nowSec()
+    if not m.top.active then return
     if m.place = invalid or NxWxPlaceKey(m.place) <> R.key then return
     if res <> invalid and res.ok = true then
         R.files = res.files

@@ -66,3 +66,12 @@ if [ -n "$builtin" ]; then
     echo "$builtin" >&2
     exit 1
 fi
+
+# An observer reads its answer from the event, never from m.<task>.result: the field is cleared while a
+# task still runs (leaving the weather channel did, 2026-11-16) and the late answer stopped the app.
+late=$(grep -nE 'm\.[A-Za-z]*Task\.result' components/WeatherView.brs components/SettingsView.brs || true)
+if [ -n "$late" ]; then
+    echo "FAIL a task's answer read from m.<task>.result, which may be cleared by then (use the event's GetData):" >&2
+    echo "$late" >&2
+    exit 1
+fi
