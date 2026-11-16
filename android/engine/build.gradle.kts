@@ -129,5 +129,8 @@ tasks.test {
         rootDir.parentFile.resolve("channels-memberships.json"),
         rootDir.parentFile.resolve("scripts/franchise-lineup-golden.json"),
         rootDir.parentFile.resolve("scripts/watch-cleanup-golden.json"),
+        // The weather channel (I-016): the golden from the web tuner's engine, and the place shards the app ships.
+        rootDir.parentFile.resolve("scripts/weather-golden.json"),
+        rootDir.parentFile.resolve("public/weather/places"),
     )
 }
