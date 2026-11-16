@@ -50,6 +50,10 @@
   gap: 16px;
 }
 .signin-form { display: flex; flex-direction: column; gap: 16px; margin: 0; }
+/* CANCEL and LOCAL SERVER (NO PLEX.TV) side by side on the Plex code screen (the self-host build wraps them). */
+.signin-btn-row { display: flex; gap: 16px; }
+.signin-btn-row .signin-btn { width: auto; flex: 1 1 0; }
+.signin-btn-row .signin-btn:last-child { flex: 2 1 0; white-space: nowrap; }
 
 /* ---- Text ---- */
 .signin p { margin: 0; }

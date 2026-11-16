@@ -30,7 +30,7 @@ function fixture({ backend = 'plex', type = 'movie', unreadable = false } = {}) 
   const sandbox = {
     console: { log() {}, warn() {} }, URL, URLSearchParams, Date: { now: () => clock },
     crypto: { randomUUID: () => `fixture-session-${++sessionCounter}` },
-    mediaBackend: backend, plexServerUrl: 'https://fixture.invalid', plexToken: 'fixture-token',
+    mediaBackend: backend, plexServerUrl: 'https://fixture.invalid', plexToken: 'fixture-token', plexLocalNoAuth: false, plexSignedIn: () => true, plexTokenParam: (t) => (t ? `X-Plex-Token=${t}` : ''), plexTokenAmp: (t) => (t ? `&X-Plex-Token=${t}` : ''),
     jellyfinUserId: 'fixture-user', jellyfinAuthHeader: () => 'fixture-header', getClientId: () => 'fixture-client',
     document: { getElementById: () => video },
     // The tracker's length is the programme's slot (#315); the minutes are all these fixtures need of it.

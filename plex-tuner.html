@@ -6070,7 +6070,7 @@
       options.headers = { Authorization: session.authorization };
     } else {
       url = `${session.serverUrl}/video/:/transcode/universal/stop`
-        + `?session=${encodeURIComponent(session.id)}&X-Plex-Token=${encodeURIComponent(session.token)}`;
+        + `?session=${encodeURIComponent(session.id)}${session.token ? `&X-Plex-Token=${encodeURIComponent(session.token)}` : ''}`;
     }
     // Always use the outgoing session's captured credentials and exact id. Never stop
     // by device alone: a late resolver could otherwise terminate the newly tuned stream.
@@ -7183,9 +7183,8 @@
     // Keep the server/profile captured at tune-in for late cleanup after disconnect.
     const auth = isPlex ? null : jellyfinAuthHeader();
     const guard = isPlex
-      ? WS.plexGuard({ serverUrl, authQuery: `X-Plex-Token=${encodeURIComponent(serverToken)}`
-          + `&X-Plex-Client-Identifier=${encodeURIComponent(getClientId())}`
-          + '&X-Plex-Product=Nostalgex&X-Plex-Platform=Web' })
+      ? WS.plexGuard({ serverUrl, authQuery: [serverToken ? `X-Plex-Token=${encodeURIComponent(serverToken)}` : '', `X-Plex-Client-Identifier=${encodeURIComponent(getClientId())}`,
+          'X-Plex-Product=Nostalgex', 'X-Plex-Platform=Web'].filter(Boolean).join('&') })
       : WS.mediaServerGuard({ serverUrl, userId: jellyfinUserId, authHeader: auth });
     const backoff = WS.createPulseBackoff();
     let options = { nowPlaying: !!initialOptions.nowPlaying, markWatched: !!initialOptions.markWatched };
@@ -7409,7 +7408,7 @@
     if (playbackTracker) { playbackTracker.stop(); playbackTracker = null; }
 
     // Pre-flight checks — fail loudly so the user knows why there's no video
-    if (!plexServerUrl || !plexToken) {
+    if (!plexServerUrl || !plexSignedIn()) {
       showVideoError('NOT CONNECTED. RECONNECT YOUR SERVER');
       return;
     }
@@ -7511,7 +7510,7 @@
       beginInfoAttempt();
 
       if (canDirectPlay) {
-        streamUrl = `${itemServerUrl}${item.partKey}?X-Plex-Token=${itemServerToken}`;
+        streamUrl = `${itemServerUrl}${item.partKey}${itemServerToken ? '?' + plexTokenParam(itemServerToken) : ''}`;
 
       } else {
         // HLS transcode - works for all formats
@@ -7522,7 +7521,7 @@
           + `?path=${encodeURIComponent('/library/metadata/' + item.ratingKey)}`
           + `&mediaIndex=0&partIndex=0&protocol=hls`
           + `&offset=${Math.floor(item.offsetSeconds || 0)}`
-          + `&copyts=1&X-Plex-Token=${itemServerToken}`
+          + `&copyts=1${plexTokenAmp(itemServerToken)}`
           + `&session=${transcodeSessionId}`
           + `&X-Plex-Session-Identifier=${transcodeSessionId}`
           + `&X-Plex-Client-Identifier=${getClientId()}`
@@ -7942,11 +7941,11 @@
     if (!item) return [];
     const server = String((item.serverUrl || plexServerUrl) || '').replace(/\/+$/, '');
     const token = item.serverToken || plexToken;
-    if (!server || !token) return [];
+    if (!server || !(token || plexLocalNoAuth)) return [];
     const episode = item.type === 'episode';
     const urls = [];
     if (mediaBackend === 'plex') {
-      const via = (path) => `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(path)}&X-Plex-Token=${encodeURIComponent(token)}`;
+      const via = (path) => `${server}/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=${encodeURIComponent(path)}${plexTokenAmp(token)}`;
       if (episode && item.seasonKey) urls.push(via(`/library/metadata/${item.seasonKey}/thumb`));
       if (episode && item.showKey) urls.push(via(`/library/metadata/${item.showKey}/thumb`));
       if (item.thumb) urls.push(via(item.thumb));
@@ -9468,7 +9467,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     try {
-      const res = await fetch(`${serverUrl}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`,
+      const res = await fetch(`${serverUrl}/library/metadata/${encodeURIComponent(item.ratingKey)}${token ? '?' + plexTokenParam(token) : ''}`,
         { headers: { Accept: 'application/json' }, signal: controller.signal });
       if (!res.ok) return null;
       const data = await res.json();
@@ -9552,7 +9551,8 @@
 
   // Plex serves a subtitle file that sits beside the film at the stream's own key, as SRT.
   function buildPlexSubtitleUrl(item, sub) {
-    return `${item.serverUrl || plexServerUrl}${sub.plexKey}?X-Plex-Token=${encodeURIComponent(item.serverToken || plexToken)}`;
+    const subToken = item.serverToken || plexToken;
+    return `${item.serverUrl || plexServerUrl}${sub.plexKey}${subToken ? '?' + plexTokenParam(subToken) : ''}`;
   }
 
   function clearSubtitleTracks() {
@@ -10845,6 +10845,9 @@
   };
 
   let plexToken = null;
+  // A local Plex server with no plex.tv sign-in (I-057, the self-hosted tuner): there is no token at all, only the server's
+  // address, which lets this network in without a sign-in. Nothing asks plex.tv, and no X-Plex-Token is sent.
+  let plexLocalNoAuth = false;
   let plexServerUrl = null;
   let plexConnections = []; // all candidate connections for the active server (local + remote + relay)
   let plexServerName = null;
@@ -10878,6 +10881,18 @@
     clientIdThisVisit = id;
     return id;
   }
+
+  // What a request to a Plex server carries to say who is asking: the token, when there is one. A local server with no
+  // plex.tv sign-in has none, and an empty token is never sent (not as a header, not in an address).
+  function plexSignedIn() { return !!(plexToken || plexLocalNoAuth); }
+  function plexTokenParam(token) { return token ? `X-Plex-Token=${encodeURIComponent(token)}` : ''; }
+  function plexTokenAmp(token) { return token ? `&X-Plex-Token=${encodeURIComponent(token)}` : ''; }
+  function plexAuthHeaders(token) {
+    const headers = { 'Accept': 'application/json' };
+    if (token) headers['X-Plex-Token'] = token;
+    return headers;
+  }
+  const LOCAL_PLEX_NEEDS_AUTH = 'THIS PLEX SERVER WANTS A SIGN-IN. IN PLEX, OPEN SETTINGS, THEN NETWORK, AND ADD YOUR HOME NETWORK TO "LIST OF IP ADDRESSES AND NETWORKS THAT ARE ALLOWED WITHOUT AUTH"';
 
   function plexHeaders() {
     const headers = { ...PLEX_HEADERS, 'X-Plex-Client-Identifier': getClientId() };
@@ -10971,6 +10986,9 @@
           if (checkData.authToken) {
             clearInterval(pollInterval);
             plexToken = checkData.authToken;
+            plexLocalNoAuth = false;   // a plex.tv sign-in replaces a local one
+            sessionStorage.removeItem('plex90_plex_local');
+            try { const sv = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null'); if (sv && sv.localNoAuth) localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
             ssSet('plex90_token', plexToken);
             // Hide the PIN/QR while we discover servers and (for 2+) show the picker.
             if (pinBlock) pinBlock.style.display = 'none';
@@ -11004,7 +11022,7 @@
     }
     try {
       const res = await fetch(`${uri}/identity`, {
-        headers: { 'Accept': 'application/json', 'X-Plex-Token': token },
+        headers: plexAuthHeaders(token),
         signal: controller.signal,
       });
       if (!res.ok) return false;
@@ -11276,7 +11294,7 @@
   // into the same refusal. Everything signOut() removes that is tied to the login goes.
   function forgetRejectedLogin() {
     for (const k of ['plex90_token', 'plex90_server_url', 'plex90_server_name', 'plex90_user_token',
-      'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id']) sessionStorage.removeItem(k);
+      'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id', 'plex90_plex_local']) sessionStorage.removeItem(k);
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
     // The cached library belongs to credentials that no longer work, and the
     // cache is consulted before the connect screen, so leaving it would build
@@ -11286,11 +11304,12 @@
 
   async function checkStoredAuth() {
     // If sessionStorage is empty (direct bookmark to plex-tuner.html), restore from localStorage.
-    if (!sessionStorage.getItem('plex90_token')) {
+    if (!sessionStorage.getItem('plex90_token') && sessionStorage.getItem('plex90_plex_local') !== '1') {
       try {
         const saved = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null');
-        if (saved && saved.token && saved.serverUrl) {
-          ssSet('plex90_token', saved.token);
+        if (saved && (saved.token || saved.localNoAuth) && saved.serverUrl) {
+          ssSet('plex90_token', saved.token || '');
+          if (saved.localNoAuth) ssSet('plex90_plex_local', '1');
           ssSet('plex90_server_url', saved.serverUrl);
           ssSet('plex90_server_name', saved.serverName || '');
           if (saved.userToken) ssSet('plex90_user_token', saved.userToken);
@@ -11319,10 +11338,12 @@
     const storedName = sessionStorage.getItem('plex90_server_name');
     const storedUserToken = sessionStorage.getItem('plex90_user_token');
 
-    if (!storedToken || !storedUrl) return;
+    const localNoAuth = mediaBackend === 'plex' && sessionStorage.getItem('plex90_plex_local') === '1';
+    if ((!storedToken && !localNoAuth) || !storedUrl) return;
 
     // true = token rejected with 401/403; false/undefined = network error or success
     let tokenRevoked = false;
+    let localNeedsAuth = false;   // a local Plex server with no sign-in that now wants one
 
     try {
       let valid = false;
@@ -11350,6 +11371,16 @@
           }
         } catch {
           valid = true; // server offline/unreachable, trust saved credentials
+        }
+      } else if (localNoAuth) {
+        // A local Plex server with no plex.tv sign-in: there is no account to ask, so nothing asks plex.tv. The server itself
+        // is asked (its /identity, no token); a 401 or 403 is the server no longer letting this network in, which the
+        // sign-in is kept through (as the Apple TV does) while the screen says which Plex setting to look at.
+        try {
+          const status = await testConnectionRaw(storedUrl, '');
+          if (status === 401 || status === 403) localNeedsAuth = true; else valid = true;
+        } catch {
+          valid = true;   // unreachable for now: the library load says so
         }
       } else {
         // Plex: validate against plex.tv first; 401 = token revoked; network error = try server
@@ -11401,6 +11432,7 @@
 
       if (valid) {
         plexToken = storedToken;
+        plexLocalNoAuth = localNoAuth;
         plexServerUrl = storedUrl;
         plexServerName = storedName;
         plexConnections = [{ uri: storedUrl }];
@@ -11422,6 +11454,11 @@
         plexConnected = true;
         updateConfigPlexStatus();
         await fetchPlexLibrary();
+      } else if (localNeedsAuth) {
+        const errorEl = document.getElementById('plex-error-label');
+        document.getElementById('plex-connect').style.display = 'grid';
+        errorEl.textContent = LOCAL_PLEX_NEEDS_AUTH;
+        errorEl.style.display = 'block';
       } else if (tokenRevoked) {
         // Token was definitively rejected — clear both session AND localStorage so stale
         // credentials don't persist across page loads.
@@ -11439,7 +11476,7 @@
   async function testConnectionRaw(url, token) {
     try {
       const res = await fetch(`${url}/identity`, {
-        headers: { 'Accept': 'application/json', 'X-Plex-Token': token }
+        headers: plexAuthHeaders(token)
       });
       return res.status;
     } catch {
@@ -11513,6 +11550,7 @@
     endScanWatch();
 
     plexToken = null;
+    plexLocalNoAuth = false;
     plexServerUrl = null;
     plexServerName = null;
     plexConnected = false;
@@ -11521,6 +11559,7 @@
     selectedServerIndices = new Set();
     discoveredServers = [];
     sessionStorage.removeItem('plex90_token');
+    sessionStorage.removeItem('plex90_plex_local');
     sessionStorage.removeItem('plex90_discovered_servers');
     sessionStorage.removeItem('plex90_server_url');
     sessionStorage.removeItem('plex90_server_name');
@@ -12180,7 +12219,7 @@
 
   async function scanServerCollections(gen) {
     const CL = globalThis.NostalgexCollections;
-    if (!CL || !plexServerUrl || !plexToken) return;
+    if (!CL || !plexServerUrl || !plexSignedIn()) return;
     const isCancelled = () => gen !== libraryExtrasGeneration;
     setCollectionScanState('scanning');
     const progress = (done, total) => {
@@ -12896,7 +12935,7 @@
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch(`${uri}${path}`, {
-          headers: { 'Accept': 'application/json', 'X-Plex-Token': plexToken },
+          headers: plexAuthHeaders(plexToken),
           signal: controller.signal,
         });
         clearTimeout(timer);
@@ -12942,7 +12981,7 @@
       if (scan) { if (scan.aborted) controller.abort(); else scan.addEventListener('abort', onScanStop, { once: true }); }
       try {
         const res = await fetch(`${uri}${path}`, {
-          headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+          headers: plexAuthHeaders(server.token),
           signal: controller.signal,
         });
         clearTimeout(timer);
@@ -12997,7 +13036,7 @@
       let res;
       try {
         res = await fetch(url, {
-          headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+          headers: plexAuthHeaders(server.token),
           signal: scanSignal(),
         });
       } catch (err) {
@@ -13106,7 +13145,7 @@
                   // Paged, so a long show is read whole and Plex gets the size header (N-038).
                   const episodes = await NC.fetchPlexPaged(async (path, win) => {
                     const epRes = await fetch(`${server.url}${NC.plexWindowPath(path, win)}`, {
-                      headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token },
+                      headers: plexAuthHeaders(server.token),
                       signal: scanSignal(),
                     });
                     noteScanAnswer();
@@ -13380,7 +13419,7 @@
     }
   }
   async function fetchPlexLibraryFresh() {
-    if (!plexServerUrl || !plexToken) return;
+    if (!plexServerUrl || !plexSignedIn()) return;
     console.log('[Nostalgex] Background library refresh…');
     try {
       await fetchLibraryFromServer({ background: true, buildAllChannels: false });
@@ -13457,7 +13496,8 @@
       const notTheServer = libraryFailureText(failureKind);
       // The server refused the login: forget it, so RECONNECT lands on the sign-in page.
       // mediaBackend stays in memory, so the message below still says Jellyfin, Emby or Plex.
-      if (failureKind === 'auth') forgetRejectedLogin();
+      // A local Plex server with no sign-in has no login to forget: the sign-in stays, and the line says which setting to look at.
+      if (failureKind === 'auth' && !plexLocalNoAuth) forgetRejectedLogin();
       // Reset the connect screen first: it removes the RECONNECT button, so resetting it after
       // the button is made (as this did) left a Jellyfin or Emby viewer with the message and
       // only CONNECT WITH PLEX to press.
@@ -13498,7 +13538,7 @@
         }
       } else {
         errorEl.textContent = err && err.plexStatus
-          ? 'PLEX SESSION REJECTED. SIGN IN AGAIN'
+          ? (plexLocalNoAuth ? LOCAL_PLEX_NEEDS_AUTH : 'PLEX SESSION REJECTED. SIGN IN AGAIN')
           : notTheServer || 'COULD NOT LOAD LIBRARY. YOUR SERVER MAY BE UNREACHABLE';
         errorEl.style.display = 'block';
       }

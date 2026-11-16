@@ -135,8 +135,9 @@
   (function () {
     try {
       var saved = JSON.parse(localStorage.getItem('plex90_saved_auth') || 'null');
-      if (saved && saved.token && saved.serverUrl) {
-        sessionStorage.setItem('plex90_token', saved.token);
+      if (saved && (saved.token || saved.localNoAuth) && saved.serverUrl) {
+        sessionStorage.setItem('plex90_token', saved.token || '');
+        if (saved.localNoAuth) sessionStorage.setItem('plex90_plex_local', '1');
         sessionStorage.setItem('plex90_server_url', saved.serverUrl);
         sessionStorage.setItem('plex90_server_name', saved.serverName || '');
         if (saved.userToken) sessionStorage.setItem('plex90_user_token', saved.userToken);
@@ -255,7 +256,10 @@
             <div class="signin-qr-code" id="connect-qr"></div>
             <p class="signin-dim">SCAN TO CONNECT</p>
           </div>
+          <!-- selfhost:only: <div class="signin-btn-row"> -->
           <button class="signin-btn signin-btn--quiet signin-btn--code" id="plex-cancel" type="button">CANCEL</button>
+          <!-- selfhost:only: <button class="signin-btn signin-btn--quiet signin-btn--code" id="plex-local-btn" type="button">LOCAL SERVER (NO PLEX.TV)</button> -->
+          <!-- selfhost:only: </div> -->
         </section>
 
         <!-- 4. Find (Jellyfin or Emby), only on a page that can reach your network -->
@@ -430,6 +434,7 @@
   function showPicker(error) {
     stopPlex();
     stopMedia();
+    flow.local = false;
     setLine('picker-error', error || '');
     showScreen('picker', 'connect-btn');
   }
@@ -491,24 +496,36 @@
   async function startPlexAuth() {
     stopPlex();
     stopMedia();
+    sessionStorage.removeItem('plex90_plex_local');   // a plex.tv sign-in replaces a local one
     const run = plexRun;
     setLine('picker-error', '');
     $('connect-pin').textContent = '----';
+    $('plex-status').classList.add('signin-dots');
     $('plex-status').textContent = C.plexConnecting;
     drawPlexQr('https://www.plex.tv/link/');
     // CANCEL takes focus quietly, so the code stays the brightest thing on screen.
     showScreen('plex', 'plex-cancel');
 
+    // Where plex.tv can't be reached (a home server with no internet is the case LOCAL SERVER is for) the code screen stays, with
+    // the reason in place of the code, so LOCAL SERVER (NO PLEX.TV) is still there to press. Without that button (the hosted page)
+    // the viewer goes back to the first screen with the reason, as before.
+    const plexTvFailed = (reason) => {
+      if (!$('plex-local-btn')) return showPicker(reason);
+      $('connect-pin').textContent = '----';
+      $('plex-status').classList.remove('signin-dots');
+      $('plex-status').textContent = reason;
+      $('connect-qr').innerHTML = '';
+    };
     let pin;
     try {
       const res = await fetch('https://plex.tv/api/v2/pins', { method: 'POST', headers: plexHeaders() });
       if (run !== plexRun) return;
-      if (res.status === 429) return showPicker(C.plexRateLimited);
-      if (!res.ok) return showPicker(C.plexHttp(res.status));
+      if (res.status === 429) return plexTvFailed(C.plexRateLimited);
+      if (!res.ok) return plexTvFailed(C.plexHttp(res.status));
       pin = await res.json();
     } catch (err) {
       if (run !== plexRun) return;
-      return showPicker(navigator.onLine === false ? C.plexOffline : C.plexUnreachable);
+      return plexTvFailed(navigator.onLine === false ? C.plexOffline : C.plexUnreachable);
     }
     if (run !== plexRun) return;
     $('connect-pin').textContent = String(pin.code).toUpperCase();
@@ -607,6 +624,8 @@
 
   $('connect-btn').addEventListener('click', startPlexAuth);
   $('plex-cancel').addEventListener('click', () => showPicker());
+  // LOCAL SERVER (NO PLEX.TV): in the self-host build only, so on the hosted page there is no such button.
+  if ($('plex-local-btn')) $('plex-local-btn').addEventListener('click', showLocalPlex);
 
   // ---- Jellyfin and Emby ----
   // Only a page served over plain http (the Docker tuner) can reach a server on your
@@ -620,7 +639,7 @@
   const DEFAULT_SCHEME = location.protocol === 'https:' ? 'https' : 'http';
   const KIND_NAME = { jellyfin: 'JELLYFIN', emby: 'EMBY' };
   // run: bumped whenever the viewer leaves a step, so a late answer from it is ignored.
-  const flow = { kind: 'jellyfin', origin: 'address', server: null, user: null, note: '', run: 0, finding: false, qc: null };
+  const flow = { kind: 'jellyfin', origin: 'address', server: null, user: null, note: '', run: 0, finding: false, qc: null, local: false };
 
   function stopMedia() {
     flow.run++;
@@ -640,6 +659,8 @@
   function chooseKind(kind) {
     stopPlex();
     flow.kind = kind;
+    flow.local = false;
+    sessionStorage.removeItem('plex90_plex_local');
     setLine('picker-error', '');
     if (CAN_FIND) showFind(true);
     else showAddress();
@@ -711,17 +732,27 @@
   // 5. Type an address.
   function showAddress(warn) {
     stopMedia();
-    $('address-title').textContent = C.connectTitle(flow.kind);
     const input = $('address-input');
-    input.placeholder = DEFAULT_SCHEME === 'https' ? C.addressPlaceholderHttps : C.addressPlaceholderHttp;
-    $('address-hint').textContent = DEFAULT_SCHEME === 'https' ? C.addressHintHttps : C.addressHintHttp;
-    if (!input.value) input.value = savedAddress(flow.kind);
+    // A field filled for one kind of server is not offered for another.
+    const mode = flow.local ? 'plex-local' : 'media';
+    if (input.dataset.mode !== mode) { input.value = ''; input.dataset.mode = mode; }
+    if (flow.local) {
+      $('address-title').textContent = C.localPlexTitle;
+      input.placeholder = C.localPlexPlaceholder;
+      $('address-hint').textContent = C.localPlexIntro + ' ' + C.localPlexHint;
+      if (!input.value) input.value = savedLocalPlexAddress();
+    } else {
+      $('address-title').textContent = C.connectTitle(flow.kind);
+      input.placeholder = DEFAULT_SCHEME === 'https' ? C.addressPlaceholderHttps : C.addressPlaceholderHttp;
+      $('address-hint').textContent = DEFAULT_SCHEME === 'https' ? C.addressHintHttps : C.addressHintHttp;
+      if (!input.value) input.value = savedAddress(flow.kind);
+    }
     syncAddress();
     setLine('address-warn', warn || '');
     showScreen('address', 'address-input');
   }
   function syncAddress() { $('address-connect').disabled = !$('address-input').value.trim(); }
-  BACK.address = () => (CAN_FIND ? showFind(false) : showPicker());
+  BACK.address = () => (flow.local || !CAN_FIND ? showPicker() : showFind(false));
 
   // 6. Checking: ask the address who it is before anyone types.
   async function startCheck(address, label, origin) {
@@ -756,6 +787,53 @@
   }
   function backFromServer() { return CAN_FIND ? showFind(false) : showAddress(); }
   BACK.checking = () => backToOrigin();
+
+  // Local Plex server, no plex.tv (I-057). Only the self-hosted build has the button, and only a page on http can reach a
+  // server on the network. The address screen asks for the server's address; /identity and the libraries are asked with
+  // no token, and a server that lets this network in without a sign-in is the whole sign-in. Nothing here asks plex.tv.
+  function savedLocalPlexAddress() {
+    const saved = savedAuth();
+    return saved && saved.backend === 'plex' && saved.localNoAuth ? (saved.serverUrl || '') : '';
+  }
+  function showLocalPlex() {
+    stopPlex();
+    stopMedia();
+    flow.local = true;
+    flow.kind = 'plex';
+    showAddress();
+  }
+  async function startLocalCheck(address) {
+    stopMedia();
+    const run = flow.run;
+    flow.origin = 'address';
+    $('checking-status').textContent = C.connecting(address);
+    showScreen('checking', 'checking-cancel');
+    let server;
+    try {
+      server = await S.checkLocalPlex(address);
+    } catch (err) {
+      if (run !== flow.run) return;
+      return showAddress(S.localPlexErrorMessage(err, pageInfo()));
+    }
+    if (run !== flow.run) return;
+    // No token: the saved sign-in is the address and a flag, and the tuner page restores it the same way.
+    sessionStorage.setItem('plex90_backend', 'plex');
+    sessionStorage.setItem('plex90_token', '');
+    sessionStorage.setItem('plex90_plex_local', '1');
+    sessionStorage.removeItem('plex90_user_token');
+    sessionStorage.setItem('plex90_server_url', server.url);
+    sessionStorage.setItem('plex90_server_name', server.name);
+    sessionStorage.setItem('plex90_selected_servers', JSON.stringify([{
+      name: server.name, url: server.url, token: '', connections: [{ uri: server.url }], machineIdentifier: server.machineIdentifier,
+    }]));
+    try {
+      localStorage.setItem('plex90_saved_auth', JSON.stringify({
+        backend: 'plex', token: '', localNoAuth: true, serverUrl: server.url, serverName: server.name,
+      }));
+    } catch (e) {}
+    showScreen('done');
+    window.location.href = 'plex-tuner.html' + window.location.search;
+  }
 
   // 7. Sign in: the server's users as tiles when it lists them, otherwise the fields.
   function showSignIn(error) {
@@ -910,7 +988,8 @@
   $('address-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const value = $('address-input').value.trim();
-    if (value) startCheck(value, value, 'address');
+    if (value && flow.local) startLocalCheck(value);
+    else if (value) startCheck(value, value, 'address');
   });
   $('address-back').addEventListener('click', BACK.address);
   $('checking-cancel').addEventListener('click', BACK.checking);

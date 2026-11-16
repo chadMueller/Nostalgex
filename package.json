@@ -137,6 +137,7 @@
     "test:reporting-controls": "node scripts/playback-reporting-controls-smoke.mjs",
     "test:last-channel": "node scripts/nostalgex-last-channel-smoke.mjs",
     "test:open-last-channel:browser": "node scripts/open-last-channel-browser-smoke.mjs",
+    "test:local-plex:browser": "node scripts/local-plex-browser-smoke.mjs",
     "test:include-hidden:browser": "node scripts/include-hidden-browser-smoke.mjs",
     "test:retro:browser": "node scripts/retro-mode-browser-smoke.mjs",
     "test:weather": "node scripts/nostalgex-weather-smoke.mjs",

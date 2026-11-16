@@ -426,6 +426,50 @@
     return result;
   }
 
+  // ── A local Plex server with no plex.tv sign-in (I-057) ──────────────────
+  // For a Plex server that lets this network in without a sign-in (Plex, Settings, Network, "List of IP addresses and
+  // networks that are allowed without auth"). The self-hosted tuner only: a page on http can reach it. Nothing here
+  // asks plex.tv, and no token is sent (the Apple TV's LOCAL SERVER (NO PLEX.TV), PlexAPIService.checkLocalServer).
+
+  /** Plex listens here out of the box. */
+  const PLEX_DEFAULT_PORT = 32400;
+
+  /** The base URL for what was typed, or '' when it names no host: http unless https was typed, :32400 when no port was. */
+  function localPlexAddress(raw) {
+    const parts = splitAddress(raw);
+    if (!parts.host) return '';
+    return `${parts.scheme === 'https' ? 'https' : 'http'}://${parts.host}:${parts.port != null ? parts.port : PLEX_DEFAULT_PORT}`;
+  }
+
+  /**
+   * Asks a Plex server who it is (/identity answers without a sign-in), then whether this network may read its libraries
+   * without one (/library/sections, no token). Resolves to { url, name, machineIdentifier }; rejects with a CheckError:
+   * notAServer, network, timeout, or needsAuth (the server wants a sign-in from this browser: a 401 or 403).
+   * `opts.fetch` stands in for window.fetch in tests.
+   */
+  async function checkLocalPlex(address, opts) {
+    const o = opts || {};
+    const fetchImpl = o.fetch || global.fetch.bind(global);
+    const ms = o.requestMs || CHECK_REQUEST_MS;
+    const url = localPlexAddress(address);
+    if (!url) throw CheckError('notAServer', '');
+    const identity = await timedFetch(fetchImpl, url + '/identity', ms);
+    let container = null;
+    try { container = (JSON.parse(identity.body) || {}).MediaContainer || null; } catch (e) { container = null; }
+    if (identity.status < 200 || identity.status > 299 || !container || typeof container !== 'object') throw CheckError('notAServer', url);
+    const sections = await timedFetch(fetchImpl, url + '/library/sections', ms);
+    if (sections.status === 401 || sections.status === 403) throw CheckError('needsAuth', url);
+    if (sections.status < 200 || sections.status > 299) throw CheckError('notAServer', url);
+    // The server's own name comes from its root, which answers once the sections did.
+    let name = 'Plex Server';
+    try {
+      const root = await timedFetch(fetchImpl, url + '/', ms);
+      const friendly = root.status >= 200 && root.status <= 299 ? ((JSON.parse(root.body) || {}).MediaContainer || {}).friendlyName : '';
+      if (friendly && typeof friendly === 'string') name = friendly;
+    } catch (e) { /* the default name */ }
+    return { url, name, machineIdentifier: typeof container.machineIdentifier === 'string' ? container.machineIdentifier : '' };
+  }
+
   // ── Copy (verbatim from the Apple TV spec, web wording where it has to differ) ──
 
   const NAMES = { jellyfin: 'Jellyfin', emby: 'Emby' };
@@ -490,6 +534,15 @@
     plexConnecting: 'CONNECTING TO PLEX.TV',
     plexWaiting: 'WAITING FOR AUTHORIZATION',
     plexFinding: 'FINDING YOUR SERVERS',
+    localPlexButton: 'LOCAL SERVER (NO PLEX.TV)',
+    localPlexTitle: 'CONNECT TO PLEX WITHOUT PLEX.TV',
+    localPlexIntro: "Type the address of your Plex server. This works when the server lets your network in without a sign-in.",
+    localPlexHint: 'The address, like 192.168.1.10 (port 32400 is added when you leave it out)',
+    localPlexPlaceholder: '192.168.1.10',
+    localPlexNeedsAuth: 'This Plex server wants a sign-in from this browser. In Plex, open Settings, then Network, and add your home network to "List of IP addresses and networks that are allowed without auth", then try again.',
+    localPlexNotPlex: "That address answered, but it isn't a Plex server. Check the address (Plex uses port 32400 unless you changed it).",
+    localPlexNothing: 'Nothing answered at that address. Check the address and port (Plex uses 32400 unless you changed it).',
+    localPlexTimeout: 'The Plex server took too long to answer. Check the address, or that this device can reach it.',
     quickConnectOff: 'Quick Connect is off on this server. Turn it on in Jellyfin (Dashboard, then General), or sign in with your password.',
     quickConnectNotJellyfin: "That address answered, but it isn't Jellyfin. Check the address and port (Jellyfin uses 8096).",
     quickConnectFailed: 'Could not start Quick Connect. Check the server address, or sign in with your password.',
@@ -515,12 +568,23 @@
     return COPY.nothingAnswered;
   }
 
+  /** The amber line for a failed local Plex check. */
+  function localPlexErrorMessage(err, page) {
+    if (page && page.online === false) return COPY.offline;
+    const code = err && err.code;
+    if (code === 'needsAuth') return COPY.localPlexNeedsAuth;
+    if (code === 'notAServer') return COPY.localPlexNotPlex;
+    if (code === 'timeout') return COPY.localPlexTimeout;
+    return COPY.localPlexNothing;
+  }
+
   const api = {
     DEFAULT_HTTP_PORT, FIND_WINDOW_MS, CHECK_REQUEST_MS, CHECK_TOTAL_MS, QUICK_CONNECT_POLL_MS, QUICK_CONNECT_MAX_POLLS,
     splitAddress, basePath, addressCandidates,
     parseDiscoveryReply, dedupeServers, discoveryOutcome, findCandidates, findServers,
     parsePublicInfo, parseQuickConnectEnabled, parsePublicUsers, preferredMethod, offersQuickConnect,
     checkServer, checkErrorMessage,
+    PLEX_DEFAULT_PORT, localPlexAddress, checkLocalPlex, localPlexErrorMessage,
     quickConnectInitiateOutcome, quickConnectPollOutcome, quickConnect, signInWithPassword, authHeader,
     COPY,
   };

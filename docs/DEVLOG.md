@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-16 (web and Docker: LOCAL SERVER (NO PLEX.TV), I-057)
+
+**State.** Branch `web/i057-local-plex` off main `7d4b3c71`. Not merged, not pushed, not in a release. The reference is the Apple TV's `appletv/i057-local-plex`.
+
+**Why.** A Plex server can let a home network in without a sign-in (Plex, Settings, Network, "List of IP addresses and networks that are allowed without auth"), but the web tuner could not use one without a plex.tv account. The self-hosted tuner runs on http and can reach such a server; the hosted https page cannot, so it has no button.
+
+**Changed.**
+- `web-tuner.html`: LOCAL SERVER (NO PLEX.TV) on the Plex code screen beside CANCEL, written with `selfhost:only` lines so only the self-host build has it. It opens the address screen (Plex words); CONNECT asks the address's `/identity`, then `/library/sections` with no token, and signs in with an empty token. The tuner page opens on that server.
+- `scripts/nostalgex-signin.js`: `localPlexAddress` (http unless https was typed, `:32400` when no port), `checkLocalPlex`, `localPlexErrorMessage` and the copy. A 401 or 403 names Plex's "List of IP addresses and networks that are allowed without auth" setting.
+- The sign-in is saved as `{ backend: 'plex', token: '', localNoAuth: true, serverUrl, serverName }` and `plex90_plex_local` in the session. It is cleared at sign-out, at a plex.tv sign-in and when another backend is chosen.
+- `plex-tuner.html`: `plexLocalNoAuth`. Nothing asks plex.tv for it (the stored-auth check asks the server's `/identity` instead). `X-Plex-Token` is left out of every Plex request when there is none: headers (`plexAuthHeaders`), and the direct play, transcode, stop, poster, metadata and subtitle addresses. A 401 later keeps the sign-in and shows the setting's name.
+- With no internet (plex.tv cannot be reached) the self-host code screen now stays with the reason in place of the code, so the button is still there to press. The hosted page goes back to the first screen as before.
+- `scripts/local-plex-browser-smoke.mjs` (`npm run test:local-plex:browser`, not in `npm test`: it needs both builds): a stub Plex server, the button beside CANCEL in the self-host build and absent from the hosted one, the address rule, a full sign-in to the guide with no token anywhere and no plex.tv request after the button, a reload, sign-out, a 401 on the address screen and on a saved sign-in, a non-Plex address, an address nothing answers, and no internet. 35 checks.
+- Two smokes that lift page functions by name (`web-tune-ownership`, `playback-reporting-controls`) got stubs for the new helpers.
+
+**Not done.** Android, Roku and the Apple TV have their own paths (the Apple TV's is the reference). A sign-in with a Plex server that has a different default port than 32400 needs the port typed.
+
 ## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
 
 **Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.

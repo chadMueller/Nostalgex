@@ -92,7 +92,7 @@ function fixture({ hls = false, backend = 'jellyfin', subtitles = false, reporti
   const context = {
     console: { log() {}, warn() {}, error() {} }, URL: FixtureURL, URLSearchParams, AbortController,
     Blob: class { constructor(parts) { this.parts = parts; } }, crypto: { randomUUID: () => `generated-${++seq}` },
-    currentChannel: null, isDemoMode: false, mediaBackend: backend, plexServerUrl: 'https://fixture.invalid', plexToken: 'fixture-token', jellyfinUserId: 'fixture-user',
+    currentChannel: null, isDemoMode: false, mediaBackend: backend, plexServerUrl: 'https://fixture.invalid', plexToken: 'fixture-token', plexLocalNoAuth: false, plexSignedIn: () => true, plexTokenParam: (t) => (t ? `X-Plex-Token=${t}` : ''), plexTokenAmp: (t) => (t ? `&X-Plex-Token=${t}` : ''), jellyfinUserId: 'fixture-user',
     jellyfinAuthHeader: () => `fixture-auth-${context.plexToken}`, getClientId: () => 'fixture-device',
     playbackTracker: null, currentPlayingItem: null, hlsInstance: null, syncPlexActivity: reporting,
     videoMuted: false, consecutivePlaybackFailures: 0,
