@@ -512,7 +512,19 @@ sub onLibraryStatus()
             m.scheduleTimer.control = "start"
         end if
         startDailyRefresh()
+        ' The live channels.json, once per launch, behind a guide that is up (N-074).
+        if first then fetchLiveChannels()
     end if
+end sub
+
+' A newer channels.json from nostalgex.app into the cache, in its own task with
+' its own time limit. Nothing on screen changes: a guide build reads the cache,
+' so a copy that arrives now is applied at the next build, not to what is
+' playing (source/util/LiveChannels.brs).
+sub fetchLiveChannels()
+    if m.liveChannels <> invalid and m.liveChannels.state = "run" then return
+    m.liveChannels = CreateObject("roSGNode", "LiveChannelsTask")
+    m.liveChannels.control = "run"
 end sub
 
 ' The seed's last airing ended before the library finished loading (#155):
@@ -551,6 +563,8 @@ end sub
 sub onDailyTick()
     if m.guide = invalid or m.libraryBusy = true then return
     now& = CreateObject("roDateTime").AsSeconds()
+    ' A TV left on asks for the live channels.json again about once a day.
+    if NxLiveChannelsDue(NxRegSection("livechannels"), now&) then fetchLiveChannels()
     last& = now&
     held = NxLibraryHeld()
     if held <> invalid then last& = held.at

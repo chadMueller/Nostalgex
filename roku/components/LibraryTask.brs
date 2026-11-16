@@ -521,7 +521,7 @@ sub loadLibrary()
         end if
     end for
     print "library: "; collections.raw.Count(); " server collections ("; collections.failed; " servers failed) in "; timer.TotalMilliseconds(); " ms"
-    config = ParseJson(ReadAsciiFile("pkg:/data/channels.json"))
+    config = NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config
     manifest = ParseJson(ReadAsciiFile("pkg:/data/channels-memberships.json"))
 
     ' Enrichment, when this build has it (source/enrich/Enrichment.brs): the
@@ -1216,7 +1216,7 @@ function rebuildForBundles(prev as Object, lib as Object) as Dynamic
         print "library: package change needs a full rebuild: the servers on changed"
         return invalid
     end if
-    config = ParseJson(ReadAsciiFile("pkg:/data/channels.json"))
+    config = NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config
     manifest = ParseJson(ReadAsciiFile("pkg:/data/channels-memberships.json"))
     reuse = {}
     for each ch in prev

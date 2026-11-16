@@ -73,6 +73,7 @@
     <field id="sections" type="array" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LiveChannels.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/BundleChoices.brs" />
   <script type="text/brightscript" uri="pkg:/source/plex/PlexApi.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/RescanInfo.brs" />

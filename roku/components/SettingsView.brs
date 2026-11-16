@@ -374,7 +374,7 @@ sub pushMissing()
     clock = CreateObject("roTimespan")
     parsedMs = -1
     if m.defs = invalid then
-        m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+        m.defs = NxChannelDefsById(NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config)
         parsedMs = clock.TotalMilliseconds()
     end if
     groups = NxMissingGroups(m.top.bundles, m.enabled, m.top.builtBundles, m.building, m.onAir, m.defs)
@@ -429,7 +429,7 @@ end sub
 sub pushPackage(i as Integer)
     b = m.top.bundles[i]
     ' The channel names the focused row lists (#277).
-    if m.defs = invalid then m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+    if m.defs = invalid then m.defs = NxChannelDefsById(NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config)
     row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
     add(row)
 end sub
