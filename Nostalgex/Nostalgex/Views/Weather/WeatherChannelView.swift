@@ -223,11 +223,28 @@ enum WeatherScreens {
         return base + region
     }
 
+    /// The credit and the age of the forecast, the least important text on screen (Chad, 2026-11-16): one small stack
+    /// at the bottom left, 16 px (about 60% of the 25 it was), text-2 at 70%, which still reads 4.5:1 or better on the
+    /// background, so the attribution the sources require stays legible. From the top (the web tuner's order): the
+    /// radar source's credit on the radar screen, DATA FROM MET NORWAY, UPDATED. The loop's pips stay at the right.
+    static let creditSize: CGFloat = 16
+    static let creditLine: CGFloat = 22
+    static let creditColor = rgb(0xB9C3DE, 0.7)
+
     static func footer(_ gc: GraphicsContext, _ st: State, screenIndex: Int, extraCredit: String?) {
         let x = safeX
         let base = H - safeY - 6
-        text(gc, "DATA FROM MET NORWAY", x, base, .mono, 25, text2)
-        if let extraCredit { text(gc, extraCredit, x, base - 34, .mono, 25, text2) }
+        var lines = ["DATA FROM MET NORWAY"]
+        if let extraCredit { lines.insert(extraCredit, at: 0) }
+        if let u = st.model?.updatedMs, let place = st.place {
+            let age = WeatherEngine.forecastAge(updatedMs: u, nowMs: st.nowMs, tz: place.tz)
+            lines.append(age.stale ? "OLD FORECAST FROM \(age.text.replacingOccurrences(of: "UPDATED ", with: ""))" : age.text)
+        }
+        var y = base - CGFloat(lines.count - 1) * creditLine
+        for l in lines {
+            text(gc, l, x, y, .mono, creditSize, creditColor)
+            y += creditLine
+        }
         let pips = WeatherEngine.screens.count
         let pw: CGFloat = 44, gap: CGFloat = 10
         let pipsW = CGFloat(pips) * pw + CGFloat(pips - 1) * gap
@@ -235,11 +252,6 @@ enum WeatherScreens {
         for i in 0..<pips {
             fillRect(gc, CGRect(x: px, y: base - 12, width: pw, height: 10), i == screenIndex ? accent(WeatherEngine.screens[i].id) : outline)
             px += pw + gap
-        }
-        if let u = st.model?.updatedMs, let place = st.place {
-            let age = WeatherEngine.forecastAge(updatedMs: u, nowMs: st.nowMs, tz: place.tz)
-            let label = age.stale ? "OLD FORECAST FROM \(age.text.replacingOccurrences(of: "UPDATED ", with: ""))" : age.text
-            text(gc, label, W - safeX - pipsW - 36, base, .mono, 25, age.stale ? amber : text2, .right)
         }
     }
 
@@ -454,7 +466,7 @@ enum WeatherScreens {
         header(gc, st, title: hasData ? screen.title : WeatherEngine.channelName, accent: hasData ? accent(screen.id) : cyan)
         var extra: String?
         if st.status == .noplace || st.place == nil {
-            message(gc, title: "SET YOUR LOCATION IN SETTINGS", sub: "SETTINGS, PLAYBACK & PICTURE, WEATHER, LOCATION", color: cyan)
+            message(gc, title: "SET YOUR LOCATION IN SETTINGS", sub: "SETTINGS, CHANNELS & BUNDLES, LOCAL WEATHER, LOCATION", color: cyan)
         } else if let model = st.model, let place = st.place {
             switch screen.id {
             case "current": screenCurrent(gc, st, model, place)
@@ -582,10 +594,14 @@ enum WeatherIcons {
                         "heavy-rain", "showers-day", "showers-night", "sleet", "snow", "flurries-day", "flurries-night", "thunder"]
     static let grids: [String: Grid] = Dictionary(uniqueKeysWithValues: names.map { ($0, make($0)) })
 
-    /// Draws an icon at (x, y), `size` square, in whole-pixel cells.
+    /// Icons are drawn at 85% of their slot (Chad, 2026-11-16: "all like 15% smaller"), in whole-pixel cells so they
+    /// stay crisp, centred in the same slot so nothing else moves: cells of 14, 8 and 7 become 12, 7 and 6.
+    static let scale: CGFloat = 0.85
+
+    /// Draws an icon centred in the `size` square at (x, y), in whole-pixel cells.
     static func draw(_ gc: GraphicsContext, _ name: String, x: CGFloat, y: CGFloat, size: CGFloat) {
         guard let grid = grids[name] ?? grids["cloud"] else { return }
-        let cell = max(1, (size / 24).rounded())
+        let cell = max(1, (size * scale / 24).rounded())
         let ox = (x + (size - cell * 24) / 2).rounded()
         let oy = (y + (size - cell * 24) / 2).rounded()
         for (r, row) in grid.enumerated() {

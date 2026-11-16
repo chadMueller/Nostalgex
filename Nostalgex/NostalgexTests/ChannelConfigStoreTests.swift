@@ -106,6 +106,32 @@ final class ChannelConfigStoreTests: XCTestCase {
         XCTAssertFalse(c.result.channels.isEmpty)
     }
 
+    /// An unchanged file costs a 304: the request carries If-None-Match only when there is an ETag to send.
+    func testTheRequestIsConditionalWhenThereIsAnETag() {
+        let plain = ChannelConfigStore.request(etag: nil, timeout: 10)
+        XCTAssertNil(plain.value(forHTTPHeaderField: "If-None-Match"))
+        XCTAssertNil(ChannelConfigStore.request(etag: "", timeout: 10).value(forHTTPHeaderField: "If-None-Match"))
+        let conditional = ChannelConfigStore.request(etag: "W/\"abc\"", timeout: 3)
+        XCTAssertEqual(conditional.value(forHTTPHeaderField: "If-None-Match"), "W/\"abc\"")
+        XCTAssertEqual(conditional.timeoutInterval, 3)
+        XCTAssertEqual(conditional.url, ChannelConfigStore.liveURL)
+        XCTAssertEqual(conditional.cachePolicy, .reloadIgnoringLocalCacheData)
+        XCTAssertLessThan(ChannelConfigStore.blockingTimeout, ChannelConfigStore.timeout)
+    }
+
+    /// Parse cost of the live file, measured on the simulator host (the numbers in the dev log).
+    func testParseTimeOfTheShippedFile() throws {
+        let data = try shipped()
+        var best = Double.infinity
+        for _ in 0..<5 {
+            let t0 = CFAbsoluteTimeGetCurrent()
+            XCTAssertNotNil(ChannelConfigLoader.loadConfig(from: data))
+            best = min(best, CFAbsoluteTimeGetCurrent() - t0)
+        }
+        print("[CONFIGPERF] \(data.count) bytes, loadConfig best of 5 = \(Int(best * 1000)) ms")
+        XCTAssertLessThan(best, 0.5, "parsing channels.json should be far under half a second")
+    }
+
     func testVersionCompare() {
         XCTAssertTrue(ChannelConfigStore.isVersion("1.0.34", newerThan: "1.0.33"))
         XCTAssertTrue(ChannelConfigStore.isVersion("1.1", newerThan: "1.0.99"))

@@ -19,9 +19,13 @@ enum ChannelConfigStore {
     /// The newest channels.json format this build reads.
     static let maxFormatVersion = 1
     static let refreshAfter: TimeInterval = 24 * 3600
-    /// The same short wait the old server lookup had: onboarding never waits longer than this.
+    /// A background refresh (a kept copy exists, nothing waits on it).
     static let timeout: TimeInterval = 10
+    /// A fetch the launch waits on, because there is no kept copy yet (a first install): short, so a slow or
+    /// missing network costs onboarding no more than this and the bundled copy is used.
+    static let blockingTimeout: TimeInterval = 3
     static let lastFetchKey = "nostalgex_live_config_fetched_at"
+    static let etagKey = "nostalgex_live_config_etag"
 
     static var cacheURL: URL? { LocalStore.rootDirectory?.appendingPathComponent("channels-live.json") }
 
@@ -110,21 +114,37 @@ enum ChannelConfigStore {
         return v
     }
 
-    /// Asks nostalgex.app for channels.json and keeps it when it passes. Never throws, never waits longer than
-    /// `timeout`. Tests never reach the network: XCTest runs keep the bundled rules.
-    static func refresh(session: URLSession = .shared) async {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+    /// The request: conditional when a kept copy came with an ETag, so an unchanged file answers 304 with no body.
+    static func request(etag: String?, timeout: TimeInterval) -> URLRequest {
         var req = URLRequest(url: liveURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let etag, !etag.isEmpty { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        return req
+    }
+
+    /// Asks nostalgex.app for channels.json and keeps it when it passes. Never throws, never waits longer than
+    /// `timeout`. Tests never reach the network: XCTest runs keep the bundled rules. The ETag is sent only while
+    /// a kept copy exists to go with it, and kept only for a copy that passed.
+    static func refresh(session: URLSession = .shared, timeout: TimeInterval = ChannelConfigStore.timeout) async {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        let keptCopyExists = cacheURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+        let etag = keptCopyExists ? AppDefaults.standard.string(forKey: etagKey) : nil
         do {
-            let (data, response) = try await session.data(for: req)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                print("[Plex90] CONFIG: live channels.json answered \((response as? HTTPURLResponse)?.statusCode ?? 0), keeping what we have")
-                AppDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastFetchKey)
+            let (data, response) = try await session.data(for: request(etag: etag, timeout: timeout))
+            let http = response as? HTTPURLResponse
+            AppDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastFetchKey)
+            if http?.statusCode == 304 {
+                print("[Plex90] CONFIG: live channels.json unchanged (304)")
+                return
+            }
+            guard http?.statusCode == 200 else {
+                print("[Plex90] CONFIG: live channels.json answered \(http?.statusCode ?? 0), keeping what we have")
                 return
             }
             let v = store(downloaded: data, bundledVersion: version(of: bundledData()), appVersion: appVersion, to: cacheURL)
-            AppDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastFetchKey)
+            if case .accepted = v {
+                AppDefaults.standard.set(http?.value(forHTTPHeaderField: "ETag"), forKey: etagKey)
+            }
             print("[Plex90] CONFIG: live channels.json \(v)")
         } catch {
             print("[Plex90] CONFIG: live channels.json failed: \(error.localizedDescription), keeping what we have")

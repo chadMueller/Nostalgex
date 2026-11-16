@@ -24,7 +24,7 @@ final class WeatherChannelWalkTests: XCTestCase {
         return f.exists ? f.label : "<nothing>"
     }
 
-    private var base: String { ProcessInfo.processInfo.environment["WEATHER_BASE"] ?? "http://127.0.0.1:8765" }
+    private var base: String { ProcessInfo.processInfo.environment["WEATHER_BASE"] ?? "https://www.nostalgex.app" }
 
     private func launch(place: String?) {
         var args = ["-uiTestResetCredentials", "-uiTestWeatherInDemo", "-uiTestMuteAudio", "-weatherBase", base]
@@ -69,15 +69,7 @@ final class WeatherChannelWalkTests: XCTestCase {
         wait(untilLoopAt: 58); shot("weather-radar")
         press(.menu, 2)
 
-        // Settings, PLAYBACK & PICTURE: the WEATHER rows.
-        for _ in 0..<6 where !focusedLabel().contains("SETTINGS") { press(.up, 0.5) }
-        press(.select, 3)
-        press(.down, 1)
-        XCTAssertTrue(focusedLabel().contains("PLAYBACK"), "not on PLAYBACK & PICTURE: \(focusedLabel())")
-        press(.select, 2)
-        for _ in 0..<20 where !focusedLabel().contains("LOCATION") { press(.down, 0.5) }
-        XCTAssertTrue(focusedLabel().contains("LOCATION"), "no LOCATION row: \(focusedLabel())")
-        shot("settings-weather")
+        // The settings are walked in testLocationSearch and testBarCreditsAndSettingsRow.
     }
 
     /// LOCATION: type a postcode, pick the match, the row says it.
@@ -87,10 +79,11 @@ final class WeatherChannelWalkTests: XCTestCase {
         launch(place: nil)
         for _ in 0..<6 where !focusedLabel().contains("SETTINGS") { press(.up, 0.5) }
         press(.select, 3)
-        press(.down, 1)
+        for _ in 0..<4 where !focusedLabel().contains("CHANNELS") { press(.down, 0.8) }
         press(.select, 2)
-        for _ in 0..<20 where !focusedLabel().contains("LOCATION") { press(.down, 0.5) }
+        for _ in 0..<8 where !focusedLabel().contains("LOCAL WEATHER") { press(.down, 0.6) }
         press(.select, 2)
+        press(.select, 2)   // LOCATION
         let field = app.textFields["weatherLocationField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the location sheet has no field")
         press(.select, 2)   // the keyboard
@@ -105,6 +98,35 @@ final class WeatherChannelWalkTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'BEVERLY HILLS'")).firstMatch.waitForExistence(timeout: 5),
                       "the LOCATION row does not show the picked place")
         shot("location-picked")
+    }
+
+    /// Chad's 2026-11-16 changes: CH 299 is one bar in the guide, the credits are a small stack at the bottom left,
+    /// and the settings are a LOCAL WEATHER row under CHANNELS & BUNDLES with its own page.
+    func testBarCreditsAndSettingsRow() {
+        continueAfterFailure = true
+        XCUIRemote.shared.press(.menu)
+        launch(place: "Toronto|CA|ON|43.65|-79.38|America/Toronto")
+        tuneWeather()
+        Thread.sleep(forTimeInterval: 8)
+        press(.right, 1); press(.right, 1)
+        shot("guide-bar")
+        XCTAssertTrue(focusedLabel().contains("LOCAL WEATHER"), "the cursor left the bar: \(focusedLabel())")
+        press(.left, 1); press(.left, 1)
+        press(.playPause, 2)
+        wait(untilLoopAt: 58); shot("weather-radar-credits")
+        press(.menu, 2)
+        for _ in 0..<14 where !focusedLabel().contains("SETTINGS") { press(.up, 0.5) }
+        press(.select, 3)
+        for _ in 0..<4 where !focusedLabel().contains("CHANNELS") { press(.down, 0.8) }
+        press(.select, 2)
+        for _ in 0..<8 where !focusedLabel().contains("LOCAL WEATHER") { press(.down, 0.6) }
+        XCTAssertTrue(focusedLabel().contains("LOCAL WEATHER"), "no LOCAL WEATHER row: \(focusedLabel())")
+        shot("channels-weather-row")
+        press(.select, 2)
+        XCTAssertTrue(focusedLabel().contains("LOCATION"), "the page did not open on LOCATION: \(focusedLabel())")
+        shot("weather-subpage")
+        press(.menu, 2)
+        XCTAssertTrue(focusedLabel().contains("LOCAL WEATHER"), "Menu did not return to the row: \(focusedLabel())")
     }
 
     func testNoLocationCard() {

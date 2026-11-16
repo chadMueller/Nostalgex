@@ -12,14 +12,18 @@ enum WeatherGuideInfo {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var _placeTitle = ""
     nonisolated(unsafe) private static var _summary = ""
+    nonisolated(unsafe) private static var _temperature = ""
 
     static var placeTitle: String { lock.lock(); defer { lock.unlock() }; return _placeTitle }
     static var summary: String { lock.lock(); defer { lock.unlock() }; return _summary }
+    /// "6°C", or empty with no forecast.
+    static var temperature: String { lock.lock(); defer { lock.unlock() }; return _temperature }
 
-    static func set(placeTitle: String, summary: String) {
+    static func set(placeTitle: String, summary: String, temperature: String = "") {
         lock.lock(); defer { lock.unlock() }
         _placeTitle = placeTitle
         _summary = summary
+        _temperature = temperature
     }
 }
 
@@ -197,7 +201,8 @@ final class WeatherController {
         } else {
             summary = "Current conditions, today\u{2019}s forecast, the 5-day forecast and radar, in a loop."
         }
-        WeatherGuideInfo.set(placeTitle: placeTitle, summary: summary)
+        let temperature = (place != nil ? model : nil).map { "\(WeatherEngine.fmtTemp($0.current.tempC, units))\u{00B0}\(units.rawValue)" } ?? ""
+        WeatherGuideInfo.set(placeTitle: placeTitle, summary: summary, temperature: temperature)
     }
 
     // MARK: Places

@@ -15,7 +15,14 @@ extension AppState {
     /// old server lookup had, so a slow or missing network costs onboarding at most that and falls back.
     func loadChannelConfig() async -> ChannelConfigResult {
         if ChannelConfigStore.isDue() {
-            await ChannelConfigStore.refresh()
+            let haveKeptCopy = ChannelConfigStore.cacheURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+            if haveKeptCopy {
+                // A kept copy builds the guide now; the day-old check runs behind it and lands at the next rebuild.
+                Task.detached(priority: .utility) { await ChannelConfigStore.refresh() }
+            } else {
+                // First install: one short wait, so the first guide can use the live rules, then the bundled copy.
+                await ChannelConfigStore.refresh(timeout: ChannelConfigStore.blockingTimeout)
+            }
         }
         let active = ChannelConfigStore.active()
         if let data = active.data {

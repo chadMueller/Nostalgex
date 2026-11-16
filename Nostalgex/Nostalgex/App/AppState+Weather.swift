@@ -24,35 +24,40 @@ enum WeatherChannel {
         return out
     }
 
-    /// The guide row: hour-long blocks from the top of the hour before now, 26 of them, each one the loop.
+    /// How far either side of now the one entry reaches: past both ends of the guide's window (22 hours ahead).
+    static let rowReach: TimeInterval = 48 * 3600
+
+    /// The guide row (Chad, 2026-11-16: "1 full width bar ... no scheduled sections because it's an unlimited
+    /// loop channel"). One entry that is always on now and runs off both ends of the guide's window, so the row
+    /// is one bar with no programme times, the programme cursor has nothing to step to, and there is no UP NEXT.
+    /// Its title is LOCAL WEATHER and the current temperature when there is a forecast.
     static func schedule(at now: Date) -> ChannelSchedule {
-        let hour: TimeInterval = 3600
-        let start = (now.timeIntervalSince1970 / hour).rounded(.down) * hour - hour
+        let start = now.addingTimeInterval(-rowReach)
+        let end = now.addingTimeInterval(rowReach)
+        let temperature = WeatherGuideInfo.temperature
+        let title = temperature.isEmpty ? WeatherEngine.channelName : "\(WeatherEngine.channelName)  \(temperature)"
         let place = WeatherGuideInfo.placeTitle
-        let summary = WeatherGuideInfo.summary
-        var entries: [ScheduleEntry] = []
-        var nowEntry: ScheduleEntry?
-        for i in 0..<26 {
-            let s = Date(timeIntervalSince1970: start + Double(i) * hour)
-            let e = s.addingTimeInterval(hour)
-            let live = s <= now && now < e
-            let key = "nostalgex-weather-\(Int(s.timeIntervalSince1970))"
-            let item = PlexMediaItem(
-                id: key, title: WeatherEngine.channelName, artist: nil, episodeTitle: place.isEmpty ? nil : place, seTag: nil,
-                summary: summary, year: nil, originallyAvailableAt: nil, contentRating: nil,
-                duration: 60, ratingKey: key, partKey: nil, container: nil,
-                videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil,
-                genres: [], rating: 0, userRating: 0, type: .episode, thumb: nil, art: nil,
-                viewCount: 0, addedAt: 0, studio: nil, tmdbID: nil, imdbID: nil, librarySource: nil)
-            let entry = ScheduleEntry(id: key, item: item, startTime: s, endTime: e, isNowPlaying: live)
-            if live { nowEntry = entry }
-            entries.append(entry)
-        }
-        let elapsed = nowEntry.map { now.timeIntervalSince($0.startTime) } ?? 0
-        // No UP NEXT: the loop is the same every hour (the web tuner leaves the line empty too).
-        return ChannelSchedule(entries: entries, nowPlaying: nowEntry, upNext: nil,
-                               progress: min(1, max(0, elapsed / hour)), elapsedSeconds: Int(elapsed))
+        let summary = [place.isEmpty ? nil : "\(place).", WeatherGuideInfo.summary]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+        let item = PlexMediaItem(
+            id: loopKey, title: title, artist: nil, episodeTitle: nil, seTag: nil,
+            summary: summary, year: nil, originallyAvailableAt: nil, contentRating: nil,
+            duration: Int(2 * rowReach / 60), ratingKey: loopKey, partKey: nil, container: nil,
+            videoCodec: nil, audioCodec: nil, videoProfile: nil, bitrate: nil,
+            genres: [], rating: 0, userRating: 0, type: .movie, thumb: nil, art: nil,
+            viewCount: 0, addedAt: 0, studio: nil, tmdbID: nil, imdbID: nil, librarySource: nil)
+        let entry = ScheduleEntry(id: loopKey, item: item, startTime: start, endTime: end, isNowPlaying: true)
+        return ChannelSchedule(entries: [entry], nowPlaying: entry, upNext: nil, progress: 0,
+                               elapsedSeconds: Int(rowReach))
     }
+
+    /// The rating key of the loop's one guide entry.
+    static let loopKey = "nostalgex-weather-loop"
+}
+
+extension PlexMediaItem {
+    /// The weather channel's one always-live guide entry: no progress bar, no times.
+    var isWeatherLoop: Bool { ratingKey == WeatherChannel.loopKey }
 }
 
 extension AppState {

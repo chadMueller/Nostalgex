@@ -125,9 +125,6 @@ struct SettingsPlaybackView: View {
                 .settingsRow("open_last_channel", focus: focus)
             }
 
-            // LOCAL WEATHER, CH 299 (I-016): LOCATION, UNITS and the channel's switch.
-            SettingsWeatherSection(focus: focus)
-
             // Moved here from CONNECTION: both are about what happens while you watch.
             if !appState.isDemoMode {
                 SettingsSectionHeader(

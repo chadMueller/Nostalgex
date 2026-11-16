@@ -1,20 +1,24 @@
 import SwiftUI
 
-/// WEATHER, under PLAYBACK & PICTURE (Trello I-016): LOCATION, UNITS and the channel's switch. The same three
-/// settings as the web tuner's WEATHER row.
+/// LOCAL WEATHER, a page under CHANNELS & BUNDLES (Trello I-016; Chad moved it there from PLAYBACK & PICTURE,
+/// 2026-11-16): LOCATION, UNITS and the channel's switch. The same three settings as the web tuner's WEATHER row.
 struct SettingsWeatherSection: View {
     @Environment(AppState.self) var appState
     let focus: FocusState<SettingsFocus?>.Binding
     @State private var weather = WeatherController.shared
     @State private var showLocation = false
 
-    var body: some View {
-        SettingsSectionHeader(
-            title: "WEATHER",
-            subtitle: "LOCAL WEATHER, CH \(WeatherEngine.channelNumber): current conditions, the forecast and radar"
-        )
-        .padding(.top, 20)
+    static let firstRowID = "weather_location"
 
+    /// The value on the CHANNELS & BUNDLES row: "BUFFALO, NY · ON", or NOT SET.
+    @MainActor
+    static func statusValue(_ w: WeatherController) -> String {
+        guard let p = w.place else { return w.channelOn ? "NOT SET" : "OFF" }
+        let place = [p.name, p.region.isEmpty ? p.cc : p.region].filter { !$0.isEmpty }.joined(separator: ", ").uppercased()
+        return "\(place) \u{00B7} \(w.channelOn ? "ON" : "OFF")"
+    }
+
+    var body: some View {
         SettingsToggleRow(
             title: "LOCATION",
             subtitle: weather.place == nil ? "Type a city or a postcode, then pick it from the matches" : "The forecast is for this place",
@@ -41,7 +45,7 @@ struct SettingsWeatherSection: View {
         .accessibilityValue(unitsLabel)
 
         SettingsToggleRow(
-            title: "SHOW THE WEATHER CHANNEL",
+            title: "SHOW LOCAL WEATHER",
             subtitle: "LOCAL WEATHER, channel \(WeatherEngine.channelNumber), in the guide",
             isOn: weather.channelOn,
             isFocused: isFocused("weather_channel")
