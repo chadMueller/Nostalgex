@@ -114,10 +114,17 @@
     MAKERS[name](g);
     ICON_GRIDS[name] = g.map((row) => row.join(''));
   }
-  /** Draws an icon at (x, y), `size` pixels square, in whole-pixel cells. */
-  function drawIcon(ctx, name, x, y, size) {
+  // Icon slots and cell sizes (Chad, 2026-11-16: "all like 15% smaller"). A slot is the square the icon used to fill, a cell is one pixel of
+  // the 24 x 24 picture; the icon is drawn in whole-pixel cells and centred in its slot, so nothing around it moves.
+  //   screen          slot   cell was  cell now   drawn size now
+  //   CURRENT         336    14        12         288 (86% of 336)
+  //   TODAY periods   192     8         7         168 (88% of 192)
+  //   5-DAY days      168     7         6         144 (86% of 168)
+  const ICON = { current: { slot: 336, cell: 12 }, today: { slot: 192, cell: 7 }, week: { slot: 168, cell: 6 } };
+  /** Draws an icon in the square slot at (x, y), `size` pixels, in whole-pixel cells of `cell` pixels (default: the slot filled), centred. */
+  function drawIcon(ctx, name, x, y, size, cellSize) {
     const grid = ICON_GRIDS[name] || ICON_GRIDS.cloud;
-    const cell = Math.max(1, Math.round(size / 24));
+    const cell = cellSize || Math.max(1, Math.round(size / 24));
     const ox = Math.round(x + (size - cell * 24) / 2);
     const oy = Math.round(y + (size - cell * 24) / 2);
     for (let r = 0; r < 24; r++) {
@@ -233,24 +240,30 @@
     const region = p.region && p.cc && (p.cc === 'US' || p.cc === 'CA' || p.cc === 'AU') ? `, ${String(p.region).toUpperCase()}` : (p.cc ? `, ${String(p.cc).toUpperCase()}` : '');
     return base + region;
   }
+  // The credits and the age of the forecast: one small stack at the bottom left, the least prominent thing on any screen (Chad,
+  // 2026-11-16). 16 px at 1080 (60% of the 25 px it was; 16 is the floor for attribution to stay legible across a room), the app's text2
+  // at 70% (about 5.5:1 on the screen's navy), lines 22 px apart, the last line's baseline on the safe area's bottom edge. Top to bottom:
+  // the radar source's credit (radar screen only), DATA FROM MET NORWAY, UPDATED hh:mm. The credits are required by MET, NOAA, ECCC and
+  // DWD: smaller, never hidden. An old forecast says so in amber, in the same size.
+  const FOOTER = { size: 16, lineHeight: 22, x: SAFE_X, baseline: H - SAFE_Y - 6, color: 'rgba(185,195,222,0.7)' };
   function footer(ctx, st, screenIndex, extraCredit) {
-    const x = SAFE_X;
-    const base = H - SAFE_Y - 6;
-    text(ctx, 'DATA FROM MET NORWAY', x, base, mono(25), C.text2, 'left');
-    if (extraCredit) text(ctx, extraCredit, x, base - 34, mono(25), C.text2, 'left');
-    // Loop pips and the age of the forecast on the right.
+    const lines = [];
+    if (extraCredit) lines.push([extraCredit, FOOTER.color]);
+    lines.push(['DATA FROM MET NORWAY', FOOTER.color]);
+    if (st.updatedMs && global.NostalgexWeather && st.place) {
+      const age = global.NostalgexWeather.forecastAge(st.updatedMs, st.nowMs, st.place.tz);
+      lines.push([age.stale ? `OLD FORECAST FROM ${age.text.replace('UPDATED ', '')}` : age.text, age.stale ? C.amber : FOOTER.color]);
+    }
+    lines.forEach(([t, color], i) => text(ctx, t, FOOTER.x, FOOTER.baseline - (lines.length - 1 - i) * FOOTER.lineHeight, mono(FOOTER.size), color, 'left'));
+    // The loop's pips, bottom right.
     const pips = global.NostalgexWeather ? global.NostalgexWeather.SCREENS.length : 4;
     const pw = 44, gap = 10;
     let px = W - SAFE_X - (pips * pw + (pips - 1) * gap);
     const ids = ['current', 'today', 'week', 'radar'];
     for (let i = 0; i < pips; i++) {
       ctx.fillStyle = i === screenIndex ? ACCENT[ids[i]] : C.outline;
-      ctx.fillRect(px, base - 12, pw, 10);
+      ctx.fillRect(px, FOOTER.baseline - 12, pw, 10);
       px += pw + gap;
-    }
-    if (st.updatedMs && global.NostalgexWeather && st.place) {
-      const age = global.NostalgexWeather.forecastAge(st.updatedMs, st.nowMs, st.place.tz);
-      text(ctx, age.stale ? `OLD FORECAST FROM ${age.text.replace('UPDATED ', '')}` : age.text, W - SAFE_X - (pips * pw + (pips - 1) * gap) - 36, base, mono(25), age.stale ? C.amber : C.text2, 'right');
     }
   }
 
@@ -282,7 +295,7 @@
     // Left panel: the icon, the temperature, the condition.
     const lx = SAFE_X, lw = 860;
     card(ctx, lx, CARD_TOP, lw, CARD_H, C.cyan);
-    drawIcon(ctx, info.icon, lx + 44, CARD_TOP + 80, 336);
+    drawIcon(ctx, info.icon, lx + 44, CARD_TOP + 80, ICON.current.slot, ICON.current.cell);
     const temp = M.fmtTemp(cur.tempC, u);
     bigTemp(ctx, temp, lx + 400, CARD_TOP + 380, 340, C.text, 'left', u);
     const condLines = wrap(ctx, info.text, mono(44 * s, 500), lw - 80, 2);
@@ -329,7 +342,7 @@
       const cx = x + cw / 2;
       text(ctx, p.name, cx, CARD_TOP + 76, mono(38 * s, 500), C.text, 'center', cw - 30);
       text(ctx, p.day, cx, CARD_TOP + 118, mono(25 * s), C.text2, 'center');
-      drawIcon(ctx, info.icon, cx - 96, CARD_TOP + 148, 192);
+      drawIcon(ctx, info.icon, cx - ICON.today.slot / 2, CARD_TOP + 148, ICON.today.slot, ICON.today.cell);
       bigTemp(ctx, M.fmtTemp(p.tempC, u), cx, CARD_TOP + 520, 200, C.text, 'center');
       const lines = wrap(ctx, info.text, mono(29 * s, 500), cw - 40, 2);
       let ty = CARD_TOP + 590;
@@ -352,7 +365,7 @@
       card(ctx, x, CARD_TOP, cw, CARD_H, C.pink);
       const cx = x + cw / 2;
       text(ctx, d.label, cx, CARD_TOP + 78, mono(40 * s, 500), C.text, 'center');
-      drawIcon(ctx, info.icon, cx - 84, CARD_TOP + 104, 168);
+      drawIcon(ctx, info.icon, cx - ICON.week.slot / 2, CARD_TOP + 104, ICON.week.slot, ICON.week.cell);
       text(ctx, 'HIGH', cx, CARD_TOP + 336, mono(25 * s), C.text2, 'center');
       bigTemp(ctx, M.fmtTemp(d.highC, u), cx, CARD_TOP + 440, 150, C.text, 'center');
       text(ctx, 'LOW', cx, CARD_TOP + 486, mono(25 * s), C.text2, 'center');
@@ -575,7 +588,7 @@
   }
 
   const api = {
-    W, H, MAP, MAP_ASPECT, FRAME_MS, HOLD_MS, COLORS: C, ACCENT, ICON_GRIDS, ICON_COLORS,
+    W, H, FOOTER, MAP, MAP_ASPECT, FRAME_MS, HOLD_MS, COLORS: C, ACCENT, ICON_GRIDS, ICON_COLORS, ICON,
     render, nextDelay, prepareBasemap, recolorRadar, drawIcon,
   };
   global.NostalgexWeatherScreens = api;
