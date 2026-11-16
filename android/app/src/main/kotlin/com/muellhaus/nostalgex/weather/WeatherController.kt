@@ -203,6 +203,10 @@ class WeatherController(private val context: Context, private val scope: Corouti
         }
     }
 
+    /** Called when what the guide's row and the info panel say changed (a forecast arrived, the temperature moved a degree). */
+    var onUpdated: (() -> Unit)? = null
+    private var lastSummary: String? = null
+
     private fun rebuildModel() {
         lastBuildMs = System.currentTimeMillis()
         val p = place
@@ -217,6 +221,8 @@ class WeatherController(private val context: Context, private val scope: Corouti
             status = "error"
             expiresMs = 0
         }
+        val summary = model?.let { Weather.infoSummary(it, units) }
+        if (summary != lastSummary) { lastSummary = summary; onUpdated?.invoke() }
     }
 
     private suspend fun ensureForecast(force: Boolean) {

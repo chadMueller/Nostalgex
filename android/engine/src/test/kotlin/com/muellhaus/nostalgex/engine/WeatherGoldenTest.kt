@@ -204,6 +204,10 @@ class WeatherGoldenTest {
             "https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?service=WMS&version=1.3.0&request=GetMap&layers=conus_bref_qcd&styles=&crs=CRS:84&bbox=-80,38,-70,44&width=435&height=175&format=image/png&transparent=true&time=2026-11-15T15%3A00%3A00.000Z",
             us.mapUrl("conus_bref_qcd", doubleArrayOf(-80.0, 38.0, -70.0, 44.0), 435, 175, "2026-11-15T15:00:00.000Z"),
         )
+        // Environment Canada refuses a time with a fraction ("Date format error"): the frame times from the shared parser carry ".000Z", the request does not.
+        val ca = Weather.radarProvider(Weather.Place("", "", "CA", 43.65, -79.38, "UTC"))!!
+        assertTrue(ca.mapUrl("RADAR_1KM_RRAI", doubleArrayOf(-80.0, 42.0, -78.0, 44.0), 435, 175, "2026-11-15T15:00:00.000Z").endsWith("&time=2026-11-15T15%3A00%3A00Z"))
+        assertTrue(ca.mapUrl("RADAR_1KM_RRAI", doubleArrayOf(-80.0, 42.0, -78.0, 44.0), 435, 175, "2026-11-15T15:00:00.000Z").startsWith("https://geo.weather.gc.ca/geomet?service=WMS&version=1.3.0&request=GetMap&layers=RADAR_1KM_RRAI&styles=&crs=CRS:84&bbox=-80,42,-78,44&width=435&height=175"))
         val de = Weather.radarProvider(Weather.Place("", "", "DE", 52.5, 13.4, "UTC"))!!
         assertTrue(de.mapUrl("Niederschlagsradar", doubleArrayOf(1.5, 2.5, 3.5, 4.5), 4, 4, null).startsWith("https://maps.dwd.de/geoserver/dwd/wms?service=WMS&version=1.3.0&request=GetMap&layers=dwd:Niederschlagsradar&styles=&crs=CRS:84&bbox=1.5,2.5,3.5,4.5"))
         // Nowhere else: the card says so.

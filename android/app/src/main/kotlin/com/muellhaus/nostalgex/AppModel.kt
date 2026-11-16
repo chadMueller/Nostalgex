@@ -778,6 +778,17 @@ class AppModel(private val context: Context) : Playback.Listener {
         emptyList(), weather = true,
     )
 
+    init {
+        // A forecast arrived or the numbers moved: the info panel's line is rebuilt with the guide's schedules, not a minute later.
+        weather.onUpdated = {
+            val l = lineup
+            if (l != null) scope.launch {
+                withContext(Dispatchers.Default) { l.rebuildSchedules() }
+                scheduleTick++
+            }
+        }
+    }
+
     /** The channel's row in the guide while its switch in Settings is on; never in demo mode. */
     private fun weatherRow(): Lineup.WeatherRow? =
         if (!weather.channelOn || demoMode) null

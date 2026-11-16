@@ -364,9 +364,11 @@ object Weather {
     /** A number as JavaScript prints it in a template string: 43.65, 40, -79.38 (no trailing .0). */
     fun jsNum(d: Double): String = if (d == Math.rint(d) && Math.abs(d) < 1e15) d.toLong().toString() else d.toString()
 
-    private fun wmsMap(baseFor: (String) -> String, layerParam: (String) -> String) = { lyr: String, bbox: DoubleArray, w: Int, h: Int, time: String? ->
+    /** `wholeSeconds`: the source wants `%Y-%m-%dT%H:%M:%SZ` and refuses a fraction (Environment Canada's GeoMet does: "Date format error"). */
+    private fun wmsMap(baseFor: (String) -> String, layerParam: (String) -> String, wholeSeconds: Boolean = false) = { lyr: String, bbox: DoubleArray, w: Int, h: Int, time: String? ->
+        val t = if (wholeSeconds && time != null) time.replace(Regex("\\.\\d+Z$"), "Z") else time
         "${baseFor(lyr)}?service=WMS&version=1.3.0&request=GetMap&layers=${layerParam(lyr)}&styles=&crs=CRS:84&bbox=${coordList(bbox)}&width=$w&height=$h&format=image/png&transparent=true" +
-            (if (time != null) "&time=${java.net.URLEncoder.encode(time, "UTF-8")}" else "")
+            (if (t != null) "&time=${java.net.URLEncoder.encode(t, "UTF-8")}" else "")
     }
 
     /** The radar source for a place, or null: the card says RADAR NOT AVAILABLE IN YOUR AREA. */
@@ -379,13 +381,13 @@ object Weather {
                 return RadarProvider(
                     "noaa", "RADAR: NOAA NATIONAL WEATHER SERVICE", listOf(layer), 10, 8,
                     caps = { "$NOAA_HOST/$ws/$layer/ows?service=WMS&version=1.3.0&request=GetCapabilities" },
-                    map = wmsMap({ lyr -> "$NOAA_HOST/$ws/$lyr/ows" }) { it },
+                    map = wmsMap({ lyr -> "$NOAA_HOST/$ws/$lyr/ows" }, { it }),
                 )
             }
             "CA" -> return RadarProvider(
                 "eccc", "DATA SOURCE: ENVIRONMENT AND CLIMATE CHANGE CANADA", listOf("RADAR_1KM_RRAI", "RADAR_1KM_RSNO"), 6, 6,
                 caps = { lyr -> "$ECCC_HOST?service=WMS&version=1.3.0&request=GetCapabilities&layer=$lyr" },
-                map = wmsMap({ ECCC_HOST }) { it },
+                map = wmsMap({ ECCC_HOST }, { it }, wholeSeconds = true),
             )
             // DWD's precipitation radar composite: one layer, a 5 minute step, frames stopped 10 minutes before the clock because its time range
             // runs into the nowcast. Its style paints the edge of the radar coverage in magenta (our EXTREME band), so that band is dropped.
@@ -393,7 +395,7 @@ object Weather {
                 "dwd", "Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben", listOf("Niederschlagsradar"), 10, 8,
                 lagMinutes = 10, ignoreBands = setOf(4),
                 caps = { "$DWD_HOST/Niederschlagsradar/wms?service=WMS&version=1.3.0&request=GetCapabilities" },
-                map = wmsMap({ "$DWD_HOST/wms" }) { "dwd:$it" },
+                map = wmsMap({ "$DWD_HOST/wms" }, { "dwd:$it" }),
             )
         }
         return null
