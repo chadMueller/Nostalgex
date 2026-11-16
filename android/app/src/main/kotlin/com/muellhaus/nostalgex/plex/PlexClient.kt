@@ -27,6 +27,7 @@ import kotlinx.serialization.json.longOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import com.muellhaus.nostalgex.engine.PlexLocal
 import com.muellhaus.nostalgex.engine.PlexUtf8Repair
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -70,8 +71,12 @@ class PlexClient(private val clientId: String, versionName: String) {
 
     private fun request(url: String, token: String? = null) = Request.Builder().url(url).apply {
         headers.forEach { (k, v) -> header(k, v) }
-        if (token != null) header("X-Plex-Token", token)
+        // A local server with no plex.tv sign-in (I-057) has no token: none is sent.
+        if (PlexLocal.hasToken(token)) header("X-Plex-Token", token!!)
     }
+
+    /** The request a call would make, for the tests: its headers show what leaves the TV. */
+    internal fun requestFor(url: String, token: String? = null): Request = request(url, token).build()
 
     /**
      * A Plex answer as JSON. Its bytes are read and repaired first (PlexUtf8Repair, #196): Plex
@@ -200,6 +205,40 @@ class PlexClient(private val clientId: String, versionName: String) {
         }
     }
 
+    /** A local server's name and id (I-057), from its own /identity and its libraries read with no token. */
+    class LocalServer(val machineIdentifier: String, val name: String)
+
+    /** The server wants a sign-in from this device: Plex's "allowed without auth" list does not take this network. */
+    class PlexUnauthorizedException(val code: Int) : IOException("HTTP $code: this Plex server wants a sign-in")
+
+    /** What answered at the address is not a Plex server. */
+    class NotPlexException : IOException("That address answered, but not as a Plex server")
+
+    private val local by lazy { http.newBuilder().callTimeout(10, TimeUnit.SECONDS).build() }
+
+    /**
+     * LOCAL SERVER (NO PLEX.TV), the Apple TV's `PlexAPIService.checkLocalServer`: asks the server who it is (/identity answers without a
+     * sign-in), then whether this network may read its libraries without one (/library/sections, no token). Throws
+     * [PlexUnauthorizedException] on a 401 or 403 there, [NotPlexException] when /identity is not Plex's, [PlexHttpException] on any other
+     * status. Nothing here goes to plex.tv, and no token is sent.
+     */
+    suspend fun checkLocalServer(url: String): LocalServer = withContext(Dispatchers.IO) {
+        fun call(path: String): Pair<Int, String> = local.newCall(request("$url$path").build()).execute().use { it.code to it.body.string() }
+        val (idCode, idBody) = call("/identity")
+        if (idCode !in 200..299) throw PlexHttpException(idCode, "$url/identity")
+        val id = runCatching { (json.parseToJsonElement(idBody).jsonObject["MediaContainer"] as JsonObject) }.getOrNull() ?: throw NotPlexException()
+        val machine = (id["machineIdentifier"] as? JsonPrimitive)?.content.orEmpty()
+        val (secCode, _) = call("/library/sections")
+        if (secCode == 401 || secCode == 403) throw PlexUnauthorizedException(secCode)
+        if (secCode !in 200..299) throw PlexHttpException(secCode, "$url/library/sections")
+        // The server's own name, from its root, which answers once the sections did.
+        val name = runCatching {
+            val (code, body) = call("/")
+            if (code !in 200..299) null else ((json.parseToJsonElement(body).jsonObject["MediaContainer"] as? JsonObject)?.get("friendlyName") as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }
+        }.getOrNull() ?: "Plex Server"
+        LocalServer(machine, name)
+    }
+
     suspend fun get(server: PlexServer, path: String): JsonObject =
         getJson("${server.url}$path", server.token).jsonObject
 
@@ -231,7 +270,7 @@ class PlexClient(private val clientId: String, versionName: String) {
      * server stream (#286, as the web tuner reads them). Blocking, at most 5 s; null on any failure.
      */
     fun audioStreams(server: String, token: String, ratingKey: String): List<com.muellhaus.nostalgex.engine.AudioPick.PlexAudio>? = runCatching {
-        val url = "$server/library/metadata/$ratingKey".toHttpUrl().newBuilder().addQueryParameter("X-Plex-Token", token).build()
+        val url = "$server/library/metadata/$ratingKey".toHttpUrl().newBuilder().apply { if (PlexLocal.hasToken(token)) addQueryParameter("X-Plex-Token", token) }.build()
         decisionHttp.newCall(request(url.toString()).build()).execute().use { res ->
             if (!res.isSuccessful) return@runCatching null
             val o = json.parseToJsonElement(res.body.string()).jsonObject
@@ -254,7 +293,7 @@ class PlexClient(private val clientId: String, versionName: String) {
     fun stopTranscode(server: String, token: String, session: String) {
         val url = "$server/video/:/transcode/universal/stop".toHttpUrl().newBuilder()
             .addQueryParameter("session", session)
-            .addQueryParameter("X-Plex-Token", token)
+            .apply { if (PlexLocal.hasToken(token)) addQueryParameter("X-Plex-Token", token) }
             .build()
         http.newCall(Request.Builder().url(url).build()).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {}

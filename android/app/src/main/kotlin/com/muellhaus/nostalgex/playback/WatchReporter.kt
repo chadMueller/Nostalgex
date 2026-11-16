@@ -6,6 +6,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import com.muellhaus.nostalgex.engine.MediaItem
+import com.muellhaus.nostalgex.engine.PlexLocal
 import com.muellhaus.nostalgex.engine.WatchState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -107,7 +108,7 @@ class WatchReporter(private val plexHeaders: Map<String, String>, private val me
     private fun plexUrl(s: Server.Plex, path: String, params: Map<String, String> = emptyMap()): String {
         val b = Uri.parse(s.url + path).buildUpon()
         params.forEach { (k, v) -> b.appendQueryParameter(k, v) }
-        b.appendQueryParameter("X-Plex-Token", s.token)
+        if (PlexLocal.hasToken(s.token)) b.appendQueryParameter("X-Plex-Token", s.token)
         b.appendQueryParameter("X-Plex-Client-Identifier", plexHeaders["X-Plex-Client-Identifier"] ?: "")
         b.appendQueryParameter("X-Plex-Product", "Nostalgex")
         b.appendQueryParameter("X-Plex-Platform", "Android")

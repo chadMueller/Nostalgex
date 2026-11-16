@@ -1,6 +1,7 @@
 package com.muellhaus.nostalgex
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.muellhaus.nostalgex.engine.ChannelConfig
 import com.muellhaus.nostalgex.engine.GuideTextSize
 import com.muellhaus.nostalgex.engine.GuideTimeout
@@ -12,14 +13,15 @@ import com.muellhaus.nostalgex.engine.StreamQuality
 import com.muellhaus.nostalgex.mediabrowser.MediaBrowserServer
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.PlaybackDiagnostics
+import com.muellhaus.nostalgex.engine.PlexLocal
 import com.muellhaus.nostalgex.plex.PlexServer
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 
 /** The sign-in, the servers and the packages, kept across launches. */
-class Prefs(context: Context) {
-    private val prefs = context.getSharedPreferences("nostalgex", Context.MODE_PRIVATE)
+class Prefs(private val prefs: SharedPreferences) {
+    constructor(context: Context) : this(context.getSharedPreferences("nostalgex", Context.MODE_PRIVATE))
     private val json = Json { ignoreUnknownKeys = true }
 
     /** One id per install, sent as X-Plex-Client-Identifier, as the web tuner's getClientId. */
@@ -31,6 +33,27 @@ class Prefs(context: Context) {
     var plexToken: String?
         get() = prefs.getString("plexToken", null)
         set(value) = prefs.edit().putString("plexToken", value).apply()
+
+    /**
+     * A Plex server signed in to without plex.tv (I-057): the server lets this network in without a sign-in, so [plexToken] is empty and
+     * nothing asks plex.tv for it. Saved with the sign-in, cleared by [signOut] and by any other sign-in.
+     */
+    var plexNoPlexTv: Boolean
+        get() = prefs.getBoolean("plexNoPlexTv", false)
+        set(value) = prefs.edit().putBoolean("plexNoPlexTv", value).apply()
+
+    /** Signed in to Plex, by plex.tv or locally. */
+    val plexSignedIn: Boolean get() = PlexLocal.isSignedIn(plexToken, plexNoPlexTv, servers.size)
+
+    /** A plex.tv sign-in: the account token with the servers chosen. */
+    fun saveAccountSignIn(token: String, chosen: List<PlexServer>) {
+        prefs.edit().putString("plexToken", token).putBoolean("plexNoPlexTv", false).putString("servers", json.encodeToString(chosen)).apply()
+    }
+
+    /** LOCAL SERVER (NO PLEX.TV): one server, an empty token, the flag. */
+    fun saveLocalPlexSignIn(server: PlexServer) {
+        prefs.edit().putString("plexToken", "").putBoolean("plexNoPlexTv", true).putString("servers", json.encodeToString(listOf(server))).apply()
+    }
 
     /** Each server on, with the address that answered at sign-in. */
     var servers: List<PlexServer>
@@ -212,7 +235,7 @@ class Prefs(context: Context) {
         }.apply()
 
     // The saved channel belongs to the lineup just left; the switch stays (the Apple TV's disconnect).
-    fun signOut() = prefs.edit().remove("plexToken").remove("servers").remove("mediaBrowser").remove(LaunchChannelMemory.SAVED_KEY)
+    fun signOut() = prefs.edit().remove("plexToken").remove("plexNoPlexTv").remove("servers").remove("mediaBrowser").remove(LaunchChannelMemory.SAVED_KEY)
         .remove("nostalgex_last_load_at").remove("nostalgex_last_library_check_at").remove("nostalgex_library_signature").apply()
 }
 

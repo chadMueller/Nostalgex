@@ -144,6 +144,7 @@ private fun Step(model: AppModel, s: Screen.Connect) {
         }
         is ConnectStep.SignIn -> SignIn(model, step.server, s.message, s.error)
         is ConnectStep.QuickConnect -> QuickConnect(model, step.server, step.code)
+        is ConnectStep.LocalPlex -> LocalPlexAddress(model, step.checking, s.message)
         is ConnectStep.SigningIn -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(u(28))) {
             Waiting("SIGNING IN")
             QuietButton("CANCEL", focusFirst = true) { model.usePassword(step.server) }
@@ -203,6 +204,27 @@ private fun Find(model: AppModel, step: ConnectStep.Find, message: String?) {
             "TYPE AN ADDRESS", primary = false, focusFirst = step.discovery == Discovery.NothingFound, fontSize = 28, fullWidth = true,
         ) { model.typeAddress(step.kind) }
         QuietButton("BACK", modifier = Modifier.padding(top = u(6))) { model.showPicker() }
+    }
+}
+
+/** LOCAL SERVER (NO PLEX.TV): the address of a Plex server that lets this network in without a sign-in (I-057). */
+@Composable
+private fun LocalPlexAddress(model: AppModel, checking: Boolean, message: String?) {
+    var address by remember { mutableStateOf(model.lastAddress) }
+    Column(Modifier.widthIn(max = u(720)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(u(24))) {
+        StepTitle("LOCAL SERVER (NO PLEX.TV)")
+        if (message != null) WarningText(message)
+        if (checking) {
+            Waiting("CONNECTING TO PLEX")
+            QuietButton("CANCEL", focusFirst = true) { model.typeLocalPlexAddress() }
+        } else {
+            Field("SERVER ADDRESS", address, placeholder = "192.168.1.10:32400", keyboard = KeyboardType.Uri, imeAction = ImeAction.Go, focusFirst = true, onChange = { address = it }) {
+                model.connectLocalPlex(address)
+            }
+            Text("Your Plex server's address. Works when Plex lets this network in without a sign-in.", style = font(DMMono, 19, Color.White.copy(alpha = 0.4f)), textAlign = TextAlign.Center)
+            OnboardingButton("CONNECT", primary = true, fontSize = 34, fullWidth = true) { model.connectLocalPlex(address) }
+            QuietButton("BACK", modifier = Modifier.padding(top = u(6))) { model.signIn() }
+        }
     }
 }
 
@@ -413,7 +435,11 @@ private fun PlexCode(model: AppModel, s: Screen.SignIn) {
             Text(s.pin?.code ?: "----", style = font(DMMonoMedium, 108, Color.White, tracking = 16))
             if (s.error != null) Text(s.error, style = font(DMMonoMedium, 22, ErrorRed))
             else Waiting(if (s.pin == null) "CONNECTING TO PLEX.TV" else "WAITING FOR AUTHORIZATION")
-            QuietButton("CANCEL", focusFirst = true, quietFocus = true) { model.showPicker() }
+            // I-057: a Plex server that lets this network in without a sign-in. A small use, so it sits here, beside CANCEL in its style, and not on the first screen.
+            Row(horizontalArrangement = Arrangement.spacedBy(u(12)), verticalAlignment = Alignment.CenterVertically) {
+                QuietButton("CANCEL", focusFirst = true, quietFocus = true) { model.showPicker() }
+                QuietButton("LOCAL SERVER (NO PLEX.TV)", quietFocus = true) { model.typeLocalPlexAddress() }
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(u(12))) {
             val url = s.pin?.let { "https://www.plex.tv/link/?pin=${it.code}" } ?: "https://www.plex.tv/link/"

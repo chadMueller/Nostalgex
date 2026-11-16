@@ -42,6 +42,7 @@ import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
 import com.muellhaus.nostalgex.engine.ServerScan
+import com.muellhaus.nostalgex.engine.PlexLocal
 import com.muellhaus.nostalgex.engine.ServerSharing
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
@@ -160,6 +161,8 @@ sealed interface ConnectStep {
     data class SignIn(val server: CheckedServer) : ConnectStep
     data class QuickConnect(val server: CheckedServer, val code: String?) : ConnectStep
     data class SigningIn(val server: CheckedServer) : ConnectStep
+    /** I-057: the address of a Plex server that needs no plex.tv sign-in; `checking` while its /identity and libraries are asked. */
+    data class LocalPlex(val checking: Boolean = false) : ConnectStep
 }
 
 /** LAN discovery on the find screen. */
@@ -632,7 +635,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     .appendQueryParameter("url", thumb)
                     .appendQueryParameter("width", "300")
                     .appendQueryParameter("height", "450")
-                    .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
+                    .apply { if (PlexLocal.hasToken(item.serverToken)) appendQueryParameter("X-Plex-Token", item.serverToken) }
                     .build().toString()
                 Request.Builder().url(url)
             }
@@ -900,7 +903,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             launchRecorded = true
             launchGuard.recordLaunch()
         }
-        val signedIn = mbServer != null || (prefs.plexToken != null && prefs.servers.isNotEmpty())
+        val signedIn = mbServer != null || prefs.plexSignedIn
         when {
             !signedIn -> showPicker()
             launchGuard.shouldAskBeforeLoading() -> screen = Screen.UnfinishedLoads
@@ -986,8 +989,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                             screen = Screen.ChooseServers(servers)
                         } else {
                             forgetFailuresUnlessShared(servers.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
-                            prefs.plexToken = token
-                            prefs.servers = servers
+                            prefs.saveAccountSignIn(token, servers)
                             chooseLibrariesOrScan()
                         }
                         return@launch
@@ -1002,6 +1004,63 @@ class AppModel(private val context: Context) : Playback.Listener {
                 screen = Screen.SignIn(null, "COULD NOT REACH PLEX.TV. CHECK YOUR CONNECTION")
             }
         }
+    }
+
+    // ── LOCAL SERVER (NO PLEX.TV), I-057 ─────────────────────────────────
+
+    /** LOCAL SERVER (NO PLEX.TV) on the Plex code screen: the code is dropped and the address screen opens. */
+    fun typeLocalPlexAddress() {
+        signInJob?.cancel()
+        connectJob?.cancel()
+        go(ConnectStep.LocalPlex())
+    }
+
+    /**
+     * CONNECT on the address screen (the Apple TV's `connectLocalPlex`): the address with Plex's port added when none was typed, its /identity,
+     * then its libraries with no token; signed in with an empty token and the "no plex.tv" flag saved. Nothing here asks plex.tv.
+     */
+    fun connectLocalPlex(raw: String) {
+        lastAddress = raw
+        val urls = PlexLocal.candidates(raw)
+        if (urls.isEmpty()) {
+            go(ConnectStep.LocalPlex(), message = "Type your Plex server's address.")
+            return
+        }
+        connectJob?.cancel()
+        go(ConnectStep.LocalPlex(checking = true))
+        connectJob = scope.launch {
+            var last: Throwable? = null
+            for (url in urls) {
+                try {
+                    val found = plex.checkLocalServer(url)
+                    Log.i(TAG, "LOCAL PLEX \"${found.name}\" answered at $url with no sign-in")
+                    finishLocalPlexSignIn(PlexServer(found.name, found.machineIdentifier.ifEmpty { url }, url, token = ""))
+                    return@launch
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: PlexClient.PlexUnauthorizedException) {
+                    Log.i(TAG, "LOCAL PLEX $url wants a sign-in (HTTP ${e.code})")
+                    go(ConnectStep.LocalPlex(), message = PlexLocal.NEEDS_AUTH_MESSAGE)
+                    return@launch
+                } catch (e: Exception) {
+                    last = e
+                }
+            }
+            Log.w(TAG, "Local Plex not reachable", last)
+            go(
+                ConnectStep.LocalPlex(),
+                message = if (last is PlexClient.NotPlexException) "That address answered, but not as a Plex server. Check the address and port (Plex uses 32400)."
+                else unreachableMessage(last ?: java.io.IOException(), "Plex"),
+            )
+        }
+    }
+
+    private fun finishLocalPlexSignIn(server: PlexServer) {
+        endBackgroundWork()
+        mbServer = null
+        forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.machineIdentifier, server.url)))
+        prefs.saveLocalPlexSignIn(server)
+        chooseLibrariesOrScan()
     }
 
     // ── Demo mode (AppState.enterDemoMode) ───────────────────────────────
@@ -1097,6 +1156,8 @@ class AppModel(private val context: Context) : Playback.Listener {
             is ConnectStep.SignIn -> backToFind(step.server.kind)
             is ConnectStep.QuickConnect -> backToFind(step.server.kind)
             is ConnectStep.SigningIn -> usePassword(step.server)
+            // Back from the local address goes to the Plex code again.
+            is ConnectStep.LocalPlex -> signIn()
         }
     }
 
@@ -1290,8 +1351,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         Log.i(TAG, "SERVERS ${picked.size} of ${servers.size} chosen")
         pendingPlexToken = null
         forgetFailuresUnlessShared(picked.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
-        prefs.plexToken = token
-        prefs.servers = picked
+        prefs.saveAccountSignIn(token, picked)
         chooseLibrariesOrScan()
     }
 
@@ -1561,7 +1621,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         get() = (availableServers + selectedServers).distinctBy { it.machineIdentifier }
 
     private fun refreshServers() {
-        if (mbServer != null) return
+        // A local server with no plex.tv sign-in has nothing to ask plex.tv about (I-057).
+        if (mbServer != null || !PlexLocal.asksPlexTv(prefs.plexNoPlexTv)) return
         val token = prefs.plexToken ?: return
         scope.launch {
             availableServers = runCatching { plex.discoverServers(token, includeShared = true) }.getOrDefault(availableServers)
@@ -1835,6 +1896,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         // userFacingLoadLibraryError: nothing usable came back, so say what happened and what to check.
         e is LoadStalled && e.userInitiated -> "Stopped waiting. Nothing had come back from your server, so no channels were built. Retry when the connection looks better."
         e is LoadStalled -> "Your server stopped sending data partway through the scan and never resumed. Check that it is awake and reachable on this network, then Retry."
+        // No plex.tv sign-in to expire: the server stopped letting this network in (I-057).
+        e is PlexHttpException && (e.code == 401 || e.code == 403) && mbServer == null && prefs.plexNoPlexTv -> PlexLocal.NEEDS_AUTH_MESSAGE
         e is PlexHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException -> "$backendName returned HTTP ${e.code}. Check the server is running, then try again."
