@@ -257,6 +257,21 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Next.** The web, Roku and Android ports of this engine change, against the regenerated golden.
 
+## 2026-11-15 (Android, N-016 option A: one rule set for which libraries are listed, on and read)
+
+**State.** Branch `android/n016-library-rules`, off `android/guide-stripes` (release 9), for release 10. The rules are the web tuner's `scripts/nostalgex-library-picker.js`, pinned by `scripts/library-picker-golden.json` (copied from `web/n016-library-rules` b663b9ae), which `LibraryPickerGoldenTest` reads (10 cases groups, one test each).
+
+**Changed.**
+1. **Plex lists and reads movie and show only** (`PlexLibrary.directories`, `LibraryPicker.plexListed`): a Music (artist) or Photo library is never listed and never asked for items or collections. A music video library is type movie in Plex, so it stays, found by its name.
+2. **Hidden Jellyfin libraries, one row each, off by default.** Jellyfin is always asked twice (`MediaBrowserLibrary.listing`: the plain list and the includeHidden list); a library only the second has is `hidden`, listed marked HIDDEN ON JELLYFIN, and read only while its id is in the new `nostalgex_included_hidden_library_sections` list (`Prefs.includedHiddenSections`). The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN row is gone from Settings. **The old Prefs switch carries over** (`carryOverHiddenSwitch`, the `hiddenSwitchUpgrade` cases): with it on and the hidden libraries known, each hidden library not turned off by hand goes into the included list once and the switch is cleared; with them not yet known the switch waits for the next read; off or never set is just cleared. It runs before the first Jellyfin scan and when the library list is read.
+3. **The collection sweep skips libraries that are off** (`Collections.fetchPlexCollections(isSectionOn)`, used by `readCollections` for Plex). Jellyfin and Emby BoxSets are one global list and the web tuner leaves them alone, so they are unchanged.
+4. **The picker shows only when there is something to choose** (`LibraryPicker.offersPicker`): more than one library across the chosen servers, or a hidden one (it starts off). One library that is not hidden just scans. The picker's rows start on except a hidden one; the server picker's default is `defaultServerIds` (the viewer's own, all when none is).
+5. **Choices reset at sign-in** (`chooseLibrariesOrScan`): both lists emptied and the old switch cleared. A choice made in Settings lasts until the next sign-in.
+
+**Tests.** `LibraryPickerGoldenTest` (the golden: Plex and Jellyfin/Emby listing, server defaults, reads, choices, the upgrade, the picker rule, the sign-in reset; plus the collection sweep and the picker's CONTINUE) and five more in `JellyfinHiddenLibrariesTest` (only the hidden libraries switched on are read; none until switched on; the listing says whether hidden ones are known; a failed second ask leaves the plain list; Emby never asks). 539 JVM tests, lint clean.
+
+**Seen** on the emulator against a stand-in Plex that lists two movie libraries, a Music and a Photos library (`android/emulator-2026-11-15/n016-plex-settings-libraries-no-music-no-photos.png`): the stub was asked for items and collections of libraries 1 and 2 only, never 8 or 9, and Settings lists only the two. **Not seen:** a real Jellyfin with hidden libraries and the sign-in picker (golden and engine tests only).
+
 ## 2026-11-15 (Android release 9: the full-screen poster, the Settings glow, the stripe above the rows, the loading pattern)
 
 **State.** Branch `android/guide-stripes`, for versionCode 9. Chad tested release 8 on the Google TV; this is what he found.
@@ -411,6 +426,38 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 **Half-done.** Radar for countries outside the US, Canada and Germany. No alerts. The loop's gapless play depends on the browser honouring the encoder delay in the m4a or mp3 (not measured on a TV browser). Apple TV, Roku and Android have not ported it.
 
 **Next.** Chad's go to push (a push to main ships the page and the relay); the privacy page line (approved, not added); the Apple TV, Roku and Android ports.
+
+## 2026-11-15 (web and Docker: one rule set for picking servers and libraries, N-016 step 1)
+
+**State.** Branch `web/n016-library-rules` off main `2895d0db`. Not merged, not pushed, not in a release. Hosted and Docker are the same page, so both change together when it ships.
+
+**Why.** The platforms each grew their own rules for the same two screens (CHOOSE YOUR LIBRARIES at first setup, and Settings > SERVERS & ACCOUNTS > LIBRARIES): which Plex library types are listed, which servers start on, what happens to a Jellyfin library the user hides from the home screen. Nothing pinned any of it, so each port drifted. Chad's call on 2026-11-15 was to lock the model as it is (option A) and write the rules once.
+
+**Changed.**
+- `scripts/library-picker-golden.json` is the shared test file: Plex, Jellyfin and Emby listings (hidden, music video, photo, music, owned and shared servers), server defaults, which libraries a scan reads, how a choice is saved, and the upgrade from the old single switch. Plain JSON, so Swift, BrightScript and Kotlin can read it as they read `jellyfin-library-golden.json`.
+- `scripts/nostalgex-library-picker.js` holds the rules, with none of the page in it. `scripts/nostalgex-library-selection.js` keeps the saved choices (two lists under the Apple TV's key names). `npm run test:library-picker` runs the rules and the page's own functions (lifted out of `plex-tuner.html`) against the golden file; it is in `npm test`.
+- Plex lists and reads Movies and TV Shows libraries only. A Music or Photos library used to be paged through on every scan and every row dropped for having no runtime; it is not listed or asked for items now. The Plex library fingerprint (the refresh check) and the collection sweep read the same set, and the collection sweep skips a library the viewer switched off, as the Apple TV does.
+- Plex first setup turns on every server the viewer owns (all of them when none is theirs), as the Apple TV does. It was exactly one.
+- Each Jellyfin library the user hides gets its own row, marked HIDDEN ON JELLYFIN, off until switched on. The scan asks `/UserViews?userId=<id>` (the request it always was) and then the same with `includeHidden=true`; a library only the second answer has is hidden. The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch is gone.
+- Saved choices carry over. The off list keeps its key and ids. A viewer who had the old switch ON keeps the same libraries on: the first time the hidden libraries are known, each one not turned off by hand goes into the new included list, then the old value is removed. A saved library list from the old version is not used (Settings asks the server once). Tested in `test:library-picker` and in the browser.
+- As on the Apple TV (coordinator, 2026-11-15): CHOOSE YOUR LIBRARIES opens at a sign-in only with more than one library or a hidden one, and every sign-in starts the choices again (both lists and the old switch cleared). `web-tuner.html` sets a one-time `plex90_fresh_signin` flag at a Jellyfin, Emby or single-server Plex sign-in, and a Plex sign-in is the server picker's CONTINUE; a reload or a saved login is not a sign-in. Golden sections `pickerOffered` and `signInReset`.
+- `scripts/library-picker-browser-smoke.mjs` replaces `include-hidden-browser-smoke.mjs`: Plex (an owned and a shared stub server) and Jellyfin and Emby stubs, first setup and Settings, with the mouse at 1440x900, 960x540 at DPR 2 and 390x844.
+
+**Checked.** Music video libraries: Plex has no Music Videos library type. "Other Videos" is type `movie`, and the scan only produces items from a movie or show library (an artist library returns artists with no runtime), so a music video library that works today is a movie or show library and stays listed and read, found as music videos by name as before. Confirmed afterwards with one read of `/library/sections` on a real Plex server: its Music Videos library is type `movie`.
+
+**Not done.** The Apple TV, Roku and Android are not changed; they are to port to the golden file.
+
+## 2026-11-15 (Apple TV: one library rule set, N-016 option A)
+
+**State.** Branch `appletv/n016-library-rules` off main, for the next build. Not pushed.
+
+**Why.** N-016: every platform lists, starts on and reads the same libraries (scripts/library-picker-golden.json, the web tuner's contract), and a library switched off while a scan was out could still land the old set.
+
+**Changed.**
+- Plex lists and reads movie and show libraries only (`PlexAPIService.readableSections`, in `loadSections` and the scan). A Music (artist) or Photos library is never offered and never read; a music video library (Other Videos, type movie, or kept as TV shows) stays, marked by its name as before.
+- Switching a library in Settings bumps `librarySessionGeneration`, so a scan already running (an earlier switch's, or a refresh) discards its results instead of landing or saving the old set.
+
+**Tested.** `LibraryPickerGoldenTests` reads the golden's `plexListing` cases (ids, kind label, subtitle with the server name when more than one server answered, the music video name rule) and checks the switch bumps the generation. Not covered here: on the Apple TV the name rule marks a movie-typed music video library's items for HIGH ROTATION; a show-typed one is listed with the mark in the golden, but its episodes are read as TV, as before.
 
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 

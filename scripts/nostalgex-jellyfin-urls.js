@@ -100,8 +100,8 @@
 //    scripts/jellyfin-library-golden.json pins both functions, for the other apps to port.
 //
 // HIDDEN LIBRARIES. The Apple TV's JellyfinAPIService.loadSections, the Roku's NxMbViewsPath and the Android
-// MediaBrowserLibrary.userViewsPath are to match it (each with its own switch, or without one on a surface that
-// has a library picker).
+// MediaBrowserLibrary.userViewsPath are to match it. The rule for what to do with a hidden library is
+// scripts/library-picker-golden.json (N-016): listed one by one, marked, off until switched on.
 //
 // 13. A Jellyfin user can switch a library off for the home screen (web client, Settings > Home,
 //    "Display on home screen" unchecked; stored as Configuration.MyMediaExcludes). GET /UserViews
@@ -110,22 +110,25 @@
 //    .Contains(i.Id))`, the same in 10.11.11, 12.0, 12.2 and 12.4, read from the release tags). The
 //    scan only reads the libraries it is told about, so a hidden library's titles never reached a
 //    channel (a report found it).
-//    Hiding a library can be on purpose (adult, kids-unsafe, test or plugin folders), and the web
-//    tuner has no per-library picker to switch a newly visible one off again, so asking for hidden
-//    libraries is a switch, OFF by default: INCLUDE_HIDDEN_DEFAULT below is the one place the
-//    default lives, and includeHiddenLibraries() reads the viewer's own choice from storage. Off,
-//    Jellyfin's list is the request it always was, /UserViews?userId=<id>, byte for byte. On, it is
-//    /UserViews?userId=<id>&includeHidden=true. The parameter lifts the hiding and nothing else: the
-//    list is built from the libraries the user may open, and a library the user has no access to is
-//    not in it either way (the server answers HTTP 401 if it is asked for its items directly).
+//    Hiding a library can be on purpose (adult, kids-unsafe, test or plugin folders), so a hidden library is never
+//    on by itself. The scan asks twice, as the Apple TV's JellyfinAPIService.loadSections does: the plain list,
+//    /UserViews?userId=<id> byte for byte as it always was, then /UserViews?userId=<id>&includeHidden=true. A library
+//    only the second answer has is hidden: it is listed, on its own row, marked HIDDEN ON JELLYFIN, and OFF until the
+//    viewer switches that library on (scripts/nostalgex-library-picker.js, rule 5; the golden is
+//    scripts/library-picker-golden.json). The parameter lifts the hiding and nothing else: the list is built from the
+//    libraries the user may open, and a library the user has no access to is not in it either way (the server answers
+//    HTTP 401 if it is asked for its items directly).
 //    Measured 2026-11-08 on Jellyfin 10.11.11: a user who hides Hidden Films and Hidden TV and has
 //    no access to Private Films got 3 libraries without the parameter and 5 with it (Private Films
 //    in neither); the scan read 10 titles without and 17 with (4 films, 3 episodes), 0 from Private
-//    Films; an admin's answer is the same either way. Emby is left alone, switch or no switch: its
-//    list, /Users/{id}/Views, has no includeHidden in the API reference (dev.emby.media), and on
-//    Emby 4.10.1.0 a user with MyMediaExcludes set still got every library they may open, with or
-//    without IncludeHidden=true (measured, the setting written through the API). Pinned by
-//    scripts/jellyfin-library-golden.json `views`, one case per position of the switch.
+//    Films; an admin's answer is the same either way. Emby is left alone: its list, /Users/{id}/Views, has no
+//    includeHidden in the API reference (dev.emby.media), and on Emby 4.10.1.0 a user with MyMediaExcludes set
+//    still got every library they may open, with or without IncludeHidden=true (measured, the setting written
+//    through the API). Pinned by scripts/jellyfin-library-golden.json `views`, one case per position of the parameter.
+//    Until 2026-11-15 this was ONE switch for all hidden libraries (Settings, OFF by default, kept under
+//    nostalgex_include_hidden_libraries). INCLUDE_HIDDEN_DEFAULT and includeHiddenLibraries() below are what is left
+//    of it: nothing in the page reads them. scripts/nostalgex-library-selection.js reads the old value once, to keep
+//    a viewer who had switched it on on the same libraries (carryOverHiddenSwitch), then removes it.
 //
 // Same on both, so shared: the MediaBrowser Authorization header (Emby 4.10 accepts it on every
 // call the tuner makes), AuthenticateByName with { Username, Pw }, /Items, PlaybackInfo, the
@@ -139,8 +142,8 @@
 //   JU.staticStreamUrl({ serverUrl, itemId, mediaSourceId, container, token, audioStreamIndex });
 //   JU.withApiKey(url, token);
 //   JU.fallbackHlsUrl({ serverUrl, itemId, mediaSourceId, token, deviceId, playSessionId });
-//   JU.userViewsPath(backend, userId[, includeHidden]);   // Jellyfin adds &includeHidden=true when it is true (see 13)
-//   JU.includeHiddenLibraries([storage]);   // the viewer's switch: true or false, INCLUDE_HIDDEN_DEFAULT when never set
+//   JU.userViewsPath(backend, userId[, includeHidden]);   // Jellyfin adds &includeHidden=true when it is true: the second ask (see 13)
+//   JU.includeHiddenLibraries([storage]);   // the OLD single switch: true or false, INCLUDE_HIDDEN_DEFAULT when never set (see 13)
 //   JU.INCLUDE_HIDDEN_DEFAULT; JU.INCLUDE_HIDDEN_KEY;
 //   JU.serverStreamOnlyFields(backend, serverStreamOnly);
 //   JU.serverKindFromPublicInfo(json);
@@ -218,13 +221,13 @@
     return backend === 'jellyfin' || backend === 'emby';
   }
 
-  // Whether a scan asks Jellyfin for the libraries a user hides from the home screen when the
-  // viewer has never chosen (see 13). The ONE place the default lives: flip it here to change it.
+  // The old single switch for hidden libraries (see 13): whether a scan asked for them when the viewer had never
+  // chosen. Superseded by a choice per library; kept for the upgrade and the other apps' ports to read.
   const INCLUDE_HIDDEN_DEFAULT = false;
   // Where the viewer's own choice is kept, in the browser: '1' on, '0' off, no value is the default.
   const INCLUDE_HIDDEN_KEY = 'nostalgex_include_hidden_libraries';
 
-  // The viewer's choice. `storage` is for a test; the page's own localStorage is used otherwise.
+  // The viewer's old choice. `storage` is for a test; the page's own localStorage is used otherwise.
   // Anything but '1' or '0', no storage, or a storage that throws, is INCLUDE_HIDDEN_DEFAULT.
   function includeHiddenLibraries(storage) {
     let raw = null;

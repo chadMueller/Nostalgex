@@ -81,9 +81,8 @@ sub render()
         end for
         m.multi = multi
         for each s in m.top.sections
-            on = true
-            if m.top.off <> invalid and m.top.off[NxSectionKey(s.serverId, s.key)] = true then on = false
-            m.on.Push(on)
+            ' Nothing chosen yet: every library on, a hidden Jellyfin one off.
+            m.on.Push(NxSectionRowOn(s, {}, {}))
         end for
         ' Focus starts on CONTINUE: the usual choice is already ticked.
         if anyOn() then m.focus = continueIndex()
@@ -214,9 +213,16 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.on[m.focus] = not m.on[m.focus]
             renderList()
         else if anyOn() then
-            choices = {}
+            ' What differs from the start: a library turned off, a hidden one turned on.
+            choices = { off: {}, included: {} }
             for i = 0 to m.top.sections.Count() - 1
-                if not m.on[i] then choices[NxSectionKey(m.top.sections[i].serverId, m.top.sections[i].key)] = true
+                sec = m.top.sections[i]
+                key = NxSectionKey(sec.serverId, sec.key)
+                if sec.hidden = true then
+                    if m.on[i] then choices.included[key] = true
+                else if not m.on[i] then
+                    choices.off[key] = true
+                end if
             end for
             m.top.choices = choices
         end if

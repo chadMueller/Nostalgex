@@ -669,12 +669,15 @@ end function
 ' fetchPlexCollections: every collection in the server's movie and TV
 ' sections, deduped by ratingKey, with its child keys, as
 ' [{ id: "<serverKey>:<ratingKey>", title, childKeys, serverKey }], or
-' invalid when the section list fails (upstream throws). A section whose
+' invalid when the section list fails (upstream throws). A section the viewer
+' switched off (`deselected`, a set of "serverKey::sectionKey", as
+' NxDeselectedSections reads it; N-016) is left alone, its collections never asked
+' for, as its items are never read. A section whose
 ' collections fail is skipped, and a collection whose children fail is
 ' dropped. fetcher.getJSON(path, window) returns the parsed document or
 ' invalid; fetcher.getMany(paths, window), when it has one, returns them all
 ' in order, which lets the Plex fetcher keep several requests in flight.
-function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress = invalid as Dynamic) as Dynamic
+function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress = invalid as Dynamic, deselected = invalid as Dynamic) as Dynamic
     sections = NxPlexPaged(fetcher, "/library/sections", "Directory", NxPlexPageSize())
     if sections = invalid then return invalid
     list = []
@@ -682,7 +685,7 @@ function NxCollectionsFetchPlex(serverKey as String, fetcher as Object, progress
     seen.SetModeCaseSensitive()
     for each section in sections
         if type(section) = "roAssociativeArray" then
-            if section.type = "movie" or section.type = "show" then
+            if (section.type = "movie" or section.type = "show") and NxSectionKept(deselected, serverKey, section.key) then
                 rows = NxPlexPaged(fetcher, "/library/sections/" + NxToStr(section.key) + "/collections", "Metadata", NxPlexPageSize())
                 if rows <> invalid then
                     for each c in rows

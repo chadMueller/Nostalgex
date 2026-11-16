@@ -47,7 +47,7 @@ class JellyfinHiddenLibrariesTest {
         val requests = ArrayList<String>()
         val itemsAskedOf = LinkedHashSet<String>()
 
-        fun library() = MediaBrowserLibrary({ path ->
+        fun library(@Suppress("UNUSED_PARAMETER") kind: String = backend) = MediaBrowserLibrary({ path ->
             requests += path
             fun v(id: String, type: String) = JsonObject(mapOf("Id" to JsonPrimitive(id), "Name" to JsonPrimitive(id.uppercase()), "CollectionType" to JsonPrimitive(type)))
             fun page(rows: List<JsonObject>) = 200 to JsonObject(mapOf("Items" to JsonArray(rows), "TotalRecordCount" to JsonPrimitive(rows.size)))
@@ -124,5 +124,55 @@ class JellyfinHiddenLibrariesTest {
             assertTrue(s.requests.none { it.contains("includeHidden") })
             assertTrue(s.requests.filter { it.contains("Views") }.all { it == "/Users/u1/Views" })
         }
+    }
+
+    // ── N-016: a row each, off until switched on ─────────────────────────────
+
+    /** A hidden library is read only while the viewer has switched that library on; the ones left off are not asked for items. */
+    @Test fun onlyTheHiddenLibrariesSwitchedOnAreRead() {
+        val s = Server()
+        val items = s.library().scan(includeHidden = true, hiddenRead = setOf("adult"))
+        assertEquals(listOf("films-1", "adult-1", "shows-s1", "shows-s2"), items.map { it.ratingKey })
+        assertFalse("keptshows" in s.itemsAskedOf)
+    }
+
+    @Test fun noHiddenLibraryIsReadUntilSwitchedOn() {
+        val s = Server()
+        val items = s.library().scan(includeHidden = true, hiddenRead = emptySet())
+        assertEquals(listOf("films-1", "shows-s1", "shows-s2"), items.map { it.ratingKey })
+        assertEquals(setOf("films", "shows", "shows-s"), s.itemsAskedOf)
+    }
+
+    @Test fun theListingSaysWhetherTheHiddenLibrariesAreKnown() {
+        val asked = Server().library().listing("srv", "Server", askHidden = true)
+        assertTrue(asked.hiddenKnown)
+        assertEquals(listOf(false, true, false, true), asked.sections.map { it.hidden })
+        val notAsked = Server()
+        val plain = notAsked.library().listing("srv", "Server", askHidden = false)
+        assertFalse("the hidden libraries are not known without the second ask", plain.hiddenKnown)
+        assertTrue(notAsked.requests.none { it.contains("includeHidden") })
+        assertEquals(listOf("films", "shows"), plain.sections.map { it.key })
+    }
+
+    @Test fun aFailedSecondAskLeavesThePlainListAndNothingHidden() {
+        val lib = MediaBrowserLibrary({ path ->
+            fun v(id: String, type: String) = JsonObject(mapOf("Id" to JsonPrimitive(id), "Name" to JsonPrimitive(id), "CollectionType" to JsonPrimitive(type)))
+            when {
+                path.contains("includeHidden=true") -> 500 to null
+                else -> 200 to JsonObject(mapOf("Items" to JsonArray(listOf(v("films", "movies")))))
+            } as Pair<Int, JsonElement?>
+        }, "u1", "jellyfin")
+        val listing = lib.listing("srv", "Server", askHidden = true)
+        assertFalse(listing.hiddenKnown)
+        assertEquals(listOf("films"), listing.sections.map { it.key })
+        assertTrue(listing.sections.none { it.hidden })
+    }
+
+    /** Emby has no hidden libraries and no second ask. */
+    @Test fun embyIsNeverAskedForHiddenLibraries() {
+        val s = Server(backend = "emby")
+        val listing = s.library("emby").listing("srv", "Server", askHidden = true)
+        assertFalse(listing.hiddenKnown)
+        assertTrue(s.requests.none { it.contains("includeHidden") })
     }
 }

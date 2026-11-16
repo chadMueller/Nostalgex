@@ -154,8 +154,9 @@ sub NxMbSaveSignIn(kind as String, base as String, info as Object, auth as Objec
     reg.Delete("token")
     reg.Delete("needsPick")
     reg.Delete("serverChoices")
-    reg.Delete("deselectedSections")
-    reg.Delete("librarySections")
+    ' A new sign-in starts again: every library on, every hidden Jellyfin one off, and the
+    ' old single hidden switch gone (I-092, N-016).
+    NxResetLibraryChoices(reg, NxHiddenLibrariesRegistry())
     reg.Write("kind", kind)
     reg.Write("servers", FormatJson([server]))
     reg.Flush()

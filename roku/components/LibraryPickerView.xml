@@ -1,17 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- CHOOSE YOUR LIBRARIES (I-092, the Apple TV's library selection): after
      sign-in and before the first scan, one row per library section on the
-     servers in use, each ON or OFF, every one on to start with (a hidden
-     Jellyfin library off unless INCLUDE LIBRARIES HIDDEN ON JELLYFIN is on). A library turned off is never read, which is the
+     servers in use, each ON or OFF, every one on to start with except a hidden
+     Jellyfin library, one row each, off. A library turned off is never read, which is the
      answer to a very large library on a TV with little memory. Shown only
-     when there is more than one section to choose between. -->
+     when there is more than one section to choose between, or a hidden one. -->
 <component name="LibraryPickerView" extends="Group">
   <interface>
     <!-- [{ serverId, serverName, key, title, type, hidden }]. -->
     <field id="sections" type="array" onChange="render" />
-    <!-- The viewer already turned off these (serverID::key), when there are some. -->
-    <field id="off" type="assocarray" />
-    <!-- Set once, on CONTINUE: { "serverID::key": true } for every section turned off. -->
+    <!-- Set once, on CONTINUE: { off: { "serverID::key": true } for every library turned off,
+         included: { "serverID::key": true } for every hidden Jellyfin library turned on }. -->
     <field id="choices" type="assocarray" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />

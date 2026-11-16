@@ -59,6 +59,10 @@ export async function mediaBrowserVectors(upstream) {
   new Function("globalThis", "window", readFileSync(join(upstream, "scripts", "nostalgex-music-brainz.js"), "utf8"))(globalThis, globalThis);
   // Its URL helpers, which the scan reads (embyDoviProfile since upstream ccb6854).
   new Function("module", readFileSync(join(upstream, "scripts", "nostalgex-jellyfin-urls.js"), "utf8"))(undefined);
+  // The scan lists its libraries through the N-016 rules (the picker) and the viewer's choices (the selection), which
+  // read no storage here: nothing is switched off, and a library hidden on Jellyfin is not read until it is switched on.
+  new Function("globalThis", "window", readFileSync(join(upstream, "scripts", "nostalgex-library-picker.js"), "utf8"))(globalThis, globalThis);
+  new Function("globalThis", "window", readFileSync(join(upstream, "scripts", "nostalgex-library-selection.js"), "utf8"))(globalThis, globalThis);
 
   const requests = [];
   let result = null;

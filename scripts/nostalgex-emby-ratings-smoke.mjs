@@ -21,6 +21,8 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import "./nostalgex-jellyfin-urls.js";
+import "./nostalgex-library-picker.js";
+import "./nostalgex-library-selection.js";
 import "./nostalgex-daily-manifest.js";
 import "./nostalgex-music-brainz.js";
 
