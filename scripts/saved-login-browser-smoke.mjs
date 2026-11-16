@@ -61,7 +61,7 @@ const media = http.createServer((req, res) => {
     return;
   }
   if (refuse) return json({}, 401);
-  if (url.startsWith("/UserViews") || /^\/Users\/[^/]+\/Views/.test(url)) return json({ Items: [{ Id: "lib1", Name: "Movies", CollectionType: "movies" }], TotalRecordCount: 1 });
+  if (url.startsWith("/UserViews") || /^\/Users\/[^/]+\/Views/.test(url)) return json({ Items: [{ Id: "lib1", Name: "Movies", CollectionType: "movies" }, { Id: "lib2", Name: "Classics", CollectionType: "movies" }], TotalRecordCount: 2 });
   if (url.includes("IncludeItemTypes=Movie")) return json({ Items: items, TotalRecordCount: items.length });
   json({ Items: [], TotalRecordCount: 0 });
 });
@@ -152,7 +152,7 @@ const holders = (page, needles) => page.evaluate(async (needles) => {
   await page.fill("#signin-pass", PASSWORD);
   await page.click("#signin-btn");
   await page.waitForURL(/plex-tuner\.html/, { timeout: 15000 });
-  // A first sign-in stops at CHOOSE YOUR LIBRARIES; one Enter on CONTINUE (all libraries on) starts the scan.
+  // A first sign-in stops at CHOOSE YOUR LIBRARIES (the stub has two libraries; with one there is nothing to choose); one Enter on CONTINUE (all libraries on) starts the scan.
   await page.waitForSelector("#library-picker.active .library-continue", { timeout: 15000 });
   await page.click(".library-continue");
   await page.waitForFunction(() => localStorage.getItem("nostalgex_completed_initial_load") === "1", null, { timeout: 30000 });

@@ -123,6 +123,11 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
   check("plex: movie and TV sections, deduped", calls.filter((c) => c.endsWith("/collections")),
     ["/library/sections/1/collections", "/library/sections/2/collections", "/library/sections/3/collections"]);
   check("plex: failed children dropped", out, [{ id: "mid:10", title: "A", childKeys: ["1", "2"], serverKey: "mid" }]);
+  // A library the viewer switched off is not read, so its collections are not asked for either.
+  calls.length = 0;
+  await C.fetchPlexCollections("mid", getJSON, undefined, (s) => s.key !== "3");
+  check("plex: a library switched off is left out of the collection sweep", calls.filter((c) => c.endsWith("/collections")),
+    ["/library/sections/1/collections", "/library/sections/2/collections"]);
 }
 {
   const calls = [];

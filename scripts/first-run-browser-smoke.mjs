@@ -68,7 +68,7 @@ const media = http.createServer((req, res) => {
     req.on("end", () => json({ AccessToken: TOKEN, User: { Id: "uid1", Name: "bob", ServerName: "lab" } }));
     return;
   }
-  if (url.startsWith("/UserViews") || /^\/Users\/[^/]+\/Views/.test(url)) return json({ Items: [{ Id: "lib1", Name: "Movies", CollectionType: "movies" }], TotalRecordCount: 1 });
+  if (url.startsWith("/UserViews") || /^\/Users\/[^/]+\/Views/.test(url)) return json({ Items: [{ Id: "lib1", Name: "Movies", CollectionType: "movies" }, { Id: "lib2", Name: "Classics", CollectionType: "movies" }], TotalRecordCount: 2 });
   if (url.includes("IncludeItemTypes=Movie")) return json({ Items: items, TotalRecordCount: items.length });
   json({ Items: [], TotalRecordCount: 0 });
 });

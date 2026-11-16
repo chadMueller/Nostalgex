@@ -23,19 +23,17 @@
  *   - the Playlists, Music and Collections views are not asked for items at all.
  *
  * Libraries a user hides from My Media (point 13 in nostalgex-jellyfin-urls.js). /UserViews leaves a
- * hidden library out of its answer unless the request says includeHidden=true, and a library that is
- * not listed is never scanned. Hiding is
- * often on purpose, so asking for hidden libraries is a switch, off unless the viewer turns it on. A
- * third stub lists libraries the way the real Jellyfin does: a hidden Movies library and a hidden TV
- * library only with includeHidden=true, and a library the user has no access to never. In both
- * positions of the switch:
- *   - OFF (and never chosen, the default): the request is /UserViews?userId=<id>, byte for byte what it
- *     always was; the hidden libraries are not listed, not asked for items, and not in the library;
- *   - ON: the request adds includeHidden=true; the hidden libraries are asked for and their films and
- *     episodes are scanned and reach the channels;
+ * hidden library out of its answer unless the request says includeHidden=true, so the scan asks twice
+ * (the plain list, then the list with includeHidden=true) and a library only the second has is hidden:
+ * listed, marked, and read only once the viewer has switched that library on (scripts/nostalgex-library-picker.js,
+ * rule 5; there is no single switch for all of them). A stub lists libraries the way the real Jellyfin does: a
+ * hidden Movies library and a hidden TV library only with includeHidden=true, and a library the user has no
+ * access to never. Checked:
+ *   - nothing chosen: the two requests are /UserViews?userId=<id> (byte for byte what it always was) and the
+ *     same with includeHidden=true; the hidden libraries are not asked for items and not in the library;
+ *   - a hidden library switched on, alone or with the other: only it is scanned and reaches the channels;
+ *   - the second ask failing leaves the plain list;
  *   - either way the library the user has no access to is never listed, never asked, never scanned.
- * A control runs the ON position over the old request (no includeHidden): the hidden libraries are
- * left out, so this fails if the parameter is ever dropped.
  *
  * No browser, no network. Run: `npm run test:jellyfin-library`.
  */
@@ -44,6 +42,8 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import "./nostalgex-jellyfin-urls.js";
+import "./nostalgex-library-picker.js";
+import "./nostalgex-library-selection.js";
 import "./nostalgex-daily-manifest.js";
 import "./nostalgex-music-brainz.js";
 
@@ -269,12 +269,13 @@ const HIDDEN_VIEWS = [
  * (measured on Jellyfin 10.11.11); the library the user may not see is never listed, and asking
  * for its items directly is recorded as a failure of the scan.
  */
-function serverWithHiddenLibraries() {
+function serverWithHiddenLibraries({ hiddenAskFails = false } = {}) {
   const plain = server();
   return (url) => {
     const u = new URL(url, "http://server.invalid");
     if (u.pathname.endsWith("/UserViews") || /\/Users\/[^/]+\/Views$/.test(u.pathname)) {
       const include = u.searchParams.get("includeHidden") === "true";
+      if (include && hiddenAskFails) return { status: 500, body: {} };
       const items = include ? [...VIEWS, ...HIDDEN_VIEWS] : VIEWS;
       return { status: 200, body: { Items: items, TotalRecordCount: items.length } };
     }
@@ -291,45 +292,66 @@ function serverWithHiddenLibraries() {
   };
 }
 
+// The viewer's saved choices, as the page keeps them (scripts/nostalgex-library-selection.js): one list of libraries
+// switched off, one of hidden libraries switched on. There is no single switch for the hidden ones any more.
+function savedChoices(off, includedHidden) {
+  const store = new Map([["nostalgex_deselected_library_sections", JSON.stringify(off)], ["nostalgex_included_hidden_library_sections", JSON.stringify(includedHidden)]]);
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => { store.set(k, String(v)); }, removeItem: (k) => { store.delete(k); } };
+}
+
 {
   const JU = globalThis.NostalgexJellyfinUrls;
+  const SID = "http://server.invalid";
   const hiddenIds = [...HIDDEN_FILMS, ...HIDDEN_EPISODES].map((i) => i.Id);
   const privateIds = PRIVATE_FILMS.map((i) => i.Id);
-  const withSwitch = (on) => ({ ...JU, includeHiddenLibraries: () => on });
   const viewsAskedOf = (run) => run.requests.filter((r) => r.includes("/UserViews"));
+  const TWO_ASKS = ["/UserViews?userId=u", "/UserViews?userId=u&includeHidden=true"];
 
-  // The old request: what the scan asked before there was a switch. Even with the switch on, the stub
-  // must leave the hidden libraries out of that answer, or the stub would prove nothing.
-  const oldRequest = { ...withSwitch(true), userViewsPath: (backend, id) => backend === "emby" ? `/Users/${id}/Views` : `/UserViews?userId=${id}` };
-  const control = await scan(serverWithHiddenLibraries(), oldRequest);
-  check("control, switch on over the old request (no includeHidden): the hidden libraries are left out of the answer and the scan", control.items.length === 6 + 5 + 4 && hiddenIds.every((id) => !control.items.some((i) => i.ratingKey === id)), `${control.items.length} items`);
+  // The stub is only a test if the plain request really leaves the hidden libraries out of its answer.
+  const control = serverWithHiddenLibraries()("http://server.invalid/UserViews?userId=u");
+  check("control: the plain request's answer leaves the hidden libraries out, as the real server does", control.body.Items.length === VIEWS.length && !control.body.Items.some((v) => v.Id === "lib-hidden"));
 
-  // OFF: explicitly off, and never chosen (the module's own reading of an empty storage, the default).
-  for (const [label, urls] of [["switch off", withSwitch(false)], ["switch never chosen (the default)", JU]]) {
-    const off = await scan(serverWithHiddenLibraries(), urls);
-    const keys = off.items.map((i) => i.ratingKey);
-    const asked = viewsAskedOf(off);
-    check(`${label}: the list of libraries is asked once, exactly /UserViews?userId=u (the request it always was)`, asked.length === 1 && asked[0] === "/UserViews?userId=u", JSON.stringify(asked));
-    check(`${label}: the hidden libraries are not asked for items and none of their titles loads`, off.requests.every((r) => !r.includes("lib-hidden") && !r.includes("hshow")) && hiddenIds.every((id) => !keys.includes(id)), `${off.items.length} items`);
-    check(`${label}: what loaded before still loads, nothing else`, off.items.length === 6 + 5 + 4, `${off.items.length} items`);
-    check(`${label}: the library without access is never asked for items`, off.requests.every((r) => !r.includes("lib-private")) && privateIds.every((id) => !keys.includes(id)));
-  }
-  check("the default is off (INCLUDE_HIDDEN_DEFAULT)", JU.INCLUDE_HIDDEN_DEFAULT === false && JU.includeHiddenLibraries() === false);
+  // Never chosen: a hidden library is listed (asked for in the second ask) and OFF.
+  savedChoices([], []);
+  const off = await scan(serverWithHiddenLibraries());
+  const offKeys = off.items.map((i) => i.ratingKey);
+  check("never chosen: the list of libraries is asked twice, /UserViews?userId=u (the request it always was) then with includeHidden=true", JSON.stringify(viewsAskedOf(off)) === JSON.stringify(TWO_ASKS), JSON.stringify(viewsAskedOf(off)));
+  check("never chosen: the hidden libraries are not asked for items and none of their titles loads", off.requests.every((r) => !r.includes("lib-hidden") && !r.includes("hshow")) && hiddenIds.every((id) => !offKeys.includes(id)), `${off.items.length} items`);
+  check("never chosen: what loaded before still loads, nothing else", off.items.length === 6 + 5 + 4, `${off.items.length} items`);
+  check("never chosen: the library without access is never asked for items", off.requests.every((r) => !r.includes("lib-private")) && privateIds.every((id) => !offKeys.includes(id)));
 
-  // ON.
-  const on = await scan(serverWithHiddenLibraries(), withSwitch(true));
+  // Each hidden library is switched on by itself.
+  savedChoices([], [`${SID}::lib-hidden`]);
+  const films = await scan(serverWithHiddenLibraries());
+  const filmKeys = films.items.map((i) => i.ratingKey);
+  check("Hidden Films switched on alone: its four films load", HIDDEN_FILMS.every((f) => filmKeys.includes(f.Id)) && films.items.length === 6 + 5 + 4 + 4, `${films.items.length} items`);
+  check("Hidden Films switched on alone: the hidden TV library is still not asked for items", films.requests.every((r) => !r.includes("lib-hiddentv") && !r.includes("hshow")));
+
+  // Both on.
+  savedChoices([], [`${SID}::lib-hidden`, `${SID}::lib-hiddentv`]);
+  const on = await scan(serverWithHiddenLibraries());
   const keys = on.items.map((i) => i.ratingKey);
-  const asked = viewsAskedOf(on);
-  check("switch on: the list of libraries is asked once, with includeHidden=true", asked.length === 1 && asked[0] === "/UserViews?userId=u&includeHidden=true", JSON.stringify(asked));
-  check("switch on: the hidden Movies library is asked for Movie and its four films load", typesAsked(on.requests, "lib-hidden").every((t) => t === "Movie") && typesAsked(on.requests, "lib-hidden").length > 0 && HIDDEN_FILMS.every((f) => keys.includes(f.Id)), JSON.stringify(typesAsked(on.requests, "lib-hidden")));
-  check("switch on: the hidden TV library is asked for Series, then Episode, and its three episodes load", [...new Set([...typesAsked(on.requests, "lib-hiddentv"), ...typesAsked(on.requests, "hshow")])].sort().join() === "Episode,Series" && HIDDEN_EPISODES.every((e) => keys.includes(e.Id)));
-  check("switch on: the titles in the hidden libraries load as films and episodes", on.items.filter((i) => HIDDEN_FILMS.some((f) => f.Id === i.ratingKey)).every((i) => i.type === "movie" && i.librarySource === "movie") && on.items.filter((i) => i.ratingKey.startsWith("hep")).every((i) => i.type === "episode"));
-  check("switch on: a hidden film sits on VHS VAULT like any other (it is a film from 1988)", HIDDEN_FILMS.every((f) => poolOf(on.items, "VHS VAULT").includes(f.Id)), JSON.stringify(poolOf(on.items, "VHS VAULT")));
-  check("switch on: everything that loaded before still loads", on.items.length === 6 + 5 + 4 + hiddenIds.length, `${on.items.length} items`);
-  check("switch on: the library the user has no access to is never listed, never asked for items", on.requests.every((r) => !r.includes("lib-private")), JSON.stringify(on.requests.filter((r) => r.includes("lib-private"))));
-  check("switch on: none of the no-access library's titles is in the scanned library", privateIds.every((id) => !keys.includes(id)), keys.filter((k) => privateIds.includes(k)).join(", "));
+  check("both on: the list of libraries is asked twice", JSON.stringify(viewsAskedOf(on)) === JSON.stringify(TWO_ASKS), JSON.stringify(viewsAskedOf(on)));
+  check("both on: the hidden Movies library is asked for Movie and its four films load", typesAsked(on.requests, "lib-hidden").every((t) => t === "Movie") && typesAsked(on.requests, "lib-hidden").length > 0 && HIDDEN_FILMS.every((f) => keys.includes(f.Id)), JSON.stringify(typesAsked(on.requests, "lib-hidden")));
+  check("both on: the hidden TV library is asked for Series, then Episode, and its three episodes load", [...new Set([...typesAsked(on.requests, "lib-hiddentv"), ...typesAsked(on.requests, "hshow")])].sort().join() === "Episode,Series" && HIDDEN_EPISODES.every((e) => keys.includes(e.Id)));
+  check("both on: the titles in the hidden libraries load as films and episodes", on.items.filter((i) => HIDDEN_FILMS.some((f) => f.Id === i.ratingKey)).every((i) => i.type === "movie" && i.librarySource === "movie") && on.items.filter((i) => i.ratingKey.startsWith("hep")).every((i) => i.type === "episode"));
+  check("both on: a hidden film sits on VHS VAULT like any other (it is a film from 1988)", HIDDEN_FILMS.every((f) => poolOf(on.items, "VHS VAULT").includes(f.Id)), JSON.stringify(poolOf(on.items, "VHS VAULT")));
+  check("both on: everything that loaded before still loads", on.items.length === 6 + 5 + 4 + hiddenIds.length, `${on.items.length} items`);
+  check("both on: the library the user has no access to is never listed, never asked for items", on.requests.every((r) => !r.includes("lib-private")), JSON.stringify(on.requests.filter((r) => r.includes("lib-private"))));
+  check("both on: none of the no-access library's titles is in the scanned library", privateIds.every((id) => !keys.includes(id)), keys.filter((k) => privateIds.includes(k)).join(", "));
   const nonVideo = NON_VIDEO_IDS.filter((id) => keys.includes(id));
-  check("switch on: playlists, songs and collections still stay out", nonVideo.length === 0, nonVideo.join(", "));
+  check("both on: playlists, songs and collections still stay out", nonVideo.length === 0, nonVideo.join(", "));
+
+  // A hidden library on, and a library the viewer turned off, are separate choices.
+  savedChoices([`${SID}::lib-hidden`], [`${SID}::lib-hidden`]);
+  const stale = await scan(serverWithHiddenLibraries());
+  check("a hidden library follows the included list only (a stale off entry changes nothing)", HIDDEN_FILMS.every((f) => stale.items.some((i) => i.ratingKey === f.Id)));
+
+  // The second ask failing: the plain list is read, as before, and nothing hidden is.
+  savedChoices([], [`${SID}::lib-hidden`, `${SID}::lib-hiddentv`]);
+  const failed = await scan(serverWithHiddenLibraries({ hiddenAskFails: true }));
+  check("the second ask failing: the plain list is read and no hidden library is", failed.items.length === 6 + 5 + 4 && failed.requests.every((r) => !r.includes("lib-hidden") && !r.includes("hshow")), `${failed.items.length} items`);
+  delete globalThis.localStorage;
 
   // Emby lists libraries at /Users/{id}/Views and has no includeHidden: the same path in both positions.
   check("Emby's library list is the same in both positions", JU.userViewsPath("emby", "u") === "/Users/u/Views" && JU.userViewsPath("emby", "u", true) === "/Users/u/Views");
@@ -340,4 +362,4 @@ if (failures.length) {
   for (const f of failures) console.error(`  FAIL ${f}`);
   process.exit(1);
 }
-console.log(`jellyfin library smoke: ${passed} checks passed (playlists, songs, albums, artists and collections stay out; films, episodes and music videos load as before; libraries hidden from My Media are scanned only with the switch on, libraries without access never)`);
+console.log(`jellyfin library smoke: ${passed} checks passed (playlists, songs, albums, artists and collections stay out; films, episodes and music videos load as before; libraries hidden from My Media are scanned only once the viewer switches that library on, libraries without access never)`);

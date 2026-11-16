@@ -18,6 +18,7 @@ import { join } from "node:path";
 import "./nostalgex-jellyfin-urls.js";
 import "./nostalgex-daily-manifest.js";
 import "./nostalgex-music-brainz.js";
+import "./nostalgex-library-picker.js";
 import "./nostalgex-library-selection.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -120,7 +121,7 @@ async function mbScan(backend, url) {
       const parent = x.searchParams.get("ParentId"); parents.push(parent);
       return { status: 200, ok: true, json: async () => ({ Items: [film(`${parent}-1`)], TotalRecordCount: 1 }) };
     },
-    globalThis: { ...globalThis, NostalgexLibraryLoad: LL }, plexServerUrl: url, jellyfinUserId: "u", mediaBackend: backend, bundles: [], enabledBundleIDs: new Set(),
+    globalThis: { ...globalThis, NostalgexLibraryLoad: LL }, plexServerUrl: url, plexServerName: "Server", jellyfinUserId: "u", mediaBackend: backend, bundles: [], enabledBundleIDs: new Set(),
     discoveredGenres: {}, jellyfinAuthHeader: () => "", backendDisplayName: () => backend, adoptMediaBrowserKind: () => {},
     finalizeLibraryWithMusicBrainz: async (list) => { items = list; return list; }, CHANNELS: [], LL, channelFilter: () => ({ onChannels: (list) => list }),
     scanSignal: () => undefined, scanIsAbandoned: () => false, noteScanAnswer: () => {}, startScanWatch: () => {}, endScanWatch: () => {}, abandonedScanError: () => new Error("abandoned"),
