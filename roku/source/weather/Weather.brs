@@ -694,7 +694,8 @@ end function
 function NxWxMapUrl(provider as Object, layer as String, bbox as Object, w as Integer, h as Integer, time as String) as String
     host = NxWxRadarHost(provider)
     tail = "&styles=&crs=CRS:84&bbox=" + NxWxBBoxText(bbox) + "&width=" + w.ToStr() + "&height=" + h.ToStr() + "&format=image/png&transparent=true"
-    if time <> "" then tail = tail + "&time=" + time.Replace(":", "%3A")
+    ' Whole seconds ("...00Z"): Environment Canada rejects milliseconds.
+    if time <> "" then tail = tail + "&time=" + time.Replace(".000Z", "Z").Replace(":", "%3A")
     if provider.id = "dwd" then return host + "/wms?service=WMS&version=1.3.0&request=GetMap&layers=dwd:" + layer + tail
     if provider.id = "noaa" then return host + "/" + provider.ws + "/" + layer + "/ows?service=WMS&version=1.3.0&request=GetMap&layers=" + layer + tail
     return host + "?service=WMS&version=1.3.0&request=GetMap&layers=" + layer + tail
@@ -1240,4 +1241,14 @@ function NxWxInfoSummary(model as Dynamic, units as String) as String
         if dir <> "" then parts.Push("Wind " + dir + " " + wind + ".") else parts.Push("Wind " + wind + ".")
     end if
     return parts.Join(" ")
+end function
+
+' The place as the header and the guide row say it: "TORONTO, ON" for the US, Canada and Australia,
+' "BERLIN, DE" elsewhere.
+function NxWxPlaceTitle(place as Object) as String
+    base = NxWxUpper(place.name)
+    cc = UCase(NxToStr(place.cc))
+    if NxToStr(place.region) <> "" and (cc = "US" or cc = "CA" or cc = "AU") then return base + ", " + NxWxUpper(place.region)
+    if cc <> "" then return base + ", " + cc
+    return base
 end function

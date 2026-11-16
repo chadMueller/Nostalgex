@@ -20,9 +20,9 @@ function NxRunLiveChannelsTests(channelsPath as String) as Integer
     NxCheck(r, "the same version as the build's is accepted", FormatJson(NxLiveChannelsAccept(NxLiveDoc(7, "", 2), 7).ok), "true")
     NxCheck(r, "a newer version is accepted", FormatJson(NxLiveChannelsAccept(NxLiveDoc(8, "", 2), 7).ok), "true")
     NxCheck(r, "an older version is rejected", NxLiveChannelsAccept(NxLiveDoc(6, "", 2), 7).reason, "older than this build's")
-    NxCheck(r, "format 1 is accepted", FormatJson(NxLiveChannelsAccept(NxLiveDoc(8, """format"":1,", 2), 7).ok), "true")
-    NxCheck(r, "a newer format is rejected", NxLiveChannelsAccept(NxLiveDoc(8, """format"":2,", 2), 7).reason, "format 2 is newer than this build reads")
-    NxCheck(r, "a format that isn't a number is rejected", NxLiveChannelsAccept(NxLiveDoc(8, """format"":""x"",", 2), 7).reason, "bad format")
+    NxCheck(r, "format 1 is accepted", FormatJson(NxLiveChannelsAccept(NxLiveDoc(8, """formatVersion"":1,", 2), 7).ok), "true")
+    NxCheck(r, "a newer format is rejected", NxLiveChannelsAccept(NxLiveDoc(8, """formatVersion"":2,", 2), 7).reason, "formatVersion 2 is newer than this build reads")
+    NxCheck(r, "a format that isn't a number is rejected", NxLiveChannelsAccept(NxLiveDoc(8, """formatVersion"":""x"",", 2), 7).reason, "bad formatVersion")
     NxCheck(r, "not JSON is rejected", NxLiveChannelsAccept("<html>502 Bad Gateway</html>", 7).reason, "not a JSON object")
     NxCheck(r, "a JSON array is rejected", NxLiveChannelsAccept("[1,2]", 7).reason, "not a JSON object")
     NxCheck(r, "empty text is rejected", NxLiveChannelsAccept("", 7).reason, "empty")
@@ -54,7 +54,7 @@ function NxRunLiveChannelsTests(channelsPath as String) as Integer
 
     ' ── Store: a bad copy is rejected and the cache is kept ──
     later& = now& + 90000
-    for each bad in ["<html>", "{""version"":9,""bundles"":[{""id"":1}],""exclusiveRules"":[],""channels"":[]}", NxLiveDoc(9, """format"":5,", 2), NxLiveDoc(3, "", 2)]
+    for each bad in ["<html>", "{""version"":9,""bundles"":[{""id"":1}],""exclusiveRules"":[],""channels"":[]}", NxLiveDoc(9, """formatVersion"":5,", 2), NxLiveDoc(3, "", 2)]
         res = NxLiveChannelsStore(bad, dir, reg, later&, 7)
         NxCheck(r, "rejected: " + Left(bad, 24), FormatJson(res.stored), "false")
         NxCheck(r, "cache kept after: " + Left(bad, 24), NxLiveVersionOf(NxLiveReadFile(NxLiveChannelsPath(dir))).ToStr(), "8")
@@ -99,7 +99,7 @@ function NxRunLiveChannelsTests(channelsPath as String) as Integer
     NxLiveWriteFile(NxLiveChannelsPath(root), "{""version"": 20, ""channels"": [")
     got = NxChannelsConfig(root, bpath)
     NxCheck(r, "a damaged cache: the bundled copy", got.source + "/" + got.config.version.ToStr(), "bundled/7")
-    NxLiveWriteFile(NxLiveChannelsPath(root), NxLiveDoc(20, """format"":9,", 2))
+    NxLiveWriteFile(NxLiveChannelsPath(root), NxLiveDoc(20, """formatVersion"":9,", 2))
     got = NxChannelsConfig(root, bpath)
     NxCheck(r, "a cache in a format this build doesn't read: the bundled copy", got.source, "bundled")
     DeleteFile(NxLiveChannelsPath(root))

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CH 299 LOCAL WEATHER, the picture (source/weather/Weather.brs has the rules, WeatherTask the network).
+     Laid out in 1920 x 1080, the web tuner's numbers (scripts/nostalgex-weather-screens.js): the owner
+     scales it into the guide's preview box or to the whole screen. Four screens on a 65 second
+     wall-clock loop: CURRENT CONDITIONS, TODAY'S FORECAST, the 5-DAY FORECAST and RADAR. It reads the
+     viewer's place and units itself, asks for the forecast and the radar only while it is active, and
+     plays the channel's own music loop. -->
+<component name="WeatherView" extends="Group">
+  <interface>
+    <!-- On while the channel is on screen: the clock runs, the forecast is asked for, the music plays. -->
+    <field id="active" type="boolean" value="false" onChange="onActive" />
+    <!-- Settings changed the place, units or switch: read them again. -->
+    <field id="reload" type="boolean" alwaysNotify="true" onChange="onReload" />
+    <!-- What the guide's info panel says under the place, and the place's name, for the owner. -->
+    <field id="summary" type="string" alwaysNotify="true" />
+    <field id="placeLabel" type="string" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/util/Values.brs" />
+  <script type="text/brightscript" uri="pkg:/source/ui/Tokens.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherZones.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/Weather.brs" />
+  <script type="text/brightscript" uri="pkg:/source/weather/WeatherStore.brs" />
+  <script type="text/brightscript" uri="pkg:/components/WeatherView.brs" />
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0A0A1AFF" />
+    <Group id="stage" />
+    <Audio id="music" />
+    <Timer id="tick" repeat="true" duration="0.5" />
+    <Timer id="frames" repeat="true" duration="0.45" />
+  </children>
+</component>

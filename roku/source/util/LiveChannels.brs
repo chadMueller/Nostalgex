@@ -19,7 +19,7 @@
 '   - parses to an object with non-empty channels, bundles and exclusiveRules;
 '   - has an integer version, not below this build's own (an older live file
 '     would take channels away) ;
-'   - names a `format` this build understands, if it names one at all (1 today:
+'   - names a `formatVersion` this build understands, if it names one at all (1 today:
 '     a file that ever changes shape must say so, and an old build then keeps
 '     what it has);
 '   - lists every channel as an object with an id and a name, no id twice;
@@ -30,7 +30,7 @@ function NxLiveChannelsUrl() as String
     return "https://www.nostalgex.app/channels.json"
 end function
 
-' The newest file format this build reads. A file without `format` is 1.
+' The newest file format this build reads. A file without `formatVersion` is 1.
 function NxLiveChannelsFormat() as Integer
     return 1
 end function
@@ -65,10 +65,10 @@ function NxLiveChannelsAccept(text as Dynamic, bundledVersion as Integer) as Obj
     if type(v) <> "roInt" and type(v) <> "Integer" and type(v) <> "roInteger" and type(v) <> "LongInteger" then return NxLiveReject("no version")
     if v < 1 then return NxLiveReject("bad version")
     if v < bundledVersion then return NxLiveReject("older than this build's")
-    fmt = doc.format
+    fmt = doc.formatVersion
     if fmt <> invalid then
-        if (type(fmt) <> "roInt" and type(fmt) <> "Integer" and type(fmt) <> "roInteger") or fmt < 1 then return NxLiveReject("bad format")
-        if fmt > NxLiveChannelsFormat() then return NxLiveReject("format " + fmt.ToStr() + " is newer than this build reads")
+        if (type(fmt) <> "roInt" and type(fmt) <> "Integer" and type(fmt) <> "roInteger") or fmt < 1 then return NxLiveReject("bad formatVersion")
+        if fmt > NxLiveChannelsFormat() then return NxLiveReject("formatVersion " + fmt.ToStr() + " is newer than this build reads")
     end if
     if type(doc.bundles) <> "roArray" or doc.bundles.Count() = 0 then return NxLiveReject("no bundles")
     if type(doc.exclusiveRules) <> "roArray" then return NxLiveReject("no exclusive rules")

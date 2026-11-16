@@ -22,7 +22,7 @@ cp -RL manifest source components "$dir"/
 cp LICENSE "$dir"/
 mkdir -p "$dir"/licenses
 cp THIRD-PARTY-LICENSES.md "$dir"/licenses/THIRD-PARTY-LICENSES.txt
-for d in images data fonts videos; do [ -d "$d" ] && cp -RL "$d" "$dir"/; done
+for d in images data fonts videos weather; do [ -d "$d" ] && cp -RL "$d" "$dir"/; done
 rm -f "$dir"/data/enrichment.json
 # A checkout without symlinks (core.symlinks=false, as on Windows by default)
 # leaves each link as a one-line text file holding its target, so check for

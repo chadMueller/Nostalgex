@@ -27,6 +27,7 @@ function NxRunSettingsRailTests() as Integer
     end for
     NxCheck(r, "tab of: SHOW NOW PLAYING moves from CONNECTION to PLAYBACK & PICTURE", NxSettingsTabOf("reportNowPlaying"), "playback")
     NxCheck(r, "tab of: MARK WATCHED too", NxSettingsTabOf("reportMarkWatched"), "playback")
+    NxCheck(r, "tab of: the weather rows", NxSettingsTabOf("weatherPlace") + NxSettingsTabOf("weatherUnits") + NxSettingsTabOf("weatherChannel"), "playbackplaybackplayback")
     for each kind in ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection"]
         NxCheck(r, "tab of: " + kind, NxSettingsTabOf(kind), "channels")
     end for

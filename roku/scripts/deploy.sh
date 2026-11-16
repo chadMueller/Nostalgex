@@ -86,6 +86,14 @@ else
     build=$(scripts/stamp-manifest.sh "$stage")
     echo "build: $build"
 fi
+# NX_WEATHER_BASE=http://<this Mac>:<port> points the weather channel's forecast, place search and
+# place files at a stand-in server, for a sideload only (the app reads it only when IsDev is true;
+# release.sh refuses it). After the stamp, so the build hash is the release's.
+if [ -n "${NX_WEATHER_BASE:-}" ]; then
+    [[ $NX_WEATHER_BASE =~ ^https?://[A-Za-z0-9.:-]+$ ]] || { echo "NX_WEATHER_BASE must be http(s)://host[:port]" >&2; exit 1; }
+    printf 'nx_weather_base=%s\n' "$NX_WEATHER_BASE" >>"$stage/manifest"
+    echo "weather: forecast and places from $NX_WEATHER_BASE (a sideload only)"
+fi
 (cd "$stage" && zip -qr ../nostalgex-roku.zip .)
 
 failed=0
