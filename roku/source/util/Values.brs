@@ -173,12 +173,68 @@ end function
 ' which is never full).
 
 function NxScanMemoryCeiling() as Integer
-    return 55
+    return NxMemCeilingFor(NxMemLimitKB())
 end function
 
 function NxScanMemoryFull(fetcher as Object) as Boolean
     if not fetcher.DoesExist("memoryPercent") then return false
     return fetcher.memoryPercent() >= NxScanMemoryCeiling()
+end function
+
+' The ceiling for a device whose app limit is limitKB. 55% is what the Streaming Stick Plus
+' (limit 501,760 KB) was measured at: the scan holds S, the channel build, the schedule and the
+' saved library add about half again (peak 84% of the limit with the scan at 55%, I-091), and the
+' app's own fixed memory is about 39,000 KB. A device with a smaller limit gets the ceiling that
+' keeps 1.5 x S + the fixed part under 90% of ITS limit; a device with at least the Stick Plus's
+' limit gets 55 exactly, as before (a normal TV must behave as it always did).
+function NxMemFixedKB() as Integer
+    return 39000
+end function
+
+function NxMemNormalLimitKB() as Integer
+    return 480000
+end function
+
+function NxMemCeilingFor(limitKB as Integer) as Integer
+    if limitKB <= 0 or limitKB >= NxMemNormalLimitKB() then return 55
+    scan# = (0.9# * limitKB - NxMemFixedKB()) / 1.5#
+    pct% = Int(scan# * 100# / limitKB)
+    if pct% < 15 then pct% = 15
+    if pct% > 55 then pct% = 55
+    return pct%
+end function
+
+' The limit the guard works against, in KB: the device's own foreground limit, or, in a sideload (IsDev)
+' with nx_mem_limit_kb in the manifest, a smaller one standing in for a low-memory Roku (the guard
+' then sees percent of THAT). 0 when the device does not say.
+function NxMemLimitKB() as Integer
+    mon = CreateObject("roAppMemoryMonitor")
+    limit% = 0
+    lim = mon.GetChannelMemoryLimit()
+    if type(lim) = "roAssociativeArray" then
+        if NxIsNumber(lim.maxForegroundMemory) then limit% = lim.maxForegroundMemory
+    end if
+    info = CreateObject("roAppInfo")
+    if info.IsDev() then
+        sim% = Val(NxToStr(info.GetValue("nx_mem_limit_kb"))).ToStr().ToInt()
+        if sim% > 0 and (limit% = 0 or sim% < limit%) then return sim%
+    end if
+    return limit%
+end function
+
+' How full the app's memory is, in percent of the limit the guard works against: the device's own percent,
+' or (a simulated smaller limit) the memory in use over that limit.
+function NxMemPercentNow() as Integer
+    mon = CreateObject("roAppMemoryMonitor")
+    pct = mon.GetMemoryLimitPercent()
+    dev% = 0
+    lim = mon.GetChannelMemoryLimit()
+    if type(lim) = "roAssociativeArray" then
+        if NxIsNumber(lim.maxForegroundMemory) then dev% = lim.maxForegroundMemory
+    end if
+    eff% = NxMemLimitKB()
+    if dev% > 0 and eff% > 0 and eff% < dev% then return Int(pct * dev% / eff%)
+    return pct
 end function
 
 ' The titles a scan stopped at, 0 when it read everything, and how many the
