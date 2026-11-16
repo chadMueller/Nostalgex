@@ -304,8 +304,8 @@ const files = [
   // MusicTitleGoldenTests.brs, ChannelsMissingTests.brs (channel-requirements-golden.json) and
   // AudioPickGoldenTests.brs (audio-pick-golden.json), GuideStripesTests.brs
   // (guide-stripe-colours-golden.json) and LibraryPickerGoldenTests.brs
-  // (library-picker-golden.json) read them.
-  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json", "audio-pick-golden.json", "guide-stripe-colours-golden.json", "library-picker-golden.json"].map((g) =>
+  // (library-picker-golden.json) and WeatherTests.brs (weather-golden.json) read them.
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json", "audio-pick-golden.json", "guide-stripe-colours-golden.json", "library-picker-golden.json", "weather-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
 ];
 let stale = false;
