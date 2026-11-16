@@ -1254,3 +1254,24 @@ function NxWxPlaceTitle(place as Object) as String
     if cc <> "" then return base + ", " + cc
     return base
 end function
+
+' Where LOCAL WEATHER sits in the guide's list: where its number puts it, before the first channel numbered 300 or
+' more (the FRANCHISES block, then the collections and HIGH ROTATION), after the regular bundles; the end of the
+' list when none is that high. `channels` are the guide's channels ({ number }) in their order.
+function NxWxInsertIndex(channels as Object) as Integer
+    at = NxWxChannel().number
+    for i = 0 to channels.Count() - 1
+        if NxIsNumber(channels[i].number) then
+            if channels[i].number >= 300 then return i
+        end if
+    end for
+    return channels.Count()
+end function
+
+' The index of the weather channel in the guide's list, or -1.
+function NxWxChannelIndex(channels as Object) as Integer
+    for i = 0 to channels.Count() - 1
+        if channels[i].weather = true then return i
+    end for
+    return -1
+end function

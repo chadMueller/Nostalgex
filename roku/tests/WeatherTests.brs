@@ -412,6 +412,13 @@ sub NxWxGuideChecks(r as Object, g as Object)
     plain = NxWxGuideBlocks("", "", "")
     NxCheck(r, "guide: no place or temperature, just the name", plain[0].line, "LOCAL WEATHER")
     NxCheck(r, "place title", NxWxPlaceTitle({ name: "Toronto", region: "ON", cc: "CA" }) + "|" + NxWxPlaceTitle({ name: "Berlin", region: "Berlin", cc: "DE" }) + "|" + NxWxPlaceTitle({ name: "Z" + Chr(252) + "rich", region: "", cc: "" }), "TORONTO, ON|BERLIN, DE|Z" + Chr(220) + "RICH")
+    ' Where its number puts it: before the FRANCHISES block (300 and up), not at the end.
+    regular = [{ number: 3 }, { number: 61 }, { number: 299 - 100 }, { number: 300 }, { number: 310 }, { number: 500 }]
+    NxCheck(r, "order: before the first channel numbered 300 or more", NxWxInsertIndex(regular).ToStr(), "3")
+    NxCheck(r, "order: no franchise block, the end of the list", NxWxInsertIndex([{ number: 3 }, { number: 61 }]).ToStr(), "2")
+    NxCheck(r, "order: only franchises, the front", NxWxInsertIndex([{ number: 300 }]).ToStr(), "0")
+    NxCheck(r, "order: nothing in the guide", NxWxInsertIndex([]).ToStr(), "0")
+    NxCheck(r, "order: found where it is", NxWxChannelIndex([{ number: 3, weather: invalid }, { number: 299, weather: true }, { number: 300 }]).ToStr() + " " + NxWxChannelIndex([{ number: 3 }]).ToStr(), "1 -1")
     NxCheck(r, "guide: the channel", NxToStr(NxWxChannel().number) + " " + NxToStr(NxWxChannel().id) + " " + NxWxChannel().name, "299 1030000 LOCAL WEATHER")
 end sub
 

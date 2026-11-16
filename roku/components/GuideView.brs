@@ -790,8 +790,8 @@ sub enterStripe()
 end sub
 
 ' Up and Down jump to the previous and next bundle, scrolling so its first
-' channel is at the top; Right goes back to the rows on that bundle's first
-' channel; OK or Left opens the bundle list; Back returns to the rows.
+' channel is at the top; Right or OK goes to the rows on that bundle's first
+' channel; Left opens the bundle list; Back returns to the rows.
 function stripeKey(key as String) as Boolean
     if key = "up" or key = "down" then
         dir = 1
@@ -802,13 +802,16 @@ function stripeKey(key as String) as Boolean
             scrollToRow(m.stripeGroups[n].firstRow)
             renderGrid()
         end if
-    else if key = "right" then
-        m.focus = m.stripeGroups[m.stripeIdx].firstRow
+    else if key = "right" or key = "OK" then
+        ' OK selects the bundle (Chad 2026-11-16): the guide goes to its first channel, with focus on that row, as
+        ' the Apple TV's BundleJumpSidebar does. Back, below, closes without jumping.
+        row = NxStripeJumpRow(m.stripeGroups, m.stripeIdx)
+        if row >= 0 then m.focus = row
         m.nav = "grid"
         keepFocusVisible()
         renderGrid()
         renderInfo()
-    else if key = "OK" or key = "left" then
+    else if key = "left" then
         m.nav = "grid"
         renderGrid()
         openSidebar()
@@ -3514,7 +3517,8 @@ function withWeather(list as Dynamic) as Object
         out.Push(ch)
     end for
     if out.Count() = 0 or not NxWxChannelOn() then return out
-    out.Push(weatherChannel())
+    ' Where its number puts it: before the FRANCHISES block, not at the end.
+    out.Insert(NxWxInsertIndex(out), weatherChannel())
     return out
 end function
 
@@ -3529,11 +3533,11 @@ sub onWeatherInfo()
     m.weatherSummary = m.weather.summary
     m.weatherTemp = m.weather.tempLabel
     if m.channels = invalid or m.channels.Count() = 0 then return
-    last = m.channels.Count() - 1
-    if m.channels[last].weather <> true then return
-    m.channels[last] = weatherChannel()
+    wi = NxWxChannelIndex(m.channels)
+    if wi < 0 then return
+    m.channels[wi] = weatherChannel()
     ' What airs is the same programme: only its words changed.
-    if m.weatherOn and m.tuned = last then m.playing = blockAt(m.channels[last], nowSec())
+    if m.weatherOn and m.tuned = wi then m.playing = blockAt(m.channels[wi], nowSec())
     m.gridStale = true
     renderGrid()
     renderInfo()
@@ -3608,17 +3612,23 @@ end sub
 sub refreshWeatherRow()
     if m.channels = invalid then return
     n = m.channels.Count()
-    hasWeather = n > 0 and m.channels[n - 1].weather = true
+    wi = NxWxChannelIndex(m.channels)
     real = n
-    if hasWeather then real = n - 1
+    if wi >= 0 then real = n - 1
     want = real > 0 and NxWxChannelOn()
-    if want = hasWeather then return
+    if want = (wi >= 0) then return
     m.stripeStale = true
     if want then
-        m.channels.Push(weatherChannel())
+        at = NxWxInsertIndex(m.channels)
+        m.channels.Insert(at, weatherChannel())
+        ' The rows after it moved down one: the tuned channel and the focus stay on what they were on.
+        if m.tuned >= at then m.tuned = m.tuned + 1
+        if m.focus >= at then m.focus = m.focus + 1
     else
-        wasTuned = m.tuned = n - 1
-        m.channels.Pop()
+        wasTuned = m.tuned = wi
+        m.channels.Delete(wi)
+        if m.tuned > wi then m.tuned = m.tuned - 1
+        if m.focus > wi then m.focus = m.focus - 1
         if m.focus >= m.channels.Count() then m.focus = m.channels.Count() - 1
         if m.focus < 0 then m.focus = 0
         if wasTuned then
