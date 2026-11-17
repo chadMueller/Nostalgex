@@ -8,7 +8,9 @@
  *   - android.html, its /android footer link on the other pages, its sitemap line, its vite input or its
  *     vercel rewrite are missing;
  *   - any public page, llms.txt or the README has a Play store link or a Play testing (join) link;
- *   - android.html says "beta", has a button pointing at a placeholder, or carries a year/month date.
+ *   - android.html says "beta", has a button pointing at a placeholder, or carries a year/month date;
+ *   - android.html has a call-to-action button other than the Sign up to stay notified form (the site's
+ *     own /api/subscribe form, tagged android_notify), which is what stands in for a Play button.
  * When "playLive" is true it wants playUrl to be the Play listing for com.muellhaus.nostalgex and the
  * page to link to exactly that. Flip this check as the last step of the checklist in content/android.json.
  *
@@ -49,6 +51,11 @@ if (cfg.playLive === true) {
     if (PLAY_LINK.test(read(f))) failures.push(`${f} has a Google Play link while playLive is false`);
   }
   if (/PLAY_URL/.test(page)) failures.push('android.html has a PLAY_URL placeholder');
+  const main = page.slice(page.indexOf('<main'), page.indexOf('</main>'));
+  const forms = main.match(/<form class="subscribe-form js-subscribe-form" data-signup-source="android_notify"/g) || [];
+  if (forms.length < 1) failures.push('android.html has no Sign up to stay notified form in place of a Play button');
+  if (/<a class="btn/.test(main)) failures.push('android.html has a link button in the page body while playLive is false');
+  if (!(main.match(/Sign up to stay notified<\/button>/g) || []).length) failures.push('the sign-up button does not say Sign up to stay notified');
   if (/\bbeta\b/i.test(page.replace(/<!--[\s\S]*?-->/g, ''))) failures.push('android.html says beta');
   if (/\b(20\d\d|january|february|march|april|may \d|june|july|august|september|october|november|december)\b/i.test(page.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style)[\s\S]*?<\/\1>/g, '').replace(/<[^>]+>/g, ' '))) {
     failures.push('android.html shows a date');

@@ -12,6 +12,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.**
 - `android.html` is a real page now (hero, feature list, FAQ, other ways to watch). It carries no Google Play link, no join link, no date and no names. The words come from the approved Play listing and store notes; the few plain lines written to fill gaps are marked `TODO(marketing)` in the source. `scripts/android-section-check.mjs` now holds "page live, link absent" in `npm test`.
+- The page's buttons are Coming soon sign-ups (hero and bottom): the site's own `/api/subscribe` form and Nostalgex list, tagged `data-signup-source="android_notify"`. Nothing new in Resend or the API. The other-platform tiles became plain links in the hero line.
 - Home page: an Android TV tile with a Coming soon sticker, five tiles across on a wide screen. An Android TV link in every footer, the sitemap and the build.
 - `/self-host` has a Release notes section, rendered from `content/tuner-releases.json` by `scripts/render-self-host.mjs`. It starts with 1.0.23. The brief's line about channel updates without a new version is left out: the Docker image carries its own `channels.json` per release, so it is not true for Docker.
 - `/channels` has a LOCAL WEATHER row after the bundles (`WEATHER_ROW` in `scripts/build-bundles.mjs`), since CH 299 is not in `channels.json`. It says "5 day" because the channel pages' copy check bans hyphens.

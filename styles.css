@@ -2985,12 +2985,16 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
   color: var(--ink);
   max-width: 46ch;
 }
-.page-android .roku-elsewhere .screens {
-  grid-template-columns: repeat(3, 1fr);
-  max-width: 980px;
-}
-@media (max-width: 800px) {
-  .page-android .roku-elsewhere .screens { grid-template-columns: 1fr; }
+.page-android .android-status a { color: var(--ink); font-weight: 700; }
+/* The Coming soon sign-up in place of a store button. The sticker hangs off its top-right corner. */
+.page-android .android-notify { position: relative; max-width: 520px; padding-top: 6px; }
+.page-android .android-notify .cta-sticker { top: -18px; right: 0; }
+.page-android .android-notify .subscribe-input { flex: 1 1 220px; }
+.page-android .android-bottom { padding-bottom: 110px; border-top: 1px solid var(--hairline); }
+.page-android .android-bottom .android-notify { margin: 8px auto 0; }
+@media (max-width: 600px) {
+  .page-android .android-notify .cta-sticker { right: 12px; }
+  .page-android .android-bottom { padding-bottom: 80px; }
 }
 
 @media (max-width: 1024px) {

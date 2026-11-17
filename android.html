@@ -145,11 +145,17 @@
           </h1>
           <p class="hero-sub">Nostalgex turns your own Plex, Jellyfin or Emby library into live TV on Android TV.</p>
           <!-- TODO(marketing): replace this line. There is no Play link yet, so the page says so plainly. -->
-          <p class="android-status">Not on Google Play yet. Watch on Apple TV, Roku or in your browser today.</p>
+          <p class="android-status">Not on Google Play yet. Watch on <a href="https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&amp;ct=site_android_page&amp;mt=8" target="_blank" rel="noopener">Apple TV</a>, <a href="/roku">Roku</a> or in the <a href="/web-tuner">web tuner</a> today.</p>
           <div class="cta-block">
-            <div class="cta-row">
-              <a class="btn btn-ink btn-lg" href="https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&amp;ct=site_android_page&amp;mt=8" target="_blank" rel="noopener">Get it on Apple TV</a>
-              <a class="btn btn-paper btn-lg" href="/web-tuner">Open the web tuner</a>
+            <div class="android-notify">
+              <span class="cta-sticker">Coming soon</span>
+              <!-- Same sign-up as the footer: /api/subscribe, the Nostalgex list. data-signup-source tags the signup as coming from this page. -->
+              <form class="subscribe-form js-subscribe-form" data-signup-source="android_notify" novalidate>
+                <label class="visually-hidden" for="androidHeroEmail">Email address</label>
+                <input class="subscribe-input" id="androidHeroEmail" type="email" name="email" placeholder="you@somewhere.tv" autocomplete="email" maxlength="254" required>
+                <button class="btn btn-ink btn-lg subscribe-btn" type="submit">Sign up to stay notified</button>
+              </form>
+              <p class="subscribe-msg" role="status" aria-live="polite"></p>
             </div>
           </div>
         </div>
@@ -209,38 +215,25 @@
       </div>
     </section>
 
-    <!-- ============ ELSEWHERE ============ -->
-    <section class="section section-screens roku-elsewhere" id="elsewhere">
-      <div class="container">
+    <!-- ============ STAY NOTIFIED ============ -->
+    <section class="section android-bottom" id="notify">
+      <div class="container container-narrow">
         <div class="section-head reveal">
-          <!-- TODO(marketing): replace this heading. -->
-          <h2>No Android TV? It's on Apple TV, Roku and <span class="underline-pink">the web today</span>.</h2>
+          <!-- TODO(marketing): the heading. It is Chad's label for now. -->
+          <h2>Sign up to stay notified.</h2>
         </div>
-        <ul class="screens reveal">
-          <li>
-            <a class="tile tile--yellow" href="https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&amp;ct=site_android_page&amp;mt=8" target="_blank" rel="noopener">
-              <span class="tile-mark"><img class="tile-badge" src="/badges/download-on-apple-tv-black.svg" alt="" width="136" height="48"></span>
-              <span class="tile-name">Get it on Apple TV</span>
-              <span class="tile-line">Free on the App Store</span>
-              <span class="tile-go" aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-          <li>
-            <a class="tile tile--navy" href="/roku">
-              <span class="tile-name">Roku</span>
-              <span class="tile-line">Plug and play on the Channel Store</span>
-              <span class="tile-go" aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-          <li>
-            <a class="tile tile--cyan" href="/web-tuner">
-              <span class="tile-mark"><svg class="tile-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="3.5" width="20" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M2 8.5 H22" stroke="currentColor" stroke-width="2.2"/><circle cx="5.4" cy="6" r="1.05" fill="currentColor"/><circle cx="8.6" cy="6" r="1.05" fill="currentColor"/><path d="M10 12 L15.5 15 L10 18 Z" fill="currentColor"/></svg></span>
-              <span class="tile-name">Open the web tuner</span>
-              <span class="tile-line">In any browser, nothing to install</span>
-              <span class="tile-go" aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
+        <div class="reveal">
+          <div class="android-notify">
+              <span class="cta-sticker">Coming soon</span>
+              <!-- Same sign-up as the footer: /api/subscribe, the Nostalgex list. data-signup-source tags the signup as coming from this page. -->
+              <form class="subscribe-form js-subscribe-form" data-signup-source="android_notify" novalidate>
+                <label class="visually-hidden" for="androidBottomEmail">Email address</label>
+                <input class="subscribe-input" id="androidBottomEmail" type="email" name="email" placeholder="you@somewhere.tv" autocomplete="email" maxlength="254" required>
+                <button class="btn btn-ink btn-lg subscribe-btn" type="submit">Sign up to stay notified</button>
+              </form>
+              <p class="subscribe-msg" role="status" aria-live="polite"></p>
+            </div>
+        </div>
       </div>
     </section>
 
