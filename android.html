@@ -4,26 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nostalgex for Android TV | Retro channel guide for Plex, Jellyfin and Emby</title>
-<meta name="description" content="TODO(marketing): meta description for the Android TV page.">
-<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Plug and play live TV for your Plex, Jellyfin or Emby library on Android TV. Free and open source.">
+<meta name="robots" content="index, follow">
 <link rel="canonical" href="https://www.nostalgex.app/android">
 <link rel="icon" type="image/png" sizes="48x48" href="/logo/favicon-48.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <!-- Open Graph -->
-<meta property="og:title" content="Nostalgex for Android TV">
-<meta property="og:description" content="TODO(marketing): social description.">
+<meta property="og:title" content="Nostalgex for Android TV | Retro channel guide for Plex, Jellyfin and Emby">
+<meta property="og:description" content="Plug and play live TV for your Plex, Jellyfin or Emby library on Android TV. Free and open source.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.nostalgex.app/android">
 <meta property="og:site_name" content="Nostalgex">
+<meta property="og:image" content="https://www.nostalgex.app/og-android-1200.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="TODO(marketing): image alt text">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Nostalgex channel guide on Android TV: a grid of live channels built from your own library">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Nostalgex for Android TV">
-<meta name="twitter:description" content="TODO(marketing): social description.">
+<meta name="twitter:title" content="Nostalgex for Android TV | Retro channel guide for Plex, Jellyfin and Emby">
+<meta name="twitter:description" content="Plug and play live TV for your Plex, Jellyfin or Emby library on Android TV. Free and open source.">
+<meta name="twitter:image" content="https://www.nostalgex.app/og-android-1200.png">
 
 <script>
   /* Theme boot, runs before first paint so there's no flash on reload. */
@@ -42,6 +46,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./styles.css">
+<link rel="preload" as="image" href="/screens/android-guide-1280.webp" fetchpriority="high">
 <script>
   /* Analytics loads after the page has, so a slow third party never holds up the load event. */
   window.addEventListener("load", function () {
@@ -53,7 +58,7 @@
   });
 </script>
 </head>
-<body class="page-android">
+<body class="page-roku page-android">
   <header class="nav" id="nav">
     <div class="nav-inner">
       <a class="brand" href="/" aria-label="Nostalgex, home">
@@ -127,65 +132,115 @@
   </div>
   </header>
 
-  <!--
-    THE ANDROID TV PAGE, OFF. Not built, not linked, not in the sitemap while content/android.json
-    says "playLive": false. Switching it on is the checklist in that file's _comment. Every
-    TODO(marketing) below is a slot for the marketing agent's words. Nothing here names a date,
-    a beta or a "coming" line. The button needs the real Google Play link and has none yet.
-  -->
   <main id="top">
 
+    <!-- ============ HERO ============ -->
     <section class="hero">
       <div class="hero-grid">
         <div class="hero-copy">
           <h1>
-            <!-- TODO(marketing): the headline. The Roku page's pattern is "Plug and play on Roku". -->
-            <span class="h1-line">Nostalgex on <span class="grad-word">Android TV.</span></span>
+            <span class="h1-line">Plug and play on
+              <span class="grad-word">Android TV.</span>
+            </span>
           </h1>
-          <p class="hero-sub"><!-- TODO(marketing): the hero line. --></p>
+          <p class="hero-sub">Nostalgex turns your own Plex, Jellyfin or Emby library into live TV on Android TV.</p>
+          <!-- TODO(marketing): replace this line. There is no Play link yet, so the page says so plainly. -->
+          <p class="android-status">Not on Google Play yet. Watch on Apple TV, Roku or in your browser today.</p>
           <div class="cta-block">
             <div class="cta-row">
-              <!-- PLAY_URL: content/android.json "playUrl", the Google Play listing once Play shows the app. -->
-              <a class="btn btn-ink btn-lg" href="PLAY_URL" target="_blank" rel="noopener"><!-- TODO(marketing): button label. --></a>
+              <a class="btn btn-ink btn-lg" href="https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&amp;ct=site_android_page&amp;mt=8" target="_blank" rel="noopener">Get it on Apple TV</a>
+              <a class="btn btn-paper btn-lg" href="/web-tuner">Open the web tuner</a>
             </div>
           </div>
-          <p class="hero-note"><a href="#elsewhere">Watch on Apple TV or in your browser today</a></p>
         </div>
+
         <div class="hero-shot">
-          <!-- TODO: a real Android TV screenshot (from the Play listing set), with alt text. -->
+          <figure class="shot shot-tilt-r">
+            <img src="/screens/android-guide-1280.webp" srcset="/screens/android-guide-1280.webp 1280w, /screens/android-guide-1920.webp 1920w" sizes="(min-width: 1100px) 600px, 92vw" alt="The Nostalgex channel guide on Android TV: Toy Story 2 airing on channel 11, RETRO TOONS, with the picture playing in the corner and the channel grid below" width="1920" height="1080" fetchpriority="high" decoding="async">
+          </figure>
         </div>
       </div>
     </section>
 
+    <!-- ============ WHAT YOU GET ============ -->
     <section class="section section-navy" id="features">
       <div class="container">
-        <div class="guide-copy reveal">
-          <!-- TODO(marketing): the heading. -->
-          <ul class="check-list">
-            <!-- Facts for this list, from the 2026-11-16 facts brief (the words are the marketing agent's):
-                 LOCAL WEATHER (CH 299), choose your libraries, bundle strip jump, Settings progress on a server switch,
-                 channel list updates without an app update, works with Plex, Jellyfin and Emby.
-                 No contributor names on this page (Chad, 2026-11-11). -->
-            <li><!-- TODO(marketing) --></li>
-          </ul>
+        <div class="guide-grid">
+          <div class="guide-copy reveal">
+            <!-- TODO(marketing): the heading. Same as the Roku page for now. -->
+            <h2>Real TV, from your <span class="mark-yellow">own shelf.</span></h2>
+            <ul class="check-list">
+              <li>LOCAL WEATHER, channel 299: a weather channel that loops current conditions, today's forecast, a 5-day forecast and radar, with its own music. Set your city or postcode in Settings, Channels &amp; Bundles, Local Weather, and pick Fahrenheit or Celsius or leave it on Auto. It sits in the guide as one long bar. Radar covers the United States, Canada and Germany.</li>
+              <li>Your movies and shows get sorted into 120+ themed channels, like the back of an old cable bill.</li>
+              <li>Every channel plays on a set daily schedule, so something is already on when you tune in.</li>
+              <li>The guide shows what's on every channel right now and what's coming up.</li>
+              <li>Select on the bundle strip in the guide jumps to the first channel of that bundle.</li>
+              <li>CHOOSE YOUR LIBRARIES: turn off any library, hidden Jellyfin ones too, before the first scan or in Settings.</li>
+              <li>Progress shows inside Settings when you switch servers.</li>
+              <li>Sign in to Plex with the code on screen, or scan the QR code with your phone. Jellyfin and Emby look for your server on your network, or you can type its address.</li>
+              <li>Nostalgex is free and open source.</li>
+            </ul>
+          </div>
         </div>
       </div>
     </section>
 
+    <!-- ============ FAQ ============ -->
     <section class="section section-faq" id="faq">
       <div class="container container-narrow">
+        <div class="section-head reveal">
+          <h2>Android TV questions, answered.</h2>
+        </div>
         <div class="faq-list reveal">
-          <!-- TODO(marketing): FAQ, in the same shape as the Roku page. Mirror any answer into a JSON-LD FAQPage block. -->
+          <details>
+            <summary>Is it on Google Play?<span class="faq-marker" aria-hidden="true"></span></summary>
+            <!-- TODO(marketing): replace this answer. -->
+            <p>Not yet. There is no download link for Android TV today. Apple TV, Roku and the web tuner are available now.</p>
+          </details>
+          <details>
+            <summary>Does it cost anything?<span class="faq-marker" aria-hidden="true"></span></summary>
+            <p>Nostalgex is free.</p>
+          </details>
+          <details>
+            <summary>Do I need to set up a server or Docker?<span class="faq-marker" aria-hidden="true"></span></summary>
+            <p>You need your own Plex, Jellyfin or Emby server with media on it. Nostalgex itself needs nothing installed.</p>
+          </details>
         </div>
       </div>
     </section>
 
-    <section class="section section-screens" id="elsewhere">
+    <!-- ============ ELSEWHERE ============ -->
+    <section class="section section-screens roku-elsewhere" id="elsewhere">
       <div class="container">
         <div class="section-head reveal">
-          <!-- TODO(marketing): heading for the other ways to watch. -->
+          <!-- TODO(marketing): replace this heading. -->
+          <h2>No Android TV? It's on Apple TV, Roku and <span class="underline-pink">the web today</span>.</h2>
         </div>
-        <!-- Tiles for Apple TV, Roku and the web tuner: copy the pattern from roku.html #elsewhere and add the Roku tile. -->
+        <ul class="screens reveal">
+          <li>
+            <a class="tile tile--yellow" href="https://apps.apple.com/app/apple-store/id6762563534?pt=128802261&amp;ct=site_android_page&amp;mt=8" target="_blank" rel="noopener">
+              <span class="tile-mark"><img class="tile-badge" src="/badges/download-on-apple-tv-black.svg" alt="" width="136" height="48"></span>
+              <span class="tile-name">Get it on Apple TV</span>
+              <span class="tile-line">Free on the App Store</span>
+              <span class="tile-go" aria-hidden="true">&rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="tile tile--navy" href="/roku">
+              <span class="tile-name">Roku</span>
+              <span class="tile-line">Plug and play on the Channel Store</span>
+              <span class="tile-go" aria-hidden="true">&rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="tile tile--cyan" href="/web-tuner">
+              <span class="tile-mark"><svg class="tile-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="3.5" width="20" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M2 8.5 H22" stroke="currentColor" stroke-width="2.2"/><circle cx="5.4" cy="6" r="1.05" fill="currentColor"/><circle cx="8.6" cy="6" r="1.05" fill="currentColor"/><path d="M10 12 L15.5 15 L10 18 Z" fill="currentColor"/></svg></span>
+              <span class="tile-name">Open the web tuner</span>
+              <span class="tile-line">In any browser, nothing to install</span>
+              <span class="tile-go" aria-hidden="true">&rarr;</span>
+            </a>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -224,7 +279,7 @@
         </form>
         <p class="subscribe-msg" role="status" aria-live="polite"></p>
       </div>
-      <p class="footer-note">Not affiliated with Plex, Jellyfin, Emby, Apple, or Google. TODO(marketing): the Android and Google Play trademark line, if one is needed.</p>
+      <p class="footer-note">Not affiliated with Plex, Jellyfin, Emby, Apple, or Google. Apple, the Apple logo, Apple TV and App Store are trademarks of Apple Inc., registered in the U.S. and other countries. Android and Android TV are trademarks of Google LLC.</p>
     </div>
   </footer>
 

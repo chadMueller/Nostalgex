@@ -4,6 +4,21 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-16 (site: Android TV page, web and Docker release notes, weather on /channels)
+
+**State.** Branch `site/platform-pages-nov16` on top of main `5c4b2143`.
+
+**Why.** Chad's answers on the release prep: a public Android TV page and a "coming soon" tile on the home page, release notes for the web tuner and Docker, and the weather channel on the channel guide.
+
+**Changed.**
+- `android.html` is a real page now (hero, feature list, FAQ, other ways to watch). It carries no Google Play link, no join link, no date and no names. The words come from the approved Play listing and store notes; the few plain lines written to fill gaps are marked `TODO(marketing)` in the source. `scripts/android-section-check.mjs` now holds "page live, link absent" in `npm test`.
+- Home page: an Android TV tile with a Coming soon sticker, five tiles across on a wide screen. An Android TV link in every footer, the sitemap and the build.
+- `/self-host` has a Release notes section, rendered from `content/tuner-releases.json` by `scripts/render-self-host.mjs`. It starts with 1.0.23. The brief's line about channel updates without a new version is left out: the Docker image carries its own `channels.json` per release, so it is not true for Docker.
+- `/channels` has a LOCAL WEATHER row after the bundles (`WEATHER_ROW` in `scripts/build-bundles.mjs`), since CH 299 is not in `channels.json`. It says "5 day" because the channel pages' copy check bans hyphens.
+- The 1.0.33 changelog title leads with the weather channel.
+
+**Half-done.** The Apple TV and Roku flips are still on `site/flip-appletv-1.0.33` and `site/flip-roku-1.0.13`, with the weather line first in each list.
+
 ## 2026-11-16 (site: ready for the Apple TV 1.0.33, Roku 1.0.13 and Android TV releases)
 
 **State.** Branch `site/platform-releases-nov16` off main `affe3481`. Not merged, not pushed. Two flips wait on their own branches, built on top of it.

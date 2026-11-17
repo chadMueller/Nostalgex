@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Release notes for the web tuner and the Docker container, shown on /self-host.",
+    "They are one product in two casings, so one entry covers both.",
+    "Source of the generated Release notes region of self-host.html; rendered by",
+    "scripts/render-self-host.mjs (npm run selfhost:render, and `npm run build`).",
+    "Never hand-edit between the TUNER-RELEASES markers; edit this and re-render.",
+    "",
+    "Newest first. title is the release's first sentence. bullets is WHAT'S NEW, big things first;",
+    "newChannels and fixes are the other two sections and are left out when empty.",
+    "The text comes from the GitHub release tuner-vX.Y.Z. Only what the web tuner and Docker got:",
+    "check the code before putting an Apple TV or Roku feature here."
+  ],
+  "entries": [
+    {
+      "version": "1.0.23",
+      "date": "NOV 2026",
+      "title": "The weather channel is one full-width bar, Settings keeps you in place during a server switch, and one set of rules now picks your servers and libraries.",
+      "bullets": [
+        "LOCAL WEATHER (CH 299) is one full-width live bar in the guide. The credits sit in a small stack at the bottom left and the weather icons are 15 percent smaller. Its settings now have a WEATHER row on the CHANNELS & BUNDLES page in Settings.",
+        "Select on a bundle stripe jumps the guide to that bundle's first channel. Left opens the bundle list.",
+        "A server switch stays in Settings. The progress shows there, with BUILDING CHANNELS and BUILDING SCHEDULE.",
+        "One set of rules for choosing servers and libraries, the same as the Apple TV. The library picker only appears when there is something to choose, and every sign-in starts the choices again. A Jellyfin library you hide from the home screen gets its own row, marked HIDDEN ON JELLYFIN, and stays off until you switch it on. The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch is gone; if you had it on, those libraries stay on."
+      ],
+      "newChannels": [],
+      "fixes": [
+        "Signing in no longer risks a stuck redirect when the browser can't save the sign-in flag.",
+        "Plex lists and reads only Movies and TV Shows libraries, so a Music or Photos library is no longer paged through on every scan."
+      ]
+    }
+  ]
+}

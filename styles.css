@@ -909,8 +909,16 @@ a { color: inherit; }
 /* No mark on this tile, so the name and line sit at the bottom like the others. */
 .tile--soon .tile-name { margin-top: auto; }
 
+/* Home page: five ways to watch. Five across on a wide screen, two across below that with the odd
+   last tile spanning the row. */
+.page-home .screens { grid-template-columns: repeat(5, 1fr); gap: 22px; }
 @media (max-width: 1100px) {
   .screens { grid-template-columns: repeat(2, 1fr); gap: 30px 28px; }
+  .page-home .screens { grid-template-columns: repeat(2, 1fr); gap: 30px 28px; }
+  .page-home .screens > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .page-home .screens { gap: 22px 18px; }
 }
 @media (max-width: 600px) {
   .screens { gap: 22px 18px; }
@@ -2966,6 +2974,23 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
   .page-roku .roku-elsewhere .screens { grid-template-columns: 1fr; }
   .page-roku .roku-elsewhere .tile { min-height: 0; }
   .page-roku .tile-badge { height: 44px; }
+}
+
+/* Android TV page: it borrows the Roku page's parts (body carries both classes). Three tiles in
+   the "other ways to watch" row, and the plain status line under the hero. */
+.page-android .android-status {
+  margin-top: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  max-width: 46ch;
+}
+.page-android .roku-elsewhere .screens {
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 980px;
+}
+@media (max-width: 800px) {
+  .page-android .roku-elsewhere .screens { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1024px) {

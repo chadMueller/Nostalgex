@@ -37,6 +37,7 @@
     { "source": "/plex", "destination": "/plex.html" },
     { "source": "/jellyfin", "destination": "/jellyfin.html" },
     { "source": "/emby", "destination": "/emby.html" },
-    { "source": "/roku", "destination": "/roku.html" }
+    { "source": "/roku", "destination": "/roku.html" },
+    { "source": "/android", "destination": "/android.html" }
   ]
 }
