@@ -270,6 +270,38 @@ function NxPickerWanted(sections as Object) as Boolean
     return false
 end function
 
+' The library pick a sign-in still owes (#331), saved as the server picker's
+' needsPick is: written where a sign-in saves its servers, and cleared once the
+' picker is answered or isn't needed. Closing the app on CHOOSE YOUR LIBRARIES
+' then brings the picker back at the next launch, instead of reading every library.
+function NxLibraryPickOwed(reg as Dynamic) as Boolean
+    if reg = invalid then return false
+    return reg.Read("needsLibraryPick") <> ""
+end function
+
+sub NxOweLibraryPick(reg as Dynamic)
+    if reg = invalid then return
+    reg.Write("needsLibraryPick", "1")
+    reg.Flush()
+end sub
+
+sub NxLibraryPickSettled(reg as Dynamic)
+    if reg = invalid then return
+    reg.Delete("needsLibraryPick")
+    reg.Flush()
+end sub
+
+' Whether a launch goes straight to reading the library, from what the sign-in
+' saved: servers to read, no server or library pick owed, and for Plex a token.
+' Otherwise the launch signs in again or asks for the libraries first.
+function NxLaunchReadsLibrary(reg as Dynamic, kind as String, plexToken as String) as Boolean
+    if reg = invalid then return false
+    if reg.Read("servers") = "" then return false
+    if NxLibraryPickOwed(reg) then return false
+    if kind <> "plex" then return true
+    return plexToken <> "" and reg.Read("needsPick") = ""
+end function
+
 ' ── The sections a scan saw ────────────────────────────────────────────────
 ' Each scan adds the sections its server listed (before the ones turned off
 ' are left out), the library task saves them with the library, and Settings
