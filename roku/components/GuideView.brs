@@ -1697,6 +1697,9 @@ sub onKeepStall()
     m.keepErrors = NxNumberOr0(m.keepErrors) + 1
     print "keepalive: the clip sat in buffering for "; NxKeepAliveStallSecs(); " s (failure "; m.keepErrors; ")"
     keepAliveAct(NxKeepAliveStallAction(state, m.keepErrors))
+    ' A restart that sticks in buffering may never change the state field, so
+    ' onKeepState would not start the timer again: re-arm it here.
+    if m.keepAlive then m.keepStall.control = "start"
 end sub
 
 sub keepAliveAct(action as String)
