@@ -4,6 +4,22 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-18 (publish Thanksgiving marathon)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/thanksgiving-marathon-own-library`.
+
+**Why.** Today's post: a Thanksgiving TV marathon from your own Plex library. The copy was already approved (`draft: false`, date 2026-11-18); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/thanksgiving-marathon-own-library.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/thanksgiving-marathon-own-library/cover.jpg` is 1200x630. Hero `header.webp` is 1920x1080. Both R2 URLs returned 200 (header.webp 125,554 bytes; cover.jpg 133,438 bytes). Images stay on R2; none committed.
+- `content/roku.json` was not touched. `announcementPost` was not set.
+- `npm run blog:render` wrote seventeen live posts into `public/sitemap.xml`, including `/blog/thanksgiving-marathon-own-library` with lastmod 2026-11-18. `/blog` lastmod is 2026-11-18. `npm run build` emitted the post to `dist/blog/thanksgiving-marathon-own-library.html` with width/height on both images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 392 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-11-16 (site: Android TV page, web and Docker release notes, weather on /channels)
 
 **State.** Branch `site/platform-pages-nov16` on top of main `5c4b2143`.
