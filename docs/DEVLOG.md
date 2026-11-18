@@ -3,6 +3,14 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-18 (Apple TV: closing the app on CHOOSE YOUR LIBRARIES)
+
+**Found.** tydude001 found it on Roku (#331): sign in, stop on the library picker, close the app, open it again, and the picker is skipped and every library is read. Nobody had run the Apple TV. Run on 1.0.33 (tag v1.0.33) against a stand-in Emby and a stand-in Jellyfin, each with two libraries, on a throwaway tvOS simulator with the app's real stores: after the relaunch the guide loaded and the server log shows `/Items` for both libraries, with the picker never shown. Plex has no stand-in for plex.tv, so it was measured at the AppState level (a second AppState over the same stores, driven through the calls the launch makes): sections read ["1", "2"], picker not shown. Not a process kill.
+
+**Changed.** Branch `appletv/picker-owed` off `appletv/weather-search-fixes`, not pushed. A pick-owed flag (`LibrarySectionSelectionStore.pickOwed`) is saved when a sign-in reaches the picker step. CONTINUE, a sign-in with nothing to choose, and sign-out clear it. A launch with it set (`resumeLibraryPickIfOwed`, called from RootView after the saved sign-in is read) re-reads the libraries and shows the picker, with the loading screen up meanwhile. If the server cannot be reached on that launch the flag stays set. `PickerOwedTests` (7) pass with `LibrarySelectionTests`, `HiddenLibrarySelectionTests`, `LibraryPickerGoldenTests` and `SessionDurabilityTests`.
+
+**Unverified.** The fix has not been run as a real kill and relaunch on a simulator or an Apple TV; the unit tests model the relaunch. Hidden Jellyfin libraries were not exercised in the repro.
+
 ## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
 
 **State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.
