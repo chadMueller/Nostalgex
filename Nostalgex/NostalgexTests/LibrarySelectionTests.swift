@@ -86,6 +86,8 @@ final class LibrarySelectionTests: XCTestCase {
         DailyManifestStore.clearAll()
         UserDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
         UserDefaults.standard.removeObject(forKey: "nostalgex_deselected_library_sections")
+        // A test that ends on the picker leaves the choice owed in the host app's real defaults.
+        UserDefaults.standard.removeObject(forKey: "nostalgex_library_pick_owed")
         super.tearDown()
     }
 

@@ -23,6 +23,8 @@ final class PickerOwedTests: XCTestCase {
         let serverID: String
         let sections: [PlexSection]
         var sectionsReadable = true
+        /// Runs while the sections are being read, as a viewer pressing a button would.
+        nonisolated(unsafe) var whileReadingSections: (@Sendable @MainActor () -> Void)?
         private let lock = NSLock()
         private var fetched: [String] = []
         var fetchedSectionKeys: [String] { lock.withLock { fetched } }
@@ -30,6 +32,7 @@ final class PickerOwedTests: XCTestCase {
         init(serverID: String, sections: [PlexSection]) { self.serverID = serverID; self.sections = sections }
         func testConnection() async throws -> String { serverID }
         func loadSections() async throws -> [PlexSection] {
+            if let hook = whileReadingSections { await hook() }
             if !sectionsReadable { throw PlexAPIService.APIError.invalidResponse }
             return sections
         }
@@ -175,6 +178,39 @@ final class PickerOwedTests: XCTestCase {
         let resumed = await third.resumeLibraryPickIfOwed()
         XCTAssertTrue(resumed)
         XCTAssertTrue(third.needsLibrarySelection, "once the server answers, the picker is shown")
+    }
+
+    func testTheServerReadShowsTheStepRailSoSTARTOVERIsThere() async {
+        _ = await signInToThePicker()
+        let second = await relaunch()
+        nonisolated(unsafe) var message = ""
+        nonisolated(unsafe) var resuming = false
+        nonisolated(unsafe) var mode = LoadingScreenMode.splash
+        backend.whileReadingSections = { [unowned second] in
+            message = second.loadingMessage
+            resuming = second.isResumingLibraryPick
+            mode = LoadingScreenMode.decide(
+                didAttemptCredentialHydration: second.didAttemptCredentialHydration,
+                isFirstLibraryLoad: second.isFirstLibraryLoad,
+                loadingMessage: second.loadingMessage,
+                scanTotalSections: second.scanTotalSections,
+                channelBuildTotal: second.channelBuildTotal)
+        }
+        _ = await second.resumeLibraryPickIfOwed()
+        XCTAssertTrue(resuming)
+        XCTAssertEqual(message, "FINDING YOUR SERVERS...")
+        XCTAssertTrue(mode.showsStepRail, "the bare logo has no START OVER; a server that never answers would trap the viewer")
+        XCTAssertEqual(second.loadingMessage, "", "the headline does not outlive the step")
+    }
+
+    func testStartingOverWhileTheServerIsBeingReadDoesNotShowThePicker() async {
+        _ = await signInToThePicker()
+        let second = await relaunch()
+        backend.whileReadingSections = { [unowned second] in second.clearCredentials() }
+        _ = await second.resumeLibraryPickIfOwed()
+        XCTAssertFalse(second.needsLibrarySelection, "signed out meanwhile: no picker for a sign-in that is gone")
+        XCTAssertFalse(LibrarySectionSelectionStore.pickOwed)
+        XCTAssertTrue(backend.fetchedSectionKeys.isEmpty)
     }
 
     func testAnOrdinaryRelaunchIsUntouched() async {

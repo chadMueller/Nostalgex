@@ -234,6 +234,8 @@ extension AppState {
         LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
 
         let sections = await loadAllLibrarySections()
+        // START OVER or a disconnect while the libraries were being read: nothing is signed in to choose for.
+        guard hasCredentials else { return }
         availableLibrarySections = sections
 
         // A hidden library is always worth a screen, even alone: it starts off, so without the
@@ -306,7 +308,13 @@ extension AppState {
     func resumeLibraryPickIfOwed() async -> Bool {
         guard hasCredentials, LibrarySectionSelectionStore.pickOwed else { return false }
         isResumingLibraryPick = true
-        defer { isResumingLibraryPick = false }
+        // A headline puts the step rail and START OVER up straight away. With none, LoadingScreenMode shows the bare
+        // logo, and an unreachable server (60 s for Emby and Jellyfin) would leave no way out.
+        loadingMessage = "FINDING YOUR SERVERS..."
+        defer {
+            isResumingLibraryPick = false
+            loadingMessage = ""
+        }
         await presentLibrarySelectionOrScan()
         return true
     }
