@@ -25,12 +25,9 @@ sub init()
 end sub
 
 ' Whether a launch would go straight into a library load: a saved sign-in
-' with servers to read, as launchLoad's own checks.
+' with servers to read and no pick owed, as launchLoad's own checks.
 function NxSignedInToLoad() as Boolean
-    reg = NxPlexRegistry()
-    if reg.Read("servers") = "" then return false
-    if NxSignedInKind() <> "plex" then return true
-    return NxPlexLoadToken() <> "" and reg.Read("needsPick") = ""
+    return NxLaunchReadsLibrary(NxPlexRegistry(), NxSignedInKind(), NxPlexLoadToken())
 end function
 
 ' upstream's UnfinishedLoadsView: LOADING DIDN'T FINISH, TRY AGAIN (OK) or
@@ -52,7 +49,12 @@ sub launchLoad()
         ' shows up as the library failing to load.
         if reg.Read("servers") <> "" then
             m.prompt.text = "Connecting to " + NxKindName(kind) + "…"
-            startLibrary(true)
+            ' A library pick still owed (#331) is asked for again first.
+            if NxLaunchReadsLibrary(reg, kind, "") then
+                startLibrary(true)
+            else
+                afterSignIn()
+            end if
             m.mbCheck = CreateObject("roSGNode", "MediaBrowserSignInTask")
             m.mbCheck.action = "check"
             m.mbCheck.ObserveField("status", "onMbCheck")
@@ -66,7 +68,9 @@ sub launchLoad()
         showConnect()
         return
     end if
-    if reg.Read("servers") <> "" and reg.Read("needsPick") = "" then startLibrary(true)
+    ' With a server or library pick still owed, nothing loads yet: the sign-in's
+    ' "ready" shows the server picker, or asks for the libraries (onSignInState).
+    if NxLaunchReadsLibrary(reg, kind, NxPlexLoadToken()) then startLibrary(true)
     startSignIn()
 end sub
 
@@ -270,6 +274,7 @@ sub onSections()
         launchComplete()
     else
         print "library: "; sections.Count(); " library section(s), no picker"
+        NxLibraryPickSettled(NxPlexRegistry())
         startLibrary(true)
     end if
 end sub
@@ -281,6 +286,7 @@ sub onLibrariesPicked()
     choices = m.libPicker.choices
     NxSaveDeselectedSections(NxPlexRegistry(), choices.off)
     NxSaveIncludedHiddenSections(NxPlexRegistry(), choices.included)
+    NxLibraryPickSettled(NxPlexRegistry())
     print "library: libraries picked after "; m.libPickerClock.TotalMilliseconds(); " ms at the library picker, "; choices.off.Count(); " turned off, "; choices.included.Count(); " hidden turned on"
     closeLibPicker()
     if m.signedInClock <> invalid then m.signedInClock = CreateObject("roTimespan")

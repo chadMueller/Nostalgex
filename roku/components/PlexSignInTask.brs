@@ -162,6 +162,8 @@ sub finishSignIn(token as String, account as Dynamic, fresh as Boolean)
     ' A new sign-in starts again: every library on, every hidden Jellyfin one off, and the
     ' old single hidden switch gone (I-092, N-016).
     NxResetLibraryChoices(reg, NxHiddenLibrariesRegistry())
+    ' Owed until CHOOSE YOUR LIBRARIES is answered or isn't needed (#331).
+    NxOweLibraryPick(reg)
     ' More than one: the viewer picks which first (MainScene, ServerPickerView).
     ' Kept until they do, so quitting at the picker brings it back.
     if found.Count() > 1 then reg.Write("needsPick", "1")
