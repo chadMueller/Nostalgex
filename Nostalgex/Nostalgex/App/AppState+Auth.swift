@@ -226,6 +226,8 @@ extension AppState {
     /// Settings-time choice from here on, not something carried in from whatever was
     /// last connected on this device.
     func presentLibrarySelectionOrScan() async {
+        // Owed from here: the sign-in is already saved, so a relaunch before the choice is made must come back here.
+        LibrarySectionSelectionStore.pickOwed = true
         deselectedLibrarySectionKeys = []
         LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
         includedHiddenLibrarySectionKeys = []
@@ -241,6 +243,8 @@ extension AppState {
             // loadLibrary will raise its own connection error if the server is
             // genuinely unreachable, so a transient read failure here shouldn't block
             // the user on a screen with nothing on it).
+            // A relaunch that could not read the sections at all keeps the choice owed for the next one.
+            if !sections.isEmpty || !isResumingLibraryPick { LibrarySectionSelectionStore.pickOwed = false }
             await loadLibrary()
             return
         }
@@ -292,7 +296,19 @@ extension AppState {
         ))
         needsLibrarySelection = false
         pendingLibrarySections = []
+        LibrarySectionSelectionStore.pickOwed = false
         Task { await loadLibrary() }
+    }
+
+    /// Launch, after the saved sign-in is read: a sign-in that ended at CHOOSE YOUR LIBRARIES (the app was closed
+    /// there) still owes the viewer that choice. Reads the libraries again and shows the picker, or scans when there
+    /// is nothing left to choose. Returns true when it took over the launch.
+    func resumeLibraryPickIfOwed() async -> Bool {
+        guard hasCredentials, LibrarySectionSelectionStore.pickOwed else { return false }
+        isResumingLibraryPick = true
+        defer { isResumingLibraryPick = false }
+        await presentLibrarySelectionOrScan()
+        return true
     }
 
     /// The one place a Plex sign-in is committed. Selecting servers used to be the only
@@ -493,6 +509,7 @@ extension AppState {
         credentialStore.delete(key: Self.serversKey)
         credentialStore.delete(key: Self.backendKindKey)
         credentialStore.delete(key: Self.jellyfinUserIdKey)
+        LibrarySectionSelectionStore.pickOwed = false
         serverURL = ""
         token = ""
         serverName = ""

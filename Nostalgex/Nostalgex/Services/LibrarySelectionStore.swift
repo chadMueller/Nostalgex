@@ -64,6 +64,17 @@ enum LibrarySectionSelectionStore {
         AppDefaults.standard.set(Array(deselected), forKey: key)
     }
 
+    private static let pickOwedKey = "nostalgex_library_pick_owed"
+
+    /// True from the moment a sign-in is saved until the viewer has made, or never needed, the library choice.
+    /// Credentials are saved before CHOOSE YOUR LIBRARIES is shown, and the screen itself lives only in memory, so
+    /// closing the app on it used to relaunch straight into a scan of every library. Set when the sign-in reaches
+    /// the picker step, cleared by CONTINUE, by a sign-in with nothing to choose, and by sign-out.
+    static var pickOwed: Bool {
+        get { AppDefaults.standard.bool(forKey: pickOwedKey) }
+        set { AppDefaults.standard.set(newValue, forKey: pickOwedKey) }
+    }
+
     /// Whether a library the user hides from the Jellyfin home screen is on until the viewer
     /// switches it off. False: it is listed in LIBRARIES but off, and nothing from it airs
     /// until the viewer switches it on, because hiding it was a choice made on the server
