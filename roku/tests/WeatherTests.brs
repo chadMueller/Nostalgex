@@ -283,6 +283,18 @@ sub NxWxZoneChecks(r as Object)
     NxCheck(r, "zone: valid", NxToStr(NxWxValidZone("America/Toronto")) + NxToStr(NxWxValidZone("Nope/Zone")) + NxToStr(NxWxValidZone("")), "truefalsefalse")
     ' The table has to reach well past the clock, or the zones stop changing: run
     ' node tests/gen-weather-zones.mjs again.
+    ' Every zone the place files name resolves, or a place in it would read as UTC (America/Atikokan, 2026-11-18).
+    meta = ParseJson(ReadAsciiFile("pkg:/tests/vectors/weather-places-meta.json"))
+    missing = []
+    if type(meta) = "roAssociativeArray" and type(meta.tz) = "roArray" then
+        for each tz in meta.tz
+            if not NxWxValidZone(tz) then missing.Push(tz)
+        end for
+        NxCheck(r, "zone: the place files' zones are all in the table (" + meta.tz.Count().ToStr() + ")", missing.Join(","), "")
+    else
+        NxCheck(r, "zone: the place files' zone list can be read", "no", "yes")
+    end if
+    NxCheck(r, "zone: Atikokan keeps Coral Harbour's offset", NxWxFmtClock(NxWxParseIso("2026-07-01T12:00:00Z"), "America/Atikokan") + " " + NxWxFmtClock(NxWxParseIso("2026-07-01T12:00:00Z"), "America/Coral_Harbour"), "7:00 AM 7:00 AM")
     NxCheck(r, "zone table reaches 2033 at least", NxToStr(NxWxZoneTableEnd() > NxWxParseIso("2033-01-01T00:00:00Z")), "true")
 end sub
 
