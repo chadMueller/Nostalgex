@@ -126,6 +126,8 @@ sub init()
     m.keepVideo.mute = true
     m.keepVideo.ObserveField("state", "onKeepState")
     m.keepAlive = false
+    ' Runs while the hold clip buffers, and restarts a clip stuck there (#334).
+    m.keepStall = newTimer(NxKeepAliveStallSecs(), false, "onKeepStall")
     m.infoPosterTimer = m.top.FindNode("infoPosterTimer")
     m.infoPosterTimer.ObserveField("fire", "onInfoPosterTimer")
     m.video.ObserveField("state", "onVideoState")
@@ -1668,6 +1670,7 @@ end sub
 sub stopKeepAlive()
     ' A channel starting is a new hold's start: a clip given up on is tried again then.
     m.keepGaveUp = false
+    m.keepStall.control = "stop"
     if not m.keepAlive then return
     m.keepAlive = false
     m.keepVideo.control = "stop"
@@ -1678,8 +1681,25 @@ sub onKeepState()
     state = m.keepVideo.state
     print "keepalive: clip "; state
     if not m.keepAlive then return
+    ' The stall timer runs only while the clip buffers (#334).
+    m.keepStall.control = "stop"
+    if state = "buffering" then m.keepStall.control = "start"
     if state = "error" then m.keepErrors = NxNumberOr0(m.keepErrors) + 1
-    action = NxKeepAliveAction(state, NxNumberOr0(m.keepErrors))
+    keepAliveAct(NxKeepAliveAction(state, NxNumberOr0(m.keepErrors)))
+end sub
+
+' The clip has sat in buffering for NxKeepAliveStallSecs: restarted as after an
+' error, and counted with the errors toward the same three tries (#334).
+sub onKeepStall()
+    if not m.keepAlive then return
+    state = m.keepVideo.state
+    if state <> "buffering" then return
+    m.keepErrors = NxNumberOr0(m.keepErrors) + 1
+    print "keepalive: the clip sat in buffering for "; NxKeepAliveStallSecs(); " s (failure "; m.keepErrors; ")"
+    keepAliveAct(NxKeepAliveStallAction(state, m.keepErrors))
+end sub
+
+sub keepAliveAct(action as String)
     if action = "play" then
         m.keepVideo.control = "stop"
         m.keepVideo.control = "play"
@@ -1687,6 +1707,7 @@ sub onKeepState()
         ' The clip cannot play: three tries, then it stays stopped until a channel starts.
         m.keepAlive = false
         m.keepGaveUp = true
+        m.keepStall.control = "stop"
         m.keepVideo.control = "stop"
         print "keepalive: the hold clip failed "; NxKeepAliveTries(); " times, stopped"
     end if
