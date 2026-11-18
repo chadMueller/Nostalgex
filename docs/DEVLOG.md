@@ -11,6 +11,10 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Verified.** The same Emby kill and relaunch on this branch: the picker comes back and the server log shows no `/Items` request before the choice.
 
+**Half-done.** Two known edges, left as they are. A multi-server Plex relaunch where only one server answers gives a non-empty list, so if that is a single non-hidden section the flag clears and everything is scanned. TRY AGAIN after an unreachable launch loads the guide with every library while the flag stays set, so the picker returns on the next launch and resets any Settings choices made in between.
+
+**Reviewed.** The resume step now shows the step rail and START OVER straight away (headline "FINDING YOUR SERVERS..."), and a START OVER while the libraries are being read no longer lets the picker appear for a signed-out app. The unit tests that end on the picker clear the flag in tearDown so the host app's defaults are not left owing a pick.
+
 **Unverified.** Not run on an Apple TV, and the fix was not run as a process kill on Jellyfin or Plex (Jellyfin shares the Emby path in the code; Plex is covered by the AppState tests only). Hidden Jellyfin libraries were not exercised.
 
 ## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
