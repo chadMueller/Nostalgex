@@ -199,7 +199,9 @@ final class WeatherController {
         } else if let model {
             summary = WeatherEngine.infoSummary(model, units)
         } else {
-            summary = "Current conditions, today\u{2019}s forecast, the 5-day forecast and radar, in a loop."
+            summary = WeatherEngine.hasRadar(place)
+                ? "Current conditions, today\u{2019}s forecast, the 5-day forecast and radar, in a loop."
+                : "Current conditions, today\u{2019}s forecast and the 5-day forecast, in a loop."
         }
         let temperature = (place != nil ? model : nil).map { "\(WeatherEngine.fmtTemp($0.current.tempC, units))\u{00B0}\(units.rawValue)" } ?? ""
         WeatherGuideInfo.set(placeTitle: placeTitle, summary: summary, temperature: temperature)
@@ -211,12 +213,15 @@ final class WeatherController {
         if placeIndex == nil {
             let base = Self.siteBase
             let session = self.session
-            placeIndex = WeatherPlaceIndex { path in
-                guard let url = URL(string: "\(base)/weather/\(path)") else { return nil }
-                guard let result = try? await session.data(from: url),
-                      (result.1 as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-                return result.0
-            }
+            placeIndex = WeatherPlaceIndex(fetch: { path in
+                guard let url = URL(string: "\(base)/weather/\(path)") else { return .failed }
+                guard let result = try? await session.data(from: url), let http = result.1 as? HTTPURLResponse else { return .failed }
+                switch http.statusCode {
+                case 200: return .data(result.0)
+                case 404: return .notFound
+                default: return .failed
+                }
+            })
         }
         return await placeIndex!.search(text)
     }
@@ -264,7 +269,7 @@ final class WeatherController {
             Task { await self.ensureForecast(force: false) }
         }
         // The radar frames load from the TODAY screen on, so they are there when the radar comes up.
-        if WeatherEngine.screenAt(now).index >= 1 { Task { await self.ensureRadar() } }
+        if WeatherEngine.screenAt(now, hasRadar: WeatherEngine.hasRadar(place)).index >= 1 { Task { await self.ensureRadar() } }
     }
 
     private func appWentToBackground() {
