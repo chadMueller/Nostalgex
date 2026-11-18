@@ -3,6 +3,19 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-18 (Roku: LOCAL WEATHER place search shows up to 36 matches, and a place with no radar plays a three screen loop, #332)
+
+**Why.** The same three changes the Apple TV and the web tuner got today, so CH 299 behaves the same on all three. On the Apple TV a failed read of the place list (`places/meta.json`) was remembered until relaunch, because a search cancelled by the next keystroke counted as a failure. GitHub #332 asked for more than 8 matches for a postcode with many localities, and for no RADAR NOT AVAILABLE slide outside the US, Canada and Germany.
+
+**Changed.**
+- *A failed place-list load is not remembered.* Checked, no change needed: the Roku search keeps nothing between searches. Each search is a new `WeatherTask` and `NxWxSearch` calls its loader for every file it needs, so a file that did not come (`NxWxNetLoad` returns invalid for a timeout, an error status or a 404 alike) is asked for again at the next search. There is no cancelled search either: the on-screen keyboard is answered before the search starts. A test now holds this.
+- *Result cap 8 to 36* (`NxWxMaxResults`). The whole postcode comes first, then the longer codes in file order, then cities, as on the Apple TV and the web. The picker is a `StandardMessageDialog` with one button per match, so it now has up to 38 buttons (36, SEARCH AGAIN, CANCEL).
+- *No radar outside coverage.* `NxWxHasRadar(place)` is true where `NxWxRadarProvider` has a source (US, Canada, Germany) and for no place yet. For any other place the loop is CURRENT, TODAY, 5-DAY at 45 s instead of 65 s: `NxWxScreens(withRadar)`, `NxWxLoopSeconds(withRadar)` and `NxWxScreenAt(nowSec, withRadar)`. The footer draws one pip per screen of the loop that is playing (three), the radar fetch is skipped, the RADAR NOT AVAILABLE card is gone, and the info panel's line before the forecast arrives drops "and radar" (`NxWxLoopSummary(false)`, published by `WeatherView`). `withRadar` defaults to true, so `weather-golden.json` is unchanged and still read byte for byte.
+
+**Tests.** The weather suite alone, in the interpreter: 824 checks (773 before), 0 failed, 16 s. New: a loader that fails and then works (a failed list, city file and postcode file each give no matches and then answer on the next search; four loads for two searches), the cap on a 41 match postcode and a 40 match city name with the order checked, the three screen loop at eleven moments (compared with the web engine's answers for the same moments), the radar answer for each provider row in the golden file, and the guide line. The static checks that run beside the suite (guards, includes, uninitialised names, test lists, duplicate keys, observers, stamp) pass. The full suite, static analysis and a sideload were not run.
+
+**Half-done.** Not seen on a TV. Branch `roku/weather-search-fixes`, off `roku/1.0.14-lowmem`. Three things to see on the stick: the picker with 38 buttons (whether the dialog scrolls and the remote reaches the last row is not proven off-device), the three pip footer and 45 s loop on a UK place, and that no radar request is made for it.
+
 ## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
 
 **Why.** The hold clip that keeps the stick awake under WATERSHED was restarted on `finished` and `error` only. Once, on a TCL 55R617, it went to `buffering` and stayed there for about 40 minutes, so the 9 PM opening didn't happen until a key press (#334).
