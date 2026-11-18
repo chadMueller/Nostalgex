@@ -3,6 +3,7 @@
 //
 // A 24/7 local-forecast channel the app draws itself, four screens in a loop:
 //   CURRENT CONDITIONS, TODAY'S FORECAST (the next four six-hour periods), 5-DAY FORECAST, RADAR.
+//   A place with no radar coverage (outside the US, Canada and Germany) plays the first three only, 45 s a loop instead of 65.
 //
 // THE WEB TUNER IS THE REFERENCE. Apple TV, Roku and Android port this file's rules, not its code:
 // scripts/weather-golden.json holds the same inputs and answers for all four (the Swift, BrightScript
@@ -46,14 +47,28 @@
   ];
   const LOOP_SECONDS = SCREENS.reduce((n, s) => n + s.seconds, 0);
 
-  /** Which screen is up at `nowMs` and how far into it: the loop runs on the wall clock, so every viewer sees the same one. */
-  function screenAt(nowMs) {
-    let t = ((nowMs / 1000) % LOOP_SECONDS + LOOP_SECONDS) % LOOP_SECONDS;
-    for (let i = 0; i < SCREENS.length; i++) {
-      if (t < SCREENS[i].seconds) return { index: i, screen: SCREENS[i], elapsed: t, remaining: SCREENS[i].seconds - t };
-      t -= SCREENS[i].seconds;
+  /**
+   * The loop for a place: every screen, or without the radar when the place has no radar coverage (`hasRadar(place)`),
+   * so the loop is only screens that carry data and is 45 seconds long instead of 65. Defaults to the full loop.
+   */
+  function activeScreens(withRadar = true) {
+    return withRadar ? SCREENS : SCREENS.filter((s) => s.id !== 'radar');
+  }
+  function loopSeconds(withRadar = true) {
+    return withRadar ? LOOP_SECONDS : activeScreens(false).reduce((n, s) => n + s.seconds, 0);
+  }
+
+  /** Which screen is up at `nowMs` and how far into it: the loop runs on the wall clock, so every viewer sees the same one.
+   *  `index` counts within the loop that is playing (`withRadar` false: no radar screen). */
+  function screenAt(nowMs, withRadar = true) {
+    const list = activeScreens(withRadar);
+    const total = loopSeconds(withRadar);
+    let t = ((nowMs / 1000) % total + total) % total;
+    for (let i = 0; i < list.length; i++) {
+      if (t < list[i].seconds) return { index: i, screen: list[i], elapsed: t, remaining: list[i].seconds - t };
+      t -= list[i].seconds;
     }
-    return { index: 0, screen: SCREENS[0], elapsed: 0, remaining: SCREENS[0].seconds };
+    return { index: 0, screen: list[0], elapsed: 0, remaining: list[0].seconds };
   }
 
   // ── Units ──────────────────────────────────────────────────────────────────
@@ -330,7 +345,7 @@
     return 'conus';
   }
 
-  /** The radar source for a place, or null: the card says RADAR NOT AVAILABLE IN YOUR AREA. */
+  /** The radar source for a place, or null: the loop then has no radar screen (`activeScreens(false)`). */
   function radarProvider(place) {
     const cc = place && String(place.cc || '').toUpperCase();
     if (cc === 'US') {
@@ -376,6 +391,11 @@
       };
     }
     return null;
+  }
+
+  /** Whether the radar screen is part of the loop for this place: only where `radarProvider` has a source. No place yet: the full loop. */
+  function hasRadar(place) {
+    return !place || radarProvider(place) != null;
   }
 
   /**
@@ -462,7 +482,8 @@
   const PLAIN_RE = /[^a-z0-9]/g;
   const plain = (s) => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(PLAIN_RE, '');
   const round2 = (n) => Math.round(Number(n) * 100) / 100;
-  const MAX_RESULTS = 8;
+  /** How many matches a search returns, whole postcodes first (GitHub #332). The picker scrolls. */
+  const MAX_RESULTS = 36;
 
   function placeLabel(p) {
     return [p.name, p.region, p.cc].filter(Boolean).join(', ').toUpperCase();
@@ -496,18 +517,26 @@
 
   /**
    * A place finder over the static place files. `io.load(path)` resolves the parsed JSON of a path under
-   * /weather/ (for example 'places/meta.json') or null when there is no such file.
+   * /weather/ (for example 'places/meta.json'), resolves null when the server says there is no such file (a 404:
+   * remembered), and rejects when the file could not be read (offline, a timeout, a server error, bad JSON:
+   * never remembered, the next search asks again).
    *   const idx = W.createPlaceIndex({ load });
-   *   const { places, hint } = await idx.search('toronto');   // up to 8, most people first
+   *   const { places, hint } = await idx.search('toronto');   // up to 36, whole postcode first, then most people first
    */
   function createPlaceIndex(io) {
-    let metaP = null;
+    // path -> the load: in flight (shared by every search that needs the file), then data, or null for a real 404.
     const shards = new Map();
     const load = (path) => {
-      if (!shards.has(path)) shards.set(path, Promise.resolve(io.load(path)).catch(() => null));
-      return shards.get(path);
+      const hit = shards.get(path);
+      if (hit) return hit;
+      const p = new Promise((resolve) => resolve(io.load(path))).then(
+        (value) => (value === undefined ? null : value),
+        () => { if (shards.get(path) === p) shards.delete(path); return null; },
+      );
+      shards.set(path, p);
+      return p;
     };
-    const meta = () => (metaP || (metaP = load('places/meta.json')));
+    const meta = () => load('places/meta.json');
 
     async function search(query) {
       const q = String(query || '').trim();
@@ -611,11 +640,13 @@
    * so the guide draws it as one bar across the whole row (no 30 minute blocks, no times), it is on now at every time position, and
    * it has nothing "up next". `live` is that mark for the ports.
    */
-  function guideItem(placeName, summary) {
+  function guideItem(placeName, summary, withRadar = true) {
     return {
       title: CHANNEL_NAME,
       episodeTitle: placeName || '',
-      summary: summary || 'Current conditions, today\u2019s forecast, the 5-day forecast and radar, in a loop.',
+      summary: summary || (withRadar
+        ? 'Current conditions, today\u2019s forecast, the 5-day forecast and radar, in a loop.'
+        : 'Current conditions, today\u2019s forecast and the 5-day forecast, in a loop.'),
       ratingKey: null,
       live: true,
     };
@@ -639,7 +670,7 @@
   }
 
   const api = {
-    CHANNEL_NUMBER, CHANNEL_ID, CHANNEL_NAME, CHANNEL_COLOR, SCREENS, LOOP_SECONDS, screenAt,
+    CHANNEL_NUMBER, CHANNEL_ID, CHANNEL_NAME, CHANNEL_COLOR, SCREENS, LOOP_SECONDS, screenAt, activeScreens, loopSeconds, hasRadar,
     unitsFor, fmtTemp, fmtWind, fmtPressure, fmtPrecip, compass,
     ICONS, symbolInfo, dayForm,
     localParts, fmtClock, validZone,
