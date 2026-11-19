@@ -304,9 +304,11 @@ const files = [
   // MusicTitleGoldenTests.brs, ChannelsMissingTests.brs (channel-requirements-golden.json) and
   // AudioPickGoldenTests.brs (audio-pick-golden.json), GuideStripesTests.brs
   // (guide-stripe-colours-golden.json) and LibraryPickerGoldenTests.brs
-  // (library-picker-golden.json) and WeatherTests.brs (weather-golden.json) read them.
+  // (library-picker-golden.json) and WeatherTests.brs (weather-golden.json, and weather-places-meta.json from public/) read them.
   ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json", "audio-pick-golden.json", "guide-stripe-colours-golden.json", "library-picker-golden.json", "weather-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
+  // The place files' own index, for WeatherTests.brs: every time zone it names has to be in the zone table.
+  [join(here, "vectors", "weather-places-meta.json"), readFileSync(join(upstream, "public", "weather", "places", "meta.json"), "utf8")],
 ];
 let stale = false;
 for (const [path, data] of files) {

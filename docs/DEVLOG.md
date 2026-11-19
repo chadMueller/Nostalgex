@@ -3,7 +3,6 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
-
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
@@ -19,6 +18,19 @@ Commits carry the detail of *what*; this carries the *why*.
 **Half-done.** None.
 
 **Next.** None for this post.
+
+## 2026-11-18 (Roku: LOCAL WEATHER place search shows up to 36 matches, and a place with no radar plays a three screen loop, #332)
+
+**Why.** The same three changes the Apple TV and the web tuner got today, so CH 299 behaves the same on all three. On the Apple TV a failed read of the place list (`places/meta.json`) was remembered until relaunch, because a search cancelled by the next keystroke counted as a failure. GitHub #332 asked for more than 8 matches for a postcode with many localities, and for no RADAR NOT AVAILABLE slide outside the US, Canada and Germany.
+
+**Changed.**
+- *A failed place-list load is not remembered.* Checked, no change needed: the Roku search keeps nothing between searches. Each search is a new `WeatherTask` and `NxWxSearch` calls its loader for every file it needs, so a file that did not come (`NxWxNetLoad` returns invalid for a timeout, an error status or a 404 alike) is asked for again at the next search. There is no cancelled search either: the on-screen keyboard is answered before the search starts. A test now holds this.
+- *Result cap 8 to 36* (`NxWxMaxResults`). The whole postcode comes first, then the longer codes in file order, then cities, as on the Apple TV and the web. The picker is a `StandardMessageDialog` with one button per match, so it now has up to 38 buttons (36, SEARCH AGAIN, CANCEL).
+- *No radar outside coverage.* `NxWxHasRadar(place)` is true where `NxWxRadarProvider` has a source (US, Canada, Germany) and for no place yet. For any other place the loop is CURRENT, TODAY, 5-DAY at 45 s instead of 65 s: `NxWxScreens(withRadar)`, `NxWxLoopSeconds(withRadar)` and `NxWxScreenAt(nowSec, withRadar)`. The footer draws one pip per screen of the loop that is playing (three), the radar fetch is skipped, the RADAR NOT AVAILABLE card is gone, and the info panel's line before the forecast arrives drops "and radar" (`NxWxLoopSummary(false)`, published by `WeatherView`). `withRadar` defaults to true, so `weather-golden.json` is unchanged and still read byte for byte.
+
+**Tests.** The weather suite alone, in the interpreter: 826 checks (773 before), 0 failed, 16 s. New: a loader that fails and then works (a failed list, city file and postcode file each give no matches and then answer on the next search; four loads for two searches), the cap on a 41 match postcode and a 40 match city name with the order checked, the three screen loop at eleven moments (compared with the web engine's answers for the same moments), the radar answer for each provider row in the golden file, and the guide line. Also added, for the larger place list the site is preparing (GeoNames cities1000, 392 time zones in its index): `America/Atikokan` was missing from the zone table (a place there would have read as UTC), so it is in with Coral Harbour's offset, -300, and a test reads the place index (`tests/vectors/weather-places-meta.json`, copied from `public/weather/places/meta.json` by `tests/gen-vectors.mjs`) and fails if any zone it names is not in the table. It passes on today's index and on the cities1000 one, and fails without the new line. `THIRD-PARTY-LICENSES.md` now says cities1000. The static checks that run beside the suite (guards, includes, uninitialised names, test lists, duplicate keys, observers, stamp) pass. The full suite, static analysis and a sideload were not run.
+
+**Half-done.** Not seen on a TV. Branch `roku/weather-search-fixes`, off `roku/1.0.14-lowmem`. Four things to see on the stick: the picker with 38 buttons (whether the dialog scrolls and the remote reaches the last row is not proven off-device), the three pip footer and 45 s loop on a UK place, and that no radar request is made for it. The fourth is for the cities1000 data: its biggest shard is `san` (307 KB raw, 5,650 rows), so search "san" and "san j" and watch the memory and the time to parse on the stick.
 
 ## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
 

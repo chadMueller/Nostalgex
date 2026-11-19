@@ -16,25 +16,37 @@ function NxWxChannel() as Object
     return { number: 299, id: 1030000, name: "LOCAL WEATHER", color: "#00D4FF" }
 end function
 
-' The loop, in seconds. Radar is longest: it plays its frames over and over.
-function NxWxScreens() as Object
-    return [
+' The loop, in seconds. Radar is longest: it plays its frames over and over. A place with no radar coverage
+' (NxWxHasRadar) plays the first three only: 45 seconds a loop, so every screen carries data (GitHub #332).
+' withRadar defaults to true, so the golden's loop (65 seconds, four screens) is the one asked for with no argument.
+function NxWxScreens(withRadar = true as Boolean) as Object
+    all = [
         { id: "current", title: "CURRENT CONDITIONS", seconds: 15 },
         { id: "today", title: "TODAY'S FORECAST", seconds: 15 },
         { id: "week", title: "5-DAY FORECAST", seconds: 15 },
         { id: "radar", title: "RADAR", seconds: 20 }
     ]
+    if withRadar then return all
+    return [all[0], all[1], all[2]]
 end function
 
-function NxWxLoopSeconds() as Integer
-    return 65
+function NxWxLoopSeconds(withRadar = true as Boolean) as Integer
+    if withRadar then return 65
+    return 45
+end function
+
+' Whether the radar screen is part of the loop for this place: only where NxWxRadarProvider has a source. No place
+' yet: the full loop.
+function NxWxHasRadar(place as Dynamic) as Boolean
+    if type(place) <> "roAssociativeArray" then return true
+    return NxWxRadarProvider(place) <> invalid
 end function
 
 ' Which screen is up at nowSec and how far into it: the loop runs on the wall clock, so every
-' viewer sees the same one. nowSec may carry a fraction.
-function NxWxScreenAt(nowSec as Dynamic) as Object
-    screens = NxWxScreens()
-    total = NxWxLoopSeconds()
+' viewer sees the same one. nowSec may carry a fraction. `index` counts within the loop that is playing.
+function NxWxScreenAt(nowSec as Dynamic, withRadar = true as Boolean) as Object
+    screens = NxWxScreens(withRadar)
+    total = NxWxLoopSeconds(withRadar)
     n# = nowSec
     whole% = n# \ 1
     t# = (whole% mod total) + (n# - whole%)
@@ -634,7 +646,7 @@ end function
 ' ── Radar ────────────────────────────────────────────────────────────────────
 ' Region-limited on purpose: no open source covers the world and allows commercial use without a
 ' key. US on NOAA MRMS, Canada on Environment Canada GeoMet, Germany on DWD; anywhere else the
-' channel says RADAR NOT AVAILABLE IN YOUR AREA.
+' loop has no radar screen (NxWxHasRadar).
 
 function NxWxNoaaLayer(lat as Double, lon as Double) as String
     if lon >= 140 and lon <= 150 and lat >= 10 and lat <= 22 then return "guam"
@@ -644,7 +656,7 @@ function NxWxNoaaLayer(lat as Double, lon as Double) as String
     return "conus"
 end function
 
-' The radar source for a place, or invalid: the card says RADAR NOT AVAILABLE IN YOUR AREA.
+' The radar source for a place, or invalid: the loop then has no radar screen (NxWxHasRadar).
 function NxWxRadarProvider(place as Dynamic) as Dynamic
     if type(place) <> "roAssociativeArray" then return invalid
     cc = UCase(NxToStr(place.cc))
@@ -1020,7 +1032,8 @@ function NxWxRowToPlace(row as Object, meta as Object, kind as String) as Object
 end function
 
 ' A place finder over the static place files. load(path) returns the parsed JSON of a path under
-' /weather/ ("places/meta.json") or invalid. Returns { places: [up to 8, most people first], hint }.
+' /weather/ ("places/meta.json") or invalid. Returns { places: [up to 36 (NxWxMaxResults): the whole postcode first, then longer codes in file order, then cities], hint }.
+' A failed load (invalid) is never kept: nothing is remembered between searches, so the next search asks again.
 function NxWxSearch(query as String, load as Function) as Object
     q = query.Trim()
     meta = load("places/meta.json")
@@ -1109,8 +1122,13 @@ function NxWxSearch(query as String, load as Function) as Object
     return { places: out, hint: hint }
 end function
 
+' How many matches a search returns (GitHub #332): a postcode with more localities is no longer cut. The picker scrolls.
+function NxWxMaxResults() as Integer
+    return 36
+end function
+
 sub NxWxPushPlace(out as Object, seen as Object, p as Object)
-    if out.Count() >= 8 then return
+    if out.Count() >= NxWxMaxResults() then return
     code = ""
     if p.code <> invalid then code = p.code
     key = p.kind + "|" + NxToStr(p.name) + "|" + NxToStr(p.region) + "|" + NxToStr(p.cc) + "|" + code
@@ -1207,7 +1225,7 @@ function NxWxGuideBlocks(placeName as String, summary as String, tempLabel as St
     line = "LOCAL WEATHER"
     if tempLabel <> "" then line = line + "  " + tempLabel
     text = summary
-    if text = "" then text = "Current conditions, today" + Chr(8217) + "s forecast, the 5-day forecast and radar, in a loop."
+    if text = "" then text = NxWxLoopSummary(true)
     return [{
         startSec: 0, endSec: 2147483000, weather: true,
         ratingKey: "", line: line, title: "LOCAL WEATHER", episodeTitle: placeName,
@@ -1216,6 +1234,12 @@ function NxWxGuideBlocks(placeName as String, summary as String, tempLabel as St
         bitrate: invalid, audioTracks: invalid, forcedSubs: invalid, fullSubs: invalid, duration: 60, exactDurationSeconds: 3600,
         videoWidth: invalid, videoHeight: invalid, serverIndex: 0, contentRating: "", rating: 0, type: ""
     }]
+end function
+
+' The info panel's line before there is a forecast: what the loop shows, without the radar where the place has none.
+function NxWxLoopSummary(withRadar as Boolean) as String
+    if withRadar then return "Current conditions, today" + Chr(8217) + "s forecast, the 5-day forecast and radar, in a loop."
+    return "Current conditions, today" + Chr(8217) + "s forecast and the 5-day forecast, in a loop."
 end function
 
 ' The current temperature for the row: "46" + degrees + "F", or "" with no forecast.
