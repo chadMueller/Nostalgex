@@ -6097,6 +6097,15 @@
     libraryPickAllowed = true;
     signInPending = true;
   }
+  // A launch that finds the choice owed asks again. The sign-in already started the choices again, so they are not
+  // reset here: a relaunch that could not read the libraries keeps the flag, and a library switched off in Settings
+  // after it must stay off at the next launch.
+  function resumeLibraryPick() {
+    try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    libraryPickResuming = true;
+    libraryPickAllowed = true;
+    signInPending = true;
+  }
   let appState = 'connect'; // 'connect' | 'player' | 'guide' | 'config'
   let discoveredGenres = {}; // { genreName: itemCount }
   let allItemsCache = []; // cached items for populating new channels
@@ -10579,6 +10588,7 @@
     const wasOn = librarySectionOn(sec);
     if (wasOn && knownLibrarySections.filter(librarySectionOn).length <= 1) return;
     if (!LSEL.setSectionOn(sec, !wasOn)) return;
+    setLibraryPickOwed(false);   // a choice made in Settings is the choice: nothing is owed at the next launch
     clearLibraryCache();
     renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
     rescanLibrary({ cause: 'switch' });
@@ -11359,8 +11369,8 @@
 
     if (!storedToken || !storedUrl) { setLibraryPickOwed(false); return; }   // no sign-in, so no choice owed
     // A sign-in that ended at CHOOSE YOUR LIBRARIES (the tab or browser was closed there) still owes the viewer that
-    // choice: ask again, with the choices starting again as at a sign-in, before any scan.
-    if (libraryPickOwed() && !signInPending) { beginSignInChoices(); libraryPickResuming = true; }
+    // choice: ask again before any scan (the choices are not reset: the sign-in already started them again).
+    if (libraryPickOwed() && !signInPending) resumeLibraryPick();
 
     // true = token rejected with 401/403; false/undefined = network error or success
     let tokenRevoked = false;

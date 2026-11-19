@@ -147,7 +147,7 @@ async function relaunchFlow(label, width, height, dpr = 1) {
   check(`${label}: a relaunch shows CHOOSE YOUR LIBRARIES again, not a scan of every library`, offered, `the guide read ${[...new Set(log.parents)].join() || "nothing"}`);
   if (!offered) { await b.ctx.close(); return; }
   const rows = await rowsOf(b.page);
-  check(`${label}: it lists both libraries, every one INCLUDED (the choices start again)`, rows.map((r) => `${r.title}:${r.state}`).join() === "Movies:INCLUDED,Documentaries:INCLUDED", JSON.stringify(rows));
+  check(`${label}: it lists both libraries, every one INCLUDED (the sign-in started the choices)`, rows.map((r) => `${r.title}:${r.state}`).join() === "Movies:INCLUDED,Documentaries:INCLUDED", JSON.stringify(rows));
   check(`${label}: no library is read while it is open`, log.parents.length === 0, log.parents.join());
   check(`${label}: still owed`, (await owed(b.page)) === "1");
   // Documentaries off, CONTINUE.
@@ -220,6 +220,34 @@ await relaunchFlow("phone 390x844", 390, 844);
     await b.page.evaluate(() => !document.getElementById("library-picker").classList.contains("active") && document.getElementById("loading-library").style.display !== "none"));
   check("unreachable relaunch: the choice stays owed for the next launch", (await owed(b.page)) === "1", String(await owed(b.page)));
   await b.ctx.close();
+  hang = false;
+}
+
+// ═══ A relaunch does not reset the choices, and a Settings choice clears the debt ═══
+{
+  const off = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("nostalgex_deselected_library_sections") || "[]"));
+  views = TWO; hang = false; log = { views: 0, parents: [] };
+  const a = await open({ width: 1440, height: 900, sess: session, local: saved });
+  await pickerUp(a.page);
+  await a.page.click("#library-picker .setup-row:nth-of-type(2)");
+  const before = await off(a.page);
+  check("no reset: Documentaries switched off in the picker is saved", before.length === 1 && /::lib2$/.test(before[0]), JSON.stringify(before));
+  // Settings, on a page that has the libraries listed: switching Documentaries back on there is the choice, so nothing is owed any more.
+  await a.page.evaluate(() => toggleLibrarySection(knownLibrarySections[1]));
+  check("Settings: switching a library there clears the debt", (await owed(a.page)) === null, String(await owed(a.page)));
+  await a.ctx.close();
+
+  views = TWO; hang = false; log = { views: 0, parents: [] };
+  const c = await open({ width: 1440, height: 900, sess: session, local: saved });
+  await pickerUp(c.page);
+  await c.page.click("#library-picker .setup-row:nth-of-type(2)");
+  hang = true;
+  const d = await relaunch(c, { width: 1440, height: 900, initScript: () => { globalThis.NX_LIBRARY_RESUME_READ_MS = 1500; } });
+  await d.page.waitForFunction(() => !document.getElementById("library-picker").classList.contains("active"), null, { timeout: 10000 }).catch(() => {});
+  const kept = await off(d.page);
+  check("no reset: a relaunch whose library read timed out leaves the choice made in the picker alone (it was reset to all on before)", kept.length === 1 && /::lib2$/.test(kept[0]), JSON.stringify(kept));
+  check("no reset: and the debt is still owed for the next launch", (await owed(d.page)) === "1");
+  await d.ctx.close();
   hang = false;
 }
 
