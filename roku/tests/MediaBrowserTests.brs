@@ -116,6 +116,17 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     ' I-091: a scan stops reading once the app is past its memory ceiling, keeps
     ' what it has, and reads no further library. A fetcher that cannot say how full
     ' the memory is (every test's, and the one above) reads it all.
+    ' Music, playlists, collections and photos are never asked for items (#205), with or without a
+    ' music channel: a Music library of 1,541 albums is no part of any scan. Only the film library is.
+    NxScanCapSet(0)
+    nonVideo = NxMbRecordingFetcher()
+    got = NxMbScanServer(nonVideo, "jellyfin", "u", 0)
+    asked = ""
+    for each p in nonVideo.paths
+        if Instr(1, p, "/Items") > 0 then asked = asked + Mid(p, Instr(1, p, "ParentId=") + 9, 4) + ","
+    end for
+    NxCheck(r, "non-video libraries: only the film library is asked for items", asked, "film,")
+    NxCheck(r, "non-video libraries: and its items come back", NxToStr(got.Count()), "2")
     NxScanCapSet(0)
     all = NxMbScanServer(NxMbGuardFetcher(1000, 0), "jellyfin", "u", 0)
     NxCheck(r, "guard: no memory reading reads every title", NxToStr(all.Count()) + "," + NxToStr(NxScanCapped()), "2000,0")
@@ -1161,4 +1172,35 @@ function NxMbGuardFetcher(total as Integer, percent as Integer) as Object
         end function
     end if
     return f
+end function
+
+' A fetcher that lists a film library beside Music, Playlists, Collections and Photos, and records every path.
+function NxMbRecordingFetcher() as Object
+    return {
+        paths: [], auth: false,
+        getJSON: function(path as String) as Dynamic
+            m.paths.Push(path)
+            if Instr(1, path, "/UserViews") > 0 then
+                return { Items: [
+                    { Name: "Films", Id: "film", CollectionType: "movies" }, { Name: "Music", Id: "musi", CollectionType: "music" },
+                    { Name: "Playlists", Id: "play", CollectionType: "playlists" }, { Name: "Collections", Id: "coll", CollectionType: "boxsets" },
+                    { Name: "Photos", Id: "phot", CollectionType: "photos" }
+                ] }
+            end if
+            items = []
+            if Instr(1, path, "ParentId=film") > 0 and Instr(1, path, "Limit=0") = 0 then
+                for i = 0 to 1
+                    items.Push({ Id: "m" + i.ToStr(), Name: "Film " + i.ToStr(), Type: "Movie", RunTimeTicks: 54000000000#, ProductionYear: 2000, Genres: [], MediaSources: [] })
+                end for
+            end if
+            return { Items: items, TotalRecordCount: items.Count(), StartIndex: 0 }
+        end function,
+        getMany: function(paths as Object) as Object
+            out = []
+            for each p in paths
+                out.Push(m.getJSON(p))
+            end for
+            return out
+        end function
+    }
 end function

@@ -27,6 +27,28 @@ function NxRunMemoryBudgetTests() as Integer
         last = c
     end for
     NxCheck(r, "a bigger limit never gets a lower ceiling", NxToStr(ok), "true")
+    ' The memory line of a load (source/util/MemTrace.brs): what ABOUT shows and what the registry keeps.
+    trace = { limitKB: 501760, ceiling: 55, notes: [] }
+    NxMemTraceAdd(trace, "SCAN", 21418, "TITLES", 33)
+    NxMemTraceAdd(trace, "COLLECTIONS", 177, "COLLECTIONS", 35)
+    NxMemTraceAdd(trace, "SCAN", 21418, "TITLES", 36)
+    NxCheck(r, "trace: a step noted again replaces its line, the order stays", NxToStr(trace.notes.Count()) + " " + NxToStr(trace.notes[0].pct), "2 36")
+    lines = NxMemTraceLines(trace)
+    NxCheck(r, "trace: the limit line", lines[0], "APP LIMIT 501,760 KB. THE SCAN STOPS AT 55% OF IT.")
+    NxCheck(r, "trace: a step line", lines[1], "SCAN: 21,418 TITLES, MEMORY AT 36%")
+    NxCheck(r, "trace: collections line", lines[2], "COLLECTIONS: 177 COLLECTIONS, MEMORY AT 35%")
+    NxMemTraceAdd(trace, "SAVED", 21418, "TITLES", -1)
+    NxCheck(r, "trace: a percent the TV could not give is left out", NxMemTraceLines(trace)[3], "SAVED: 21,418 TITLES")
+    NxCheck(r, "trace: no limit reported says so", NxMemTraceLines({ limitKB: 0, ceiling: 55, notes: [] })[0], "THIS TV DOES NOT REPORT ITS LIMIT. THE SCAN STOPS AT 55%.")
+    NxCheck(r, "trace: nothing recorded, no lines", NxToStr(NxMemTraceLines(invalid).Count()), "0")
+    reg = NxFakeRegistry()
+    NxCheck(r, "trace: nothing saved reads as none", NxToStr(NxReadMemTrace(reg) = invalid), "true")
+    NxMemTraceSave(reg, trace)
+    back = NxReadMemTrace(reg)
+    NxCheck(r, "trace: it round-trips through the registry", NxMemTraceLines(back).Join("|"), NxMemTraceLines(trace).Join("|"))
+    reg.Write("memTrace", "not json")
+    NxCheck(r, "trace: a damaged record reads as none", NxToStr(NxReadMemTrace(reg) = invalid), "true")
+    NxCheck(r, "trace: a runtime with no memory monitor gives -1, not a crash", NxToStr(NxMemPercentSafe() >= -1), "true")
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function

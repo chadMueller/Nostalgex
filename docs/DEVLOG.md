@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-19 (Roku 1.0.14: a memory line in ABOUT, and the BoxSet sweep reads only what the scan read)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not signed, not on a stick yet.
+
+**Why.** Two Discord users on 1.0.13 still lose the app to the Roku home screen during the first load (a Jellyfin library of 21,000 titles on a Stick HD and an Express; Plex servers of 600 to 800 series). On the Stick Plus a stand-in of juicextract's size (2,093 movies, 773 series, 1,541 albums, 177 collections) peaks at 226 MB of 514 (44%) and settles at 195 MB (38%): that library fits there. Nothing says yet where it stops on the smaller sticks, so the app now says what it held at each step, and a user can read it out.
+
+**Changed.**
+- *The memory line* (`source/util/MemTrace.brs`): the app's own limit, the scan's ceiling for it, and the percent of the limit after the scan, the collections, the channels, the schedule and the save. Kept in the registry as `memTrace` (a sign-out clears it, as the library's other records), shown under MEMORY at the end of ABOUT. A step noted again replaces its line. No percent from a TV that cannot give one is left out.
+- *The BoxSet sweep* (Jellyfin and Emby) is given what the scan read (`NxCollectionsKnownKeys`): a member from a library that is off, or never read, is not kept; a BoxSet left with none is not kept; a server that read nothing is not asked at all. A BoxSet is not tied to a library, so the server lists every one; the collections that resolve are the same as before, only the keys that could never resolve are gone. The JS engine and its golden are untouched (`known` is an optional last argument).
+- *Music*: the scan never asked for it. A stand-in log that seemed to show one Music request was my own smoke test; the log of the run after has none. A test now holds that a film library beside Music, Playlists, Collections and Photos is the only one asked for items.
+
+**Tests.** `MemoryBudgetTests` (11 more cases: the lines, a step noted again, the registry round trip, a damaged record), `CollectionTests` (5 more: the known keys, a half read BoxSet, an empty one, a server that read nothing, the same items resolve), `MediaBrowserTests` (2 more: only the film library is asked). Static checks pass. The full suite was not re-run.
+
+**Half-done.** Not seen on a TV. The ABOUT rows are plain info lines under a MEMORY header; how they sit on the real page (scrolling, the line width) is unproven. Where the app really stops on a Stick HD (3840) or an Express (3930) is not measured.
+
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.

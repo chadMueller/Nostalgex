@@ -74,6 +74,7 @@ function NxRunCollectionTests(vectorsPath as String, configPath as String, dicti
     NxClSplitCases(r)
     NxClPagingCases(r)
     NxClSyntheticPlexCases(r)
+    NxClBoxSetKnownCases(r)
 
     print "collection cases (upstream vectors and Swift tests): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
@@ -1190,3 +1191,41 @@ function NxClPlexNet(lib as Object, opts as Object) as Object
         end function
     }
 end function
+
+' BoxSets and the libraries the scan did not read (Jellyfin and Emby): a member that is not among the
+' scan's items is not kept, a BoxSet left with none is not kept, and with nothing read the sweep
+' has nothing to ask. Without `known` the sweep keeps every member, as upstream's does.
+sub NxClBoxSetKnownCases(r as Object)
+    list = "/Items?userId=u&IncludeItemTypes=BoxSet&Recursive=true&Fields=ChildCount&SortBy=SortName&StartIndex=0&Limit=500"
+    docs = {}
+    docs[list] = { Items: [{ Id: "bA", Name: "All read" }, { Id: "bB", Name: "Half read" }, { Id: "bC", Name: "None read" }], TotalRecordCount: 3 }
+    for each b in [["bA", ["m1", "s1"]], ["bB", ["m2", "x9"]], ["bC", ["x1", "x2"]]]
+        rows = []
+        for each id in b[1]
+            rows.Push({ Id: id, Type: "Movie" })
+        end for
+        docs[NxBoxSetPagePath("u", b[0], 0)] = { Items: rows, TotalRecordCount: rows.Count() }
+    end for
+    items = [
+        { serverIndex: 0, ratingKey: "m1", type: "movie" },
+        { serverIndex: 0, ratingKey: "m2", type: "movie" },
+        { serverIndex: 0, ratingKey: "e5", type: "episode", showKey: "s1" },
+        { serverIndex: 1, ratingKey: "x1", type: "movie" }
+    ]
+    known = NxCollectionsKnownKeys(items, 0)
+    NxCheck(r, "boxsets known: this server's items and an episode's show", known.Count().ToStr() + NxToStr(known.DoesExist("m1")) + NxToStr(known.DoesExist("s1")) + NxToStr(known.DoesExist("x1")), "4truetruefalse")
+    NxCheck(r, "boxsets known: a server that read nothing has no known keys", NxCollectionsKnownKeys(items, 2).Count().ToStr(), "0")
+    got = NxCollectionsFetchBoxSets("srv", "u", NxClStubFetcher(docs), invalid, known)
+    have = ""
+    for each c in got
+        have = have + c.title + "=" + c.childKeys.Join("+") + ";"
+    end for
+    NxCheck(r, "boxsets known: unread members and an empty BoxSet are left out", have, "All read=m1+s1;Half read=m2;")
+    all = NxCollectionsFetchBoxSets("srv", "u", NxClStubFetcher(docs))
+    NxCheck(r, "boxsets without known: every BoxSet and member, as before", all.Count().ToStr() + " " + all[2].childKeys.Join("+"), "3 x1+x2")
+    ' What resolves is the same either way: only the keys the library has can resolve.
+    index = NxCollectionsIndexLibrary(items, {})
+    a = NxCollectionsResolve(all[1].childKeys, index["0"])
+    b = NxCollectionsResolve(got[1].childKeys, index["0"])
+    NxCheck(r, "boxsets known: the half-read BoxSet resolves to the same items", a.Count().ToStr() + NxToStr(a[0].ratingKey), b.Count().ToStr() + NxToStr(b[0].ratingKey))
+end sub

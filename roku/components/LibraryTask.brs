@@ -266,6 +266,7 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
 end function
 
 sub loadLibrary()
+    NxMemTraceReset()
     ' A task of its own for the library sections on the servers, asked for before the
     ' first scan (I-092): mode "sections".
     if m.top.mode = "sections" then
@@ -482,6 +483,7 @@ sub loadLibrary()
         end if
     end for
     print "library: "; items.Count(); " items in "; timer.TotalMilliseconds(); " ms ("; scanned.Count(); " servers scanned)"
+    NxMemTraceNote("SCAN", items.Count(), "TITLES")
     if items.Count() = 0 and emptyStop = "viewer" then
         fail("Stopped waiting. Nothing had come back from your server, so no channels were built. Press OK to try again when the connection looks better.")
         return
@@ -511,7 +513,16 @@ sub loadLibrary()
                 s.signature = invalid
             end if
         else
-            got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top)
+            ' Only what the scan read can be a member: with every video library turned off there is
+            ' nothing to ask, and a member from a library that is off is not kept (a BoxSet is not
+            ' tied to a library, so the server lists them all).
+            known = NxCollectionsKnownKeys(items, s.index)
+            if known.Count() = 0 then
+                got = []
+            else
+                got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top, known)
+            end if
+            known = invalid
         end if
         if got = invalid then
             collections.failed = collections.failed + 1
@@ -521,6 +532,7 @@ sub loadLibrary()
         end if
     end for
     print "library: "; collections.raw.Count(); " server collections ("; collections.failed; " servers failed) in "; timer.TotalMilliseconds(); " ms"
+    NxMemTraceNote("COLLECTIONS", collections.raw.Count(), "COLLECTIONS")
     config = NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config
     manifest = ParseJson(ReadAsciiFile("pkg:/data/channels-memberships.json"))
 
@@ -623,6 +635,7 @@ sub loadLibrary()
         reg.Flush()
     end if
     if scanned.Count() > 0 then print "library: saved the library in "; timer.TotalMilliseconds(); " ms; memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "% of the app's limit"
+    if scanned.Count() > 0 then NxMemTraceNote("SAVED", items.Count(), "TITLES")
     ' Every item's filter cache goes; the library itself stays for package
     ' switches (rebuildForBundles). The pools hold most of it anyway, and
     ' reading it back from cachefs: for each switch kept two copies alive
@@ -739,6 +752,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     m.top.bar = -1
     m.top.barCaption = ""
     print "library: built "; built; " channels ("; reused; " kept from the last build) in "; timer.TotalMilliseconds(); " ms"
+    NxMemTraceNote("CHANNELS", built, "CHANNELS")
     setPhase("finishing")
     m.top.progress = ""
 
@@ -855,6 +869,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         out = NxScheduleGuide(ordered, nowSec&)
         print "library: scheduled in "; timer.TotalMilliseconds(); " ms"
     end if
+    NxMemTraceNote("SCHEDULE", out.Count(), "CHANNELS")
     ' The sidebar (NxGuideJumpTargets) jumps to the first channel shown of each
     ' package. FRANCHISES covers the classics, the found franchises and the
     ' franchise collections; the other collections get an entry of their own.
