@@ -3,6 +3,16 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
+
+**Why.** The hold clip that keeps the stick awake under WATERSHED was restarted on `finished` and `error` only. Once, on a TCL 55R617, it went to `buffering` and stayed there for about 40 minutes, so the 9 PM opening didn't happen until a key press (#334).
+
+**Changed.** While the clip buffers, a 10 s one-shot timer (`m.keepStall`) runs. Every other state from the clip stops it. A clip still buffering when it fires counts as a failure, as `error` does (`NxKeepAliveStallAction`, `source/guide/Watershed.brs`): it is restarted, and the third failure, stalls and errors together, stops it until a channel starts. `NxKeepAliveAction` is unchanged, so buffering alone still does nothing. LOCAL WEATHER's music shares the Video node and the watch, so it gets the same check. As with errors, the count is reset only when the clip or the music starts, so three stalls across one long hold stop it. After a stall restart the timer is re-armed in `onKeepStall` itself, because a restart that sticks in buffering may not change the clip's state, and the state change is what starts it otherwise.
+
+**Tests.** `WatershedGoldenTests` (watershed-gate), 37 cases (32 before): a first and a second stall tried again, a third giving up, a clip that is playing, finished or stopped by then left alone, and a wait under a minute. With the stall action passing the clip's own state through, four fail. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Half-done.** Not seen on a TV. The stall happened once and can't be made on demand, and the tests run `source/`, not the components, so the timer's wiring in GuideView is covered only by `pr-check.sh`'s static checks.
+
 
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
