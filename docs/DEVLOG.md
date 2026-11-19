@@ -85,6 +85,20 @@ Commits carry the detail of *what*; this carries the *why*.
 - The block's second line (Settings and the guide) follows the phase: READ n TITLES and the library being read, then BUILDING CHANNELS: i OF n, then BUILDING SCHEDULE. It used to keep saying MOVIES: 450 OF 450 through the whole build. GUIDE READY: n TITLES at the end.
 - `scripts/loading-state-browser-smoke.mjs`: a switch from Settings checks all of it; a check about a removed feature (the hidden-libraries switch) is dropped.
 
+## 2026-11-18 (Apple TV: closing the app on CHOOSE YOUR LIBRARIES)
+
+**Found.** tydude001 found it on Roku (#331): sign in, stop on the library picker, close the app, open it again, and the picker is skipped and every library is read. Nobody had run the Apple TV. Run on 1.0.33 (tag v1.0.33) against a stand-in Emby and a stand-in Jellyfin, each with two libraries, on a throwaway tvOS simulator with the app's real stores: after the relaunch the guide loaded and the server log shows `/Items` for both libraries, with the picker never shown. Plex has no stand-in for plex.tv, so it was measured at the AppState level (a second AppState over the same stores, driven through the calls the launch makes): sections read ["1", "2"], picker not shown. Not a process kill.
+
+**Changed.** Branch `appletv/picker-owed` off `appletv/weather-search-fixes`, not pushed. A pick-owed flag (`LibrarySectionSelectionStore.pickOwed`) is saved when a sign-in reaches the picker step. CONTINUE, a sign-in with nothing to choose, and sign-out clear it. A launch with it set (`resumeLibraryPickIfOwed`, called from RootView after the saved sign-in is read) re-reads the libraries and shows the picker, with the loading screen up meanwhile. If the server cannot be reached on that launch the flag stays set. `PickerOwedTests` (7) pass with `LibrarySelectionTests`, `HiddenLibrarySelectionTests`, `LibraryPickerGoldenTests` and `SessionDurabilityTests`.
+
+**Verified.** The same Emby kill and relaunch on this branch: the picker comes back and the server log shows no `/Items` request before the choice.
+
+**Half-done.** Two known edges, left as they are. A multi-server Plex relaunch where only one server answers gives a non-empty list, so if that is a single non-hidden section the flag clears and everything is scanned. TRY AGAIN after an unreachable launch loads the guide with every library while the flag stays set, so the picker returns on the next launch and resets any Settings choices made in between.
+
+**Reviewed.** The resume step now shows the step rail and START OVER straight away (headline "FINDING YOUR SERVERS..."), and a START OVER while the libraries are being read no longer lets the picker appear for a signed-out app. The unit tests that end on the picker clear the flag in tearDown so the host app's defaults are not left owing a pick.
+
+**Unverified.** Not run on an Apple TV, and the fix was not run as a process kill on Jellyfin or Plex (Jellyfin shares the Emby path in the code; Plex is covered by the AppState tests only). Hidden Jellyfin libraries were not exercised.
+
 ## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
 
 **State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.

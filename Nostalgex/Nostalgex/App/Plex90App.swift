@@ -37,6 +37,8 @@ struct RootView: View {
                     LoadingView()
                 } else if !appState.hasCredentials {
                     SettingsView()
+                } else if appState.isResumingLibraryPick {
+                    LoadingView()
                 } else if appState.isHoldingAfterUnfinishedLoads {
                     UnfinishedLoadsView {
                         appState.isHoldingAfterUnfinishedLoads = false
@@ -111,6 +113,8 @@ struct RootView: View {
             }
             InstallDiagnostics.recordLaunch()
             await appState.hydrateCredentialsWithRetry()
+            // Closed on CHOOSE YOUR LIBRARIES last time: the choice is still owed, so no scan yet.
+            if await appState.resumeLibraryPickIfOwed() { return }
             if appState.hasCredentials && appState.channels.isEmpty && LaunchGuard.shouldAskBeforeLoading() {
                 appState.isHoldingAfterUnfinishedLoads = true
                 return

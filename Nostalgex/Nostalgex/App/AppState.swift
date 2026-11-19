@@ -245,6 +245,9 @@ class AppState {
     /// sets this, there is nothing to choose, so existing single-library accounts see
     /// no new screen.
     var needsLibrarySelection: Bool = false
+    /// True while a launch is re-reading the libraries to show a choice the viewer still owes (see
+    /// `LibrarySectionSelectionStore.pickOwed`). RootView shows the loading screen, not an empty guide, meanwhile.
+    var isResumingLibraryPick: Bool = false
     /// Sections the library-selection screen is currently showing (onboarding only).
     /// Cleared once CONTINUE commits a choice.
     var pendingLibrarySections: [LibrarySectionRef] = []
