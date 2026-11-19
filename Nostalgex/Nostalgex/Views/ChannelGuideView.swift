@@ -50,6 +50,8 @@ struct ChannelGuideView: View {
     /// Whether Up or Down has moved the stripe since it took focus. If not, Right goes back to the row the
     /// viewer left; if so, to the first channel of the package the stripe is on.
     @State private var stripeJumped = false
+    /// Bumped by Select on the stripe, handled where the scroll proxy is (`selectStripeBundle`).
+    @State private var stripeSelectCount = 0
     @State private var stripeReturnRow: Int?
     /// From Left until the stripe has focus: the stripe has only just become a focus target, so focus is
     /// asked for a few times, and a focus that is nowhere for the moment does not count as leaving it.
@@ -216,6 +218,9 @@ struct ChannelGuideView: View {
                         .onChange(of: stripeMode) { _, on in
                             // The stripe is a focus target only now, so ask for focus only now.
                             if on { requestStripeFocus() } else { stripeLeftAt = Date() }
+                        }
+                        .onChange(of: stripeSelectCount) { _, _ in
+                            selectStripeBundle(proxy)
                         }
                         .onChange(of: focusedChannelID) { oldID, newID in
                             GuideJumpProbe.shared.rawFocusChanged(from: oldID, to: newID)
@@ -598,7 +603,40 @@ struct ChannelGuideView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { suppressFocusScroll = false }
     }
 
-    /// Select on the stripe, and Left again from it: the package list (the left jump rail).
+    /// Select on the stripe (Chad, 2026-11-16, "you should be able to select it and the guide should go to the first
+    /// item in that bundle"): the guide scrolls so the first channel of the bundle the stripe is on is at the top, and
+    /// focus goes to that row. The stripe is where it was: it is drawn from the rows, so it scrolls with them, and Left
+    /// puts the viewer back on it. A run that is no bundle has nothing to jump to and Select does nothing.
+    private func selectStripeBundle(_ proxy: ScrollViewProxy) {
+        let groups = stripeGroups
+        guard stripeMode, let row = GuideStripes.selectTargetRow(groups: groups, index: stripeGroupIndex,
+                                                                 channelCount: appState.channels.count) else { return }
+        let target: Int
+        if row == 0, appState.seasonalBundleOnOffer != nil {
+            target = Self.seasonalRowID
+        } else {
+            target = appState.channels[row].id
+        }
+        stripeJumped = true
+        if reduceMotion {
+            scrollWithoutAnimation(proxy, to: target, anchor: .top)
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(target, anchor: .top) }
+        }
+        // `stripeJumped` makes this land on the first channel of the bundle the stripe is on.
+        returnFromStripe()
+        // Moving focus onto the row pulls the list back (measured: the scroll offset ran from 390 back to 0 over
+        // a second, row 1 at the top again), so the bundle's first channel is put at the top again once focus has
+        // landed, the way the guide places the live channel after a return (`anchorFocusToLiveChannel`).
+        for delay in [0.1, 0.4] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard !stripeMode else { return }
+                scrollWithoutAnimation(proxy, to: target, anchor: .top)
+            }
+        }
+    }
+
+    /// Left from the stripe, or Left from the rows when there is no stripe: the package list (the left jump rail).
     private func openPackageList() {
         stripeMode = false
         if !showBundleSidebar {
@@ -609,13 +647,14 @@ struct ChannelGuideView: View {
     }
 
     /// The stripe's focus target, between its two sentinels, over the left edge of the rows. A button, so Select
-    /// opens the package list; disabled, so it is not a focus target at all, until the viewer pressed Left.
+    /// jumps to the first channel of its bundle; disabled, so it is not a focus target at all, until the viewer
+    /// pressed Left.
     @ViewBuilder
     private var stripeColumn: some View {
         VStack(spacing: 0) {
             stripeSentinel(Self.stripeUpSentinelID)
             Button {
-                openPackageList()
+                stripeSelectCount += 1
             } label: {
                 Color.white.opacity(0.001)
                     .frame(width: GuideStripes.stripeWidth)
@@ -626,7 +665,7 @@ struct ChannelGuideView: View {
             .disabled(!stripeMode)
             .accessibilityIdentifier("guideStripe")
             .accessibilityLabel(stripeAccessibilityLabel)
-            .accessibilityHint("Up and Down change bundle. Select opens the bundle list. Right returns to the channels.")
+            .accessibilityHint("Up and Down change bundle. Select jumps to its first channel. Left opens the bundle list. Right returns to the channels.")
             .accessibilityHidden(!stripeMode)
             stripeSentinel(Self.stripeDownSentinelID)
         }

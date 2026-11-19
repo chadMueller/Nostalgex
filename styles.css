@@ -909,8 +909,16 @@ a { color: inherit; }
 /* No mark on this tile, so the name and line sit at the bottom like the others. */
 .tile--soon .tile-name { margin-top: auto; }
 
+/* Home page: five ways to watch. Five across on a wide screen, two across below that with the odd
+   last tile spanning the row. */
+.page-home .screens { grid-template-columns: repeat(5, 1fr); gap: 22px; }
 @media (max-width: 1100px) {
   .screens { grid-template-columns: repeat(2, 1fr); gap: 30px 28px; }
+  .page-home .screens { grid-template-columns: repeat(2, 1fr); gap: 30px 28px; }
+  .page-home .screens > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .page-home .screens { gap: 22px 18px; }
 }
 @media (max-width: 600px) {
   .screens { gap: 22px 18px; }
@@ -1630,6 +1638,7 @@ a { color: inherit; }
 }
 .changelog__entry li { margin-bottom: 8px; }
 .changelog__entry li::marker { color: var(--pink); }
+.changelog__entry .changelog__section { margin: 18px 0 8px; font-size: 16px; }
 
 /* ---------- Reveal on scroll ---------- */
 .reveal {
@@ -2965,6 +2974,27 @@ pre.has-copy .copy-btn.is-copied { color: var(--cyan); border-color: var(--cyan)
   .page-roku .roku-elsewhere .screens { grid-template-columns: 1fr; }
   .page-roku .roku-elsewhere .tile { min-height: 0; }
   .page-roku .tile-badge { height: 44px; }
+}
+
+/* Android TV page: it borrows the Roku page's parts (body carries both classes). Three tiles in
+   the "other ways to watch" row, and the plain status line under the hero. */
+.page-android .android-status {
+  margin-top: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  max-width: 46ch;
+}
+.page-android .android-status a { color: var(--ink); font-weight: 700; }
+/* The Coming soon sign-up in place of a store button. The sticker hangs off its top-right corner. */
+.page-android .android-notify { position: relative; max-width: 520px; padding-top: 6px; }
+.page-android .android-notify .cta-sticker { top: -18px; right: 0; }
+.page-android .android-notify .subscribe-input { flex: 1 1 220px; }
+.page-android .android-bottom { padding-bottom: 110px; border-top: 1px solid var(--hairline); }
+.page-android .android-bottom .android-notify { margin: 8px auto 0; }
+@media (max-width: 600px) {
+  .page-android .android-notify .cta-sticker { right: 12px; }
+  .page-android .android-bottom { padding-bottom: 80px; }
 }
 
 @media (max-width: 1024px) {

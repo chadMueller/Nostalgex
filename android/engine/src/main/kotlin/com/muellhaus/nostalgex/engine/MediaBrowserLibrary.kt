@@ -53,24 +53,37 @@ class MediaBrowserLibrary(
         return (views as? JsonObject)?.arr("Items") ?: emptyList()
     }
 
-    /**
-     * Every library, for the library-selection screen and Settings (JellyfinAPIService.loadSections).
-     * With the INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch off (`includeHidden` false), the one
-     * plain list Android always asked for. With it on, on Jellyfin, the list with the libraries
-     * the user hides from the home screen too, and the plain list beside it so a hidden one can
-     * be marked `hidden`. If the plain list fails, nothing is marked. A view with no videos in
-     * it (Playlists, Music, Collections...) is not offered (#206).
-     */
-    fun sections(serverId: String, serverName: String, includeHidden: Boolean = false): List<LibrarySection> {
-        val listed = views(includeHidden)
-        val shownIds = if (includeHidden && backend == "jellyfin") {
-            views().mapTo(HashSet()) { it.str("Id") }.takeIf { it.isNotEmpty() }
-        } else null
-        return listed.filter(::holdsVideos).map { view ->
-            LibrarySection(serverId, serverName, view.str("Id") ?: "", view.str("Name") ?: "Library", sectionType(view.str("CollectionType")),
-                hidden = shownIds != null && view.str("Id") !in shownIds)
-        }
+    /** One ask of the user's libraries, or null when it failed or answered something that is not a list (N-016: the second ask may fail). */
+    private fun viewsOrNull(includeHidden: Boolean): List<JsonObject>? = try {
+        val (status, body) = fetch.get(userViewsPath(backend, userId, includeHidden))
+        (body as? JsonObject)?.takeIf { status in 200..299 }?.get("Items")?.let { it as? JsonArray }?.mapNotNull { it as? JsonObject }
+    } catch (e: ScanCancelled) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
+
+    /** The libraries listed, and whether the includeHidden list was answered (so hidden ones are known). */
+    class Listing(val sections: List<LibrarySection>, val hiddenKnown: Boolean)
+
+    /**
+     * Every library, for the library-selection screen and Settings (N-016, LibraryPicker): the plain list, and on Jellyfin, when asked
+     * (`askHidden`), the includeHidden list beside it. A library only the second has is hidden: listed on its own row, marked, and off until
+     * the viewer switches it on. If the second ask fails the plain list stands and nothing is hidden; if the plain ask fails the second
+     * stands, with nothing marked. A view that holds no videos (Playlists, Music, Collections...) is not listed (#206).
+     */
+    fun listing(serverId: String, serverName: String, askHidden: Boolean): Listing {
+        val plain = views()
+        val all = if (askHidden && backend == "jellyfin") viewsOrNull(true) else null
+        return if (plain.isEmpty() && all != null && all.isNotEmpty()) {
+            // The plain list gave nothing but the second answered: nothing is known about which are hidden.
+            Listing(LibraryPicker.mediaBrowserListed(serverId, serverName, all, null), hiddenKnown = false)
+        } else Listing(LibraryPicker.mediaBrowserListed(serverId, serverName, plain, all), hiddenKnown = all != null)
+    }
+
+    /** The libraries, as [listing] (hidden ones marked when `includeHidden` asks for them on Jellyfin). */
+    fun sections(serverId: String, serverName: String, includeHidden: Boolean = false): List<LibrarySection> =
+        listing(serverId, serverName, includeHidden).sections
 
     /**
      * Every item in every library but those in `excluded` (view ids), which are skipped before
@@ -87,13 +100,24 @@ class MediaBrowserLibrary(
          * request is the plain one. Emby has no such list (userViewsPath).
          */
         includeHidden: Boolean = INCLUDE_HIDDEN_DEFAULT,
+        /**
+         * N-016: with the includeHidden list asked, the keys of the hidden libraries the viewer switched on. A hidden library (one only the
+         * includeHidden list has) not among them is not read; with the plain list unanswered nothing is known to be hidden and none is dropped.
+         * Null keeps every library of the list read (the old single switch).
+         */
+        hiddenRead: Set<String>? = null,
         /** A movie or episode dropped for having no runtime, for the coverage line (skippedNoRuntimeCount). */
         onSkippedNoRuntime: () -> Unit = {},
         /** Sections kept from a scan that didn't finish, and each one read in full (#288). */
         keep: SectionKeep = SectionKeep.NONE,
     ): List<MediaItem> {
         // A view with no videos in it is never asked for items (#206).
-        val viewList = views(includeHidden).filter { (it.str("Id") ?: "") !in excluded && holdsVideos(it) }
+        val asked = views(includeHidden)
+        val plainIds = if (includeHidden && hiddenRead != null && backend == "jellyfin") views().mapNotNull { it.str("Id") }.toSet().takeIf { it.isNotEmpty() } else null
+        val viewList = asked.filter {
+            val id = it.str("Id") ?: ""
+            id !in excluded && holdsVideos(it) && (plainIds == null || id in plainIds || id in (hiddenRead ?: emptySet()))
+        }
         val out = ArrayList<MediaItem>()
         val tally = SectionTally()
         for ((index, view) in viewList.withIndex()) {

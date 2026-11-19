@@ -263,12 +263,34 @@ await check("never asked again before Expires, not more often than the window", 
   assert.deepEqual(a, { text: "UPDATED 8:19 AM", stale: false });
   assert.equal(W.forecastAge(Date.parse("2026-11-15T01:00:00Z"), Date.parse("2026-11-15T14:00:00Z"), "UTC").stale, true);
 });
-await check("guide blocks: hour-long, contiguous, cover now", () => {
-  const now = Date.parse("2026-11-15T18:20:00Z");
-  const b = W.guideBlocks("TORONTO", now, 26);
-  assert.equal(b.length, 26);
-  assert.ok(b[0].startSec * 1000 <= now && now < b[2].endSec * 1000);
-  for (let i = 1; i < b.length; i++) assert.equal(b[i].startSec, b[i - 1].endSec);
+await import("./nostalgex-weather-screens.js");
+await check("icons: whole-pixel cells, about 85% of what they were, centred in the old slots", () => {
+  const S = globalThis.NostalgexWeatherScreens;
+  const was = { current: 14, today: 8, week: 7 };
+  for (const [k, cell] of Object.entries(S.ICON)) {
+    assert.equal(cell.slot, was[k] * 24, `${k} keeps its old slot`);
+    assert.ok(Number.isInteger(cell.cell) && cell.cell === Math.round(was[k] * 0.85), `${k} cell ${cell.cell}`);
+    const ratio = (cell.cell * 24) / cell.slot;
+    assert.ok(ratio >= 0.84 && ratio <= 0.89, `${k} is ${(ratio * 100).toFixed(1)}%`);
+    assert.ok(Number.isInteger((cell.slot - cell.cell * 24) / 2), `${k} centres on a whole pixel`);
+  }
+  assert.deepEqual(S.ICON, { current: { slot: 336, cell: 12 }, today: { slot: 192, cell: 7 }, week: { slot: 168, cell: 6 } });
+});
+await check("the credits stack: 16 px, bottom left, text2 at 70%", () => {
+  const f = globalThis.NostalgexWeatherScreens.FOOTER;
+  assert.deepEqual([f.size, f.lineHeight, f.x, f.baseline, f.color], [16, 22, 90, 1018, "rgba(185,195,222,0.7)"]);
+});
+await check("the guide's item: one endless programme, always live, and the bar says LOCAL WEATHER and the temperature", () => {
+  const it = W.guideItem("TORONTO, ON, CA", "Cloudy, 6\u00B0C.");
+  assert.deepEqual([it.title, it.episodeTitle, it.summary, it.live, it.ratingKey], ["LOCAL WEATHER", "TORONTO, ON, CA", "Cloudy, 6\u00B0C.", true, null]);
+  assert.ok(!("startSec" in it) && !("endSec" in it) && !("duration" in it), "no start, no end, no length");
+  assert.ok(W.guideItem().summary.length > 20);
+  const m = { current: { tempC: 6.4 } };
+  assert.equal(W.guideBarText(m, "C"), "LOCAL WEATHER  6\u00B0C");
+  assert.equal(W.guideBarText(m, "F"), "LOCAL WEATHER  44\u00B0F");
+  assert.equal(W.guideBarText(null, "C"), "LOCAL WEATHER");
+  assert.equal(W.guideBarText({ current: { tempC: null } }, "C"), "LOCAL WEATHER");
+  assert.equal(W.guideBlocks, undefined, "the hour-long blocks are gone");
 });
 
 // ── 6. The channel's rules ──

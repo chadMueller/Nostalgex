@@ -229,7 +229,8 @@ struct PlexAPIService: MediaBackend {
         // A section the viewer turned off in library selection (I-054) is dropped here,
         // before a single item request for it is made, never fetched, not fetched
         // and discarded.
-        let sections = excludedSectionKeys.isEmpty ? allSections : allSections.filter { !excludedSectionKeys.contains($0.key) }
+        let readable = Self.readableSections(allSections)
+        let sections = excludedSectionKeys.isEmpty ? readable : readable.filter { !excludedSectionKeys.contains($0.key) }
 
         let isSlowLink = probeSeconds > Self.slowLinkThresholdSeconds
         let pageSize = isSlowLink ? Self.slowLinkPageSize : Self.sectionPageSize
@@ -403,10 +404,7 @@ struct PlexAPIService: MediaBackend {
             }
             return bulk
         } else {
-            let isMusicSection = section.title.range(
-                of: #"music.?video|^music$|^mv[s]?$"#,
-                options: [.regularExpression, .caseInsensitive]
-            ) != nil
+            let isMusicSection = Self.isMusicVideoLibrary(title: section.title)
             // Report page progress so a large movie/music section doesn't look frozen
             // while it streams in. These sections have no "shows", so the item count
             // rides the same progress channel used for shows.
@@ -655,8 +653,23 @@ struct PlexAPIService: MediaBackend {
     func loadSections() async throws -> [PlexSection] {
         guard let req = request(path: "/library/sections") else { throw APIError.invalidResponse }
         let (data, response) = try await Self.session.data(for: req)
-        return try Self.decodePlexJSONResponse(SectionsResponse.self, data: data, response: response)
-            .MediaContainer.Directory ?? []
+        return Self.readableSections(try Self.decodePlexJSONResponse(SectionsResponse.self, data: data, response: response)
+            .MediaContainer.Directory ?? [])
+    }
+
+    /// The Plex libraries Nostalgex lists and reads: movie and show only (N-016 option A, the
+    /// rule set in scripts/library-picker-golden.json). A Music (artist) or Photos library is
+    /// never offered and never scanned; a music video library is a movie (Other Videos) or show
+    /// library and stays, marked by its name (`isMusicVideoLibrary`).
+    static let readableSectionTypes: Set<String> = ["movie", "show"]
+
+    static func readableSections(_ sections: [PlexSection]) -> [PlexSection] {
+        sections.filter { readableSectionTypes.contains($0.type) }
+    }
+
+    /// The name rule that marks a Plex library's items as music videos for HIGH ROTATION.
+    static func isMusicVideoLibrary(title: String) -> Bool {
+        title.range(of: #"music.?video|^music$|^mv[s]?$"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     // MARK: - Collections

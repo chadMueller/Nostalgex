@@ -576,8 +576,10 @@ object Collections {
         serverKey: String,
         getJSON: (String) -> JsonElement,
         onProgress: ((Int, Int) -> Unit)? = null,
+        /** N-016: a library the viewer switched off is not read, so its collections are not read either (by section key); null reads every one. */
+        isSectionOn: ((String) -> Boolean)? = null,
     ): List<ServerCollection> {
-        val sections = parsePlexSections(getJSON(PLEX_SECTIONS_PATH))
+        val sections = parsePlexSections(getJSON(PLEX_SECTIONS_PATH)).filter { isSectionOn?.invoke(it) != false }
         val list = ArrayList<PlexCollectionRow>()
         val seen = HashSet<String>()
         for (key in sections) {

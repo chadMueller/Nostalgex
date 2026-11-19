@@ -3,6 +3,23 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+
+## 2026-11-19 (publish Jellyfin apps for Apple TV)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
+
+**Why.** Today's post: the Jellyfin apps for Apple TV, plus Nostalgex as the channel-flipping companion. The copy was already approved (`draft: false`, date 2026-11-19); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/jellyfin-apple-tv-apps.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: OG `cover.jpg` is 1200x630. Hero `header.webp` is 1920x1080. Inline `nostalgex-jellyfin-guide.webp` is 1920x1080. All three R2 URLs returned 200 (header.webp 110,542 bytes; cover.jpg 114,247 bytes; nostalgex-jellyfin-guide.webp 110,542 bytes). Images stay on R2; none committed.
+- `content/roku.json` was not touched. `announcementPost` was not set.
+- `npm run blog:render` wrote eighteen live posts into `public/sitemap.xml`, including `/blog/jellyfin-apple-tv-apps` with lastmod 2026-11-19. `/blog` lastmod is 2026-11-19. `npm run build` emitted the post to `dist/blog/jellyfin-apple-tv-apps.html` with width/height on the hero, the inline still and the OG card, and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 399 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
 
 **Why.** The hold clip that keeps the stick awake under WATERSHED was restarted on `finished` and `error` only. Once, on a TCL 55R617, it went to `buffering` and stayed there for about 40 minutes, so the 9 PM opening didn't happen until a key press (#334).
@@ -25,6 +42,120 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Half-done.** Only Home was tried on the TV, not a crash or a power cut, and only on Emby: the Plex path is untested on a TV. From reading only, the Apple TV may have the same gap: `needsLibrarySelection` is held in memory, and a launch with credentials restores the saved library or loads it without asking for the libraries.
 
+## 2026-11-18 (publish Thanksgiving marathon)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/thanksgiving-marathon-own-library`.
+
+**Why.** Today's post: a Thanksgiving TV marathon from your own Plex library. The copy was already approved (`draft: false`, date 2026-11-18); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/thanksgiving-marathon-own-library.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: cover at `site/blog/thanksgiving-marathon-own-library/cover.jpg` is 1200x630. Hero `header.webp` is 1920x1080. Both R2 URLs returned 200 (header.webp 125,554 bytes; cover.jpg 133,438 bytes). Images stay on R2; none committed.
+- `content/roku.json` was not touched. `announcementPost` was not set.
+- `npm run blog:render` wrote seventeen live posts into `public/sitemap.xml`, including `/blog/thanksgiving-marathon-own-library` with lastmod 2026-11-18. `/blog` lastmod is 2026-11-18. `npm run build` emitted the post to `dist/blog/thanksgiving-marathon-own-library.html` with width/height on both images and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 392 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
+## 2026-11-16 (site: Android TV page, web and Docker release notes, weather on /channels)
+
+**State.** Branch `site/platform-pages-nov16` on top of main `5c4b2143`.
+
+**Why.** Chad's answers on the release prep: a public Android TV page and a "coming soon" tile on the home page, release notes for the web tuner and Docker, and the weather channel on the channel guide.
+
+**Changed.**
+- `android.html` is a real page now (hero, feature list, FAQ, other ways to watch). It carries no Google Play link, no join link, no date and no names. The words come from the approved Play listing and store notes; the few plain lines written to fill gaps are marked `TODO(marketing)` in the source. `scripts/android-section-check.mjs` now holds "page live, link absent" in `npm test`.
+- The page's buttons are Coming soon sign-ups (hero and bottom): the site's own `/api/subscribe` form and Nostalgex list, tagged `data-signup-source="android_notify"`. Nothing new in Resend or the API. The other-platform tiles became plain links in the hero line.
+- Home page: an Android TV tile with a Coming soon sticker, five tiles across on a wide screen. An Android TV link in every footer, the sitemap and the build.
+- `/self-host` has a Release notes section, rendered from `content/tuner-releases.json` by `scripts/render-self-host.mjs`. It starts with 1.0.23. The brief's line about channel updates without a new version is left out: the Docker image carries its own `channels.json` per release, so it is not true for Docker.
+- `/channels` has a LOCAL WEATHER row after the bundles (`WEATHER_ROW` in `scripts/build-bundles.mjs`), since CH 299 is not in `channels.json`. It says "5 day" because the channel pages' copy check bans hyphens.
+- The 1.0.33 changelog title leads with the weather channel.
+
+**Half-done.** The Apple TV and Roku flips are still on `site/flip-appletv-1.0.33` and `site/flip-roku-1.0.13`, with the weather line first in each list.
+
+## 2026-11-16 (site: ready for the Apple TV 1.0.33, Roku 1.0.13 and Android TV releases)
+
+**State.** Branch `site/platform-releases-nov16` off main `affe3481`. Not merged, not pushed. Two flips wait on their own branches, built on top of it.
+
+**Why.** The site speaks only about what people can install today, and three platforms are about to move. The base branch carries everything that is true now, and each flip is one commit that is applied when its platform is public.
+
+**Changed on this branch (nothing visible on the live pages).**
+- `content/changelog.json`: the 1.0.33 entry now holds the App Store text in its three sections. `bullets` is WHAT'S NEW, with the new `newChannels` and `fixes` lists beside it. It stays `released: false`, so the home page does not show it yet. The renderer (`scripts/render-changelog.mjs`) and the Discord post script print the two extra lists when an entry has them; older entries render as before. The channel update line says the app checks when it opens and about once a day, not hourly.
+- `scripts/store-gate.mjs` (`npm run store:gate -- appletv 1.0.33`): exits 0 only when the public App Store lookup shows that version. Nothing else decides the Apple TV flip.
+- `content/android.json`, `content/android/android.html` and `scripts/android-section-check.mjs`: the Android TV page as an unbuilt scaffold with slots for the words, a switch that is off, and a check in `npm test` that fails if anything public points at it. The checklist to switch it on is in the JSON file.
+- `THIRD-PARTY-LICENSES.md` said the weather channel is CH 600; it is CH 299.
+
+**Half-done.**
+- `site/flip-appletv-1.0.33`: changelog entry `released: true`, README heading and What's new, the weather line on `/apple-tv`. Apply it when `npm run store:gate -- appletv 1.0.33` passes.
+- `site/flip-roku-1.0.13`: README heading and the weather line on `/roku`. Apply it when the Roku Channel Store shows the new version. There is no script for this one; Chad confirms it by eye.
+- Web tuner and Docker 1.0.23 are live, and their notes are on the GitHub release `tuner-v1.0.23`. The site has no page for web or Docker release notes, so none was added.
+
+**Next.** Marketing fills the slots marked `TODO(marketing)` (the 1.0.33 entry title, the Android page). The Android page does not go out until Google Play shows the app.
+
+
+## 2026-11-16 (web tuner: a server switch stays in Settings, and CH 299 over a playing channel)
+
+**State.** Branch `web/settings-server-progress` off main `39c0b2a5`. Not merged, not pushed.
+
+**Why.** Chad's Android test: a server switch in Settings booted him out, and tuning the weather drew its radar see-through over the last film.
+
+**Checked, no change needed.** Tuning CH 299 from a playing channel already stops the old video and sound (`startWeatherScreen` calls `stopVideo`, which invalidates a tune still in flight), the canvas is opaque (solid `#0a0a1a`, drawn to every corner) and covers the picture, and tuning away restores a normal channel. Covered now in `scripts/weather-browser-smoke.mjs`, including a tune overtaken by CH 299.
+
+**Changed.**
+- A load that ends while Settings is open (a server switch) used to tune a channel and set the app state to player (or show the empty state and set it to connect), so the keys left Settings. `tuneFirstOrShowEmpty` now keeps Settings and its keys; closing Settings sets the state right and shows the empty state if there is one. Settings already carried the progress (the same words as the guide's block); leaving Settings during the load shows the guide's block, as before.
+- The block's second line (Settings and the guide) follows the phase: READ n TITLES and the library being read, then BUILDING CHANNELS: i OF n, then BUILDING SCHEDULE. It used to keep saying MOVIES: 450 OF 450 through the whole build. GUIDE READY: n TITLES at the end.
+- `scripts/loading-state-browser-smoke.mjs`: a switch from Settings checks all of it; a check about a removed feature (the hidden-libraries switch) is dropped.
+
+## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
+
+**Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
+
+**Changed.** Select on the stripe now scrolls the guide so the first channel of the stripe's bundle is at the top and puts focus on that row (`GuideStripes.selectTargetRow`, `ChannelGuideView.selectStripeBundle`); the stripe is drawn from the rows, so it stays where it was and Left puts the viewer back on it. Left from the stripe opens the hidden bundle list, where Select used to; Select in the list still jumps and closes it, Menu closes it without a jump, Up and Down on the stripe still step through bundles and wrap. A run that is no bundle has nothing to jump to and Select does nothing. Moving focus onto the row pulled the list back (measured on the simulator: the scroll offset ran 390 to 0 over a second), so the top position is set again 0.1 s and 0.4 s after focus lands.
+
+**Tested.** `GuideStripeSelectTargetTests` (3) and `GuideStripesTests`; `GuideStripeFocusTests` (3 UI tests on the simulator, including Select landing on channel 7 with its row at the top of the guide, Left from the stripe opening the list and Menu closing it). Not tried on a TV.
+
+## 2026-11-16 (Apple TV 1.0.33 (58): Chad's weather changes)
+
+**State.** On `appletv/1.0.33-weather`, still build 58. Not pushed.
+
+**Live channels.json, measured (Chad asked whether it costs anything).** The live file is 126,842 bytes, 22,402 gzipped, answered in 0.10 to 0.19 s from nostalgex.app; `loadConfig` parses it in 10 ms on a Mac simulator (not measured on a TV). A snapshot launch (the normal one) never calls the loader or the fetch: the guide comes from the snapshot rows. Only a full library load does, and it now waits for the fetch only when there is no kept copy (a first install) and then for at most 3 s (it was 10 s); with a kept copy it builds from it at once and checks for a new one behind it. The request is now conditional (`If-None-Match` with the kept copy's ETag, saved only for a copy that passed); nostalgex.app answers 304 with no body in 0.11 s. A fetch never rebuilds the guide: it only writes the file, and the next library load uses it, so a changed `version` lands at the next rebuild (a library change, or the 24 hour hard cap), never on every daily fetch.
+
+**Changed.**
+- CH 299 in the guide is one full-width bar ("it should have no scheduled sections because it's an unlimited loop channel"): one entry, always on now, running past both ends of the guide's 22-hour window, titled LOCAL WEATHER and the current temperature. No programme times, no UP NEXT, the programme cursor has nothing to step to, and the info panel shows it as one live item: LIVE and a full bar, no times.
+- The credits and the forecast's age are one small stack at the bottom left of every screen: the radar source's credit on the radar screen, DATA FROM MET NORWAY, UPDATED, at 16 px (the 25 they were, about 60%) in text-2 at 70% opacity, which still reads about 5.6:1 on the background, so the attribution stays legible.
+- Every weather icon is 15% smaller: whole-pixel cells of 12, 7 and 6 where they were 14, 8 and 7, centred in the same slots, so nothing else moves.
+- The weather settings moved from PLAYBACK & PICTURE to CHANNELS & BUNDLES: one LOCAL WEATHER row (its value is the place and ON or OFF, or NOT SET) that opens a page with LOCATION, UNITS and SHOW LOCAL WEATHER. The no-location card points there.
+
+## 2026-11-15, night (Apple TV 1.0.33 (58): CH 299 LOCAL WEATHER, live channel rules)
+
+**State.** Branch `appletv/1.0.33-weather` on `appletv/1.0.33` (`c0d3dc43`) with `appletv/n016-library-rules` merged in. Build number 58. Not pushed, not merged, not uploaded.
+
+**Why.** Chad wants the weather channel on every platform for the 2026-11-16 releases, and channel rule fixes to reach Apple TVs without an App Store build (Trello I-016, N-074).
+
+**Changed.**
+- CH 299, LOCAL WEATHER, a port of the web tuner's channel (`scripts/nostalgex-weather.js` and `nostalgex-weather-screens.js` are the reference). `Services/Weather/WeatherEngine.swift` holds the rules, `Views/Weather/WeatherChannelView.swift` draws the four screens (CURRENT CONDITIONS, TODAY'S FORECAST, 5-DAY FORECAST, RADAR) on a 1920 x 1080 picture with the web's layout numbers, DM Mono and VT323, on the same 65 second wall-clock loop. `WeatherGoldenTests` reads `scripts/weather-golden.json` (copied from the web branch unchanged) and matches every vector: the five forecast cases, symbols, units, formats, compass, the loop, radar bands, frame picking, the map window, the providers and the postcode keys. Numbers round the way JavaScript's `Math.round` does, so -2.5 is -2 on both.
+- Forecast through the relay `nostalgex.app/api/weather` with `X-Nostalgex-Client: tvos` and an identifying User-Agent, only while the channel is on screen (the one exception: picking a location asks once). The last answer is kept in Caches with its time; it is not asked again before 30 minutes.
+- Radar: NOAA (US), Environment Canada (Canada) and DWD (Germany), straight from the device as the web does, recoloured to the five bands, over the Natural Earth outlines (`Resources/Weather/weather-basemap.json`, shipped in the app). Elsewhere RADAR NOT AVAILABLE IN YOUR AREA. Environment Canada answers a time with milliseconds (`...:00.000Z`) with a NoMatch error, so the map request sends whole seconds; the web tuner builds the same string and probably has the same fault for Canada (not checked in a browser).
+- Music: the original loop `local-forecast.m4a` ships in the app and plays under the screens while the channel is up; it stops with the sleep timer and in the background.
+- Settings, WEATHER (since 2026-11-16 a LOCAL WEATHER page under CHANNELS & BUNDLES): LOCATION (type a city or postcode; the GeoNames files are read from `nostalgex.app/weather/places/` a few KB at a time, not bundled, because the 1,380 shard files would flatten into one bundle folder with clashing names), UNITS (AUTO, °F, °C), SHOW THE WEATHER CHANNEL (on by default). With no location the channel says SET YOUR LOCATION IN SETTINGS. ABOUT has a WEATHER CREDITS list: MET Norway, GeoNames, Natural Earth, NOAA, Environment Canada, DWD, the music.
+- In the guide CH 299 is in no bundle and joins only beside library channels, so an empty library still reads as empty. It is kept out of the scheduler's lineup, Top Shelf and the default launch channel; its guide row is hour blocks of the loop with no UP NEXT. Tuning it stops the video and asks nothing of the media server.
+- Live channels.json (N-074). `loadChannelConfig()` no longer asks the media server for channels.json (it never answered). `ChannelConfigStore` fetches `nostalgex.app/channels.json` at launch when the kept copy is missing or a day old, and about every 24 hours from the background refresh loop, with the old 10 second timeout. A download is kept only if the same `ChannelConfigLoader` parses it, it has channels, its optional `formatVersion` is at most 1 (missing counts as 1), and its content `version` is not below the bundled one (the rule Android set; Roku follows). A bad download never replaces the kept copy. The guide is built from the kept copy, else the bundled one, and only where the guide is rebuilt anyway (a library load, a snapshot restore), so a new copy never lands mid-programme. channels.json has no `formatVersion` today; it is read so a future format change can go to the site without breaking builds already out.
+
+**Tested.** `WeatherGoldenTests` (8), `WeatherChannelLineupTests` (3), `ChannelConfigStoreTests` (6: an invalid file is rejected and the kept copy stays; an older content version and a formatVersion above 1 are rejected; a good newer copy is kept and built from). Simulator walk, `NostalgexUITests/WeatherChannelWalkTests` in demo mode with `-uiTestWeatherInDemo` against a stand-in relay on the Mac (the site relay was not live yet): the guide with CH 299, the four screens full screen, radar for Toronto from Environment Canada, the no-location card, the WEATHER rows, and a postcode search (90210 to BEVERLY HILLS). Full NostalgexTests on the first commit: 1,508 tests, 1,461 passed, 13 failed, 34 skipped; all 13 were package-lineup tests that now saw CH 299 (exact lineups in BundleBuild, Franchise, PreferenceSync, Seasonal and BackendSwitch tests), so unit tests start with the weather switch off; those 7 classes and the new ones then passed, 93 of 93. Not tested: against the real relay, on a real Apple TV, a US or German radar on screen (NOAA and DWD map requests checked with curl only), the music on a TV.
+
+**Half-done.** A 1.0.33 changelog entry (none exists yet), THIRD-PARTY-LICENSES.md lines for the app (the web branch adds the weather section; adding it here too would clash on merge).
+
+## 2026-11-16 (a pre-deploy check on channels.json)
+
+**State.** Branch `web/channels-json-check` off main `7d4b3c71`. Not merged, not pushed.
+
+**Why.** The Apple TV, Roku and Android apps and the web tuner now fetch `https://www.nostalgex.app/channels.json`, so a bad file pushed to main would reach every device on its next fetch.
+
+**Changed.** `scripts/channels-json-check.mjs` (`npm run channels:json:check`, in `npm test` and the CI channel-engine job): the file parses; every channel has its fields of the right kind; ids are unique and numbers are unique, each on its own (a channel's id is not always its number); every bundle has its fields and real channel ids, and a channel's category is a bundle (or franchise); every rule key a channel uses, and every key in `exclusiveRules`, appears in the Swift `Channel.swift`, the JS filter, the Roku `ChannelFilter.brs` and the Android `ChannelFilter.kt`; the optional channel and bundle fields are in all four loaders' sources; `version` is a whole number not lower than the deployed copy; `formatVersion`, when present, is 1 or less. CI sets `NX_CHANNELS_REQUIRE_PREVIOUS=1`, so an unreadable deployed copy fails there; a laptop offline skips only the version comparison and says so. `scripts/channels-json-check-smoke.mjs` (`npm run test:channels-json`, 21 checks): the real file passes and each of 17 bad copies fails with its own message.
+
+**Found.** `exclusiveRules[1]` lists channel id 32, which no channel has. The loaders skip it, so it is a note, not a failure. Not put on `npm run build`: a hosted or Docker build should not depend on the network, and a deploy gate there can be added if Chad wants it.
+
 
 ## 2026-11-15 (Roku 1.0.13 weather build: LOCAL WEATHER CH 299, the live channels.json, N-016 option A)
 
@@ -41,6 +172,15 @@ Commits carry the detail of *what*; this carries the *why*.
 - **`deploy.sh` with `NX_WEATHER_BASE`** points a sideload's weather calls at a stand-in server (the app reads it only when IsDev; `release.sh` refuses it).
 
 **Found.** The golden's `format` rows have both a `c` and a `C` key, which a BrightScript associative array holds as one (keys are case-insensitive), so the test writes the four Celsius inputs itself. The relay and the place files were not deployed when this was built; the stick walk used a stand-in serving the golden's MET document and the web branch's place files.
+
+## 2026-11-16 (web tuner: select on the bundle stripe jumps to the bundle)
+
+**State.** Branch `web/bundle-strip-jump` off main `250a6f13`. Not merged, not pushed.
+
+**Why.** Chad, on the Apple TV: "you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden", and this should be global.
+
+**Changed.** On the bundle stripe, select (Enter, Space, or a click on the bundle's name) now puts the cursor on the first channel of that bundle (`selectStripe`) and leaves the stripe; it used to go back to the row it came from. Left from the stripe opens the hidden bundle list, where selecting a bundle jumps and closes it and Esc closes it without a jump (as before). Up and Down still step through bundles and wrap. Right and Esc on the stripe still go back to the rows. The same page serves the Docker build. Tested in `scripts/guide-cursor-browser-smoke.mjs`.
+
 ## 2026-11-15 (Apple TV: the loading pattern, the same on every platform)
 
 **Why.** Chad: one loading pattern on Apple TV, Roku, Android and web (wording from Android's `LoadNotice.kt`). A server or library switch and RESCAN LIBRARY used to replace the whole screen with the loading view; now the guide stays up and its empty area says what is happening.
@@ -285,6 +425,21 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Next.** The web, Roku and Android ports of this engine change, against the regenerated golden.
 
+## 2026-11-15 (Android, N-016 option A: one rule set for which libraries are listed, on and read)
+
+**State.** Branch `android/n016-library-rules`, off `android/guide-stripes` (release 9), for release 10. The rules are the web tuner's `scripts/nostalgex-library-picker.js`, pinned by `scripts/library-picker-golden.json` (copied from `web/n016-library-rules` b663b9ae), which `LibraryPickerGoldenTest` reads (10 cases groups, one test each).
+
+**Changed.**
+1. **Plex lists and reads movie and show only** (`PlexLibrary.directories`, `LibraryPicker.plexListed`): a Music (artist) or Photo library is never listed and never asked for items or collections. A music video library is type movie in Plex, so it stays, found by its name.
+2. **Hidden Jellyfin libraries, one row each, off by default.** Jellyfin is always asked twice (`MediaBrowserLibrary.listing`: the plain list and the includeHidden list); a library only the second has is `hidden`, listed marked HIDDEN ON JELLYFIN, and read only while its id is in the new `nostalgex_included_hidden_library_sections` list (`Prefs.includedHiddenSections`). The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN row is gone from Settings. **The old Prefs switch carries over** (`carryOverHiddenSwitch`, the `hiddenSwitchUpgrade` cases): with it on and the hidden libraries known, each hidden library not turned off by hand goes into the included list once and the switch is cleared; with them not yet known the switch waits for the next read; off or never set is just cleared. It runs before the first Jellyfin scan and when the library list is read.
+3. **The collection sweep skips libraries that are off** (`Collections.fetchPlexCollections(isSectionOn)`, used by `readCollections` for Plex). Jellyfin and Emby BoxSets are one global list and the web tuner leaves them alone, so they are unchanged.
+4. **The picker shows only when there is something to choose** (`LibraryPicker.offersPicker`): more than one library across the chosen servers, or a hidden one (it starts off). One library that is not hidden just scans. The picker's rows start on except a hidden one; the server picker's default is `defaultServerIds` (the viewer's own, all when none is).
+5. **Choices reset at sign-in** (`chooseLibrariesOrScan`): both lists emptied and the old switch cleared. A choice made in Settings lasts until the next sign-in.
+
+**Tests.** `LibraryPickerGoldenTest` (the golden: Plex and Jellyfin/Emby listing, server defaults, reads, choices, the upgrade, the picker rule, the sign-in reset; plus the collection sweep and the picker's CONTINUE) and five more in `JellyfinHiddenLibrariesTest` (only the hidden libraries switched on are read; none until switched on; the listing says whether hidden ones are known; a failed second ask leaves the plain list; Emby never asks). 539 JVM tests, lint clean.
+
+**Seen** on the emulator against a stand-in Plex that lists two movie libraries, a Music and a Photos library (`android/emulator-2026-11-15/n016-plex-settings-libraries-no-music-no-photos.png`): the stub was asked for items and collections of libraries 1 and 2 only, never 8 or 9, and Settings lists only the two. **Not seen:** a real Jellyfin with hidden libraries and the sign-in picker (golden and engine tests only).
+
 ## 2026-11-15 (Android release 9: the full-screen poster, the Settings glow, the stripe above the rows, the loading pattern)
 
 **State.** Branch `android/guide-stripes`, for versionCode 9. Chad tested release 8 on the Google TV; this is what he found.
@@ -420,6 +575,17 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 
 **Half-done.** Demo mode has one bundle, so Up and Down between bundles were not seen on a device, only in the unit tests. The info panel was not put beside the Apple TV's screenshots, and nothing was run on the real TV. The seasonal invite row has no stripe cell. A preview programme in the info panel (I-089) is not ported.
 
+## 2026-11-16 (web tuner: the weather channel's guide bar, credits, icons and settings page)
+
+**State.** Branch `web/weather-full-bar` off main `7d4b3c71`. Not merged, not pushed.
+
+**Changed** (all Chad's, 2026-11-16).
+- Guide: CH 299 is one full-width bar, "LOCAL WEATHER" and the temperature ("LOCAL WEATHER  6\u00B0C"), no 30 minute blocks, no times, on now at every time position. It has no schedule blocks, so Left and Right step nothing on it, the info panel shows LIVE and no UP NEXT. The schedule is `WXE.guideItem` (one always-live item).
+- Credits: DATA FROM MET NORWAY, the radar source's credit (radar screen) and UPDATED hh:mm are one stack at the bottom left, 16 px, text2 at 70%, 22 px apart (`FOOTER` in `scripts/nostalgex-weather-screens.js`). The loop's pips stay bottom right.
+- Icons: 15% smaller in whole-pixel cells, centred in their old slots: CURRENT 14 to 12, TODAY 8 to 7, 5-DAY 7 to 6 (`ICON`).
+- Settings: the WEATHER section is out of PLAYBACK & PICTURE. CHANNELS & BUNDLES has one link row, LOCAL WEATHER, saying the place and ON or OFF ("BUFFALO, NY \u00B7 ON") or NOT SET. It opens a page with LOCATION, UNITS and SHOW LOCAL WEATHER; Back returns to the row. Up and Down on that page walk its controls by focus.
+- Tests: the weather smokes are updated (36 and 185 checks).
+
 ## 2026-11-15 (web tuner: the weather channel, first version, Trello I-016)
 
 **State.** Branch `web/weather-channel` off main `eaf4443e`. Not merged, not pushed, not deployed. A push to main ships the page and the relay together.
@@ -439,6 +605,39 @@ The 1.0.29 mismatch is why 1.0.32 cut; the 1.0.32 cuts over a minute are all at 
 **Half-done.** Radar for countries outside the US, Canada and Germany. No alerts. The loop's gapless play depends on the browser honouring the encoder delay in the m4a or mp3 (not measured on a TV browser). Apple TV, Roku and Android have not ported it.
 
 **Next.** Chad's go to push (a push to main ships the page and the relay); the privacy page line (approved, not added); the Apple TV, Roku and Android ports.
+
+## 2026-11-15 (web and Docker: one rule set for picking servers and libraries, N-016 step 1)
+
+**State.** Branch `web/n016-library-rules` off main `2895d0db`. Not merged, not pushed, not in a release. Hosted and Docker are the same page, so both change together when it ships.
+
+**Why.** The platforms each grew their own rules for the same two screens (CHOOSE YOUR LIBRARIES at first setup, and Settings > SERVERS & ACCOUNTS > LIBRARIES): which Plex library types are listed, which servers start on, what happens to a Jellyfin library the user hides from the home screen. Nothing pinned any of it, so each port drifted. Chad's call on 2026-11-15 was to lock the model as it is (option A) and write the rules once.
+
+**Changed.**
+- `scripts/library-picker-golden.json` is the shared test file: Plex, Jellyfin and Emby listings (hidden, music video, photo, music, owned and shared servers), server defaults, which libraries a scan reads, how a choice is saved, and the upgrade from the old single switch. Plain JSON, so Swift, BrightScript and Kotlin can read it as they read `jellyfin-library-golden.json`.
+- `scripts/nostalgex-library-picker.js` holds the rules, with none of the page in it. `scripts/nostalgex-library-selection.js` keeps the saved choices (two lists under the Apple TV's key names). `npm run test:library-picker` runs the rules and the page's own functions (lifted out of `plex-tuner.html`) against the golden file; it is in `npm test`.
+- Plex lists and reads Movies and TV Shows libraries only. A Music or Photos library used to be paged through on every scan and every row dropped for having no runtime; it is not listed or asked for items now. The Plex library fingerprint (the refresh check) and the collection sweep read the same set, and the collection sweep skips a library the viewer switched off, as the Apple TV does.
+- Plex first setup turns on every server the viewer owns (all of them when none is theirs), as the Apple TV does. It was exactly one.
+- Each Jellyfin library the user hides gets its own row, marked HIDDEN ON JELLYFIN, off until switched on. The scan asks `/UserViews?userId=<id>` (the request it always was) and then the same with `includeHidden=true`; a library only the second answer has is hidden. The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch is gone.
+- Saved choices carry over. The off list keeps its key and ids. A viewer who had the old switch ON keeps the same libraries on: the first time the hidden libraries are known, each one not turned off by hand goes into the new included list, then the old value is removed. A saved library list from the old version is not used (Settings asks the server once). Tested in `test:library-picker` and in the browser.
+- As on the Apple TV (coordinator, 2026-11-15): CHOOSE YOUR LIBRARIES opens at a sign-in only with more than one library or a hidden one, and every sign-in starts the choices again (both lists and the old switch cleared). `web-tuner.html` sets a one-time `plex90_fresh_signin` flag at a Jellyfin, Emby or single-server Plex sign-in, and a Plex sign-in is the server picker's CONTINUE; a reload or a saved login is not a sign-in. Golden sections `pickerOffered` and `signInReset`.
+- `scripts/library-picker-browser-smoke.mjs` replaces `include-hidden-browser-smoke.mjs`: Plex (an owned and a shared stub server) and Jellyfin and Emby stubs, first setup and Settings, with the mouse at 1440x900, 960x540 at DPR 2 and 390x844.
+
+**Checked.** Music video libraries: Plex has no Music Videos library type. "Other Videos" is type `movie`, and the scan only produces items from a movie or show library (an artist library returns artists with no runtime), so a music video library that works today is a movie or show library and stays listed and read, found as music videos by name as before. Confirmed afterwards with one read of `/library/sections` on a real Plex server: its Music Videos library is type `movie`.
+
+**Not done.** The Apple TV, Roku and Android are not changed; they are to port to the golden file.
+
+
+## 2026-11-15 (Apple TV: one library rule set, N-016 option A)
+
+**State.** Branch `appletv/n016-library-rules` off main, for the next build. Not pushed.
+
+**Why.** N-016: every platform lists, starts on and reads the same libraries (scripts/library-picker-golden.json, the web tuner's contract), and a library switched off while a scan was out could still land the old set.
+
+**Changed.**
+- Plex lists and reads movie and show libraries only (`PlexAPIService.readableSections`, in `loadSections` and the scan). A Music (artist) or Photos library is never offered and never read; a music video library (Other Videos, type movie, or kept as TV shows) stays, marked by its name as before.
+- Switching a library in Settings bumps `librarySessionGeneration`, so a scan already running (an earlier switch's, or a refresh) discards its results instead of landing or saving the old set.
+
+**Tested.** `LibraryPickerGoldenTests` reads the golden's `plexListing` cases (ids, kind label, subtitle with the server name when more than one server answered, the music video name rule) and checks the switch bumps the generation. Not covered here: on the Apple TV the name rule marks a movie-typed music video library's items for HIGH ROTATION; a show-typed one is listed with the mark in the golden, but its episodes are read as TV, as before.
 
 ## 2026-11-14 (Apple TV: the guide's info panel puts the description where the design says)
 

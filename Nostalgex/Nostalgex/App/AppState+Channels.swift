@@ -10,39 +10,27 @@ import UIKit
 extension AppState {
     // MARK: - Channel config loading
 
+    /// The channel rules the guide is built from (N-074): nostalgex.app's channels.json when a good copy is
+    /// kept, else the one in the app. A missing or day-old copy is fetched first, with the short timeout the
+    /// old server lookup had, so a slow or missing network costs onboarding at most that and falls back.
     func loadChannelConfig() async -> ChannelConfigResult {
-        // Try fetching channels.json from same server
-        if !serverURL.isEmpty,
-           let baseURL = URL(string: serverURL) {
-            let configURL = baseURL.appendingPathComponent("channels.json")
-            do {
-                // Short timeout: this is an optional override with a bundled fallback, so a
-                // sleeping or unreachable server must not hold the first step of onboarding
-                // for the URLSession default of 60s with nothing on screen but "PREPARING".
-                var req = URLRequest(url: configURL)
-                req.timeoutInterval = 10
-                let (data, _) = try await URLSession.shared.data(for: req)
-                if let result = ChannelConfigLoader.loadConfig(from: data),
-                   !result.channels.isEmpty {
-                    print("[Plex90] CONFIG: server \(configURL.absoluteString) — \(Self.configDiagnostic(from: data))")
-                    return result
-                } else {
-                    print("[Plex90] CONFIG: Server config parsed but empty or invalid, using bundled")
-                }
-            } catch {
-                print("[Plex90] CONFIG: Server config load failed: \(error.localizedDescription), using bundled")
+        if ChannelConfigStore.isDue() {
+            let haveKeptCopy = ChannelConfigStore.cacheURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+            if haveKeptCopy {
+                // A kept copy builds the guide now; the day-old check runs behind it and lands at the next rebuild.
+                Task.detached(priority: .utility) { await ChannelConfigStore.refresh() }
+            } else {
+                // First install: one short wait, so the first guide can use the live rules, then the bundled copy.
+                await ChannelConfigStore.refresh(timeout: ChannelConfigStore.blockingTimeout)
             }
         }
-
-        // Fallback: bundled channels.json (copied from repo root on each Xcode build)
-        let bundled = ChannelConfigLoader.loadBundled()
-        if let url = Bundle.main.url(forResource: "channels", withExtension: "json"),
-           let data = try? Data(contentsOf: url) {
-            print("[Plex90] CONFIG: bundled — \(Self.configDiagnostic(from: data))")
+        let active = ChannelConfigStore.active()
+        if let data = active.data {
+            print("[Plex90] CONFIG: \(active.source) — \(Self.configDiagnostic(from: data))")
         } else {
             print("[Plex90] CONFIG: bundled channels.json MISSING from app — channel rules will be empty")
         }
-        return bundled
+        return active.result
     }
 
     /// Quick sanity check in console: CH122 name and CH74 title-rule count change when config updates land.
@@ -125,7 +113,7 @@ extension AppState {
     /// If the current channel got filtered out, select the first available.
     func reselectIfCurrentChannelFilteredOut() {
         if let current = currentChannel, !channels.contains(where: { $0.id == current.id }) {
-            if let first = channels.first {
+            if let first = channels.first(where: { !$0.isWeather }) ?? channels.first {
                 selectChannel(first)
             } else {
                 currentChannel = nil
@@ -303,7 +291,7 @@ extension AppState {
     func applyBundleFilter() {
         if bundles.isEmpty {
             // No bundles defined: show all channels (backward compat with v9 JSON)
-            channels = allChannels
+            channels = WeatherChannel.lineup(allChannels, on: weatherChannelApplies)
             return
         }
 
@@ -331,8 +319,9 @@ extension AppState {
         // A seasonal package leads the guide while it runs — see GuideChannelOrder.
         let seasonalLead = GuideChannelOrder.seasonalLeadIDs(
             bundles: bundles, enabledBundleIDs: enabledBundleIDs, now: Date())
+        // LOCAL WEATHER (CH 299) is in no bundle: it joins while its switch in Settings is on.
         channels = GuideChannelOrder.sorted(
-            allChannels.filter { enabledChannelIDs.contains($0.id) },
+            WeatherChannel.lineup(allChannels.filter { enabledChannelIDs.contains($0.id) }, on: weatherChannelApplies),
             seasonalFirst: seasonalLead)
 
         bundleJumpTargets = Self.bundleJumpTargets(

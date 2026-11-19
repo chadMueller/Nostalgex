@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "The Android TV page (android.html) is public. The Google Play link is not: it does not exist yet.",
+    "",
+    "playLive: false until Google Play shows the Nostalgex listing (Chad confirms by opening the public",
+    "Play page). playUrl: null until then, and then it is the public Play listing link, nothing else.",
+    "There is no beta or join link on the site, and no date. `npm test` (android:check) fails if one",
+    "appears, or if the page, its footer link or its sitemap line go missing.",
+    "",
+    "When Play shows the app, in order:",
+    "1. android.html: replace the .android-status line and the 'Is it on Google Play?' answer, and add the",
+    "   Play button to the hero (and the home tile: drop the Coming soon sticker, say what it is).",
+    "2. Set playLive true and playUrl here.",
+    "3. scripts/android-section-check.mjs: flip it from 'link absent' to 'link present and exactly playUrl'.",
+    "No contributor names anywhere on the site (Chad, 2026-11-11). Credit is GitHub and Discord only."
+  ],
+  "playLive": false,
+  "playUrl": null
+}

@@ -83,6 +83,17 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY, MediaBrowserLibrary.INCLUDE_HIDDEN_DEFAULT)
         set(value) = prefs.edit().putBoolean(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY, value).apply()
 
+    /** Whether the old single switch was ever written (N-016 upgrade): its value is [includeHiddenLibraries]. */
+    val hasLegacyHiddenSwitch: Boolean get() = prefs.contains(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY)
+
+    /** The old single switch is gone once its choice has been carried to the per-library list (or at a sign-in). */
+    fun clearLegacyHiddenSwitch() = prefs.edit().remove(MediaBrowserLibrary.INCLUDE_HIDDEN_KEY).apply()
+
+    /** The hidden Jellyfin libraries switched on (LibrarySection ids), under the Apple TV's key. A hidden library reads only this (N-016). */
+    var includedHiddenSections: Set<String>
+        get() = prefs.getStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, null) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(LibrarySection.INCLUDED_HIDDEN_KEY, value).apply()
+
     /** The libraries switched off (LibrarySection ids), under the Apple TV's key. Absent means every library is on. */
     var deselectedSections: Set<String>
         get() = prefs.getStringSet(LibrarySection.STORAGE_KEY, null) ?: emptySet()

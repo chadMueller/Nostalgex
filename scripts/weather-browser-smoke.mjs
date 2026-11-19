@@ -183,7 +183,7 @@ async function open({ width, height, mobile = false, place = TORONTO, relay = "o
     // Every string the page draws on the weather canvas, with its font.
     window.__wxText = [];
     const orig = CanvasRenderingContext2D.prototype.fillText;
-    CanvasRenderingContext2D.prototype.fillText = function (t, x, y, w) { if (this.canvas && this.canvas.id === "weather-screen") window.__wxText.push([String(t), this.font]); return orig.call(this, t, x, y, w); };
+    CanvasRenderingContext2D.prototype.fillText = function (t, x, y, w) { if (this.canvas && this.canvas.id === "weather-screen") window.__wxText.push([String(t), this.font, x, y]); return orig.call(this, t, x, y, w); };
     if (location.pathname.endsWith("plex-tuner.html") && !sessionStorage.getItem("nx-seeded")) {
       sessionStorage.setItem("nx-seeded", "1");
       localStorage.setItem("plex90_saved_auth", JSON.stringify({ token: "t", serverUrl: url, serverName: "lab", backend: "plex", userToken: "t" }));
@@ -246,6 +246,13 @@ for (const [tag, w, h, mobile] of SIZES) {
     check(`${tag} ${id}: the screen's title`, strings.includes(TITLES[id]), JSON.stringify(strings.slice(0, 8)));
     check(`${tag} ${id}: DATA FROM MET NORWAY, and CH 299`, strings.includes("DATA FROM MET NORWAY") && strings.includes("CH 299"));
     check(`${tag} ${id}: the place and the clock in the header`, strings.includes("TORONTO, ON") && strings.some((t) => /^\d{1,2}:\d{2} [AP]M$/.test(t)));
+    // The credits and the age of the forecast: one small stack bottom left, 16 px, the least prominent text on the screen.
+    const pxOf = (t) => Number(/(\d+(?:\.\d+)?)px/.exec(t[1])[1]);
+    const isCredit = (t) => t[0] === "DATA FROM MET NORWAY" || /^UPDATED \d|^OLD FORECAST/.test(t[0]) || /^(RADAR: NOAA|DATA SOURCE: ENVIRONMENT|Datenbasis: )/.test(t[0]);
+    const credits = text.filter(isCredit), others = text.filter((t) => !isCredit(t));
+    const metLine = text.find((t) => t[0] === "DATA FROM MET NORWAY"), updLine = text.find((t) => /^UPDATED \d/.test(t[0]));
+    check(`${tag} ${id}: the credits and UPDATED are one stack at x 90, 16 px, 22 px apart, ending at the safe edge`, credits.every((t) => pxOf(t) === 16 && t[0] !== undefined && t[2] === 90) && metLine && updLine && updLine[3] === 1018 && metLine[3] === 996 && (id !== "radar" || text.find((t) => /^(RADAR: NOAA|DATA SOURCE: ENVIRONMENT|Datenbasis: )/.test(t[0]))[3] === 974), JSON.stringify(credits));
+    check(`${tag} ${id}: nothing on the screen is smaller than the credits, and nothing else is under 25 px`, others.every((t) => pxOf(t) >= 25), JSON.stringify(others.filter((t) => pxOf(t) < 25)));
     check(`${tag} ${id}: drawn with DM Mono and VT323`, text.some((t) => /DM Mono/.test(t[1])) && text.some((t) => /VT323/.test(t[1])));
     check(`${tag} ${id}: the canvas holds a picture`, (await canvasInk(page)) > 8);
     if (id === "current") {
@@ -269,9 +276,25 @@ for (const [tag, w, h, mobile] of SIZES) {
     await page.waitForTimeout(600);
     const row = await page.evaluate((id) => {
       const r = document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`);
-      return r ? { num: r.querySelector(".grid-ch-num").textContent.trim(), name: r.querySelector(".grid-ch-name").textContent.trim(), prog: [...r.querySelectorAll(".grid-program")].map((p) => p.textContent.trim()), active: r.classList.contains("active") } : null;
+      return r ? { num: r.querySelector(".grid-ch-num").textContent.trim(), name: r.querySelector(".grid-ch-name").textContent.trim(), prog: [...r.querySelectorAll(".grid-program")].map((p) => p.textContent.trim()), active: r.classList.contains("active"), bar: (() => { const b = r.querySelector(".grid-program"), c = r.querySelector(".grid-row-programs"); return b ? { w: b.getBoundingClientRect().width, cw: c.getBoundingClientRect().width, start: b.dataset.start || null, end: b.dataset.end || null, now: b.classList.contains("now-playing"), bg: b.style.background } : null; })() } : null;
     }, CH_ID);
-    check("guide: CH 299 LOCAL WEATHER with a programme, and it is the one playing", row && row.num === "299" && row.name === "LOCAL WEATHER" && row.prog.length >= 1 && /LOCAL WEATHER/.test(row.prog[0]) && row.active, JSON.stringify(row));
+    check("guide: CH 299 is one full-width bar, LOCAL WEATHER and the temperature, no times, on now, in the row colour", row && row.num === "299" && row.name === "LOCAL WEATHER" && row.prog.length === 1 && row.prog[0] === "LOCAL WEATHER  6\u00B0C" && row.active && row.bar.w >= row.bar.cw - 1 && row.bar.start === null && row.bar.end === null && row.bar.now && /rgba?\(0, 212, 255|#00d4ff/i.test(row.bar.bg), JSON.stringify(row));
+    // The time header scrolls; the bar does not break into blocks and is on now at every position. Left and Right on it step nothing.
+    const moved = await page.evaluate((id) => {
+      guideFocusIndex = getEnabledChannels().findIndex((c) => c.id === id); updateGuideFocus();
+      const out = {};
+      guideSlotOffset = 3; renderGrid(); const r = document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`);
+      out.later = { bars: r.querySelectorAll(".grid-program").length, now: r.querySelector(".grid-program").classList.contains("now-playing"), slot: document.querySelector(".grid-time-slot").textContent };
+      out.cursor = r.querySelector(".grid-program").classList.contains("grid-program--cursor");
+      guideSlotOffset = 0; guideCursorTime = null; renderGrid();
+      return out;
+    }, CH_ID);
+    check("guide: the time header moves, the bar stays one live bar with the cursor on it", moved.later.bars === 1 && moved.later.now && moved.cursor, JSON.stringify(moved));
+    await page.keyboard.press("ArrowRight");
+    const afterRight = await page.evaluate(() => ({ t: guideCursorTime, off: guideSlotOffset }));
+    check("guide: Right on the weather row steps through no blocks", afterRight.t === null && afterRight.off === 0, JSON.stringify(afterRight));
+    const live = await page.evaluate(() => ({ time: document.getElementById("info-time").textContent, up: document.getElementById("info-upnext").textContent, prog: document.getElementById("info-progress").style.width, np: document.getElementById("np-time").textContent }));
+    check("info panel: LIVE, no UP NEXT", live.time === "LIVE" && live.up === "" && live.np === "LIVE", JSON.stringify(live));
     const info = await page.evaluate(() => ({ tag: document.getElementById("info-channel-tag").textContent, title: document.getElementById("info-title").textContent, ep: document.getElementById("info-episode-title").textContent, desc: document.getElementById("info-description").textContent }));
     check("info panel: the channel, the place, a summary", /CH 299 - LOCAL WEATHER/.test(info.tag) && info.title === "LOCAL WEATHER" && info.ep === "TORONTO, ON, CA" && /^Cloudy, 6°C\./.test(info.desc), JSON.stringify(info));
     await page.evaluate((id) => { const r = document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`); if (r) r.scrollIntoView({ block: "center" }); }, CH_ID);
@@ -304,9 +327,18 @@ for (const [tag, w, h, mobile] of SIZES) {
   const info = await page.evaluate(() => document.getElementById("info-description").textContent);
   check("no location: the info panel says what to do", /Set your location in Settings/.test(info), info);
 
+  // Before it is set, the row in CHANNELS & BUNDLES says NOT SET; PLAYBACK & PICTURE has no weather in it.
+  await page.evaluate(() => { showConfig(); switchConfigTab("bundles"); });
+  const row0 = await page.evaluate(() => { const r = [...document.querySelectorAll("#channels-list-rows .chan-link")].find((b) => /LOCAL WEATHER/.test(b.textContent)); return r ? { t: r.querySelector(".chan-link-title").textContent, v: r.querySelector(".chan-link-value").textContent, n: document.querySelectorAll("#channels-list-rows .chan-link").length } : null; });
+  check("CHANNELS & BUNDLES has one LOCAL WEATHER link row, after the collections, saying NOT SET", row0 && row0.t === "LOCAL WEATHER" && row0.v === "NOT SET" && row0.n === 4, JSON.stringify(row0));
+  check("PLAYBACK & PICTURE no longer has a weather section", await page.evaluate(() => { const g = document.getElementById("config-tab-general"); return !g.querySelector("#wx-input, #wx-units-chips, #wx-channel-toggle, .wx-credits") && !/WEATHER/.test(g.textContent); }));
+  check("the weather controls are on their own page, hidden until the row is opened", await page.evaluate(() => document.getElementById("channels-page-weather").hidden && !!document.getElementById("channels-page-weather").querySelector("#wx-input, #wx-units-chips, #wx-channel-toggle, .wx-credits")));
+  await page.evaluate(() => { hideConfig(); });
   await page.click("#weather-actions .nx-btn");
   await page.waitForFunction(() => document.getElementById("config-overlay").classList.contains("open") && !document.getElementById("wx-search").hidden);
-  check("the button opens Settings on the weather section with the box ready", await page.waitForFunction(() => document.activeElement && document.activeElement.id === "wx-input", null, { timeout: 3000 }).then(() => true, () => false));
+  check("the button opens Settings on the LOCAL WEATHER page (CHANNELS & BUNDLES) with the box ready", await page.evaluate(() => configTab === "bundles" && channelsPage === "weather" && document.getElementById("config-pane-title").textContent === "LOCAL WEATHER") &&
+    await page.evaluate(() => !document.getElementById("chan-back").hidden && document.getElementById("chan-back-label").textContent === "CHANNELS & BUNDLES"));
+  check("the box is ready", await page.waitForFunction(() => document.activeElement && document.activeElement.id === "wx-input", null, { timeout: 3000 }).then(() => true, () => false));
   await page.fill("#wx-input", "tor");
   await page.waitForFunction(() => document.querySelectorAll("#wx-results .wx-result").length > 1);
   const matches = await page.$$eval("#wx-results .wx-result", (els) => els.map((e) => e.textContent));
@@ -319,10 +351,24 @@ for (const [tag, w, h, mobile] of SIZES) {
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nostalgex_weather_place")));
   check("picking a match saves the town at 2 decimals with its time zone", saved.name === "Toronto" && saved.lat === 43.65 && saved.lon === -79.38 && saved.tz === "America/Toronto" && saved.cc === "CA", JSON.stringify(saved));
   check("the relay got exactly the rounded place", s.relayCalls.length === 1 && /lat=43\.65&lon=-79\.38$/.test(s.relayCalls[0].url), JSON.stringify(s.relayCalls.map((c) => c.url)));
-  check("Settings shows the place and offers REMOVE", await page.evaluate(() => document.getElementById("wx-place-desc").textContent === "TORONTO, ON, CA" && !document.getElementById("wx-remove-btn").hidden));
+  check("the page shows the place and offers REMOVE", await page.evaluate(() => document.getElementById("wx-place-desc").textContent === "TORONTO, ON, CA" && !document.getElementById("wx-remove-btn").hidden));
   check("the no-location button is gone", await page.evaluate(() => !document.getElementById("weather-actions").classList.contains("on")));
   const text2 = (await drawn(page)).map((t) => t[0]);
   check("the channel now reports Toronto", text2.includes("TORONTO, ON") && !text2.includes("SET YOUR LOCATION IN SETTINGS"), JSON.stringify(text2.slice(0, 6)));
+  // Back returns to the row, which now says the place and that the channel is on.
+  await page.keyboard.press("ArrowDown").catch(() => {});
+  await page.click("#chan-back");
+  const row1 = await page.evaluate(() => { const r = [...document.querySelectorAll("#channels-list-rows .chan-link")].find((b) => /LOCAL WEATHER/.test(b.textContent)); return { v: r.querySelector(".chan-link-value").textContent, focused: r.classList.contains("kfocus"), page: channelsPage, title: document.getElementById("config-pane-title").textContent }; });
+  check("Back returns to the row, with the cursor on it, saying TORONTO, ON \u00B7 ON", row1.page === "list" && row1.focused && row1.v === "TORONTO, ON \u00B7 ON" && row1.title === "CHANNELS & BUNDLES", JSON.stringify(row1));
+  await shot(page, "settings-weather-row-1920x1080");
+  await page.evaluate(() => { document.querySelector("#channels-list-rows .chan-link.kfocus").click(); });
+  await page.waitForFunction(() => channelsPage === "weather");
+  check("the row opens the page again, LOCATION first", await page.waitForFunction(() => document.activeElement && document.activeElement.id === "wx-change-btn", null, { timeout: 3000 }).then(() => true, () => false));
+  await page.keyboard.press("ArrowDown");
+  check("Up and Down walk the page's controls", await page.evaluate(() => document.activeElement && document.activeElement.id === "wx-remove-btn"));
+  await page.keyboard.press("ArrowLeft");
+  check("Left goes back a page, as on the others", await page.evaluate(() => channelsPage === "list"));
+  await page.evaluate(() => { openChannelsPage("weather"); });
   // The credit line.
   const credits = await page.evaluate(() => document.querySelector(".wx-credits").textContent);
   check("Settings carries the MET Norway, GeoNames, radar and Natural Earth credits and the privacy line", /MET Norway/.test(credits) && /CC BY 4\.0/.test(credits) && /GeoNames/.test(credits) && /Natural Earth/.test(credits) && /National Weather Service/.test(credits) && /Environment and Climate Change Canada/.test(credits) && /rounded to about a kilometre/.test(credits), credits);
@@ -340,9 +386,10 @@ for (const [tag, w, h, mobile] of SIZES) {
   await page.waitForFunction((id) => !CHANNELS.some((c) => c.id === id), CH_ID);
   await page.evaluate(() => { renderGrid(); });
   check("switch OFF: the channel leaves the guide and the picture goes", await page.evaluate((id) => !document.querySelector(`#grid-body > .grid-row[data-channel-id="${id}"]`) && !document.getElementById("weather-screen").classList.contains("on") && currentChannel !== id, CH_ID));
-  check("switch OFF: it is remembered", await page.evaluate(() => localStorage.getItem("nostalgex_weather_channel") === "0"));
+  check("switch OFF: it is remembered, and the row says OFF", await page.evaluate(() => localStorage.getItem("nostalgex_weather_channel") === "0" && wxStatusText() === "TORONTO, ON \u00B7 OFF"));
   await page.click("#wx-channel-toggle");
   await page.waitForFunction((id) => CHANNELS.some((c) => c.id === id), CH_ID);
+  check("the row says ON again", await page.evaluate(() => wxStatusText() === "TORONTO, ON \u00B7 ON"));
   check("switch ON: it is back, last in the guide", await page.evaluate((id) => CHANNELS[CHANNELS.length - 1].id === id, CH_ID));
   await page.click("#wx-remove-btn");
   check("REMOVE forgets the place and the saved forecast", await page.evaluate(() => !localStorage.getItem("nostalgex_weather_place") && !localStorage.getItem("nostalgex_weather_forecast") && !WX.place));
@@ -487,6 +534,41 @@ for (const [tag, w, h, mobile] of SIZES) {
   check("Docker: the forecast comes from www.nostalgex.app/api/weather, with the self-host client header, rounded", s.relayCalls.length === 1 && s.relayCalls[0].url === "https://www.nostalgex.app/api/weather?lat=43.65&lon=-79.38" && s.relayCalls[0].headers["x-nostalgex-client"] === "selfhost", JSON.stringify(s.relayCalls.map((c) => [c.url, c.headers["x-nostalgex-client"]])));
   check("Docker: the place list is the page's own (weather/places/), not a service", await page.evaluate(async () => { const r = await fetch("weather/places/meta.json"); return r.ok && (await r.json()).postcodes.includes("US"); }));
   check("Docker: no errors", s.errors.length === 0, s.errors.join(" | "));
+  await s.ctx.close();
+}
+
+// ═══ 5c. CH 299 tuned from a playing channel (Android drew the radar see-through over the last film): the old picture and sound stop, the weather is opaque, tuning away restores a channel ═══
+{
+  const s = await open({ width: 1920, height: 1080 });
+  const { page } = s;
+  const oid = await page.evaluate(() => CHANNELS.find((c) => !c.weather && c.enabled).id);
+  await tune(page, oid);
+  await page.waitForFunction(() => document.getElementById("plex-video").getAttribute("src"), null, { timeout: 10000 });
+  check("before: a normal channel is playing (the video has a source)", await page.evaluate(() => !!document.getElementById("plex-video").getAttribute("src")));
+  await tune(page, CH_ID);
+  await page.waitForFunction(() => document.getElementById("weather-screen").classList.contains("on") && WX.fonts, null, { timeout: 10000 });
+  await page.waitForTimeout(700);
+  const on = await page.evaluate(() => {
+    const v = document.getElementById("plex-video"), c = document.getElementById("weather-screen"), cs = getComputedStyle(c), r = c.getBoundingClientRect(), vr = document.getElementById("video-container").getBoundingClientRect();
+    const px = (x, y) => Array.from(c.getContext("2d").getImageData(x, y, 1, 1).data);
+    return { src: v.getAttribute("src"), paused: v.paused, hls: typeof hlsInstance === "undefined" ? null : hlsInstance, tracker: playbackTracker, bg: cs.backgroundColor, opacity: cs.opacity, display: cs.display, z: cs.zIndex,
+      corners: [px(0, 0), px(c.width - 1, 0), px(0, c.height - 1), px(c.width - 1, c.height - 1), px(960, 540)], covers: Math.abs(r.width - vr.width) < 2 && Math.abs(r.height - vr.height) < 2 && Math.abs(r.left - vr.left) < 2 };
+  });
+  check("tuning CH 299 stops the previous channel's video and sound (no source, paused, no player, no watch session)", on.src === null && on.paused && !on.hls && on.tracker === null, JSON.stringify(on));
+  check("the weather view is opaque: a solid background, full opacity, every drawn corner and the centre at alpha 255", /^rgb\(10, 10, 26\)$/.test(on.bg) && on.opacity === "1" && on.display === "block" && on.corners.every((p) => p[3] === 255), JSON.stringify([on.bg, on.opacity, on.corners]));
+  check("the weather view covers the whole picture, above the video", on.covers && Number(on.z) >= 2, JSON.stringify([on.covers, on.z]));
+  // A tune that has not started playing yet (the stream lookup is still in flight) must not start under the weather afterwards.
+  await page.evaluate((ids) => { switchChannel(ids.o, true); switchChannel(ids.w, true); }, { o: oid, w: CH_ID });
+  await page.waitForTimeout(2500);
+  const late = await page.evaluate(() => ({ src: document.getElementById("plex-video").getAttribute("src"), paused: document.getElementById("plex-video").paused, on: document.getElementById("weather-screen").classList.contains("on"), cur: currentChannel }));
+  check("a tune of another channel overtaken by CH 299 never starts its video under the weather", late.src === null && late.paused && late.on && late.cur === CH_ID, JSON.stringify(late));
+  await tune(page, oid);
+  await page.waitForFunction(() => document.getElementById("plex-video").getAttribute("src"), null, { timeout: 10000 });
+  const back = await page.evaluate(() => ({ on: document.getElementById("weather-screen").classList.contains("on"), actions: document.getElementById("weather-actions").classList.contains("on"), music: document.getElementById("weather-music").paused, timer: WX.timer, app: appState,
+    failure: document.getElementById("channel-display").classList.contains("has-failure"), src: !!document.getElementById("plex-video").getAttribute("src"), cur: currentChannel }));
+  check("tuning away: the weather view, its button, its loop and its timer are gone, the channel plays, no failure card", !back.on && !back.actions && back.music && back.timer === null && back.src && !back.failure && back.cur === oid, JSON.stringify(back));
+  check("tuning back to CH 299 again works and is opaque again", await (async () => { await tune(page, CH_ID); await page.waitForTimeout(700); return page.evaluate(() => { const c = document.getElementById("weather-screen"); return c.classList.contains("on") && Array.from(c.getContext("2d").getImageData(5, 5, 1, 1).data)[3] === 255 && !document.getElementById("plex-video").getAttribute("src"); }); })());
+  check("CH 299 over a channel: no errors", s.errors.length === 0, s.errors.join(" | "));
   await s.ctx.close();
 }
 

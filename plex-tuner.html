@@ -48,6 +48,7 @@
 <script src="scripts/nostalgex-guide-timeout.js"></script>
 <script src="scripts/nostalgex-library-refresh.js"></script>
 <script src="scripts/nostalgex-playback-recovery.js"></script>
+<script src="scripts/nostalgex-library-picker.js"></script>
 <script src="scripts/nostalgex-library-selection.js"></script>
 <script src="scripts/nostalgex-server-resolve.js"></script>
 <script src="scripts/nostalgex-weather.js"></script>
@@ -3839,6 +3840,7 @@
     font-family: 'VT323', monospace; font-weight: 400; font-size: max(14px, calc(var(--nx-fs) * 1.2)); letter-spacing: 0.08em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 0; box-sizing: border-box;
   }
+  .grid-stripe-label { pointer-events: auto; cursor: pointer; }
   .grid-stripe-label.focused { width: calc(var(--g-stripe) + 8px); outline: 3px solid var(--cyan); outline-offset: -1px; box-shadow: 0 0 14px rgba(0,196,255,0.9); border-radius: 8px; }
   .pkg-list {
     display: none; position: absolute; left: 0; top: 0; bottom: 0; z-index: 20;
@@ -4343,6 +4345,44 @@
         </div>
       </div>
 
+      <div id="channels-page-weather" data-page="weather" hidden>
+        <div class="chan-note">LOCAL WEATHER is channel 299: a loop of current conditions, today's forecast, the 5-day forecast and radar, with quiet music. Real buttons and a text box, so a TV browser with no keys can set it up.</div>
+        <div class="cfg-row cfg-row--wrap">
+          <div>
+            <div class="cfg-row-title">Location</div>
+            <div class="cfg-row-desc" id="wx-place-desc">Type a city or a postcode, then pick it from the matches.</div>
+          </div>
+          <div class="wx-actions">
+            <button class="plex-btn" id="wx-change-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxOpenSearch()">SET LOCATION</button>
+            <button class="plex-btn" id="wx-remove-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxClearPlace()" hidden>REMOVE</button>
+          </div>
+        </div>
+        <div class="wx-search" id="wx-search" hidden>
+          <input class="wx-input" id="wx-input" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="City or postcode" aria-label="City or postcode" oninput="wxSearchInput(this.value)" onkeydown="wxSearchKey(event)">
+          <div class="wx-hint" id="wx-hint" role="status"></div>
+          <div class="wx-results" id="wx-results" role="listbox" aria-label="Matching places"></div>
+        </div>
+        <div class="cfg-row cfg-row--wrap">
+          <div>
+            <div class="cfg-row-title">Units</div>
+            <div class="cfg-row-desc">AUTO uses Fahrenheit in the United States and Celsius everywhere else. <span id="wx-units-note"></span></div>
+          </div>
+          <div class="sleep-chips" id="wx-units-chips" role="group" aria-label="Weather units">
+            <button class="sleep-chip" type="button" data-units="auto" onclick="wxSetUnits('auto')" aria-pressed="true">AUTO</button>
+            <button class="sleep-chip" type="button" data-units="F" onclick="wxSetUnits('F')" aria-pressed="false">&deg;F</button>
+            <button class="sleep-chip" type="button" data-units="C" onclick="wxSetUnits('C')" aria-pressed="false">&deg;C</button>
+          </div>
+        </div>
+        <div class="cfg-row">
+          <div>
+            <div class="cfg-row-title">Show the weather channel</div>
+            <div class="cfg-row-desc">LOCAL WEATHER, channel 299, in the guide. Off takes it out.</div>
+          </div>
+          <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
+        </div>
+        <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service, Environment and Climate Change Canada and the Deutscher Wetterdienst (Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben, CC BY 4.0). Map outlines from Natural Earth. Music: an original loop played with the FluidR3_GM sound set (MIT). To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
+      </div>
+
       <div id="channels-page-collections" data-page="collections" hidden>
         <div class="chan-note">Collections on your server with 3 or more movies or episodes that are not movie series. Switch one on and it airs from CH 400. Movie series are under FRANCHISES.</div>
         <div id="collections-status" class="chan-note" style="margin-bottom: 12px;"></div>
@@ -4516,43 +4556,6 @@
           <button class="plex-btn plex-btn--toggle" id="cfg-auto-subs" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleAutoSubsForeignAudio()">ON</button>
         </div>
       </div>
-      <div class="config-section-label" id="wx-section" style="margin-top: 28px;">WEATHER</div>
-      <!-- LOCAL WEATHER, CH 299: a loop of current conditions, today's forecast, the 5-day forecast and radar. Real buttons and a text box,
-           so a TV browser with no keys can set it up. -->
-      <div class="cfg-row cfg-row--wrap">
-        <div>
-          <div class="cfg-row-title">Location</div>
-          <div class="cfg-row-desc" id="wx-place-desc">Type a city or a postcode, then pick it from the matches.</div>
-        </div>
-        <div class="wx-actions">
-          <button class="plex-btn" id="wx-change-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxOpenSearch()">SET LOCATION</button>
-          <button class="plex-btn" id="wx-remove-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxClearPlace()" hidden>REMOVE</button>
-        </div>
-      </div>
-      <div class="wx-search" id="wx-search" hidden>
-        <input class="wx-input" id="wx-input" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="City or postcode" aria-label="City or postcode" oninput="wxSearchInput(this.value)" onkeydown="wxSearchKey(event)">
-        <div class="wx-hint" id="wx-hint" role="status"></div>
-        <div class="wx-results" id="wx-results" role="listbox" aria-label="Matching places"></div>
-      </div>
-      <div class="cfg-row cfg-row--wrap">
-        <div>
-          <div class="cfg-row-title">Units</div>
-          <div class="cfg-row-desc">AUTO uses Fahrenheit in the United States and Celsius everywhere else. <span id="wx-units-note"></span></div>
-        </div>
-        <div class="sleep-chips" id="wx-units-chips" role="group" aria-label="Weather units">
-          <button class="sleep-chip" type="button" data-units="auto" onclick="wxSetUnits('auto')" aria-pressed="true">AUTO</button>
-          <button class="sleep-chip" type="button" data-units="F" onclick="wxSetUnits('F')" aria-pressed="false">&deg;F</button>
-          <button class="sleep-chip" type="button" data-units="C" onclick="wxSetUnits('C')" aria-pressed="false">&deg;C</button>
-        </div>
-      </div>
-      <div class="cfg-row">
-        <div>
-          <div class="cfg-row-title">Show the weather channel</div>
-          <div class="cfg-row-desc">LOCAL WEATHER, channel 299, in the guide. Off takes it out.</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle on" id="wx-channel-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="wxToggleChannel()" aria-label="Show the weather channel" aria-pressed="true">ON</button>
-      </div>
-      <p class="wx-credits">Weather data from <a href="https://api.met.no/" target="_blank" rel="noopener noreferrer">MET Norway</a> (api.met.no), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, rearranged for display. Place names from <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (geonames.org), CC BY 4.0. Radar from the US National Weather Service, Environment and Climate Change Canada and the Deutscher Wetterdienst (Datenbasis: Deutscher Wetterdienst, Rasterdaten bildlich wiedergegeben, CC BY 4.0). Map outlines from Natural Earth. Music: an original loop played with the FluidR3_GM sound set (MIT). To get the forecast, the place you pick is sent, rounded to about a kilometre, to nostalgex.app and on to MET Norway.</p>
     </div>
 
     <div id="config-tab-server" style="display:none" tabindex="-1">
@@ -4562,14 +4565,6 @@
         <div id="cfg-library-coverage-wrap" style="display:none; margin: 0 0 4px; padding: 0 4px;">
           <div id="cfg-library-coverage" style="font-size: var(--fs-desc); color: rgba(255,255,255,0.7); letter-spacing: 0.06em; line-height: 1.5;"></div>
         </div>
-      <!-- Jellyfin only: shown by updateIncludeHiddenControls(). Off unless switched on. -->
-      <div class="cfg-row" id="cfg-include-hidden-row" hidden>
-        <div>
-          <div class="cfg-row-title">Include libraries hidden on Jellyfin</div>
-          <div class="cfg-row-desc">Jellyfin lets you hide a library from your home screen. Off keeps those out of your channels.</div>
-        </div>
-        <button class="plex-btn plex-btn--toggle" id="cfg-include-hidden-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleIncludeHiddenLibraries()" aria-label="Include libraries hidden on Jellyfin" aria-pressed="false">OFF</button>
-      </div>
         <div class="cfg-row" id="cfg-rescan-row">
           <div>
             <div class="cfg-row-title">RESCAN LIBRARY</div>
@@ -5040,7 +5035,7 @@
     place: null, units: 'auto', channelOn: !!WXE,
     met: null, metKey: '', savedMs: 0, expiresMs: 0, loading: false, failedMs: 0, model: null, status: 'noplace',
     radar: { status: 'none', key: '', frames: [], provider: null, base: null, loadedMs: 0, loading: false },
-    basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false,
+    basemap: null, timer: null, lastCheckMs: 0, lastBuildMs: 0, fonts: false, guideLabel: '',
     index: null, results: [], searchSeq: 0, searchTimer: null,
   };
   function wxStored(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -5099,6 +5094,9 @@
       WX.expiresMs = 0;
     }
     if (wxActive()) buildChannelSchedule(WX_CHANNEL);
+    // The bar in the guide carries the temperature: draw it again when that text changes.
+    const label = wxGuideLabel();
+    if (label !== WX.guideLabel) { WX.guideLabel = label; if (guideVisible) renderActiveGuide(); }
   }
   async function wxEnsureForecast(force) {
     if (!WX.place) { WX.status = 'noplace'; WX.model = null; return; }
@@ -5298,28 +5296,18 @@
     if (a && !a.paused) a.pause();
   }
 
-  // The guide row and the info panel: hour-long blocks, and a summary of what the channel says now.
+  // The guide row and the info panel. LOCAL WEATHER is an endless loop (Chad, 2026-11-16: "1 full width bar, no scheduled sections"): one
+  // item that is always live. No blocks and no times, so the guide's programme cursor has nothing to step through (_manifestBlocks is
+  // null: Left and Right do not move on it), the row is one bar at every time position, and there is no UP NEXT.
   function buildWeatherSchedule(ch, nowSec = Date.now() / 1000) {
-    const blocks = WXE.guideBlocks(wxPlaceTitle(), nowSec * 1000, 26);
     const summary = WX.model ? WXE.infoSummary(WX.model, wxUnits()) : (WX.place ? '' : 'Set your location in Settings to see the forecast.');
-    blocks.forEach((b) => { if (summary) b.item.summary = summary; });
     ch._live = null;
     ch._guide = null;
-    ch._manifestBlocks = blocks;
-    const i = blocks.findIndex((b) => nowSec >= b.startSec && nowSec < b.endSec);
-    const rows = blocks.slice(Math.max(i, 0), Math.max(i, 0) + 4);
-    ch.schedule = rows.map((b, j) => {
-      const item = { ...b.item, startSec: b.startSec, endSec: b.endSec };
-      if (j === 0) {
-        const span = b.endSec - b.startSec;
-        item.progress = ((nowSec - b.startSec) / span) * 100;
-        item.position = formatTime(nowSec - b.startSec);
-        item.total = formatTime(span);
-        item.offsetSeconds = 0;
-      }
-      return item;
-    });
+    ch._manifestBlocks = null;
+    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary), progress: 100, position: '', total: '' }];
   }
+  /** What the guide's bar says. */
+  function wxGuideLabel() { return WXE.guideBarText(WX.model, wxUnits()); }
 
   // Settings: LOCATION, UNITS, and the channel's switch.
   function wxPlaceIndex() {
@@ -5447,14 +5435,21 @@
     }
     if (guideVisible) renderActiveGuide();
   }
+  /** What the LOCAL WEATHER row in CHANNELS & BUNDLES says: the place and whether the channel is on ("BUFFALO, NY \u00B7 ON"), or NOT SET. */
+  function wxStatusText() {
+    if (!WXE || !WX.place) return 'NOT SET';
+    const p = WX.place;
+    const where = [p.name, (p.cc === 'US' || p.cc === 'CA' || p.cc === 'AU') && p.region ? p.region : p.cc].filter(Boolean).join(', ').toUpperCase();
+    return `${where} \u00B7 ${WX.channelOn ? 'ON' : 'OFF'}`;
+  }
   /** The button on the channel's own card: straight to the setting, for a TV browser with no keys. */
   function wxOpenSettings() {
     showConfig();
-    switchConfigTab('general');
-    const sec = document.getElementById('wx-section');
-    if (sec) sec.scrollIntoView({ block: 'start' });
+    switchConfigTab('bundles');
+    bundleFocusIndex = channelsListRowsModel().findIndex((r) => r.page === 'weather');
+    openChannelsPage('weather');
     wxOpenSearch();
-    // Settings moves focus into itself as it opens; the box takes it back once that is done.
+    // The page moves focus into itself as it opens; the box takes it back once that is done.
     setTimeout(() => { const i = document.getElementById('wx-input'); if (i && !document.getElementById('wx-search').hidden) i.focus({ preventScroll: true }); }, 150);
   }
   // The text size can change under a drawn channel.
@@ -5755,51 +5750,6 @@
   function rememberLastChannel(ch) {
     const value = NostalgexLastChannel.serialize(ch);
     if (value) lsSet(NostalgexLastChannel.CHANNEL_KEY, value);
-  }
-
-  // ── INCLUDE LIBRARIES HIDDEN ON JELLYFIN ────────────────────────────────────
-  // Jellyfin only. Off unless the viewer turns it on (the default is INCLUDE_HIDDEN_DEFAULT in
-  // scripts/nostalgex-jellyfin-urls.js, point 13 there has why), kept per browser. A library the
-  // viewer hid from the Jellyfin home screen is then asked for and scanned. Switching it reads the
-  // library again once, in the background (the guide, the channel playing and Settings stay as they are).
-  function includeHiddenOn() {
-    return NostalgexJellyfinUrls.includeHiddenLibraries();
-  }
-
-  function updateIncludeHiddenControls() {
-    const row = document.getElementById('cfg-include-hidden-row');
-    const button = document.getElementById('cfg-include-hidden-toggle');
-    if (!row || !button) return;
-    row.hidden = mediaBackend !== 'jellyfin';
-    const on = includeHiddenOn();
-    button.textContent = on ? 'ON' : 'OFF';
-    button.classList.toggle('on', on);
-    button.setAttribute('aria-pressed', String(on));
-  }
-
-  let includeHiddenReading = false;
-  async function toggleIncludeHiddenLibraries() {
-    // A press while the last one is still being read does nothing: two reads at once would race for the library.
-    if (mediaBackend !== 'jellyfin' || includeHiddenReading) return;
-    // lsSet says whether it saved. Nothing is read again if it did not: the scan reads this same
-    // key, so a choice it cannot read would change nothing.
-    if (!lsSet(NostalgexJellyfinUrls.INCLUDE_HIDDEN_KEY, includeHiddenOn() ? '0' : '1')) { updateIncludeHiddenControls(); return; }
-    updateIncludeHiddenControls();
-    // What was saved was read the other way: drop it, so a failed read below is not followed by a
-    // visit that restores a library the switch no longer describes.
-    clearLibraryCache();
-    includeHiddenReading = true;
-    try {
-      // In the background, as the daily refresh reads: the guide stays up, the channel that is playing keeps
-      // playing and Settings stays open. A foreground read ends by tuning the first channel (tuneFirstOrShowEmpty),
-      // which would take a viewer on any other channel off it.
-      await fetchLibraryFromServer({ background: true, buildAllChannels: false, cause: 'switch' });
-    } catch (err) {
-      console.warn('[Nostalgex] Library rescan after the hidden libraries switch failed:', err);
-    } finally {
-      includeHiddenReading = false;
-      if (typeof refreshLibraryRows === 'function') refreshLibraryRows();
-    }
   }
 
   // A link can name the channel to open on: plex-tuner.html?channel=<number>, the number the guide shows (the web's counterpart of the
@@ -6115,6 +6065,16 @@
   // True only when this visit came straight from a sign-in (the landing page hands the session over, or a
   // Plex code was just approved). A restored saved login never opens CHOOSE YOUR LIBRARIES.
   let libraryPickAllowed = false;
+  // A sign-in just happened on this visit (rule 9 of scripts/nostalgex-library-picker.js): the choices start again and the
+  // picker is offered, as on the Apple TV. A reload, a saved login coming back and a rescan are not sign-ins.
+  let signInPending = false;
+  const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  function beginSignInChoices() {
+    try { globalThis.NostalgexLibrarySelection.resetForSignIn(); } catch (e) { /* the choices stay as they were */ }
+    try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    libraryPickAllowed = true;
+    signInPending = true;
+  }
   let appState = 'connect'; // 'connect' | 'player' | 'guide' | 'config'
   let discoveredGenres = {}; // { genreName: itemCount }
   let allItemsCache = []; // cached items for populating new channels
@@ -6245,7 +6205,6 @@
     updateSyncActivityControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
-    updateIncludeHiddenControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
     const menuBtn = document.getElementById('m-menu-btn');
@@ -6727,8 +6686,17 @@
       const progsCol = document.createElement('div');
       progsCol.className = 'grid-row-programs';
 
-      if (ch.weather || (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0)) {
-        const items = ch.weather ? [] : getTimeFilteredPool(ch);
+      if (ch.weather) {
+        // One bar across the whole row: no blocks, no times, on now at every position of the guide's window.
+        const bar = document.createElement('div');
+        bar.className = 'grid-program grid-program--live now-playing';
+        bar.style.width = '100%';
+        bar.style.background = `${ch.colorHex}22`;
+        bar.textContent = wxGuideLabel();
+        bar.title = bar.textContent;
+        progsCol.appendChild(bar);
+      } else if (ch.schedule && ch.schedule.length > 0 && ch.itemPool && ch.itemPool.length > 0) {
+        const items = getTimeFilteredPool(ch);
         const nowSec = nowMs / 1000;
         const windowStartSec = windowStartMs / 1000;
 
@@ -6995,7 +6963,7 @@
     document.getElementById('np-meta').textContent = now.meta || '';
     document.getElementById('np-progress').style.width = (now.progress || 0) + '%';
     document.getElementById('np-progress').style.background = ch.color;
-    document.getElementById('np-time').textContent = `${now.position || '0:00'} / ${now.total || ''}`;
+    document.getElementById('np-time').textContent = ch.weather ? 'LIVE' : `${now.position || '0:00'} / ${now.total || ''}`;
     document.getElementById('np-upnext').innerHTML = next
       ? `<strong>UP NEXT</strong> ${escapeHtml(itemGuideTitle(next))}`
       : '';
@@ -7909,7 +7877,12 @@
       labelEl.textContent = NostalgexUpNext.label(upNextSeconds);
       upNextEl.append(titleEl, '  ', labelEl);
     }
-    if (ch.weather) upNextEl.textContent = '';   // the loop has no "up next"
+    if (ch.weather) {
+      // An endless loop: always live, no times, nothing up next.
+      upNextEl.textContent = '';
+      document.getElementById('info-time').textContent = 'LIVE';
+      document.getElementById('info-progress').style.width = '100%';
+    }
   }
 
   // The year, the content rating and the star rating (and a music video's genre); the programme's length is in the progress line.
@@ -8139,6 +8112,13 @@
     for (const el of document.querySelectorAll('.grid-program--cursor')) el.classList.remove('grid-program--cursor');
     for (const el of document.querySelectorAll('.grid-row--has-cursor')) el.classList.remove('grid-row--has-cursor');
     const entries = focusedGuideEntries();
+    if (guideVisible && !guideStripeMode && !guidePromoKey) {
+      // The weather channel's one bar is always the cursor's cell on its row, whatever time the cursor is at.
+      const fch = getEnabledChannels()[guideFocusIndex];
+      const wrow = fch && fch.weather ? document.querySelector('.grid-row.focused:not(.grid-row--promo)') : null;
+      const bar = wrow ? wrow.querySelector('.grid-program--live') : null;
+      if (bar) { bar.classList.add('grid-program--cursor'); wrow.classList.add('grid-row--has-cursor'); return; }
+    }
     if (!entries || !guideVisible || guideStripeMode) return;
     const row = document.querySelector('.grid-row.focused:not(.grid-row--promo)');
     if (!row) return;
@@ -9788,6 +9768,7 @@
     bundles:     { title: 'CHANNEL BUNDLES', sub: 'Each bundle adds a set of channels', parent: 'list' },
     franchises:  { title: 'FRANCHISES', sub: 'The classics, the series in your library and your server\'s movie-series collections', parent: 'list' },
     collections: { title: 'MY COLLECTIONS', sub: 'Turn your server\'s collections into channels', parent: 'list' },
+    weather:     { title: 'LOCAL WEATHER', sub: 'The weather channel, CH 299: where, in what units, and whether it is in the guide', parent: 'list' },
     missing:     { title: 'MISSING CHANNELS', sub: 'A channel goes on air once your library has enough titles that fit it', parent: 'bundles' },
   };
 
@@ -9816,6 +9797,8 @@
   function openChannelsPage(page) {
     channelsReturnIndex[channelsPage] = bundleFocusIndex;
     showChannelsPage(page);
+    // LOCAL WEATHER's page is controls, not rows: the cursor starts on LOCATION.
+    if (page === 'weather') setTimeout(() => { const b = document.getElementById('wx-change-btn'); if (b && channelsPage === 'weather') b.focus({ preventScroll: true }); }, 0);
   }
   /** Back a page. False when already at the list (the caller then leaves the category as before). */
   function channelsGoBack() {
@@ -9838,6 +9821,7 @@
       { page: 'bundles', title: 'CHANNEL BUNDLES', value: `${on} ON` },
       { page: 'franchises', title: 'FRANCHISES', value: franchisePackageOn() ? `${fOn} ON` : 'OFF' },
       { page: 'collections', title: 'MY COLLECTIONS', value: `${cOn} ON` },
+      { page: 'weather', title: 'LOCAL WEATHER', value: wxStatusText() },
     ];
   }
   function renderChannelsList() {
@@ -9934,6 +9918,7 @@
     if (bundleFocusIndex >= model.total) bundleFocusIndex = Math.max(0, model.total - 1);
     if (channelsPage === 'list') { renderChannelsList(); return; }
     if (channelsPage === 'missing') { renderMissingCards(); return; }
+    if (channelsPage === 'weather') { wxRenderSettings(); return; }
     if (channelsPage === 'franchises') { renderFranchiseList(model); return; }
     if (channelsPage === 'collections') { renderCollectionList(); return; }
     container.innerHTML = '';
@@ -9957,6 +9942,7 @@
     if (channelsPage === 'list') total = channelsListRowsModel().length + 1;                          // the three links and WATERSHED
     else if (channelsPage === 'bundles' && missingCountOf(missingChannelGroups()) > 0) total += 1;   // WHY ARE SOME CHANNELS MISSING?
     else if (channelsPage === 'missing') total = missingCountOf(missingChannelGroups());
+    else if (channelsPage === 'weather') total = 1;   // its controls are walked by focus (wxPageKeys), not by row index
     return { packages, franchises, collections, total };
   }
 
@@ -10379,25 +10365,29 @@
   // ══════════════════════════════════════
   // LIBRARY SELECTION: CHOOSE YOUR LIBRARIES (first setup) and the LIBRARIES rows in Settings
   // ══════════════════════════════════════
-  // One list of each server's libraries (read without scanning a title), one stored OFF set
-  // (scripts/nostalgex-library-selection.js, key <serverId>::<sectionKey>, nothing off by default) that the
-  // scan loops read. The picker and the Settings rows share both, so they never disagree.
+  // One list of each server's libraries (read without scanning a title), one stored choice
+  // (scripts/nostalgex-library-selection.js, key <serverId>::<sectionKey>, everything on by default except a library
+  // Jellyfin hides from its home screen) that the scan loops read. The picker and the Settings rows share both, so they
+  // never disagree. The rules (which types are listed, what starts on) are scripts/nostalgex-library-picker.js, pinned by
+  // scripts/library-picker-golden.json.
   let knownLibrarySections = [];
+
+  // The second ask of a Jellyfin user's libraries is NostalgexLibraryPicker.fetchHiddenViews: /UserViews with
+  // includeHidden=true, which also lists the ones the user hides from the home screen. Null when it is not asked
+  // (Emby has no such parameter) or it fails: the plain list then stands and nothing is marked hidden (rule 5 there).
 
   async function listLibrarySections() {
     const LSEL = globalThis.NostalgexLibrarySelection;
+    const LP = globalThis.NostalgexLibraryPicker;
     const out = [];
     if (isMediaBrowserBackend(mediaBackend)) {
-      // The same request the scan makes, so the hidden-libraries switch decides what is listed.
-      const url = plexServerUrl + NostalgexJellyfinUrls.userViewsPath(mediaBackend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
-      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() } });
+      // The same two asks the scan makes: the plain list, then the list with the libraries the user hides.
+      const headers = { 'Accept': 'application/json', 'Authorization': jellyfinAuthHeader() };
+      const res = await fetch(plexServerUrl + NostalgexJellyfinUrls.userViewsPath(mediaBackend, jellyfinUserId, false), { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status} from the library list`);
       const data = await res.json();
-      for (const v of (data.Items || [])) {
-        const type = NostalgexJellyfinUrls.sectionType(v.CollectionType);
-        if (type === 'other') continue;   // Playlists, Music, Photos: never scanned, so never listed
-        out.push({ serverId: LSEL.mediaBrowserServerId(plexServerUrl), serverName: plexServerName || backendDisplayName(), key: v.Id, title: v.Name || 'Library', type });
-      }
+      const all = mediaBackend === 'jellyfin' ? await NostalgexLibraryPicker.fetchHiddenViews(fetch, plexServerUrl + NostalgexJellyfinUrls.userViewsPath('jellyfin', jellyfinUserId, true), { headers }) : null;
+      out.push(...LSEL.mediaBrowserViews(mediaBackend, plexServerUrl, plexServerName || backendDisplayName(), data.Items || [], all).rows);
     } else {
       const servers = selectedServers.length > 0
         ? selectedServers
@@ -10407,10 +10397,7 @@
         try {
           const sections = await NC.fetchPlexPaged(
             (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
-          for (const sec of sections) {
-            if (sec.type === 'photo') continue;
-            out.push({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type });
-          }
+          out.push(...LP.plexListed(LSEL.plexServerId(server), server.name, sections));
         } catch (err) {
           console.warn(`[Nostalgex] Could not list the libraries of ${server.name}:`, err);
         }
@@ -10418,7 +10405,7 @@
     }
     return out;
   }
-  function librarySectionOn(sec) { return !globalThis.NostalgexLibrarySelection.isOff(sec.serverId, sec.key); }
+  function librarySectionOn(sec) { return globalThis.NostalgexLibrarySelection.sectionOn(sec); }
   function librarySectionsMultiServer(list) { return new Set(list.map(x => x.serverId)).size > 1; }
 
   // ---- the setup screen ----
@@ -10445,7 +10432,7 @@
         row.setAttribute('role', 'checkbox'); row.setAttribute('tabindex', '0'); row.setAttribute('aria-checked', on ? 'true' : 'false');
         row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
         row.innerHTML = `<div class="setup-row-main"><div class="setup-row-title">${escapeHtml(sec.title)}</div><div class="setup-row-sub">${escapeHtml(LSEL.subtitle(sec, multi))}</div></div><div class="setup-row-state">${on ? 'INCLUDED' : 'OFF'}</div>`;
-        row.addEventListener('click', () => { if (LSEL.setOff(sec.serverId, sec.key, on)) render(row.dataset.key); });
+        row.addEventListener('click', () => { if (LSEL.setSectionOn(sec, !on)) render(row.dataset.key); });
         list.appendChild(row);
       });
       picker.appendChild(list);
@@ -10473,12 +10460,15 @@
     if (picker && picker.dataset.canGoBack && picker._finish) picker._finish('back');
   }
 
-  // First setup only: an existing install (initial load done) never sees it. Skipped, silently, if the
-  // libraries cannot be listed or there are none: the scan then runs as it always did.
-  const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  // At a sign-in, and while a first setup is not finished: a reload or a saved login on an install that has loaded
+  // before never sees it. Offered only when there is something to choose (more than one library, or a hidden one;
+  // rule 8 of scripts/nostalgex-library-picker.js). Skipped, silently, if the libraries cannot be listed or there is
+  // nothing to choose: the scan then runs as it always did.
   async function maybeChooseLibraries() {
     const LL = globalThis.NostalgexLibraryLoad;
-    if (!libraryPickAllowed || !LL || !LL.isFirstLibraryLoad() || localStorage.getItem(LIBRARY_PICK_SEEN_KEY) === '1') return 'skip';
+    const signedIn = signInPending;
+    signInPending = false;
+    if (!libraryPickAllowed || !LL || !(signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) return 'skip';
     // While the list loads, the same left-hand copy shows with one quiet line on the right.
     const picker = document.getElementById('library-picker');
     document.getElementById('plex-connect').style.display = '';
@@ -10491,8 +10481,8 @@
     if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
     let sections;
     try { sections = await listLibrarySections(); } catch (err) { console.warn('[Nostalgex] Library list failed, scanning everything:', err); picker.classList.remove('active'); return 'skip'; }
-    if (!sections.length) { picker.classList.remove('active'); return 'skip'; }
     knownLibrarySections = sections;
+    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) { picker.classList.remove('active'); return 'skip'; }
     const canGoBack = !isMediaBrowserBackend(mediaBackend) && discoveredServers.length > 1;
     const how = await showLibrarySelection(sections, canGoBack);
     if (how === 'back') { document.getElementById('library-picker').classList.remove('active'); showServerPicker(); return 'back'; }
@@ -10516,7 +10506,7 @@
       row.className = 'cfg-row';
       row.setAttribute('role', 'checkbox'); row.tabIndex = 0; row.setAttribute('aria-checked', on ? 'true' : 'false');
       row.dataset.rowAction = 'self'; row.dataset.key = LSEL.sectionId(sec.serverId, sec.key);
-      row.innerHTML = `<div><div class="cfg-row-title">${escapeHtml(sec.title)}</div><div class="cfg-row-desc">${escapeHtml(last ? LSEL.typeLabel(sec.type, sec.title) + ' · only enabled library' : LSEL.subtitle(sec, multi))}</div></div><div class="cfg-row-state${on ? ' on' : ''}">${on ? 'INCLUDED' : 'OFF'}</div>`;
+      row.innerHTML = `<div><div class="cfg-row-title">${escapeHtml(sec.title)}</div><div class="cfg-row-desc">${escapeHtml(last ? LSEL.subtitle(sec, false) + ' · only enabled library' : LSEL.subtitle(sec, multi))}</div></div><div class="cfg-row-state${on ? ' on' : ''}">${on ? 'INCLUDED' : 'OFF'}</div>`;
       row.addEventListener('click', () => toggleLibrarySection(sec));
       host.appendChild(row);
     });
@@ -10546,7 +10536,7 @@
     const LSEL = globalThis.NostalgexLibrarySelection;
     const wasOn = librarySectionOn(sec);
     if (wasOn && knownLibrarySections.filter(librarySectionOn).length <= 1) return;
-    if (!LSEL.setOff(sec.serverId, sec.key, wasOn)) return;
+    if (!LSEL.setSectionOn(sec, !wasOn)) return;
     clearLibraryCache();
     renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
     rescanLibrary({ cause: 'switch' });
@@ -10573,7 +10563,7 @@
         const NC = globalThis.NostalgexCollections;
         const all = await NC.fetchPlexPaged(
           (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server, { timeoutMs: 8000 }), '/library/sections', 'Directory');
-        const sections = all.filter(d => d.type !== 'photo');
+        const sections = all.filter(d => NostalgexLibraryPicker.isPlexVideoType(d.type));
         per.push(NostalgexLibraryRefresh.signature(server.machineIdentifier || server.name || server.url, sections));
       } catch (e) { return null; }
     }
@@ -10758,7 +10748,6 @@
     updateAutoSubsControls();
     updateWatershedControls();
     updateOpenLastChannelControls();
-    updateIncludeHiddenControls();
   }
 
   function hideConfig() {
@@ -11081,10 +11070,11 @@
         selectedServerIndices = new Set([0]);
         confirmMultiServerSelection();
       } else {
-        // Default: exactly one server on, the first one you own (else the first listed). The rest
-        // start OFF and are one press away, so a first setup never scans a friend's server by surprise.
-        const firstOwned = discoveredServers.findIndex(sv => sv.owned);
-        selectedServerIndices = new Set([firstOwned >= 0 ? firstOwned : 0]);
+        // Default, as the Apple TV: every server you own is on, and servers shared with you start OFF and are one press
+        // away, so a first setup never scans a friend's server by surprise. With none of your own, all start on
+        // (scripts/nostalgex-library-picker.js, rule 4; scripts/library-picker-golden.json `serverDefaults`).
+        const startOn = new Set(NostalgexLibraryPicker.defaultServerIds(discoveredServers.map((sv, i) => ({ id: i, owned: !!sv.owned }))));
+        selectedServerIndices = new Set(discoveredServers.map((sv, i) => i).filter(i => startOn.has(i)));
         showServerPicker();
       }
     } catch (err) {
@@ -11248,7 +11238,7 @@
 
     plexConnected = true;
     updateConfigPlexStatus();
-    libraryPickAllowed = true;
+    beginSignInChoices();
     await fetchPlexLibrary();
   }
 
@@ -11308,6 +11298,11 @@
       // Hide connect screen immediately so Jellyfin users don't see "CONNECT WITH PLEX" during validation.
       document.getElementById('plex-connect').style.display = 'none';
       libraryPickAllowed = true;
+      // The start screen sets this flag when it signs the viewer in (and not when a saved login comes back).
+      if (sessionStorage.getItem('plex90_fresh_signin') === '1') {
+        sessionStorage.removeItem('plex90_fresh_signin');
+        beginSignInChoices();
+      }
     }
 
     // Re-read backend selection (web-tuner.html sets this before redirecting here).
@@ -12208,7 +12203,10 @@
       for (const server of servers) {
         const serverKey = server.machineIdentifier || 'plex';
         try {
-          const list = await CL.fetchPlexCollections(serverKey, (path, win) => plexLibraryFetchForServer(CL.plexWindowPath(path, win), server), progress);
+          // A library the viewer switched off is not read, so its collections are not either.
+          const LSEL = globalThis.NostalgexLibrarySelection;
+          const list = await CL.fetchPlexCollections(serverKey, (path, win) => plexLibraryFetchForServer(CL.plexWindowPath(path, win), server), progress,
+            (sec) => LSEL.sectionOn({ serverId: LSEL.plexServerId(server), key: String(sec.key), hidden: false }));
           found = found.concat(list);
           anyOK = true;
         } catch (err) {
@@ -12481,10 +12479,10 @@
     // From here to the end of the library loop the scan is watched for silence (STOP WAITING).
     if (!background) startScanWatch(LL);
 
-    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). Jellyfin
-    // adds includeHidden=true only when the viewer has switched on INCLUDE LIBRARIES HIDDEN ON JELLYFIN
-    // (point 13 there); off, the request is what it always was.
-    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, NostalgexJellyfinUrls.includeHiddenLibraries());
+    // /UserViews on Jellyfin, /Users/{id}/Views on Emby (scripts/nostalgex-jellyfin-urls.js). The plain list is the
+    // request it always was; Jellyfin is then asked once more with includeHidden=true (point 13 there), and a library
+    // only that list has is one the user hides from the home screen: listed, marked, and read only once switched on.
+    const viewsUrl = (backend) => plexServerUrl + NostalgexJellyfinUrls.userViewsPath(backend, jellyfinUserId, false);
     let viewsRes;
     try {
       viewsRes = await fetch(viewsUrl(mediaBackend), { headers, signal: scanSignal() });
@@ -12511,15 +12509,15 @@
       throw e;
     }
     const viewsData = await viewsRes.json();
-    // A library the viewer switched off is never read. Nothing is off by default.
+    // The libraries that hold videos, each marked hidden or not (scripts/nostalgex-library-picker.js). A library the
+    // viewer switched off is never read, and a hidden one only once the viewer has switched it on. Nothing else is off.
+    const hiddenList = mediaBackend === 'jellyfin' ? await globalThis.NostalgexLibraryPicker.fetchHiddenViews(fetch, plexServerUrl + NostalgexJellyfinUrls.userViewsPath('jellyfin', jellyfinUserId, true), { headers, signal: scanSignal() }) : null;
+    if (hiddenList === null && mediaBackend === 'jellyfin' && scanIsAbandoned()) throw abandonedScanError();
+    if (hiddenList) noteScanAnswer();
     const LSEL = globalThis.NostalgexLibrarySelection;
-    const NJU = globalThis.NostalgexJellyfinUrls;
-    if (LSEL && LSEL.noteListing && NJU) {
-      const sid = LSEL.mediaBrowserServerId(plexServerUrl);
-      LSEL.noteListing(sid, (viewsData.Items || []).map(v => ({ serverId: sid, serverName: plexServerName || 'Server', key: v.Id, title: v.Name || 'Library', type: NJU.sectionType(v.CollectionType) }))
-        .filter(x => x.type !== 'other'));
-    }
-    const views = (viewsData.Items || []).filter(v => !LSEL || !LSEL.isOff(LSEL.mediaBrowserServerId(plexServerUrl), v.Id));
+    const picked = LSEL.mediaBrowserViews(mediaBackend, plexServerUrl, backendDisplayName(), viewsData.Items || [], hiddenList);
+    const chosen = LSEL.state();
+    const views = picked.views.filter((v, i) => globalThis.NostalgexLibraryPicker.isOn(picked.rows[i], chosen));
     LL.state.scanTotalSections = views.length;
     LL.state.scanSectionIndex = 0;
     await LL.pulsePhase('scanningLibrary', `${views.length} libraries`);
@@ -13054,11 +13052,15 @@
     const NC = globalThis.NostalgexCollections;
     const allSections = await NC.fetchPlexPaged(
       (path, win) => plexLibraryFetchForServer(NC.plexWindowPath(path, win), server), '/library/sections', 'Directory');
-    // A library the viewer switched off (CHOOSE YOUR LIBRARIES, Settings) is never read. Nothing is off by default.
+    // Only movie and show libraries are listed and read: a Music or Photo library gave every row up for having no runtime
+    // (scripts/nostalgex-library-picker.js, rule 1). A library the viewer switched off (CHOOSE YOUR LIBRARIES, Settings)
+    // is never read either. Nothing is off by default.
     const LSEL = globalThis.NostalgexLibrarySelection;
-    if (LSEL && LSEL.noteListing) LSEL.noteListing(LSEL.plexServerId(server), allSections.filter(sec => sec.type !== 'photo')
-      .map(sec => ({ serverId: LSEL.plexServerId(server), serverName: server.name, key: sec.key, title: sec.title, type: sec.type })));
-    const sections = LSEL ? allSections.filter(sec => !LSEL.isOff(LSEL.plexServerId(server), sec.key)) : allSections;
+    const listedRows = globalThis.NostalgexLibraryPicker.plexListed(LSEL.plexServerId(server), server.name, allSections);
+    LSEL.noteListing(LSEL.plexServerId(server), listedRows);
+    const chosen = LSEL.state();
+    const onKeys = new Set(listedRows.filter(row => globalThis.NostalgexLibraryPicker.isOn(row, chosen)).map(row => row.key));
+    const sections = allSections.filter(sec => onKeys.has(String(sec.key)));
     const serverPrefix = multiServer ? `${server.name} · ` : '';
 
     LL.state.scanTotalSections = sections.length;
@@ -13294,10 +13296,14 @@
   // content, say so (issue #129). Without this the screen stayed black with nothing to press.
   const emptyGuideShown = () => document.getElementById('plex-empty').style.display === 'flex';
   function tuneFirstOrShowEmpty() {
+    // A load that ends while Settings is open (a server switch) leaves the viewer in Settings: the channel is tuned and the empty state is
+    // set behind it, but the app state stays 'config' (a tune sets it to 'player', and the keys read it), and closing Settings sets it right.
+    const inSettings = configVisible && appState === 'config';
     const firstEnabled = channelToOpenOn();
     if (firstEnabled) {
       hideEmptyGuideState();
       switchChannel(firstEnabled.id);
+      if (inSettings) appState = 'config';
       return;
     }
     // Never leave this behind browser full screen.
@@ -13306,7 +13312,7 @@
     document.getElementById('plex-actions').style.display = 'none';
     document.getElementById('plex-empty').style.display = 'flex';
     document.getElementById('plex-connect').style.display = 'grid';
-    appState = 'connect';
+    appState = inSettings ? 'config' : 'connect';
   }
   function hideEmptyGuideState() {
     document.getElementById('plex-empty').style.display = 'none';
@@ -13557,7 +13563,7 @@
 
     // Always update progress bar and time (cheap DOM writes)
     document.getElementById('np-progress').style.width = (now.progress || 0) + '%';
-    document.getElementById('np-time').textContent = `${now.position || '0:00'} / ${now.total || ''}`;
+    document.getElementById('np-time').textContent = ch.weather ? 'LIVE' : `${now.position || '0:00'} / ${now.total || ''}`;
 
     updateInfoPanel();
   }
@@ -13669,6 +13675,11 @@
         return;
       }
       // Bundle tab keyboard navigation
+      if (configTab === 'bundles' && channelsPage === 'weather' && (key === 'ArrowDown' || key === 'ArrowUp')) {
+        moveConfigFocus(key === 'ArrowDown' ? 1 : -1);   // controls, not rows: LOCATION, the units, the switch, back
+        e.preventDefault();
+        return;
+      }
       if (configTab === 'bundles') {
         if (key === 'ArrowDown') {
           bundleFocusIndex = Math.min(bundleFocusIndex + 1, bundleTabModel().total - 1);
@@ -13718,10 +13729,12 @@
 
     // Guide navigation (when guide is visible and focused)
     if (appState === 'guide' || (guideVisible && appState === 'player')) {
-      // On the package stripe: Up and Down jump between packages, Right (or Enter) goes back to the rows, Left opens the list.
+      // On the package stripe: Up and Down step between packages (wrapping), select (Enter or Space) jumps the guide to the first channel of
+      // the bundle the stripe is on, Right (or Esc) goes back to the rows, Left opens the hidden bundle list (Chad 2026-11-16, as on the Apple TV).
       if (guideStripeMode) {
         if (key === 'ArrowUp' || key === 'ArrowDown') { jumpPackage(key === 'ArrowDown' ? 1 : -1); e.preventDefault(); return; }
-        if (key === 'ArrowRight' || key === 'Enter' || key === ' ' || key === 'Escape') { returnFromStripe(); e.preventDefault(); return; }
+        if (key === 'Enter' || key === ' ') { selectStripe(); e.preventDefault(); return; }
+        if (key === 'ArrowRight' || key === 'Escape') { returnFromStripe(); e.preventDefault(); return; }
         if (key === 'ArrowLeft') { openPackageList(); e.preventDefault(); return; }
       }
       if (key === 'g' || key === 'G') {
@@ -14001,6 +14014,8 @@
       el.style.top = vt + 'px'; el.style.height = (vb - vt) + 'px';
       el.style.background = hex; el.style.color = stripeNameColor(hex);
       el.textContent = g.pkg.name;
+      // A click or a tap on a bundle's name selects it: the guide jumps to its first channel.
+      el.addEventListener('click', () => { guideStripeMode = true; guideStripeGroup = gi; selectStripe(); });
       overlay.appendChild(el);
     });
   }
@@ -14048,6 +14063,21 @@
     document.querySelectorAll('.grid-stripe-cell').forEach(c => { const g = groups[Number(c.dataset.group)]; c.style.setProperty('--stripe', g && g.pkg ? stripeHex(g.pkg.name) : 'rgba(255,255,255,0.10)'); });
     updateGuideFocus();
     updateStripeLabels();
+  }
+
+  /**
+   * Select on the stripe (Enter, Space or a click on a bundle's name): the guide goes to the first channel of that bundle, with the cursor
+   * on that row, and the stripe is left. The list is Left's now.
+   */
+  function selectStripe() {
+    const groups = guideStripeGroups();
+    const g = groups[guideStripeGroup];
+    if (!g || !g.pkg) { returnFromStripe(); return; }
+    guideStripeJumped = true;   // returnFromStripe puts the focus on the bundle's first channel
+    returnFromStripe();
+    const first = getEnabledChannels()[g.first];
+    const row = first ? document.querySelector('#grid-body > .grid-row[data-channel-id="' + first.id + '"]') : null;
+    if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   // ---- the package list ----

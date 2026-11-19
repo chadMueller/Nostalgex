@@ -9,6 +9,8 @@ enum ChannelsPage: String, Hashable {
     case collections
     /// The I-004 explainer, one level under CHANNEL PACKAGES.
     case missing
+    /// LOCAL WEATHER, CH 299 (I-016): LOCATION, UNITS and its switch.
+    case weather
 
     /// The page Menu returns to. `nil` is the Channels list.
     var parent: ChannelsPage? { self == .missing ? .packages : nil }
@@ -22,6 +24,7 @@ enum ChannelsPage: String, Hashable {
         case .franchises: return "FRANCHISES"
         case .collections: return "MY COLLECTIONS"
         case .missing: return "MISSING CHANNELS"
+        case .weather: return "LOCAL WEATHER"
         }
     }
 }
@@ -59,6 +62,8 @@ struct SettingsChannelsView: View {
         case .missing:
             return ChannelsMissingPage.groups(appState: appState).first?.channels.first
                 .map { "missing_card_\($0.id)" } ?? "missing_none"
+        case .weather:
+            return SettingsWeatherSection.firstRowID
         }
     }
 
@@ -74,6 +79,10 @@ struct SettingsChannelsView: View {
             ChannelsCollectionsPage(focus: focus)
         case .missing:
             ChannelsMissingPage(focus: focus)
+        case .weather:
+            VStack(alignment: .leading, spacing: 16) {
+                SettingsWeatherSection(focus: focus)
+            }
         }
     }
 }
@@ -97,6 +106,7 @@ private struct ChannelsHomePage: View {
             link(.packages, value: "\(packagesOn) ON")
             link(.franchises, value: franchisesValue)
             link(.collections, value: appState.isScanning ? "SCANNING" : "\(collectionsOn) ON")
+            link(.weather, value: SettingsWeatherSection.statusValue(WeatherController.shared))
 
             SettingsToggleRow(
                 title: "WATERSHED",

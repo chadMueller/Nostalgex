@@ -25,7 +25,7 @@ The image (`npm run build:selfhost`) bundles these from npm instead of loading t
 
 ## Weather channel (web tuner and Docker image)
 
-The LOCAL WEATHER channel (CH 600) draws its own screens and uses these data sources. The credit shows on the channel and in Settings.
+The LOCAL WEATHER channel (CH 299) draws its own screens and uses these data sources. The credit shows on the channel and in Settings.
 
 | Source | Used for | License and credit |
 |---|---|---|

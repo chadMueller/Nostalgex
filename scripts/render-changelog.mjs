@@ -21,9 +21,25 @@ function renderEntries(entries) {
         ? 'changelog__entry changelog__entry--latest'
         : "changelog__entry";
 
-      const bullets = (entry.bullets ?? [])
-        .map((b) => `        <li>${b}</li>`)
-        .join("\n");
+      const list = (items) =>
+        (items ?? []).map((b) => `        <li>${b}</li>`).join("\n");
+      const bullets = list(entry.bullets);
+
+      // An entry can carry the store notes' other two sections: `newChannels` and
+      // `fixes`, each a list like `bullets`. `bullets` is WHAT'S NEW, the big things first.
+      // An empty or missing section is left out. Older entries have only `bullets`
+      // and render exactly as before.
+      const extra = [
+        ["New channels", entry.newChannels],
+        ["Fixes", entry.fixes],
+      ]
+        .filter(([, items]) => Array.isArray(items) && items.length > 0)
+        .flatMap(([label, items]) => [
+          `      <h4 class="changelog__section">${label}</h4>`,
+          "      <ul>",
+          list(items),
+          "      </ul>",
+        ]);
 
       return [
         `    <div class="${classes}">`,
@@ -34,6 +50,7 @@ function renderEntries(entries) {
         "      <ul>",
         bullets,
         "      </ul>",
+        ...extra,
         "    </div>",
       ].join("\n");
     })

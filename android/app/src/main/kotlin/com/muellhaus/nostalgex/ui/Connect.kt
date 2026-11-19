@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
+import com.muellhaus.nostalgex.engine.LibraryPicker
 import com.muellhaus.nostalgex.engine.LibrarySection
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.verticalScroll
@@ -324,8 +325,8 @@ private fun QuickConnect(model: AppModel, server: CheckedServer, code: String?) 
  */
 @Composable
 private fun ChooseLibraries(model: AppModel, sections: List<LibrarySection>) {
-    // Every library on, so one press builds the full guide.
-    var included by remember { mutableStateOf(sections.map { it.id }.toSet()) }
+    // Every library on but a hidden Jellyfin one (it starts off), so one press builds the guide (N-016).
+    var included by remember { mutableStateOf(sections.filter(LibraryPicker::startsOn).map { it.id }.toSet()) }
     val multiServer = sections.map { it.serverId }.toSet().size > 1
     Column(Modifier.widthIn(max = u(760)), verticalArrangement = Arrangement.spacedBy(u(24))) {
         Column(
@@ -352,7 +353,7 @@ private fun ChooseLibraries(model: AppModel, sections: List<LibrarySection>) {
 @Composable
 private fun ChooseServers(model: AppModel, servers: List<PlexServer>) {
     var included by remember {
-        mutableStateOf((servers.filter { it.owned }.ifEmpty { servers }).map { it.machineIdentifier }.toSet())
+        mutableStateOf(LibraryPicker.defaultServerIds(servers.map { it.machineIdentifier to it.owned }).toSet())
     }
     Column(Modifier.widthIn(max = u(760)), verticalArrangement = Arrangement.spacedBy(u(24))) {
         Column(

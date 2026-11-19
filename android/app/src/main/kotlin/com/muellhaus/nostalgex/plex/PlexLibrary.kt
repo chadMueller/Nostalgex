@@ -2,6 +2,7 @@ package com.muellhaus.nostalgex.plex
 
 import com.muellhaus.nostalgex.engine.DailyManifest
 import com.muellhaus.nostalgex.engine.DailyRefresh
+import com.muellhaus.nostalgex.engine.LibraryPicker
 import com.muellhaus.nostalgex.engine.SectionTally
 import com.muellhaus.nostalgex.engine.LibrarySection
 import com.muellhaus.nostalgex.engine.MediaItem
@@ -36,8 +37,15 @@ class PlexLibrary(private val client: PlexClient) {
         fun update(progress: ScanProgress)
     }
 
-    private suspend fun directories(server: PlexServer) =
+    /** Every library the server lists, whatever its type. */
+    private suspend fun allDirectories(server: PlexServer) =
         client.get(server, "/library/sections")["MediaContainer"]?.jsonObject?.array("Directory") ?: emptyList()
+
+    /**
+     * The libraries Nostalgex lists and reads: movie and show only (N-016 rule 1). A Music or Photo library is never listed and never asked for
+     * items: every row of one was dropped for having no runtime. A music video library is type movie in Plex, so it stays, found by its name.
+     */
+    private suspend fun directories(server: PlexServer) = allDirectories(server).filter { LibraryPicker.isPlexVideoType(it.str("type")) }
 
     /**
      * Each section's change stamps, for the refresh's signature (LibraryChangeSignature, #195):
@@ -48,9 +56,7 @@ class PlexLibrary(private val client: PlexClient) {
     }
 
     /** Every library on the server, for the library-selection screen and Settings (loadSections). */
-    suspend fun sections(server: PlexServer): List<LibrarySection> = directories(server).map {
-        LibrarySection(server.machineIdentifier, server.name, it.str("key") ?: "", it.str("title") ?: "", it.str("type") ?: "")
-    }
+    suspend fun sections(server: PlexServer): List<LibrarySection> = LibraryPicker.plexListed(server.machineIdentifier, server.name, allDirectories(server))
 
     /** Every library but those in `excluded` (section keys), which are skipped before any request for their items. */
     suspend fun scan(

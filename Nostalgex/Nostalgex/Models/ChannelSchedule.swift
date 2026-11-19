@@ -59,6 +59,8 @@ enum ChannelScheduleBuilder {
         at now: Date = Date(),
         credentialFingerprint: String
     ) -> ChannelSchedule? {
+        // CH 299, LOCAL WEATHER: hour blocks of the loop, not a manifest (AppState+Weather.swift).
+        if channel.isWeather { return WeatherChannel.schedule(at: now) }
         let nowUnix = Int(now.timeIntervalSince1970)
         let windowStartUnix = (nowUnix / 1800) * 1800
         // 24-hour rolling horizon. Fetch across day boundaries so late-night

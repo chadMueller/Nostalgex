@@ -427,6 +427,9 @@ extension AppState {
         }
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
+        // A different set of libraries is a different library: a scan already running (an
+        // earlier toggle's, or a refresh) must not land the old set or save it (N-016).
+        invalidateInFlightLibraryLoads()
         beginLoadInPlace(.changing)
         Task { await loadLibrary() }
     }
@@ -557,7 +560,7 @@ extension AppState {
 
         let demoChannels = DemoData.channels()
         allChannels = demoChannels
-        channels = demoChannels
+        channels = WeatherChannel.lineup(demoChannels, on: weatherChannelApplies)
         allItems = demoChannels.flatMap { $0.itemPool }
         // `-uiTestGuideStripes` only: the demo channels in demo packages, for the guide's package stripes.
         if DemoData.guideStripesFixtureRequested {

@@ -7,7 +7,8 @@
 //
 // Three files, one source:
 //
-//   self-host.html      the device table, the robots meta, the pre-launch note
+//   self-host.html      the device table, the robots meta, the pre-launch note, and the
+//                       web tuner and Docker release notes (from content/tuner-releases.json)
 //   public/sitemap.xml  the /self-host entry
 //   public/llms.txt     the /self-host line under "Get it"
 //
@@ -22,6 +23,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const DATA = new URL("../content/self-host.json", import.meta.url);
+const RELEASES = new URL("../content/tuner-releases.json", import.meta.url);
 const PAGE = new URL("../self-host.html", import.meta.url);
 const SITEMAP = new URL("../public/sitemap.xml", import.meta.url);
 const LLMS = new URL("../public/llms.txt", import.meta.url);
@@ -116,6 +118,28 @@ function renderPreviewNote(data) {
   ].join("\n");
 }
 
+// ── release notes (web tuner and Docker are one product) ──────────────────────
+
+function renderReleases(releases) {
+  const list = (items) =>
+    ["            <ul>", ...items.map((i) => `              <li>${escapeHtml(i)}</li>`), "            </ul>"].join("\n");
+  const entries = releases.entries.map((e) => {
+    const sections = [
+      ["New channels", e.newChannels],
+      ["Fixes", e.fixes],
+    ].filter(([, items]) => Array.isArray(items) && items.length > 0);
+    return [
+      '          <div class="sh-release">',
+      `            <p class="sh-release-meta"><strong>${escapeHtml(e.version)}</strong> ${escapeHtml(e.date)}</p>`,
+      `            <h3>${escapeHtml(e.title)}</h3>`,
+      list(e.bullets),
+      ...sections.flatMap(([label, items]) => [`            <h4>${label}</h4>`, list(items)]),
+      "          </div>",
+    ].join("\n");
+  });
+  return ["", ...entries, "        "].join("\n");
+}
+
 // ── sitemap and llms.txt ─────────────────────────────────────────────────────
 
 function renderSitemap(data) {
@@ -148,6 +172,11 @@ if (!Array.isArray(data.devices) || data.devices.length === 0) {
   throw new Error("content/self-host.json: devices is empty.");
 }
 
+const releases = JSON.parse(await readFile(RELEASES, "utf8"));
+if (!Array.isArray(releases.entries) || releases.entries.length === 0) {
+  throw new Error("content/tuner-releases.json: entries is empty.");
+}
+
 const jobs = [
   {
     file: PAGE,
@@ -156,6 +185,7 @@ const jobs = [
       ["ROBOTS", renderRobots(data)],
       ["PREVIEW-NOTE", renderPreviewNote(data)],
       ["DEVICES", renderDevices(data)],
+      ["TUNER-RELEASES", renderReleases(releases)],
     ],
   },
   { file: SITEMAP, name: "public/sitemap.xml", regions: [["SELFHOST", renderSitemap(data)]] },

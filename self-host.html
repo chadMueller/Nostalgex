@@ -265,6 +265,7 @@
           <a href="#network">What leaves your network</a>
           <a href="#where">Where it works</a>
           <a href="#limits">When it doesn't work</a>
+          <a href="#releases">Release notes</a>
           <a href="#help">Help</a>
       </nav>
 
@@ -446,6 +447,28 @@ docker run -d --name nostalgex -p 8080:8080 nostalgex</code></pre>
     <p>MusicBrainz and Deezer lookups are off in the image, because they'd be outside requests. The music video channels still work and still show titles and artists. Genre splits are thinner than they are on Apple TV.</p>
         </section>
 
+        <section class="doc-section" id="releases">
+<h2>Release notes</h2>
+    <p>The web tuner and the Docker container are one product, so they share release notes.</p>
+        <!-- TUNER-RELEASES:START (auto-generated) -->
+          <div class="sh-release">
+            <p class="sh-release-meta"><strong>1.0.23</strong> NOV 2026</p>
+            <h3>The weather channel is one full-width bar, Settings keeps you in place during a server switch, and one set of rules now picks your servers and libraries.</h3>
+            <ul>
+              <li>LOCAL WEATHER (CH 299) is one full-width live bar in the guide. The credits sit in a small stack at the bottom left and the weather icons are 15 percent smaller. Its settings now have a WEATHER row on the CHANNELS &amp; BUNDLES page in Settings.</li>
+              <li>Select on a bundle stripe jumps the guide to that bundle's first channel. Left opens the bundle list.</li>
+              <li>A server switch stays in Settings. The progress shows there, with BUILDING CHANNELS and BUILDING SCHEDULE.</li>
+              <li>One set of rules for choosing servers and libraries, the same as the Apple TV. The library picker only appears when there is something to choose, and every sign-in starts the choices again. A Jellyfin library you hide from the home screen gets its own row, marked HIDDEN ON JELLYFIN, and stays off until you switch it on. The single INCLUDE LIBRARIES HIDDEN ON JELLYFIN switch is gone; if you had it on, those libraries stay on.</li>
+            </ul>
+            <h4>Fixes</h4>
+            <ul>
+              <li>Signing in no longer risks a stuck redirect when the browser can't save the sign-in flag.</li>
+              <li>Plex lists and reads only Movies and TV Shows libraries, so a Music or Photos library is no longer paged through on every scan.</li>
+            </ul>
+          </div>
+        <!-- TUNER-RELEASES:END (auto-generated) -->
+        </section>
+
         <section class="doc-section" id="help">
 <h2>Help</h2>
     <div class="doc-note">
@@ -471,6 +494,7 @@ docker run -d --name nostalgex -p 8080:8080 nostalgex</code></pre>
       <nav class="footer-links" aria-label="Footer">
         <a href="/apple-tv">Apple TV</a>
         <a href="/roku">Roku</a>
+        <a href="/android">Android TV</a>
         <a href="/web-tuner">Web tuner</a>
         <a href="/plex">Plex</a>
         <a href="/jellyfin">Jellyfin</a>
