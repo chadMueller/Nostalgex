@@ -9,9 +9,7 @@ struct GuideLoadBlock: View {
     @FocusState private var stopWaitingFocused: Bool
 
     private var detail: String {
-        if appState.libraryLoadPhase == .scanningLibrary { return appState.guideLoadDetail }
-        if appState.libraryLoadPhase == .preparing { return "" }
-        return appState.libraryLoadPhase.title.uppercased()
+        LoadNotice.detailLine(phase: appState.libraryLoadPhase, scanDetail: appState.guideLoadDetail)
     }
 
     var body: some View {

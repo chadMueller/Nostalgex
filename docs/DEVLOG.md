@@ -85,6 +85,16 @@ Commits carry the detail of *what*; this carries the *why*.
 - The block's second line (Settings and the guide) follows the phase: READ n TITLES and the library being read, then BUILDING CHANNELS: i OF n, then BUILDING SCHEDULE. It used to keep saying MOVIES: 450 OF 450 through the whole build. GUIDE READY: n TITLES at the end.
 - `scripts/loading-state-browser-smoke.mjs`: a switch from Settings checks all of it; a check about a removed feature (the hidden-libraries switch) is dropped.
 
+## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
+
+**State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.
+
+**Why.** Chad, from Android's test: stay in Settings when a server is switched and see the progress there, not be sent back to the guide. Checked first: the Apple TV already keeps the viewer in Settings (it is pushed over the guide; only Disconnect returns to sign-in, because the credentials go), and the guide behind it shows CHANNEL GUIDE IS CHANGING. What was missing was the progress inside Settings, which showed only "Scanning..." on one row.
+
+**Changed.** A read-only status line over the foot of SERVERS & ACCOUNTS (which holds LIBRARIES) and CHANNELS & BUNDLES, not focusable and outside the scroll so no row moves. It reads state the load already keeps and changes none of it: BUILDING CHANNELS, READ n TITLES, the library being read (or the step after it), then BUILDING SCHEDULE for the last phase (TUNING IN in the full-screen loader), then GUIDE READY: n TITLES for 4 s. A refresh behind the guide says UPDATING LIBRARY: n TITLES READ, as the header does. The words are `LoadNotice` (new `buildingChannels`, `buildingSchedule` and `detailLine`, the last shared with the guide's block) and Android's step names. `SettingsLoadStatus` is the logic, `SettingsLoadStatusBar` the view.
+
+**Tested.** `SettingsLoadStatusTests` (9) with `LoadNoticeTests`: 13 pass. One simulator walk (`SettingsLoadStatusWalkTests`, `-uiTestGuideLoadFixture changing`): the line shows on CHANNELS & BUNDLES and SERVERS & ACCOUNTS with the exact text and not on PLAYBACK & PICTURE. Not run: a real server switch, a real TV. The BUILDING SCHEDULE and GUIDE READY lines are covered by the unit tests and the fixture (`schedule`), not shown on screen in the walk.
+
 ## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
 
 **Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
