@@ -4,6 +4,14 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-19 (Apple TV: the 1.0.34 integration branch)
+
+**State.** Branch `appletv/1.0.34-next` off `origin/main` `4fac0f4d`, not pushed, no tag, no version or build bump. No release is being cut; this banks the Apple TV work for the next one.
+
+**What is in it.** `appletv/weather-search-fixes` (`f4366da2`: a failed place-list read is never remembered, the place search shows up to 36 matches, a place with no radar coverage gets a loop without the radar) and, under it, `appletv/1.0.34-polish` (`54e76086`: the loading status line in Settings). Then `appletv/picker-owed` (`5badfd71`: closing the app on CHOOSE YOUR LIBRARIES no longer skips the picker, with the review fixes). The only conflict was this file; both sides kept.
+
+**Not in it.** `appletv/live-channels-faster` (hourly channels.json check), the HEVC and harness branches, `appletv/guide-text-smaller`, `appletv/stall-diag` (throwaway). The live 1.0.33 What's New says "about once an hour"; the next version needs a correct line unless the hourly check ships first.
+
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
