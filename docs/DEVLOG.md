@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-18 (Roku: a library pick still owed brings CHOOSE YOUR LIBRARIES back at the next launch, #331)
+
+**Why.** A Jellyfin or Emby sign-in, and a Plex one, saves `servers` before CHOOSE YOUR LIBRARIES is shown. `launchLoad` started the scan whenever `servers` was saved, so closing the app on the picker (Home, a crash, a power cut) skipped it at the next launch and read every library. Seen once on a TCL Roku TV against a lab Emby (#331).
+
+**Changed.** A sign-in writes `needsLibraryPick` beside its servers, as `needsPick` works for the Plex server picker. `onSections` clears it when there is nothing to choose, and `onLibrariesPicked` clears it once the libraries are picked. `NxLaunchReadsLibrary` (`source/util/LibrarySections.brs`) holds the launch's decision: servers saved, no server or library pick owed, a token for Plex. `launchLoad` and `NxSignedInToLoad` both use it. With a pick owed, Jellyfin and Emby go to `afterSignIn`. Plex loads nothing before its sign-in check, whose `ready` asks for the libraries. A launch with a pick owed starts no load, so LOADING DIDN'T FINISH isn't asked before it. Installs already signed in have no flag and launch as before.
+
+**Tests.** `LibrarySectionsTests`, 58 cases (38 before): the launch read with and without a pick owed and once settled, for each kind; no servers, no Plex token, a Plex server pick owed, no registry; and the sign-in reset leaving the flag set. With the flag check taken out of `NxLaunchReadsLibrary`, the three "a pick owed" cases fail. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Seen** on the 55R617 (OS 16.0.4), test-data builds signed in to the lab Emby as `nxlab` (three libraries), the same steps on each: sign out, sign in, Home on CHOOSE YOUR LIBRARIES, relaunch. On `main` at `f8449bcd` the relaunch skipped the picker and read all 28 items. On this branch it listed the sections again and showed the picker; CONTINUE read the library, and the next relaunch went straight to the guide.
+
+**Half-done.** Only Home was tried on the TV, not a crash or a power cut, and only on Emby: the Plex path is untested on a TV. From reading only, the Apple TV may have the same gap: `needsLibrarySelection` is held in memory, and a launch with credentials restores the saved library or loads it without asking for the libraries.
+
 
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
