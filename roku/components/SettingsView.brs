@@ -334,16 +334,16 @@ sub buildRows()
     add({ kind: "signOut" })
 
     add({ kind: "version" })
-    add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
-    for each link in NxAboutLinks()
-        add({ kind: "aboutLink", linkId: link.id })
-    end for
-    ' MEMORY: what the last load held at each step, to read out when the app closes while loading.
+    ' MEMORY: what the last load held (above the links, so its lines are on screen without scrolling) at each step, to read out when the app closes while loading.
     add({ kind: "header", title: "MEMORY", subtitle: "What the last load used. Read it out if the app closes while loading." }, "about")
     memLines = NxMemTraceLines(NxReadMemTrace(NxPlexRegistry()))
     if memLines.Count() = 0 then memLines.Push("NO LOAD RECORDED YET.")
     for each memLine in memLines
         add({ kind: "info", text: memLine }, "about")
+    end for
+    add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
+    for each link in NxAboutLinks()
+        add({ kind: "aboutLink", linkId: link.id })
     end for
 
     pickTab()

@@ -49,6 +49,26 @@ function NxRunMemoryBudgetTests() as Integer
     reg.Write("memTrace", "not json")
     NxCheck(r, "trace: a damaged record reads as none", NxToStr(NxReadMemTrace(reg) = invalid), "true")
     NxCheck(r, "trace: a runtime with no memory monitor gives -1, not a crash", NxToStr(NxMemPercentSafe() >= -1), "true")
+    ' The guard for a load that begins over the ceiling (a rescan, a library switch in Settings: the
+    ' guide, the pools and the pages the process holds are already there): NxMemFullFor.
+    NxCheck(r, "guard: under the ceiling never stops", NxToStr(NxMemFullFor(40, 43, 10)), "false")
+    NxCheck(r, "guard: a load that began under the ceiling stops at it, as always", NxToStr(NxMemFullFor(43, 43, 10)) + NxToStr(NxMemFullFor(55, 55, 8)), "truetrue")
+    NxCheck(r, "guard: base not known: the ceiling alone", NxToStr(NxMemFullFor(50, 43, invalid)) + NxToStr(NxMemFullFor(50, 43, -1)), "truetrue")
+    NxCheck(r, "guard: began at 70% over a 43% ceiling, nothing read yet: goes on (it stopped on page one before)", NxToStr(NxMemFullFor(70, 43, 70)), "false")
+    NxCheck(r, "guard: it goes on while the projected peak is under 90%", NxToStr(NxMemFullFor(80, 43, 70)), "false")
+    NxCheck(r, "guard: and stops when the peak it is heading for reaches 90% (84 + half of 14 = 91)", NxToStr(NxMemFullFor(84, 43, 70)), "true")
+    NxCheck(r, "guard: memory that fell below where it began does not count as growth", NxToStr(NxMemFullFor(60, 43, 70)), "false")
+    NxCheck(r, "guard: never goes on at 90% or more, whatever it began at", NxToStr(NxMemFullFor(90, 43, 90)) + NxToStr(NxMemFullFor(95, 43, 95)), "truetrue")
+    ' It reads the base the load stored (NxScanMemBaseSet); none stored is the ceiling alone.
+    g = GetGlobalAA()
+    g.nxScanMemBase = invalid
+    fetcher = { memoryPercent: function() as Integer
+        return 70
+    end function }
+    NxCheck(r, "guard: no base stored, 70% is over the ceiling", NxToStr(NxScanMemoryFull(fetcher)), "true")
+    g.nxScanMemBase = 70
+    NxCheck(r, "guard: a base of 70% stored, the same 70% is not", NxToStr(NxScanMemoryFull(fetcher)), "false")
+    g.nxScanMemBase = invalid
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function

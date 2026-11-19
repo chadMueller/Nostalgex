@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-19 (Roku 1.0.14: a rescan no longer stops on its first page at a small limit)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick since the change.
+
+**Why.** On the stick with a simulated 150 MB limit, a rescan after Shows was turned off read 200 titles and stopped: memory already stood at 70% of the (simulated) limit, over the 43% ceiling, before the scan read anything. The same happens to a launch refresh and to a Settings library switch on a real small TV, whose process already holds a guide, the pools and the pages an earlier library took. The guide kept what fit and the saved file stayed whole, but the guide shrank to one page.
+
+**Chose.** Not freeing the old library first: `releaseLibrary` already stops and drops the old load before the new one starts, so the old library is not what keeps the number high, and no code can hand the process's own pages back. Measuring the guard net of where the load began (`NxScanMemBaseSet` at the start of a load, `NxMemFullFor`): a load that began under the ceiling stops at it exactly as before (a first load, any TV at or over the Stick Plus's limit); one that began at or over it stops when memory plus half of what the scan itself added since then reaches 90% of the limit, which is where the build, the schedule and the save take the peak. Never later than that, and a TV that does not report, or a test's fetcher, keeps the ceiling alone. The rule that a cut scan never replaces a whole saved library that holds more (`NxSnapshotKeepSaved`) is untouched.
+
+**Also.** ABOUT shows MEMORY above LINKS, so its seven lines are on screen without scrolling (they were below the edge; the links are now the part that scrolls).
+
+**Tests.** `MemoryBudgetTests` (10 more cases: the rule at each edge, the stored base), `MediaBrowserTests` (2 more: a load that began at 70% reads all 2,000 titles at 70% and stops after its first page at 95%), `SnapshotTests` (52, unchanged, pass). Static checks pass. Not run on a stick: whether a real small TV then reads more and still stays under its limit is unproven; the projection is conservative, a freed page is reused before the process grows.
+
 ## 2026-11-19 (Roku 1.0.14: a memory line in ABOUT, and the BoxSet sweep reads only what the scan read)
 
 **State.** Branch `roku/1.0.14`. Not pushed, not signed, not on a stick yet.

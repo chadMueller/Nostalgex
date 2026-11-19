@@ -409,6 +409,8 @@ sub loadLibrary()
         return
     end if
     NxScanSectionsReset()
+    ' Where the app's memory stands before this load reads anything (the guard's reference, NxMemFullFor).
+    NxScanMemBaseSet()
     for i = 0 to servers.Count() - 1
         ' A server with no address is left out this time; it's tried again on
         ' the next load.

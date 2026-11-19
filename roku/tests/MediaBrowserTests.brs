@@ -146,6 +146,17 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     NxCheck(r, "guard: it stops on the page that finds memory full, keeping the pages before", NxToStr(capped.Count()) + "," + NxToStr(NxScanCapped()), "400,400")
     NxCheck(r, "guard: and says how many it holds", NxToStr(NxScanCapTotal()), "2000")
     NxCheck(r, "guard: the ceiling is a percent of the app's own limit", NxToStr(NxScanMemoryCeiling()), "55")
+    ' A rescan or a library switch begins in a process that already holds a guide and the pages an earlier
+    ' library took: memory begins at 70%, over the ceiling, and must not stop the scan on its first page.
+    GetGlobalAA().nxScanMemBase = 70
+    NxScanCapSet(0)
+    began70 = NxMbScanServer(NxMbGuardFetcher(1000, 70), "jellyfin", "u", 0)
+    NxCheck(r, "guard: a load that began at 70% reads everything while memory holds at 70%", NxToStr(began70.Count()) + "," + NxToStr(NxScanCapped()), "2000,0")
+    NxScanCapSet(0)
+    grown95 = NxMbScanServer(NxMbGuardFetcher(1000, 95), "jellyfin", "u", 0)
+    NxCheck(r, "guard: the same load stops after the first page once memory is at 95%", NxToStr(grown95.Count()) + "," + NxToStr(NxScanCapped()), "200,200")
+    GetGlobalAA().nxScanMemBase = invalid
+    NxScanCapSet(0)
     NxScanCapSet(0)
     NxScanSkipsReset()
     NxCheck(r, "guard: a new scan starts with no cap", NxToStr(NxScanCapped()), "0")

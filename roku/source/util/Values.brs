@@ -178,7 +178,42 @@ end function
 
 function NxScanMemoryFull(fetcher as Object) as Boolean
     if not fetcher.DoesExist("memoryPercent") then return false
-    return fetcher.memoryPercent() >= NxScanMemoryCeiling()
+    return NxMemFullFor(fetcher.memoryPercent(), NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase)
+end function
+
+' The app's memory as the guard reads it, or -1 where there is no monitor (the off-device interpreter).
+function NxMemPercentSafe() as Integer
+    pct = -1
+    try
+        pct = NxMemPercentNow()
+    catch e
+        pct = -1
+    end try
+    return pct
+end function
+
+' Where the app's memory stood when this load began, before any scan read a title: what the
+' guide on screen, the saved library's pools and the pages the process already holds put there.
+sub NxScanMemBaseSet()
+    GetGlobalAA().nxScanMemBase = NxMemPercentSafe()
+end sub
+
+' Whether the scan is to stop reading, for memory `pct` now, the ceiling, and the memory `base`
+' the load began at (invalid or -1: not known). A load that began under the ceiling stops at it,
+' as it always did. One that began at or over it (a rescan, or a library switch in Settings, in
+' a process that already holds a guide and the pages an earlier library took) cannot be judged
+' by the ceiling: it would stop on its first page every time and the guide would shrink to that
+' page. It is judged by where the peak will land instead: the build, the schedule and the save
+' take half again what the scan itself added since `base`, so it stops when `pct` plus half of
+' its own growth reaches 90% of the limit. Never later than that, and never on a TV that
+' does not report.
+function NxMemFullFor(pct as Integer, ceiling as Integer, base as Dynamic) as Boolean
+    if pct < ceiling then return false
+    if not NxIsNumber(base) then return true
+    if base < ceiling then return true
+    grown = pct - base
+    if grown < 0 then grown = 0
+    return pct + grown \ 2 >= 90
 end function
 
 ' The ceiling for a device whose app limit is limitKB. 55% is what the Streaming Stick Plus

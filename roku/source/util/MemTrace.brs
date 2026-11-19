@@ -6,16 +6,6 @@
 ' and a viewer whose app closes while loading can read the numbers out. A step that is noted again
 ' (a package change builds again) replaces its line.
 
-function NxMemPercentSafe() as Integer
-    pct = -1
-    try
-        pct = NxMemPercentNow()
-    catch e
-        pct = -1
-    end try
-    return pct
-end function
-
 sub NxMemTraceReset()
     GetGlobalAA().nxMemTrace = { limitKB: NxMemLimitKB(), ceiling: NxScanMemoryCeiling(), notes: [] }
 end sub
