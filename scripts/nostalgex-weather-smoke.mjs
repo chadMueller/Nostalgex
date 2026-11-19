@@ -234,10 +234,101 @@ await check("search: a too-short key asks for more, a miss is empty", async () =
   assert.equal((await idx.search("")).places.length, 0);
   assert.ok((await idx.search("mad")).places.length > 0);
 });
-await check("search: at most 8, no repeats", async () => {
+await check("search: at most 36, no repeats", async () => {
   const r = (await idx.search("san")).places;
-  assert.ok(r.length <= 8);
+  assert.ok(r.length > 8 && r.length <= 36, `${r.length} matches`);
   assert.equal(new Set(r.map((p) => p.label)).size, r.length);
+});
+
+// ── 4b. A place list that fails to load is not remembered (the Apple TV's WeatherPlaceSearchTests, ported) ──
+const fakeMeta = { tz: ["UTC"], postcodes: ["US"], split: [] };
+const fakeCodes = (n) => Array.from({ length: n }, (_, i) => [`902${String(i + 10)}`, `Place ${i}`, "CA", 34.1, -118.4, 0]);
+/** A loader over a map of path -> data, counting each path's calls; `fail(path, n)` says whether call n (from 1) throws. */
+function fakeLoader(files, fail = () => false) {
+  const calls = new Map();
+  return {
+    calls,
+    load: async (path) => {
+      const n = (calls.get(path) || 0) + 1;
+      calls.set(path, n);
+      if (fail(path, n)) throw new Error("offline");
+      return Object.hasOwn(files, path) ? files[path] : null;
+    },
+  };
+}
+await check("place list: a load that fails once succeeds on the next search", async () => {
+  const io = fakeLoader({ "places/meta.json": fakeMeta, "places/z/US/90.json": fakeCodes(3) }, (path, n) => path === "places/meta.json" && n === 1);
+  const index = W.createPlaceIndex(io);
+  const first = await index.search("90210");
+  assert.equal(first.places.length, 0);
+  assert.equal(first.hint, "PLACE LIST NOT AVAILABLE");
+  const second = await index.search("90210");
+  assert.equal(second.places.length, 1, "the second search asks again and finds it");
+  assert.equal(io.calls.get("places/meta.json"), 2);
+});
+await check("place list: a shard that fails once is asked again, a shard that is a 404 is asked once", async () => {
+  const io = fakeLoader({ "places/meta.json": fakeMeta, "places/z/US/90.json": fakeCodes(3) }, (path, n) => path === "places/z/US/90.json" && n === 1);
+  const index = W.createPlaceIndex(io);
+  assert.equal((await index.search("90210")).places.length, 0);
+  assert.equal((await index.search("90210")).places.length, 1);
+  assert.equal(io.calls.get("places/z/US/90.json"), 2);
+  assert.equal((await index.search("55555")).places.length, 0);
+  assert.equal((await index.search("55555")).places.length, 0);
+  assert.equal(io.calls.get("places/z/US/55.json"), 1, "a file the server does not have (null) is remembered");
+  assert.equal(io.calls.get("places/meta.json"), 1, "a file that loaded is kept");
+});
+await check("place list: searches that overlap share one load of a file", async () => {
+  const io = fakeLoader({ "places/meta.json": fakeMeta, "places/z/US/90.json": fakeCodes(3) });
+  const index = W.createPlaceIndex(io);
+  const all = await Promise.all([index.search("90210"), index.search("90211"), index.search("90212")]);
+  assert.deepEqual(all.map((r) => r.places.length), [1, 1, 1]);
+  assert.equal(io.calls.get("places/meta.json"), 1);
+  assert.equal(io.calls.get("places/z/US/90.json"), 1);
+});
+await check("place list: a loader that throws at once (not a rejected promise) is a failure too", async () => {
+  let n = 0;
+  const index = W.createPlaceIndex({ load: (path) => { n += 1; if (n === 1) throw new Error("sync"); return path === "places/meta.json" ? fakeMeta : null; } });
+  assert.equal((await index.search("90210")).hint, "PLACE LIST NOT AVAILABLE");
+  assert.notEqual((await index.search("90210")).hint, "PLACE LIST NOT AVAILABLE", "the second search found the list");
+  assert.ok(n >= 2, "asked again");
+});
+await check("place list: 36 matches, the whole code first, then longer codes in file order", async () => {
+  // 40 codes that begin with 902 and the whole code 902 itself, last in the file.
+  const rows = [...fakeCodes(40), ["902", "The Whole Code", "CA", 34.1, -118.4, 0]];
+  const index = W.createPlaceIndex(fakeLoader({ "places/meta.json": fakeMeta, "places/z/US/90.json": rows }));
+  const r = (await index.search("902")).places;
+  assert.equal(r.length, 36);
+  assert.equal(r[0].code, "902", "the whole code first");
+  assert.deepEqual(r.slice(1).map((p) => p.code), rows.slice(0, 35).map((row) => row[0]), "then the rest in file order");
+});
+
+// ── 4c. A place with no radar coverage plays a loop without the radar (GitHub #332) ──
+await check("loop: the full loop is the default and the golden vectors stand", () => {
+  assert.equal(W.hasRadar(null), true);
+  assert.deepEqual(W.activeScreens().map((s) => s.id), ["current", "today", "week", "radar"]);
+  assert.equal(W.loopSeconds(), 65);
+  assert.equal(W.screenAt(50_000).screen.id, "radar");
+  assert.equal(W.screenAt(50_000, true).index, 3);
+});
+await check("loop: hasRadar follows the radar sources (US, Canada, Germany)", () => {
+  for (const cc of ["US", "CA", "DE"]) assert.equal(W.hasRadar({ cc, lat: 45, lon: -75 }), true, cc);
+  for (const cc of ["GB", "AU", "FR", "MX", ""]) assert.equal(W.hasRadar({ cc, lat: 50, lon: 0 }), false, cc);
+});
+await check("loop: without radar it is CURRENT, TODAY, 5-DAY, 45 seconds, and the index counts within it", () => {
+  assert.deepEqual(W.activeScreens(false).map((s) => s.id), ["current", "today", "week"]);
+  assert.equal(W.loopSeconds(false), 45);
+  for (const [s, id, index, elapsed] of [[0, "current", 0, 0], [14.9, "current", 0, 14.9], [15, "today", 1, 0], [44.9, "week", 2, 14.9], [45, "current", 0, 0], [50, "current", 0, 5], [65, "today", 1, 5], [-1, "week", 2, 14]]) {
+    const r = W.screenAt(s * 1000, false);
+    assert.deepEqual([r.screen.id, r.index], [id, index], `${s} s`);
+    assert.ok(Math.abs(r.elapsed - elapsed) < 1e-9, `${s} s elapsed ${r.elapsed}`);
+  }
+  assert.equal(W.SCREENS.length, 4, "the shared loop is untouched");
+});
+await check("guide: the info panel line has no radar for a place without it", () => {
+  assert.ok(/and radar/.test(W.guideItem("TORONTO, ON, CA", "").summary));
+  const none = W.guideItem("LONDON, GB", "", false).summary;
+  assert.ok(!/radar/i.test(none) && /5-day forecast/.test(none), none);
+  assert.equal(W.guideItem("LONDON, GB", "Cloudy, 6\u00B0C.", false).summary, "Cloudy, 6\u00B0C.");
 });
 await check("saved places are checked on the way back in", () => {
   assert.equal(W.normalizePlace(null), null);

@@ -246,7 +246,7 @@
   // the radar source's credit (radar screen only), DATA FROM MET NORWAY, UPDATED hh:mm. The credits are required by MET, NOAA, ECCC and
   // DWD: smaller, never hidden. An old forecast says so in amber, in the same size.
   const FOOTER = { size: 16, lineHeight: 22, x: SAFE_X, baseline: H - SAFE_Y - 6, color: 'rgba(185,195,222,0.7)' };
-  function footer(ctx, st, screenIndex, extraCredit) {
+  function footer(ctx, st, screenIds, screenIndex, extraCredit) {
     const lines = [];
     if (extraCredit) lines.push([extraCredit, FOOTER.color]);
     lines.push(['DATA FROM MET NORWAY', FOOTER.color]);
@@ -256,10 +256,11 @@
     }
     lines.forEach(([t, color], i) => text(ctx, t, FOOTER.x, FOOTER.baseline - (lines.length - 1 - i) * FOOTER.lineHeight, mono(FOOTER.size), color, 'left'));
     // The loop's pips, bottom right.
-    const pips = global.NostalgexWeather ? global.NostalgexWeather.SCREENS.length : 4;
+    // One pip per screen of the loop that is playing: three where the place has no radar.
+    const ids = screenIds;
+    const pips = ids.length;
     const pw = 44, gap = 10;
     let px = W - SAFE_X - (pips * pw + (pips - 1) * gap);
-    const ids = ['current', 'today', 'week', 'radar'];
     for (let i = 0; i < pips; i++) {
       ctx.fillStyle = i === screenIndex ? ACCENT[ids[i]] : C.outline;
       ctx.fillRect(px, FOOTER.baseline - 12, pw, 10);
@@ -477,10 +478,8 @@
     const R = st.radar || { status: 'none' };
     ctx.fillStyle = '#070C18';
     ctx.fillRect(MAP.x, MAP.y, MAP.w, MAP.h);
-    if (R.status === 'none') {
-      message(ctx, 'RADAR NOT AVAILABLE IN YOUR AREA', 'RADAR COVERS THE UNITED STATES, CANADA AND GERMANY', C.amber);
-      return null;
-    }
+    // The loop has no radar screen where there is no coverage (`hasRadar`), so there is no slide for it; this only holds the map's colour.
+    if (R.status === 'none') return null;
     if (R.status === 'loading' && !(R.frames && R.frames.length)) { message(ctx, 'LOADING RADAR', 'THE MAP DRAWS AS SOON AS THE FRAMES ARRIVE', C.amber); return R.provider ? R.provider.credit : null; }
     if (R.status === 'error' && !(R.frames && R.frames.length)) { message(ctx, 'RADAR UNAVAILABLE RIGHT NOW', 'TRYING AGAIN SOON', C.amber); return R.provider ? R.provider.credit : null; }
     const frames = R.frames || [];
@@ -523,11 +522,14 @@
   function render(ctx, st) {
     const M = NW();
     st.textScale = st.textScale || 1;
-    const at = M.screenAt(st.nowMs);
+    // The loop for this place: no radar screen where there is no radar coverage (GitHub #332).
+    const withRadar = M.hasRadar(st.place);
+    const loop = M.activeScreens(withRadar);
+    const at = M.screenAt(st.nowMs, withRadar);
     let index = at.index;
     let elapsed = at.elapsed;
-    if (st.screen) { index = M.SCREENS.findIndex((s) => s.id === st.screen); if (index < 0) index = 0; elapsed = st.elapsed != null ? st.elapsed : 4; }
-    const screen = M.SCREENS[index];
+    if (st.screen) { index = loop.findIndex((s) => s.id === st.screen); if (index < 0) index = 0; elapsed = st.elapsed != null ? st.elapsed : 4; }
+    const screen = loop[index];
     ctx.save();
     ctx.setTransform(ctx.canvas.width / W, 0, 0, ctx.canvas.height / H, 0, 0);
     background(ctx);
@@ -543,7 +545,7 @@
     else if (screen.id === 'today') screenToday(ctx, st);
     else if (screen.id === 'week') screenWeek(ctx, st);
     else if (screen.id === 'radar' && st.place) extra = screenRadar(ctx, st, elapsed * 1000);
-    footer(ctx, st, index, screen.id === 'radar' && st.status !== 'noplace' ? extra : null);
+    footer(ctx, st, loop.map((s) => s.id), index, screen.id === 'radar' && st.status !== 'noplace' ? extra : null);
     // The change between screens: a quick wipe from the left.
     const WIPE = 0.4;
     if (elapsed < WIPE && !st.screen) {
@@ -561,8 +563,8 @@
    * Sound cue for the page: how long to wait before the next draw. The picture only moves on the radar
    * screen and during the wipe; elsewhere once a second keeps the clock and the pulse right.
    */
-  function nextDelay(nowMs) {
-    const at = global.NostalgexWeather.screenAt(nowMs);
+  function nextDelay(nowMs, withRadar = true) {
+    const at = global.NostalgexWeather.screenAt(nowMs, withRadar);
     if (at.elapsed < 0.45) return 50;
     if (at.screen.id === 'radar') return 120;
     return 500;

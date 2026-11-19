@@ -5239,8 +5239,10 @@
       wxEnsureForecast(false);
     }
     // The radar frames load from the TODAY screen on, so they are there when the radar comes up.
-    if (WXE.screenAt(now).index >= 1) wxEnsureRadar();
-    WX.timer = setTimeout(wxTick, WXS.nextDelay(now));
+    // A place with no radar coverage has no radar screen in its loop, so there is nothing to fetch.
+    const withRadar = WXE.hasRadar(WX.place);
+    if (withRadar && WXE.screenAt(now, withRadar).index >= 1) wxEnsureRadar();
+    WX.timer = setTimeout(wxTick, WXS.nextDelay(now, withRadar));
   }
   async function wxLoadFonts() {
     if (WX.fonts) return;
@@ -5304,7 +5306,7 @@
     ch._live = null;
     ch._guide = null;
     ch._manifestBlocks = null;
-    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary), progress: 100, position: '', total: '' }];
+    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary, WXE.hasRadar(WX.place)), progress: 100, position: '', total: '' }];
   }
   /** What the guide's bar says. */
   function wxGuideLabel() { return WXE.guideBarText(WX.model, wxUnits()); }
@@ -5314,8 +5316,11 @@
     if (!WX.index) {
       WX.index = WXE.createPlaceIndex({
         load: async (path) => {
+          // A 404 is the answer "no such file" and is remembered; any other failure throws, is not remembered and is asked again.
           const r = await fetch(`weather/${path}`);
-          return r.ok ? r.json() : null;
+          if (r.ok) return r.json();
+          if (r.status === 404) return null;
+          throw new Error(`weather/${path}: ${r.status}`);
         },
       });
     }
@@ -5386,7 +5391,8 @@
       document.getElementById('wx-change-btn').focus();
     } else if (e.key === 'ArrowDown') {
       const first = document.querySelector('#wx-results .wx-result');
-      if (first) { e.preventDefault(); first.focus(); }
+      // Stop here: the page's own Down handler would otherwise step on from the first match to the second in the same press.
+      if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); }
     }
   }
   function wxPickPlace(i) {

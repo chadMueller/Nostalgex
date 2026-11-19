@@ -40,6 +40,10 @@ const NOW = Date.parse("2026-11-15T18:20:00Z");
 const LOOP = 65, STARTS = [0, 15, 30, 45];
 const at = (i, offset = 4) => { const base = Math.floor(NOW / 1000); let s = base - (base % LOOP) + STARTS[i] + offset; if (s > base + 40) s -= LOOP; return s * 1000 + 250; };
 
+/** The same, for a place with no radar coverage: the loop is CURRENT, TODAY, 5-DAY, 45 seconds (current 0, today 15, week 30). */
+const LOOP_NO_RADAR = 45;
+const atNoRadar = (i, offset = 4) => { const base = Math.floor(NOW / 1000); let s = base - (base % LOOP_NO_RADAR) + [0, 15, 30][i] + offset; if (s > base + 30) s -= LOOP_NO_RADAR; return s * 1000 + 250; };
+
 function png(w, h, pixel) {
   const raw = Buffer.alloc((w * 4 + 1) * h);
   for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; for (let x = 0; x < w; x++) { const p = pixel(x, y) || [0, 0, 0, 0]; raw.set(p, y * (w * 4 + 1) + 1 + x * 4); } }
@@ -182,6 +186,10 @@ async function open({ width, height, mobile = false, place = TORONTO, relay = "o
   await ctx.addInitScript(([url, seed, units0, big, withMusic, now]) => {
     // Every string the page draws on the weather canvas, with its font.
     window.__wxText = [];
+    // The footer's pips: one 44 x 10 bar per screen of the loop.
+    window.__wxPips = [];
+    const origRect = CanvasRenderingContext2D.prototype.fillRect;
+    CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) { if (this.canvas && this.canvas.id === "weather-screen" && w === 44 && h === 10) window.__wxPips.push(x); return origRect.call(this, x, y, w, h); };
     const orig = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (t, x, y, w) { if (this.canvas && this.canvas.id === "weather-screen") window.__wxText.push([String(t), this.font, x, y]); return orig.call(this, t, x, y, w); };
     if (location.pathname.endsWith("plex-tuner.html") && !sessionStorage.getItem("nx-seeded")) {
@@ -207,10 +215,12 @@ async function open({ width, height, mobile = false, place = TORONTO, relay = "o
 
 /** The strings the weather canvas drew since the last call. Waits for a fresh draw. */
 async function drawn(page, ms = 900) {
-  await page.evaluate(() => { window.__wxText.length = 0; });
+  await page.evaluate(() => { window.__wxText.length = 0; window.__wxPips.length = 0; });
   await page.waitForTimeout(ms);
   return page.evaluate(() => window.__wxText.slice());
 }
+/** How many pips (one per screen of the loop) the footer drew since the last `drawn`. */
+const pipCount = (page) => page.evaluate(() => new Set(window.__wxPips).size);
 async function setClock(page, t) { await page.clock.setFixedTime(new Date(t)); }
 // As a viewer does: the cursor goes to the row, then the channel is tuned.
 const tune = (page, id = CH_ID) => page.evaluate((cid) => { guideFocusIndex = getEnabledChannels().findIndex((c) => c.id === cid); updateGuideFocus(); tuneFromGuide(cid); }, id);
@@ -342,7 +352,7 @@ for (const [tag, w, h, mobile] of SIZES) {
   await page.fill("#wx-input", "tor");
   await page.waitForFunction(() => document.querySelectorAll("#wx-results .wx-result").length > 1);
   const matches = await page.$$eval("#wx-results .wx-result", (els) => els.map((e) => e.textContent));
-  check("typing 'tor': matches, the biggest first", matches[0] === "TORONTO, ON, CA" && matches.length <= 8, JSON.stringify(matches));
+  check("typing 'tor': matches, the biggest first", matches[0] === "TORONTO, ON, CA" && matches.length <= 36, JSON.stringify(matches));
   await page.fill("#wx-input", "toronto");
   await page.waitForFunction(() => (document.querySelector("#wx-results .wx-result") || {}).textContent === "TORONTO, ON, CA");
   await shot(page, "settings-weather-1920x1080");
@@ -409,6 +419,7 @@ for (const [tag, w, h, mobile] of SIZES) {
   await setClock(page, at(3));
   await page.waitForFunction(() => WX.radar.status === "ready" && WX.radar.frames.length >= 4, null, { timeout: 15000 });
   const rad = (await drawn(page)).map((t) => t[0]);
+  check("US place: four pips in the footer", (await pipCount(page)) === 4);
   check("US place: the NOAA credit on the radar", rad.includes("RADAR: NOAA NATIONAL WEATHER SERVICE") && rad.includes("DATA FROM MET NORWAY"), JSON.stringify(rad));
   check("US place: one NOAA layer per frame, eight frames, the CONUS composite", s.radarCalls.filter((u) => /GetMap/i.test(u) && /conus_bref_qcd/.test(u)).length === 8, String(s.radarCalls.length));
   await shot(page, "weather-radar-us-1920x1080");
@@ -417,16 +428,68 @@ for (const [tag, w, h, mobile] of SIZES) {
   const uk = await open({ width: 1920, height: 1080, place: LONDON });
   await tune(uk.page);
   await uk.page.waitForFunction(() => document.getElementById("weather-screen").classList.contains("on") && WX.model && WX.fonts, null, { timeout: 15000 });
-  await setClock(uk.page, at(3));
-  const none = (await drawn(uk.page)).map((t) => t[0]);
-  check("UK place: RADAR NOT AVAILABLE IN YOUR AREA, and still the forecast credit", none.includes("RADAR NOT AVAILABLE IN YOUR AREA") && none.includes("DATA FROM MET NORWAY"), JSON.stringify(none));
-  check("UK place: no radar request at all", uk.radarCalls.length === 0);
-  await setClock(uk.page, at(0));
+  // GitHub #332: no radar coverage, no radar screen. The loop is CURRENT, TODAY, 5-DAY, 45 seconds, three pips, and nothing asks for a radar.
+  const ukTitles = ["CURRENT CONDITIONS", "TODAY'S FORECAST", "5-DAY FORECAST"];
+  for (let i = 0; i < 3; i++) {
+    await setClock(uk.page, atNoRadar(i));
+    const strings = (await drawn(uk.page)).map((t) => t[0]);
+    check(`UK place screen ${i + 1}: ${ukTitles[i]}, three pips, no radar slide, still the forecast credit`, strings.includes(ukTitles[i]) && (await pipCount(uk.page)) === 3 && !strings.some((t) => /RADAR/.test(t)) && strings.includes("DATA FROM MET NORWAY"), JSON.stringify(strings.slice(0, 8)));
+  }
+  // 45 s in is the start of the next loop, not a fourth screen: and 50 s in the old 65 s loop was the radar.
+  await setClock(uk.page, atNoRadar(0, 50 - 0));
+  const wrapped = (await drawn(uk.page)).map((t) => t[0]);
+  check("UK place: after the 5-DAY the loop starts again at CURRENT", wrapped.includes("CURRENT CONDITIONS") && !wrapped.some((t) => /RADAR/.test(t)), JSON.stringify(wrapped.slice(0, 6)));
+  check("UK place: no radar request at all, and the radar state stays empty", uk.radarCalls.length === 0 && (await uk.page.evaluate(() => WX.radar.status === "none" && WX.radar.frames.length === 0)));
+  const ukInfo = await uk.page.evaluate(() => { const ch = CHANNELS.find((c) => c.id === 1030000); return ch.schedule[0].summary; });
+  check("UK place: the info panel line has no radar in it", !/radar/i.test(ukInfo) && ukInfo.length > 10, ukInfo);
+  await setClock(uk.page, atNoRadar(0));
   const ukCur = (await drawn(uk.page)).map((t) => t[0]);
   check("UK place: Celsius", ukCur.includes("C") && ukCur.includes("LONDON, GB"), JSON.stringify(ukCur.slice(0, 12)));
-  await shot(uk.page, "weather-radar-not-available-1920x1080");
+  await shot(uk.page, "weather-no-radar-current-1920x1080");
   check("UK place: no errors", uk.errors.length === 0, uk.errors.join(" | "));
   await uk.ctx.close();
+}
+
+// ═══ 3b. The place picker lists up to 36 matches and every row can be reached (GitHub #332) ═══
+for (const [tag, w, h] of [["1920x1080", 1920, 1080], ["960x540", 960, 540]]) {
+  const s = await open({ width: w, height: h, place: null });
+  const { page } = s;
+  await page.evaluate(() => { showConfig(); switchConfigTab("bundles"); openChannelsPage("weather"); wxOpenSearch(); });
+  await page.fill("#wx-input", "san");
+  await page.waitForFunction(() => document.querySelectorAll("#wx-results .wx-result").length > 8, null, { timeout: 8000 });
+  const n = await page.$$eval("#wx-results .wx-result", (els) => els.length);
+  check(`picker ${tag}: more than 8 matches are listed, 36 at most`, n > 8 && n <= 36, String(n));
+  check(`picker ${tag}: the hint counts them`, (await page.textContent("#wx-hint")).startsWith(`${n} matches`));
+  // Down from the box, row by row, to the last row: each focus lands on the next row and the last row is on screen, inside its scroll box.
+  await page.focus("#wx-input");
+  await page.keyboard.press("ArrowDown");
+  const seen = [];
+  for (let i = 0; i < n + 3; i++) {
+    seen.push(await page.evaluate(() => (document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null) ?? null));
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(40);
+  }
+  const last = await page.evaluate(() => (document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null));
+  check(`picker ${tag}: Down walks the rows in order from the first`, seen[0] === "0" && seen[1] === "1" && seen[2] === "2", JSON.stringify(seen.slice(0, 5)));
+  check(`picker ${tag}: focus reaches the last row (${n - 1}) by keys`, seen.includes(String(n - 1)) || last === String(n - 1), JSON.stringify(seen.slice(-6)));
+  await page.waitForTimeout(600);
+  const vis = await page.evaluate((idx) => {
+    const el = document.querySelector(`#wx-results .wx-result[data-i="${idx}"]`);
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, vh: innerHeight, w: r.width, h: r.height };
+  }, n - 1);
+  await page.focus(`#wx-results .wx-result[data-i="${n - 1}"]`);
+  await page.waitForTimeout(700);
+  const vis2 = await page.evaluate((idx) => { const r = document.querySelector(`#wx-results .wx-result[data-i="${idx}"]`).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight }; }, n - 1);
+  check(`picker ${tag}: the last row is a real button, tall enough to click`, vis.w > 100 && vis.h > 24, JSON.stringify(vis));
+  check(`picker ${tag}: with the last row focused it is on screen`, vis2.top >= 0 && vis2.bottom <= vis2.vh + 1, JSON.stringify(vis2));
+  // A click on the last row picks it (a TV browser with no keys).
+  await page.click(`#wx-results .wx-result[data-i="${n - 1}"]`);
+  await page.waitForFunction(() => WX.place, null, { timeout: 8000 });
+  check(`picker ${tag}: clicking the last row sets that place`, await page.evaluate(() => !!WX.place && WX.place.name.length > 0));
+  await shot(page, `settings-weather-picker-${tag}`);
+  check(`picker ${tag}: no errors`, s.errors.length === 0, s.errors.join(" | "));
+  await s.ctx.close();
 }
 
 // ═══ 4. GUIDE TEXT SIZE LARGE: bigger text, same layout ═══
