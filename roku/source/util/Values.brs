@@ -208,12 +208,17 @@ end function
 ' with nx_mem_limit_kb in the manifest, a smaller one standing in for a low-memory Roku (the guard
 ' then sees percent of THAT). 0 when the device does not say.
 function NxMemLimitKB() as Integer
-    mon = CreateObject("roAppMemoryMonitor")
     limit% = 0
-    lim = mon.GetChannelMemoryLimit()
-    if type(lim) = "roAssociativeArray" then
-        if NxIsNumber(lim.maxForegroundMemory) then limit% = lim.maxForegroundMemory
-    end if
+    ' The off-device interpreter has no roAppMemoryMonitor and stops on it: no limit then (the ceiling is 55).
+    try
+        mon = CreateObject("roAppMemoryMonitor")
+        lim = mon.GetChannelMemoryLimit()
+        if type(lim) = "roAssociativeArray" then
+            if NxIsNumber(lim.maxForegroundMemory) then limit% = lim.maxForegroundMemory
+        end if
+    catch e
+        limit% = 0
+    end try
     info = CreateObject("roAppInfo")
     if info.IsDev() then
         sim% = Val(NxToStr(info.GetValue("nx_mem_limit_kb"))).ToStr().ToInt()
