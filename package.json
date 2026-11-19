@@ -118,6 +118,7 @@
     "test:library-selection": "node scripts/nostalgex-library-selection-smoke.mjs",
     "test:library-picker": "node scripts/nostalgex-library-picker-smoke.mjs",
     "test:library-picker:browser": "node scripts/library-picker-browser-smoke.mjs",
+    "test:library-picker:owed": "node scripts/library-pick-owed-browser-smoke.mjs",
     "test:plex-section-failures": "node scripts/plex-section-failures-browser-smoke.mjs",
     "test:emby-ratings": "node scripts/nostalgex-emby-ratings-smoke.mjs",
     "test:jellyfin-quick-connect": "node scripts/nostalgex-jellyfin-quick-connect-smoke.mjs",

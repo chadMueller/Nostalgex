@@ -4,7 +4,24 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
-## 2026-11-19 (publish Jellyfin apps for Apple TV)
+## 2026-11-19 (web 1.0.24-next: weather search fixes and the library choice a sign-in owes)
+
+**Shipped.** Nothing. This is the web and Docker next-release integration branch, `web/1.0.24-next`, off `origin/main` (4fac0f4d). It is not pushed, `tunerVersion` is still 1.0.23 and there is no `tuner-v` tag.
+
+**Why.** Work is banked on one branch per product until a release is cut. Two things are on it so far.
+
+**Changed.**
+- Merged `web/weather-search-fixes` (8b1084b7): a failed place-list load is never remembered, the place search shows up to 36 matches, and a place with no radar coverage gets a loop without the radar. The cities1000 list is not on it (`site/weather-cities1000` stays separate).
+- The library picker relaunch gap (Apple TV #337, Roku #331, Android #338). The web tuner had it. The landing page saves the sign-in to localStorage before CHOOSE YOUR LIBRARIES, and the picker was only offered to a visit that came straight from a sign-in (`libraryPickAllowed` and `signInPending` live in memory). A new browser session (closed tab, restarted browser, TV browser relaunch, a Docker page opened again) restored the saved login and read every library without asking. Proved first on the page as it was: sign in, picker up, new browser context carrying the old localStorage and no sessionStorage, no picker and `lib1,lib2` both read. A reload in the same tab was fine, because sessionStorage still held the sign-in.
+- The fix is the Apple TV's `pickOwed`: `plex-tuner.html` keeps `nostalgex_library_pick_owed` in localStorage, set when a sign-in begins its choices, cleared by CONTINUE, by a sign-in with nothing to choose, by sign-out and by a refused login. A launch that finds it owed shows the picker again before any scan, with the choices starting again as at a sign-in. A relaunch that cannot read the libraries keeps it owed for the next one. Web only: a relaunch waits 15 seconds for the library list, then hands over to the loading screen (which has START OVER) so an unreachable server does not leave the viewer on the picker's one quiet line.
+- New test `scripts/library-pick-owed-browser-smoke.mjs` (`npm run test:library-picker:owed`, not part of `npm test`, like the other browser smokes). 43 checks at desktop, 960x540 at DPR 2 and phone width. On the page before the fix it fails 9 checks, including the relaunch.
+
+**Tests run (the weather and picker ones only, one at a time, load under 4 before each).** `test:library-picker:owed` 43 passed; `test:library-picker` 167; `test:library-selection` 26; `test:library-picker:browser` 141; `test:weather` 45; `test:weather:browser` 214. No full suite.
+
+**Half-done.** Plex was not driven through a relaunch in the browser: the gate is the same function for every backend and the Jellyfin stub exercises it, but the Plex path has no relaunch check of its own.
+
+**Next.** Cross-product: Apple TV has the fix on `appletv/picker-owed`, Roku has #331 open for it, Android #338. The Roku engine copy does not include `plex-tuner.html`, so there is no Roku port from this change.
+
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
 

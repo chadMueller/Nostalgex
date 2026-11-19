@@ -6075,9 +6075,25 @@
   // picker is offered, as on the Apple TV. A reload, a saved login coming back and a rescan are not sign-ins.
   let signInPending = false;
   const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  // True from the moment a sign-in is saved until the viewer has made, or never needed, the library choice (the Apple
+  // TV's LibrarySectionSelectionStore.pickOwed). The saved login is written before CHOOSE YOUR LIBRARIES is shown and
+  // the screen itself lives only in this page, so a new browser session (a closed tab, a TV browser relaunch, a Docker
+  // page opened again) used to come back to a scan of every library. Set at a sign-in, cleared by CONTINUE, by a
+  // sign-in with nothing to choose and by sign-out.
+  const LIBRARY_PICK_OWED_KEY = 'nostalgex_library_pick_owed';
+  function libraryPickOwed() {
+    try { return localStorage.getItem(LIBRARY_PICK_OWED_KEY) === '1'; } catch (e) { return false; }
+  }
+  function setLibraryPickOwed(on) {
+    try { if (on) lsSet(LIBRARY_PICK_OWED_KEY, '1'); else localStorage.removeItem(LIBRARY_PICK_OWED_KEY); } catch (e) { /* the picker is still offered by signInPending */ }
+  }
+  // This launch found the choice owed and is asking again (not a sign-in made on this visit).
+  let libraryPickResuming = false;
   function beginSignInChoices() {
     try { globalThis.NostalgexLibrarySelection.resetForSignIn(); } catch (e) { /* the choices stay as they were */ }
     try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    setLibraryPickOwed(true);
+    libraryPickResuming = false;
     libraryPickAllowed = true;
     signInPending = true;
   }
@@ -10474,7 +10490,9 @@
     const LL = globalThis.NostalgexLibraryLoad;
     const signedIn = signInPending;
     signInPending = false;
-    if (!libraryPickAllowed || !LL || !(signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) return 'skip';
+    const resuming = libraryPickResuming;
+    libraryPickResuming = false;
+    if (!LL || !((libraryPickAllowed && (signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) || libraryPickOwed())) return 'skip';
     // While the list loads, the same left-hand copy shows with one quiet line on the right.
     const picker = document.getElementById('library-picker');
     document.getElementById('plex-connect').style.display = '';
@@ -10486,12 +10504,30 @@
     const copy = document.getElementById('library-copy');
     if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
     let sections;
-    try { sections = await listLibrarySections(); } catch (err) { console.warn('[Nostalgex] Library list failed, scanning everything:', err); picker.classList.remove('active'); return 'skip'; }
+    try {
+      // A launch that found the choice owed waits only so long on a server that does not answer: the scan after it has
+      // the STOP WAITING and START OVER the picker's one quiet line does not.
+      sections = resuming
+        ? await Promise.race([listLibrarySections(), new Promise((_, reject) => setTimeout(() => reject(new Error('the library list did not answer')), globalThis.NX_LIBRARY_RESUME_READ_MS || 15000))])
+        : await listLibrarySections();
+    } catch (err) {
+      console.warn('[Nostalgex] Library list failed, scanning everything:', err);
+      // A relaunch that could not read the libraries keeps the choice owed for the next one.
+      if (!resuming) setLibraryPickOwed(false);
+      picker.classList.remove('active');
+      return 'skip';
+    }
     knownLibrarySections = sections;
-    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) { picker.classList.remove('active'); return 'skip'; }
+    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) {
+      // Nothing to choose clears it, unless a relaunch read no libraries at all.
+      if (sections.length > 0 || !resuming) setLibraryPickOwed(false);
+      picker.classList.remove('active');
+      return 'skip';
+    }
     const canGoBack = !isMediaBrowserBackend(mediaBackend) && discoveredServers.length > 1;
     const how = await showLibrarySelection(sections, canGoBack);
     if (how === 'back') { document.getElementById('library-picker').classList.remove('active'); showServerPicker(); return 'back'; }
+    setLibraryPickOwed(false);
     lsSet(LIBRARY_PICK_SEEN_KEY, '1');
     return 'continue';
   }
@@ -11274,6 +11310,7 @@
     for (const k of ['plex90_token', 'plex90_server_url', 'plex90_server_name', 'plex90_user_token',
       'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id']) sessionStorage.removeItem(k);
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    setLibraryPickOwed(false);
     // The cached library belongs to credentials that no longer work, and the
     // cache is consulted before the connect screen, so leaving it would build
     // channels around dead tokens instead of asking the user to sign in.
@@ -11320,7 +11357,10 @@
     const storedName = sessionStorage.getItem('plex90_server_name');
     const storedUserToken = sessionStorage.getItem('plex90_user_token');
 
-    if (!storedToken || !storedUrl) return;
+    if (!storedToken || !storedUrl) { setLibraryPickOwed(false); return; }   // no sign-in, so no choice owed
+    // A sign-in that ended at CHOOSE YOUR LIBRARIES (the tab or browser was closed there) still owes the viewer that
+    // choice: ask again, with the choices starting again as at a sign-in, before any scan.
+    if (libraryPickOwed() && !signInPending) { beginSignInChoices(); libraryPickResuming = true; }
 
     // true = token rejected with 401/403; false/undefined = network error or success
     let tokenRevoked = false;
@@ -11531,6 +11571,7 @@
     sessionStorage.removeItem('plex90_jellyfin_user_id');
     try { localStorage.removeItem('nostalgex_library_signature'); } catch (e) {}   // the refresh fingerprint goes with the library it describes
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    setLibraryPickOwed(false);   // nothing is signed in to choose for
     // The channel last watched is this account's too (the Apple TV clears it on disconnect). The OPEN ON LAST
     // CHANNEL switch is a preference and stays.
     try { localStorage.removeItem(NostalgexLastChannel.CHANNEL_KEY); } catch (e) {}
