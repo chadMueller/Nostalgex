@@ -180,6 +180,35 @@ final class PickerOwedTests: XCTestCase {
         XCTAssertTrue(third.needsLibrarySelection, "once the server answers, the picker is shown")
     }
 
+    /// The list read fails on a relaunch, the scan still runs, and the viewer then turns a library off in Settings.
+    /// That choice must clear the flag and survive the next launch; a resume never resets saved choices.
+    func testAChoiceMadeInSettingsWhileOwedIsKeptAtTheNextLaunch() async {
+        _ = await signInToThePicker()
+        backend.sectionsReadable = false
+        let second = await relaunch()
+        _ = await second.resumeLibraryPickIfOwed()
+        XCTAssertTrue(LibrarySectionSelectionStore.pickOwed, "setup: still owed after the failed read")
+
+        backend.sectionsReadable = true
+        second.availableLibrarySections = await second.loadAllLibrarySections()
+        guard let cartoons = second.availableLibrarySections.first(where: { $0.sectionKey == "2" }) else {
+            return XCTFail("setup: Settings lists the libraries")
+        }
+        second.toggleLibrarySection(cartoons)
+        XCTAssertFalse(LibrarySectionSelectionStore.pickOwed, "a choice saved in Settings settles the pick")
+
+        let third = await relaunch()
+        let resumed = await third.resumeLibraryPickIfOwed()
+        XCTAssertFalse(resumed)
+        XCTAssertTrue(LibrarySectionSelectionStore.load().contains(cartoons.id), "the Settings choice is kept")
+
+        // Even with the flag set, a resume keeps what is saved.
+        LibrarySectionSelectionStore.pickOwed = true
+        let fourth = await relaunch()
+        _ = await fourth.resumeLibraryPickIfOwed()
+        XCTAssertTrue(LibrarySectionSelectionStore.load().contains(cartoons.id), "a resume is not a new sign-in")
+    }
+
     func testTheServerReadShowsTheStepRailSoSTARTOVERIsThere() async {
         _ = await signInToThePicker()
         let second = await relaunch()

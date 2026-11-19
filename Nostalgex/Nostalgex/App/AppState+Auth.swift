@@ -228,10 +228,14 @@ extension AppState {
     func presentLibrarySelectionOrScan() async {
         // Owed from here: the sign-in is already saved, so a relaunch before the choice is made must come back here.
         LibrarySectionSelectionStore.pickOwed = true
-        deselectedLibrarySectionKeys = []
-        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
-        includedHiddenLibrarySectionKeys = []
-        LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        // A relaunch that resumes an owed pick is not a new sign-in: whatever is saved stays (a viewer may have
+        // set libraries in Settings after a relaunch that could not read the list).
+        if !isResumingLibraryPick {
+            deselectedLibrarySectionKeys = []
+            LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+            includedHiddenLibrarySectionKeys = []
+            LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        }
 
         let sections = await loadAllLibrarySections()
         // START OVER or a disconnect while the libraries were being read: nothing is signed in to choose for.
@@ -449,6 +453,8 @@ extension AppState {
             else { deselectedLibrarySectionKeys.remove(section.id) }
             LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
         }
+        // A choice made in Settings is the choice: the picker is no longer owed at the next launch.
+        LibrarySectionSelectionStore.pickOwed = false
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
         // A different set of libraries is a different library: a scan already running (an
