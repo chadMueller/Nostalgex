@@ -319,8 +319,23 @@ function NxMemPercentNow() as Integer
         if NxIsNumber(lim.maxForegroundMemory) then dev% = lim.maxForegroundMemory
     end if
     eff% = NxMemLimitKB()
-    if dev% > 0 and eff% > 0 and eff% < dev% then return Int(pct * dev% / eff%)
+    if dev% > 0 and eff% > 0 and eff% < dev% then
+        ' Over a smaller limit (a simulated one, or a low-memory TV's): from the memory in use in KB, not the whole percent
+        ' of the real limit scaled up, which moves the reading 3 to 6 points at a time over a 150 MB limit.
+        avail = mon.GetChannelAvailableMemory()
+        if NxIsNumber(avail) then
+            used = dev% - avail
+            if used >= 0 then return NxMemPercentOf(used, eff%)
+        end if
+        return Int(pct * dev% / eff%)
+    end if
     return pct
+end function
+
+' Memory in use as a percent of a limit, both in KB.
+function NxMemPercentOf(usedKB as Integer, limitKB as Integer) as Integer
+    if limitKB <= 0 then return 0
+    return Int(usedKB * 100# / limitKB)
 end function
 
 ' The titles a scan stopped at, 0 when it read everything, and how many the

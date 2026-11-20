@@ -95,6 +95,7 @@ function NxRunMemoryBudgetTests() as Integer
     g.nxScanBiggest = 100000
     NxCheck(r, "guard: the largest server counted from the load's start", NxToStr(NxScanMemoryFull(guardNone)), "true")
     g.nxScanBiggest = 0
+    NxCheck(r, "memory percent: 97,000 KB over a 153,600 KB limit is 63, not a multiple of the real percent's step", NxToStr(NxMemPercentOf(97000, 153600)) + " " + NxToStr(NxMemPercentOf(0, 153600)) + " " + NxToStr(NxMemPercentOf(5, 0)), "63 0 0")
     NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
     NxPlexGuardCases(r)
     NxPlexSeedCases(r)
