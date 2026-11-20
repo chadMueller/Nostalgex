@@ -65,6 +65,11 @@ sub launchLoad()
         return
     end if
     if NxPlexLoadToken() = "" then
+        ' A sideload with a seed signs in from it (NxPlexSeedUrl), not from the connect screen.
+        if NxPlexSeedUrl() <> "" then
+            startSignIn()
+            return
+        end if
         showConnect()
         return
     end if

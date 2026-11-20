@@ -3,6 +3,16 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-19 (Roku sideload: a Plex sign-in from a seed page, for stand-in Plex servers)
+
+**State.** Branch `roku/1.0.14`. A sideload tool; a store build never reads it.
+
+**Why.** A stand-in Plex server on the home network cannot be signed in to through plex.tv. The Plex memory pass on the stick (brytenyte's sizes) needs one.
+
+**Changed.** A sideloaded build (IsDev) with `nx_plex_seed_url` in its manifest, signed out, signs in from that address: the page answers `{ token, account: { id, name }, servers: [{ name, machineIdentifier, uri }] }` and `NxPlexApplySeed` saves it as a sign-in saves its own (token, kind, servers reached at their address and already checked, every server on, the library pick owed, `devSeed`). A seeded sign-in is never sent to plex.tv, which does not know the token (`PlexSignInTask`). `launchLoad` goes to the seed instead of the connect screen. Signing out clears it and the next launch seeds again.
+
+**Tests.** `MemoryBudgetTests` (7 more cases on the seed), 56 pass.
+
 ## 2026-11-19 (Roku 1.0.14: the Plex scan has the memory guard Jellyfin and Emby have)
 
 **State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick yet.

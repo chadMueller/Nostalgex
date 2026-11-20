@@ -64,6 +64,60 @@ function NxPlexLoadToken() as String
     return NxPlexRegistry().Read("token")
 end function
 
+' ── A sideload's seed ─────────────────────────────────────────────────────────────────────────
+' A sideloaded build (IsDev) with nx_plex_seed_url in its manifest signs in from that address instead of plex.tv: the
+' page answers { token, account: { id, name }, servers: [{ name, machineIdentifier, uri }] } and the app saves it as a
+' sign-in saves its own, so a stand-in Plex server on the home network can be read without a plex.tv account. Never
+' in a store build: IsDev is false there and the key is not read.
+function NxPlexSeedUrl() as String
+    info = CreateObject("roAppInfo")
+    if info.IsDev() then return NxToStr(info.GetValue("nx_plex_seed_url"))
+    return ""
+end function
+
+' Whether the saved sign-in is a seed (so plex.tv, which does not know its token, is not asked about it).
+function NxPlexDevSeeded() as Boolean
+    if NxPlexSeedUrl() = "" then return false
+    return NxPlexRegistry().Read("devSeed") = "1"
+end function
+
+' Saves a seed into `reg` as a sign-in does: the token, the kind, the servers (reached at their address as given, so
+' none is looked up at plex.tv), every server on, the library choices started again and the library pick owed.
+' Returns the account's name, "" when the seed is not usable.
+function NxPlexApplySeed(reg as Dynamic, seed as Dynamic) as String
+    if reg = invalid or type(seed) <> "roAssociativeArray" then return ""
+    if type(seed.servers) <> "roArray" or seed.servers.Count() = 0 then return ""
+    token = NxToStr(seed.token)
+    if token = "" then return ""
+    servers = []
+    choices = {}
+    for each s in seed.servers
+        if type(s) = "roAssociativeArray" then
+            id = NxToStr(s.machineIdentifier)
+            if id <> "" and NxToStr(s.uri) <> "" then
+                servers.Push({ name: NxOr(s.name, id), machineIdentifier: id, owned: true, accessToken: token, uri: NxToStr(s.uri), lanUri: NxToStr(s.uri), checked: true })
+                choices[id] = true
+            end if
+        end if
+    end for
+    if servers.Count() = 0 then return ""
+    name = "Seed"
+    if type(seed.account) = "roAssociativeArray" then name = NxOr(seed.account.name, name)
+    reg.Write("token", token)
+    reg.Write("kind", "plex")
+    reg.Write("servers", FormatJson(servers))
+    reg.Write("serverChoices", FormatJson(choices))
+    reg.Delete("needsPick")
+    reg.Delete("deselectedSections")
+    reg.Delete("includedHiddenSections")
+    reg.Delete("librarySections")
+    reg.Write("needsLibraryPick", "1")
+    reg.Write("devSeed", "1")
+    reg.Write("devSeedAccount", name)
+    reg.Flush()
+    return name
+end function
+
 sub NxPlexSaveToken(token as String)
     reg = NxPlexRegistry()
     reg.Write("token", token)

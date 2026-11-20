@@ -82,6 +82,7 @@ function NxRunMemoryBudgetTests() as Integer
     NxCheck(r, "build room: memory that fell below where it began does not count as growth", NxToStr(NxBuildRoomFor(40, 60)), "true")
     NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
     NxPlexGuardCases(r)
+    NxPlexSeedCases(r)
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function
@@ -199,3 +200,17 @@ function NxFakeQuery(url as String, name as String) as Integer
     end while
     return Val(digits)
 end function
+
+' A sideload's seed (NxPlexApplySeed): saved as a sign-in saves its own, with nothing looked up at plex.tv.
+sub NxPlexSeedCases(r as Object)
+    reg = NxFakeRegistry()
+    seed = { token: "tok", account: { id: "1", name: "Stand-in" }, servers: [{ name: "A", machineIdentifier: "ida", uri: "http://192.0.2.45:32401" }, { name: "B", machineIdentifier: "idb", uri: "http://192.0.2.45:32402" }, { name: "no address", machineIdentifier: "idc", uri: "" }] }
+    NxCheck(r, "seed: the account's name comes back", NxPlexApplySeed(reg, seed), "Stand-in")
+    saved = ParseJson(reg.Read("servers"))
+    NxCheck(r, "seed: two servers with an address are saved, one without is not", NxToStr(saved.Count()), "2")
+    NxCheck(r, "seed: each is reached at its address as given, already checked", NxToStr(saved[0].checked) + " " + saved[0].lanUri + " " + saved[0].accessToken, "true http://192.0.2.45:32401 tok")
+    NxCheck(r, "seed: the token and the kind", reg.Read("token") + " " + reg.Read("kind"), "tok plex")
+    NxCheck(r, "seed: every server is on, no server pick owed, the library pick is", NxToStr(ParseJson(reg.Read("serverChoices")).Count()) + " [" + reg.Read("needsPick") + "] " + reg.Read("needsLibraryPick"), "2 [] 1")
+    NxCheck(r, "seed: it marks the sign-in as a seed", reg.Read("devSeed"), "1")
+    NxCheck(r, "seed: no token, no servers, or no page is no sign-in", NxPlexApplySeed(NxFakeRegistry(), { servers: seed.servers }) + NxPlexApplySeed(NxFakeRegistry(), { token: "t", servers: [] }) + NxPlexApplySeed(NxFakeRegistry(), invalid), "")
+end sub
