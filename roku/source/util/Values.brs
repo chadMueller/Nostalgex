@@ -275,6 +275,7 @@ end function
 sub NxScanMemBaseSet()
     GetGlobalAA().nxScanMemBase = NxMemPercentSafe()
     GetGlobalAA().nxScanBiggest = 0
+    print "memory: the load begins at "; GetGlobalAA().nxScanMemBase; "% of "; NxMemLimitKB(); " KB"
 end sub
 
 ' Whether there is room to build the channels from what the scan read, at memory `pct` now and `base` where
