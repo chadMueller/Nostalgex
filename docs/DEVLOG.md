@@ -3,6 +3,26 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-20 (Roku 1.0.14: the Plex stick pass, every run, and why the beta cut is held)
+
+**State.** Branch `roku/1.0.14` at `60b9f616`. The stick is back on the 1.0.13 candidate (build `5dbf5ff91346`, hash and file-for-file checked). Nothing pushed.
+
+**Stand-in Plex servers** (sideload seed, `nx_plex_seed_url`): A 2,200 films and 700 series of 25 episodes (19,700 titles), B 2,400 and 800 (22,400), Big 12,000 and 2,500 of 20 (62,000), about 250 to 400 collections each. Peaks are the stick's own process memory (`query/chanperf`), as a percent of the simulated limit.
+
+| Run | Limit | Servers | Read | Peak | Result |
+|---|---|---|---|---|---|
+| p1 | full (514 MB) | Big | 62,000 of 62,000 | 323.5 MB, 63% | no quit, settled 58% |
+| p4 | 256 MB sim | A+B | 42,100 of 42,100 | 197.8 MB, 74% | no quit |
+| p2 | 256 MB sim | A+B+Big | 57,600 of 104,100 (Big cut at 15,500) | 223.6 MB, 83% | no quit |
+| p3 | 150 MB sim | A+B+Big | 26,775 (B cut at 6,775, Big 300) | 162.2 MB, 103% | over the limit |
+| p5 | 150 MB sim | A+B+Big | 24,900 | 158.0 MB, 100.4% | over; added the build's cost (2.5 KB an item) to the guard |
+| p6 | 150 MB sim | A+B+Big | 26,775 | 162.2 MB, 103% | over; refit to 22 MB + 1.9 KB an item: no change (readings move by whole points) |
+| p7 | 150 MB sim | A+B+Big | 9,675 (A cut at 9,075) | 66.4 MB, 42% | no quit; the check before the build refused ("no room", 71% by the app's own reading) |
+
+**What the runs showed.** The channel build costs about 22 MB plus 1.9 KB for each item of the largest server (62,000 items +143 MB, 22,400 +58, 19,700 +55 to +60), not half of what the scan added. Over a smaller limit the reading was the real percent scaled up, which moves 3 to 6 points at a time; it is now the KB in use over the limit. Process memory from `chanperf` and the app's own reading do not agree (66 MB against 71% of 157 MB at p7), so a peak read off `chanperf` is not what the OS counts.
+
+**Why the beta cut is held.** 150 MB now stops safely but with no guide (the scan stops at a projected 90%, the collections sweep then adds about 6 points and the check refuses at 95%), and 256 MB has not been re-measured with the finer reading. A margin rule, not another fit, is proposed: stop reading at a projected 80% on a small limit and keep room for the sweep.
+
 ## 2026-11-20 (Roku 1.0.14: the guard counts what the build takes; a cut at a library's end; RESCAN saves the library choices first)
 
 **State.** Branch `roku/1.0.14`.
