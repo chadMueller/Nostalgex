@@ -4,6 +4,22 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-20 (publish 80s sitcoms channel)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/80s-sitcoms-channel`.
+
+**Why.** Today's post: the 80s sitcoms that make a 24/7 channel, and how Nostalgex puts the ones you own on 80S SITCOMS. The copy was already approved (`draft: false`, date 2026-11-20); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/80s-sitcoms-channel.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: hero `header.webp` is 1280x720. OG `cover.jpg` is 1200x630. Inline `80s-sitcoms-guide.webp` is 1920x1080. All three R2 URLs returned 200 (header.webp 52,594 bytes; cover.jpg 76,713 bytes; 80s-sitcoms-guide.webp 81,670 bytes). Images stay on R2; none committed.
+- `content/roku.json` was not touched. `announcementPost` was not set.
+- `npm run blog:render` wrote nineteen live posts into `public/sitemap.xml`, including `/blog/80s-sitcoms-channel` with lastmod 2026-11-20. `/blog` lastmod is 2026-11-20. `npm run build` emitted the post to `dist/blog/80s-sitcoms-channel.html` with width/height on the hero, the inline still and the OG card, and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 406 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
