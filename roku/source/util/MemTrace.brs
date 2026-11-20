@@ -14,7 +14,9 @@ end sub
 sub NxMemTraceNote(phase as String, count as Integer, unit as String)
     g = GetGlobalAA()
     if g.nxMemTrace = invalid then NxMemTraceReset()
-    NxMemTraceAdd(g.nxMemTrace, phase, count, unit, NxMemPercentSafe())
+    pct = NxMemPercentSafe()
+    NxMemTraceAdd(g.nxMemTrace, phase, count, unit, pct)
+    print "memory: "; phase; ", "; count; " "; unit; ", "; pct; "% of "; NxMemLimitKB(); " KB"
     NxMemTraceSave(NxPlexRegistry(), g.nxMemTrace)
 end sub
 

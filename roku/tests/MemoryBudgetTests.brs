@@ -97,6 +97,7 @@ function NxRunMemoryBudgetTests() as Integer
     g.nxScanBiggest = 0
     NxCheck(r, "memory percent: 97,000 KB over a 153,600 KB limit is 63, not a multiple of the real percent's step", NxToStr(NxMemPercentOf(97000, 153600)) + " " + NxToStr(NxMemPercentOf(0, 153600)) + " " + NxToStr(NxMemPercentOf(5, 0)), "63 0 0")
     NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
+    NxMarginRuleCases(r)
     NxPlexGuardCases(r)
     NxPlexSeedCases(r)
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
@@ -236,4 +237,74 @@ sub NxPlexSeedCases(r as Object)
     NxCheck(r, "seed: every server is on, no server pick owed, the library pick is", NxToStr(ParseJson(reg.Read("serverChoices")).Count()) + " [" + reg.Read("needsPick") + "] " + reg.Read("needsLibraryPick"), "2 [] 1")
     NxCheck(r, "seed: it marks the sign-in as a seed", reg.Read("devSeed"), "1")
     NxCheck(r, "seed: no token, no servers, or no page is no sign-in", NxPlexApplySeed(NxFakeRegistry(), { servers: seed.servers }) + NxPlexApplySeed(NxFakeRegistry(), { token: "t", servers: [] }) + NxPlexApplySeed(NxFakeRegistry(), invalid), "")
+end sub
+
+' The margin rule (source/util/Values.brs, NxScanProjectedFull, NxBuildRoomFor): a device under the Stick Plus's limit stops
+' reading where the app's reading, the build's cost and the collections sweep's reserve reach 80% and refuses the build at
+' 90%, so a cut scan leaves room for what it read; a device at or over that limit keeps the stops it had (90 and 95).
+sub NxMarginRuleCases(r as Object)
+    g = GetGlobalAA()
+    ' Constants at the limits the stick runs used.
+    NxCheck(r, "margin: build cost at 150 MB for 9,675 items, as a percent of the limit", NxToStr(NxBuildOverheadPctFor(9675, 153600)), "29")
+    NxCheck(r, "margin: build cost at 256 MB for 19,700 items", NxToStr(NxBuildOverheadPctFor(19700, 262144)), "25")
+    NxCheck(r, "margin: the sweep's reserve at 150 MB and 256 MB", NxToStr(NxSweepReservePct(153600)) + " " + NxToStr(NxSweepReservePct(262144)), "8 5")
+    NxCheck(r, "margin: no reserve at or over the Stick Plus's limit", NxToStr(NxSweepReservePct(480000)) + " " + NxToStr(NxSweepReservePct(501760)) + " " + NxToStr(NxSweepReservePct(0)), "0 0 0")
+    NxCheck(r, "margin: the stops, small and normal", NxToStr(NxScanStopPct(153600)) + " " + NxToStr(NxBuildRefusePct(153600)) + " " + NxToStr(NxScanStopPct(501760)) + " " + NxToStr(NxBuildRefusePct(501760)), "80 90 90 95")
+    ' The scan's edge at 150 MB with 9,675 items: 29 + 8 = 37 points on top of the reading.
+    NxCheck(r, "margin: 150 MB, 42% with 9,675 items still reads, 43% stops", NxToStr(NxScanProjectedFull(42, 9675, 153600)) + NxToStr(NxScanProjectedFull(43, 9675, 153600)), "falsetrue")
+    ' The same reading with the normal limit is not a stop (the old rule: 90).
+    NxCheck(r, "margin: a Stick Plus at 43% with 9,675 items reads on", NxToStr(NxScanProjectedFull(43, 9675, 501760)), "false")
+    ' A normal device's rule is the one it had: reading + Int((22000 + 1.9 x items) x 100 / limit) >= 90.
+    same = true
+    for each lim in [501760, 480000, 900000, 2000000, 0]
+        eff = lim
+        if eff = 0 then eff = 501760
+        for each items in [0, 100, 5000, 19700, 62000, 100000]
+            for pct = 20 to 89 step 3
+                was = pct + Int((22000# + items * 1.9#) * 100# / eff) >= 90
+                if was <> NxScanProjectedFull(pct, items, lim) then same = false
+            end for
+        end for
+    end for
+    NxCheck(r, "margin: at or over 480,000 KB the stop is exactly the one it was", NxToStr(same), "true")
+    ' The build's refusal at 150 MB: 90, with the build's cost counted.
+    g.nxMemLimitTest = 153600
+    NxCheck(r, "margin: 150 MB, 60% with 9,675 items to build is built (89), 62% is not (91)", NxToStr(NxBuildRoomFor(60, 40, 9675)) + NxToStr(NxBuildRoomFor(62, 40, 9675)), "truefalse")
+    NxCheck(r, "margin: 150 MB, three servers read (growth 40 points) with 9,675 items the largest: the build's cost is the measure, not half the growth", NxToStr(NxBuildRoomFor(55, 15, 9675)) + NxToStr(NxBuildRoomFor(62, 15, 9675)), "truefalse")
+    NxCheck(r, "margin: 150 MB, 90% is never built, 89% that added nothing is", NxToStr(NxBuildRoomFor(90, 90)) + NxToStr(NxBuildRoomFor(89, 89)), "falsetrue")
+    ' What the limit the test sets says for the scan's own check (NxScanMemoryFull).
+    g.nxScanMemBase = 26
+    g.nxScanBiggest = 0
+    guard42 = { memoryPercent: function() as Integer
+        return 42
+    end function }
+    NxCheck(r, "margin: the scan at 150 MB, 42% with nothing counted yet: 24 MB and the reserve make 24, so it reads on", NxToStr(NxScanMemoryFull(guard42, 0)), "false")
+    NxCheck(r, "margin: and with 9,675 items counted at 42% it still reads (79); at 43% it stops", NxToStr(NxScanMemoryFull(guard42, 9675)), "false")
+    g.nxScanBiggest = 20000
+    NxCheck(r, "margin: with 20,000 items the largest, 42% stops at 150 MB (42 + 41 + 8)", NxToStr(NxScanMemoryFull(guard42, 0)), "true")
+    g.nxScanBiggest = 0
+    ' A cut scan leaves room to build what it read: whatever the scan did not stop at, the check before the build,
+    ' after the sweep's measured 6 points at 150 MB, lets through (base 26 and 40, sizes from 0 to 60,000 items).
+    ok = true
+    worst = 0
+    for each lim in [153600, 200000, 262144, 400000]
+        g.nxMemLimitTest = lim
+        sweep = Int(9000# * 100# / lim + 0.999#)
+        for each items in [1, 300, 3000, 10000, 20000, 40000, 60000]
+            for each base in [26, 40]
+                for pct = base to 95
+                    if not NxScanProjectedFull(pct, items, lim) then
+                        if not NxBuildRoomFor(pct + sweep, base, items) then ok = false
+                        peak = pct + sweep + Int((22000# + items * 1.9#) * 100# / lim)
+                        if peak > worst then worst = peak
+                    end if
+                end for
+            end for
+        end for
+    end for
+    NxCheck(r, "margin: a scan that was not stopped is never refused after the sweep, 150 to 400 MB", NxToStr(ok), "true")
+    NxCheck(r, "margin: and its peak by the measured cost stays under 85%", NxToStr(worst < 85), "true")
+    g.nxMemLimitTest = invalid
+    g.nxScanMemBase = invalid
+    g.nxScanBiggest = 0
 end sub

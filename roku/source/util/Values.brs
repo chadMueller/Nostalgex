@@ -179,13 +179,69 @@ end function
 function NxScanMemoryFull(fetcher as Object, hereItems = 0 as Integer) as Boolean
     if not fetcher.DoesExist("memoryPercent") then return false
     pct = fetcher.memoryPercent()
-    if NxMemFullFor(pct, NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase) then return true
+    if NxMemFullFor(pct, NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase) then
+        print "memory: the scan stops at "; pct; "% (the ceiling is "; NxScanMemoryCeiling(); "%)"
+        return true
+    end if
     ' And what the build will take on top (NxBuildOverheadPct): it grows with the largest server's items, which the
     ' ceiling above does not see, and is most of the peak on a small limit (a 150 MB limit measured 2026-11-20).
     biggest = hereItems
     if NxNumberOr0(GetGlobalAA().nxScanBiggest) > biggest then biggest = GetGlobalAA().nxScanBiggest
-    if pct < 0 or biggest <= 0 then return false
-    return pct + NxBuildOverheadPct(biggest) >= 90
+    if pct < 0 then return false
+    if biggest <= 0 and not NxMemIsSmall(NxMemLimitKB()) then return false
+    if NxScanProjectedFull(pct, biggest, NxMemLimitKB()) then
+        print "memory: the scan stops at "; pct; "% with the build for "; biggest; " items still to take"
+        return true
+    end if
+    return false
+end function
+
+' The margin rule (2026-11-20, from the Plex and Jellyfin stick runs at 150 and 256 MB). A device at or over the Stick
+' Plus's limit (480,000 KB) keeps what it had: the scan stops where the build's projected peak reaches 90% of the limit,
+' and the check before the build refuses at 95%. A smaller device keeps a margin, so a cut scan leaves room to build what
+' it read and the peak stays under 85%: the scan stops where the app's reading, the build's cost (the stick's measured
+' 22 MB and 1.9 KB an item, here 24 MB and 2.1 KB, a tenth over) and a reserve for the collections sweep (measured about
+' 6 points of a 150 MB limit, 9 MB; here 12 MB) reach 80%, and the build is refused at 90%.
+function NxMemIsSmall(limitKB as Integer) as Boolean
+    return limitKB > 0 and limitKB < NxMemNormalLimitKB()
+end function
+
+' What the channel build adds, in KB, for the largest server's items.
+function NxBuildCostKB(items as Integer, limitKB as Integer) as Integer
+    if NxMemIsSmall(limitKB) then return 24000 + Int(items * 2.1#)
+    return 22000 + Int(items * 1.9#)
+end function
+
+' ... as a percent of the limit (rounded up on a small device, down as before on a normal one).
+function NxBuildOverheadPctFor(items as Integer, limitKB as Integer) as Integer
+    eff = limitKB
+    if eff <= 0 then eff = 501760
+    pct# = NxBuildCostKB(items, limitKB) * 100# / eff
+    if NxMemIsSmall(limitKB) then return Int(pct# + 0.999#)
+    return Int(pct#)
+end function
+
+' The collections sweep's reserve, in percent of the limit (0 where nothing is kept back), rounded up.
+function NxSweepReservePct(limitKB as Integer) as Integer
+    if not NxMemIsSmall(limitKB) then return 0
+    return Int(12000# * 100# / limitKB + 0.999#)
+end function
+
+' The percent of the limit at which the scan stops reading (80 on a small device, 90 as before) and at which the build
+' is refused (90, 95 as before).
+function NxScanStopPct(limitKB as Integer) as Integer
+    if NxMemIsSmall(limitKB) then return 80
+    return 90
+end function
+
+function NxBuildRefusePct(limitKB as Integer) as Integer
+    if NxMemIsSmall(limitKB) then return 90
+    return 95
+end function
+
+' Whether a scan at `pct` of the limit, its largest server holding `items`, is to stop.
+function NxScanProjectedFull(pct as Integer, items as Integer, limitKB as Integer) as Boolean
+    return pct + NxBuildOverheadPctFor(items, limitKB) + NxSweepReservePct(limitKB) >= NxScanStopPct(limitKB)
 end function
 
 ' What the channel build adds to the app's memory, as a percent of its limit: about 22 MB and 1.9 KB for each item of the
@@ -194,9 +250,7 @@ end function
 ' servers (largest 22,400) +55; a Jellyfin library of 21,400 +46 (the fit runs a little high for these, as it should).
 ' The limit is the TV's own, or a sideload's simulated one.
 function NxBuildOverheadPct(items as Integer) as Integer
-    limit = NxMemLimitKB()
-    if limit <= 0 then limit = 501760
-    return Int((22000# + items * 1.9#) * 100# / limit)
+    return NxBuildOverheadPctFor(items, NxMemLimitKB())
 end function
 
 ' The app's memory as the guard reads it, or -1 where there is no monitor (the off-device interpreter).
@@ -224,12 +278,13 @@ end sub
 ' the load began (invalid or -1: not known). The build, the schedule and the save take half again what the
 ' load added since `base` (measured on the stick: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB, from a
 ' start at 17% and 26%), so the peak it heads for is `pct` plus half that growth. At 95% of the limit or more
-' it is not built: the OS ends the app near 100% with no message, and the viewer is told instead. A TV that
+' (90% on a device under the Stick Plus's limit, NxBuildRefusePct) it is not built: the OS ends the app near 100% with no message, and the viewer is told instead. A TV that
 ' gives no reading (-1) is let through. Every backend: the scan's own guard (NxMemFullFor) only covers
 ' Jellyfin and Emby, and only while they read.
 function NxBuildRoomFor(pct as Integer, base as Dynamic, biggestItems = 0 as Integer) as Boolean
     if pct < 0 then return true
-    if pct >= 95 then return false
+    refuse = NxBuildRefusePct(NxMemLimitKB())
+    if pct >= refuse then return false
     start = 0
     if NxIsNumber(base) then start = base
     if start < 0 then start = 0
@@ -239,9 +294,15 @@ function NxBuildRoomFor(pct as Integer, base as Dynamic, biggestItems = 0 as Int
     ' What the build takes grows with the largest server's items (NxBuildOverheadPct); the larger of the two guesses.
     if biggestItems > 0 then
         overhead = NxBuildOverheadPct(biggestItems)
-        if overhead > extra then extra = overhead
+        ' On a small device the measured cost is the whole answer: with several servers read, half the growth is far over it
+        ' (three equal servers: 9 KB an item against 2.1) and would refuse a scan the margin rule let through.
+        if NxMemIsSmall(NxMemLimitKB()) then
+            extra = overhead
+        else if overhead > extra then
+            extra = overhead
+        end if
     end if
-    return pct + extra < 95
+    return pct + extra < refuse
 end function
 
 ' Whether the scan is to stop reading, for memory `pct` now, the ceiling, and the memory `base`
@@ -289,6 +350,9 @@ end function
 ' with nx_mem_limit_kb in the manifest, a smaller one standing in for a low-memory Roku (the guard
 ' then sees percent of THAT). 0 when the device does not say.
 function NxMemLimitKB() as Integer
+    ' A test's limit (never set in the app).
+    testLimit = GetGlobalAA().nxMemLimitTest
+    if NxIsNumber(testLimit) then return testLimit
     limit% = 0
     ' The off-device interpreter has no roAppMemoryMonitor and stops on it: no limit then (the ceiling is 55).
     try
