@@ -136,12 +136,23 @@ end function
 ' is private (the home-network address sign-in found). Anything else is
 ' refused. Returns { code, json } like NxHttp; code 0 if refused.
 function NxPlexServerGet(url as String, token as String, timeoutMs = 15000 as Integer) as Object
+    ' A test's stand-in for the network (never set in the app): its get(url) answers { code, json }.
+    net = GetGlobalAA().nxPlexTestNet
+    if net <> invalid then return net.get(url)
     return NxServerRequest("GET", url, NxPlexHeaders(token), "", timeoutMs, true)
 end function
 
 ' Several GETs to one Plex server, up to `width` in flight at once, under the
 ' same rules as NxPlexServerGet. Returns { code, json } per URL, in order.
 function NxPlexServerGetMany(urls as Object, token as String, width as Integer, timeoutMs = 15000 as Integer) as Object
+    net = GetGlobalAA().nxPlexTestNet
+    if net <> invalid then
+        answers = []
+        for each u in urls
+            answers.Push(net.get(u))
+        end for
+        return answers
+    end if
     return NxServerGetMany(urls, NxPlexHeaders(token), width, timeoutMs, true)
 end function
 

@@ -183,6 +183,9 @@ end function
 
 ' The app's memory as the guard reads it, or -1 where there is no monitor (the off-device interpreter).
 function NxMemPercentSafe() as Integer
+    ' A test's reading (never set in the app).
+    test = GetGlobalAA().nxMemPercentTest
+    if NxIsNumber(test) then return test
     pct = -1
     try
         pct = NxMemPercentNow()

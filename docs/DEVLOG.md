@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-19 (Roku 1.0.14: the Plex scan has the memory guard Jellyfin and Emby have)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick yet.
+
+**Why.** brytenyte (Stick 4K, Plex, only his biggest server on) is ended by the OS after the channel build with no message. Jellyfin and Emby already stop reading at a ceiling and keep a partial library; the Plex scan had no check at all, and held a whole section's raw rows (6 to 10 KB each, with the Media and Stream lists) beside the records made from them.
+
+**Changed.** A film (or other non-show) section is read 300 a page and each page made into records at once, the raw page dropped (`NxPlexScanPages`); after each page `NxScanMemoryFull` asks the same projected-peak rule as the Jellyfin scan, and a full memory keeps what was read and counts the rest from the sections' own totalSize (`NxPlexSectionTotal`, `NxPlexNoteCut`), so the cut line and ABOUT's MEMORY lines read as they do for Jellyfin. A show section keeps its two requests (the show list, then one allLeaves a show) and is checked after each batch of 25 shows; the later sections are never started once a cut is made. A failed page skips its section and leaves none of its records behind, as before. The check before the channel build already covers the build for every backend.
+
+**The hung test run.** The first Plex guard test hung because the off-device interpreter's `Val()` returns 0 for "300&X-Plex-Container-Size=...", where a TV's returns 300: the fake server answered page one for ever. It was the interpreter, in the test fake (numbers are read digit by digit now), not the app and not the Dolby Vision step.
+
+**Tests.** `MemoryBudgetTests` (8 more cases on a fake Plex of 1,000 films and 20 shows: everything read at low memory, a cut after the first page of films with the totals counted, a cut after a batch of shows, a scan that began at 70%, a failed page leaving nothing behind), 49 pass. The Plex request path has a test hook (`nxPlexTestNet`) that is never set in the app.
+
+**Half-done.** Not on a stick: whether a Plex library of brytenyte's size now stops under its limit is the stick pass. Plex reads a show's episodes as it always did; that is what lazy episodes (branch `roku/lazy-episodes`) changes later.
+
 ## 2026-11-19 (Roku 1.0.14: no silent quit at the channel build, a message instead)
 
 **State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick.

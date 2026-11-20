@@ -81,6 +81,121 @@ function NxRunMemoryBudgetTests() as Integer
     NxCheck(r, "build room: a TV that gives no reading is let through", NxToStr(NxBuildRoomFor(-1, invalid)), "true")
     NxCheck(r, "build room: memory that fell below where it began does not count as growth", NxToStr(NxBuildRoomFor(40, 60)), "true")
     NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
+    NxPlexGuardCases(r)
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
+end function
+
+' The Plex scan's guard (source/plex/PlexLibrary.brs): records a page at a time, memory checked per page and per
+' batch of shows, a cut keeps what was read and counts the rest, as the Jellyfin scan does (I-091).
+sub NxPlexGuardCases(r as Object)
+    g = GetGlobalAA()
+    server = { machineIdentifier: "srv", uri: "http://fake", lanUri: "", accessToken: "t", name: "Fake" }
+    sections = [{ key: "1", title: "Movies", type: "movie" }, { key: "2", title: "TV Shows", type: "show" }]
+
+    ' Memory low: everything is read, no cut.
+    g.nxPlexTestNet = NxFakePlexNet(sections, 1000, 20, 3)
+    g.nxMemPercentTest = 10
+    g.nxScanMemBase = invalid
+    NxScanCapSet(0)
+    all = NxPlexScanServer(server, 0)
+    NxCheck(r, "plex guard: memory low reads every title", NxToStr(all.Count()) + "," + NxToStr(NxScanCapped()), "1060,0")
+    NxCheck(r, "plex guard: films come before episodes, one record each", all[0].title + "|" + all[999].title + "|" + NxToStr(all[1000].type), "Film 0|Film 999|episode")
+
+    ' Memory full: the first page of films is kept, the rest counted, no section after it read.
+    NxScanCapSet(0)
+    g.nxMemPercentTest = 60
+    cut = NxPlexScanServer(server, 0)
+    NxCheck(r, "plex guard: memory full stops after the first page of films", NxToStr(cut.Count()) + "," + NxToStr(NxScanCapped()), "300,300")
+    NxCheck(r, "plex guard: and counts the films left and the later section's episodes (type 4)", NxToStr(NxScanCapTotal()), "1060")
+
+    ' A show section: stops after a batch of 25 shows, counting its episodes.
+    g.nxPlexTestNet = NxFakePlexNet([{ key: "2", title: "TV Shows", type: "show" }], 0, 60, 3)
+    NxScanCapSet(0)
+    shows = NxPlexScanServer(server, 0)
+    NxCheck(r, "plex guard: memory full stops a show section after a batch of 25 shows", NxToStr(shows.Count()) + "," + NxToStr(NxScanCapped()) + "," + NxToStr(NxScanCapTotal()), "75,75,180")
+
+    ' Memory low in a show section reads all its shows.
+    g.nxMemPercentTest = 10
+    NxScanCapSet(0)
+    NxCheck(r, "plex guard: memory low reads every episode of every show", NxToStr(NxPlexScanServer(server, 0).Count()) + "," + NxToStr(NxScanCapped()), "180,0")
+
+    ' A load that began at 70% over the ceiling reads on while the peak stays under 90%.
+    g.nxPlexTestNet = NxFakePlexNet(sections, 1000, 20, 3)
+    g.nxMemPercentTest = 70
+    g.nxScanMemBase = 70
+    NxScanCapSet(0)
+    NxCheck(r, "plex guard: a load that began at 70% reads everything while memory holds at 70%", NxToStr(NxPlexScanServer(server, 0).Count()) + "," + NxToStr(NxScanCapped()), "1060,0")
+
+    ' A page that fails skips its section and leaves none of its records behind.
+    g.nxMemPercentTest = 10
+    g.nxScanMemBase = invalid
+    net = NxFakePlexNet(sections, 1000, 20, 3)
+    net.failFilmPage = 600
+    g.nxPlexTestNet = net
+    NxScanCapSet(0)
+    kept = NxPlexScanServer(server, 0)
+    NxCheck(r, "plex guard: a failed page skips the film section with none of its records left", NxToStr(kept.Count()) + "," + NxToStr(kept[0].type), "60,episode")
+
+    g.nxPlexTestNet = invalid
+    g.nxMemPercentTest = invalid
+    g.nxScanMemBase = invalid
+    NxScanCapSet(0)
+end sub
+
+' A Plex server answering from memory: `films` films (300 a page, as the scan asks), `shows` shows of `eps`
+' episodes each, a totalSize on every answer, type=4 counting episodes, allLeaves per show. get(url) answers
+' { code, json } as NxPlexServerGet does.
+function NxFakePlexNet(sections as Object, films as Integer, shows as Integer, eps as Integer) as Object
+    return {
+        sections: sections, films: films, shows: shows, eps: eps, failFilmPage: -1, calls: 0,
+        get: function(url as String) as Object
+            m.calls = m.calls + 1
+            if Instr(1, url, "/allLeaves") > 0 then
+                at = Instr(1, url, "/library/metadata/s") + 19
+                idx = NxFakeQuery("n" + Mid(url, at), "n")
+                rows = []
+                for e = 0 to m.eps - 1
+                    rows.Push({ ratingKey: "e" + idx.ToStr() + "-" + e.ToStr(), title: "Ep " + e.ToStr(), duration: 1500000, Media: [{ container: "mkv", videoCodec: "h264", audioCodec: "aac", Part: [{ key: "/p" }] }] })
+                end for
+                return { code: 200, json: { MediaContainer: { size: rows.Count(), Metadata: rows } } }
+            end if
+            if Instr(1, url, "/all?") = 0 then
+                return { code: 200, json: { MediaContainer: { Directory: m.sections } } }
+            end if
+            isShow = Instr(1, url, "/library/sections/2/") > 0
+            start = NxFakeQuery(url, "X-Plex-Container-Start=")
+            size = NxFakeQuery(url, "X-Plex-Container-Size=")
+            total = m.films
+            if isShow then total = m.shows
+            if isShow and Instr(1, url, "type=4") > 0 then total = m.shows * m.eps
+            rows = []
+            if size > 0 then
+                if not isShow and m.failFilmPage >= 0 and start >= m.failFilmPage then return { code: 500, json: invalid }
+                for i = start to NxMinInt(start + size, total) - 1
+                    if isShow then
+                        rows.Push({ ratingKey: "s" + i.ToStr(), title: "Show " + i.ToStr(), Genre: [{ tag: "Comedy" }] })
+                    else
+                        rows.Push({ ratingKey: "m" + i.ToStr(), title: "Film " + i.ToStr(), duration: 6000000, year: 1990, Genre: [{ tag: "Drama" }], Media: [{ container: "mkv", videoCodec: "h264", audioCodec: "aac", Part: [{ key: "/p" }] }] })
+                    end if
+                end for
+            end if
+            return { code: 200, json: { MediaContainer: { size: rows.Count(), totalSize: total, Metadata: rows } } }
+        end function
+    }
+end function
+
+' The number after `name` in a URL. Digits are read by hand: the off-device interpreter's Val() gives 0 for "300&X-Plex-..."
+' where a TV's gives 300, which made a fake server answer the first page for ever (the hang of the first Plex guard run
+' was this, not the app).
+function NxFakeQuery(url as String, name as String) as Integer
+    at = Instr(1, url, name)
+    if at = 0 then return 0
+    at = at + Len(name)
+    digits = ""
+    while at <= Len(url) and Asc(Mid(url, at, 1)) >= 48 and Asc(Mid(url, at, 1)) <= 57
+        digits = digits + Mid(url, at, 1)
+        at = at + 1
+    end while
+    return Val(digits)
 end function

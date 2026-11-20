@@ -109,6 +109,88 @@ function NxPlexSectionItems(server as Object, key as String) as Dynamic
     return all
 end function
 
+' The memory guard's reading for a Plex scan: what NxMbFetcher answers for Jellyfin and Emby (-1, never
+' full, where the TV gives none).
+function NxPlexGuardFetcher() as Object
+    return {
+        memoryPercent: function() as Integer
+            return NxMemPercentSafe()
+        end function
+    }
+end function
+
+' One film (or other non-show) section read a page at a time, each page made into records at once and
+' dropped, stopping at totalSize, an empty page, a failed page (invalid: the section is skipped, as upstream
+' skips it) or a full memory (I-091). Returns { seen, total, cut } or invalid. A scan told to stop waiting
+' keeps the pages read, as NxPlexSectionItems does.
+function NxPlexScanPages(server as Object, section as Object, serverIndex as Integer, isMusicVideoSection as Boolean, musicGenre as Object, out as Object, guard as Object, progress as Dynamic) as Dynamic
+    pageSize = 300
+    start = 0
+    seen = 0
+    total = 0
+    title = NxToStr(section.title)
+    while true
+        mc = NxPlexGetContainer(server, "/library/sections/" + NxToStr(section.key) + "/all?includeGuids=1&X-Plex-Container-Start=" + start.ToStr() + "&X-Plex-Container-Size=" + pageSize.ToStr(), invalid, 30000)
+        if mc = invalid then
+            if NxLoadStopped() then return { seen: seen, total: seen, cut: false }
+            return invalid
+        end if
+        rows = NxList(mc.Metadata)
+        for each raw in rows
+            it = NxPlexMovieItem(raw, section, isMusicVideoSection, musicGenre)
+            if it <> invalid then
+                it.serverIndex = serverIndex
+                out.Push(it)
+            end if
+        end for
+        seen = seen + rows.Count()
+        total = seen
+        if NxIsNumber(mc.totalSize) then total = mc.totalSize
+        if NxIsNumber(mc.totalSize) then
+            NxScanReport(progress, out.Count(), title, NxMinInt(seen, total), total)
+        else
+            NxScanReport(progress, out.Count(), title)
+        end if
+        if rows.Count() = 0 then exit while
+        if NxIsNumber(mc.totalSize) then
+            if seen >= mc.totalSize then exit while
+        else if rows.Count() < pageSize then
+            exit while
+        end if
+        if NxScanMemoryFull(guard) then return { seen: seen, total: total, cut: true }
+        start = start + pageSize
+    end while
+    if progress <> invalid then
+        progress.progress = title + ": " + seen.ToStr() + " items"
+        progress.bar = -1
+    end if
+    return { seen: seen, total: total, cut: false }
+end function
+
+' How many titles a section holds, from a request for none (the answer's totalSize), or 0 when the server
+' won't say. A show section counts its episodes (type 4), the titles the scan makes of it.
+function NxPlexSectionTotal(server as Object, section as Object) as Integer
+    kind = ""
+    if section.type = "show" then kind = "type=4&"
+    mc = NxPlexGetContainer(server, "/library/sections/" + NxToStr(section.key) + "/all?" + kind + "X-Plex-Container-Start=0&X-Plex-Container-Size=0")
+    if type(mc) = "roAssociativeArray" then
+        if NxIsNumber(mc.totalSize) then return mc.totalSize
+    end if
+    return 0
+end function
+
+' A scan that stopped for a full memory says how far it got and how many titles the server holds: what it
+' has read, `leftHere` more in the section it stopped in, and every section after it (I-091, as the
+' Jellyfin scan's NxMbNoteCut).
+sub NxPlexNoteCut(server as Object, sections as Object, at as Integer, out as Object, leftHere as Integer)
+    total = out.Count() + leftHere
+    for v = at + 1 to sections.Count() - 1
+        total = total + NxPlexSectionTotal(server, sections[v])
+    end for
+    NxScanCapSet(out.Count(), total)
+    print "plex: memory is at "; NxScanMemoryCeiling(); "% of the limit, stopped at "; out.Count(); " of "; total; " titles"
+end sub
+
 ' Port of LibraryChangeSignature.signature: each section's updatedAt and
 ' contentChangedAt (scannedAt is left out, since a scheduled scan bumps it
 ' when nothing changed). invalid when a section carries neither, so an
@@ -158,15 +240,35 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
     musicGenre = CreateObject("roRegex", "music", "i")
 
     out = []
-    for each section in sections
+    guard = NxPlexGuardFetcher()
+    for sectionAt = 0 to sections.Count() - 1
+        section = sections[sectionAt]
+        ' A full memory ends the scan: no section after the one it stopped in (I-091, as the Jellyfin scan).
+        if NxScanCapped() > 0 then exit for
         title = NxToStr(section.title)
         sectionStart = out.Count()
         NxScanReport(progress, out.Count(), title)
-        items = NxPlexSectionItems(server, NxToStr(section.key))
+        isMusicVideoSection = mvSection.IsMatch(title.Trim())
+        if section.type = "show" then
+            items = NxPlexSectionItems(server, NxToStr(section.key))
+        else
+            ' Records are made a page at a time and the raw page dropped: a whole section of raw rows
+            ' (6 to 10 KB each, with the Media and Stream lists) held beside its records was most of a big
+            ' server's peak.
+            read = NxPlexScanPages(server, section, serverIndex, isMusicVideoSection, musicGenre, out, guard, progress)
+            if read = invalid then
+                items = invalid
+            else
+                items = []
+                if read.cut then NxPlexNoteCut(server, sections, sectionAt, out, read.total - read.seen)
+            end if
+        end if
         if items = invalid then
+            while out.Count() > sectionStart
+                out.Pop()
+            end while
             print "plex: skipped a section that failed to load"
         else
-            isMusicVideoSection = mvSection.IsMatch(title.Trim())
             if section.type = "show" then
                 ' Episodes are fetched five shows at a time, as upstream's
                 ' BATCH_SIZE, and kept in show order. A show whose fetch
@@ -206,20 +308,13 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         progress.barCaption = NxMinInt(b + batch, items.Count()).ToStr() + " of " + items.Count().ToStr() + " shows"
                     end if
                     if NxLoadStopped() then exit for
-                end for
-            else
-                for each raw in items
-                    it = NxPlexMovieItem(raw, section, isMusicVideoSection, musicGenre)
-                    if it <> invalid then
-                        it.serverIndex = serverIndex
-                        out.Push(it)
+                    if NxScanMemoryFull(guard) and b + batch < items.Count() then
+                        leftHere = NxPlexSectionTotal(server, section) - (out.Count() - sectionStart)
+                        if leftHere < 0 then leftHere = 0
+                        NxPlexNoteCut(server, sections, sectionAt, out, leftHere)
+                        exit for
                     end if
                 end for
-                NxScanReport(progress, out.Count(), title, items.Count(), items.Count())
-                if progress <> invalid then
-                    progress.progress = title + ": " + items.Count().ToStr() + " items"
-                    progress.bar = -1
-                end if
             end if
             if not NxLoadStopped() then NxPlexStampDovi(out, sectionStart, NxToStr(section.key), NxToStr(section.type), NxDisplayShowsDolbyVision(), { server: server, get: function(key as String, kind as String) as Object
                 return NxPlexDoviProfiles(m.server, key, kind)
