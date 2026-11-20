@@ -198,6 +198,24 @@ sub NxScanMemBaseSet()
     GetGlobalAA().nxScanMemBase = NxMemPercentSafe()
 end sub
 
+' Whether there is room to build the channels from what the scan read, at memory `pct` now and `base` where
+' the load began (invalid or -1: not known). The build, the schedule and the save take half again what the
+' load added since `base` (measured on the stick: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB, from a
+' start at 17% and 26%), so the peak it heads for is `pct` plus half that growth. At 95% of the limit or more
+' it is not built: the OS ends the app near 100% with no message, and the viewer is told instead. A TV that
+' gives no reading (-1) is let through. Every backend: the scan's own guard (NxMemFullFor) only covers
+' Jellyfin and Emby, and only while they read.
+function NxBuildRoomFor(pct as Integer, base as Dynamic) as Boolean
+    if pct < 0 then return true
+    if pct >= 95 then return false
+    start = 0
+    if NxIsNumber(base) then start = base
+    if start < 0 then start = 0
+    grown = pct - start
+    if grown < 0 then grown = 0
+    return pct + grown \ 2 < 95
+end function
+
 ' Whether the scan is to stop reading, for memory `pct` now, the ceiling, and the memory `base`
 ' the load began at (invalid or -1: not known). A load that began under the ceiling stops at it,
 ' as it always did. One that began at or over it (a rescan, or a library switch in Settings, in

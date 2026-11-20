@@ -561,6 +561,25 @@ sub loadLibrary()
         reuse = NxSavedFiltered(items, config, NxFilterClock(), NxEnabledBundles())
         if reuse <> invalid then print "library: "; reuse.Count(); " channels' filter results from the last build, read in "; timer.TotalMilliseconds(); " ms"
     end if
+    ' No room to build: the channel build takes about half again what the scan added, and a TV past its
+    ' limit ends the app with no message (a Plex server has no scan guard at all). So the build is not
+    ' started: a guide on screen stays as it is (the saved library is not replaced), a first load says why,
+    ' and its next try asks which libraries to read (the library pick is owed again), so it cannot read
+    ' the same too much again.
+    roomPct = NxMemPercentSafe()
+    if not NxBuildRoomFor(roomPct, GetGlobalAA().nxScanMemBase) then
+        NxMemTraceNote("BUILD SKIPPED", items.Count(), "TITLES")
+        print "library: no room to build the channels: memory at "; roomPct; "% after "; items.Count(); " titles"
+        m.top.incomplete = true
+        if shown then
+            print "library: keeping the saved guide"
+            keepSavedGuide()
+            return
+        end if
+        NxOweLibraryPick(NxPlexRegistry())
+        fail(NxBuildRoomLine(items.Count()))
+        return
+    end if
     built = invalid
     if NxEnrichHasRemoteWork(state, opts) then
         if not shown then

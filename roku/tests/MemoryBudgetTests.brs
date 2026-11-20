@@ -69,6 +69,18 @@ function NxRunMemoryBudgetTests() as Integer
     g.nxScanMemBase = 70
     NxCheck(r, "guard: a base of 70% stored, the same 70% is not", NxToStr(NxScanMemoryFull(fetcher)), "false")
     g.nxScanMemBase = invalid
+    ' Room to build the channels (NxBuildRoomFor): the build takes half again what the load added.
+    NxCheck(r, "build room: a first load at 51% from a 17% start builds (peak about 68%)", NxToStr(NxBuildRoomFor(51, 17)), "true")
+    NxCheck(r, "build room: 45% from 26% builds (peak about 55%)", NxToStr(NxBuildRoomFor(45, 26)), "true")
+    NxCheck(r, "build room: 70% from 17% is not built (peak about 96%)", NxToStr(NxBuildRoomFor(70, 17)), "false")
+    NxCheck(r, "build room: just under, 69% from 17% (peak about 95%), is not built", NxToStr(NxBuildRoomFor(69, 17)), "false")
+    NxCheck(r, "build room: 66% from 17% builds", NxToStr(NxBuildRoomFor(66, 17)), "true")
+    NxCheck(r, "build room: a rescan that began at 70% and added nothing builds", NxToStr(NxBuildRoomFor(70, 70)), "true")
+    NxCheck(r, "build room: 95% or more never builds, whatever it began at", NxToStr(NxBuildRoomFor(95, 95)) + NxToStr(NxBuildRoomFor(99, 99)), "falsefalse")
+    NxCheck(r, "build room: base not known counts it as zero", NxToStr(NxBuildRoomFor(60, invalid)) + NxToStr(NxBuildRoomFor(64, invalid)), "truefalse")
+    NxCheck(r, "build room: a TV that gives no reading is let through", NxToStr(NxBuildRoomFor(-1, invalid)), "true")
+    NxCheck(r, "build room: memory that fell below where it began does not count as growth", NxToStr(NxBuildRoomFor(40, 60)), "true")
+    NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
     print "memory budget cases: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function

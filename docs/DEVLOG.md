@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-19 (Roku 1.0.14: no silent quit at the channel build, a message instead)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick.
+
+**Why.** brytenyte (Stick 4K, Plex, only his biggest server on): the app reads, starts building the channels and drops to the Roku home screen with no message. The scan's guard covers Jellyfin and Emby only, and only while they read; nothing looked at memory before the build, which takes about half again what the load added since it began (measured: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB).
+
+**Changed.** Before the channel build, on every backend, `NxBuildRoomFor` projects the peak (memory now plus half of what the load added since it began, `nxScanMemBase`) and refuses at 95% of the limit or more. A TV that gives no reading is let through. Refused: nothing is built or saved, so the saved library and guide stay as they were. With a guide on screen (a launch refresh) it stays and says nothing, as for a refresh that cannot read the library; the MEMORY lines in ABOUT show BUILD SKIPPED with the titles and the percent. On a first load the error says: **THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.** (the cut line's words, `NxBuildRoomLine`), and the library pick is owed again, so OK at "try again" goes to CHOOSE YOUR LIBRARIES instead of reading the same libraries again.
+
+**Tests.** `MemoryBudgetTests` (11 more cases: each edge of the rule and the words), 41 pass. Static checks pass. The refusal in the load itself is not covered off-device (LibraryTask is not run by the interpreter suite).
+
+**Half-done.** Not seen on a TV. The 95% line and the half-again factor come from the Jellyfin stand-in; Plex's own factor is not measured.
+
 ## 2026-11-19 (Roku 1.0.14: a rescan no longer stops on its first page at a small limit)
 
 **State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick since the change.
