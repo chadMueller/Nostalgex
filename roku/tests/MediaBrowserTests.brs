@@ -127,6 +127,11 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
     end for
     NxCheck(r, "non-video libraries: only the film library is asked for items", asked, "film,")
     NxCheck(r, "non-video libraries: and its items come back", NxToStr(got.Count()), "2")
+    ' A last page that crosses the ceiling is the cut at the library's end, the next library counted, not started (N-090).
+    NxScanCapSet(0)
+    lastPage = NxMbScanServer(NxMbGuardFetcher(150, 60), "jellyfin", "u", 0)
+    NxCheck(r, "guard: a library whose one page crosses the ceiling ends the scan there, the next counted", NxToStr(lastPage.Count()) + "," + NxToStr(NxScanCapped()) + "," + NxToStr(NxScanCapTotal()), "150,150,300")
+    NxScanCapSet(0)
     NxScanCapSet(0)
     all = NxMbScanServer(NxMbGuardFetcher(1000, 0), "jellyfin", "u", 0)
     NxCheck(r, "guard: no memory reading reads every title", NxToStr(all.Count()) + "," + NxToStr(NxScanCapped()), "2000,0")

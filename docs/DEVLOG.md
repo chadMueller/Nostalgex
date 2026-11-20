@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-20 (Roku 1.0.14: the guard counts what the build takes; a cut at a library's end; RESCAN saves the library choices first)
+
+**State.** Branch `roku/1.0.14`.
+
+**Why.** The Plex stick pass with stand-in servers sized like brytenyte's (A 19,700 titles, B 22,400, Big 62,000) showed no quit at the full limit (Big alone: 62,000 read, peak 323 MB of 514, 63%) or at a simulated 256 MB (57,600 read of 104,000, Big cut at 15,500, peak 224 MB of 268, 83%), but a peak of 162 MB at a simulated 150 MB (103% of it). What the channel build adds was not half of what the scan added: it is about 2.5 KB for each item of the largest server (the filter keeps a record for each, I-065): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 across two servers (largest 22,400) +55, and a Jellyfin library of 21,400 +46. At a small limit that is most of the peak. And a second server's scan was started at full memory (it read its first page).
+
+**Changed.**
+- `NxScanMemoryFull` also stops when memory plus what the build will take (`NxBuildOverheadPct`, 2.5 KB an item of the largest server read so far, counted from the load's start across servers) reaches 90%; the check before the channel build takes the larger of that and the old half-of-the-growth guess.
+- N-090: a last page that takes memory past the ceiling ends its library without a check, so the next library was started; the check now also runs where a library or section begins (after the first), and that is the cut, the libraries left counted. Jellyfin, Emby and Plex.
+- I-099: RESCAN LIBRARY in Settings saves the libraries switched in the same visit first (`saveLibraryChoices`), so the rescan does not read the ones from before the switch, and leaving does not ask for a second read.
+
+**Tests.** `MemoryBudgetTests` (63), `MediaBrowserTests` (6,228) pass. The Settings change has no off-device test (SettingsView is a component).
+
+**Half-done.** The new build cost per item is measured on stand-ins; a re-run at 150 MB on the stick is the check.
+
 ## 2026-11-19 (Roku sideload: a Plex sign-in from a seed page, for stand-in Plex servers)
 
 **State.** Branch `roku/1.0.14`. A sideload tool; a store build never reads it.

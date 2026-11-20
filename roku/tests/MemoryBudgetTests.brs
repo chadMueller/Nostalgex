@@ -80,6 +80,20 @@ function NxRunMemoryBudgetTests() as Integer
     NxCheck(r, "build room: base not known counts it as zero", NxToStr(NxBuildRoomFor(60, invalid)) + NxToStr(NxBuildRoomFor(64, invalid)), "truefalse")
     NxCheck(r, "build room: a TV that gives no reading is let through", NxToStr(NxBuildRoomFor(-1, invalid)), "true")
     NxCheck(r, "build room: memory that fell below where it began does not count as growth", NxToStr(NxBuildRoomFor(40, 60)), "true")
+    ' The build takes about 2.5 KB an item of the largest server: at a 150 MB limit (153,600 KB) 19,700 items is 32% of it.
+    g = GetGlobalAA()
+    NxCheck(r, "build overhead: 19,700 items at a 501,760 KB limit", NxToStr(NxBuildOverheadPct(19700)), "9")
+    NxCheck(r, "build room: with the largest server's items counted, 58% heading for 90% is not built at a small limit", NxToStr(NxBuildRoomFor(58, 17, 600000)), "false")
+    NxCheck(r, "build room: and a small server is", NxToStr(NxBuildRoomFor(40, 17, 3000)), "true")
+    g.nxScanBiggest = 0
+    guardNone = { memoryPercent: function() as Integer
+        return 50
+    end function }
+    NxCheck(r, "guard: no items counted, the ceiling alone (50% is over 43, under 55 at the Plus's limit)", NxToStr(NxScanMemoryFull(guardNone)), "false")
+    NxCheck(r, "guard: 50% with 100,000 items the largest: the build would take 49% more, so full", NxToStr(NxScanMemoryFull(guardNone, 100000)), "true")
+    g.nxScanBiggest = 100000
+    NxCheck(r, "guard: the largest server counted from the load's start", NxToStr(NxScanMemoryFull(guardNone)), "true")
+    g.nxScanBiggest = 0
     NxCheck(r, "build room: the words", NxBuildRoomLine(21093), "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.")
     NxPlexGuardCases(r)
     NxPlexSeedCases(r)
@@ -121,6 +135,13 @@ sub NxPlexGuardCases(r as Object)
     NxScanCapSet(0)
     NxCheck(r, "plex guard: memory low reads every episode of every show", NxToStr(NxPlexScanServer(server, 0).Count()) + "," + NxToStr(NxScanCapped()), "180,0")
 
+    ' A last page that crosses the ceiling ends its section there, the next one counted and not started (N-090).
+    g.nxPlexTestNet = NxFakePlexNet(sections, 250, 20, 3)
+    g.nxMemPercentTest = 60
+    g.nxScanMemBase = invalid
+    NxScanCapSet(0)
+    lastPage = NxPlexScanServer(server, 0)
+    NxCheck(r, "plex guard: a film section whose one page crosses the ceiling ends the scan there, the shows counted", NxToStr(lastPage.Count()) + "," + NxToStr(NxScanCapped()) + "," + NxToStr(NxScanCapTotal()), "250,250,310")
     ' A load that began at 70% over the ceiling reads on while the peak stays under 90%.
     g.nxPlexTestNet = NxFakePlexNet(sections, 1000, 20, 3)
     g.nxMemPercentTest = 70

@@ -1486,6 +1486,9 @@ sub pressRow()
             render()
         end if
     else if row.kind = "rescan" then
+        ' The libraries switched in this visit are saved first, or the rescan reads the ones from before the
+        ' switch (I-099); leaving then finds nothing changed and does not ask for a second read.
+        saveLibraryChoices()
         if not m.top.rescanning then m.top.rescan = true
     else if row.kind = "reportNowPlaying" then
         m.report.nowPlaying = not (m.report.nowPlaying = true)
@@ -1579,6 +1582,18 @@ end sub
 
 ' Back on the rail: the server, franchise and collection choices are saved once
 ' here and the guide rebuilt as needed, as they were when Settings was one page.
+' The libraries turned off or on in this visit, saved now (RESCAN LIBRARY, I-099). What leave() would save, once: it
+' finds the visit's start moved to what is saved and asks for no second read.
+sub saveLibraryChoices()
+    if not m.libsChanged then return
+    if FormatJson(m.libOff) + FormatJson(m.libIncl) = m.libOffAtOpen then return
+    NxSaveDeselectedSections(NxPlexRegistry(), m.libOff)
+    NxSaveIncludedHiddenSections(NxPlexRegistry(), m.libIncl)
+    m.libOffAtOpen = FormatJson(m.libOff) + FormatJson(m.libIncl)
+    m.libsChanged = false
+    print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff, m.libIncl); " of "; m.libs.Count(); " on, saved before the rescan"
+end sub
+
 sub leave()
     if m.serversChanged then m.serversChanged = FormatJson(m.serversOn) <> m.serversOnAtOpen
     if m.serversChanged then

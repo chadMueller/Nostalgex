@@ -443,6 +443,9 @@ sub loadLibrary()
                 got = scanUnderWatch(servers[i], i, info)
                 if loadStale() then return
                 skipped = NxScanSkips()
+                if got <> invalid then
+                    if got.Count() > NxNumberOr0(GetGlobalAA().nxScanBiggest) then GetGlobalAA().nxScanBiggest = got.Count()
+                end if
                 cutRead = NxScanCapped()
                 cutOf = NxScanCapTotal()
                 if NxScanCapped() > 0 then m.top.incomplete = true
@@ -567,7 +570,7 @@ sub loadLibrary()
     ' and its next try asks which libraries to read (the library pick is owed again), so it cannot read
     ' the same too much again.
     roomPct = NxMemPercentSafe()
-    if not NxBuildRoomFor(roomPct, GetGlobalAA().nxScanMemBase) then
+    if not NxBuildRoomFor(roomPct, GetGlobalAA().nxScanMemBase, NxNumberOr0(GetGlobalAA().nxScanBiggest)) then
         NxMemTraceNote("BUILD SKIPPED", items.Count(), "TITLES")
         print "library: no room to build the channels: memory at "; roomPct; "% after "; items.Count(); " titles"
         m.top.incomplete = true

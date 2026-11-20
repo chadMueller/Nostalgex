@@ -176,9 +176,26 @@ function NxScanMemoryCeiling() as Integer
     return NxMemCeilingFor(NxMemLimitKB())
 end function
 
-function NxScanMemoryFull(fetcher as Object) as Boolean
+function NxScanMemoryFull(fetcher as Object, hereItems = 0 as Integer) as Boolean
     if not fetcher.DoesExist("memoryPercent") then return false
-    return NxMemFullFor(fetcher.memoryPercent(), NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase)
+    pct = fetcher.memoryPercent()
+    if NxMemFullFor(pct, NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase) then return true
+    ' And what the build will take on top (NxBuildOverheadPct): it grows with the largest server's items, which the
+    ' ceiling above does not see, and is most of the peak on a small limit (a 150 MB limit measured 2026-11-20).
+    biggest = hereItems
+    if NxNumberOr0(GetGlobalAA().nxScanBiggest) > biggest then biggest = GetGlobalAA().nxScanBiggest
+    if pct < 0 or biggest <= 0 then return false
+    return pct + NxBuildOverheadPct(biggest) >= 90
+end function
+
+' What the channel build adds to the app's memory, as a percent of its limit: about 2.5 KB for each item of the
+' largest server (the filter reads one server's items at a time, I-065, and keeps a record for each). Measured on the
+' stick with the stand-in servers (2026-11-20): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 (largest 22,400)
+' +55; a Jellyfin library of 21,400 +46. The limit is the TV's own, or a sideload's simulated one.
+function NxBuildOverheadPct(items as Integer) as Integer
+    limit = NxMemLimitKB()
+    if limit <= 0 then limit = 501760
+    return Int(items * 250# / limit)
 end function
 
 ' The app's memory as the guard reads it, or -1 where there is no monitor (the off-device interpreter).
@@ -199,6 +216,7 @@ end function
 ' guide on screen, the saved library's pools and the pages the process already holds put there.
 sub NxScanMemBaseSet()
     GetGlobalAA().nxScanMemBase = NxMemPercentSafe()
+    GetGlobalAA().nxScanBiggest = 0
 end sub
 
 ' Whether there is room to build the channels from what the scan read, at memory `pct` now and `base` where
@@ -208,7 +226,7 @@ end sub
 ' it is not built: the OS ends the app near 100% with no message, and the viewer is told instead. A TV that
 ' gives no reading (-1) is let through. Every backend: the scan's own guard (NxMemFullFor) only covers
 ' Jellyfin and Emby, and only while they read.
-function NxBuildRoomFor(pct as Integer, base as Dynamic) as Boolean
+function NxBuildRoomFor(pct as Integer, base as Dynamic, biggestItems = 0 as Integer) as Boolean
     if pct < 0 then return true
     if pct >= 95 then return false
     start = 0
@@ -216,7 +234,13 @@ function NxBuildRoomFor(pct as Integer, base as Dynamic) as Boolean
     if start < 0 then start = 0
     grown = pct - start
     if grown < 0 then grown = 0
-    return pct + grown \ 2 < 95
+    extra = grown \ 2
+    ' What the build takes grows with the largest server's items (NxBuildOverheadPct); the larger of the two guesses.
+    if biggestItems > 0 then
+        overhead = NxBuildOverheadPct(biggestItems)
+        if overhead > extra then extra = overhead
+    end if
+    return pct + extra < 95
 end function
 
 ' Whether the scan is to stop reading, for memory `pct` now, the ceiling, and the memory `base`

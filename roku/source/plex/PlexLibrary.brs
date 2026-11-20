@@ -157,7 +157,7 @@ function NxPlexScanPages(server as Object, section as Object, serverIndex as Int
         else if rows.Count() < pageSize then
             exit while
         end if
-        if NxScanMemoryFull(guard) then return { seen: seen, total: total, cut: true }
+        if NxScanMemoryFull(guard, out.Count()) then return { seen: seen, total: total, cut: true }
         start = start + pageSize
     end while
     if progress <> invalid then
@@ -245,6 +245,12 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
         section = sections[sectionAt]
         ' A full memory ends the scan: no section after the one it stopped in (I-091, as the Jellyfin scan).
         if NxScanCapped() > 0 then exit for
+        ' A last page that took memory past the ceiling ends its section without a check (it is made between pages):
+        ' the cut is here, the sections left counted (N-090).
+        if sectionAt > 0 and NxScanMemoryFull(guard, out.Count()) then
+            NxPlexNoteCut(server, sections, sectionAt - 1, out, 0)
+            exit for
+        end if
         title = NxToStr(section.title)
         sectionStart = out.Count()
         NxScanReport(progress, out.Count(), title)
@@ -308,7 +314,7 @@ function NxPlexScanServer(server as Object, serverIndex as Integer, progress = i
                         progress.barCaption = NxMinInt(b + batch, items.Count()).ToStr() + " of " + items.Count().ToStr() + " shows"
                     end if
                     if NxLoadStopped() then exit for
-                    if NxScanMemoryFull(guard) and b + batch < items.Count() then
+                    if NxScanMemoryFull(guard, out.Count()) and b + batch < items.Count() then
                         leftHere = NxPlexSectionTotal(server, section) - (out.Count() - sectionStart)
                         if leftHere < 0 then leftHere = 0
                         NxPlexNoteCut(server, sections, sectionAt, out, leftHere)
