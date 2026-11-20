@@ -80,9 +80,10 @@ function NxRunMemoryBudgetTests() as Integer
     NxCheck(r, "build room: base not known counts it as zero", NxToStr(NxBuildRoomFor(60, invalid)) + NxToStr(NxBuildRoomFor(64, invalid)), "truefalse")
     NxCheck(r, "build room: a TV that gives no reading is let through", NxToStr(NxBuildRoomFor(-1, invalid)), "true")
     NxCheck(r, "build room: memory that fell below where it began does not count as growth", NxToStr(NxBuildRoomFor(40, 60)), "true")
-    ' The build takes about 2.5 KB an item of the largest server: at a 150 MB limit (153,600 KB) 19,700 items is 32% of it.
+    ' The build takes about 22 MB and 1.9 KB an item of the largest server.
     g = GetGlobalAA()
-    NxCheck(r, "build overhead: 19,700 items at a 501,760 KB limit", NxToStr(NxBuildOverheadPct(19700)), "9")
+    NxCheck(r, "build overhead: 19,700 items at a 501,760 KB limit", NxToStr(NxBuildOverheadPct(19700)), "11")
+    NxCheck(r, "build overhead: 62,000 items at a 501,760 KB limit", NxToStr(NxBuildOverheadPct(62000)), "27")
     NxCheck(r, "build room: with the largest server's items counted, 58% heading for 90% is not built at a small limit", NxToStr(NxBuildRoomFor(58, 17, 600000)), "false")
     NxCheck(r, "build room: and a small server is", NxToStr(NxBuildRoomFor(40, 17, 3000)), "true")
     g.nxScanBiggest = 0
@@ -90,7 +91,7 @@ function NxRunMemoryBudgetTests() as Integer
         return 50
     end function }
     NxCheck(r, "guard: no items counted, the ceiling alone (50% is over 43, under 55 at the Plus's limit)", NxToStr(NxScanMemoryFull(guardNone)), "false")
-    NxCheck(r, "guard: 50% with 100,000 items the largest: the build would take 49% more, so full", NxToStr(NxScanMemoryFull(guardNone, 100000)), "true")
+    NxCheck(r, "guard: 50% with 100,000 items the largest: the build would take 42% more, so full", NxToStr(NxScanMemoryFull(guardNone, 100000)), "true")
     g.nxScanBiggest = 100000
     NxCheck(r, "guard: the largest server counted from the load's start", NxToStr(NxScanMemoryFull(guardNone)), "true")
     g.nxScanBiggest = 0

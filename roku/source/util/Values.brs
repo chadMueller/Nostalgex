@@ -188,14 +188,15 @@ function NxScanMemoryFull(fetcher as Object, hereItems = 0 as Integer) as Boolea
     return pct + NxBuildOverheadPct(biggest) >= 90
 end function
 
-' What the channel build adds to the app's memory, as a percent of its limit: about 2.5 KB for each item of the
+' What the channel build adds to the app's memory, as a percent of its limit: about 22 MB and 1.9 KB for each item of the
 ' largest server (the filter reads one server's items at a time, I-065, and keeps a record for each). Measured on the
-' stick with the stand-in servers (2026-11-20): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 (largest 22,400)
-' +55; a Jellyfin library of 21,400 +46. The limit is the TV's own, or a sideload's simulated one.
+' stick with the stand-in servers (2026-11-20): 62,000 items +143 MB, 22,400 +58, 19,700 +55 and +60, 42,100 across two
+' servers (largest 22,400) +55; a Jellyfin library of 21,400 +46 (the fit runs a little high for these, as it should).
+' The limit is the TV's own, or a sideload's simulated one.
 function NxBuildOverheadPct(items as Integer) as Integer
     limit = NxMemLimitKB()
     if limit <= 0 then limit = 501760
-    return Int(items * 250# / limit)
+    return Int((22000# + items * 1.9#) * 100# / limit)
 end function
 
 ' The app's memory as the guard reads it, or -1 where there is no monitor (the off-device interpreter).
