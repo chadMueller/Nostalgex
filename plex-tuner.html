@@ -4326,6 +4326,13 @@
         </div>
         <button class="plex-btn plex-btn--toggle" id="cfg-watershed-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleWatershed()" aria-label="Watershed" aria-pressed="false">OFF</button>
       </div>
+      <div class="cfg-row" id="chan-episode-order-row">
+        <div>
+          <div class="cfg-row-title">EPISODE ORDER</div>
+          <div class="cfg-row-desc" id="cfg-episode-order-desc">Two episodes of a show back to back, in order. Movie channels are not affected.</div>
+        </div>
+        <button class="plex-btn" id="cfg-episode-order-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="cycleEpisodeOrder()" aria-label="Episode order" aria-describedby="cfg-episode-order-desc">CLASSIC RERUNS</button>
+      </div>
 </div>
 
       <div id="channels-page-bundles" data-page="bundles" hidden>
@@ -6235,6 +6242,7 @@
     updateRetroControls();
     updateSyncActivityControls();
     updateWatershedControls();
+    updateEpisodeOrderControls();
     updateOpenLastChannelControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
@@ -6548,6 +6556,44 @@
   // once (the Apple TV registers AppState.channels the same way). A cached older engine
   // script has no setLineup: it packs each channel alone, as before, until it reloads.
   if (typeof NostalgexDailyManifest.setLineup === 'function') NostalgexDailyManifest.setLineup(guideLineup);
+
+  // ── EPISODE ORDER (I-103): one setting for every channel's shows, in CHANNELS & BUNDLES (the Apple TV's EpisodeOrder) ──
+  // CLASSIC RERUNS (the default) airs two consecutive episodes of a show back to back, from a random spot in the series.
+  // SHUFFLE airs one at a time, picked at random. Movies are never affected. The engine (scripts/nostalgex-daily-manifest.js,
+  // the same file the Apple TV and Roku port) holds the order; this page saves the choice, hands it over at load and on
+  // every change, and builds the schedules again. The default is saved as no key, as the Apple TV does.
+  const EPISODE_ORDER_KEY = 'nostalgex_episode_order';
+  const EPISODE_ORDERS = {
+    classic: { title: 'CLASSIC RERUNS', text: 'Two episodes of a show back to back, in order. Movie channels are not affected.' },
+    shuffle: { title: 'SHUFFLE', text: 'One episode at a time, picked at random. Movie channels are not affected.' },
+  };
+  function savedEpisodeOrder() {
+    try { return localStorage.getItem(EPISODE_ORDER_KEY) === 'shuffle' ? 'shuffle' : 'classic'; } catch (e) { return 'classic'; }
+  }
+  // A cached older engine script has no setEpisodeOrder: it airs the way it always did until it reloads.
+  function applyEpisodeOrder() {
+    if (typeof NostalgexDailyManifest.setEpisodeOrder === 'function') NostalgexDailyManifest.setEpisodeOrder(savedEpisodeOrder());
+  }
+  applyEpisodeOrder();
+  /** The button and the line under the row show what the engine will read, so a write that failed shows as before. */
+  function updateEpisodeOrderControls() {
+    const order = EPISODE_ORDERS[savedEpisodeOrder()];
+    const button = document.getElementById('cfg-episode-order-btn');
+    const desc = document.getElementById('cfg-episode-order-desc');
+    if (button) button.textContent = order.title;
+    if (desc) desc.textContent = order.text;
+  }
+  function cycleEpisodeOrder() {
+    const next = savedEpisodeOrder() === 'classic' ? 'shuffle' : 'classic';
+    let saved = true;
+    if (next === 'classic') { try { localStorage.removeItem(EPISODE_ORDER_KEY); } catch (e) { saved = false; } }
+    else saved = lsSet(EPISODE_ORDER_KEY, next);
+    updateEpisodeOrderControls();
+    if (!saved) return;   // the engine reads what was saved, so a choice that did not save changes nothing
+    applyEpisodeOrder();
+    rebuildAllSchedules();
+    renderActiveGuide();
+  }
 
   /**
    * TunerView.buildAllSchedules: every channel at one instant, then one title on two
@@ -10799,6 +10845,7 @@
     if (subSel) subSel.value = subtitleLanguage;
     updateAutoSubsControls();
     updateWatershedControls();
+    updateEpisodeOrderControls();
     updateOpenLastChannelControls();
   }
 
@@ -11843,6 +11890,17 @@
     console.log(`[Nostalgex] ${LC.orphanReport(result, onAir.size)} (counted in ${Math.round(performance.now() - started)} ms)`);
   }
 
+  // CLASSIC RERUNS (EPISODE ORDER) reads each episode's seTag ("S01E04"). A library saved before the scan kept it has
+  // none, but the number is in the item's `meta` ("Pilot" · S01E04 · 22 min), so it is read from there and a saved
+  // library airs in series order at once instead of in library order until it is read again.
+  function restoreSeTags(items) {
+    for (const item of items || []) {
+      if (item.type !== 'episode' || item.seTag || typeof item.meta !== 'string') continue;
+      const tag = item.meta.split(' \u00B7 ').find(part => /^(?:S\d+)?(?:E\d+)?$/.test(part) && part !== '');
+      if (tag) item.seTag = tag;
+    }
+  }
+
   async function loadLibraryCache(allowStale = false) {
     try {
       const parsed = await NostalgexStorage.libraryCache.load();
@@ -11852,6 +11910,7 @@
       if (url !== plexServerUrl) return null;
       const stale = Date.now() - ts > LIBRARY_CACHE_TTL || parsed.scanRevision !== LIBRARY_SCAN_REVISION;
       if (stale && !allowStale) return null;
+      restoreSeTags(items);
       return { items, ts, stale, skippedNoRuntime: Number(parsed.skippedNoRuntime) || 0 };
     } catch (e) {
       return null;
@@ -12780,6 +12839,8 @@
                   return {
                     title: show.Name || 'Unknown',
                     episodeTitle: epTitle,
+                    // "S01E04": the show's order, which CLASSIC RERUNS airs two episodes of at a time (EPISODE ORDER, I-103).
+                    seTag,
                     meta: [`"${epTitle}"`, seTag, formatDuration(durationMin)].filter(Boolean).join(' · '),
                     summary: ep.Overview || show.Overview || '',
                     year: show.ProductionYear || '',
@@ -13200,6 +13261,8 @@
                     return {
                       title: show.title || 'Unknown',
                       episodeTitle: epTitle,
+                      // "S01E04": the show's order, which CLASSIC RERUNS airs two episodes of at a time (EPISODE ORDER, I-103).
+                      seTag,
                       meta: [`"${epTitle}"`, seTag, formatDuration(durationMin)].filter(Boolean).join(' · '),
                       summary: ep.summary || show.summary || '',
                       year: show.year || '',

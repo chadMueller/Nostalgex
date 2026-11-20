@@ -4,6 +4,26 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-19 (web 1.0.24-next: EPISODE ORDER, I-103)
+
+**Shipped.** Nothing. On `web/1.0.24-next`, not pushed, `tunerVersion` still 1.0.23, no tag.
+
+**Why.** Chad, 2026-11-19: the free tier gets two app-wide episode modes. CLASSIC RERUNS (the default) airs two consecutive episodes of a show back to back from a seeded random spot; SHUFFLE airs one at a time, random. The default schedule changes on purpose. IN ORDER and the other modes are held for Plus (N-092) and not built.
+
+**Changed.**
+- The shared engine and its tests came from the Apple TV commit `2155af04` (appletv/1.0.34-next), checked out byte for byte, not re-implemented: `scripts/nostalgex-daily-manifest.js` (SCHEMA_VERSION 5, `setEpisodeOrder`, `interleaveByShow`, `seriesNext` and the rest), `scripts/schedule-parity-golden.json`, `scripts/episode-order-golden.json`, `schedule-parity-dump.mjs`, `schedule-parity-golden.mjs`, `nostalgex-episode-order-smoke.mjs`, `nostalgex-schedule-order-smoke.mjs`, `nostalgex-collections-smoke.mjs`, `play-to-end-smoke.mjs`, and the `test:episode-order` lines in `package.json`. Both branches carry the identical engine.
+- `plex-tuner.html`: every episode (Plex, Jellyfin, Emby) now carries `seTag` ("S01E04", the string already built for `meta`); without it CLASSIC RERUNS falls back to library order. A library saved before this has no `seTag`, so it is read back from the item's `meta` when the cache is restored (`restoreSeTags`). `LIBRARY_SCAN_REVISION` stays 3: `play-to-end-smoke.mjs` pins it, and that file is the Apple TV's.
+- An EPISODE ORDER row on the CHANNELS & BUNDLES list page, under Watershed: a real button that shows CLASSIC RERUNS or SHUFFLE and cycles on a press, with the Apple TV's words ("Two episodes of a show back to back, in order." or "One episode at a time, picked at random.", then "Movie channels are not affected."). Saved in localStorage `nostalgex_episode_order`; the default is no key, as on the Apple TV. The page hands the choice to the engine at load and on every press, and builds every schedule again. A press that does not save changes nothing.
+- The Docker image gets all of it from the same page: nothing here sits inside a `selfhost:strip` block (checked by cutting the strip blocks out of `plex-tuner.html` the way the builder does and finding every new piece still there). `npm run build:selfhost` was not run.
+- New test `scripts/episode-order-browser-smoke.mjs` (`npm run test:episode-order:browser`, not part of `npm test`): 45 checks at desktop, 960x540 at DPR 2 and phone width, on a Jellyfin stub with two shows of numbered episodes. It fails on the page before this change.
+
+**Tests run (one at a time, load under 4 before each, no full suite).** `test:schedule-parity` 64, `test:episode-order` 17, `test:schedule` 12, `test:play-to-end` 48, `test:collections` 59, `test:episode-order:browser` 45. `test:play-to-end` failed once, on the scan-revision pin, when I had bumped the revision; fixed by the `meta` read-back above.
+
+**Half-done.** Plex and Emby episodes get `seTag` from the same lines as `meta` but only Jellyfin was run in a browser.
+
+**Next.** Roku ports the engine change (it copies this JS).
+
+
 ## 2026-11-19 (web 1.0.24-next: weather search fixes and the library choice a sign-in owes)
 
 **Shipped.** Nothing. This is the web and Docker next-release integration branch, `web/1.0.24-next`, off `origin/main` (4fac0f4d). It is not pushed, `tunerVersion` is still 1.0.23 and there is no `tuner-v` tag.

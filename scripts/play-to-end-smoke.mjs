@@ -94,10 +94,10 @@ const again = M.getManifestBlocks(channel, pool, day1 * 1000, SK);
 check("a day whose pool did not change is read back, not packed again", JSON.stringify(saved.map((b) => [b.item.ratingKey, b.startSec])) === JSON.stringify(again.map((b) => [b.item.ratingKey, b.startSec])));
 const storedKey = [...store.keys()].find((k) => k.endsWith(`_${channel.id}_${M.localDayKey(day1 * 1000)}`));
 const stored = JSON.parse(store.get(storedKey));
-check("a packed day is stored at schema 4", stored.schemaVersion === 4, String(stored.schemaVersion));
+check("a packed day is stored at schema 5", stored.schemaVersion === 5, String(stored.schemaVersion));
 store.set(storedKey, JSON.stringify({ ...stored, schemaVersion: 3, blocks: stored.blocks.map((b) => ({ ...b, endSec: b.startSec + 240 })) }));
 const repacked = M.getManifestBlocks(channel, pool, day1 * 1000, SK);
-check("a day stored at schema 3 (minute slots) is packed again, once", repacked.every((b) => b.endSec - b.startSec === 251) && JSON.parse(store.get(storedKey)).schemaVersion === 4);
+check("a day stored at schema 3 (minute slots) is packed again, once", repacked.every((b) => b.endSec - b.startSec === 251) && JSON.parse(store.get(storedKey)).schemaVersion === 5);
 
 // A library refresh just after midnight forgets the stored days but keeps yesterday's: the programme running over midnight is
 // on air from it, and the day packed again starts when it ends.
