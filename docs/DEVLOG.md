@@ -14,15 +14,21 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **SHUFFLE.** One episode of a show at a time, random order. EPISODE ORDER is one row in CHANNELS & BUNDLES, app-wide; the order is in a stored day's fingerprint, so a change packs today again and the programme playing carries on to its end. Its goldens are in a file of their own, `scripts/episode-order-golden.json`, so the file every platform reads moves only for the default.
 
+**Review fixes, same day.** (1) A programme picked ahead of a pair (another channel had the pair's first episode on) used to leave the pair's second episode behind, because only the head of the queue was checked: A1 A2 B1 B2 aired as B1 A1 A2 B2. The pairs are now read from the order as built (`SchedulePoolOrdering.pairs`) and the second is found anywhere in the lookahead window; and once a show has had its turn another title that fits goes next, so a programme picked ahead cannot leave two pairs of one show back to back. (2) A show is its server id (`showKey`: Plex grandparentRatingKey, Jellyfin and Emby SeriesId; already on the Apple TV's and the web tuner's items), else its title and year, not its title: two shows with one title no longer interleave as one. Within one show a second copy of the same season and episode does not air (the first in the library's order does), under both orders; only a tag with both a season and an episode counts. Checked upstream first: the library load removes duplicates only for one server reached under two identities, so a show held in two libraries arrives as two shows with their own ids and airs as two shows. With no id and no year, two shows with one title and the same numbering cannot be told apart and one is treated as copies. New golden case `plex-denver-pairs-kept`; the fixtures' shows now carry ids.
+
+**Decision: keep the pair whole (Chad, 2026-11-19).** The second episode of a pair airs straight after the first even when another channel has that episode on. One episode on two channels now and then is accepted. Pinned by the golden case (channel 22 airs one episode all day, channel 32 opens with its pair), `EpisodeOrderTests.testAPairIsKeptWholeWhenAnotherChannelHasItsSecondEpisodeOn` and a check in `test:episode-order`.
+
+**Looked at in the simulator** (`EpisodeOrderWalkTests`, demo mode, muted): the row reads CLASSIC RERUNS with its line, a press makes it SHUFFLE, the guide's episode channel changes from two of a show in a row to one at a time, and the film playing carries on from where it was.
+
 **Not built.** IN ORDER, MARATHON, CONTINUE WATCHING and a per-channel order are held for Plus (Chad). No saved position exists. `EpisodeOrder` is an enum that takes more cases.
 
 **Known edges.** On the premiere channel a title added this week is slotted by airtime and can land between the two episodes of a pair. The filler loop can start on the second episode of a pair, which then airs alone. Once every other show in a day's ordering has run out, the last show airs alone, pair after pair, as it did before.
 
 **Regenerating the goldens.** `node scripts/schedule-parity-golden.mjs cases A.json` and `order-cases B.json`; join the two `cases` lists in one file; run `ScheduleParityTests/testDumpForAFixtureFile` with `TEST_RUNNER_NX_SCHED_FIXTURE` and `TEST_RUNNER_NX_SCHED_OUT`; then `fold OUT.json` and `order-fold OUT.json`. Both say whether the web engine matches.
 
-**Tested.** Simulator: the 11 schedule classes (parity, episode order, daily manifest, lineup, DST, collections and neighbours), 70 tests, 2 skipped by design; one test asserted the old shuffle and was rewritten. `npm run test:schedule-parity` (4 cases byte for byte), `test:episode-order` (new, 17), `test:schedule`, `test:play-to-end`, `test:collections`, `test:schedule-dst`, `test:schedule-lineup`. The Android and Roku tests that read `schedule-parity-golden.json` were not run and will not match until those engines take the change.
+**Tested.** Simulator: the 11 schedule classes (parity, episode order, daily manifest, lineup, DST, collections and neighbours); one test asserted the old shuffle and was rewritten. `npm run test:schedule-parity` (5 cases byte for byte), `test:episode-order` (new, 25 checks), `test:schedule`, `test:play-to-end`, `test:collections`, `test:schedule-dst`, `test:schedule-lineup`. The Android and Roku tests that read `schedule-parity-golden.json` were not run and will not match until those engines take the change.
 
-**Unverified.** The row and the guide's refresh after a change were not looked at in the simulator or on a TV.
+**Unverified.** Not looked at on a TV.
 
 ## 2026-11-19 (Apple TV: the 1.0.34 integration branch)
 

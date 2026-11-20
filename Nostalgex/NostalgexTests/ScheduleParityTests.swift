@@ -245,9 +245,11 @@ final class ScheduleParityTests: XCTestCase {
             // The season and episode tag as makeEpisodeItem builds it (series order, I-103).
             let s = raw.parentIndex.map { "S\(String(format: "%02d", $0))" } ?? ""
             let e = raw.index.map { "E\(String(format: "%02d", $0))" } ?? ""
+            // The show's id as makeEpisodeItem keeps it (`showKey`), and its year: what tells two shows apart.
             return (raw.ratingKey, item(key: raw.ratingKey, title: show["title"] as? String ?? "", type: .episode,
                                         minutes: minutes, addedAt: raw.addedAt ?? 0,
-                                        exact: raw.duration.map { Double($0) / 1000 }, seTag: (s + e).isEmpty ? nil : s + e))
+                                        exact: raw.duration.map { Double($0) / 1000 }, seTag: (s + e).isEmpty ? nil : s + e,
+                                        showKey: show["ratingKey"] as? String, year: int(show["year"])))
         case ("jellyfin", "movie"):
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
@@ -270,10 +272,17 @@ final class ScheduleParityTests: XCTestCase {
     }
 
     private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double? = nil,
-                             seTag: String? = nil) -> PlexMediaItem {
+                             seTag: String? = nil, showKey: String? = nil, year: Int? = nil) -> PlexMediaItem {
+        var made = makeItemFields(key: key, title: title, type: type, minutes: minutes, addedAt: addedAt, exact: exact, seTag: seTag, year: year)
+        made.showKey = showKey
+        return made
+    }
+
+    private static func makeItemFields(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double?,
+                                       seTag: String?, year: Int?) -> PlexMediaItem {
         PlexMediaItem(
             id: key, title: title, artist: nil, episodeTitle: nil, seTag: seTag, summary: "",
-            year: 2000, originallyAvailableAt: nil, contentRating: nil, duration: minutes,
+            year: year ?? 2000, originallyAvailableAt: nil, contentRating: nil, duration: minutes,
             ratingKey: key, partKey: nil, container: "mp4", videoCodec: nil, audioCodec: nil,
             videoProfile: nil, bitrate: nil, genres: [], rating: 0, userRating: 0,
             type: type, thumb: nil, art: nil, viewCount: 0,

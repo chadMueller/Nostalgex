@@ -46,18 +46,53 @@ enum SchedulePoolOrdering {
         }.map(\.item)
     }
 
-    private static func showKey(_ item: PlexMediaItem) -> String {
-        item.type == .episode ? item.title : "movie_\(item.ratingKey)"
+    /// Which show an episode belongs to: the server's id for the show (`showKey`: Plex grandparentRatingKey,
+    /// Jellyfin and Emby SeriesId) where the item has one, else the title and year. Two shows with one title (a
+    /// remake) are two shows. A film is its own group. Mirrors `showIdentity` in scripts/nostalgex-daily-manifest.js.
+    static func showIdentity(_ item: PlexMediaItem) -> String {
+        guard item.type == .episode else { return "movie_\(item.ratingKey)" }
+        if let key = item.showKey, !key.isEmpty { return "show_\(key)" }
+        return "title_\(item.title)|\(item.year.map(String.init) ?? "")"
+    }
+
+    /// One show's episodes with a second copy of the same season and episode left out (a title held twice, or
+    /// two files under one show): the first copy in the library's order airs. Only a tag with both a season and
+    /// an episode says two items are the same episode.
+    static func withoutSecondCopies(_ episodes: [PlexMediaItem]) -> [PlexMediaItem] {
+        guard episodes.count > 1 else { return episodes }
+        var seen = Set<String>()
+        return episodes.filter { item in
+            guard item.type == .episode, let tag = item.seTag, tag.contains("S"), tag.contains("E"),
+                  let n = seriesNumber(item) else { return true }
+            return seen.insert("\(n.season)x\(n.episode)").inserted
+        }
+    }
+
+    /// The pairs in a day's ordering as it will air: the first episode's id to the second's. Two neighbours are a
+    /// pair when the second follows the first in the series; three in a row are a pair and a single.
+    static func pairs(in ordered: [PlexMediaItem], seriesNext: [String: String]) -> [String: String] {
+        var out: [String: String] = [:]
+        var i = 0
+        while i + 1 < ordered.count {
+            if seriesNext[ordered[i].id] == ordered[i + 1].id {
+                out[ordered[i].id] = ordered[i + 1].id
+                i += 2
+            } else {
+                i += 1
+            }
+        }
+        return out
     }
 
     /// For each episode in `pool`, the id of the one after it in its show's series order; the last is followed
     /// by the first. A show with one episode has no entry. This is what makes two episodes a pair.
     static func seriesNext(_ pool: [PlexMediaItem]) -> [String: String] {
         var groups: [String: [PlexMediaItem]] = [:]
-        for item in pool where item.type == .episode { groups[item.title, default: []].append(item) }
+        for item in pool where item.type == .episode { groups[showIdentity(item), default: []].append(item) }
         var next: [String: String] = [:]
         for group in groups.values where group.count > 1 {
-            let ordered = inSeriesOrder(group)
+            let ordered = inSeriesOrder(withoutSecondCopies(group))
+            guard ordered.count > 1 else { continue }
             for (i, item) in ordered.enumerated() { next[item.id] = ordered[(i + 1) % ordered.count].id }
         }
         return next
@@ -71,7 +106,8 @@ enum SchedulePoolOrdering {
     /// is the pool less what aired yesterday, an episode whose neighbour is missing airs alone, never beside a
     /// stranger. SHUFFLE: each show's episodes in random order, one at a time.
     ///
-    /// A title alone in its group (every film, a show with one episode) draws nothing from the generator, so a
+    /// A show is `showIdentity`, not its title, and a second copy of one episode is left out
+    /// (`withoutSecondCopies`). A title alone in its group (every film, a show with one episode) draws nothing from the generator, so a
     /// channel of films is ordered exactly as it was before the setting existed.
     static func interleaveByShow(
         _ items: [PlexMediaItem],
@@ -88,7 +124,7 @@ enum SchedulePoolOrdering {
         var groupsByTitle: [String: Int] = [:]
 
         for item in items {
-            let key = showKey(item)
+            let key = showIdentity(item)
             if let idx = groupsByTitle[key] {
                 showGroups[idx].append(item)
             } else {
@@ -98,6 +134,10 @@ enum SchedulePoolOrdering {
         }
 
         let next = order == .classicReruns ? (seriesNext ?? Self.seriesNext(items)) : [:]
+        // A second copy of an episode does not air (before anything is drawn, so both orders leave out the same ones).
+        for i in showGroups.indices where showGroups[i].count > 1 {
+            showGroups[i] = withoutSecondCopies(showGroups[i])
+        }
         for i in showGroups.indices where showGroups[i].count > 1 {
             switch order {
             case .classicReruns:

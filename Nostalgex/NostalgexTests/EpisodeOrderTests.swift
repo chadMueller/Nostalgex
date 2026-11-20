@@ -26,17 +26,20 @@ final class EpisodeOrderTests: XCTestCase {
         super.tearDown()
     }
 
-    private func episode(_ show: String, season: Int? = 1, _ n: Int?) -> PlexMediaItem {
+    private func episode(_ show: String, season: Int? = 1, _ n: Int?, id: String? = nil, showKey: String? = nil,
+                         year: Int? = 1990) -> PlexMediaItem {
         let s = season.map { "S\(String(format: "%02d", $0))" } ?? ""
         let e = n.map { "E\(String(format: "%02d", $0))" } ?? ""
-        let key = "\(show)-\(season ?? 0)-\(n ?? 0)"
-        return PlexMediaItem(
+        let key = id ?? "\(show)-\(season ?? 0)-\(n ?? 0)"
+        var item = PlexMediaItem(
             id: key, title: show, artist: nil, episodeTitle: nil, seTag: (s + e).isEmpty ? nil : s + e, summary: "",
-            year: 1990, originallyAvailableAt: nil, contentRating: nil, duration: 22,
+            year: year, originallyAvailableAt: nil, contentRating: nil, duration: 22,
             ratingKey: key, partKey: nil, container: "mp4", videoCodec: nil, audioCodec: nil,
             videoProfile: nil, bitrate: nil, genres: [], rating: 0, userRating: 0,
             type: .episode, thumb: nil, art: nil, viewCount: 0,
             addedAt: 0, studio: nil, tmdbID: nil, imdbID: nil, librarySource: .tv, exactDurationSeconds: nil)
+        item.showKey = showKey
+        return item
     }
 
     private func film(_ key: String) -> PlexMediaItem {
@@ -155,6 +158,89 @@ final class EpisodeOrderTests: XCTestCase {
         let before = DailyManifestScheduler.pickCandidate(queue, at: 100, playSeconds: { _ in 600 }, occupancy: occupancy,
                                                           channelId: 1, avoidKey: nil, mustFit: true, skippingGated: false)
         XCTAssertEqual(before, 1, "without the rule the next episode jumps ahead")
+    }
+
+    /// Two shows with one title are two shows: by the server's id for the show, else by year.
+    func testTwoShowsWithOneTitleAreNotInterleavedAsOne() {
+        let byKey = (1...4).map { (n: Int) in episode("The Office", n, id: "uk\(n)", showKey: "uk") }
+            + (1...4).map { (n: Int) in episode("The Office", n, id: "us\(n)", showKey: "us") }
+        let byYear = (1...4).map { (n: Int) in episode("Dragnet", n, id: "a\(n)", year: 1951) }
+            + (1...4).map { (n: Int) in episode("Dragnet", n, id: "b\(n)", year: 1967) }
+        for pool in [byKey, byYear] {
+            let next = SchedulePoolOrdering.seriesNext(pool)
+            XCTAssertEqual(next.count, 8)
+            for (a, b) in next { XCTAssertEqual(a.prefix(1), b.prefix(1), "\(a) is followed by \(b), another show's episode") }
+            for day in 1...20 {
+                let ordered = SchedulePoolOrdering.interleaveByShow(pool, seed: 7, dayNumber: day)
+                XCTAssertEqual(ordered.count, 8)
+                let pairs = SchedulePoolOrdering.pairs(in: ordered, seriesNext: next)
+                XCTAssertEqual(pairs.count, 4, "day \(day): \(ordered.map(\.id))")
+            }
+        }
+    }
+
+    /// A show held twice under one show (two files per episode): one copy of each episode airs, and a pair is never
+    /// the same episode twice.
+    func testASecondCopyOfAnEpisodeDoesNotAir() {
+        let pool = (1...4).flatMap { (n: Int) in [episode("Echo", n, id: "hd\(n)", showKey: "e"), episode("Echo", n, id: "uhd\(n)", showKey: "e")] }
+            + (1...4).map { episode("Foxtrot", $0, showKey: "f") }
+        XCTAssertEqual(SchedulePoolOrdering.withoutSecondCopies(Array(pool.prefix(8))).map(\.id), ["hd1", "hd2", "hd3", "hd4"])
+        for order in EpisodeOrder.allCases {
+            for day in 1...20 {
+                let ordered = SchedulePoolOrdering.interleaveByShow(pool, seed: 7, dayNumber: day, order: order)
+                XCTAssertEqual(ordered.filter { $0.title == "Echo" }.map(\.id).sorted(), ["hd1", "hd2", "hd3", "hd4"], "\(order) day \(day)")
+            }
+        }
+        // Only a tag with both halves says two items are one episode: a show with seasons but no episode numbers is kept whole.
+        let unnumbered = (1...3).map { (n: Int) in episode("Golf", season: 1, nil, id: "g\(n)") }
+        XCTAssertEqual(SchedulePoolOrdering.withoutSecondCopies(unnumbered).count, 3)
+    }
+
+    /// The pairs of an order as it airs: three of a show in a row are a pair and a single.
+    func testPairsAreReadFromTheOrderAsBuilt() {
+        let run = (1...5).map { episode("B", $0) }
+        let next = SchedulePoolOrdering.seriesNext(run)
+        XCTAssertEqual(SchedulePoolOrdering.pairs(in: Array(run.prefix(3)), seriesNext: next), ["B-1-1": "B-1-2"])
+        XCTAssertEqual(SchedulePoolOrdering.pairs(in: [run[0], run[2], run[3]], seriesNext: next), ["B-1-3": "B-1-4"])
+    }
+
+    func testTheShowThatJustHadItsTurnIsPassedOver() {
+        let queue = [episode("B", 3), episode("B", 4), film("f1")]
+        let picked = DailyManifestScheduler.pickCandidate(queue, at: 100, playSeconds: { _ in 600 }, occupancy: nil,
+                                                          channelId: 1, avoidKey: nil, mustFit: true, skippingGated: false,
+                                                          keepingShowOrder: true,
+                                                          avoidingShow: SchedulePoolOrdering.showIdentity(queue[0]))
+        XCTAssertEqual(picked, 2)
+        let alone = DailyManifestScheduler.pickCandidate(Array(queue.prefix(2)), at: 100, playSeconds: { _ in 600 }, occupancy: nil,
+                                                         channelId: 1, avoidKey: nil, mustFit: true, skippingGated: false,
+                                                         keepingShowOrder: true,
+                                                         avoidingShow: SchedulePoolOrdering.showIdentity(queue[0]))
+        XCTAssertNil(alone, "nothing else fits: the caller asks again without the show")
+    }
+
+    /// "Keep the pair whole" (Chad, 2026-11-19): the second episode of a pair airs straight after the first even when
+    /// another channel has that episode on. In the golden case channel 22 airs one episode all day; channel 32 opens
+    /// its day with that episode's pair, whole.
+    func testAPairIsKeptWholeWhenAnotherChannelHasItsSecondEpisodeOn() throws {
+        let url = Self.repoRoot.appendingPathComponent("scripts/schedule-parity-golden.json")
+        let golden = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let cases = try XCTUnwrap(golden["cases"] as? [[String: Any]])
+        let pairs = try XCTUnwrap(cases.first { $0["name"] as? String == "plex-denver-pairs-kept" })
+        let fixture = try XCTUnwrap(pairs["fixture"] as? [String: Any])
+        let got = try ScheduleParityTests.dump(fixture)
+        let days = try XCTUnwrap(got["days"] as? [String: Any])
+        let firstDay = try XCTUnwrap(days[try XCTUnwrap(days.keys.sorted().first)] as? [String: Any])
+        func blocks(_ channel: String) throws -> [(key: String, start: Int, end: Int)] {
+            try XCTUnwrap(firstDay[channel] as? [[Any]]).map {
+                (key: $0[0] as? String ?? "", start: ($0[1] as? NSNumber)?.intValue ?? 0, end: ($0[2] as? NSNumber)?.intValue ?? 0)
+            }
+        }
+        let blocker = try blocks("22")
+        let channel = try blocks("32")
+        let second = try XCTUnwrap(blocker.first?.key)
+        XCTAssertTrue(blocker.allSatisfy { $0.key == second }, "setup: channel 22 airs one episode all day")
+        XCTAssertEqual(channel.count > 1 ? channel[1].key : "", second, "the second of the pair airs straight after the first")
+        XCTAssertTrue(blocker.contains { $0.start < channel[1].end && $0.end > channel[1].start }, "setup: it is on channel 22 at that moment")
     }
 
     func testTheOrderIsPartOfADaysFingerprintAndClassicKeepsTheOldOne() {

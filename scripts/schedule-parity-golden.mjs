@@ -78,7 +78,7 @@ function plexCase() {
   const shows = [["Cheers", 2001, 12, 1350000], ["Frasier", 2101, 9, 1360000], ["Columbo", 2201, 4, 5700000 + 30000]];
   for (const [show, base, count, ms] of shows) {
     for (let e = 0; e < count; e++) {
-      items.push({ backend: "plex", kind: "episode", show: { title: show }, raw: {
+      items.push({ backend: "plex", kind: "episode", show: { title: show, ratingKey: String(base - 1) }, raw: {
         ratingKey: String(base + e), title: `${show} ${e + 1}`, type: "episode",
         // Seasons of five, so a pair can cross a season; Columbo carries no numbers and keeps the library's order.
         ...(show === "Columbo" ? {} : { parentIndex: 1 + Math.floor(e / 5), index: (e % 5) + 1 }),
@@ -144,7 +144,7 @@ function jellyfinCase() {
   items.push({ backend: "jellyfin", kind: "movie", raw: { Id: hexId("jf-old"), Name: "Default Date", Type: "Movie", RunTimeTicks: 52800000000, DateCreated: "0001-01-01T00:00:00.0000000Z" } });
   for (const [show, count, minutes] of [["Bluey", 14, 7], ["Seinfeld", 10, 23], ["The Wire", 5, 58]]) {
     for (let e = 0; e < count; e++) {
-      items.push({ backend: "jellyfin", kind: "episode", show: { Name: show }, raw: {
+      items.push({ backend: "jellyfin", kind: "episode", show: { Name: show, Id: hexId(`jf-show-${show}`) }, raw: {
         Id: hexId(`jf-${show}-${e}`), Name: `Episode ${e + 1}`, SeriesName: show, Type: "Episode",
         // Bluey: seasons of seven. Seinfeld: episode numbers only, listed last to first. The Wire: none.
         ...(show === "Bluey" ? { ParentIndexNumber: 1 + Math.floor(e / 7), IndexNumber: (e % 7) + 1 }
@@ -187,7 +187,7 @@ function embyCase() {
   });
   for (const [show, count, minutes] of [["Only Fools and Horses", 8, 29], ["Doctor Who", 6, 44]]) {
     for (let e = 0; e < count; e++) {
-      items.push({ backend: "emby", kind: "episode", show: { Name: show }, raw: {
+      items.push({ backend: "emby", kind: "episode", show: { Name: show, Id: String(40000 + show.length) }, raw: {
         Id: String(50000 + show.length * 100 + e), Name: `Part ${e + 1}`, SeriesName: show, Type: "Episode",
         RunTimeTicks: (minutes * 60 + 59) * 10000000 + 9999999, DateCreated: "2025-12-24T18:00:00.0000000Z",
       } });
@@ -353,9 +353,93 @@ const buildOrder = () => {
   return [shuffle];
 };
 
+/**
+ * CLASSIC RERUNS under pressure (I-103): pairs that another channel's programme tries to split, two shows
+ * with one title, and a show held twice. Each lower-numbered "blocker" channel opens its day with the one
+ * episode its neighbour would open with, then a film longer than the day: the neighbour has to pick ahead
+ * for one slot, and the episode it passed over comes free straight after.
+ */
+function pairsCase() {
+  const zone = "America/Denver";
+  const day = local(zone, 2026, 11, 19, 12);
+  const items = [];
+  const ep = (showTitle, showExtra, key, season, n, minutes = 22) => {
+    items.push({ backend: "plex", kind: "episode", show: { title: showTitle, ...showExtra }, raw: {
+      ratingKey: key, title: `${showTitle} ${season}x${n}`, type: "episode",
+      ...(season == null ? {} : { parentIndex: season }), ...(n == null ? {} : { index: n }),
+      duration: minutes * 60000 + 1000, addedAt: 1500000000,
+    } });
+    return key;
+  };
+  const film = (key, minutes) => {
+    items.push({ backend: "plex", kind: "movie", raw: { ratingKey: key, title: `Film ${key}`, type: "movie", duration: minutes * 60000, addedAt: 1500000000 } });
+    return key;
+  };
+  // 30: three shows of six. 31: one show of eight and three films.
+  const three = [];
+  for (const [s, base] of [["Alpha", 3100], ["Bravo", 3200], ["Charlie", 3300]]) for (let n = 1; n <= 6; n++) three.push(ep(s, { ratingKey: String(base) }, String(base + n), 1, n));
+  const oneAndFilms = [];
+  for (let n = 1; n <= 8; n++) oneAndFilms.push(ep("Delta", { ratingKey: "3400" }, String(3400 + n), 1 + Math.floor((n - 1) / 4), ((n - 1) % 4) + 1));
+  for (const k of ["3491", "3492", "3493"]) oneAndFilms.push(film(k, 23));
+  // 32: a remake, two shows with one title and their own ids. 33: the same with no ids, told apart by year.
+  const remakeByKey = [];
+  for (const [sk, base] of [["3500", 3500], ["3550", 3550]]) for (let n = 1; n <= 4; n++) remakeByKey.push(ep("The Office", { ratingKey: sk }, String(base + n), 1, n));
+  const remakeByYear = [];
+  for (const [year, base] of [[1951, 3600], [1967, 3650]]) for (let n = 1; n <= 4; n++) remakeByYear.push(ep("Dragnet", { year }, String(base + n), 1, n));
+  // 34: a show held twice under one id (two files per episode), and a second show so pairs have something between them.
+  const heldTwice = [];
+  for (let n = 1; n <= 4; n++) { heldTwice.push(ep("Echo", { ratingKey: "3700" }, String(3700 + n), 1, n)); heldTwice.push(ep("Echo", { ratingKey: "3700" }, String(3750 + n), 1, n)); }
+  for (let n = 1; n <= 4; n++) heldTwice.push(ep("Foxtrot", { ratingKey: "3800" }, String(3800 + n), 1, n));
+
+  // What each pressured channel would open the day with, from the web engine's own ordering.
+  const { M } = loadEngine();
+  const savedTZ = process.env.TZ;
+  process.env.TZ = zone;
+  const dayNumber = M.localDayNumber(day * 1000);
+  if (savedTZ === undefined) delete process.env.TZ; else process.env.TZ = savedTZ;
+  const built = new Map(items.map((spec) => makeItem(M, spec)));
+  const opener = (id, pool) => M.interleaveByShow(pool.map((k) => built.get(k)), id, dayNumber)[0].ratingKey;
+  // A blocker: the opener, then a 26 hour film. Its number is the first whose own ordering puts the episode first.
+  const blocker = (from, openerKey, filmKey) => {
+    film(filmKey, 26 * 60);
+    const pool = [openerKey, filmKey].map((k) => built.get(k) || makeItem(M, items[items.length - 1])[1]);
+    for (let id = from; id < from + 10; id++) {
+      if (M.interleaveByShow(pool, id, dayNumber)[0].ratingKey === openerKey) return { id, pool: [openerKey, filmKey] };
+    }
+    throw new Error("no blocker number opens with the episode");
+  };
+  // 31 has to open on an episode for the blocker to matter; its number is the first that does.
+  let id31 = 31;
+  while (built.get(opener(id31, oneAndFilms)).type !== "episode") id31 += 100;
+  // "Keep the pair whole" (Chad, 2026-11-19): channel 22 has the second episode of channel 32's first pair on all
+  // day, and channel 32 still airs it straight after the first.
+  const order32 = M.interleaveByShow(remakeByKey.map((k) => built.get(k)), 32, dayNumber);
+  const next32 = M.seriesNext(remakeByKey.map((k) => built.get(k)));
+  if (next32.get(order32[0].ratingKey) !== order32[1].ratingKey) throw new Error("channel 32 does not open on a pair");
+  const channels = [
+    blocker(10, opener(30, three), "3091"),
+    { id: 22, pool: [order32[1].ratingKey] },
+    blocker(20, opener(id31, oneAndFilms), "3092"),
+    { id: 30, pool: three },
+    { id: id31, pool: oneAndFilms },
+    { id: 32, pool: remakeByKey },
+    { id: 33, pool: remakeByYear },
+    { id: 34, pool: heldTwice },
+  ];
+  return {
+    name: "plex-denver-pairs-kept",
+    fixture: {
+      zone, fingerprint: "parity-pairs",
+      prime: [], days: [day, day + 86400],
+      at: [local(zone, 2026, 11, 19, 0, 10), local(zone, 2026, 11, 19, 20, 5)],
+      channels, items,
+    },
+  };
+}
+
 const [, , cmd, path] = process.argv;
 const build = () => {
-  const cases = [plexCase(), jellyfinCase(), embyCase(), crowdedCase()];
+  const cases = [plexCase(), jellyfinCase(), embyCase(), crowdedCase(), pairsCase()];
   for (const c of cases) {
     const n = addConflictInstants(c);
     if (n === 0) console.error(`${c.name}: no instant with one title on two channels`);
