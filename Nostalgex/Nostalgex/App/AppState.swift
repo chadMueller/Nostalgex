@@ -619,6 +619,20 @@ class AppState {
     /// VAULT's own permanent hold already does; see `Channel.filteredPool`. Per-TV, like
     /// `iCloudSyncEnabled` itself: not synced through iCloud, so turning it on or off is
     /// never silently inherited from another Apple TV.
+    /// EPISODE ORDER (I-103), in CHANNELS & BUNDLES. A change packs today again under the new order (the order is in
+    /// the day's fingerprint); the programme playing now carries on to its end.
+    var episodeOrder: EpisodeOrder = EpisodeOrder.current {
+        didSet {
+            guard oldValue != episodeOrder else { return }
+            EpisodeOrder.current = episodeOrder
+            Analytics.track(.settingChanged(key: "episode_order", value: episodeOrder.rawValue))
+            DailyManifestScheduler.invalidateMemo()
+            // The guide reads its rows from the scheduler; reassigning the lineup makes it read them again.
+            let lineup = channels
+            channels = lineup
+        }
+    }
+
     var watershedEnabled: Bool = AppDefaults.standard.object(forKey: Channel.watershedDefaultsKey) as? Bool ?? false {
         didSet {
             AppDefaults.standard.set(watershedEnabled, forKey: Channel.watershedDefaultsKey)

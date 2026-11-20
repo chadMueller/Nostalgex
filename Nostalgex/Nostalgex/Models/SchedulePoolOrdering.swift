@@ -4,8 +4,82 @@ import Foundation
 
 enum SchedulePoolOrdering {
 
-    /// Interleave items so the same show doesn't run more than 2 episodes in a row.
-    static func interleaveByShow(_ items: [PlexMediaItem], seed: Int, dayNumber: Int) -> [PlexMediaItem] {
+    // MARK: - Series order (EPISODE ORDER, I-103)
+
+    /// Season and episode from an item's `seTag` ("S01E04", "E04", "S02"); a missing half reads as 0. Nil when
+    /// the item carries neither. Mirrors `seriesNumber` in scripts/nostalgex-daily-manifest.js.
+    static func seriesNumber(_ item: PlexMediaItem) -> (season: Int, episode: Int)? {
+        guard let tag = item.seTag, !tag.isEmpty else { return nil }
+        var season: Int?
+        var episode: Int?
+        var rest = Substring(tag)
+        if rest.first == "S" {
+            let digits = rest.dropFirst().prefix { $0.isASCII && $0.isNumber }
+            guard !digits.isEmpty, let n = Int(digits) else { return nil }
+            season = n
+            rest = rest.dropFirst(1 + digits.count)
+        }
+        if rest.first == "E" {
+            let digits = rest.dropFirst().prefix { $0.isASCII && $0.isNumber }
+            guard !digits.isEmpty, let n = Int(digits) else { return nil }
+            episode = n
+            rest = rest.dropFirst(1 + digits.count)
+        }
+        guard rest.isEmpty, season != nil || episode != nil else { return nil }
+        return (season ?? 0, episode ?? 0)
+    }
+
+    /// One show's episodes in series order: by season then episode, and an episode with no numbers after the
+    /// numbered ones. Ties, and the unnumbered, keep the order they came in (the library's).
+    static func inSeriesOrder(_ episodes: [PlexMediaItem]) -> [PlexMediaItem] {
+        let keyed = episodes.enumerated().map { (index: $0.offset, number: seriesNumber($0.element), item: $0.element) }
+        return keyed.sorted { a, b in
+            switch (a.number, b.number) {
+            case let (x?, y?):
+                if x.season != y.season { return x.season < y.season }
+                if x.episode != y.episode { return x.episode < y.episode }
+                return a.index < b.index
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return a.index < b.index
+            }
+        }.map(\.item)
+    }
+
+    private static func showKey(_ item: PlexMediaItem) -> String {
+        item.type == .episode ? item.title : "movie_\(item.ratingKey)"
+    }
+
+    /// For each episode in `pool`, the id of the one after it in its show's series order; the last is followed
+    /// by the first. A show with one episode has no entry. This is what makes two episodes a pair.
+    static func seriesNext(_ pool: [PlexMediaItem]) -> [String: String] {
+        var groups: [String: [PlexMediaItem]] = [:]
+        for item in pool where item.type == .episode { groups[item.title, default: []].append(item) }
+        var next: [String: String] = [:]
+        for group in groups.values where group.count > 1 {
+            let ordered = inSeriesOrder(group)
+            for (i, item) in ordered.enumerated() { next[item.id] = ordered[(i + 1) % ordered.count].id }
+        }
+        return next
+    }
+
+    /// Interleave items by show for the day (EPISODE ORDER, I-103).
+    ///
+    /// CLASSIC RERUNS: each show's episodes run in series order from a random spot, two back to back. The two are
+    /// always consecutive episodes (7 then 8; the last of a season then the first of the next; the last of the
+    /// series then the first). `seriesNext` says which episode follows which in the whole pool, so when `items`
+    /// is the pool less what aired yesterday, an episode whose neighbour is missing airs alone, never beside a
+    /// stranger. SHUFFLE: each show's episodes in random order, one at a time.
+    ///
+    /// A title alone in its group (every film, a show with one episode) draws nothing from the generator, so a
+    /// channel of films is ordered exactly as it was before the setting existed.
+    static func interleaveByShow(
+        _ items: [PlexMediaItem],
+        seed: Int,
+        dayNumber: Int,
+        order: EpisodeOrder = .classicReruns,
+        seriesNext: [String: String]? = nil
+    ) -> [PlexMediaItem] {
         guard items.count > 1 else { return items }
 
         var rng = SeededRNG(seed: UInt64(abs(seed) + 1) &+ UInt64(dayNumber))
@@ -14,7 +88,7 @@ enum SchedulePoolOrdering {
         var groupsByTitle: [String: Int] = [:]
 
         for item in items {
-            let key = item.type == .episode ? item.title : "movie_\(item.ratingKey)"
+            let key = showKey(item)
             if let idx = groupsByTitle[key] {
                 showGroups[idx].append(item)
             } else {
@@ -23,12 +97,19 @@ enum SchedulePoolOrdering {
             }
         }
 
-        for i in showGroups.indices {
-            showGroups[i].shuffle(using: &rng)
+        let next = order == .classicReruns ? (seriesNext ?? Self.seriesNext(items)) : [:]
+        for i in showGroups.indices where showGroups[i].count > 1 {
+            switch order {
+            case .classicReruns:
+                let ordered = inSeriesOrder(showGroups[i])
+                let start = Int.random(in: 0..<ordered.count, using: &rng)
+                showGroups[i] = Array(ordered[start...] + ordered[..<start])
+            case .shuffle:
+                showGroups[i].shuffle(using: &rng)
+            }
         }
         showGroups.shuffle(using: &rng)
 
-        let maxConsecutive = 2
         var result: [PlexMediaItem] = []
         var groupPositions = Array(repeating: 0, count: showGroups.count)
         var groupIndex = 0
@@ -45,7 +126,10 @@ enum SchedulePoolOrdering {
 
             let group = showGroups[groupIndex]
             let pos = groupPositions[groupIndex]
-            let take = min(maxConsecutive, group.count - pos)
+            var take = 1
+            if order == .classicReruns, pos + 1 < group.count, next[group[pos].id] == group[pos + 1].id {
+                take = 2
+            }
 
             for i in 0..<take {
                 result.append(group[pos + i])

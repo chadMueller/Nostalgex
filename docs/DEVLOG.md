@@ -4,6 +4,26 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-19 (EPISODE ORDER: CLASSIC RERUNS and SHUFFLE, I-103)
+
+**State.** On `appletv/1.0.34-next`, not pushed. The engine change is in Swift and in `scripts/nostalgex-daily-manifest.js` together; the web tuner's own setting and its items' `seTag` are the web agent's port.
+
+**The default schedule changed, on purpose.** Chad, 2026-11-19: CLASSIC RERUNS should be what he believed it was, two consecutive episodes of a show back to back (7 then 8) from a random spot. The code aired any two episodes of the show. It now sorts each show by season and episode (`seTag`; an episode with no numbers keeps the library's order, after the numbered ones), starts at a seeded random episode, and takes two at a time. The last of a season is followed by the first of the next, the last of the series by the first. So `scripts/schedule-parity-golden.json` was generated again from the Apple TV (its episode fixtures now carry season and episode numbers), `DailyManifestStore.schemaVersion` went 3 to 4 and the web engine's 4 to 5: a stored day is packed again once after the update. A channel of films is ordered exactly as before (a title alone in its group draws nothing from the generator; `EpisodeOrderTests` pins it). A channel with episodes and films changes for both.
+
+**A pair is never split or faked.** The day's ordering leaves out what aired yesterday; an episode whose neighbour is gone airs alone, not beside a stranger. When another channel has the second of a pair on, it still airs straight after the first, and no episode goes ahead of an earlier one of its show waiting before it (`pickCandidate`, `keepingShowOrder`).
+
+**SHUFFLE.** One episode of a show at a time, random order. EPISODE ORDER is one row in CHANNELS & BUNDLES, app-wide; the order is in a stored day's fingerprint, so a change packs today again and the programme playing carries on to its end. Its goldens are in a file of their own, `scripts/episode-order-golden.json`, so the file every platform reads moves only for the default.
+
+**Not built.** IN ORDER, MARATHON, CONTINUE WATCHING and a per-channel order are held for Plus (Chad). No saved position exists. `EpisodeOrder` is an enum that takes more cases.
+
+**Known edges.** On the premiere channel a title added this week is slotted by airtime and can land between the two episodes of a pair. The filler loop can start on the second episode of a pair, which then airs alone. Once every other show in a day's ordering has run out, the last show airs alone, pair after pair, as it did before.
+
+**Regenerating the goldens.** `node scripts/schedule-parity-golden.mjs cases A.json` and `order-cases B.json`; join the two `cases` lists in one file; run `ScheduleParityTests/testDumpForAFixtureFile` with `TEST_RUNNER_NX_SCHED_FIXTURE` and `TEST_RUNNER_NX_SCHED_OUT`; then `fold OUT.json` and `order-fold OUT.json`. Both say whether the web engine matches.
+
+**Tested.** Simulator: the 11 schedule classes (parity, episode order, daily manifest, lineup, DST, collections and neighbours), 70 tests, 2 skipped by design; one test asserted the old shuffle and was rewritten. `npm run test:schedule-parity` (4 cases byte for byte), `test:episode-order` (new, 17), `test:schedule`, `test:play-to-end`, `test:collections`, `test:schedule-dst`, `test:schedule-lineup`. The Android and Roku tests that read `schedule-parity-golden.json` were not run and will not match until those engines take the change.
+
+**Unverified.** The row and the guide's refresh after a change were not looked at in the simulator or on a TV.
+
 ## 2026-11-19 (Apple TV: the 1.0.34 integration branch)
 
 **State.** Branch `appletv/1.0.34-next` off `origin/main` `4fac0f4d`, not pushed, no tag, no version or build bump. No release is being cut; this banks the Apple TV work for the next one.

@@ -2,12 +2,14 @@
 /**
  * Golden-vector smoke test for scripts/nostalgex-daily-manifest.js ordering.
  *
- * The expected strings below were produced by running the REAL Swift algorithms
- * (SeededRNG + Array.shuffle(using:) + SchedulePoolOrdering.interleaveByShow /
- * promoteRecentlyAdded / groupSequelParts, copied verbatim out of
- * Nostalgex/Nostalgex/Models/SchedulePoolOrdering.swift) against the same
- * fixture, on Apple Swift 6.2.1. If this test fails, web and Apple TV are no
- * longer airing the same program at the same time.
+ * The expected strings pin the ordering (interleaveByShow, promoteRecentlyAdded,
+ * groupSequelParts). They were first produced by running the Swift algorithms on Apple
+ * Swift 6.2.1. On 2026-11-19 CLASSIC RERUNS changed to two consecutive episodes from a
+ * random spot (EPISODE ORDER, I-103) and the strings were written again from this engine,
+ * after scripts/schedule-parity-golden.json (the Apple TV's own answers) matched it byte
+ * for byte. That file is the proof the two agree; this one catches a drift in the ordering
+ * alone. The episodes here carry no season or episode number, so series order is the
+ * order they are listed in.
  *
  * Run: `npm run test:schedule`
  */
@@ -33,15 +35,15 @@ const pool = [];
 const DAY_START = 1700100000;
 
 const GOLDEN = {
-  "INTER:1:20000": "m8,m3,m5,m4,m7,m2,m6,m9,m0,e22,e25,e03,e01,m1,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11",
-  "PROMO:1:20000": "m3,m5,m7,m2,m6,m9,e22,e25,e03,e01,m1,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11,m0,m4,m8",
-  "SEQ:1:20000": "m3,m1,m5,m7,m2,m6,m4,m9,e22,e25,e03,e01,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11,m0,m8",
-  "INTER:49:20431": "m1,e23,e24,m7,m3,m2,m9,m0,m5,m4,e03,e05,e14,e12,m8,m6,e22,e21,e02,e04,e11,e15,e25,e01,e13",
-  "PROMO:49:20431": "m1,e23,e24,m7,m3,m2,m9,m5,e03,e05,e14,e12,m6,e22,e21,e02,e04,e11,e15,e25,e01,e13,m0,m8,m4",
-  "SEQ:49:20431": "m3,m1,e23,e24,m7,m2,m9,m5,e03,e05,e14,e12,m6,m4,e22,e21,e02,e04,e11,e15,e25,e01,e13,m0,m8",
-  "INTER:141:20500": "m8,m9,m6,m2,m4,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,m0,e25,e24,e02,e01,e15,e13,e23,e03,e14",
-  "PROMO:141:20500": "m9,m6,m2,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,e25,e24,e02,e01,e15,e13,e23,e03,e14,m4,m8,m0",
-  "SEQ:141:20500": "m9,m6,m4,m2,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,e25,e24,e02,e01,e15,e13,e23,e03,e14,m8,m0",
+  "INTER:1:20000": "m7,m8,m3,e23,e24,m0,m4,m9,m2,e13,e14,m1,m5,m6,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02",
+  "PROMO:1:20000": "m7,m3,e23,e24,m9,m2,e13,e14,m1,m5,m6,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02,m0,m4,m8",
+  "SEQ:1:20000": "m7,m3,m1,e23,e24,m9,m2,e13,e14,m5,m6,m4,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02,m0,m8",
+  "INTER:49:20431": "m0,m6,e03,e04,m5,e15,e11,e25,e21,m1,m7,m2,m4,m3,m9,m8,e05,e01,e12,e13,e22,e23,e02,e14,e24",
+  "PROMO:49:20431": "m6,e03,e04,m5,e15,e11,e25,e21,m1,m7,m2,m3,m9,e05,e01,e12,e13,e22,e23,e02,e14,e24,m0,m8,m4",
+  "SEQ:49:20431": "m6,m4,e03,e04,m5,e15,e11,e25,e21,m3,m1,m7,m2,m9,e05,e01,e12,e13,e22,e23,e02,e14,e24,m0,m8",
+  "INTER:141:20500": "m2,m1,e25,e21,m6,m9,e04,e05,m3,m8,m7,e14,e15,m0,m5,m4,e22,e23,e01,e02,e11,e12,e24,e03,e13",
+  "PROMO:141:20500": "m2,m1,e25,e21,m6,m9,e04,e05,m3,m7,e14,e15,m5,e22,e23,e01,e02,e11,e12,e24,e03,e13,m4,m8,m0",
+  "SEQ:141:20500": "m2,m3,m1,e25,e21,m6,m4,m9,e04,e05,m7,e14,e15,m5,e22,e23,e01,e02,e11,e12,e24,e03,e13,m8,m0",
 };
 
 const failures = [];

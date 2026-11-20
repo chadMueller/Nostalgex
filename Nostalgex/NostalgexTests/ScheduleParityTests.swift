@@ -76,6 +76,10 @@ final class ScheduleParityTests: XCTestCase {
             throw NSError(domain: "parity", code: 1, userInfo: [NSLocalizedDescriptionKey: "Calendar.current did not take \(zone)"])
         }
         let fp = try XCTUnwrap(fx["fingerprint"] as? String)
+        // EPISODE ORDER (I-103): a fixture without one is CLASSIC RERUNS, whatever a test before it left saved.
+        let savedOrder = EpisodeOrder.current
+        EpisodeOrder.current = (fx["episodeOrder"] as? String).flatMap(EpisodeOrder.init(rawValue:)) ?? .classicReruns
+        defer { EpisodeOrder.current = savedOrder }
         DailyManifestStore.clearAll(credentialFingerprint: fp)
         DailyManifestScheduler.invalidateMemo()
         defer {
@@ -238,9 +242,12 @@ final class ScheduleParityTests: XCTestCase {
             let raw = try JSONDecoder().decode(PlexRawItem.self, from: rawData)
             let minutes = (raw.duration ?? 0) / 60000
             guard minutes > 0 else { return (raw.ratingKey, nil) }
+            // The season and episode tag as makeEpisodeItem builds it (series order, I-103).
+            let s = raw.parentIndex.map { "S\(String(format: "%02d", $0))" } ?? ""
+            let e = raw.index.map { "E\(String(format: "%02d", $0))" } ?? ""
             return (raw.ratingKey, item(key: raw.ratingKey, title: show["title"] as? String ?? "", type: .episode,
                                         minutes: minutes, addedAt: raw.addedAt ?? 0,
-                                        exact: raw.duration.map { Double($0) / 1000 }))
+                                        exact: raw.duration.map { Double($0) / 1000 }, seTag: (s + e).isEmpty ? nil : s + e))
         case ("jellyfin", "movie"):
             let raw = try JSONDecoder().decode(JellyfinItem.self, from: rawData)
             return (raw.Id, JellyfinAPIService(serverURL: "", accessToken: "", userId: "").parseMovieItem(raw, isMusicSection: false))
@@ -262,9 +269,10 @@ final class ScheduleParityTests: XCTestCase {
         }
     }
 
-    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double? = nil) -> PlexMediaItem {
+    private static func item(key: String, title: String, type: MediaType, minutes: Int, addedAt: Int, exact: Double? = nil,
+                             seTag: String? = nil) -> PlexMediaItem {
         PlexMediaItem(
-            id: key, title: title, artist: nil, episodeTitle: nil, seTag: nil, summary: "",
+            id: key, title: title, artist: nil, episodeTitle: nil, seTag: seTag, summary: "",
             year: 2000, originallyAvailableAt: nil, contentRating: nil, duration: minutes,
             ratingKey: key, partKey: nil, container: "mp4", videoCodec: nil, audioCodec: nil,
             videoProfile: nil, bitrate: nil, genres: [], rating: 0, userRating: 0,
