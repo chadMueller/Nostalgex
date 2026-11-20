@@ -280,6 +280,18 @@ sub NxMarginRuleCases(r as Object)
     end function }
     NxCheck(r, "margin: the scan at 150 MB, 42% with nothing counted yet: 24 MB and the reserve make 24, so it reads on", NxToStr(NxScanMemoryFull(guard42, 0)), "false")
     NxCheck(r, "margin: and with 9,675 items counted at 42% it still reads (79); at 43% it stops", NxToStr(NxScanMemoryFull(guard42, 9675)), "false")
+    guard44 = { memoryPercent: function() as Integer
+        return 44
+    end function }
+    NxCheck(r, "margin: 150 MB, 44% with 1,000 items is past the old ceiling of 43 and reads on (44 + 17 + 8 = 69)", NxToStr(NxScanMemoryFull(guard44, 1000)), "false")
+    g.nxMemLimitTest = 501760
+    g.nxScanMemBase = 26
+    NxCheck(r, "margin: a Stick Plus keeps its ceiling: 55% stops, 54% reads on", NxToStr(NxScanMemoryFull({ memoryPercent: function() as Integer
+        return 55
+    end function }, 100)) + NxToStr(NxScanMemoryFull({ memoryPercent: function() as Integer
+        return 54
+    end function }, 100)), "truefalse")
+    g.nxMemLimitTest = 153600
     g.nxScanBiggest = 20000
     NxCheck(r, "margin: with 20,000 items the largest, 42% stops at 150 MB (42 + 41 + 8)", NxToStr(NxScanMemoryFull(guard42, 0)), "true")
     g.nxScanBiggest = 0

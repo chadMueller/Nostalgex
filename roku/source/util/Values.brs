@@ -179,7 +179,10 @@ end function
 function NxScanMemoryFull(fetcher as Object, hereItems = 0 as Integer) as Boolean
     if not fetcher.DoesExist("memoryPercent") then return false
     pct = fetcher.memoryPercent()
-    if NxMemFullFor(pct, NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase) then
+    ' A device under the Stick Plus's limit is judged by the margin rule alone (below): the ceiling's guess of the build as half
+    ' again the scan is a tighter line than the measured cost, and stopped a Jellyfin load at 1,000 of 21,418 titles over a 150 MB
+    ' limit with room for about 3,000 (2026-11-20). A normal device keeps its ceiling, as it always had.
+    if not NxMemIsSmall(NxMemLimitKB()) and NxMemFullFor(pct, NxScanMemoryCeiling(), GetGlobalAA().nxScanMemBase) then
         print "memory: the scan stops at "; pct; "% (the ceiling is "; NxScanMemoryCeiling(); "%)"
         return true
     end if
