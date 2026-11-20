@@ -85,6 +85,78 @@ check("every episode airs once in both orders", missing === 0);
   check("without the rule the next episode jumps ahead", M.pickCandidate(queue, 100, () => 600, occupancy, 1, null, true, false) === 1);
 }
 
+// 2b. A day packed with another channel in the way (the reviewer's cases, 2026-11-19).
+{
+  const occupancyOf = () => { const l = []; return { add: (ch, k, s, e) => l.push({ ch, k, s, e }),
+    overlap: (k, s, e, ch) => l.reduce((n, x) => n + (x.k === k && x.ch !== ch ? Math.max(0, Math.min(e, x.e) - Math.max(s, x.s)) : 0), 0) }; };
+  const e1 = (show, n, key, extra = {}) => ({ ratingKey: key || `${show}${n}`, title: show, type: "episode", duration: 22, seTag: `S01E${String(n).padStart(2, "0")}`, ...extra });
+  const film = (k) => ({ ratingKey: k, title: k, type: "movie", duration: 22 });
+  const savedTZ = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  const dayStart = Math.floor(new Date(2026, 10, 19).getTime() / 1000), ch = 7;
+  const aired = (pool, occ, dayNumber, n) => M.packDay(pool, dayStart, dayNumber, ch, new Set(), false, null, occ, false, 0).slice(0, n).map((b) => b.ratingKey);
+  const follows = (pool) => M.seriesNext(pool);
+  let splits = 0, chains = 0, tried = 0;
+  for (let dayNumber = 20400; dayNumber < 20440; dayNumber++) {
+    // Three shows; another channel has this channel's first programme on in the first slot only.
+    let pool = []; for (const s of ["A", "B", "C"]) for (let n = 1; n <= 6; n++) pool.push(e1(s, n));
+    let order = M.interleaveByShow(pool, ch, dayNumber);
+    let occ = occupancyOf(); occ.add(99, order[0].ratingKey, dayStart, dayStart + 22 * 60);
+    let got = aired(pool, occ, dayNumber, 12);
+    const next = follows(pool);
+    tried += 1;
+    // Every first of a pair in the order as built is followed by its second on air.
+    for (let i = 0; i + 1 < 12; i += 2) {
+      const a = order[i].ratingKey, b = order[i + 1].ratingKey;
+      if (next.get(a) === b && got.includes(a) && got[got.indexOf(a) + 1] !== b) splits += 1;
+    }
+    // One show and films; the show's first episode is on elsewhere in the first slot. Never three of the show in a
+    // row while a film is still to come.
+    pool = []; for (let n = 1; n <= 8; n++) pool.push(e1("A", n)); for (const f of ["F1", "F2", "F3"]) pool.push(film(f));
+    order = M.interleaveByShow(pool, ch, dayNumber);
+    occ = occupancyOf(); if (order[0].type === "episode") occ.add(99, order[0].ratingKey, dayStart, dayStart + 22 * 60);
+    got = aired(pool, occ, dayNumber, 11);
+    let run = 0;
+    got.forEach((k, i) => { run = k.startsWith("A") ? run + 1 : 0; if (run > 2 && got.slice(i + 1).some((x) => x.startsWith("F"))) chains += 1; });
+  }
+  check("a programme picked ahead never splits a pair", tried === 40 && splits === 0, `${splits} split`);
+  check("a programme picked ahead never leaves two pairs of a show back to back", chains === 0, `${chains}`);
+  // "Keep the pair whole" (Chad, 2026-11-19): the second of a pair airs straight after the first even when another
+  // channel has that episode on; one episode on two channels now and then is accepted.
+  {
+    const pool = []; for (const s of ["A", "B", "C"]) for (let n = 1; n <= 6; n++) pool.push(e1(s, n));
+    const order = M.interleaveByShow(pool, ch, 20411);
+    const occ = occupancyOf(); occ.add(99, order[1].ratingKey, dayStart, dayStart + 86400);
+    const got = aired(pool, occ, 20411, 2);
+    check("the pair is kept whole when another channel has its second episode on",
+      follows(pool).get(order[0].ratingKey) === order[1].ratingKey && got[0] === order[0].ratingKey && got[1] === order[1].ratingKey, got.join(" "));
+  }
+  // Two shows with one title: by the show's id, else by year.
+  for (const [label, extraA, extraB] of [["id", { showKey: "uk" }, { showKey: "us" }], ["year", { year: 1951 }, { year: 1967 }]]) {
+    const pool = [1, 2, 3, 4].map((n) => e1("The Office", n, `uk${n}`, extraA)).concat([1, 2, 3, 4].map((n) => e1("The Office", n, `us${n}`, extraB)));
+    const got = aired(pool, null, 20411, 8);
+    const next = follows(pool);
+    let ok = new Set(got).size === 8;
+    for (let i = 0; i < 8; i += 2) if (next.get(got[i]) !== got[i + 1] || got[i].slice(0, 2) !== got[i + 1].slice(0, 2)) ok = false;
+    check(`two shows with one title, told apart by ${label}, each air their own pairs`, ok, got.join(" "));
+  }
+  // A show held twice under one id: one copy of each episode airs.
+  {
+    const pool = [];
+    for (let n = 1; n <= 4; n++) { pool.push(e1("Echo", n, `hd${n}`, { showKey: "e" })); pool.push(e1("Echo", n, `uhd${n}`, { showKey: "e" })); }
+    for (let n = 1; n <= 4; n++) pool.push(e1("Foxtrot", n, `f${n}`, { showKey: "f" }));
+    const got = aired(pool, null, 20411, 30);
+    check("a second copy of an episode does not air", !got.some((k) => k.startsWith("uhd")) && ["hd1", "hd2", "hd3", "hd4"].every((k) => got.includes(k)), got.slice(0, 10).join(" "));
+    M.setEpisodeOrder("shuffle");
+    const shuffled = aired(pool, null, 20411, 30);
+    M.setEpisodeOrder("classic");
+    check("nor under SHUFFLE", !shuffled.some((k) => k.startsWith("uhd")));
+    const unnumbered = [1, 2, 3].map((n) => ({ ratingKey: `g${n}`, title: "Golf", type: "episode", duration: 22, seTag: "S01" }));
+    check("a season with no episode numbers is kept whole", M.withoutSecondCopies(unnumbered).length === 3);
+  }
+  if (savedTZ === undefined) delete process.env.TZ; else process.env.TZ = savedTZ;
+}
+
 // 3. Stored days and the order.
 {
   const { M: E, store } = loadEngine();

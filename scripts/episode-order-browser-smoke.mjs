@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * EPISODE ORDER (I-103) in the real plex-tuner.html (headless), against a Jellyfin-shaped stub with two shows of
- * numbered episodes. The engine and its goldens are `npm run test:episode-order` and `test:schedule-parity`
+ * EPISODE ORDER (I-103) in the real plex-tuner.html (headless), against a Jellyfin-shaped stub with four shows of
+ * numbered episodes (two of them different shows with one name). The engine and its goldens are `npm run test:episode-order` and `test:schedule-parity`
  * (scripts/nostalgex-daily-manifest.js, the file the Apple TV and Roku port); this is the page around it:
  *   - every episode the scan reads carries its seTag ("S01E04"), which CLASSIC RERUNS needs to find the next one, and a
  *     library saved before that gets it back from the item's meta when it is restored;
  *   - CHANNELS & BUNDLES has an EPISODE ORDER row, CLASSIC RERUNS by default, with the Apple TV's words
  *     ("Two episodes of a show back to back, in order." ... "Movie channels are not affected.");
+ *   - every episode carries showKey (the Jellyfin SeriesId; Plex grandparentRatingKey) and year, the engine's show
+ *     identity, so two different shows with one name are not one show;
  *   - on CLASSIC RERUNS a channel airs a show's episodes two consecutive ones at a time (no two of one show in a row
- *     that are not neighbours in the series); one press makes it SHUFFLE (one at a time, a different schedule), saved
+ *     that are not neighbours in the series, and same-title shows never pair with each other); one press makes it SHUFFLE (one at a time, a different schedule), saved
  *     in localStorage and kept across a reload; another press is back to CLASSIC RERUNS, with the first schedule again
  *     and the saved key removed (the default is no key, as on the Apple TV);
  *   - the row is a real button that fits the screen and can be pressed with the mouse at desktop, 960x540 (DPR 2, a TV
@@ -39,9 +41,13 @@ const episode = (show, i) => {
       MediaStreams: [{ Type: "Video", Codec: "h264", Width: 1280, Height: 720, Index: 0, IsDefault: true }, { Type: "Audio", Codec: "aac", Language: "eng", Channels: 2, Index: 1, IsDefault: true }] }],
   };
 };
-const SHOWS = ["alpha", "beta"];
+// Two different shows with one name ("Twin Show", years apart) number their episodes alike: grouped by title they would be
+// one show with every episode twice. A show is its server id (showKey), so each pairs with itself.
+const SHOWS = ["alpha", "beta", "twin1", "twin2"];
+const NAMES = { alpha: "Alpha Show", beta: "Beta Show", twin1: "Twin Show", twin2: "Twin Show" };
+const YEARS = { alpha: 1992, beta: 1992, twin1: 1991, twin2: 1994 };
 const EPISODES = Object.fromEntries(SHOWS.map((s) => [s, Array.from({ length: 14 }, (_, i) => episode(s, i))]));
-const SERIES = SHOWS.map((s) => ({ Id: s, Name: s === "alpha" ? "Alpha Show" : "Beta Show", Type: "Series", ProductionYear: 1992, Genres: ["Comedy"], Studios: [], ProviderIds: {}, OfficialRating: "TV-PG", CommunityRating: 7 }));
+const SERIES = SHOWS.map((s) => ({ Id: s, Name: NAMES[s], Type: "Series", ProductionYear: YEARS[s], Genres: ["Comedy"], Studios: [], ProviderIds: {}, OfficialRating: "TV-PG", CommunityRating: 7 }));
 const VIEWS = [{ Id: "lib-tv", Name: "Shows", CollectionType: "tvshows" }];
 const jellyfin = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -95,26 +101,32 @@ const airing = (page) => page.evaluate(() => {
   const withBlocks = CHANNELS.filter((c) => c.enabled && c._manifestBlocks && c._manifestBlocks.some((b) => b.item.type === "episode"));
   let best = null;
   for (const c of withBlocks) {
-    const shows = new Set(c._manifestBlocks.filter((b) => b.item.type === "episode").map((b) => b.item.title));
+    const shows = new Set(c._manifestBlocks.filter((b) => b.item.type === "episode").map((b) => b.item.showKey));
     if (!best || shows.size > best.shows) best = { c, shows: shows.size };
   }
   if (!best) return { channel: null, blocks: [], channels: CHANNELS.filter((c) => c.enabled).map((c) => c.name) };
-  const blocks = best.c._manifestBlocks.filter((b) => b.item.type === "episode").map((b) => ({ show: b.item.title, se: b.item.seTag, key: b.item.ratingKey }));
+  const blocks = best.c._manifestBlocks.filter((b) => b.item.type === "episode").map((b) => ({ show: b.item.title, showKey: b.item.showKey, se: b.item.seTag, key: b.item.ratingKey, start: b.startSec }));
   return { channel: best.c.name, blocks };
 });
-// Adjacent blocks of one show: are they neighbours in that show's series order (S01E01 ... S02E07, then round to S01E01)?
+// Adjacent blocks of one show (one showKey, not one title): are they neighbours in that show's series order
+// (S01E01 ... S02E07, then round to S01E01)? `across` counts adjacent blocks that share a title but not a show. `seam` counts
+// a non-neighbour pair that straddles local midnight: each day is packed from its own seeded spot, so a pair cannot run on
+// from one day into the next (a day's last episode, then the next day's first pick).
 function pairs(blocks) {
   const order = {};
-  for (const s of SHOWS) order[s === "alpha" ? "Alpha Show" : "Beta Show"] = EPISODES[s].map((e) => `S${String(e.ParentIndexNumber).padStart(2, "0")}E${String(e.IndexNumber).padStart(2, "0")}`);
-  let consecutive = 0, other = 0;
+  for (const s of SHOWS) order[s] = EPISODES[s].map((e) => `S${String(e.ParentIndexNumber).padStart(2, "0")}E${String(e.IndexNumber).padStart(2, "0")}`);
+  let consecutive = 0, other = 0, across = 0, seam = 0;
   for (let i = 0; i + 1 < blocks.length; i++) {
     const a = blocks[i], b = blocks[i + 1];
-    if (a.show !== b.show) continue;
-    const list = order[a.show];
+    if (a.show === b.show && a.showKey !== b.showKey) { across++; continue; }
+    if (a.showKey !== b.showKey) continue;
+    const list = order[a.showKey];
     const ia = list.indexOf(a.se), ib = list.indexOf(b.se);
-    if (ia >= 0 && ib === (ia + 1) % list.length) consecutive++; else other++;
+    if (ia >= 0 && ib === (ia + 1) % list.length) { consecutive++; continue; }
+    const midnight = new Date(a.start * 1000); midnight.setHours(24, 0, 0, 0);
+    if (a.start * 1000 < midnight.getTime() && b.start * 1000 >= midnight.getTime()) seam++; else other++;
   }
-  return { consecutive, other };
+  return { consecutive, other, across, seam };
 }
 const sequence = (blocks) => blocks.map((b) => b.key).join();
 
@@ -134,7 +146,10 @@ async function flow(label, width, height, dpr = 1) {
   await settledGuide(page);
 
   const read = await page.evaluate(() => allItemsCache.filter((i) => i.type === "episode").map((i) => i.seTag));
-  check(`${label}: every episode the scan read carries its seTag`, read.length === 28 && read.every((t) => /^S0[12]E0[1-7]$/.test(t)), JSON.stringify(read.slice(0, 5)));
+  check(`${label}: every episode the scan read carries its seTag`, read.length === 56 && read.every((t) => /^S0[12]E0[1-7]$/.test(t)), JSON.stringify(read.slice(0, 5)));
+  const keys = await page.evaluate(() => allItemsCache.filter((i) => i.type === "episode").map((i) => `${i.title}|${i.year}|${i.showKey}`));
+  const expectKeys = new Set(SHOWS.map((s) => `${NAMES[s]}|${YEARS[s]}|${s}`));
+  check(`${label}: every episode carries its show's server id (showKey, the Jellyfin SeriesId) and year, so the two "Twin Show"s are told apart`, keys.length === 56 && keys.every((k) => expectKeys.has(k)) && new Set(keys).size === 4, JSON.stringify([...new Set(keys)]));
   check(`${label}: with nothing saved, the engine is on CLASSIC RERUNS`, await page.evaluate(() => NostalgexDailyManifest.getEpisodeOrder()) === "classic" && (await stored(page)) === null);
 
   // A library saved before the scan kept seTag has none: the number is read back from the item's meta when it is restored.
@@ -147,12 +162,14 @@ async function flow(label, width, height, dpr = 1) {
     }
     return null;
   });
-  check(`${label}: a library saved without seTag gets it back from the item's meta when it is restored`, restored && restored.length === 28 && restored.every((t) => /:S0[12]E0[1-7]$/.test(t)), JSON.stringify((restored || []).slice(0, 3)));
+  check(`${label}: a library saved without seTag gets it back from the item's meta when it is restored`, restored && restored.length === 56 && restored.every((t) => /:S0[12]E0[1-7]$/.test(t)), JSON.stringify((restored || []).slice(0, 3)));
 
   const first = await airing(page);
-  check(`${label}: some channel airs episodes of both shows`, first.channel !== null && new Set(first.blocks.map((b) => b.show)).size === 2, JSON.stringify(first.channels || first.channel));
+  check(`${label}: some channel airs episodes of all four shows, the two "Twin Show"s among them`, first.channel !== null && new Set(first.blocks.map((b) => b.showKey)).size === 4, JSON.stringify(first.channels || first.channel));
   const classic = pairs(first.blocks);
-  check(`${label}: CLASSIC RERUNS: shows air in pairs, and no two in a row from one show are anything but neighbours in the series`, classic.consecutive > 0 && classic.other === 0, JSON.stringify(classic));
+  check(`${label}: CLASSIC RERUNS: shows air in pairs, and no two in a row from one show are anything but neighbours in the series`, classic.consecutive > 0 && classic.other === 0 && classic.seam <= 1, JSON.stringify(classic));
+  const twins = first.blocks.filter((b) => b.show === "Twin Show");
+  check(`${label}: same-title shows do not pair: both "Twin Show"s air, each pairs only with itself, and no episode airs twice in a row`, new Set(twins.map((b) => b.showKey)).size === 2 && first.blocks.every((b, i) => i === 0 || b.key !== first.blocks[i - 1].key), JSON.stringify({ twins: twins.length, ...classic }));
 
   // The row, in CHANNELS & BUNDLES.
   await page.evaluate(() => { showConfig(); switchConfigTab("bundles"); });
@@ -175,7 +192,7 @@ async function flow(label, width, height, dpr = 1) {
   check(`${label}: it is saved ("shuffle") and the engine is on it`, (await stored(page)) === "shuffle" && await page.evaluate(() => NostalgexDailyManifest.getEpisodeOrder()) === "shuffle");
   const shuffled = await airing(page);
   const sp = pairs(shuffled.blocks);
-  check(`${label}: the schedules were built again: a different order, one episode at a time`, sequence(shuffled.blocks) !== sequence(first.blocks) && sp.other > 0, JSON.stringify(sp));
+  check(`${label}: the schedules were built again: a different order, and one at a time (far fewer episodes of a show back to back than CLASSIC RERUNS airs)`, sequence(shuffled.blocks) !== sequence(first.blocks) && sp.consecutive * 4 < classic.consecutive, JSON.stringify({ shuffle: sp, classic }));
 
   // A reload keeps it.
   await page.reload();

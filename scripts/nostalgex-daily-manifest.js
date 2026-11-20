@@ -140,6 +140,52 @@
     return { season: m[1] === undefined ? 0 : parseInt(m[1], 10), episode: m[2] === undefined ? 0 : parseInt(m[2], 10) };
   }
 
+  /**
+   * Which show an episode belongs to: the server's id for the show (`showKey`: Plex grandparentRatingKey,
+   * Jellyfin and Emby SeriesId) where the item has one, else the title and year. A film is its own group.
+   * Mirrors SchedulePoolOrdering.showIdentity.
+   */
+  function showIdentity(item) {
+    if (item.type !== 'episode') return `movie_${item.ratingKey}`;
+    if (item.showKey != null && item.showKey !== '') return `show_${item.showKey}`;
+    return `title_${item.title}|${item.year ? item.year : ''}`;
+  }
+
+  /**
+   * One show's episodes with a second copy of the same season and episode left out; the first in the
+   * library's order airs. Only a tag with both a season and an episode says two items are one episode.
+   * Mirrors SchedulePoolOrdering.withoutSecondCopies.
+   */
+  function withoutSecondCopies(episodes) {
+    if (episodes.length < 2) return episodes;
+    const seen = new Set();
+    return episodes.filter((item) => {
+      const tag = item.seTag || '';
+      if (item.type !== 'episode' || !tag.includes('S') || !tag.includes('E')) return true;
+      const n = seriesNumber(item);
+      if (!n) return true;
+      const k = `${n.season}x${n.episode}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+
+  /** The pairs in a day's ordering as it will air: the first's ratingKey to the second's. Mirrors SchedulePoolOrdering.pairs. */
+  function pairsIn(ordered, follows) {
+    const out = new Map();
+    let i = 0;
+    while (i + 1 < ordered.length) {
+      if (follows.get(ordered[i].ratingKey) === ordered[i + 1].ratingKey) {
+        out.set(ordered[i].ratingKey, ordered[i + 1].ratingKey);
+        i += 2;
+      } else {
+        i += 1;
+      }
+    }
+    return out;
+  }
+
   /** One show's episodes in series order; the unnumbered after the numbered, ties in the order they came. */
   function inSeriesOrder(episodes) {
     return episodes
@@ -165,13 +211,15 @@
     const groups = new Map();
     for (const item of pool) {
       if (item.type !== 'episode') continue;
-      if (!groups.has(item.title)) groups.set(item.title, []);
-      groups.get(item.title).push(item);
+      const key = showIdentity(item);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
     }
     const next = new Map();
     for (const group of groups.values()) {
       if (group.length < 2) continue;
-      const ordered = inSeriesOrder(group);
+      const ordered = inSeriesOrder(withoutSecondCopies(group));
+      if (ordered.length < 2) continue;
       ordered.forEach((item, i) => next.set(item.ratingKey, ordered[(i + 1) % ordered.length].ratingKey));
     }
     return next;
@@ -189,10 +237,7 @@
 
     const groups = new Map();
     for (const item of items) {
-      // Swift keys episodes on `item.title`, which IS the show title on a
-      // PlexMediaItem (episode name lives in `episodeTitle`). The web items use
-      // the same shape.
-      const key = item.type === 'episode' ? item.title : `movie_${item.ratingKey}`;
+      const key = showIdentity(item);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(item);
     }
@@ -202,7 +247,9 @@
     const classic = order !== 'shuffle';
     const follows = classic ? (next || seriesNext(items)) : new Map();
     const orderedGroups = [];
-    for (const list of groups.values()) {
+    for (const all of groups.values()) {
+      // A second copy of an episode does not air, under either order.
+      const list = withoutSecondCopies(all);
       if (list.length < 2) { orderedGroups.push(list); continue; }
       if (classic) {
         const ordered = inSeriesOrder(list);
@@ -514,7 +561,7 @@
    * elsewhere, this is always 0: the channel's own order. Mirrors
    * DailyManifestScheduler.pickCandidate.
    */
-  function pickCandidate(queue, t, playSec, occupancy, channelId, avoidKey, mustFit, skipGated, keepShowOrder = false) {
+  function pickCandidate(queue, t, playSec, occupancy, channelId, avoidKey, mustFit, skipGated, keepShowOrder = false, avoidShow = null) {
     const n = Math.min(LOOKAHEAD, queue.length);
     let best = -1;
     let bestOverlap = Infinity;
@@ -524,10 +571,13 @@
       if (i > 0 && waitsForEarlierPart(queue, i)) continue;
       // CLASSIC RERUNS (I-103): an episode never goes ahead of an earlier one of its show waiting before it.
       if (keepShowOrder && i > 0 && item.type === 'episode') {
+        const show = showIdentity(item);
         let earlier = false;
-        for (let k = 0; k < i; k++) if (queue[k].type === 'episode' && queue[k].title === item.title) { earlier = true; break; }
+        for (let k = 0; k < i; k++) if (queue[k].type === 'episode' && showIdentity(queue[k]) === show) { earlier = true; break; }
         if (earlier) continue;
       }
+      // The show that just had its turn is passed over; the caller asks again without it when nothing else fits.
+      if (avoidShow != null && item.type === 'episode' && showIdentity(item) === avoidShow) continue;
       const ov = occupancy ? occupancy.overlap(item.ratingKey, t, t + playSec(i), channelId, skipGated) : 0;
       if (ov === 0) return i;
       if (ov < bestOverlap) { bestOverlap = ov; best = i; }
@@ -555,8 +605,26 @@
     const order = episodeOrder;
     const classic = order === 'classic';
     const follows = classic ? seriesNext(pool) : new Map();
-    // The second of a pair airs straight after the first, whatever another channel has on.
-    const completesPair = (queue, lastKey) => queue.length > 0 && lastKey != null && follows.get(lastKey) === queue[0].ratingKey;
+    const byKey = new Map(pool.map((i) => [i.ratingKey, i]));
+    const blocks = [];
+    // What airs next from `queue`. Under 'classic' the second of a pair airs straight after the first, wherever a
+    // programme picked ahead of the pair left it in the queue and whatever another channel has on; and once a show
+    // has had its turn, another title goes next while one is waiting that fits. Mirrors packDay's pickNext.
+    const pickNext = (queue, pairs, t, avoidKey, mustFit) => {
+      const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : null;
+      const last = lastKey == null ? null : byKey.get(lastKey);
+      const playFor = (i) => slotSeconds(queue[i]);
+      if (classic && last && pairs.has(lastKey)) {
+        const second = pairs.get(lastKey);
+        const n = Math.min(LOOKAHEAD, queue.length);
+        for (let j = 0; j < n; j++) if (queue[j].ratingKey === second) return j;
+      }
+      if (classic && last && last.type === 'episode') {
+        const other = pickCandidate(queue, t, playFor, occupancy, channelId, avoidKey, true, gated, true, showIdentity(last));
+        if (other >= 0) return other;
+      }
+      return pickCandidate(queue, t, playFor, occupancy, channelId, avoidKey, mustFit, gated, classic, null);
+    };
     const interleaved = interleaveByShow(unplayed, channelId, dayNumber, order, follows);
     const promoted = isPremiereChannel
       ? promoteRecentlyAdded(interleaved, dayStartSec, channelId)
@@ -570,7 +638,7 @@
         unplayedOrdered[0].ratingKey === yesterdayLastRatingKey) {
       unplayedOrdered.push(unplayedOrdered.shift());
     }
-    const blocks = [];
+    const primaryPairs = classic ? pairsIn(unplayedOrdered, follows) : new Map();
     // The day starts when the programme running over midnight from yesterday ends: it plays to its own end (#315), so nothing of
     // today's may be on air under it. Missing, or before midnight, is the start of the day. Mirrors packDay's runsOverUntil.
     let t = Math.max(dayStartSec, runsOverUntilSec || dayStartSec);
@@ -581,8 +649,7 @@
     // waiting fits, the day goes on with the filler loop below, which holds the whole pool.
     const queue = unplayedOrdered.filter((item) => (item.duration || 0) > 0);
     while (queue.length && t < dayEndSec) {
-      const j = completesPair(queue, blocks.length ? blocks[blocks.length - 1].ratingKey : null) ? 0
-        : pickCandidate(queue, t, (i) => slotSeconds(queue[i]), occupancy, channelId, null, true, gated, classic);
+      const j = pickNext(queue, primaryPairs, t, null, true);
       if (j < 0) break;
       const item = queue.splice(j, 1)[0];
       const dur = slotSeconds(item);
@@ -622,11 +689,11 @@
       // were cut files short.
       const loop = orderedFull.slice(cycleIndex).concat(orderedFull.slice(0, cycleIndex))
         .filter((item) => (item.duration || 0) > 0);
+      const loopPairs = classic ? pairsIn(loop, follows) : new Map();
       while (t < dayEndSec && loop.length) {
         const playFor = (i) => slotSeconds(loop[i]);
         const lastKey = blocks.length ? blocks[blocks.length - 1].ratingKey : yesterdayLastRatingKey;
-        const j = completesPair(loop, blocks.length ? blocks[blocks.length - 1].ratingKey : null) ? 0
-          : pickCandidate(loop, t, playFor, occupancy, channelId, lastKey, false, gated, classic);
+        const j = pickNext(loop, loopPairs, t, lastKey, false);
         const playSec = playFor(j);
         const item = loop.splice(j, 1)[0];
         loop.push(item);
@@ -1072,6 +1139,8 @@
     seriesNumber,
     inSeriesOrder,
     seriesNext,
+    showIdentity,
+    withoutSecondCopies,
     setEpisodeOrder,
     getEpisodeOrder,
     promoteRecentlyAdded,
