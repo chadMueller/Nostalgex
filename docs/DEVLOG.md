@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-20 (Roku 1.0.14: the margin rule, the stick runs, the beta cut prepared)
+
+**State.** Branch `roku/1.0.14`, version 1.0.14 (build_version 14), nothing pushed, not signed. Stick back on the 1.0.13 candidate (build `5dbf5ff91346`, zip sha256 `192e8929cbea...`, installed, files identical to the rk-1013-real stage).
+
+**The rule** (`source/util/Values.brs`, one path for Plex, Jellyfin and Emby). A device with a limit under 480,000 KB: the scan stops when the app's reading plus the build's cost (24 MB plus 2.1 KB an item of the largest server, a tenth over the measured 22 MB and 1.9) plus a 12 MB reserve for the collections sweep (measured 9 MB) reaches 80% of the limit, so the projected peak stays under 85%; the check before the build refuses at 90%, with the build's cost as the measure (not half the growth, which refused scans the rule had let through over several servers); the old ceiling no longer applies there (it stopped a Jellyfin load at 1,000 titles over 150 MB). At or over 480,000 KB nothing changed: ceiling 55, stop at a projected 90, refuse at 95. The console prints the reading at each load step and where the load begins.
+
+| Run | Limit | Servers | Titles read | App reading peak | Guide |
+|---|---|---|---|---|---|
+| q1 | 150 MB | Plex A+B+Big | 15,925 | 68% | built |
+| q5 | 150 MB | Plex A+B+Big (2nd try, ceiling gone) | 3,700 | 63% | built |
+| q2 | 256 MB | Plex A+B+Big | 53,800 | 78% | built |
+| q6 | 256 MB | Plex A+B+Big (2nd try) | 26,150 | 71% | built |
+| q4 | 150 MB | Plex 20,000 films, 100 series | 13,500 | 71% | built |
+| q8 | 150 MB | same (2nd try) | 1,200 | 59% | built |
+| q3 | 150 MB | Jellyfin 2,093 films, 773 series x 25 | 1,000 | 58% | built |
+| q7 | 150 MB | same (2nd try) | 1,600 | 63% | built |
+
+**What it shows.** The peak held under 85% by the app's own reading in all eight runs and a guide was built every time. The titles read did not hold steady: the app's reading when a load begins climbed over the session, from about 15% to 29% (q6) to about 50% (q7, q8), while the stick's process memory at that point stayed near 47 MB, so the reading is not a plain function of the process. Reading less is the safe direction, but at 256 MB the second run read 26,150 titles against 57,600 before. The build's cost is also lower than the fit for a small library (3,700 titles cost 3 points, not the 17 the rule reserves). Not done: a clean comparison on a restarted stick, and whether `RunGarbageCollector()` before a reading would make it steadier (nothing in the app calls it).
+
 ## 2026-11-20 (Roku 1.0.14: the Plex stick pass, every run, and why the beta cut is held)
 
 **State.** Branch `roku/1.0.14` at `60b9f616`. The stick is back on the 1.0.13 candidate (build `5dbf5ff91346`, hash and file-for-file checked). Nothing pushed.
