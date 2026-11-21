@@ -4,6 +4,17 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-21 (Tip jar signals)
+
+**State.** On `appletv/1.0.34-next`. Chad, 2026-11-21: "don't we want analytics on tips as well?" The tip jar sent nothing until now, on purpose, to stay off the privacy label. That choice is reversed.
+
+**Three signals, one parameter.** `tip.started`, `tip.completed` and `tip.failed`, each with `tier` = `popcorn`, `tv_dinner` or `pizza_night`. No quantity, price, total, currency or transaction id, and no programme or channel. Started fires when the viewer confirms and the App Store sheet is asked for. Completed fires with the thank-you card, so once per transaction, and also for an Ask to Buy tip approved later. Failed fires when a tip the viewer started is refused or fails verification. A cancel and a wait for approval send nothing.
+
+**Before this ships.** The App Store privacy label and `nostalgex.app/privacy` need a look: these are anonymous counts, but "Purchases" may need declaring. `TipJarTests` pins the names and the one key, so a new parameter fails there first.
+
+**Tested.** Simulator: `TipJarTests` (21), `AnalyticsEventTests`, `AnalyticsGateTests`. No purchase was run.
+
+
 ## 2026-11-19 (EPISODE ORDER: CLASSIC RERUNS and SHUFFLE, I-103)
 
 **State.** On `appletv/1.0.34-next`, not pushed. The engine change is in Swift and in `scripts/nostalgex-daily-manifest.js` together; the web tuner's own setting and its items' `seTag` are the web agent's port.
