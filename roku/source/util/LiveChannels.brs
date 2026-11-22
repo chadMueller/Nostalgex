@@ -229,6 +229,14 @@ function NxLiveRebuildMaxTitles() as Integer
     return 3000
 end function
 
-function NxLiveRebuildNow(titles as Integer) as Boolean
-    return titles <= NxLiveRebuildMaxTitles()
+' Whether the channels are rebuilt now, behind the guide, from `titles` saved titles, the app's memory at `pct` of
+' `limitKB` (pct -1: no reading, judged by the size alone). Both must hold: the size cap above, and the 1.0.14 margin
+' rule (NxScanProjectedFull, the rule a scan is judged by: the reading, the build's cost for these titles and, on a
+' device under the Stick Plus's limit, the sweep's reserve must stay under the stop line, 80% on a small device, 90% on
+' a normal one). A rebuild from the saved library has no scan, so the build's cost never reaches the load's own check
+' (nxScanBiggest stays 0): this is where the apply asks it. Not met: the apply waits for the next launch.
+function NxLiveRebuildNow(titles as Integer, pct = -1 as Integer, limitKB = 0 as Integer) as Boolean
+    if titles > NxLiveRebuildMaxTitles() then return false
+    if pct >= 0 and NxScanProjectedFull(pct, titles, limitKB) then return false
+    return true
 end function

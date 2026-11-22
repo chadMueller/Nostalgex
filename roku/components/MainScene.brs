@@ -556,8 +556,9 @@ sub applyLiveChannels()
     if not m.guide.callFunc("onGuideScreen", invalid) then return
     m.liveChannelsPending = false
     if m.library <> invalid then
-        if not NxLiveRebuildNow(m.library.titleCount) then
-            print "channels: a newer channels.json is cached; this library ("; m.library.titleCount; " titles) is too big to rebuild behind the guide, so the next launch uses it"
+        pct = NxMemPercentSafe()
+        if not NxLiveRebuildNow(m.library.titleCount, pct, NxMemLimitKB()) then
+            print "channels: a newer channels.json is cached; this library ("; m.library.titleCount; " titles, memory "; pct; "% of "; NxMemLimitKB(); " KB) is too big to rebuild behind the guide now, so the next launch uses it"
             return
         end if
     end if

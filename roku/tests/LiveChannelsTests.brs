@@ -83,6 +83,13 @@ function NxRunLiveChannelsTests(channelsPath as String) as Integer
     NxCheck(r, "newer than the cached copy: new", FormatJson(NxLiveChannelsIsNew(53, 52, 50)), "true")
     NxCheck(r, "a library up to 3,000 titles is rebuilt behind the guide", FormatJson(NxLiveRebuildNow(1546)) + FormatJson(NxLiveRebuildNow(3000)), "truetrue")
     NxCheck(r, "a bigger one waits for the next launch", FormatJson(NxLiveRebuildNow(3001)) + FormatJson(NxLiveRebuildNow(72000)), "falsefalse")
+    ' The 1.0.14 margin rule on top of the size (3,000 titles: a 150 MB limit adds 20 points for the build and 8 for the
+    ' sweep's reserve against the 80 stop line; a normal device adds 5 against 90).
+    NxCheck(r, "150 MB limit, 3,000 titles, memory 51%: rebuilt", FormatJson(NxLiveRebuildNow(3000, 51, 153600)), "true")
+    NxCheck(r, "150 MB limit, 3,000 titles, memory 52%: waits for the next launch", FormatJson(NxLiveRebuildNow(3000, 52, 153600)), "false")
+    NxCheck(r, "256 MB limit, 3,000 titles, memory 62% rebuilt, 63% waits", FormatJson(NxLiveRebuildNow(3000, 62, 262144)) + FormatJson(NxLiveRebuildNow(3000, 63, 262144)), "truefalse")
+    NxCheck(r, "a normal limit, 3,000 titles, memory 84% rebuilt, 85% waits", FormatJson(NxLiveRebuildNow(3000, 84, 501760)) + FormatJson(NxLiveRebuildNow(3000, 85, 501760)), "truefalse")
+    NxCheck(r, "no memory reading: the size alone decides", FormatJson(NxLiveRebuildNow(3000, -1, 153600)) + FormatJson(NxLiveRebuildNow(3001, -1, 153600)), "truefalse")
     keyed = NxFakeRegistry()
     NxCheck(r, "no live copy: nothing in the key", NxLiveChannelsKeyPart(keyed) + NxLiveChannelsKeyPart(invalid), "")
     keyed.Write("version", "51")

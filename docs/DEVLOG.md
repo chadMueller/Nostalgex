@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-22 (Roku 1.0.14: the faster live channels.json, N-074, added from the held branch)
+
+**State.** Branch `roku/1.0.14`, cherry-pick of `roku/live-channels-faster` (`377f3586`, held since 2026-11-16 only for release timing) plus one gate on top. Nothing pushed, not signed, no build number change, version still 1.0.14 (build 14). Chad, 2026-11-22: add the faster channel check to the 1.0.14 line to match the Apple TV (`appletv/1.0.34-next`).
+
+**What a viewer gets.** The app asks nostalgex.app for `channels.json` at launch, when a link wakes it and from the 15 minute loop, at most once an hour (`NxLiveChannelsIntervalSec`, one constant; the request is conditional, so unchanged is a 304 with no body, and a failed try also waits the hour). A newer copy is applied from the saved library, no server read, only while the viewer is on the guide (not full screen, not Settings, not a prompt, not a load), else at the next launch. UPDATING LIBRARY then GUIDE READY in the header. The saved guide and pools are keyed by the live copy's version, so a new copy rebuilds them.
+
+**The merge.** The cherry-pick applied with no conflicts (the held branch's base `3798acdb` is an ancestor of the line; git auto-merged `GuideView.brs`, `LibraryTask.brs` and `MainScene.brs`, where the two sides edited different parts). No conflict does not mean no interaction, so it was read against the margin rule.
+
+**The memory interaction, and the gate.** An apply is `startLibrary(true, true)`: a rebuild from the saved library with the saved guide shown, so the app holds the guide on screen, the saved library read back from disk and the new pools at once. The load's own checks do not see that: `nxScanBiggest` is set only by a scan, so a rebuild from the saved library asks `NxBuildRoomFor` with 0 items, which is the old half-the-growth guess and refuses only at 90% (95% on a normal device), none of the margin rule's measured build cost. What stood in the way was the held branch's cap of 3,000 titles, a fixed number from the 1.0.13 profile that knows nothing of the device's limit or of where its reading stands. `NxLiveRebuildNow(titles, pct, limitKB)` now also asks `NxScanProjectedFull`, the rule a scan is judged by: the reading plus the build's cost for those titles plus, under the Stick Plus's limit, the sweep's reserve (kept though a saved-library rebuild has no sweep: a tenth over) must stay under the stop line, 80% under 480,000 KB and 90% above. A 3,000 title library at a 150 MB limit waits at a reading of 52% or more, at 256 MB at 63%, on a normal device at 85%. Not met, the apply is dropped for this run and the next launch uses the cached copy, as it does for a library over 3,000 titles. At launch the load starts from a low reading and the margin rule's own checks guard it.
+
+**Not in the rule's fit.** The build's cost was fitted on scans, where the items were already resident. An apply also reads the saved library back, about 3,000 titles at most, so the real peak of an apply is above what the gate projects by that read. Not measured on a stick: the 3,000 cap bounds it, and the gate's tenth over and the reserve are the margin that stands for it. A stick run at a simulated 150 MB limit (`nx_mem_limit_kb`) with a library near 3,000 titles is the measurement that closes this.
+
+**The daily schedule memo.** The Apple TV clears its schedule memo on an apply. Roku's equivalent is `nxManifests` (`NxManifestCache`), cleared by `NxClearManifests()` in `buildGuide` whenever the filter results are not reused. They are reused only by the same build key (`NxSavedFiltered`, exact key), and the live copy's version is in that key (`NxBuildKey`), so an apply never reuses them and the memo is cleared by construction. No extra line added.
+
+**Tests.** `tests/LiveChannelsTests.brs`: five cases for the gate (150 MB, 256 MB, normal, no reading). Run once, the live-channels suite only, plus the static checks. Not run: the full suite, static analysis (`sca.sh`), the stick.
+
 ## 2026-11-20 (Roku 1.0.14: the margin rule, the stick runs, the beta cut prepared)
 
 **State.** Branch `roku/1.0.14`, version 1.0.14 (build_version 14), nothing pushed, not signed. Stick back on the 1.0.13 candidate (build `5dbf5ff91346`, zip sha256 `192e8929cbea...`, installed, files identical to the rk-1013-real stage).
