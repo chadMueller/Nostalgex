@@ -4,6 +4,18 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-22 (Apple TV 1.0.34: the faster live channel list is in, N-074)
+
+**State.** On `appletv/1.0.34-next`. Chad, 2026-11-22: "the hevc fix and faster channel - why don't we add that?" The work held on `appletv/live-channels-faster` since 2026-11-16 (the entry of that date below) is cherry-picked here. It was held for release timing only. Not archived, the build number is untouched.
+
+**What a TV does now.** It asks nostalgex.app for channels.json at launch, on return to the foreground and from the 15 minute background loop, but at most once an hour (`ChannelConfigStore.checkInterval`, 3600 s; 1.0.33 asked once a day). An unchanged file is a 304. A newer valid one is applied from the library already in memory, with no server scan, the next time the viewer is on the guide, or at the next launch. Never while a programme is full screen and never during a load. The header says UPDATING LIBRARY, then GUIDE READY. So a published change reaches an open TV within about an hour and 15 minutes at most if it sits on the guide, and otherwise when the viewer next comes back to the guide.
+
+**With the 1.0.34 work.** The pick applied clean in code; only this file conflicted.
+- Settings load status: an apply sets the same state a background refresh does, so the Settings bar reads UPDATING LIBRARY and then GUIDE READY with the header. An apply never starts under Settings.
+- EPISODE ORDER: the choice is a saved setting, not part of channels.json, and an apply does not touch it. One line added: the apply now drops the scheduler's memo (`DailyManifestScheduler.invalidateMemo`). The memo's key is a pool's size and its first and last title, so a rule change that swapped titles in the middle of a pool could have kept serving the old day until midnight. The day packed after an apply is packed under the viewer's order.
+
+**Tested.** `LiveChannelRulesTests` (9), `EpisodeOrderTests` (16) and the new `BigLibraryHarness.testALiveRulesApplyKeepsTheEpisodeOrder` (2,000 titles, SHUFFLE picked, apply, still SHUFFLE and the day aired is the SHUFFLE day), once, on the simulator: 26 pass. Not run: the full suite, the 30,000 title measurement again, and anything on a TV. No real download of a new channels.json was exercised here; the fetch is switched off under tests.
+
 ## 2026-11-21 (Tip jar signals)
 
 **State.** On `appletv/1.0.34-next`. Chad, 2026-11-21: "don't we want analytics on tips as well?" The tip jar sent nothing until now, on purpose, to stay off the privacy label. That choice is reversed.

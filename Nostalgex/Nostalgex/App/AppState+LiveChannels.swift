@@ -68,6 +68,10 @@ extension AppState {
         await rebuildFoundFranchisesOffMain()
         guard librarySessionGeneration == session else { return }
         materializeDynamicChannels()
+        // The pools changed under the scheduler's memo, whose key is only a pool's size and ends: drop it, so every
+        // channel's day is read against its new pool and packed again where the pool differs, under the viewer's
+        // EPISODE ORDER (I-103), which this apply never touches.
+        DailyManifestScheduler.invalidateMemo()
         applyBundleFilter()
         if channels.isEmpty { autoEnableBundlesWithContent() }
 

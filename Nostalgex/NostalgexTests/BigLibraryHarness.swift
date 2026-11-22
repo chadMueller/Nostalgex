@@ -585,4 +585,65 @@ final class BigLibraryHarness: XCTestCase {
         }
         XCTAssertEqual(after.allChannels > 0, true)
     }
+
+    /// EPISODE ORDER (I-103) through a live channel-list apply (N-074). Not a measurement and not gated: a small
+    /// library is loaded, the viewer picks SHUFFLE, then `rebuildChannelsFromLoadedLibrary` runs. The choice is still
+    /// SHUFFLE afterwards, in the app and saved, the day a channel airs after the apply is the SHUFFLE day and not
+    /// the CLASSIC RERUNS one, and the header is left at GUIDE READY with nothing still marked as updating.
+    func testALiveRulesApplyKeepsTheEpisodeOrder() async throws {
+        let isolation = HarnessScope.begin("testALiveRulesApplyKeepsTheEpisodeOrder")
+        defer { isolation.end() }
+        let serverID = "4f0c2b9e8a7d6c5b4a39281706f5e4d3c2b1a090"
+        let server = AppState.ServerRef(machineIdentifier: serverID, name: "Vault", baseURL: "http://127.0.0.1:9", owned: true, token: "srv")
+        LibrarySnapshotStore.clear()
+        DailyManifestStore.clearAll()
+        DailyManifestScheduler.invalidateMemo()
+        let savedOrder = EpisodeOrder.current
+        defer {
+            EpisodeOrder.current = savedOrder
+            LibrarySnapshotStore.clear()
+            DailyManifestStore.clearAll()
+            DailyManifestScheduler.invalidateMemo()
+            AppDefaults.standard.removeObject(forKey: AppState.initialLoadCompleteKey)
+        }
+
+        let backend = FixtureBackend(serverID: serverID, items: Self.makeLibrary(count: 2000, serverID: serverID).items)
+        let state = AppState(credentialStore: InMemoryStore())
+        state.backendOverride = { _ in backend }
+        state.completePlexSignIn(token: "plex-account-token", servers: [server])
+        await state.loadLibrary()
+        await Task.detached { LibrarySnapshotStore.waitForPendingSaves() }.value
+        state.episodeOrder = .shuffle
+
+        let config = ChannelConfigStore.active().result
+        await state.rebuildChannelsFromLoadedLibrary(config: config, version: ChannelConfigStore.version(of: ChannelConfigStore.bundledData()) + 1)
+        await Task.detached { LibrarySnapshotStore.waitForPendingSaves() }.value
+
+        XCTAssertEqual(state.episodeOrder, .shuffle)
+        XCTAssertEqual(EpisodeOrder.current, .shuffle)
+        XCTAssertFalse(state.isBackgroundRefreshing)
+        XCTAssertFalse(state.isApplyingLiveRules)
+        XCTAssertEqual(state.guideReadyTitles, state.allItems.count)
+
+        // A channel with several shows of several episodes: the two orders pack its day differently.
+        let fingerprint = state.scheduleCredentialFingerprint
+        func day(_ channel: Channel) -> [String] {
+            DailyManifestScheduler.blocks(for: channel, credentialFingerprint: fingerprint).map(\.item.id)
+        }
+        let candidates = state.channels.filter { c in
+            !c.isWeather && Set(c.itemPool.filter { $0.type == .episode }.map(\.title)).count >= 3
+        }
+        XCTAssertFalse(candidates.isEmpty, "the fixture has no channel of episodes")
+        let afterApply = candidates.map(day)
+        XCTAssertTrue(afterApply.contains { !$0.isEmpty })
+
+        // The same days asked for again from nothing, under each order.
+        DailyManifestStore.clearAll(credentialFingerprint: fingerprint)
+        DailyManifestScheduler.invalidateMemo()
+        XCTAssertEqual(candidates.map(day), afterApply, "the day aired after the apply is the SHUFFLE day")
+        EpisodeOrder.current = .classicReruns
+        DailyManifestStore.clearAll(credentialFingerprint: fingerprint)
+        DailyManifestScheduler.invalidateMemo()
+        XCTAssertNotEqual(candidates.map(day), afterApply, "and it is not the CLASSIC RERUNS day")
+    }
 }
