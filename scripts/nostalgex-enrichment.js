@@ -32,6 +32,11 @@
 //     whether any of this runs. It has to say `"enrichment": true`; anything else,
 //     including a missing or unreadable file, means no Supabase or relay request.
 //
+// A record is looked up by number AND type: `movie:603` and `tv:603` are two rows, because TMDB numbers
+// films and shows separately and the shared table's key is (tmdb_id, media_type). The library item's own
+// type picks the row (an episode is `tv`, anything else `movie`), and "cached" means a row of THAT type
+// exists, so a show is never skipped because a film with the same number is stored.
+//
 // The attached record lives at `item.enrichment`, in the shape
 // scripts/nostalgex-channel-filter.cjs `enrichedValue()` reads (camelCase, the
 // Swift MediaEnrichment property names).
@@ -60,6 +65,11 @@
   ];
   const OMDB_BLOCK_KEY = 'nostalgex_omdb_blocked_until';
   const IMDB_ID = /^tt\d{7,9}$/;
+
+  /** The key of a record, a cache row and a lookup: `${media_type}:${tmdb_id}`. */
+  function recordKey(mediaType, tmdbID) { return `${mediaType === 'tv' ? 'tv' : 'movie'}:${tmdbID}`; }
+  /** The type a library item asks for: an episode is a show, anything else a film. */
+  function itemMediaType(item) { return item && item.type === 'episode' ? 'tv' : 'movie'; }
 
   // ── Pure: shapes ───────────────────────────────────────────────────────────
 
@@ -236,12 +246,12 @@
     });
   }
 
-  /** Server genres per TMDB id, merged across the id's items. */
+  /** Server genres per record key (type and TMDB id), merged across the key's items. */
   function genresByTMDB(items) {
     const out = new Map();
     for (const item of items || []) {
       if (!item || item.tmdbID == null) continue;
-      const id = String(item.tmdbID);
+      const id = recordKey(itemMediaType(item), item.tmdbID);
       const set = out.get(id) || new Set();
       for (const g of Array.isArray(item.genres) ? item.genres : []) set.add(g);
       out.set(id, set);
@@ -254,10 +264,11 @@
     if (!gates || !gates.length) return [];
     const out = [];
     for (const w of work) {
-      const e = records.get(w.tmdbID);
+      const key = recordKey(w.mediaType, w.tmdbID);
+      const e = records.get(key);
       if (!e || e.imdbRating != null) continue;
       if (typeof e.imdbID !== 'string' || !IMDB_ID.test(e.imdbID)) continue;
-      const genres = [...(e.tmdbGenres || []), ...((genresByID && genresByID.get(w.tmdbID)) || [])];
+      const genres = [...(e.tmdbGenres || []), ...((genresByID && genresByID.get(key)) || [])];
       if (!isOMDbCandidate(e.mediaType, e.keywords, genres, gates)) continue;
       out.push({ tmdbID: w.tmdbID, imdbID: e.imdbID, record: e });
     }
@@ -307,16 +318,19 @@
     try { return global.localStorage || null; } catch (err) { return null; }
   }
 
-  /** One work item per TMDB id. Episodes are tv, everything else movie. First item wins. */
+  /** One work item per TMDB number and type. Episodes are tv, everything else movie. A film and a show that
+   *  share a number are two items: each is looked up, cached and fetched under its own type. */
   function workItems(items) {
-    const byID = new Map();
+    const byKey = new Map();
     for (const item of items || []) {
       if (!item || item.tmdbID == null || item.tmdbID === '') continue;
       const id = String(item.tmdbID);
       if (!/^\d{1,10}$/.test(id)) continue;
-      if (!byID.has(id)) byID.set(id, { tmdbID: id, mediaType: item.type === 'episode' ? 'tv' : 'movie' });
+      const mediaType = itemMediaType(item);
+      const key = recordKey(mediaType, id);
+      if (!byKey.has(key)) byKey.set(key, { tmdbID: id, mediaType });
     }
-    return [...byID.values()];
+    return [...byKey.values()];
   }
 
   function chunk(list, size) {
@@ -330,7 +344,7 @@
     let n = 0;
     for (const item of items || []) {
       if (!item || item.tmdbID == null) continue;
-      const e = records.get(String(item.tmdbID));
+      const e = records.get(recordKey(itemMediaType(item), item.tmdbID));
       if (e) { item.enrichment = e; n++; }
     }
     return n;
@@ -360,10 +374,12 @@
     return { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' };
   }
 
-  /** SupabaseService.fetchEnrichments, in chunks of 200. A failed chunk is skipped, not fatal. */
+  /** SupabaseService.fetchEnrichments, in chunks of 200. A failed chunk is skipped, not fatal. `ids` are
+   *  TMDB numbers; the table can answer two rows for one number (a film and a show), so the caller keeps
+   *  the row whose type it asked for (`recordKey`). */
   async function readSupabase(ids, cfg, fetchImpl, onChunk) {
     const out = [];
-    const chunks = chunk(ids, cfg.chunkSize || SUPABASE_CHUNK);
+    const chunks = chunk([...new Set(ids)], cfg.chunkSize || SUPABASE_CHUNK);
     for (let i = 0; i < chunks.length; i++) {
       const url = `${cfg.supabaseURL}/rest/v1/media_enrichments?tmdb_id=in.(${chunks[i].join(',')})&select=*`;
       try {
@@ -437,7 +453,7 @@
   }
 
   // ── Local cache (IndexedDB) ────────────────────────────────────────────────
-  // Rows: { tmdbID, savedAt, record | null }. A null record is a TMDB 404, kept for
+  // Rows: { key (`movie:603`), tmdbID, savedAt, record | null }. A null record is a TMDB 404, kept for
   // MISS_TTL_MS so a title TMDB does not know is not asked for on every reload.
 
   function indexedDBCache(dbName = 'nostalgex-enrichment', storeName = 'rows') {
@@ -446,10 +462,13 @@
       if (dbPromise) return dbPromise;
       dbPromise = new Promise((resolve, reject) => {
         try {
-          const req = global.indexedDB.open(dbName, 1);
+          // Version 2: rows are keyed by type and number. The first version keyed them by number alone, so a
+          // film's row could stand in for a show's; those rows are dropped and read again from the shared cache.
+          const req = global.indexedDB.open(dbName, 2);
           req.onupgradeneeded = () => {
             const db = req.result;
-            if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: 'tmdbID' });
+            if (db.objectStoreNames.contains(storeName)) db.deleteObjectStore(storeName);
+            db.createObjectStore(storeName, { keyPath: 'key' });
           };
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => reject(req.error);
@@ -499,7 +518,7 @@
     return {
       rows: m,
       async getMany(ids) { const out = new Map(); for (const id of ids) if (m.has(id)) out.set(id, m.get(id)); return out; },
-      async putMany(rows) { for (const r of rows) m.set(r.tmdbID, r); },
+      async putMany(rows) { for (const r of rows) m.set(r.key, r); },
     };
   }
 
@@ -609,13 +628,14 @@
     if (!work.length) return { records, stats, omdb };
 
     // 1. Local cache.
-    const local = await cache.getMany(work.map((w) => w.tmdbID));
+    const keyOf = (w) => recordKey(w.mediaType, w.tmdbID);
+    const local = await cache.getMany(work.map(keyOf));
     const needRemote = [];
     for (const w of work) {
-      const row = local.get(w.tmdbID);
+      const row = local.get(keyOf(w));
       const ttl = row && row.record ? CACHE_TTL_MS : MISS_TTL_MS;
       if (row && nowMs - row.savedAt < ttl) {
-        if (row.record) { records.set(w.tmdbID, row.record); stats.local++; }
+        if (row.record) { records.set(keyOf(w), row.record); stats.local++; }
         else stats.misses++;
       } else {
         needRemote.push(w);
@@ -629,10 +649,13 @@
       const rows = await readSupabase(needRemote.map((w) => w.tmdbID), cfg, fetchImpl, (d, t) => {
         progress(d, t, 'cache');
       });
+      const wanted = new Set(needRemote.map(keyOf));
       for (const e of rows) {
-        if (records.has(e.tmdbID)) continue;
-        records.set(e.tmdbID, e);
-        toStore.push({ tmdbID: e.tmdbID, savedAt: nowMs, record: e });
+        const key = recordKey(e.mediaType, e.tmdbID);
+        // The row of the type the library asked for. A film's row for a number a show asked for is not it.
+        if (!wanted.has(key) || records.has(key)) continue;
+        records.set(key, e);
+        toStore.push({ key, tmdbID: e.tmdbID, savedAt: nowMs, record: e });
         stats.supabase++;
       }
     }
@@ -641,7 +664,7 @@
     if (records.size && opts.onCacheReady && !cancelled()) opts.onCacheReady(records);
 
     // 3. Relay for whatever neither cache had.
-    const toFetch = needRemote.filter((w) => !records.has(w.tmdbID));
+    const toFetch = needRemote.filter((w) => !records.has(keyOf(w)));
     const fresh = [];
     const freshStore = [];
     if (toFetch.length && !cancelled()) {
@@ -652,12 +675,12 @@
         const { status, json } = await fetchRelay(w, cfg, fetchImpl);
         if (status === 200) {
           const e = parseTMDBResponse(json, w.tmdbID, null, w.mediaType, new Date(nowMs));
-          records.set(w.tmdbID, e);
+          records.set(keyOf(w), e);
           fresh.push(e);
-          freshStore.push({ tmdbID: w.tmdbID, savedAt: nowMs, record: e });
+          freshStore.push({ key: keyOf(w), tmdbID: w.tmdbID, savedAt: nowMs, record: e });
           stats.fetched++;
         } else if (status === 404) {
-          freshStore.push({ tmdbID: w.tmdbID, savedAt: nowMs, record: null });
+          freshStore.push({ key: keyOf(w), tmdbID: w.tmdbID, savedAt: nowMs, record: null });
           stats.misses++;
         } else {
           stats.failed++;
@@ -699,9 +722,9 @@
           const parsed = parseOMDbResponse(json);
           if (!parsed) { omdb.misses++; return; }
           const merged = mergeOMDb(c.record, parsed, c.imdbID);
-          records.set(c.tmdbID, merged);
+          records.set(recordKey(merged.mediaType, c.tmdbID), merged);
           omdbFresh.push(merged);
-          freshStore.push({ tmdbID: c.tmdbID, savedAt: nowMs, record: merged });
+          freshStore.push({ key: recordKey(merged.mediaType, c.tmdbID), tmdbID: c.tmdbID, savedAt: nowMs, record: merged });
           omdb.fetched++;
         });
       }
@@ -725,6 +748,8 @@
   }
 
   const api = {
+    recordKey,
+    itemMediaType,
     SUPABASE_CHUNK,
     RELAY_CONCURRENCY,
     CACHE_TTL_MS,
