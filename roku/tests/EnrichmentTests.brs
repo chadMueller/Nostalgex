@@ -69,7 +69,7 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     item = { title: "Spy Film", type: "movie", genres: ["Action"], duration: 100, tmdbID: 77, ratingKey: "1" }
     NxCheck(r, "unenriched item misses SPY GAMES", NxItemPasses(item, spyGames, invalid, excl, clock), "")
     records = {}
-    records["77"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""Espionage""}]}}"), "77", invalid, "movie", v.fetchedAt)
+    records["movie:77"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""Espionage""}]}}"), "77", invalid, "movie", v.fetchedAt)
     NxCheck(r, "attach count", NxEnrichAttach([item], records).ToStr(), "1")
     ' Port: the filter caches its view of an item, and attaching drops it, so
     ' the item that just missed now passes.
@@ -77,11 +77,11 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     NxCheck(r, "enrichedValue reads keywords", FormatJson(NxEnriched(item, "keywords")), "[""Espionage""]")
     fr = { title: "Amelie", type: "movie", genres: ["Comedy"], duration: 120, tmdbID: 194, ratingKey: "2" }
     records = {}
-    records["194"] = NxEnrichFromSupabaseRow({ tmdb_id: "194", media_type: "movie", keywords: ["french cinema"], imdb_rating: 8.3, imdb_votes: 800000 }, nowSec&)
+    records["movie:194"] = NxEnrichFromSupabaseRow({ tmdb_id: "194", media_type: "movie", keywords: ["french cinema"], imdb_rating: 8.3, imdb_votes: 800000 }, nowSec&)
     NxEnrichAttach([fr], records)
     NxCheck(r, "OMDb row passes FOREIGN FILMS", NxEnBool(NxItemPasses(fr, foreign, invalid, excl, clock) <> ""), "true")
     frNoOmdb = { title: "Amelie", type: "movie", genres: ["Comedy"], duration: 120, tmdbID: 194, ratingKey: "2" }
-    records["194"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""french cinema""}]}}"), "194", invalid, "movie", v.fetchedAt)
+    records["movie:194"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""french cinema""}]}}"), "194", invalid, "movie", v.fetchedAt)
     NxEnrichAttach([frNoOmdb], records)
     NxCheck(r, "TMDB-only row still gated by OMDb (as on tvOS)", NxEnBool(NxItemPasses(frNoOmdb, foreign, invalid, excl, clock) <> ""), "false")
 
@@ -150,8 +150,8 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     state = NxEnrichLibrary(items, { config: cfg, net: net, cache: cache, nowSec: nowSec&, onCacheReady: ready })
     s = state.stats
     NxCheck(r, "e2e: stats", FormatJson([s.ids, s.local, s.supabase, s.fetched, s.misses, s.failed, s.upserted]), "[5,0,1,2,1,1,2]")
-    NxCheck(r, "e2e: early rebuild saw the cache hit only", NxEnJoin(ready.keys), "1")
-    NxCheck(r, "e2e: records", NxEnJoin(NxEnSorted(state.records.Keys())), "1,2,3")
+    NxCheck(r, "e2e: early rebuild saw the cache hit only", NxEnJoin(ready.keys), "movie:1")
+    NxCheck(r, "e2e: records", NxEnJoin(NxEnSorted(state.records.Keys())), "movie:1,movie:2,tv:3")
     titles = []
     for each it in items
         if it.enrichment <> invalid then titles.Push(it.title)
@@ -177,8 +177,8 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
         sent.Push(call.url)
     end for
     NxCheck(r, "e2e: only TMDB ids sent", NxEnBool(CreateObject("roRegex", "title|Show|Gone|tt\d", "").IsMatch(sent.Join(" "))), "false")
-    NxCheck(r, "e2e: 404 cached as a miss", NxEnBool(cache.rows["4"] <> invalid and cache.rows["4"].record = invalid), "true")
-    NxCheck(r, "e2e: 429 not cached", NxEnBool(cache.rows.DoesExist("5")), "false")
+    NxCheck(r, "e2e: 404 cached as a miss", NxEnBool(cache.rows["movie:4"] <> invalid and cache.rows["movie:4"].record = invalid), "true")
+    NxCheck(r, "e2e: 429 not cached", NxEnBool(cache.rows.DoesExist("movie:5")), "false")
 
     again = NxEnLibrary()
     net = NxEnStubNet("backend")
@@ -228,17 +228,17 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     NxCheck(r, "gate without a type admits tv (port)", NxEnBool(NxEnrichIsOMDbCandidate("tv", ["x"], [], NxEnrichOMDbGates([{ rules: { keywords: ["x"], imdbVotesMin: 1 } }]))), "true")
 
     recs = {}
-    recs["1"] = NxEnRec("1", { imdbID: "tt0000001", keywords: ["cult film"] }, v.fetchedAt)
-    recs["2"] = NxEnRec("2", { imdbID: "tt0000002", keywords: ["cult film"], imdbRating: 7.1 }, v.fetchedAt)
-    recs["3"] = NxEnRec("3", { keywords: ["cult film"] }, v.fetchedAt)
-    recs["4"] = NxEnRec("4", { imdbID: "tt0000004", keywords: ["romance"] }, v.fetchedAt)
-    recs["5"] = NxEnRec("5", { imdbID: "tt0000005" }, v.fetchedAt)
+    recs["movie:1"] = NxEnRec("1", { imdbID: "tt0000001", keywords: ["cult film"] }, v.fetchedAt)
+    recs["movie:2"] = NxEnRec("2", { imdbID: "tt0000002", keywords: ["cult film"], imdbRating: 7.1 }, v.fetchedAt)
+    recs["movie:3"] = NxEnRec("3", { keywords: ["cult film"] }, v.fetchedAt)
+    recs["movie:4"] = NxEnRec("4", { imdbID: "tt0000004", keywords: ["romance"] }, v.fetchedAt)
+    recs["movie:5"] = NxEnRec("5", { imdbID: "tt0000005" }, v.fetchedAt)
     work = []
     for each id in ["1", "2", "3", "4", "5", "6"]
         work.Push({ tmdbID: id, mediaType: "movie" })
     end for
     byID = NxEnrichGenresByTMDB([{ tmdbID: 5, genres: ["Horror"] }, { tmdbID: 5, genres: ["Thriller"] }])
-    NxCheck(r, "genresByTMDB merges", byID["5"].list.Join(","), "Horror,Thriller")
+    NxCheck(r, "genresByTMDB merges", byID["movie:5"].list.Join(","), "Horror,Thriller")
     picked = []
     for each cand in NxEnrichOMDbCandidates(work, recs, byID, gates)
         picked.Push(cand.tmdbID)
@@ -392,10 +392,84 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     NxCheck(r, "steps: the failed id is still work", NxEnBool(NxEnrichHasRemoteWork(state, opts)), "true")
     opts.nowSec = nowSec& + 60
     for each w in state.needRemote
-        cache.putMany([{ tmdbID: w.tmdbID, savedAt: nowSec&, record: invalid }])
+        cache.putMany([{ tmdbID: w.tmdbID, mediaType: w.mediaType, savedAt: nowSec&, record: invalid }])
     end for
     state = NxEnrichFromCaches(NxEnLibrary(), opts)
     NxCheck(r, "steps: nothing left without OMDb gates", NxEnBool(NxEnrichHasRemoteWork(state, opts)), "false")
+
+    ' ── A film and a show with one TMDB number (the table's key is the number plus the type) ──
+    ' TMDB numbers films and shows separately, and the shared table now holds a row for each. A title's own
+    ' type picks the row, and a show is never skipped because a film with its number is stored.
+    work = NxEnrichWorkItems(NxEnShared())
+    NxCheck(r, "shared number: two titles, not one", NxEnCanon(work), "[{""mediaType"":""movie"",""tmdbID"":""603""},{""mediaType"":""tv"",""tmdbID"":""603""}]")
+    NxCheck(r, "shared number: the key is the type and the number", NxEnrichKey("tv", 603), "tv:603")
+
+    items = NxEnShared()
+    net = NxEnStubNet("sharedBoth")
+    state = NxEnrichLibrary(items, { config: cfg, net: net, cache: NxEnrichMemoryCache(), nowSec: nowSec& })
+    NxCheck(r, "shared number: each type takes its own row", items[0].enrichment.keywords.Join(",") + "|" + items[1].enrichment.keywords.Join(",") + "|" + items[2].enrichment.keywords.Join(","), "film row|show row|show row")
+    NxCheck(r, "shared number: one read, the relay not asked", net.calls.Count().ToStr(), "1")
+    NxCheck(r, "shared number: the number is asked once", NxEnBool(Instr(1, net.calls[0].url, "tmdb_id=in.(603)&select=*") > 0), "true")
+    NxCheck(r, "shared number: both rows counted from the table", state.stats.supabase.ToStr(), "2")
+    NxCheck(r, "shared number: records keyed by type and number", NxEnJoin(NxEnSorted(state.records.Keys())), "movie:603,tv:603")
+
+    items = NxEnShared()
+    net = NxEnStubNet("filmOnlyShared")
+    cache = NxEnrichMemoryCache()
+    state = NxEnrichLibrary(items, { config: cfg, net: net, cache: cache, nowSec: nowSec& })
+    NxCheck(r, "film row only: the show is still fetched", FormatJson([items[0].enrichment.keywords, items[1].enrichment.keywords]), "[[""film row""],[""show fetched""]]")
+    paths = []
+    for each call in net.calls
+        if Instr(1, call.url, "path=") > 0 then paths.Push(NxRx("enTestHost", "^https://[^/]+").Replace(call.url, ""))
+    end for
+    NxCheck(r, "film row only: only the show goes to the relay", paths.Join(" "), "/api/tmdb?path=tv/603")
+    NxCheck(r, "film row only: one row saved, for the show", FormatJson([state.stats.upserted, ParseJson(net.calls[net.calls.Count() - 1].body)[0].media_type]), "[1,""tv""]")
+    NxCheck(r, "film row only: the local cache holds both", NxEnJoin(NxEnSorted(cache.rows.Keys())), "movie:603,tv:603")
+
+    ' A show in a library of shows, a film with its number in the table: the film's row is not the show's.
+    items = [{ title: "Show", type: "episode", tmdbID: 603 }]
+    net = NxEnStubNet("filmOnlyShared")
+    NxEnrichLibrary(items, { config: cfg, net: net, cache: NxEnrichMemoryCache(), nowSec: nowSec& })
+    NxCheck(r, "show only: the film's row is not taken", FormatJson(items[0].enrichment.keywords), "[""show fetched""]")
+
+    ' The local cache holding the film does not make the show cached.
+    items = NxEnShared()
+    cache = NxEnrichMemoryCache()
+    cache.putMany([{ tmdbID: "603", mediaType: "movie", savedAt: nowSec&, record: NxEnRec("603", { keywords: ["film local"] }, v.fetchedAt) }])
+    net = NxEnStubNet("filmOnlyShared")
+    state = NxEnrichLibrary(items, { config: cfg, net: net, cache: cache, nowSec: nowSec& + 60 })
+    NxCheck(r, "local film row: the film from the file, the show from the net", FormatJson([state.stats.local, items[0].enrichment.keywords, items[1].enrichment.keywords]), "[1,[""film local""],[""show fetched""]]")
+    NxCheck(r, "local film row: the show is still asked of the table", NxEnBool(Instr(1, net.calls[0].url, "tmdb_id=in.(603)") > 0), "true")
+
+    ' A saved miss for the show is the show's, not the film's.
+    items = NxEnShared()
+    cache = NxEnrichMemoryCache()
+    cache.putMany([{ tmdbID: "603", mediaType: "tv", savedAt: nowSec&, record: invalid }])
+    net = NxEnStubNet("filmOnlyShared")
+    state = NxEnrichLibrary(items, { config: cfg, net: net, cache: cache, nowSec: nowSec& + 60 })
+    NxCheck(r, "show miss saved: the film is read, the show is not asked", FormatJson([state.stats.misses, items[0].enrichment.keywords, items[1].enrichment]), "[1,[""film row""],null]")
+
+    ' A file an earlier build wrote kept its rows under the bare number: a row with a record is kept under its
+    ' own type, a saved miss (no type) is dropped.
+    old = {}
+    old["603"] = { tmdbID: "603", savedAt: nowSec&, record: NxEnRec("603", { keywords: ["film local"] }, v.fetchedAt) }
+    old["1399"] = { tmdbID: "1399", savedAt: nowSec&, record: NxParseTMDBResponse({}, "1399", invalid, "tv", v.fetchedAt) }
+    old["9"] = { tmdbID: "9", savedAt: nowSec&, record: invalid }
+    rekeyed = NxEnrichRekeyRows(old)
+    NxCheck(r, "old file: rows re-keyed by their own type", NxEnJoin(NxEnSorted(rekeyed.Keys())), "movie:603,tv:1399")
+    NxCheck(r, "old file: a saved miss with no type is dropped", NxEnBool(rekeyed.DoesExist("movie:9") or rekeyed.DoesExist("tv:9") or rekeyed.DoesExist("9")), "false")
+    NxCheck(r, "old file: the row now names its type", rekeyed["tv:1399"].mediaType, "tv")
+
+    ' Server genres and OMDb candidates are per title: the film's do not reach the show.
+    byID = NxEnrichGenresByTMDB(NxEnShared())
+    NxCheck(r, "shared number: genres kept apart", byID["movie:603"].list.Join(",") + "|" + byID["tv:603"].list.Join(","), "Action|Drama")
+    recs = {}
+    recs["tv:603"] = NxEnRec("603", { imdbID: "tt0000603", keywords: ["cult film"], mediaType: "tv" }, v.fetchedAt)
+    NxCheck(r, "shared number: the show's record is not the film's", NxEnrichOMDbCandidates(NxEnrichWorkItems(NxEnShared()), recs, byID, gates).Count().ToStr(), "0")
+    recs = {}
+    recs["movie:603"] = NxEnRec("603", { imdbID: "tt0000603", keywords: ["cult film"] }, v.fetchedAt)
+    cands = NxEnrichOMDbCandidates(NxEnrichWorkItems(NxEnShared()), recs, byID, gates)
+    NxCheck(r, "shared number: the film's record makes the film a candidate", FormatJson([cands.Count(), cands[0].mediaType, cands[0].tmdbID]), "[1,""movie"",""603""]")
 
     print "  enrichment: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
@@ -533,6 +607,15 @@ function NxEnLibrary() as Object
     ]
 end function
 
+' A film and a show (two episodes) with one TMDB number.
+function NxEnShared() as Object
+    return [
+        { title: "Film", type: "movie", tmdbID: 603, genres: ["Action"] },
+        { title: "Show", type: "episode", tmdbID: 603, genres: ["Drama"] },
+        { title: "Show", type: "episode", tmdbID: 603 }
+    ]
+end function
+
 function NxEnOmdbLibrary(n as Integer) as Object
     items = []
     for i = 1 to n
@@ -606,6 +689,15 @@ function NxEnStubAnswer(net as Object, req as Object) as Object
     else if net.mode = "failSecond" then
         if net.calls.Count() = 2 then return { status: 500, body: "{}" }
         return { status: 200, body: FormatJson([{ tmdb_id: "1", media_type: "movie" }]) }
+    else if net.mode = "sharedBoth" then
+        if isRead then return { status: 200, body: FormatJson([{ tmdb_id: "603", media_type: "movie", keywords: ["film row"] }, { tmdb_id: "603", media_type: "tv", keywords: ["show row"] }]) }
+        if isSupa then return { status: 201, body: "" }
+        return { status: 404, body: "{}" }
+    else if net.mode = "filmOnlyShared" then
+        if isRead then return { status: 200, body: FormatJson([{ tmdb_id: "603", media_type: "movie", keywords: ["film row"] }]) }
+        if isSupa then return { status: 201, body: "" }
+        if Right(url, 11) = "path=tv/603" then return { status: 200, body: "{""keywords"":{""results"":[{""name"":""show fetched""}]}}" }
+        return { status: 404, body: "{}" }
     else if net.mode = "created" then
         return { status: 201, body: "" }
     else if net.mode = "refused" or net.mode = "someRefused" then

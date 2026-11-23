@@ -97,7 +97,7 @@ function NxRunMultiServerFilterTests(configPath as String, manifestPath as Strin
     film = ParseJson(FormatJson({ title: "Spy Film", type: "movie", genres: ["Action"], duration: 100, tmdbID: 77, ratingKey: "1" }))
     NxCheck(r, "read back with ParseJson: before its record, SPY GAMES misses it", NxItemPasses(film, spy, invalid, excl, clock), "")
     records = {}
-    records["77"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""Espionage""}]}}"), "77", invalid, "movie", NxEnrichIsoTime(1760000000&))
+    records["movie:77"] = NxParseTMDBResponse(ParseJson("{""keywords"":{""keywords"":[{""name"":""Espionage""}]}}"), "77", invalid, "movie", NxEnrichIsoTime(1760000000&))
     NxCheck(r, "read back with ParseJson: the record attaches", NxEnrichAttach([film], records).ToStr(), "1")
     NxCheck(r, "read back with ParseJson: after its record, SPY GAMES takes it by keyword", NxItemPasses(film, spy, invalid, excl, clock), "keyword")
 
