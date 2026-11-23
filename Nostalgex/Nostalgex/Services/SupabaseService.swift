@@ -85,16 +85,12 @@ struct SupabaseService {
         let urlString = "\(restURL)/media_enrichments"
         guard let url = URL(string: urlString) else { return }
 
-        // Batch in chunks of 200
-        for chunk in enrichments.chunked(into: 200) {
+        for body in try Self.upsertBodies(for: enrichments) {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
             req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
-
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            req.httpBody = try encoder.encode(chunk)
+            req.httpBody = body
 
             let (_, response) = try await Self.session.data(for: req)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -102,6 +98,42 @@ struct SupabaseService {
                 print("[Enrichment] Supabase upsert failed: HTTP \(code)")
             }
         }
+    }
+
+    /// The request bodies for an upsert: JSON arrays of at most `chunkSize` rows, and in each
+    /// one every row carries the same keys.
+    ///
+    /// The table's API refuses a whole batch whose rows do not all carry the same keys
+    /// (PGRST102 "All object keys must match", HTTP 400; seen against the live project on
+    /// 2026-11-23). A row leaves out what it does not know (no IMDb id, no franchise, no
+    /// IMDb rating), so a batch of mixed rows was refused and none of it was saved. Rows are
+    /// grouped by the keys they carry and each group goes in its own requests. A key is
+    /// still left out, never sent as null: a null would wipe what another device learned.
+    static func upsertBodies(for enrichments: [MediaEnrichment], chunkSize: Int = 200) throws -> [Data] {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var order: [String] = []
+        var groups: [String: [Data]] = [:]
+        for enrichment in enrichments {
+            let row = try encoder.encode(enrichment)
+            let keys = ((try? JSONSerialization.jsonObject(with: row)) as? [String: Any])?.keys.sorted() ?? []
+            let signature = keys.joined(separator: ",")
+            if groups[signature] == nil { order.append(signature) }
+            groups[signature, default: []].append(row)
+        }
+        var bodies: [Data] = []
+        for signature in order {
+            for chunk in (groups[signature] ?? []).chunked(into: max(1, chunkSize)) {
+                var body = Data("[".utf8)
+                for (i, row) in chunk.enumerated() {
+                    if i > 0 { body.append(Data(",".utf8)) }
+                    body.append(row)
+                }
+                body.append(Data("]".utf8))
+                bodies.append(body)
+            }
+        }
+        return bodies
     }
 }
 

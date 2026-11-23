@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-23 (Apple TV: enrichment saves to the shared table were refused when a batch held mixed rows)
+
+**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
+
+**Found.** The shared `media_enrichments` table refuses a whole upsert request whose rows do not all carry the same keys (PGRST102 "All object keys must match", HTTP 400). A `MediaEnrichment` row leaves out a key it has no value for (IMDb id, franchise id and name, the five OMDb fields), and `SupabaseService.upsertEnrichments` sent up to 200 rows of any shape in one request. A request holding, say, one film in a collection and one that is not was refused whole, the app printed "Supabase upsert failed: HTTP 400", then "Saved N enrichments to Supabase" all the same, and carried on. A request of one row, or of rows that happened to match, went through.
+
+**How long.** The upsert and the optional IMDb id are both in the first enrichment commit (2026-04-08, in the pre-public history), so the code has had the fault from its first day. An App Store build could not reach the table before the Supabase address and key came in through `Config.xcconfig` (2026-10-11); `v1.0.26` is the first tag that holds that change, and it also holds the franchise keys (2026-10-10) that make film rows differ from each other. Whether a given archive carried the key cannot be read from git.
+
+**What a viewer got, from the code.** `EnrichmentService.enrichItems` asks TMDB for every id the shared table has no row for; the disk cache is not consulted there (it is read on a snapshot restore only). So a title whose save was refused was fetched from TMDB again on every full library load, on that device and on every other, with the "Fetching metadata" step repeating, and the save refused again whenever the batch was mixed. An IMDb rating learned from OMDb in such a pass lived in memory and the disk cache but not in the table; on the next load the title's fresh TMDB row (or the table's older row) replaced it without the rating, and OMDb lookups are capped at 50 a load, so a rating could be lost and have to be looked up again. Channels gated on an IMDb rating leave out a title with no rating. Not measured: how many saves were refused in the field, or how many titles a real library lost from a gated channel.
+
+**Changed.** `SupabaseService.upsertBodies` groups the rows by the keys they carry and sends each group in its own requests of up to 200. A key is still left out and never sent as null, because a null would overwrite what another device saved. Nothing else is ported from the branch this came from: no new columns are written.
+
+**Tests.** `EnrichmentUpsertBodyTests` (2, new): eight rows of five shapes go out as five requests, each with one set of keys, every row once, no nulls; 450 like rows split 200, 200, 50. Against the live table, two rows it already held were written back unchanged: both in one request, as the app sent before, 400 PGRST102; each in its own request, 200 and 200; both rows read back identical. No row was added or removed.
+
+**Half-done.** The web tuner and Roku build their upsert rows another way (`scripts/nostalgex-enrichment.js`, `roku/source/enrich/Enrichment.brs`) and were not read for the same fault. The "Saved N enrichments" line still prints after a refused request.
+
 
 ## 2026-11-22 (Apple TV 1.0.34: the faster live channel list is in, N-074)
 
