@@ -3,6 +3,30 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-23 (Roku 1.0.14: enrichment rows by type and number; the live channels.json apply measured on the stick)
+
+**State.** Branch `roku/1.0.14`, one commit on `8e2d7ac0`. Nothing pushed, not signed, no build number change.
+
+**Enrichment, by type and number.** The shared `media_enrichments` table's key is now `(tmdb_id, media_type)` (changed 2026-11-23), so one TMDB number can hold a film's row and a show's row and a read of `tmdb_id=in.(...)` can answer both. `source/enrich/Enrichment.brs` kept and looked up everything by the number alone, so a show could take a film's row, or be skipped as already cached when only the film was stored. Now every record, local cache row, lookup and OMDb candidate is keyed `movie:603` or `tv:603` (`NxEnrichKey`, the web tuner's `recordKey`: anything but tv is movie). The item's own type picks the row (an episode is tv, anything else movie). A work item is one title, a number and a type, so a film and a show with one number are two. The Supabase read asks each number once, and keeps a row only for a title the library has, by its type. A local cache file an earlier build wrote kept its rows under the bare number: on load a row with a record is re-keyed by the record's own type, a saved miss (it has no type) is dropped and asked again. Saves are unchanged (they already send `media_type`). The work-item shape `{ tmdbID, mediaType }` is unchanged, so the golden vectors still compare.
+
+**Vectors.** The first work vector held a film and a show with number 1399 and expected one item (the old engine's "first type wins"). That input now repeats the episode, so the vector reads the same on the old engine and on the web agent's (`web/1.0.24-next` `24980cad`). Run once against that engine with the original input: the port gives the same three items it does (1399 as tv, 1399 as movie, 603), 255 enrichment checks, 0 failed. The shared-number cases are in `tests/EnrichmentTests.brs` with the port's own fixtures (both rows from the table, only the film in the table, the film in the local cache, a saved miss for the show, an old cache file, genres and OMDb candidates kept apart).
+
+**The live channels.json apply, on the stick** (Streaming Stick Plus, 1.0.14 head `8e2d7ac0`, one Plex stand-in server of 2,900 titles, the size the 3,000 title cap allows, enrichment off, simulated limits by `nx_mem_limit_kb`). The bundled `channels.json` was staged one version low (49 against the live 50) so the live copy counts as new. The app reading is the app's own, in percent of the limit; the process figure is `query/chanperf`.
+
+| Limit | Reading at the apply | Gate (reading + build + reserve, stop at 80) | Result | App reading peak in the rebuild | Process peak |
+|---|---|---|---|---|---|
+| 150 MB (153,600 KB) | 24% | 24 + 20 + 8 = 52 | applied: rebuilt from the saved library, guide handed over | 35% | 78.8 MB |
+| 96 MB (98,304 KB) | 38% at the load's start | borderline, under 80 | applied | 55% | 78.1 MB |
+| 90 MB (92,160 KB) | 36% | 36 + 33 + 14 = 83 | waited: "a newer channels.json is cached; this library (2900 titles, memory 36% of 92160 KB) is too big to rebuild behind the guide now, so the next launch uses it" | none (no rebuild) | 67.5 MB over the whole run |
+| 90 MB, next launch | 25% at the load's start | | rebuilt from the saved library at launch, guide handed over | 46% | 63.0 MB |
+| real (501,760 KB) | 7% | 7 + 6 + 0 = 13 (stop at 90) | applied | 11% | 78.9 MB |
+
+What it shows. The gate waits when the projection reaches the stop line and applies when it does not, and what it waits for is used at the next launch. The projection is far above what the rebuild took: 52 predicted against a 35% peak at 150 MB, and under 80 (the apply was let through; the reading at the decision was not printed) against 55% at 96 MB. The process figure for the same library is about 78 MB at every limit, which is 77% of a simulated 96 MB; the app's own reading, which the rule uses, said 55% of it. At 96 MB the rule sat on its edge and let the apply through with the process near three quarters of the simulated limit and no quit; that is the one run where the rule's number and the process's number are far apart. Not run: a library over 3,000 titles (it never applies behind the guide, by the cap), a real small TV (Stick HD, Express).
+
+**What the run showed about timing.** The stick suspends an app that plays no video and gets no key for about ten minutes, so the 15 minute tick (where a pending apply is tried) does not run on an idle stick until a key comes ("guide: back after 337 s without a tick"). On a TV a viewer is watching, a video plays and the tick runs on time. The run sent a key to wake it.
+
+**Tests.** The enrichment suite alone, once, before the commit: 254 passed and 1 failed, the failure my test (FormatJson refuses one array twice in a list), fixed. Against the web engine's vectors: 255 passed, 0 failed. **The cut run, once, on head `098b4991`:** `tests/run.sh` (one interpreter at a time, 63 minutes) ALL TESTS PASSED, 92 suites, 15,602 checks, 0 failed, with the six static guard scripts (guards, includes, uninit, testlists, dupkeys, observers) and the stamp check inside it; the added-lines scan (trailers, secrets, addresses, dashes) PASS; static analysis (`sca-cmd`, portable Temurin 21 JRE, not installed) 0 errors and the one old warning (a 1,434 character line in `SubtitleSettings.brs`). The stick was put back on the 1.0.13 candidate (build `5dbf5ff91346`, zip hash checked). Not run: `pr-check.sh` (it repeats the suite), the golden suite on the stick, signing.
+
 ## 2026-11-22 (Roku 1.0.14: the faster live channels.json, N-074, added from the held branch)
 
 **State.** Branch `roku/1.0.14`, cherry-pick of `roku/live-channels-faster` (`377f3586`, held since 2026-11-16 only for release timing) plus one gate on top. Nothing pushed, not signed, no build number change, version still 1.0.14 (build 14). Chad, 2026-11-22: add the faster channel check to the 1.0.14 line to match the Apple TV (`appletv/1.0.34-next`).
