@@ -3,6 +3,21 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-23 (Apple TV: an enrichment row is looked up by its type and its number)
+
+**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
+
+**Why.** TMDB numbers films and shows separately, so one number can be a film and a show. The shared `media_enrichments` table's key is now the number plus the type (`tmdb_id`, `media_type`), so it holds a row for each, and a read by number (`tmdb_id=in.(...)`) can answer with two rows. The app kept rows in memory under the bare number: the second row to arrive replaced the first, a show could read a film's keywords and genres, and a show whose number a cached film had was taken as cached and never asked of TMDB.
+
+**Changed.** The in-memory cache, the "already cached" check and every lookup by a library item use `type:number` (`MediaEnrichment.cacheKey`, `PlexMediaItem.enrichmentKey`; an episode's type is `tv`). The work list is one entry per type and number. The three franchise lookups in `AppState+Franchises` use the same key. The table is still asked by number, each number once. Saves are unchanged: the row already carries `media_type`.
+
+**Disk cache.** The file format is unchanged (rows under a text key). On load each row is placed under its own type and number, so a file an older build wrote under the bare number loads as before. A file this build writes is keyed `type:number`; an older build reading it would find no row by bare number and fetch again from the shared table, nothing worse.
+
+**Tests.** `EnrichmentKeyTests` (5, new): a film and a show that share a number each find their own row, in either arrival order; a show finds nothing when only the film is cached; a show is still on the fetch list when the table only has the film. `OMDBRelayTests` (17) and `EnrichmentCacheStoreTests` (5) follow the new key. One run of the three, 27 tests, 0 failures. No full suite.
+
+**Not done.** Not run against the live table or a real library. Roku and Android key the row by the bare number and need the same change. The web tuner was not read for it.
+
+
 ## 2026-11-23 (Apple TV: enrichment saves to the shared table were refused when a batch held mixed rows)
 
 **Shipped.** Nothing. Branch `appletv/1.0.34-next`.

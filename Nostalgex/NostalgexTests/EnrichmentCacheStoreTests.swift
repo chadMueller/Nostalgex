@@ -72,8 +72,10 @@ final class EnrichmentCacheStoreTests: XCTestCase {
         service.seedCache([inMemory])
         XCTAssertEqual(service.loadDiskCache(), 2)
         XCTAssertEqual(service.cache.count, 2)
-        XCTAssertEqual(service.cache["1"]?.keywords, ["newer"], "a row already in memory wins")
-        XCTAssertEqual(service.cache["2"]?.productionCompanies.count, 2)
+        // The file is keyed by the bare number, as builds before 1.0.34 wrote it. In memory a
+        // row is under its own type and number.
+        XCTAssertEqual(service.cache["movie:1"]?.keywords, ["newer"], "a row already in memory wins")
+        XCTAssertEqual(service.cache["movie:2"]?.productionCompanies.count, 2)
     }
 
     /// The cost at the size of the report's library (I-073 is a ~12k-title library): bytes

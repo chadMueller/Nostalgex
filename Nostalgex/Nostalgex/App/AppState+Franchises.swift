@@ -192,8 +192,8 @@ extension AppState {
     ///   snapshot of the enrichment service's cache so the builder stays off the actor.
     func rebuildFoundFranchises(enrichmentFor: ((PlexMediaItem) -> MediaEnrichment?)? = nil) {
         let lookup: (PlexMediaItem) -> MediaEnrichment? = enrichmentFor ?? { [cache = enrichmentService.cache] item in
-            guard let tmdbID = item.tmdbID else { return nil }
-            return cache[tmdbID]
+            guard let key = item.enrichmentKey else { return nil }
+            return cache[key]
         }
         let (movies, tv) = franchiseCandidates()
         let groupings = FranchiseChannelBuilder.build(
@@ -227,13 +227,13 @@ extension AppState {
                 FranchiseChannelBuilder.build(
                     movies: movies,
                     tvItems: tv,
-                    enrichmentFor: { item in item.tmdbID.flatMap { cache[$0] } },
+                    enrichmentFor: { item in item.enrichmentKey.flatMap { cache[$0] } },
                     availableStockChannelIDs: available
                 )
             }.value
             guard !Task.isCancelled, session == librarySessionGeneration, !isLoading else { return }
             guard stamp == currentRefilterStamp() else { continue }
-            applyFoundFranchiseGroupings(groupings) { item in item.tmdbID.flatMap { cache[$0] } }
+            applyFoundFranchiseGroupings(groupings) { item in item.enrichmentKey.flatMap { cache[$0] } }
             return
         }
     }
@@ -356,8 +356,8 @@ extension AppState {
     func applyFranchiseFolds(enrichmentFor: ((PlexMediaItem) -> MediaEnrichment?)? = nil) {
         guard !discoveredCollections.isEmpty else { return }
         let lookup: (PlexMediaItem) -> MediaEnrichment? = enrichmentFor ?? { [cache = enrichmentService.cache] item in
-            guard let tmdbID = item.tmdbID else { return nil }
-            return cache[tmdbID]
+            guard let key = item.enrichmentKey else { return nil }
+            return cache[key]
         }
 
         var targets: [FranchiseCollectionFold.Target] = []
