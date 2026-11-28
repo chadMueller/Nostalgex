@@ -6325,7 +6325,7 @@
         // A click or a tap is a press on that row: the cursor, the cyan highlight and the info panel go to it, as Down then Enter
         // would. Without this they stayed on the row the cursor was on before (after a bundle stripe select, the bundle's first channel).
         const idx = getEnabledChannels().findIndex(c => c.id === channelId);
-        if (idx >= 0) { guideFocusIndex = idx; guidePromoKey = null; guideStripeMode = false; }
+        if (idx >= 0) { guideFocusIndex = idx; guidePromoKey = null; guideStripeMode = false; guideStripeGroup = null; guideStripeJumped = false; }
         tuneFromGuide(channelId);
         updateGuideFocus();
       }
