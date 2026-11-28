@@ -3,6 +3,16 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-27 (Apple TV 1.0.34 (59): the store cut)
+
+**State.** `appletv/1.0.34-next`, version 1.0.34, build 59 (App Store Connect's highest is 58). Not archived, not uploaded. Chad, 2026-11-27, on getting Apple TV 1.0.34, web 1.0.24 and Roku 1.0.14 ready as one free release: "alright lets do it".
+
+**In the build** (main plus the branch): Settings load status, the LOCAL WEATHER place search and radar fixes (#332), the library picker relaunch fix (#337), EPISODE ORDER with CLASSIC RERUNS now two consecutive episodes, the hourly live channel list check, tip jar signals, and the two enrichment fixes (mixed-key saves, a row keyed by type and number). No Pro or theme code, no PR #235, no contributor commits on the app delta since 1.0.33, no new launch hooks beyond the demo-mode UI test fixture. Bundled channels.json is version 50, as in 1.0.33.
+
+**Tested.** Full NostalgexTests once, serial, one simulator of its own: 1,536 tests, 35 skipped, 0 failures. Release build for generic tvOS compiles.
+
+**Not done.** Not on a TV. The privacy page and PRIVACY_POLICY.md do not list the three tip events, and the App Store privacy label was not looked at for them.
+
 ## 2026-11-23 (Apple TV: an enrichment row is looked up by its type and its number)
 
 **Shipped.** Nothing. Branch `appletv/1.0.34-next`.
