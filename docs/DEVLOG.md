@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-27 (Roku 1.0.14: the enrichment upsert leaves out a value nobody has, as the Apple TV's N-093 fix)
+
+**State.** Branch `roku/1.0.14`. Not on a stick; tests below.
+
+**Why.** The Apple TV's save (02849501) sends each row with only the keys it has a value for, grouped so the shared table never sees mixed rows, and never sends a null, because a null wipes what another device learned. Roku named a fixed column list in every request (`?columns=...`) and sent a row's missing values as null, so a lookup that found no IMDb rating, or a title with no franchise, wrote an empty value over a rating or a franchise another device had saved in the meantime. The fixed list also hid the mixed-rows refusal (PGRST102) the Apple TV hit, so no save was lost on Roku, but the overwrite was possible.
+
+**Changed.** `NxEnrichUpsertGroups` (source/enrich/Enrichment.brs) builds each row from the columns it has a value for and groups rows by those columns; `NxEnrichUpsertSupabase` sends each group in its own requests of 200 and names that group's columns in the request. The key columns (tmdb_id, media_type) are always there. TMDB and OMDb rows still go apart, so a TMDB save never touches an OMDb column.
+
+**Tests.** `EnrichmentTests`: a mixed batch (a film with a franchise, a film and a show without) makes two requests and saves all three; the franchise columns are named only where a row has them; no request body holds a null; an OMDb row with no rating names no rating column but keeps its Metacritic score; the two older checks that pinned the full column list now name the columns the rows have. The part passes, 41 lines.
+
+**Not checked.** Against the live table (a write there is not a test). A TMDB refresh can no longer clear a franchise or a rating on purpose; the Apple TV cannot either.
+
 ## 2026-11-23 (Roku 1.0.14: enrichment rows by type and number; the live channels.json apply measured on the stick)
 
 **State.** Branch `roku/1.0.14`, one commit on `8e2d7ac0`. Nothing pushed, not signed, no build number change.

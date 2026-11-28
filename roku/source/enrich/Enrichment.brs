@@ -646,32 +646,66 @@ function NxEnrichReadSupabase(ids as Object, cfg as Object, net as Object, nowSe
     return out
 end function
 
-' SupabaseService.upsertEnrichments: chunks of 200, merge-duplicates.
-' `omdb` picks the OMDb columns; otherwise the TMDB ones.
-function NxEnrichUpsertSupabase(records as Object, cfg as Object, net as Object, omdb as Boolean) as Integer
+' The rows an upsert sends, as the Apple TV's SupabaseService.upsertBodies (N-093): each row carries only the
+' columns it has a value for (a value that is invalid is left out, never sent as null, because a null would
+' wipe what another device saved: a rating, a franchise, a count), and rows with the same columns go together.
+' The shared table refuses a request whose rows do not all carry the same keys (PGRST102), and the columns
+' named in the request decide which columns the write may touch, so each group names its own.
+' `omdb` picks the OMDb columns; otherwise the TMDB ones. Returns [{ columns, rows }] in the order a group
+' first appears; a group is not cut into requests here (NxEnrichUpsertSupabase does that).
+function NxEnrichUpsertGroups(records as Object, omdb as Boolean) as Object
     k = NxEnrichConstants()
     columns = k.tmdbColumns
     if omdb then columns = k.omdbColumns
+    order = []
+    groups = {}
+    for each e in records
+        full = invalid
+        if omdb then full = NxEnrichToOMDbRow(e) else full = NxEnrichToSupabaseRow(e)
+        row = {}
+        have = []
+        for each c in columns
+            v = full[c]
+            if v <> invalid then
+                row[c] = v
+                have.Push(c)
+            end if
+        end for
+        sig = have.Join(",")
+        if not groups.DoesExist(sig) then
+            groups[sig] = { columns: have, rows: [] }
+            order.Push(sig)
+        end if
+        groups[sig].rows.Push(row)
+    end for
+    out = []
+    for each sig in order
+        out.Push(groups[sig])
+    end for
+    return out
+end function
+
+' SupabaseService.upsertEnrichments: chunks of 200, merge-duplicates, a group of rows with the same columns at a time.
+function NxEnrichUpsertSupabase(records as Object, cfg as Object, net as Object, omdb as Boolean) as Integer
+    k = NxEnrichConstants()
     size = k.supabaseChunk
     if cfg.chunkSize <> invalid then size = cfg.chunkSize
     headers = NxEnrichSupabaseHeaders(cfg.anonKey)
     headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
     written = 0
-    for each part in NxEnrichChunk(records, size)
-        rows = []
-        for each e in part
-            if omdb then rows.Push(NxEnrichToOMDbRow(e)) else rows.Push(NxEnrichToSupabaseRow(e))
+    for each group in NxEnrichUpsertGroups(records, omdb)
+        for each rows in NxEnrichChunk(group.rows, size)
+            res = net.fetchAll([{
+                method: "POST",
+                url: cfg.supabaseURL + "/rest/v1/media_enrichments?columns=" + group.columns.Join(","),
+                headers: headers, body: FormatJson(rows)
+            }], 1)[0]
+            if res.status < 200 or res.status >= 300 then
+                print "enrichment: Supabase upsert failed: HTTP "; res.status
+            else
+                written = written + rows.Count()
+            end if
         end for
-        res = net.fetchAll([{
-            method: "POST",
-            url: cfg.supabaseURL + "/rest/v1/media_enrichments?columns=" + columns.Join(","),
-            headers: headers, body: FormatJson(rows)
-        }], 1)[0]
-        if res.status < 200 or res.status >= 300 then
-            print "enrichment: Supabase upsert failed: HTTP "; res.status
-        else
-            written = written + part.Count()
-        end if
     end for
     return written
 end function

@@ -126,11 +126,41 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
     NxCheck(r, "upsert: chunks of 200", sizes.Join(","), "200,50")
     NxCheck(r, "upsert: POST", net.calls[0].method, "POST")
     NxCheck(r, "upsert: merge duplicates", net.calls[0].headers.Prefer, "resolution=merge-duplicates,return=minimal")
-    NxCheck(r, "upsert: columns pinned", net.calls[0].url, "https://example.supabase.co/rest/v1/media_enrichments?columns=tmdb_id,media_type,keywords,networks,production_companies,tmdb_genres,franchise_id,franchise_name,fetched_at")
+    NxCheck(r, "upsert: columns named, a franchise nothing knows left out", net.calls[0].url, "https://example.supabase.co/rest/v1/media_enrichments?columns=tmdb_id,media_type,keywords,networks,production_companies,tmdb_genres,fetched_at")
     NxCheck(r, "upsert: written", written.ToStr(), "250")
-    NxCheck(r, "upsert carries TMDB columns only", NxEnKeys(ParseJson(net.calls[0].body)[0]), "fetched_at,franchise_id,franchise_name,keywords,media_type,networks,production_companies,tmdb_genres,tmdb_id")
+    NxCheck(r, "upsert carries TMDB columns only, never a null", NxEnKeys(ParseJson(net.calls[0].body)[0]), "fetched_at,keywords,media_type,networks,production_companies,tmdb_genres,tmdb_id")
+    NxCheck(r, "upsert sends no null", NxEnBool(Instr(1, net.calls[0].body, "null") > 0), "false")
     net = NxEnStubNet("down")
     NxCheck(r, "upsert: a network error writes nothing (port)", NxEnrichUpsertSupabase(recs, cfg, net, false).ToStr(), "0")
+
+    ' A mixed batch (N-093, as the Apple TV's upsertBodies): rows with different columns go in their own requests,
+    ' each naming its own columns, and a value nobody has is left out, so the table keeps what another device saved.
+    withFranchise = NxEnRec("10", { franchiseID: 119, franchiseName: "The Lord of the Rings Collection" }, v.fetchedAt)
+    plain = NxEnRec("11", {}, v.fetchedAt)
+    aShow = NxParseTMDBResponse({}, "12", invalid, "tv", v.fetchedAt)
+    net = NxEnStubNet("created")
+    written = NxEnrichUpsertSupabase([withFranchise, plain, aShow], cfg, net, false)
+    NxCheck(r, "mixed batch: two requests, one per set of columns", net.calls.Count().ToStr(), "2")
+    NxCheck(r, "mixed batch: every row saved", written.ToStr(), "3")
+    NxCheck(r, "mixed batch: the franchise row names the franchise columns", NxEnBool(Instr(1, net.calls[0].url, "franchise_id,franchise_name") > 0), "true")
+    NxCheck(r, "mixed batch: the others do not", NxEnBool(Instr(1, net.calls[1].url, "franchise") > 0), "false")
+    NxCheck(r, "mixed batch: rows per request", ParseJson(net.calls[0].body).Count().ToStr() + "," + ParseJson(net.calls[1].body).Count().ToStr(), "1,2")
+    NxCheck(r, "mixed batch: the type stays with its row", ParseJson(net.calls[1].body)[1].media_type, "tv")
+    for each call in net.calls
+        n = 0
+        for each row in ParseJson(call.body)
+            n = n + row.Count()
+        end for
+        cols = Mid(call.url, Instr(1, call.url, "columns=") + 8).Split(",").Count()
+        NxCheck(r, "mixed batch: every row has exactly the request's columns", n.ToStr(), (cols * ParseJson(call.body).Count()).ToStr())
+    end for
+    NxCheck(r, "mixed batch: no null sent", NxEnBool(Instr(1, net.calls[0].body + net.calls[1].body, "null") > 0), "false")
+    ' A lookup that found no rating leaves the rating out; the Metacritic score it did find is still saved.
+    noRating = NxEnrichMergeOMDb(NxEnRec("13", {}, v.fetchedAt), { imdbRating: invalid, imdbVotes: invalid, rottenTomatoesScore: invalid, metacriticScore: 61, awards: invalid }, "tt0000013")
+    net = NxEnStubNet("created")
+    NxEnrichUpsertSupabase([noRating], cfg, net, true)
+    NxCheck(r, "omdb upsert leaves out a rating nobody found", Mid(net.calls[0].url, Instr(1, net.calls[0].url, "columns=") + 8), "tmdb_id,media_type,imdb_id,metacritic_score")
+    NxCheck(r, "omdb upsert row", NxEnKeys(ParseJson(net.calls[0].body)[0]), "imdb_id,media_type,metacritic_score,tmdb_id")
 
     ' ── Transcribed: relay requests ──
     tvReq = NxEnrichRelayRequest({ tmdbID: "1399", mediaType: "tv" }, cfg)
@@ -309,8 +339,15 @@ function NxRunEnrichmentTests(vectorsPath as String) as Integer
         if call.method = "POST" then ups.Push(call)
     end for
     NxCheck(r, "e2e omdb: one OMDb upsert", ups.Count().ToStr(), "1")
-    NxCheck(r, "e2e omdb: upsert pinned to OMDb columns", NxEnBool(Right(ups[0].url, Len("columns=" + k.omdbColumns.Join(","))) = "columns=" + k.omdbColumns.Join(",")), "true")
+    ' The request names the OMDb columns these rows have values for, and no others (N-093): a column the lookup found nothing for is left out.
+    named = Mid(ups[0].url, Instr(1, ups[0].url, "columns=") + 8).Split(",")
+    allOMDb = true
+    for each cname in named
+        if not NxHasValue(k.omdbColumns, cname) then allOMDb = false
+    end for
+    NxCheck(r, "e2e omdb: upsert pinned to OMDb columns", NxEnBool(allOMDb and named.Count() >= 5 and named[0] = "tmdb_id" and named[1] = "media_type"), "true")
     body = ParseJson(ups[0].body)
+    NxCheck(r, "e2e omdb: the row carries just the columns the request names", NxEnKeys(body[0]), NxEnSorted(named).Join(","))
     NxCheck(r, "e2e omdb: upsert rows", body.Count().ToStr(), "50")
     NxCheck(r, "e2e omdb: votes parsed", NxToStr(body[0].imdb_votes), "45000")
     rated = []
