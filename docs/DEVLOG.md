@@ -3,6 +3,18 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-28 (site: Apple TV 1.0.34 is live, the site flip and the v1.0.34 tag)
+
+**Why.** The App Store shows Apple TV 1.0.34 as READY_FOR_SALE (checked through the App Store Connect API and `npm run store:gate -- appletv 1.0.34`). The site only talks about what people can install, so the flip went out.
+
+**Changed (91321e2b, live).**
+- `content/changelog.json`: the 1.0.34 entry is `released: true`; `index.html` re-rendered by the build and shows it.
+- `README.md`: the Apple TV heading, What's new in 1.0.34 (EPISODE ORDER first) and the Releases line.
+- `apple-tv.html`: one EPISODE ORDER line at the top of the list. `public/sitemap.xml`: lastmod for `/` and `/apple-tv`.
+- Tag `v1.0.34` on `6a588b8f`, the merge of `appletv/1.0.34-next` (archived from its `e654f2e1`) into main, as `v1.0.33` sits on its merge. Lightweight, like the earlier ones. Only `tuner-v*` tags start the Docker workflow.
+
+**Half-done.** The GitHub release page for `v1.0.34` does not exist, and the README's "Full release notes" link points at it. The release email and the Discord post are drafted, not sent (`nostalgex-internal/marketing/2026-11-28/`). `npm run changelog:discord` prints an em dash in its title, so the Discord text was written by hand instead.
+
 ## 2026-11-28 (web 1.0.24, Roku 1.0.14 and Apple TV 1.0.34 land on main together)
 
 **Why.** The Roku port of EPISODE ORDER needs web 1.0.24's `scripts/` beside it, the Apple TV's engine and goldens are the same files, and the new `scripts/schedule-parity-golden.json` turns the `roku`, `tvos-unit-tests` and `android` jobs red unless each side has what it needs. One landing, one tag (`tuner-v1.0.24`).
