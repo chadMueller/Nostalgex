@@ -3,7 +3,7 @@
     {
       "version": "1.0.34",
       "date": "NOV 2026",
-      "released": false,
+      "released": true,
       "title": "EPISODE ORDER, faster channel updates, and a loading line in Settings",
       "bullets": [
         "EPISODE ORDER, in Settings, Channels & Bundles. CLASSIC RERUNS, the default, now plays two episodes of a show back to back and in order, like 7 then 8, starting from a random spot in the series. SHUFFLE plays one episode at a time, picked at random. Movie channels stay as they are.",

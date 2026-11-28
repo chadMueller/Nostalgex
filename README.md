@@ -27,7 +27,7 @@ All four are free. Not sure? Use the app on your TV and the web tuner everywhere
 
 <a id="tvos-nostalgex"></a>
 <a id="apple-tv-app"></a>
-## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.33`
+## <a href="https://apps.apple.com/app/id6762563534"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download on the App Store" height="32" align="center"></a> Apple TV app `1.0.34`
 
 The best way to watch on a TV. Connect one or more servers, then flip channels with the Siri Remote. Needs tvOS 18 or later.
 
@@ -64,19 +64,16 @@ Then open `http://YOUR-SERVER-IP:8080`. Step by step help is in the [Docker cont
 
 **Latest: `tuner-v1.0.24`.** EPISODE ORDER: a show's channel airs two episodes back to back in order (CLASSIC RERUNS, the default) or one at a time at random (SHUFFLE), set on the CHANNELS & BUNDLES page. The LOCAL WEATHER place search shows up to 36 matches, a place with no radar coverage gets a loop without the radar, closing the page on CHOOSE YOUR LIBRARIES brings the picker back at the next visit, and a click or a tap on a guide row moves the highlight and the info panel to it. [Release notes](https://github.com/chadMueller/Nostalgex/releases/tag/tuner-v1.0.24). Already running it? `docker compose pull && docker compose up -d`.
 
-<a id="whats-new-in-1033"></a>
-## What's new in 1.0.33
+<a id="whats-new-in-1034"></a>
+## What's new in 1.0.34
 
-[Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.33)
+[Full release notes](https://github.com/chadMueller/Nostalgex/releases/tag/v1.0.34)
 
-- **LOCAL WEATHER, channel 299.** A weather channel that loops current conditions, today's forecast, a 5-day forecast and radar, with its own music. Set your city or postcode in Settings, Channels & Bundles, Local Weather, and pick Fahrenheit or Celsius or leave it on Auto. It sits in the guide as one long bar. Radar covers the United States, Canada and Germany.
-- **Channel updates without a new app version.** Nostalgex checks for new channel rules when it opens and about once a day, and uses them the next time the guide is rebuilt, never in the middle of a programme.
-- **Every show, film and music video plays to its very end.** The guide gives each one its real running time, down to the second, so nothing gets cut off in the last minute.
-- **The guide steps one programme at a time.** Left and Right move to the next programme, with the one you are on lit up. Select on the bundle strip jumps to the first channel of that bundle.
-- **Loading keeps the guide on screen.** Switching servers or libraries, or rescanning, says what is happening in the guide's empty area, with STOP WAITING if it stalls.
-- **GUIDE TEXT SIZE has three steps:** SMALLER, DEFAULT and LARGER. UP NEXT shows the title first, then the minutes until it starts.
-- **Posters in the guide's info panel** on Plex, Jellyfin and Emby, and OPEN IN JELLYFIN when the Jellyfin app is installed on your Apple TV.
-- **Fixes:** a programme that runs past midnight now plays to its end, a library update just after midnight no longer leaves Now Playing and Up Next empty, Plex lists only movie and show libraries, the bundle strip loops from the last bundle back to the first, and Jellyfin and Emby servers with very many collections load them in parts.
+- **EPISODE ORDER.** In Settings, Channels & Bundles. CLASSIC RERUNS, the default, plays two episodes of a show back to back and in order, like 7 then 8, starting from a random spot in the series. SHUFFLE plays one episode at a time, picked at random. Movie channels stay as they are.
+- **Faster channel updates.** Nostalgex checks for new channel rules when it opens and about once an hour, and uses them the next time you are on the guide, never in the middle of a programme.
+- **Settings shows what the app is doing while it loads.** Switch servers or libraries and a line at the bottom of SERVERS & ACCOUNTS and CHANNELS & BUNDLES shows where it is, then says GUIDE READY.
+- **LOCAL WEATHER place search** shows up to 36 matches, so a postcode that covers lots of towns is no longer cut short.
+- **Fixes:** closing the app on CHOOSE YOUR LIBRARIES no longer skips the picker, LOCAL WEATHER skips the radar screen outside the United States, Canada and Germany, a place search that failed once no longer leaves LOCAL WEATHER stuck on PLACE LIST NOT AVAILABLE, title details are saved properly so the same titles are not looked up again on every library load, and a show and a film that share a TMDB number each keep their own details.
 
 ## Join in
 
@@ -247,7 +244,7 @@ Each film series in your library (Star Wars, Rocky, whatever you own) gets its o
 <a id="maintained"></a>
 Nostalgex has been on the App Store since April 19, 2026, and gets updates every month. I'm one person, and I read every issue.
 
-- **Releases:** 1.0.33 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
+- **Releases:** 1.0.34 is live on the App Store. History is in [GitHub releases](https://github.com/chadMueller/Nostalgex/releases), the [App Store version history](https://apps.apple.com/app/id6762563534) and [`content/changelog.json`](content/changelog.json).
 - **Dev log:** [docs/DEVLOG.md](docs/DEVLOG.md) explains why things changed and what's still half done.
 - **Outside contributors:** thank you to [@w6trp](https://github.com/w6trp) for #18, #19, #20 and #21 in 1.0.26, and to [@Gorbataras](https://github.com/Gorbataras) for [#5](https://github.com/chadMueller/Nostalgex/pull/5) and [#7](https://github.com/chadMueller/Nostalgex/pull/7) (Emby seek fix, and no more sound over a black picture on Jellyfin and Emby).
 - **Tests** run in CI on every push to `main` and on every pull request.
