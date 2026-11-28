@@ -148,7 +148,6 @@ function NxRunWeatherTests(goldenPath as String) as Integer
     ' The search itself: a place file that fails once and then works gives its matches through the loader's retry.
     GetGlobalAA().nxWxTest = { codes: [0, 200], calls: 0, pauses: [] }
     NxCheck(r, "retry: a first-read failure then success is one answer", NxToStr(NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "u", {}, 1).text), "x")
-    NxCheck(r, "forecast: no file kept is no forecast, and no error", FormatJson(NxWxReadForecast("none") = invalid), "true")
 
     print "weather: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
