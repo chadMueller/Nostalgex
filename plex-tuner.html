@@ -6321,7 +6321,14 @@
       if (promoType === 'email') { window.__openPromoModal && window.__openPromoModal(); return; }
       if (promoType === 'coffee') { window.open('https://buymeacoffee.com/chadmueller', '_blank', 'noopener'); return; }
       const channelId = parseInt(row.dataset.channelId);
-      if (channelId) tuneFromGuide(channelId);
+      if (channelId) {
+        // A click or a tap is a press on that row: the cursor, the cyan highlight and the info panel go to it, as Down then Enter
+        // would. Without this they stayed on the row the cursor was on before (after a bundle stripe select, the bundle's first channel).
+        const idx = getEnabledChannels().findIndex(c => c.id === channelId);
+        if (idx >= 0) { guideFocusIndex = idx; guidePromoKey = null; guideStripeMode = false; }
+        tuneFromGuide(channelId);
+        updateGuideFocus();
+      }
     });
 
     // Wire up config channel row clicks

@@ -4,6 +4,24 @@ Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
 
+## 2026-11-27 (web 1.0.24-next: the release cut, and the guide row click)
+
+**Shipped.** Nothing. `web/1.0.24-next` is pushed and ready; `tunerVersion` is 1.0.24 in the last commit, no `tuner-v` tag, not merged to main.
+
+**What the release holds.** Seven commits over main (4fac0f4d): the weather fixes (#332), the library choice a sign-in still owes surviving a relaunch, EPISODE ORDER (I-103), and the enrichment lookup by media type and TMDB number. `channels.json` is unchanged, so there are no new channels. Nothing from `pro/web`, THEME or a contributor fork is in it.
+
+**Changed.**
+- A click or a tap on a guide row now moves the cursor, the highlight and the info panel to that row before it tunes. Before, the click tuned the channel and left all three on the row the cursor was on, so after a bundle stripe select the info panel stayed on the bundle's first channel (Discord report of 2026-11-21, Trello card "Bug: Web tuner, picking a channel from the bundle strip leaves the info stuck on the bundle's first channel"). Down then Enter always did it right; only the mouse and the touch path did not. The bug is older than the stripe: any click on a row did it, the stripe select just made it easy to see.
+- New test `scripts/guide-row-click-browser-smoke.mjs` (`npm run test:guide-row-click:browser`, not part of `npm test`, like the other browser smokes): 33 checks at desktop, 960x540 at DPR 2 and phone width. Against the page before the fix it fails 12 checks, all on the click: the highlight and the info panel stay on "90S SITCOMS" while "AFTER SCHOOL TV" plays.
+- `tunerVersion` 1.0.24, the README headings and its Latest line.
+
+**Tests run (one at a time, load under 4 before each, no full suite).** `build`, `build:selfhost`, `test:tuner-version:builds` 69, `test:weather` 45, `test:enrichment` 158, `test:episode-order` 25, `test:schedule` 12, `test:schedule-parity` 66, `test:collections` 59, `test:play-to-end` 48, `test:library-picker:owed` 47, `test:episode-order:browser` 51, `test:weather:browser` 214, `test:guide-cursor:browser` 94, `test:guide-row-click:browser` 33, `readme:check`, `changelog:check`. Not run: the full `npm test`, the Roku golden run.
+
+**Half-done.** The Roku port of EPISODE ORDER does not exist. `roku/1.0.14` carries the weather fixes, the pick-owed fix and the enrichment-by-type change, but its `scripts/nostalgex-daily-manifest.js` and `scripts/schedule-parity-golden.json` are main's. This branch changes both (SCHEMA_VERSION 5, a new golden), and the `roku` CI job runs on those paths, so merging this to main without the port is expected to turn it red. By inspection only; the Roku golden run was not done here.
+
+**Next.** Roku ports EPISODE ORDER from `scripts/nostalgex-daily-manifest.js` and `scripts/episode-order-golden.json`. Chad's go to merge to main and push the `tuner-v1.0.24` tag. After the tag: `PARITY.md` and the README platform versions.
+
+
 ## 2026-11-19 (web 1.0.24-next: EPISODE ORDER, I-103)
 
 **Shipped.** Nothing. On `web/1.0.24-next`, not pushed, `tunerVersion` still 1.0.23, no tag.
