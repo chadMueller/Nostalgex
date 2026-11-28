@@ -63,6 +63,7 @@ end sub
 ' first forecast) and the next one works, so a viewer's first search read PLACE LIST NOT AVAILABLE. Only code 0 is tried
 ' again, once, after `pauseMs`; any answer (a 404, a 500) stands. `get(address, headers, limitMs)` is the one
 ' attempt ({ code, text, headers }), `pause` what waits between them (Sleep on the TV, a counter in the tests).
+' A timeout also returns code 0, so the worst case is about 30 s on the task thread (two 15 s tries).
 function NxWxGetRetrying(get as Function, pause as Function, address as String, headers as Object, limitMs as Integer, pauseMs = 500 as Integer) as Object
     got = get(address, headers, limitMs)
     if got.code = 0 then
