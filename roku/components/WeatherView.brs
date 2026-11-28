@@ -124,7 +124,12 @@ sub publish()
     end if
     m.top.placeLabel = NxWxPlaceLabel(m.place)
     summary = ""
-    if m.model <> invalid then summary = NxWxInfoSummary(m.model, unitsNow())
+    if m.model <> invalid then
+        summary = NxWxInfoSummary(m.model, unitsNow())
+    else if not NxWxHasRadar(m.place) then
+        ' Before the forecast is in: the loop's line, without "and radar" for a place that has none.
+        summary = NxWxLoopSummary(false)
+    end if
     m.top.summary = summary
     m.top.tempLabel = NxWxTempLabel(m.model, unitsNow())
 end sub
@@ -232,7 +237,9 @@ sub onTick()
     end if
     m.tickClock = CreateObject("roTimespan")
     now = nowSec()
-    at = NxWxScreenAt(now)
+    ' The loop for this place: no radar screen where there is no radar coverage (GitHub #332).
+    withRadar = NxWxHasRadar(m.place)
+    at = NxWxScreenAt(now, withRadar)
     if now - m.lastBuildSec >= 60 then rebuildModel()
     if now - m.lastCheckSec >= 20 then
         m.lastCheckSec = now
@@ -240,7 +247,8 @@ sub onTick()
     end if
     ' The radar frames load from the TODAY screen on, so they are there when the radar comes up.
     ' Not at the first draw: the TV's CPU goes to the first screens, then the radar's work starts behind them.
-    if at.index >= 1 then ensureRadar()
+    ' A place with no radar coverage has no radar screen, so there is nothing to fetch for it.
+    if withRadar and at.index >= 1 then ensureRadar()
     if m.dirty or at.index <> m.builtIndex then buildScreen(at.index)
     ' The header's clock and the blinking dot.
     if m.place <> invalid and m.clockLbl <> invalid then
@@ -545,14 +553,14 @@ end sub
 sub buildScreen(index as Integer)
     clock = CreateObject("roTimespan")
     buildScreenNow(index)
-    print "weather: drew "; NxWxScreens()[index].id; " in "; clock.TotalMilliseconds(); " ms, "; m.stage.GetChildCount(); " nodes, memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "%"
+    print "weather: drew "; NxWxScreens(NxWxHasRadar(m.place))[index].id; " in "; clock.TotalMilliseconds(); " ms, "; m.stage.GetChildCount(); " nodes, memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "%"
 end sub
 
 sub buildScreenNow(index as Integer)
     removeStageKeepClock()
     m.dirty = false
     m.builtIndex = index
-    screens = NxWxScreens()
+    screens = NxWxScreens(NxWxHasRadar(m.place))
     screen = screens[index]
     st = m.stage
     hasData = m.status <> "noplace" and m.model <> invalid
@@ -648,10 +656,15 @@ sub footer(parent as Object, screenIndex as Integer, extraCredit as String)
         y = y + 22
     end for
     ' The loop's pips on the right.
-    pips = NxWxScreens().Count()
+    ' One pip per screen of the loop that is playing: three where the place has no radar.
+    lp = NxWxScreens(NxWxHasRadar(m.place))
+    pips = lp.Count()
     pw = 44
     gap = 10
-    ids = ["current", "today", "week", "radar"]
+    ids = []
+    for each sc in lp
+        ids.Push(sc.id)
+    end for
     px = m.W - m.safeX - (pips * pw + (pips - 1) * gap)
     for i = 0 to pips - 1
         color = m.c.outline
@@ -798,10 +811,9 @@ function screenRadar(parent as Object) as String
     mw = m.W - 2 * m.safeX
     mh = 700
     rect(parent, mx, my, mw, mh, "0x070C18FF")
-    if R.status = "none" then
-        message(parent, "RADAR NOT AVAILABLE IN YOUR AREA", "RADAR COVERS THE UNITED STATES, CANADA AND GERMANY", m.c.amber)
-        return ""
-    end if
+    ' The loop has no radar screen where there is no coverage (NxWxHasRadar), so there is no card for it; this only
+    ' holds the map's colour.
+    if R.status = "none" then return ""
     if R.status = "loading" and R.files.Count() = 0 then
         message(parent, "LOADING RADAR", "THE MAP DRAWS AS SOON AS THE FRAMES ARRIVE", m.c.amber)
         return R.credit

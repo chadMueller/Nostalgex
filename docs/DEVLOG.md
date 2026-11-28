@@ -92,6 +92,194 @@ sends a random visitor ID, and what the analytics host stores is not visible fro
 
 **Next.** Cross-product: Apple TV has the fix on `appletv/picker-owed`, Roku has #331 open for it, Android #338. The Roku engine copy does not include `plex-tuner.html`, so there is no Roku port from this change.
 
+## 2026-11-27 (Roku 1.0.14: EPISODE ORDER, I-103, the port of web 1.0.24 and Apple TV 1.0.34)
+
+**State.** Branch `roku/1.0.14`. It passes only with web 1.0.24's `scripts/` beside it (`web/1.0.24-next`, 155a1a6d): the vector generator checks the engine's own answers. Merge the two together; either alone turns the `roku` CI job red.
+
+**Why.** CLASSIC RERUNS now airs two consecutive episodes of a show, from a random spot in the series, and SHUFFLE one at a time (Chad, 2026-11-19). The Apple TV, the web tuner and the shared goldens moved; Roku had the old pairs, so `roku/tests/run.sh` stopped at the first check (`gen-vectors.mjs`: "upstream JS disagrees with Swift at INTER:1:20000") against the web branch's engine.
+
+**Changed.**
+- `source/schedule/DailyManifest.brs`: the engine's `seriesNumber`, `showIdentity` (the server's show id, else title and year), `withoutSecondCopies`, `inSeriesOrder`, `seriesNext`, `pairsIn`; `NxInterleaveByShow(items, seed, day, order, follows)` for both orders (the start spot is one `NxRngBounded` draw, a title alone in its group draws none); `NxPickCandidate` takes `keepShowOrder` and `avoidShow`; `NxPackDay` reads the order once per day and asks `NxPickNext` (the second of a pair straight after the first, wherever another channel's programme left it; then another show while one fits). The series order is sorted on a text key that is never the same for two episodes, so it does not rely on a stable sort.
+- `source/guide/EpisodeOrder.brs` (new): the saved choice (the player section's `episodeOrder`, nothing saved for classic), the Apple TV's words (CLASSIC RERUNS, SHUFFLE and the two sentences), the pool fingerprint's suffix (`|order=shuffle`, nothing for classic). An item the loaders made has `seasonNumber` and `episodeNumber`, not a `seTag`; `NxEpisodeTag` makes the tag the web loader would (S01E04, E04, S02).
+- What a change of order has to move: the pool fingerprint (so the session's day cache packs again; the memo keeps the fingerprint without the suffix, so no pool is read again), the re-check key (`NxScheduleHourKey` with the order, so closing Settings reschedules), `guide.episodeOrder` (a saved guide is shown only under the order it was packed under), and the saved guide's key always names the order, so a guide saved by 1.0.13, whose pairs were any two episodes, is not shown at the first launch; the saved pools, scheduled now, are.
+- Settings, CHANNELS & BUNDLES: an EPISODE ORDER row before WATERSHED, OK cycles, as the Apple TV's.
+- `tests/gen-vectors.mjs`: the Swift order strings of fixture A rewritten from the engine's smoke file (as the engine's own header says they were on 2026-11-19), a fixture C (show ids, every tag form, remakes with one title, a show held twice, films) with the engine's answers under both orders, `episode-order-golden.json` copied like the other goldens.
+
+**Tests.** Each part alone, one interpreter at a time: `episode-order` (new, 87 cases: tags, identity, series order, second copies, what follows what, the day's order under both orders, the two pick rules, whole days, the saved choice through a fake registry, the keys), `episode-order-golden` (new: scripts/episode-order-golden.json, the Apple TV's SHUFFLE answers for a Plex lineup, 135 checks), `schedule-parity` (the Apple TV's CLASSIC RERUNS answers for Plex, Jellyfin and Emby lineups, with the pairs under pressure, 480 checks), schedule, schedule-dst, cross-channel, lineup, version, settings-rail, settings-channels and enrichment. The static guard scripts (guards, includes, uninit, testlists, dupkeys, observers) pass. All 0 failed.
+
+**On the stick** (Streaming Stick Plus, OS 16.0.4, a sideloaded build in its own data space, a stand-in Plex of 60 films and 150 shows of 24 episodes, enrichment off). EPISODE ORDER sits before WATERSHED in CHANNELS & BUNDLES with the Apple TV's words (`.shots/roku-1014-ready-2026-11-27/09-channels-page.jpg`); OK moved it to SHUFFLE, closing Settings rescheduled 13 channels in 1.6 s, and the sitcom channel went from pairs of one show to the other order. Scheduling the first full build took 2.1 s; the same library on the 1.0.14 head without the port took 1.4 s (5.4 s before two changes: item numbers read straight from `seasonNumber` and `episodeNumber` with no text or pattern, and one `follows` map per pool, kept in the pool's memo).
+
+**Half-done.** The full `run.sh` is not run on this head. Launch time with a big library of shows is measured only at 3,660 titles (+0.7 s to schedule); the cost grows with the episodes a pool holds, about 0.2 ms a title. The Jellyfin and Emby loaders' episodes were not read on a stick; their `seasonNumber`, `episodeNumber` and `showKey` are what the goldens' fixtures go through.
+
+## 2026-11-27 (Roku 1.0.14: the enrichment upsert leaves out a value nobody has, as the Apple TV's N-093 fix)
+
+**State.** Branch `roku/1.0.14`. Not on a stick; tests below.
+
+**Why.** The Apple TV's save (02849501) sends each row with only the keys it has a value for, grouped so the shared table never sees mixed rows, and never sends a null, because a null wipes what another device learned. Roku named a fixed column list in every request (`?columns=...`) and sent a row's missing values as null, so a lookup that found no IMDb rating, or a title with no franchise, wrote an empty value over a rating or a franchise another device had saved in the meantime. The fixed list also hid the mixed-rows refusal (PGRST102) the Apple TV hit, so no save was lost on Roku, but the overwrite was possible.
+
+**Changed.** `NxEnrichUpsertGroups` (source/enrich/Enrichment.brs) builds each row from the columns it has a value for and groups rows by those columns; `NxEnrichUpsertSupabase` sends each group in its own requests of 200 and names that group's columns in the request. The key columns (tmdb_id, media_type) are always there. TMDB and OMDb rows still go apart, so a TMDB save never touches an OMDb column.
+
+**Tests.** `EnrichmentTests`: a mixed batch (a film with a franchise, a film and a show without) makes two requests and saves all three; the franchise columns are named only where a row has them; no request body holds a null; an OMDb row with no rating names no rating column but keeps its Metacritic score; the two older checks that pinned the full column list now name the columns the rows have. The part passes, 41 lines.
+
+**Not checked.** Against the live table (a write there is not a test). A TMDB refresh can no longer clear a franchise or a rating on purpose; the Apple TV cannot either.
+
+## 2026-11-23 (Roku 1.0.14: enrichment rows by type and number; the live channels.json apply measured on the stick)
+
+**State.** Branch `roku/1.0.14`, one commit on `8e2d7ac0`. Nothing pushed, not signed, no build number change.
+
+**Enrichment, by type and number.** The shared `media_enrichments` table's key is now `(tmdb_id, media_type)` (changed 2026-11-23), so one TMDB number can hold a film's row and a show's row and a read of `tmdb_id=in.(...)` can answer both. `source/enrich/Enrichment.brs` kept and looked up everything by the number alone, so a show could take a film's row, or be skipped as already cached when only the film was stored. Now every record, local cache row, lookup and OMDb candidate is keyed `movie:603` or `tv:603` (`NxEnrichKey`, the web tuner's `recordKey`: anything but tv is movie). The item's own type picks the row (an episode is tv, anything else movie). A work item is one title, a number and a type, so a film and a show with one number are two. The Supabase read asks each number once, and keeps a row only for a title the library has, by its type. A local cache file an earlier build wrote kept its rows under the bare number: on load a row with a record is re-keyed by the record's own type, a saved miss (it has no type) is dropped and asked again. Saves are unchanged (they already send `media_type`). The work-item shape `{ tmdbID, mediaType }` is unchanged, so the golden vectors still compare.
+
+**Vectors.** The first work vector held a film and a show with number 1399 and expected one item (the old engine's "first type wins"). That input now repeats the episode, so the vector reads the same on the old engine and on the web agent's (`web/1.0.24-next` `24980cad`). Run once against that engine with the original input: the port gives the same three items it does (1399 as tv, 1399 as movie, 603), 255 enrichment checks, 0 failed. The shared-number cases are in `tests/EnrichmentTests.brs` with the port's own fixtures (both rows from the table, only the film in the table, the film in the local cache, a saved miss for the show, an old cache file, genres and OMDb candidates kept apart).
+
+**The live channels.json apply, on the stick** (Streaming Stick Plus, 1.0.14 head `8e2d7ac0`, one Plex stand-in server of 2,900 titles, the size the 3,000 title cap allows, enrichment off, simulated limits by `nx_mem_limit_kb`). The bundled `channels.json` was staged one version low (49 against the live 50) so the live copy counts as new. The app reading is the app's own, in percent of the limit; the process figure is `query/chanperf`.
+
+| Limit | Reading at the apply | Gate (reading + build + reserve, stop at 80) | Result | App reading peak in the rebuild | Process peak |
+|---|---|---|---|---|---|
+| 150 MB (153,600 KB) | 24% | 24 + 20 + 8 = 52 | applied: rebuilt from the saved library, guide handed over | 35% | 78.8 MB |
+| 96 MB (98,304 KB) | 38% at the load's start | borderline, under 80 | applied | 55% | 78.1 MB |
+| 90 MB (92,160 KB) | 36% | 36 + 33 + 14 = 83 | waited: "a newer channels.json is cached; this library (2900 titles, memory 36% of 92160 KB) is too big to rebuild behind the guide now, so the next launch uses it" | none (no rebuild) | 67.5 MB over the whole run |
+| 90 MB, next launch | 25% at the load's start | | rebuilt from the saved library at launch, guide handed over | 46% | 63.0 MB |
+| real (501,760 KB) | 7% | 7 + 6 + 0 = 13 (stop at 90) | applied | 11% | 78.9 MB |
+
+What it shows. The gate waits when the projection reaches the stop line and applies when it does not, and what it waits for is used at the next launch. The projection is far above what the rebuild took: 52 predicted against a 35% peak at 150 MB, and under 80 (the apply was let through; the reading at the decision was not printed) against 55% at 96 MB. The process figure for the same library is about 78 MB at every limit, which is 77% of a simulated 96 MB; the app's own reading, which the rule uses, said 55% of it. At 96 MB the rule sat on its edge and let the apply through with the process near three quarters of the simulated limit and no quit; that is the one run where the rule's number and the process's number are far apart. Not run: a library over 3,000 titles (it never applies behind the guide, by the cap), a real small TV (Stick HD, Express).
+
+**What the run showed about timing.** The stick suspends an app that plays no video and gets no key for about ten minutes, so the 15 minute tick (where a pending apply is tried) does not run on an idle stick until a key comes ("guide: back after 337 s without a tick"). On a TV a viewer is watching, a video plays and the tick runs on time. The run sent a key to wake it.
+
+**Tests.** The enrichment suite alone, once, before the commit: 254 passed and 1 failed, the failure my test (FormatJson refuses one array twice in a list), fixed. Against the web engine's vectors: 255 passed, 0 failed. **The cut run, once, on head `098b4991`:** `tests/run.sh` (one interpreter at a time, 63 minutes) ALL TESTS PASSED, 92 suites, 15,602 checks, 0 failed, with the six static guard scripts (guards, includes, uninit, testlists, dupkeys, observers) and the stamp check inside it; the added-lines scan (trailers, secrets, addresses, dashes) PASS; static analysis (`sca-cmd`, portable Temurin 21 JRE, not installed) 0 errors and the one old warning (a 1,434 character line in `SubtitleSettings.brs`). The stick was put back on the 1.0.13 candidate (build `5dbf5ff91346`, zip hash checked). Not run: `pr-check.sh` (it repeats the suite), the golden suite on the stick, signing.
+
+## 2026-11-22 (Roku 1.0.14: the faster live channels.json, N-074, added from the held branch)
+
+**State.** Branch `roku/1.0.14`, cherry-pick of `roku/live-channels-faster` (`377f3586`, held since 2026-11-16 only for release timing) plus one gate on top. Nothing pushed, not signed, no build number change, version still 1.0.14 (build 14). Chad, 2026-11-22: add the faster channel check to the 1.0.14 line to match the Apple TV (`appletv/1.0.34-next`).
+
+**What a viewer gets.** The app asks nostalgex.app for `channels.json` at launch, when a link wakes it and from the 15 minute loop, at most once an hour (`NxLiveChannelsIntervalSec`, one constant; the request is conditional, so unchanged is a 304 with no body, and a failed try also waits the hour). A newer copy is applied from the saved library, no server read, only while the viewer is on the guide (not full screen, not Settings, not a prompt, not a load), else at the next launch. UPDATING LIBRARY then GUIDE READY in the header. The saved guide and pools are keyed by the live copy's version, so a new copy rebuilds them.
+
+**The merge.** The cherry-pick applied with no conflicts (the held branch's base `3798acdb` is an ancestor of the line; git auto-merged `GuideView.brs`, `LibraryTask.brs` and `MainScene.brs`, where the two sides edited different parts). No conflict does not mean no interaction, so it was read against the margin rule.
+
+**The memory interaction, and the gate.** An apply is `startLibrary(true, true)`: a rebuild from the saved library with the saved guide shown, so the app holds the guide on screen, the saved library read back from disk and the new pools at once. The load's own checks do not see that: `nxScanBiggest` is set only by a scan, so a rebuild from the saved library asks `NxBuildRoomFor` with 0 items, which is the old half-the-growth guess and refuses only at 90% (95% on a normal device), none of the margin rule's measured build cost. What stood in the way was the held branch's cap of 3,000 titles, a fixed number from the 1.0.13 profile that knows nothing of the device's limit or of where its reading stands. `NxLiveRebuildNow(titles, pct, limitKB)` now also asks `NxScanProjectedFull`, the rule a scan is judged by: the reading plus the build's cost for those titles plus, under the Stick Plus's limit, the sweep's reserve (kept though a saved-library rebuild has no sweep: a tenth over) must stay under the stop line, 80% under 480,000 KB and 90% above. A 3,000 title library at a 150 MB limit waits at a reading of 52% or more, at 256 MB at 63%, on a normal device at 85%. Not met, the apply is dropped for this run and the next launch uses the cached copy, as it does for a library over 3,000 titles. At launch the load starts from a low reading and the margin rule's own checks guard it.
+
+**Not in the rule's fit.** The build's cost was fitted on scans, where the items were already resident. An apply also reads the saved library back, about 3,000 titles at most, so the real peak of an apply is above what the gate projects by that read. Not measured on a stick: the 3,000 cap bounds it, and the gate's tenth over and the reserve are the margin that stands for it. A stick run at a simulated 150 MB limit (`nx_mem_limit_kb`) with a library near 3,000 titles is the measurement that closes this.
+
+**The daily schedule memo.** The Apple TV clears its schedule memo on an apply. Roku's equivalent is `nxManifests` (`NxManifestCache`), cleared by `NxClearManifests()` in `buildGuide` whenever the filter results are not reused. They are reused only by the same build key (`NxSavedFiltered`, exact key), and the live copy's version is in that key (`NxBuildKey`), so an apply never reuses them and the memo is cleared by construction. No extra line added.
+
+**Tests.** `tests/LiveChannelsTests.brs`: five cases for the gate (150 MB, 256 MB, normal, no reading). Run once, the live-channels suite only, plus the static checks. Not run: the full suite, static analysis (`sca.sh`), the stick.
+
+## 2026-11-20 (Roku 1.0.14: the margin rule, the stick runs, the beta cut prepared)
+
+**State.** Branch `roku/1.0.14`, version 1.0.14 (build_version 14), nothing pushed, not signed. Stick back on the 1.0.13 candidate (build `5dbf5ff91346`, zip sha256 `192e8929cbea...`, installed, files identical to the rk-1013-real stage).
+
+**The rule** (`source/util/Values.brs`, one path for Plex, Jellyfin and Emby). A device with a limit under 480,000 KB: the scan stops when the app's reading plus the build's cost (24 MB plus 2.1 KB an item of the largest server, a tenth over the measured 22 MB and 1.9) plus a 12 MB reserve for the collections sweep (measured 9 MB) reaches 80% of the limit, so the projected peak stays under 85%; the check before the build refuses at 90%, with the build's cost as the measure (not half the growth, which refused scans the rule had let through over several servers); the old ceiling no longer applies there (it stopped a Jellyfin load at 1,000 titles over 150 MB). At or over 480,000 KB nothing changed: ceiling 55, stop at a projected 90, refuse at 95. The console prints the reading at each load step and where the load begins.
+
+| Run | Limit | Servers | Titles read | App reading peak | Guide |
+|---|---|---|---|---|---|
+| q1 | 150 MB | Plex A+B+Big | 15,925 | 68% | built |
+| q5 | 150 MB | Plex A+B+Big (2nd try, ceiling gone) | 3,700 | 63% | built |
+| q2 | 256 MB | Plex A+B+Big | 53,800 | 78% | built |
+| q6 | 256 MB | Plex A+B+Big (2nd try) | 26,150 | 71% | built |
+| q4 | 150 MB | Plex 20,000 films, 100 series | 13,500 | 71% | built |
+| q8 | 150 MB | same (2nd try) | 1,200 | 59% | built |
+| q3 | 150 MB | Jellyfin 2,093 films, 773 series x 25 | 1,000 | 58% | built |
+| q7 | 150 MB | same (2nd try) | 1,600 | 63% | built |
+
+**What it shows.** The peak held under 85% by the app's own reading in all eight runs and a guide was built every time. The titles read did not hold steady: the app's reading when a load begins climbed over the session, from about 15% to 29% (q6) to about 50% (q7, q8), while the stick's process memory at that point stayed near 47 MB, so the reading is not a plain function of the process. Reading less is the safe direction, but at 256 MB the second run read 26,150 titles against 57,600 before. The build's cost is also lower than the fit for a small library (3,700 titles cost 3 points, not the 17 the rule reserves). Not done: a clean comparison on a restarted stick, and whether `RunGarbageCollector()` before a reading would make it steadier (nothing in the app calls it).
+
+## 2026-11-20 (Roku 1.0.14: the Plex stick pass, every run, and why the beta cut is held)
+
+**State.** Branch `roku/1.0.14` at `60b9f616`. The stick is back on the 1.0.13 candidate (build `5dbf5ff91346`, hash and file-for-file checked). Nothing pushed.
+
+**Stand-in Plex servers** (sideload seed, `nx_plex_seed_url`): A 2,200 films and 700 series of 25 episodes (19,700 titles), B 2,400 and 800 (22,400), Big 12,000 and 2,500 of 20 (62,000), about 250 to 400 collections each. Peaks are the stick's own process memory (`query/chanperf`), as a percent of the simulated limit.
+
+| Run | Limit | Servers | Read | Peak | Result |
+|---|---|---|---|---|---|
+| p1 | full (514 MB) | Big | 62,000 of 62,000 | 323.5 MB, 63% | no quit, settled 58% |
+| p4 | 256 MB sim | A+B | 42,100 of 42,100 | 197.8 MB, 74% | no quit |
+| p2 | 256 MB sim | A+B+Big | 57,600 of 104,100 (Big cut at 15,500) | 223.6 MB, 83% | no quit |
+| p3 | 150 MB sim | A+B+Big | 26,775 (B cut at 6,775, Big 300) | 162.2 MB, 103% | over the limit |
+| p5 | 150 MB sim | A+B+Big | 24,900 | 158.0 MB, 100.4% | over; added the build's cost (2.5 KB an item) to the guard |
+| p6 | 150 MB sim | A+B+Big | 26,775 | 162.2 MB, 103% | over; refit to 22 MB + 1.9 KB an item: no change (readings move by whole points) |
+| p7 | 150 MB sim | A+B+Big | 9,675 (A cut at 9,075) | 66.4 MB, 42% | no quit; the check before the build refused ("no room", 71% by the app's own reading) |
+
+**What the runs showed.** The channel build costs about 22 MB plus 1.9 KB for each item of the largest server (62,000 items +143 MB, 22,400 +58, 19,700 +55 to +60), not half of what the scan added. Over a smaller limit the reading was the real percent scaled up, which moves 3 to 6 points at a time; it is now the KB in use over the limit. Process memory from `chanperf` and the app's own reading do not agree (66 MB against 71% of 157 MB at p7), so a peak read off `chanperf` is not what the OS counts.
+
+**Why the beta cut is held.** 150 MB now stops safely but with no guide (the scan stops at a projected 90%, the collections sweep then adds about 6 points and the check refuses at 95%), and 256 MB has not been re-measured with the finer reading. A margin rule, not another fit, is proposed: stop reading at a projected 80% on a small limit and keep room for the sweep.
+
+## 2026-11-20 (Roku 1.0.14: the guard counts what the build takes; a cut at a library's end; RESCAN saves the library choices first)
+
+**State.** Branch `roku/1.0.14`.
+
+**Why.** The Plex stick pass with stand-in servers sized like brytenyte's (A 19,700 titles, B 22,400, Big 62,000) showed no quit at the full limit (Big alone: 62,000 read, peak 323 MB of 514, 63%) or at a simulated 256 MB (57,600 read of 104,000, Big cut at 15,500, peak 224 MB of 268, 83%), but a peak of 162 MB at a simulated 150 MB (103% of it). What the channel build adds was not half of what the scan added: it is about 22 MB and 1.9 KB for each item of the largest server (the filter keeps a record for each, I-065): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 across two servers (largest 22,400) +55, and a Jellyfin library of 21,400 +46. At a small limit that is most of the peak. And a second server's scan was started at full memory (it read its first page).
+
+**Changed.**
+- `NxScanMemoryFull` also stops when memory plus what the build will take (`NxBuildOverheadPct`, 22 MB and 1.9 KB an item of the largest server read so far, counted from the load's start across servers) reaches 90%; the check before the channel build takes the larger of that and the old half-of-the-growth guess.
+- N-090: a last page that takes memory past the ceiling ends its library without a check, so the next library was started; the check now also runs where a library or section begins (after the first), and that is the cut, the libraries left counted. Jellyfin, Emby and Plex.
+- I-099: RESCAN LIBRARY in Settings saves the libraries switched in the same visit first (`saveLibraryChoices`), so the rescan does not read the ones from before the switch, and leaving does not ask for a second read.
+
+**Tests.** `MemoryBudgetTests` (63), `MediaBrowserTests` (6,228) pass. The Settings change has no off-device test (SettingsView is a component).
+
+**Half-done.** The new build cost per item is measured on stand-ins; a re-run at 150 MB on the stick is the check.
+
+## 2026-11-19 (Roku sideload: a Plex sign-in from a seed page, for stand-in Plex servers)
+
+**State.** Branch `roku/1.0.14`. A sideload tool; a store build never reads it.
+
+**Why.** A stand-in Plex server on the home network cannot be signed in to through plex.tv. The Plex memory pass on the stick (brytenyte's sizes) needs one.
+
+**Changed.** A sideloaded build (IsDev) with `nx_plex_seed_url` in its manifest, signed out, signs in from that address: the page answers `{ token, account: { id, name }, servers: [{ name, machineIdentifier, uri }] }` and `NxPlexApplySeed` saves it as a sign-in saves its own (token, kind, servers reached at their address and already checked, every server on, the library pick owed, `devSeed`). A seeded sign-in is never sent to plex.tv, which does not know the token (`PlexSignInTask`). `launchLoad` goes to the seed instead of the connect screen. Signing out clears it and the next launch seeds again.
+
+**Tests.** `MemoryBudgetTests` (7 more cases on the seed), 56 pass.
+
+## 2026-11-19 (Roku 1.0.14: the Plex scan has the memory guard Jellyfin and Emby have)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick yet.
+
+**Why.** brytenyte (Stick 4K, Plex, only his biggest server on) is ended by the OS after the channel build with no message. Jellyfin and Emby already stop reading at a ceiling and keep a partial library; the Plex scan had no check at all, and held a whole section's raw rows (6 to 10 KB each, with the Media and Stream lists) beside the records made from them.
+
+**Changed.** A film (or other non-show) section is read 300 a page and each page made into records at once, the raw page dropped (`NxPlexScanPages`); after each page `NxScanMemoryFull` asks the same projected-peak rule as the Jellyfin scan, and a full memory keeps what was read and counts the rest from the sections' own totalSize (`NxPlexSectionTotal`, `NxPlexNoteCut`), so the cut line and ABOUT's MEMORY lines read as they do for Jellyfin. A show section keeps its two requests (the show list, then one allLeaves a show) and is checked after each batch of 25 shows; the later sections are never started once a cut is made. A failed page skips its section and leaves none of its records behind, as before. The check before the channel build already covers the build for every backend.
+
+**The hung test run.** The first Plex guard test hung because the off-device interpreter's `Val()` returns 0 for "300&X-Plex-Container-Size=...", where a TV's returns 300: the fake server answered page one for ever. It was the interpreter, in the test fake (numbers are read digit by digit now), not the app and not the Dolby Vision step.
+
+**Tests.** `MemoryBudgetTests` (8 more cases on a fake Plex of 1,000 films and 20 shows: everything read at low memory, a cut after the first page of films with the totals counted, a cut after a batch of shows, a scan that began at 70%, a failed page leaving nothing behind), 49 pass. The Plex request path has a test hook (`nxPlexTestNet`) that is never set in the app.
+
+**Half-done.** Not on a stick: whether a Plex library of brytenyte's size now stops under its limit is the stick pass. Plex reads a show's episodes as it always did; that is what lazy episodes (branch `roku/lazy-episodes`) changes later.
+
+## 2026-11-19 (Roku 1.0.14: no silent quit at the channel build, a message instead)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick.
+
+**Why.** brytenyte (Stick 4K, Plex, only his biggest server on): the app reads, starts building the channels and drops to the Roku home screen with no message. The scan's guard covers Jellyfin and Emby only, and only while they read; nothing looked at memory before the build, which takes about half again what the load added since it began (measured: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB).
+
+**Changed.** Before the channel build, on every backend, `NxBuildRoomFor` projects the peak (memory now plus half of what the load added since it began, `nxScanMemBase`) and refuses at 95% of the limit or more. A TV that gives no reading is let through. Refused: nothing is built or saved, so the saved library and guide stay as they were. With a guide on screen (a launch refresh) it stays and says nothing, as for a refresh that cannot read the library; the MEMORY lines in ABOUT show BUILD SKIPPED with the titles and the percent. On a first load the error says: **THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.** (the cut line's words, `NxBuildRoomLine`), and the library pick is owed again, so OK at "try again" goes to CHOOSE YOUR LIBRARIES instead of reading the same libraries again.
+
+**Tests.** `MemoryBudgetTests` (11 more cases: each edge of the rule and the words), 41 pass. Static checks pass. The refusal in the load itself is not covered off-device (LibraryTask is not run by the interpreter suite).
+
+**Half-done.** Not seen on a TV. The 95% line and the half-again factor come from the Jellyfin stand-in; Plex's own factor is not measured.
+
+## 2026-11-19 (Roku 1.0.14: a rescan no longer stops on its first page at a small limit)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick since the change.
+
+**Why.** On the stick with a simulated 150 MB limit, a rescan after Shows was turned off read 200 titles and stopped: memory already stood at 70% of the (simulated) limit, over the 43% ceiling, before the scan read anything. The same happens to a launch refresh and to a Settings library switch on a real small TV, whose process already holds a guide, the pools and the pages an earlier library took. The guide kept what fit and the saved file stayed whole, but the guide shrank to one page.
+
+**Chose.** Not freeing the old library first: `releaseLibrary` already stops and drops the old load before the new one starts, so the old library is not what keeps the number high, and no code can hand the process's own pages back. Measuring the guard net of where the load began (`NxScanMemBaseSet` at the start of a load, `NxMemFullFor`): a load that began under the ceiling stops at it exactly as before (a first load, any TV at or over the Stick Plus's limit); one that began at or over it stops when memory plus half of what the scan itself added since then reaches 90% of the limit, which is where the build, the schedule and the save take the peak. Never later than that, and a TV that does not report, or a test's fetcher, keeps the ceiling alone. The rule that a cut scan never replaces a whole saved library that holds more (`NxSnapshotKeepSaved`) is untouched.
+
+**Also.** ABOUT shows MEMORY above LINKS, so its seven lines are on screen without scrolling (they were below the edge; the links are now the part that scrolls).
+
+**Tests.** `MemoryBudgetTests` (10 more cases: the rule at each edge, the stored base), `MediaBrowserTests` (2 more: a load that began at 70% reads all 2,000 titles at 70% and stops after its first page at 95%), `SnapshotTests` (52, unchanged, pass). Static checks pass. Not run on a stick: whether a real small TV then reads more and still stays under its limit is unproven; the projection is conservative, a freed page is reused before the process grows.
+
+## 2026-11-19 (Roku 1.0.14: a memory line in ABOUT, and the BoxSet sweep reads only what the scan read)
+
+**State.** Branch `roku/1.0.14`. Not pushed, not signed, not on a stick yet.
+
+**Why.** Two Discord users on 1.0.13 still lose the app to the Roku home screen during the first load (a Jellyfin library of 21,000 titles on a Stick HD and an Express; Plex servers of 600 to 800 series). On the Stick Plus a stand-in of juicextract's size (2,093 movies, 773 series, 1,541 albums, 177 collections) peaks at 226 MB of 514 (44%) and settles at 195 MB (38%): that library fits there. Nothing says yet where it stops on the smaller sticks, so the app now says what it held at each step, and a user can read it out.
+
+**Changed.**
+- *The memory line* (`source/util/MemTrace.brs`): the app's own limit, the scan's ceiling for it, and the percent of the limit after the scan, the collections, the channels, the schedule and the save. Kept in the registry as `memTrace` (a sign-out clears it, as the library's other records), shown under MEMORY at the end of ABOUT. A step noted again replaces its line. No percent from a TV that cannot give one is left out.
+- *The BoxSet sweep* (Jellyfin and Emby) is given what the scan read (`NxCollectionsKnownKeys`): a member from a library that is off, or never read, is not kept; a BoxSet left with none is not kept; a server that read nothing is not asked at all. A BoxSet is not tied to a library, so the server lists every one; the collections that resolve are the same as before, only the keys that could never resolve are gone. The JS engine and its golden are untouched (`known` is an optional last argument).
+- *Music*: the scan never asked for it. A stand-in log that seemed to show one Music request was my own smoke test; the log of the run after has none. A test now holds that a film library beside Music, Playlists, Collections and Photos is the only one asked for items.
+
+**Tests.** `MemoryBudgetTests` (11 more cases: the lines, a step noted again, the registry round trip, a damaged record), `CollectionTests` (5 more: the known keys, a half read BoxSet, an empty one, a server that read nothing, the same items resolve), `MediaBrowserTests` (2 more: only the film library is asked). Static checks pass. The full suite was not re-run.
+
+**Half-done.** Not seen on a TV. The ABOUT rows are plain info lines under a MEMORY header; how they sit on the real page (scrolling, the line width) is unproven. Where the app really stops on a Stick HD (3840) or an Express (3930) is not measured.
+
 ## 2026-11-19 (publish Jellyfin apps for Apple TV)
 
 **Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/jellyfin-apple-tv-apps`.
@@ -108,6 +296,30 @@ sends a random visitor ID, and what the analytics host stores is not visible fro
 
 **Next.** None for this post.
 
+
+
+## 2026-11-18 (Roku: LOCAL WEATHER place search shows up to 36 matches, and a place with no radar plays a three screen loop, #332)
+
+**Why.** The same three changes the Apple TV and the web tuner got today, so CH 299 behaves the same on all three. On the Apple TV a failed read of the place list (`places/meta.json`) was remembered until relaunch, because a search cancelled by the next keystroke counted as a failure. GitHub #332 asked for more than 8 matches for a postcode with many localities, and for no RADAR NOT AVAILABLE slide outside the US, Canada and Germany.
+
+**Changed.**
+- *A failed place-list load is not remembered.* Checked, no change needed: the Roku search keeps nothing between searches. Each search is a new `WeatherTask` and `NxWxSearch` calls its loader for every file it needs, so a file that did not come (`NxWxNetLoad` returns invalid for a timeout, an error status or a 404 alike) is asked for again at the next search. There is no cancelled search either: the on-screen keyboard is answered before the search starts. A test now holds this.
+- *Result cap 8 to 36* (`NxWxMaxResults`). The whole postcode comes first, then the longer codes in file order, then cities, as on the Apple TV and the web. The picker is a `StandardMessageDialog` with one button per match, so it now has up to 38 buttons (36, SEARCH AGAIN, CANCEL).
+- *No radar outside coverage.* `NxWxHasRadar(place)` is true where `NxWxRadarProvider` has a source (US, Canada, Germany) and for no place yet. For any other place the loop is CURRENT, TODAY, 5-DAY at 45 s instead of 65 s: `NxWxScreens(withRadar)`, `NxWxLoopSeconds(withRadar)` and `NxWxScreenAt(nowSec, withRadar)`. The footer draws one pip per screen of the loop that is playing (three), the radar fetch is skipped, the RADAR NOT AVAILABLE card is gone, and the info panel's line before the forecast arrives drops "and radar" (`NxWxLoopSummary(false)`, published by `WeatherView`). `withRadar` defaults to true, so `weather-golden.json` is unchanged and still read byte for byte.
+
+**Tests.** The weather suite alone, in the interpreter: 826 checks (773 before), 0 failed, 16 s. New: a loader that fails and then works (a failed list, city file and postcode file each give no matches and then answer on the next search; four loads for two searches), the cap on a 41 match postcode and a 40 match city name with the order checked, the three screen loop at eleven moments (compared with the web engine's answers for the same moments), the radar answer for each provider row in the golden file, and the guide line. Also added, for the larger place list the site is preparing (GeoNames cities1000, 392 time zones in its index): `America/Atikokan` was missing from the zone table (a place there would have read as UTC), so it is in with Coral Harbour's offset, -300, and a test reads the place index (`tests/vectors/weather-places-meta.json`, copied from `public/weather/places/meta.json` by `tests/gen-vectors.mjs`) and fails if any zone it names is not in the table. It passes on today's index and on the cities1000 one, and fails without the new line. `THIRD-PARTY-LICENSES.md` now says cities1000. The static checks that run beside the suite (guards, includes, uninitialised names, test lists, duplicate keys, observers, stamp) pass. The full suite, static analysis and a sideload were not run.
+
+**Half-done.** Not seen on a TV. Branch `roku/weather-search-fixes`, off `roku/1.0.14-lowmem`. Four things to see on the stick: the picker with 38 buttons (whether the dialog scrolls and the remote reaches the last row is not proven off-device), the three pip footer and 45 s loop on a UK place, and that no radar request is made for it. The fourth is for the cities1000 data: its biggest shard is `san` (307 KB raw, 5,650 rows), so search "san" and "san j" and watch the memory and the time to parse on the stick.
+
+## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
+
+**Why.** The hold clip that keeps the stick awake under WATERSHED was restarted on `finished` and `error` only. Once, on a TCL 55R617, it went to `buffering` and stayed there for about 40 minutes, so the 9 PM opening didn't happen until a key press (#334).
+
+**Changed.** While the clip buffers, a 10 s one-shot timer (`m.keepStall`) runs. Every other state from the clip stops it. A clip still buffering when it fires counts as a failure, as `error` does (`NxKeepAliveStallAction`, `source/guide/Watershed.brs`): it is restarted, and the third failure, stalls and errors together, stops it until a channel starts. `NxKeepAliveAction` is unchanged, so buffering alone still does nothing. LOCAL WEATHER's music shares the Video node and the watch, so it gets the same check. As with errors, the count is reset only when the clip or the music starts, so three stalls across one long hold stop it. After a stall restart the timer is re-armed in `onKeepStall` itself, because a restart that sticks in buffering may not change the clip's state, and the state change is what starts it otherwise.
+
+**Tests.** `WatershedGoldenTests` (watershed-gate), 37 cases (32 before): a first and a second stall tried again, a third giving up, a clip that is playing, finished or stopped by then left alone, and a wait under a minute. With the stall action passing the clip's own state through, four fail. `tests/run.sh` ends in ALL TESTS PASSED.
+
+**Half-done.** Not seen on a TV. The stall happened once and can't be made on demand, and the tests run `source/`, not the components, so the timer's wiring in GuideView is covered only by `pr-check.sh`'s static checks.
 ## 2026-11-18 (Roku: a library pick still owed brings CHOOSE YOUR LIBRARIES back at the next launch, #331)
 
 **Why.** A Jellyfin or Emby sign-in, and a Plex one, saves `servers` before CHOOSE YOUR LIBRARIES is shown. `launchLoad` started the scan whenever `servers` was saved, so closing the app on the picker (Home, a crash, a power cut) skipped it at the next launch and read every library. Seen once on a TCL Roku TV against a lab Emby (#331).
@@ -129,6 +341,7 @@ sends a random visitor ID, and what the analytics host stores is not visible fro
 **Tests.** `WatershedGoldenTests` (watershed-gate), 37 cases (32 before): a first and a second stall tried again, a third giving up, a clip that is playing, finished or stopped by then left alone, and a wait under a minute. With the stall action passing the clip's own state through, four fail. `tests/run.sh` ends in ALL TESTS PASSED.
 
 **Half-done.** Not seen on a TV. The stall happened once and can't be made on demand, and the tests run `source/`, not the components, so the timer's wiring in GuideView is covered only by `pr-check.sh`'s static checks.
+
 
 ## 2026-11-18 (publish Thanksgiving marathon)
 

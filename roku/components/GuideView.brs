@@ -3664,3 +3664,8 @@ sub refreshWeatherRow()
     renderGrid()
     renderInfo()
 end sub
+
+function onGuideScreen(unused = invalid as Dynamic) as Boolean
+    if m.channels = invalid or m.channels.Count() = 0 then return false
+    return not m.fullscreen and m.settings = invalid and m.promptOpen <> true and m.graceEnd = invalid and m.leaving <> true and m.sidebarOpen <> true
+end function

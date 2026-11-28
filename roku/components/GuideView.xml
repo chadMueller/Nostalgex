@@ -36,6 +36,9 @@
     <field id="seedEnded" type="boolean" alwaysNotify="true" />
     <!-- The id of the channel tuned, as a string, or "" (resumeId's source). -->
     <function name="tunedChannelId" />
+    <!-- True while the viewer is on the guide itself: no full screen, Settings or prompt, no sleep prompt. The
+         safe moment to rebuild the channels (MainScene, a new channels.json). -->
+    <function name="onGuideScreen" />
     <!-- The loading pattern (source/guide/LoadState.brs). loadInfo is what the
          scan has read so far ({ titles, of, name }); readyTitles is set when a
          load finished (GUIDE READY: n TITLES); loadError is why a switch could
@@ -61,6 +64,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/EpisodeOrder.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeout.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeCursor.brs" />

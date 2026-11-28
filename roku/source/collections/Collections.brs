@@ -758,7 +758,7 @@ end function
 ' Upstream reads four BoxSets at a time, each one's pages in turn. This reads
 ' every BoxSet's first page 25 at a time through getMany, then any further
 ' pages one by one, so the requests are the same but not in the same order.
-function NxCollectionsFetchBoxSets(serverKey as String, userId as String, fetcher as Object, progress = invalid as Dynamic) as Dynamic
+function NxCollectionsFetchBoxSets(serverKey as String, userId as String, fetcher as Object, progress = invalid as Dynamic, known = invalid as Dynamic) as Dynamic
     uid = NxUrlEncode(userId)
     ' The list of collections is paged, 500 a time (#318, as scripts/nostalgex-collections.js): a server with an
     ' auto-collections plugin can hold thousands. A page that fails fails the read, and a page that adds no
@@ -820,12 +820,46 @@ function NxCollectionsFetchBoxSets(serverKey as String, userId as String, fetche
             progress.barCaption = "Collection " + done.ToStr() + " of " + boxSets.Count().ToStr()
         end if
         if childKeys <> invalid then
-            title = "Untitled"
-            if NxTruthy(b.Name) then title = NxToStr(b.Name)
-            out.Push({ id: serverKey + ":" + NxToStr(b.Id), title: title, childKeys: childKeys, serverKey: serverKey })
+            ' `known`, when given, is what the scan read (NxCollectionsKnownKeys): a member from a library
+            ' that is turned off, or never read, is not kept, and a BoxSet left with none is not kept (it
+            ' would resolve to nothing). Roku only: the output after the member index resolves is the same.
+            if known <> invalid then childKeys = NxCollectionsKeepKnown(childKeys, known)
+            if known = invalid or childKeys.Count() > 0 then
+                title = "Untitled"
+                if NxTruthy(b.Name) then title = NxToStr(b.Name)
+                out.Push({ id: serverKey + ":" + NxToStr(b.Id), title: title, childKeys: childKeys, serverKey: serverKey })
+            end if
         end if
     end for
     return out
+end function
+
+' The keys a BoxSet member can resolve to for one server's scan: every item's ratingKey, and an
+' episode's show key (Jellyfin lists a show by its series id, NxCollectionsResolve). An empty set
+' means the scan read nothing from this server, so there is nothing for a collection to hold.
+function NxCollectionsKnownKeys(items as Object, serverIndex as Integer) as Object
+    known = {}
+    known.SetModeCaseSensitive()
+    for each it in items
+        if it <> invalid then
+            if it.serverIndex = serverIndex then
+                known[NxToStr(it.ratingKey)] = true
+                if it.type = "episode" and it.showKey <> invalid then
+                    show = NxToStr(it.showKey)
+                    if show <> "" then known[show] = true
+                end if
+            end if
+        end if
+    end for
+    return known
+end function
+
+function NxCollectionsKeepKnown(childKeys as Object, known as Object) as Object
+    kept = []
+    for each k in childKeys
+        if known.DoesExist(NxToStr(k)) then kept.Push(k)
+    end for
+    return kept
 end function
 
 function NxBoxSetPagePath(uid as String, boxSetID as Dynamic, start as Integer) as String

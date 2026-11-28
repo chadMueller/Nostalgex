@@ -68,12 +68,32 @@ function NxRunLiveChannelsTests(channelsPath as String) as Integer
     NxCheck(r, "never tried: due", FormatJson(NxLiveChannelsDue(fresh, now&)), "true")
     good = NxFakeRegistry()
     good.Write("tried", now&.ToStr()) : good.Write("okAt", now&.ToStr())
-    NxCheck(r, "after a good fetch, 23 h: not due", FormatJson(NxLiveChannelsDue(good, now& + 23 * 3600)), "false")
-    NxCheck(r, "after a good fetch, 24 h: due", FormatJson(NxLiveChannelsDue(good, now& + 24 * 3600)), "true")
+    NxCheck(r, "the interval is one named constant, an hour", NxLiveChannelsIntervalSec().ToStr(), "3600")
+    NxCheck(r, "after a good fetch, 59 min: not due", FormatJson(NxLiveChannelsDue(good, now& + 59 * 60)), "false")
+    NxCheck(r, "after a good fetch, 1 h: due", FormatJson(NxLiveChannelsDue(good, now& + 3600)), "true")
     failed = NxFakeRegistry()
     failed.Write("tried", now&.ToStr()) : failed.Write("okAt", (now& - 86400).ToStr())
     NxCheck(r, "after a failed try, 30 min: not due", FormatJson(NxLiveChannelsDue(failed, now& + 1800)), "false")
     NxCheck(r, "after a failed try, 1 h: due", FormatJson(NxLiveChannelsDue(failed, now& + 3600)), "true")
+
+    ' ── A new copy, and what the cache keys carry of it ──
+    NxCheck(r, "newer than the bundled copy and nothing cached: new", FormatJson(NxLiveChannelsIsNew(51, 0, 50)), "true")
+    NxCheck(r, "the same as the bundled copy: not new", FormatJson(NxLiveChannelsIsNew(50, 0, 50)), "false")
+    NxCheck(r, "the same as the cached copy: not new", FormatJson(NxLiveChannelsIsNew(52, 52, 50)), "false")
+    NxCheck(r, "newer than the cached copy: new", FormatJson(NxLiveChannelsIsNew(53, 52, 50)), "true")
+    NxCheck(r, "a library up to 3,000 titles is rebuilt behind the guide", FormatJson(NxLiveRebuildNow(1546)) + FormatJson(NxLiveRebuildNow(3000)), "truetrue")
+    NxCheck(r, "a bigger one waits for the next launch", FormatJson(NxLiveRebuildNow(3001)) + FormatJson(NxLiveRebuildNow(72000)), "falsefalse")
+    ' The 1.0.14 margin rule on top of the size (3,000 titles: a 150 MB limit adds 20 points for the build and 8 for the
+    ' sweep's reserve against the 80 stop line; a normal device adds 5 against 90).
+    NxCheck(r, "150 MB limit, 3,000 titles, memory 51%: rebuilt", FormatJson(NxLiveRebuildNow(3000, 51, 153600)), "true")
+    NxCheck(r, "150 MB limit, 3,000 titles, memory 52%: waits for the next launch", FormatJson(NxLiveRebuildNow(3000, 52, 153600)), "false")
+    NxCheck(r, "256 MB limit, 3,000 titles, memory 62% rebuilt, 63% waits", FormatJson(NxLiveRebuildNow(3000, 62, 262144)) + FormatJson(NxLiveRebuildNow(3000, 63, 262144)), "truefalse")
+    NxCheck(r, "a normal limit, 3,000 titles, memory 84% rebuilt, 85% waits", FormatJson(NxLiveRebuildNow(3000, 84, 501760)) + FormatJson(NxLiveRebuildNow(3000, 85, 501760)), "truefalse")
+    NxCheck(r, "no memory reading: the size alone decides", FormatJson(NxLiveRebuildNow(3000, -1, 153600)) + FormatJson(NxLiveRebuildNow(3001, -1, 153600)), "truefalse")
+    keyed = NxFakeRegistry()
+    NxCheck(r, "no live copy: nothing in the key", NxLiveChannelsKeyPart(keyed) + NxLiveChannelsKeyPart(invalid), "")
+    keyed.Write("version", "51")
+    NxCheck(r, "a live copy in use: its version is in the key", NxLiveChannelsKeyPart(keyed), "+c51")
 
     ' ── Choose: the cache, then the bundled copy ──
     bdir = dir + "/b"

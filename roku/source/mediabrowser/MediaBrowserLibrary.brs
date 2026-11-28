@@ -635,6 +635,14 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
         view = views[viewAt]
         ' A full memory ends the scan: no library after the one it stopped in (I-091).
         if NxScanCapped() > 0 then exit for
+        ' A last page that took memory past the ceiling ends its library without a check (the check is between
+        ' pages), so the next library would be started: it is the cut here, the libraries left counted (N-090).
+        if viewAt > 0 then
+            if NxScanMemoryFull(fetcher, out.Count()) then
+                NxMbNoteCut(fetcher, userId, views, viewAt - 1, out, 0)
+                exit for
+            end if
+        end if
         section = ""
         if type(view) = "roAssociativeArray" then section = NxMbSectionType(view.CollectionType)
         ' A library with no videos in it is never asked for items (#205).
@@ -680,7 +688,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         progress.barCaption = done.ToStr() + " of " + series.Count().ToStr() + " shows"
                     end if
                     if NxLoadStopped() then exit for
-                    if NxScanMemoryFull(fetcher) and b + batch < series.Count() then
+                    if NxScanMemoryFull(fetcher, out.Count()) and b + batch < series.Count() then
                         leftHere = NxMbTotalOf(fetcher, userId, parentId, "Episode") - (out.Count() - libStart)
                         if leftHere < 0 then leftHere = 0
                         NxMbNoteCut(fetcher, userId, views, viewAt, out, leftHere)
@@ -716,7 +724,7 @@ function NxMbScanServer(fetcher as Object, kind as String, userId as String, ser
                         NxScanReport(progress, out.Count(), name)
                     end if
                     if rows.Count() = 0 or seen >= total then exit while
-                    if NxScanMemoryFull(fetcher) then
+                    if NxScanMemoryFull(fetcher, out.Count()) then
                         NxMbNoteCut(fetcher, userId, views, viewAt, out, total - seen)
                         exit while
                     end if

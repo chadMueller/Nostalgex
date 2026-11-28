@@ -74,10 +74,11 @@ end function
 ' The local day and hour, and whether the WATERSHED switch is on: the only
 ' things besides the pools that NxScheduleGuide's result depends on. The
 ' gate itself opens at 9 PM and closes at midnight, on an hour.
-function NxScheduleHourKey(nowSec as LongInteger, watershed = false as Boolean) as String
+function NxScheduleHourKey(nowSec as LongInteger, watershed = false as Boolean, order = "classic" as String) as String
     day = NxLocalDay(nowSec)
     key = day.dayKey + " " + day.hour.ToStr()
     if watershed then key = key + " watershed"
+    if order = "shuffle" then key = key + " shuffle"
     return key
 end function
 

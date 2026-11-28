@@ -15,7 +15,7 @@
 ' tests/vectors/schedule-parity-zones.json holds each zone's UTC offsets over
 ' those dates, from the tz database. Returns the failure count.
 
-function NxRunScheduleParityGoldenTests(goldenPath as String, zonesPath as String) as Integer
+function NxRunScheduleParityGoldenTests(goldenPath as String, zonesPath as String, claims = true as Boolean) as Integer
     golden = ParseJson(ReadAsciiFile(goldenPath))
     tz = ParseJson(ReadAsciiFile(zonesPath))
     if golden = invalid or tz = invalid then
@@ -37,20 +37,33 @@ function NxRunScheduleParityGoldenTests(goldenPath as String, zonesPath as Strin
             NxCheck(r, c.name + " has offsets", "no", "yes")
         else
             NxClearManifests()
+            ' EPISODE ORDER (I-103): a fixture names its order, CLASSIC RERUNS where it names none.
+            if fx.episodeOrder = "shuffle" then NxSetEpisodeOrder("shuffle") else NxSetEpisodeOrder("classic")
             NxParityCase(r, c.name, fx, want, cover)
         end if
     end for
     g.nxTzOffsets = invalid
     NxSetLineup(invalid)
+    NxSetEpisodeOrder("classic")
 
-    ' The golden file covers what it claims, so a pass here means something.
-    NxCheck(r, "a channel gives a title way to a lower one", (cover.gaveWay >= 6).ToStr(), "true")
-    NxCheck(r, "tuning to a channel that gave way still plays that title", (cover.tuneGaveWay > 0).ToStr(), "true")
-    NxCheck(r, "a next pick skips a title already on another channel", (cover.skipped > 0).ToStr(), "true")
-    NxCheck(r, "a resync seeks into the programme", (cover.resyncSeek > 0).ToStr(), "true")
-    NxCheck(r, "items the loaders drop", (cover.dropped >= 4).ToStr(), "true")
+    ' The golden file covers what it claims, so a pass here means something. (The EPISODE ORDER file holds the
+    ' orders other than CLASSIC RERUNS over the Plex fixture and claims none of this.)
+    if claims then
+        NxCheck(r, "a channel gives a title way to a lower one", (cover.gaveWay >= 6).ToStr(), "true")
+        NxCheck(r, "tuning to a channel that gave way still plays that title", (cover.tuneGaveWay > 0).ToStr(), "true")
+        NxCheck(r, "a next pick skips a title already on another channel", (cover.skipped > 0).ToStr(), "true")
+        NxCheck(r, "a resync seeks into the programme", (cover.resyncSeek > 0).ToStr(), "true")
+        NxCheck(r, "items the loaders drop", (cover.dropped >= 4).ToStr(), "true")
+    else
+        NxCheck(r, "the file holds a case", (golden.cases.Count() > 0).ToStr(), "true")
+    end if
     print "schedule parity golden (Apple TV): "; r.pass; " passed,"; r.fail; " failed"
     return r.fail
+end function
+
+' The orders other than CLASSIC RERUNS (scripts/episode-order-golden.json): the same walk, with the order the file names.
+function NxRunEpisodeOrderGoldenTests(goldenPath as String, zonesPath as String) as Integer
+    return NxRunScheduleParityGoldenTests(goldenPath, zonesPath, false)
 end function
 
 sub NxParityCase(r as Object, name as String, fx as Object, want as Object, cover as Object)

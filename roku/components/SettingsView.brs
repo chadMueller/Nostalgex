@@ -313,8 +313,9 @@ sub buildRows()
     add({ kind: "info", text: "Radar from NOAA (US), Environment Canada and the German Weather Service." }, "channels")
 
     m.addPage = ""
-    ' WATERSHED (#190) ends the CHANNELS & BUNDLES list, after the three links,
-    ' as on the Apple TV.
+    ' EPISODE ORDER (I-103) and WATERSHED (#190) end the CHANNELS & BUNDLES list, after the three links,
+    ' in the Apple TV's order.
+    add({ kind: "episodeOrder" })
     add({ kind: "watershed" })
 
     add({ kind: "subheader", text: "SERVERS" }, "servers")
@@ -334,6 +335,13 @@ sub buildRows()
     add({ kind: "signOut" })
 
     add({ kind: "version" })
+    ' MEMORY: what the last load held (above the links, so its lines are on screen without scrolling) at each step, to read out when the app closes while loading.
+    add({ kind: "header", title: "MEMORY", subtitle: "What the last load used. Read it out if the app closes while loading." }, "about")
+    memLines = NxMemTraceLines(NxReadMemTrace(NxPlexRegistry()))
+    if memLines.Count() = 0 then memLines.Push("NO LOAD RECORDED YET.")
+    for each memLine in memLines
+        add({ kind: "info", text: memLine }, "about")
+    end for
     add({ kind: "header", title: "LINKS", subtitle: "" }, "about")
     for each link in NxAboutLinks()
         add({ kind: "aboutLink", linkId: link.id })
@@ -1111,6 +1119,13 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "episodeOrder" then
+        ' The Apple TV's EPISODE ORDER (I-103): CLASSIC RERUNS or SHUFFLE; OK moves to the next.
+        label = "EPISODE ORDER"
+        detail = NxEpisodeOrderExplanation(NxEpisodeOrder())
+        state = NxEpisodeOrderTitle(NxEpisodeOrder())
+        stateColor = m.t2
+        if NxEpisodeOrder() <> "classic" then stateColor = m.accent + "FF"
     else if row.kind = "watershed" then
         label = "WATERSHED"
         detail = "18 and R-rated titles wait until 9 PM"
@@ -1479,6 +1494,9 @@ sub pressRow()
             render()
         end if
     else if row.kind = "rescan" then
+        ' The libraries switched in this visit are saved first, or the rescan reads the ones from before the
+        ' switch (I-099); leaving then finds nothing changed and does not ask for a second read.
+        saveLibraryChoices()
         if not m.top.rescanning then m.top.rescan = true
     else if row.kind = "reportNowPlaying" then
         m.report.nowPlaying = not (m.report.nowPlaying = true)
@@ -1508,6 +1526,11 @@ sub pressRow()
         ' cold-start seed's channel (LibraryTask.followSeed).
         NxSaveLastChannelOn(NxLastChannelRegistry(), not NxLastChannelOn(NxLastChannelRegistry()))
         print "settings: open on last channel "; NxLastChannelOn(NxLastChannelRegistry())
+        render()
+    else if row.kind = "episodeOrder" then
+        ' The library task reads it on its next re-check, which closing Settings asks for at once.
+        NxSaveEpisodeOrder(NxEpisodeOrderNext(NxEpisodeOrder()))
+        print "settings: episode order "; NxEpisodeOrder()
         render()
     else if row.kind = "watershed" then
         ' The library task reads it on its next re-check, which closing
@@ -1572,6 +1595,18 @@ end sub
 
 ' Back on the rail: the server, franchise and collection choices are saved once
 ' here and the guide rebuilt as needed, as they were when Settings was one page.
+' The libraries turned off or on in this visit, saved now (RESCAN LIBRARY, I-099). What leave() would save, once: it
+' finds the visit's start moved to what is saved and asks for no second read.
+sub saveLibraryChoices()
+    if not m.libsChanged then return
+    if FormatJson(m.libOff) + FormatJson(m.libIncl) = m.libOffAtOpen then return
+    NxSaveDeselectedSections(NxPlexRegistry(), m.libOff)
+    NxSaveIncludedHiddenSections(NxPlexRegistry(), m.libIncl)
+    m.libOffAtOpen = FormatJson(m.libOff) + FormatJson(m.libIncl)
+    m.libsChanged = false
+    print "settings: libraries changed, "; NxSectionsOnCount(m.libs, m.libOff, m.libIncl); " of "; m.libs.Count(); " on, saved before the rescan"
+end sub
+
 sub leave()
     if m.serversChanged then m.serversChanged = FormatJson(m.serversOn) <> m.serversOnAtOpen
     if m.serversChanged then

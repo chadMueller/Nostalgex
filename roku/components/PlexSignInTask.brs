@@ -43,6 +43,27 @@ end sub
 
 sub runLinkSignIn()
     print "plex: sign-in task started"
+    ' A sideload's seed (nx_plex_seed_url): signed in from the page, no plex.tv, as a stand-in server is read.
+    if NxPlexSeedUrl() <> "" and (NxPlexLoadToken() = "" or NxPlexDevSeeded()) then
+        reg = NxPlexRegistry()
+        if NxPlexDevSeeded() then
+            m.top.account = reg.Read("devSeedAccount")
+        else
+            m.top.status = "checking"
+            res = NxServerRequest("GET", NxPlexSeedUrl(), {}, "", 15000)
+            name = NxPlexApplySeed(reg, res.json)
+            if name = "" then
+                fail("The sideload's seed at " + NxPlexSeedUrl() + " could not be read.")
+                return
+            end if
+            if NxClaimAccountCaches("seed:" + name, true) then print "plex: cleared the saved library left by another account, or by none recorded"
+            m.top.account = name
+        end if
+        m.top.message = "Signed in as " + m.top.account + "."
+        m.top.status = "ready"
+        print "plex: signed in from the sideload's seed; plex.tv is not asked"
+        return
+    end if
     token = NxPlexLoadToken()
     ' No saved sign-in: a first run, or the app deleted and installed again.
     fresh = token = ""
